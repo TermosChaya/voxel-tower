@@ -16,18 +16,43 @@ public static class Ornament
     public static readonly Color Ember = new("eb8a34"), EmberGlow = new("ffad4f"), EmberDim = new("3d2411");
     public static readonly Color Blood = new("d24a33"), Moss = new("94b46c");
 
-    public static readonly SystemFont Serif = Sys(400, false, "PT Serif", "Georgia", "Times New Roman", "Noto Serif", "DejaVu Serif");
-    public static readonly SystemFont SerifBold = Sys(700, false, "PT Serif", "Georgia", "Times New Roman", "Noto Serif", "DejaVu Serif");
-    public static readonly SystemFont SerifItalic = Sys(400, true, "PT Serif", "Georgia", "Times New Roman", "Noto Serif", "DejaVu Serif");
+    // Alegreya for text and Cormorant Garamond for headings ship with the game (SIL OFL, see fonts/);
+    // the system serif only steps in for a glyph they lack.
+    static readonly SystemFont SystemSerif = Sys(400, false, "PT Serif", "Georgia", "Times New Roman", "Noto Serif", "DejaVu Serif");
+    static readonly Font AlegreyaFile = Bundled("res://fonts/Alegreya-Variable.ttf");
+    static readonly Font AlegreyaItalicFile = Bundled("res://fonts/Alegreya-Italic-Variable.ttf");
+    static readonly Font CormorantFile = Bundled("res://fonts/CormorantGaramond-Variable.ttf");
+
+    public static readonly Font Serif = Weight(AlegreyaFile, 400);
+    public static readonly Font SerifBold = Weight(AlegreyaFile, 700);
+    public static readonly Font SerifItalic = Weight(AlegreyaItalicFile, 400);
+    /// <summary>Headings: tool names, the treasury, the wave clock.</summary>
+    public static readonly Font Display = Weight(CormorantFile, 650);
     public static readonly SystemFont Mono = Sys(400, false, "PT Mono", "Menlo", "Consolas", "DejaVu Sans Mono");
     /// <summary>Spaced capitals for captions, like letters cut into a plaque.</summary>
-    public static readonly FontVariation Caps = new() { BaseFont = SerifBold, SpacingGlyph = 2 };
+    public static readonly FontVariation Caps = Weight(AlegreyaFile, 700, spacing: 2);
 
     static SystemFont Sys(int weight, bool italic, params string[] names) => new()
     {
         FontNames = names, FontWeight = weight, FontItalic = italic,
         Antialiasing = TextServer.FontAntialiasing.Gray, Hinting = TextServer.Hinting.Light,
     };
+
+    static Font Bundled(string path)
+    {
+        var f = ResourceLoader.Exists(path) ? GD.Load<FontFile>(path) : null;
+        if (f == null) return SystemSerif;
+        f.Fallbacks = new Godot.Collections.Array<Font> { SystemSerif };
+        return f;
+    }
+
+    static FontVariation Weight(Font font, int wght, int spacing = 0)
+    {
+        var v = new FontVariation { BaseFont = font, SpacingGlyph = spacing };
+        if (font is FontFile)
+            v.VariationOpentype = new Godot.Collections.Dictionary { { TextServerManager.GetPrimaryInterface().NameToTag("wght"), wght } };
+        return v;
+    }
 
     /// <summary>Hammered-metal grain laid faintly over every plate.</summary>
     public static readonly ImageTexture Grain = MakeGrain();

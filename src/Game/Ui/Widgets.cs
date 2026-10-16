@@ -203,7 +203,7 @@ public partial class Banner : Control
     {
         icon(this, new Rect2(r.Position + new Vector2(0, 11), new Vector2(38, 38)), Ornament.BronzeLight);
         DrawString(Ornament.Caps, r.Position + new Vector2(48, 24), caption.ToUpperInvariant(), HorizontalAlignment.Left, -1, 10, Ornament.Aged);
-        DrawString(Ornament.SerifBold, r.Position + new Vector2(48, 47), value, HorizontalAlignment.Left, -1, 22, Ornament.Parchment);
+        DrawString(Ornament.Display, r.Position + new Vector2(48, 48), value, HorizontalAlignment.Left, -1, 27, Ornament.Parchment);
     }
 
     public override GodotObject _MakeCustomTooltip(string forText) => Tooltip.Make(forText);

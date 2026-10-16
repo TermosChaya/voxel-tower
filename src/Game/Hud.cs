@@ -119,7 +119,7 @@ public partial class Hud : CanvasLayer
         var col = new VBoxContainer();
         col.AddThemeConstantOverride("separation", 7);
         var head = new HBoxContainer();
-        _toolName = Text("", Ornament.SerifBold, 19, Ornament.EmberGlow);
+        _toolName = Text("", Ornament.Display, 24, Ornament.EmberGlow);
         _toolName.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         head.AddChild(_toolName);
         _toolMat = CapsLabel("", 10);
