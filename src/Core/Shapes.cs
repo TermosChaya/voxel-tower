@@ -15,6 +15,8 @@ public struct Stroke
     public bool Level;
     /// <summary>Rectangles and circles: walls only, Width thick.</summary>
     public bool Hollow;
+    /// <summary>Dig instead of lay: Height becomes the depth, and a levelled stroke digs to one flat floor.</summary>
+    public bool Dig;
 }
 
 /// <summary>
@@ -29,10 +31,19 @@ public static class Shapes
     /// <summary>Stone and mortar count as one material when looking for a flat face.</summary>
     public static byte Family(byte m) => m == Mat.Mortar ? Mat.Stone : m;
 
-    /// <summary>Fills one column from its surface up to the top (exclusive), clearing plants above.</summary>
+    /// <summary>Fills one column from its surface up to the top (exclusive), clearing plants above.
+    /// Digging strokes instead mark everything diggable from the surface down to the floor.</summary>
     static void Column(VoxelWorld w, Site site, VoxelList L, int x, int z, in Stroke st, int levelTop)
     {
         if (x < 0 || x >= w.SX || z < 0 || z >= w.SZ || site.Forbidden(x, z)) return;
+        if (st.Dig)
+        {
+            int surf = w.SurfAt(x, z), floor = Math.Max(3, st.Level ? levelTop : surf - st.Height);
+            for (int y = surf - 1; y >= floor; y--)
+                if (Labour.Diggable(w.Get(x, y, z))) L.Add(x, y, z, Mat.Air);
+            if (floor < surf) Brushes.ClearVegAbove(w, L, x, z, surf);
+            return;
+        }
         int bottom = w.SurfAt(x, z);
         int top = st.Level ? levelTop : bottom + st.Height;
         if (top <= bottom) return;
@@ -45,6 +56,13 @@ public static class Shapes
     /// <summary>The flat top a levelled stroke gets when it starts on this column.</summary>
     public static int LevelTop(VoxelWorld w, int x, int z, int height) =>
         w.SurfAt(Math.Clamp(x, 0, w.SX - 1), Math.Clamp(z, 0, w.SZ - 1)) + height;
+
+    /// <summary>The flat floor a levelled digging stroke goes down to when it starts on this column.</summary>
+    public static int LevelFloor(VoxelWorld w, int x, int z, int depth) =>
+        w.SurfAt(Math.Clamp(x, 0, w.SX - 1), Math.Clamp(z, 0, w.SZ - 1)) - depth;
+
+    /// <summary>The level a stroke works to: a top when laying, a floor when digging.</summary>
+    public static int Level(VoxelWorld w, int x, int z, in Stroke st) => st.Dig ? LevelFloor(w, x, z, st.Height) : LevelTop(w, x, z, st.Height);
 
     /// <summary>A straight band from A to B, Width thick, with rounded ends so lines join cleanly at corners.</summary>
     public static VoxelList Line(VoxelWorld w, Site site, int ax, int az, int bx, int bz, in Stroke st, int levelTop)
@@ -111,6 +129,50 @@ public static class Shapes
         return L;
     }
 
+    /// <summary>Everything diggable inside a ball: the freehand pick.</summary>
+    public static VoxelList BallDig(VoxelWorld w, Site site, int cx, int cy, int cz, double radius)
+    {
+        var L = new VoxelList();
+        int n = (int)Math.Ceiling(radius);
+        for (int y = Math.Max(3, cy - n); y <= Math.Min(w.SY - 1, cy + n); y++)
+            for (int z = Math.Max(0, cz - n); z <= Math.Min(w.SZ - 1, cz + n); z++)
+                for (int x = Math.Max(0, cx - n); x <= Math.Min(w.SX - 1, cx + n); x++)
+                {
+                    if (Brushes.Dist(x - cx, y - cy, z - cz) > radius + .01 || site.Forbidden(x, z)) continue;
+                    if (Labour.Diggable(w.Get(x, y, z))) L.Add(x, y, z, Mat.Air);
+                }
+        return L;
+    }
+
+    /// <summary>
+    /// A whole tree from one of its voxels: trunk, boughs and crown, kept within reach of where it was clicked
+    /// so a forest doesn't come down with it.
+    /// </summary>
+    public static VoxelList Tree(VoxelWorld w, int x0, int y0, int z0, int limit = 40000)
+    {
+        var L = new VoxelList();
+        static bool Wood(byte m) => m == Mat.Trunk || m == Mat.Leaf || m == Mat.Foliage;
+        if (!Wood(w.Get(x0, y0, z0))) return L;
+        var seen = new HashSet<long> { Key(w, x0, y0, z0) };
+        var queue = new Queue<(int x, int y, int z)>();
+        queue.Enqueue((x0, y0, z0));
+        while (queue.Count > 0 && L.Count < limit)
+        {
+            var (x, y, z) = queue.Dequeue();
+            L.Add(x, y, z, Mat.Air);
+            for (int dy = -1; dy <= 1; dy++)
+                for (int dz = -1; dz <= 1; dz++)
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        int nx = x + dx, ny = y + dy, nz = z + dz;
+                        if (!w.InBounds(nx, ny, nz) || Math.Abs(nx - x0) > 22 || Math.Abs(nz - z0) > 22) continue;
+                        if (!Wood(w.Get(nx, ny, nz)) || !seen.Add(Key(w, nx, ny, nz))) continue;
+                        queue.Enqueue((nx, ny, nz));
+                    }
+        }
+        return L;
+    }
+
     /// <summary>Nib radius for a brush of the given width: one voxel at width 1, then half the width.</summary>
     public static double NibRadius(int width) => width <= 1 ? 0 : width / 2.0;
 
@@ -118,7 +180,7 @@ public static class Shapes
     /// The flat patch of one material around the face that was clicked, pushed out by `steps` voxels in the
     /// selected material. Raises a wall by a course, thickens it, or puts a wooden top on a stone one.
     /// </summary>
-    public static VoxelList Extrude(VoxelWorld w, Site site, VoxelHit hit, int steps, byte mat, int maxFaces, out bool tooBig)
+    public static VoxelList Extrude(VoxelWorld w, Site site, VoxelHit hit, int steps, byte mat, int maxFaces, out bool tooBig, bool dig = false)
     {
         tooBig = false;
         var L = new VoxelList();
@@ -152,9 +214,19 @@ public static class Shapes
         foreach (var (fx, fy, fz) in face)
             for (int k = 1; k <= steps; k++)
             {
-                int x = fx + nx * k, y = fy + ny * k, z = fz + nz * k;
-                if (!w.InBounds(x, y, z) || site.Forbidden(x, z) || !Brushes.Free(w.Get(x, y, z))) break;
-                L.Add(x, y, z, Lay(mat, x, y, z));
+                if (dig)
+                {
+                    // pushing the face in: a tunnel mouth, a step cut into a bank
+                    int x = fx - nx * (k - 1), y = fy - ny * (k - 1), z = fz - nz * (k - 1);
+                    if (!w.InBounds(x, y, z) || y < 3 || site.Forbidden(x, z) || !Labour.Diggable(w.Get(x, y, z))) break;
+                    L.Add(x, y, z, Mat.Air);
+                }
+                else
+                {
+                    int x = fx + nx * k, y = fy + ny * k, z = fz + nz * k;
+                    if (!w.InBounds(x, y, z) || site.Forbidden(x, z) || !Brushes.Free(w.Get(x, y, z))) break;
+                    L.Add(x, y, z, Lay(mat, x, y, z));
+                }
             }
         return L;
     }

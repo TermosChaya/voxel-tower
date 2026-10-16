@@ -238,5 +238,122 @@ foreach (var (size, label, mp) in variants)
     Check($"valley {size}: forests and rock to quarry", trunk > 50 && rock > 1000, $"{trunk} trunk and {rock} rock samples");
 }
 
+// ---- the living valley: navigation, labour, the horde
+if (args.Length == 0 || args[0] == "--sim")
+{
+    Console.WriteLine();
+    var mp4 = new MapParams();
+    var w4 = new VoxelWorld(mp4.SizeX, mp4.SizeY, mp4.SizeZ);
+    var site4 = MapGen.Generate(w4, mp4);
+    w4.Compact();
+    sw.Restart();
+    var sim = new Sim(w4, site4);
+    Console.WriteLine($"navigation {sim.Nav.NX}×{sim.Nav.NY}×{sim.Nav.NZ} cells built in {sw.ElapsedMilliseconds} ms");
+    sim.Waves.Countdown = 1e9;
+    void Run(double seconds) { for (double t = 0; t < seconds; t += .05) sim.Step(.05f); }
+    Check("a gate before the citadel", sim.Gate >= 0, sim.Gate.ToString());
+    Check("cells beside the citadel to batter", sim.Goals.Count > 20, sim.Goals.Count.ToString());
+
+    sim.Stock.Gold = 2000;
+    var crew = new System.Collections.Generic.List<Unit>();
+    for (int i = 0; i < 4; i++) crew.Add(sim.Hire(Kinds.Worker));
+    Check("workers hired at the gate", crew.TrueForAll(u => u != null));
+
+    int gx = site4.KeepX - site4.KeepR - 12, gz = site4.KeepZ;
+    int far = sim.NearestStand(gx - 160, gz + 60, 4);
+    sw.Restart();
+    bool walked = sim.GoTo(crew[0], far);
+    Check("a path across the plateau", walked && crew[0].Path != null && crew[0].Path.Count > 15, $"{crew[0].Path?.Count} cells, {sw.ElapsedMilliseconds} ms");
+    crew[0].Path = null;
+
+    // a pit two metres square and half a metre deep
+    int px = gx - 70, pz = gz + 44;
+    double earth0 = sim.Stock[Stockpile.Earth];
+    var digStroke = new Stroke { Width = 1, Height = 8, Dig = true };
+    int nDig = sim.DesignateRemove(Shapes.Box(w4, site4, px, pz, px + 31, pz + 31, digStroke, 0));
+    sw.Restart();
+    Run(120);
+    long simMs = sw.ElapsedMilliseconds;
+    Check("workers dig the pit", nDig > 3000 && sim.Orders.Total < nDig / 10, $"{nDig} voxels marked, {sim.Orders.Total} left, +{Fmt.M3((int)(sim.Stock[Stockpile.Earth] - earth0))} m³ of earth; 120 s simulated in {simMs} ms");
+
+    // a stone wall three metres long, half a metre thick and a metre high, from the stores
+    double stone0 = sim.Stock[Stockpile.Stone];
+    var wallStroke = new Stroke { Mat = Mat.Stone, Width = 8, Height = 16, Level = true };
+    int wx4 = px + 60;
+    int nWall = sim.DesignateBuild(Shapes.Line(w4, site4, wx4, pz, wx4, pz + 48, wallStroke, Shapes.LevelTop(w4, wx4, pz, 16)));
+    Run(150);
+    Check("workers lay the wall from the stores", nWall > 2000 && sim.Orders.BuildTotal < nWall / 10 && sim.Stock[Stockpile.Stone] < stone0,
+        $"{nWall} voxels planned, {sim.Orders.BuildTotal} left, stone {Fmt.M3((int)stone0)} → {Fmt.M3((int)sim.Stock[Stockpile.Stone])} m³");
+    foreach (var u in crew) if (u.Why != "") Console.WriteLine($"     {u.T.Name} #{u.Id}: {u.Why}");
+
+    // fell the nearest tree
+    (int x, int y, int z) trunk = (-1, -1, -1);
+    for (int r = 8; r < 400 && trunk.x < 0; r += 8)
+        for (int dz = -r; dz <= r && trunk.x < 0; dz += 4)
+            for (int dx = -r; dx <= r && trunk.x < 0; dx += 4)
+            {
+                int x = gx + dx, z = gz + dz;
+                if (x < 0 || z < 0 || x >= w4.SX || z >= w4.SZ) continue;
+                int g = w4.SurfAt(x, z);
+                if (w4.Get(x, g + 2, z) == Mat.Trunk) trunk = (x, g + 2, z);
+            }
+    double wood0 = sim.Stock[Stockpile.Wood];
+    var treeList = trunk.x >= 0 ? Shapes.Tree(w4, trunk.x, trunk.y, trunk.z) : null;
+    int nTree = treeList == null ? 0 : sim.DesignateRemove(treeList);
+    Run(200);
+    Check("workers fell a tree for wood", nTree > 300 && sim.Stock[Stockpile.Wood] > wood0 + 200 && w4.Get(trunk.x, trunk.y, trunk.z) != Mat.Trunk,
+        $"{nTree} voxels of tree at {trunk}, wood +{Fmt.M3((int)(sim.Stock[Stockpile.Wood] - wood0))} m³, {sim.Orders.Total} orders left");
+
+    // the horde finds its way; through a stone ring it has to hack
+    sw.Restart();
+    sim.ComputeFields();
+    Console.WriteLine($"     raider fields for {Kinds.HordeKinds.Length} kinds in {sw.ElapsedMilliseconds} ms");
+    int spawn = sim.NearestStand(site4.SpawnStrip / 2, w4.SZ / 2, 4);
+    Check("every raider kind finds the citadel from the west", Array.TrueForAll(Kinds.HordeKinds, t => sim.Fields.TryGetValue(t, out var f) && !float.IsInfinity(f.Dist[spawn])),
+        string.Join(", ", Array.ConvertAll(Kinds.HordeKinds, t => $"{t.Key} {sim.Fields[t].Dist[spawn]:0} s")));
+
+    // a whole wave against two archers and a swordsman by the gate
+    foreach (var u in crew) sim.Command(new[] { u }, sim.Gate);
+    sim.Hire(Kinds.Archer); sim.Hire(Kinds.Archer); sim.Hire(Kinds.Swordsman);
+    float keep0 = sim.KeepHp;
+    sim.Waves.Countdown = 0;
+    sw.Restart();
+    Run(180);
+    int alive = 0, dead = 0;
+    foreach (var u in sim.Units) if (u.Team == Team.Horde) { if (u.Dead) dead++; else alive++; }
+    Check("the first wave comes and fights", sim.Waves.Number == 1 && sim.Kills > 0 && sim.Shots > 0,
+        $"{sim.Kills} raiders killed, {alive} alive, {sim.Shots} arrows loosed, {sim.ShotHits} hit, citadel {keep0:0} → {sim.KeepHp:0}; 180 s in {sw.ElapsedMilliseconds} ms, fields {sim.LastFieldMs:0} ms");
+    foreach (var u in sim.Units)
+        if (!u.Dead) Console.WriteLine($"     {u.T.Name} #{u.Id}: {u.State}, {u.Hp:0} hp, at {u.X / 16:0.0},{u.Y / 16:0.0},{u.Z / 16:0.0} m{(u.Why != "" ? ", " + u.Why : "")}");
+    sim.Waves.Countdown = 1e9;
+
+    sim.InstantLabour = true;
+    {
+        // a block of stone dropped right on the gate where the garrison stands
+        var (gfx, gfy, gfz) = sim.Nav.Feet(sim.Gate);
+        sim.DesignateBuild(Shapes.Box(w4, site4, (int)gfx - 20, (int)gfz - 20, (int)gfx + 20, (int)gfz + 20, new Stroke { Mat = Mat.Stone, Width = 8, Height = 40 }, 0));
+        sim.Step(.05f);
+        int walled = 0, there = 0;
+        foreach (var u in sim.Units)
+            if (!u.Dead && u.Team == Team.Player) { there++; if (sim.Nav.Fill[u.Cell] >= NavGrid.SolidT) walled++; }
+        Check("instant building leaves room for the garrison", there > 0 && walled == 0, $"{there} pawns at the gate, {walled} walled in");
+    }
+    // the orc alone against the stone: the garrison leaves the field
+    foreach (var u in sim.Units) if (u.Team == Team.Player) { u.Dead = true; u.DiedAt = -999; }
+    sim.Step(.05f);
+    var ringStroke = new Stroke { Mat = Mat.Stone, Width = 8, Height = 48, Hollow = true };
+    sim.DesignateBuild(Shapes.Circle(w4, site4, site4.KeepX, site4.KeepZ, site4.KeepR + 44, ringStroke, 0));
+    sim.InstantLabour = false;
+    sim.ComputeFields();
+    int hacked = 0;
+    sim.Hacked = (x, y, z, m) => hacked++;
+    var orc = sim.Spawn(Kinds.Orc, sim.NearestStand(site4.KeepX - site4.KeepR - 100, site4.KeepZ, 4));
+    float d0 = MathF.Sqrt((orc.X - site4.KeepX) * (orc.X - site4.KeepX) + (orc.Z - site4.KeepZ) * (orc.Z - site4.KeepZ));
+    Run(120);
+    float d1 = MathF.Sqrt((orc.X - site4.KeepX) * (orc.X - site4.KeepX) + (orc.Z - site4.KeepZ) * (orc.Z - site4.KeepZ));
+    Check("an orc hacks through the stone ring", hacked > 200 && d1 < d0 - 40, $"{hacked} voxels hacked, {d0 / 16:0.0} → {d1 / 16:0.0} m from the citadel, {orc.State}{(orc.Dead ? " (" + orc.KilledBy + ")" : "")}");
+
+}
+
 Console.WriteLine(failures == 0 ? "\nall checks passed" : $"\n{failures} check(s) failed");
 return failures == 0 ? 0 : 1;

@@ -28,6 +28,9 @@ public sealed class VoxelWorld
 
     public int Revision { get; private set; }
 
+    /// <summary>Called after every voxel written with Set: navigation and the map listen to it.</summary>
+    public Action<int, int, int> Edited;
+
     public VoxelWorld(int sx, int sy, int sz)
     {
         if (sx % CS != 0 || sy % CS != 0 || sz % CS != 0) throw new ArgumentException("world size must be a multiple of 32");
@@ -80,6 +83,7 @@ public sealed class VoxelWorld
         Touch(x, y, z);
         int col = z * SX + x;
         if (!_colDirty[col]) { _colDirty[col] = true; _colDirtyList.Add(col); }
+        Edited?.Invoke(x, y, z);
         return true;
     }
 
@@ -162,6 +166,10 @@ public sealed class VoxelWorld
     }
 
     public bool IsEmpty(int ci) => _data[ci] == null && _uniform[ci] == Mat.Air;
+
+    /// <summary>A chunk's voxels, or null when the whole chunk is one material (see <see cref="ChunkUniform"/>).</summary>
+    public byte[] ChunkData(int ci) => _data[ci];
+    public byte ChunkUniform(int ci) => _uniform[ci];
 
     /// <summary>Copies a chunk plus a one-voxel shell of its neighbours into a 34³ block for the mesher.</summary>
     public void CopyPadded(int ci, byte[] pad)
