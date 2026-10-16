@@ -25,6 +25,9 @@ public sealed partial class Sim
 
     public int CancelOrders(int x, int y, int z, double radius) => Orders.Cancel(x, y, z, radius);
 
+    /// <summary>Takes back every order on the columns of a rectangle.</summary>
+    public int CancelArea(int x0, int z0, int x1, int z1) => Orders.CancelArea(x0, z0, x1, z1);
+
     /// <summary>Tests: every order done at once, as if by an army of workers with full stores.</summary>
     public void CompleteAll()
     {
@@ -85,7 +88,9 @@ public sealed partial class Sim
             Gather(u);
             if (u.Jobs.Count == 0)
             {
-                if (u.Why != "") u.Unreachable[u.Site] = Time + 8;
+                // nothing to do from here after all (stores empty, or someone stands where the masonry goes):
+                // leave this spot to others for a while and look elsewhere
+                u.Unreachable[u.Site] = Time + (u.Why.StartsWith("нет") ? 8 : 4);
                 ReleaseSite(u);
                 u.NextSearch = Time + .2;
                 return;
@@ -148,6 +153,7 @@ public sealed partial class Sim
         int y0 = Math.Max(0, feet - Labour.ReachDown), y1 = Math.Min(World.SY, feet + Labour.ReachUp);
         var builds = new List<(int, int, int, byte)>();
         string missing = "";
+        bool crowded = false;
         for (int y = y1 - 1; y >= y0 && u.Jobs.Count < 2048; y--)
             for (int z = z0; z < z1; z++)
                 for (int x = x0; x < x1; x++)
@@ -157,18 +163,18 @@ public sealed partial class Sim
                     if (o == Orders.Remove) { u.Jobs.Add((x, y, z, o)); continue; }
                     int ck = Labour.CostKind(o);
                     if (ck != Stockpile.None && Stock[ck] < 1) { missing = Stockpile.Name(ck); continue; }
-                    if (_bodies[Nav.CellOf(x, y, z)] > 0) continue;
+                    if (_bodies[Nav.CellOf(x, y, z)] > 0) { crowded = true; continue; }
                     builds.Add((x, y, z, o));
                 }
         builds.Reverse();
         u.Jobs.AddRange(builds);
-        if (u.Jobs.Count == 0 && missing != "") u.Why = "нет: " + missing;
+        if (u.Jobs.Count == 0) u.Why = missing != "" ? "нет: " + missing : crowded ? "на месте кладки стоят" : "";
     }
 
     void FindWork(Unit u)
     {
         u.NextSearch = Time + .5 + Rng.NextDouble() * .5;
-        if (Orders.Active.Count == 0) { if (u.Why.StartsWith("до")) u.Why = ""; return; }
+        if (Orders.Active.Count == 0) { u.Why = ""; return; }
         int ui = Nav.I(u.Cell), uk = Nav.K(u.Cell);
         var near = new List<(float d, int col)>();
         foreach (int col in Orders.Active)
@@ -187,8 +193,10 @@ public sealed partial class Sim
         {
             if (!Orders.Span(col, out int y0, out int y1)) continue;
             int ci = col % Nav.NX, ck = col / Nav.NX;
+            // stand beside the work, or in its column if nothing is to be laid where the body would be
             bool Goal(int c) => Math.Abs(Nav.I(c) - ci) <= 1 && Math.Abs(Nav.K(c) - ck) <= 1
-                && Nav.Floor[c] - Labour.ReachDown <= y1 && Nav.Floor[c] + Labour.ReachUp > y0 && !BuildsInBody(c, h);
+                && Nav.Floor[c] - Labour.ReachDown <= y1 && Nav.Floor[c] + Labour.ReachUp > y0
+                && !(Nav.I(c) == ci && Nav.K(c) == ck && BuildsInBody(c, h));
             List<int> path = Goal(u.Cell) ? new List<int>() : Paths.Find(u.Cell, Goal, c => H(c, ci, ck), u.T.Move, 30000);
             if (path == null) { u.Unreachable[col] = Time + 12; continue; }
             u.Site = col; _claims[col]++;

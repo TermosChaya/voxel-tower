@@ -115,6 +115,48 @@ public static class Icons
         Line(c, Shade(ink, .5f), S(r, .02f), P(r, .45f, .58f), P(r, .27f, .8f));
     }
 
+    /// <summary>A miner's pick: the worker's sign, and the slot that turns brushes to digging.</summary>
+    public static void Pick(CanvasItem c, Rect2 r, Color ink)
+    {
+        Line(c, Shade(ink, .78f), S(r, .075f), P(r, .2f, .9f), P(r, .6f, .32f));
+        var head = new[] { P(r, .14f, .36f), P(r, .3f, .24f), P(r, .5f, .17f), P(r, .7f, .19f), P(r, .86f, .28f), P(r, .94f, .42f) };
+        Line(c, ink, S(r, .085f), head);
+        Fill(c, ink, P(r, .1f, .4f), P(r, .16f, .31f), P(r, .2f, .36f));
+        Fill(c, ink, P(r, .9f, .38f), P(r, .98f, .5f), P(r, .91f, .45f));
+        Dot(c, P(r, .6f, .21f), S(r, .05f), Shade(ink, .6f));
+    }
+
+    public static void Bow(CanvasItem c, Rect2 r, Color ink)
+    {
+        const int n = 14;
+        var arc = new Vector2[n + 1];
+        for (int i = 0; i <= n; i++) { float a = -MathF.PI / 2 + i / (float)n * MathF.PI; arc[i] = P(r, .3f + MathF.Cos(a) * .42f, .5f + MathF.Sin(a) * .42f); }
+        Line(c, ink, S(r, .07f), arc);
+        c.DrawLine(arc[0], arc[^1], Shade(ink, .7f), 1.2f, true);
+        Line(c, Shade(ink, .85f), S(r, .04f), P(r, .14f, .5f), P(r, .9f, .5f));
+        Fill(c, ink, P(r, .82f, .44f), P(r, .95f, .5f), P(r, .82f, .56f));
+        Line(c, Shade(ink, .6f), S(r, .03f), P(r, .14f, .5f), P(r, .07f, .43f));
+        Line(c, Shade(ink, .6f), S(r, .03f), P(r, .14f, .5f), P(r, .07f, .57f));
+    }
+
+    public static void Sword(CanvasItem c, Rect2 r, Color ink)
+    {
+        Fill(c, ink, P(r, .8f, .1f), P(r, .9f, .2f), P(r, .42f, .68f), P(r, .32f, .58f));
+        Line(c, Shade(ink, .55f), S(r, .02f), P(r, .84f, .16f), P(r, .38f, .62f));
+        Line(c, Shade(ink, .85f), S(r, .07f), P(r, .22f, .52f), P(r, .48f, .78f));
+        Line(c, Shade(ink, .7f), S(r, .07f), P(r, .35f, .65f), P(r, .17f, .83f));
+        Dot(c, P(r, .14f, .86f), S(r, .06f), ink);
+    }
+
+    /// <summary>A horn: the call to arms.</summary>
+    public static void Horn(CanvasItem c, Rect2 r, Color ink)
+    {
+        Fill(c, ink, P(r, .1f, .7f), P(r, .3f, .52f), P(r, .55f, .42f), P(r, .8f, .2f), P(r, .9f, .3f), P(r, .62f, .56f), P(r, .36f, .7f), P(r, .16f, .86f));
+        c.DrawEllipse(P(r, .85f, .25f), S(r, .09f), S(r, .06f), Shade(ink, .5f), true, -1, true);
+        Line(c, Shade(ink, .6f), S(r, .025f), P(r, .3f, .62f), P(r, .36f, .5f));
+        Line(c, Shade(ink, .6f), S(r, .025f), P(r, .5f, .55f), P(r, .55f, .43f));
+    }
+
     public static void Scroll(CanvasItem c, Rect2 r, Color ink)
     {
         Fill(c, Shade(ink, .92f), P(r, .24f, .2f), P(r, .76f, .2f), P(r, .76f, .8f), P(r, .24f, .8f));

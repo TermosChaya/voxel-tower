@@ -27,6 +27,22 @@ public sealed partial class Sim
         return false;
     }
 
+    /// <summary>Living raiders in the valley.</summary>
+    public int RaidersAlive()
+    {
+        int n = 0;
+        foreach (var u in Units) if (!u.Dead && u.Team == Team.Horde) n++;
+        return n;
+    }
+
+    /// <summary>Living units of a kind.</summary>
+    public int Count(UnitType t)
+    {
+        int n = 0;
+        foreach (var u in Units) if (!u.Dead && u.T == t) n++;
+        return n;
+    }
+
     public static float Dist(Unit a, Unit b)
     {
         float dx = a.X - b.X, dz = a.Z - b.Z, dy = (a.Y - b.Y) * .7f;

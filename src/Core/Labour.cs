@@ -64,6 +64,36 @@ public static class Labour
         Mat.Rammed => Stockpile.Earth,
         _ => Stockpile.None,
     };
+
+    /// <summary>
+    /// What a plan asks of the stores and of the workers. Fills <paramref name="stores"/> (indexed by store) with voxels
+    /// taken from it, or given to it when negative; returns seconds of one worker's labour.
+    /// </summary>
+    public static double Estimate(VoxelWorld w, VoxelList L, bool dig, double[] stores)
+    {
+        Array.Clear(stores);
+        double work = 0;
+        if (L == null) return 0;
+        for (int i = 0; i < L.Count; i++)
+        {
+            byte m = L.M(i);
+            if (dig)
+            {
+                byte cur = w.Get(L.X(i), L.Y(i), L.Z(i));
+                if (!Diggable(cur)) continue;
+                work += Dig(cur);
+                int k = YieldKind(cur);
+                if (k != Stockpile.None) stores[k] -= YieldShare(cur);
+            }
+            else if (m != 0)
+            {
+                work += Lay(m);
+                int k = CostKind(m);
+                if (k != Stockpile.None) stores[k] += 1;
+            }
+        }
+        return work / WorkPerSecond;
+    }
 }
 
 /// <summary>
@@ -161,6 +191,30 @@ public sealed class Orders
                 {
                     if (Brushes.Dist(x - cx, y - cy, z - cz) > radius + .01 || Layer.Get(x, y, z) == 0) continue;
                     Clear(x, y, z); n++;
+                }
+        return n;
+    }
+
+    /// <summary>Takes back every order standing on the columns of a rectangle, at any height; returns how many.</summary>
+    public int CancelArea(int x0, int z0, int x1, int z1)
+    {
+        if (x1 < x0) (x0, x1) = (x1, x0);
+        if (z1 < z0) (z0, z1) = (z1, z0);
+        x0 = Math.Max(0, x0); z0 = Math.Max(0, z0); x1 = Math.Min(_w.SX - 1, x1); z1 = Math.Min(_w.SZ - 1, z1);
+        int n = 0;
+        for (int cz = z0 >> VoxelWorld.Shift; cz <= z1 >> VoxelWorld.Shift; cz++)
+            for (int cx = x0 >> VoxelWorld.Shift; cx <= x1 >> VoxelWorld.Shift; cx++)
+                for (int cy = 0; cy < _w.CY; cy++)
+                {
+                    var d = Layer.ChunkData(Layer.ChunkIndex(cx, cy, cz));
+                    if (d == null) continue;
+                    for (int i = 0; i < d.Length; i++)
+                    {
+                        if (d[i] == 0) continue;
+                        int x = cx * VoxelWorld.CS + (i & 31), z = cz * VoxelWorld.CS + (i >> 5 & 31), y = cy * VoxelWorld.CS + (i >> 10);
+                        if (x < x0 || x > x1 || z < z0 || z > z1) continue;
+                        Clear(x, y, z); n++;
+                    }
                 }
         return n;
     }

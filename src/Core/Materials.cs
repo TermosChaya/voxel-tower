@@ -23,6 +23,10 @@ public readonly struct MaterialDef
 /// <summary>World materials. Ids match the browser prototype so maps and blueprints line up.</summary>
 public static class Mat
 {
+    /// <summary>Colours for the figures of pawns and raiders; never placed in the world.</summary>
+    public const byte SkinHuman = 32, SkinGoblin = 33, SkinOrc = 34, SkinTroll = 35, ClothBlue = 36, ClothRed = 37, ClothDark = 38,
+        Leather = 39, Steel = 40, Mail = 41, Handle = 42, Bone = 43, Hair = 44, Eye = 45, Linen = 46, Brass = 47, Rag = 48;
+
     public const byte Air = 0, Bed = 1, Soil = 2, Grass = 3, Rock = 4, Stone = 5, Mortar = 6, Wood = 7, Rammed = 8,
         Keep = 9, KeepDark = 10, Roof = 11, Leaf = 12, Trunk = 13, Ember = 14, Path = 15, Moss = 16, Iron = 17, Tuft = 18, Plank = 19, Foliage = 20;
     public const int Count = 64;
@@ -58,6 +62,16 @@ public static class Mat
         D(Tuft, "Трава", 0x46582e, .34f, MatGroup.Earth, Natural | Earthy);
         D(Plank, "Доски", 0x5a3d26, .18f, MatGroup.Hard, 0);
         D(Foliage, "Листва", 0x34431f, .32f, MatGroup.Wood, Natural);
+
+        D(SkinHuman, "кожа", 0xc29878, .08f, MatGroup.Hard, 0); D(SkinGoblin, "кожа", 0x6d8a39, .12f, MatGroup.Hard, 0);
+        D(SkinOrc, "кожа", 0x56673f, .12f, MatGroup.Hard, 0); D(SkinTroll, "кожа", 0x66705f, .16f, MatGroup.Hard, 0);
+        D(ClothBlue, "сукно", 0x2e4562, .14f, MatGroup.Hard, 0); D(ClothRed, "сукно", 0x6b2320, .14f, MatGroup.Hard, 0);
+        D(ClothDark, "сукно", 0x302a2e, .14f, MatGroup.Hard, 0); D(Leather, "кожа", 0x4a3424, .14f, MatGroup.Hard, 0);
+        D(Steel, "сталь", 0xa7abb1, .12f, MatGroup.Hard, 0); D(Mail, "кольчуга", 0x6d7075, .3f, MatGroup.Hard, 0);
+        D(Handle, "древко", 0x4b3423, .14f, MatGroup.Hard, 0); D(Bone, "кость", 0xd9cfb6, .06f, MatGroup.Hard, 0);
+        D(Hair, "волосы", 0x1d1916, .1f, MatGroup.Hard, 0); D(Eye, "глаз", 0x1a1416, .04f, MatGroup.Hard, 0);
+        D(Linen, "холст", 0x8a7a5a, .12f, MatGroup.Hard, 0); D(Brass, "латунь", 0xb08a3e, .1f, MatGroup.Hard, 0);
+        D(Rag, "тряпьё", 0x4a3b2c, .2f, MatGroup.Hard, 0);
 
         foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage }) IsVeg[m] = true;
         // what holds the world up: loose pieces resting on these never fall

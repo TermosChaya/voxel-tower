@@ -175,19 +175,27 @@ public sealed class NavGrid
         }
     }
 
-    /// <summary>The highest top of solid ground among the cell's middle columns, from half a cell below to near its top.</summary>
+    /// <summary>
+    /// The highest top of solid ground among the cell's middle columns, from half a cell below to near its top.
+    /// When the middle is open (the cell below holds only the edge of a wall) the feet rest on that edge instead.
+    /// </summary>
     int FloorIn(int x0, int y0, int z0)
     {
         int best = -1;
-        for (int q = 0; q < 4; q++)
-        {
-            int x = x0 + 3 + (q & 1), z = z0 + 3 + (q >> 1);
-            for (int yy = y0 + 5; yy >= y0 - 8 && yy > best - 1; yy--)
-            {
-                if (yy < 0) { best = Math.Max(best, 0); break; }
-                if (Cls[World.Get(x, yy, z)] != 0) { best = Math.Max(best, yy + 1); break; }
-            }
-        }
+        for (int q = 0; q < 4; q++) best = Math.Max(best, TopIn(x0 + 3 + (q & 1), z0 + 3 + (q >> 1), y0, best));
+        if (best >= 0) return best;
+        for (int zz = 0; zz < CS; zz++)
+            for (int xx = 0; xx < CS; xx++) best = Math.Max(best, TopIn(x0 + xx, z0 + zz, y0, best));
         return best >= 0 ? best : y0;
+    }
+
+    int TopIn(int x, int z, int y0, int best)
+    {
+        for (int yy = y0 + 5; yy >= y0 - 8 && yy > best - 1; yy--)
+        {
+            if (yy < 0) return 0;
+            if (Cls[World.Get(x, yy, z)] != 0) return yy + 1;
+        }
+        return -1;
     }
 }

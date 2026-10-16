@@ -5,26 +5,29 @@ using VoxelTower.Core;
 
 namespace VoxelTower.Game;
 
-public enum Tool { None, Brush, Line, Box, Circle, Extrude, Erase, Dig, Capture, Paste }
+public enum Tool { None, Brush, Line, Box, Circle, Extrude, Unmark, Capture, Paste }
 
-public enum BrushForm { Column, Ball, Repaint }
+public enum BrushForm { Column, Ball }
 
 public sealed class ToolOptions
 {
     public byte Material = Mat.Stone;
-    /// <summary>Thickness of lines and walls, nib of the brush and the eraser, width of the spade; voxels.</summary>
+    /// <summary>The pick in hand instead of a material: strokes mark what is to be dug, quarried or felled.</summary>
+    public bool Dig;
+    /// <summary>Thickness of lines and walls, nib of the brush; voxels.</summary>
     public int Width = 8;
     public int Height = 32;
+    /// <summary>How deep the pick goes below the surface.</summary>
+    public int Depth = 16;
     public int Step = 4;
-    public int DigDepth = 16;
     public BrushForm Form = BrushForm.Column;
     public bool Hollow;
     public bool Level = true;
 
     public static readonly int[] Widths = { 1, 2, 3, 4, 6, 8, 12, 16, 24, 32 };
     public static readonly int[] Heights = { 4, 8, 12, 16, 24, 32, 40, 48, 56, 64, 80, 96 };
+    public static readonly int[] Depths = { 4, 8, 12, 16, 24, 32, 48, 64, 96 };
     public static readonly int[] Steps = { 1, 2, 4, 8, 16 };
-    public static readonly int[] Depths = { 8, 16, 24, 32 };
 
     public static int Next(int[] values, int current, int dir)
     {
@@ -35,34 +38,41 @@ public sealed class ToolOptions
 }
 
 /// <summary>
-/// The player's hands. There are no ready-made buildings: walls, towers and stairs are drawn with brushes,
-/// and whatever is worth repeating is captured as a blueprint. A ghost shows each stroke before it is laid
-/// (ember when the treasury can pay, red when it cannot); laying is instant.
+/// The player's hands. Nothing is laid or dug at once: every stroke marks work, and the pawns carry it out voxel by
+/// voxel, laying from the stores and bringing back what they dig. There are no ready-made buildings either: walls,
+/// towers and stairs are drawn with brushes, and whatever is worth repeating is captured as a blueprint. A ghost shows
+/// each stroke before it is marked: ember when the stores hold enough, red when they don't or when the pick will take it.
 /// </summary>
 public partial class BuildTools : Node3D
 {
     public static string ToolName(Tool t) => t switch
     {
         Tool.Brush => "Кисть", Tool.Line => "Линия", Tool.Box => "Прямоугольник", Tool.Circle => "Круг",
-        Tool.Extrude => "Выдавить", Tool.Erase => "Ластик", Tool.Dig => "Лопата", Tool.Capture => "Снять чертёж",
-        Tool.Paste => "Чертёж", _ => "Стройка",
+        Tool.Extrude => "Выдавить", Tool.Unmark => "Снять разметку", Tool.Capture => "Снять чертёж",
+        Tool.Paste => "Чертёж", _ => "Без кисти",
     };
 
-    public static string Hint(Tool t) => t switch
+    public static string Hint(Tool t, bool dig) => (t, dig) switch
     {
-        Tool.Brush => "Ведите по земле или по стене — материал ложится следом. F меняет форму, Shift стирает.",
-        Tool.Line => "Зажмите и протяните: прямая полоса заданной толщины и высоты. Так рисуют стены.",
-        Tool.Box => "Протяните от угла до угла. F — сплошной или только стенки.",
-        Tool.Circle => "Нажмите в центре и тяните до края. F — сплошной или кольцо, кольцо — это башня.",
-        Tool.Extrude => "Щёлкните по грани своей кладки: вся ровная грань нарастёт на шаг выбранным материалом.",
-        Tool.Erase => "Стирает свою кладку. Половина цены камня и брёвен вернётся, земля — целиком.",
-        Tool.Dig => "Копает грунт и дёрн, скалу не берёт. Вырытая земля идёт на насыпи и земляные стены.",
-        Tool.Capture => "Обведите рамкой свою постройку — она станет чертежом.",
-        Tool.Paste => "Щёлкните, чтобы поставить копию. R поворачивает, Esc отменяет.",
-        _ => "1–7 — кисти, Z X C — материал, B — снять чертёж. Нарисуйте стену или башню и сохраните её чертежом.",
+        (Tool.Brush, false) => "Ведите по земле — рабочие выложат столб до заданной высоты. F — шар. Shift или кирка (V) — размечать, что копать.",
+        (Tool.Brush, true) => "Ведите по земле — рабочие выкопают полосу на заданную глубину. Шар (F) вынимает ком: так пробивают ходы. Щелчок по дереву — срубить.",
+        (Tool.Line, false) => "Зажмите и протяните: стена заданной толщины и высоты. Рабочие сложат её из запасов.",
+        (Tool.Line, true) => "Протяните — ров или траншея заданной ширины и глубины. Деревья на пути срубят целиком.",
+        (Tool.Box, false) => "От угла до угла. F — сплошной помост или только стенки: двор, квадратная башня.",
+        (Tool.Box, true) => "От угла до угла — котлован. Ровное дно или по рельефу (G).",
+        (Tool.Circle, false) => "Из центра к краю. Кольцо — круглая башня, сплошной — бастион. F переключает.",
+        (Tool.Circle, true) => "Из центра к краю — круглая яма или кольцевой ров вокруг башни (F).",
+        (Tool.Extrude, false) => "Щёлкните по ровной грани: она нарастёт на шаг выбранным материалом.",
+        (Tool.Extrude, true) => "Щёлкните по ровной грани: её вынут на шаг вглубь. Ступени в склоне, проход в скале.",
+        (Tool.Unmark, _) => "Протяните рамку — вся разметка в ней снимается. Щелчок снимает разметку поблизости.",
+        (Tool.Capture, _) => "Обведите рамкой свою постройку — она станет чертежом.",
+        (Tool.Paste, _) => "Щёлкните, чтобы разметить копию. R поворачивает, Esc отменяет.",
+        _ => "ЛКМ — выбрать пешек, рамкой — нескольких, ПКМ — послать. 1–5 — кисти, Z X C — материал, V — кирка.",
     };
 
     const int MaxExtrudeFaces = 6000;
+    /// <summary>How far round the cursor a click of the unmarking tool reaches, in voxels.</summary>
+    public const int UnmarkR = 12;
 
     Main _m;
     public Tool Tool { get; private set; }
@@ -72,16 +82,22 @@ public partial class BuildTools : Node3D
 
     VoxelHit _hover;
     bool _hasHover;
-    // while a shape or a wall stroke is dragged, its far end follows the plane it started on
+    // with the pick in hand the cursor also sees trees, to fell them whole
+    VoxelHit _tree;
+    bool _hasTree;
+    // while a shape or a column stroke is dragged, its far end follows the plane it started on
     (int x, int y, int z) _dragPt;
     bool _hasDrag;
     bool _lmb, _paint, _shift, _hasStart;
     Vector2 _pressPos;
     (int x, int y, int z) _startPt;
-    int _levelTop, _digFloor;
+    int _level;
     (int x, int z) _lastG;
     Vector3 _lastHit;
-    int _sumStone, _sumWood, _sumEarth;
+    int _strokeVox;
+    double _strokeSec;
+    readonly double[] _est = new double[4];
+    readonly double[] _strokeEst = new double[4];
 
     Node3D _voxSpace;
     MeshInstance3D _ghost, _shape, _cursor;
@@ -90,13 +106,18 @@ public partial class BuildTools : Node3D
     readonly GreedyMesher _mesher = new();
     byte[] _grid = Array.Empty<byte>();
     VoxelList _plan;
+    bool _planDig;
     string _planKey = "~";
-    double _planClock, _clock;
+    double _planClock, _clock, _revAt;
+    int _rev;
 
-    /// <summary>What the planned stroke costs, or null; and whether the treasury can pay for it.</summary>
+    /// <summary>What the stroke under the cursor asks for, or null; and whether the stores hold enough.</summary>
     public string PlanText { get; private set; }
     public bool PlanAffordable { get; private set; }
-    /// <summary>The material under the cursor and its height above the ground.</summary>
+    /// <summary>Voxels the stroke under the cursor takes from each store (negative when digging fills it).</summary>
+    public readonly double[] PlanNeeds = new double[4];
+    public bool PlanIsDig { get; private set; }
+    /// <summary>The material under the cursor and what is marked there.</summary>
     public string HoverText { get; private set; } = "";
 
     public void Init(Main m)
@@ -150,34 +171,46 @@ public partial class BuildTools : Node3D
 
     public void Cancel() { if (Tool != Tool.None) SetTool(Tool.None); }
 
-    public void SetMaterial(byte m) { Opt.Material = m; Changed(); }
+    /// <summary>A material to lay; puts the pick away.</summary>
+    public void SetMaterial(byte m) { Opt.Material = m; Opt.Dig = false; Changed(); }
+
+    /// <summary>Takes up the pick (or puts it away): the brushes then mark digging instead of laying.</summary>
+    public void SetDig(bool dig)
+    {
+        Opt.Dig = dig;
+        if (dig && Tool is Tool.None or Tool.Capture or Tool.Unmark or Tool.Paste) { Tool = Tool.Line; PasteBp = null; }
+        Changed();
+    }
 
     /// <summary>Call after any option changed: re-plans the ghost and updates the belt.</summary>
     public void Changed() { _planKey = "~"; _m.Hud.OnToolChanged(); }
 
     public void StepWidth(int dir) { Opt.Width = ToolOptions.Next(ToolOptions.Widths, Opt.Width, dir); Changed(); }
 
-    /// <summary>The second number of the current tool: height, extrusion step or digging depth.</summary>
+    /// <summary>The second number of the current tool: height, digging depth or extrusion step.</summary>
     public void StepHeight(int dir)
     {
         if (Tool == Tool.Extrude) Opt.Step = ToolOptions.Next(ToolOptions.Steps, Opt.Step, dir);
-        else if (Tool == Tool.Dig) Opt.DigDepth = ToolOptions.Next(ToolOptions.Depths, Opt.DigDepth, dir);
+        else if (Opt.Dig) Opt.Depth = ToolOptions.Next(ToolOptions.Depths, Opt.Depth, dir);
         else Opt.Height = ToolOptions.Next(ToolOptions.Heights, Opt.Height, dir);
         Changed();
     }
 
     public void ToggleForm()
     {
-        if (Tool == Tool.Brush) Opt.Form = (BrushForm)(((int)Opt.Form + 1) % 3);
+        if (Tool == Tool.Brush) Opt.Form = Opt.Form == BrushForm.Column ? BrushForm.Ball : BrushForm.Column;
         else Opt.Hollow = !Opt.Hollow;
         Changed();
     }
 
     public void ToggleLevel() { Opt.Level = !Opt.Level; Changed(); }
 
+    /// <summary>The pick is in hand, or Shift turns the brush into one for this stroke.</summary>
+    bool DigNow => Opt.Dig || (Tool == Tool.Brush && (_lmb ? _shift : Input.IsKeyPressed(global::Godot.Key.Shift)));
+
     Stroke StrokeNow() => new()
     {
-        Mat = Opt.Material, Width = Opt.Width, Height = Opt.Height, Level = Opt.Level, Hollow = Opt.Hollow,
+        Mat = Opt.Material, Width = Opt.Width, Height = DigNow ? Opt.Depth : Opt.Height, Level = Opt.Level, Hollow = Opt.Hollow, Dig = DigNow,
     };
 
     // ---------------------------------------------------------------- input
@@ -188,10 +221,12 @@ public partial class BuildTools : Node3D
         {
             case InputEventMouseMotion mm:
                 Pick(mm.Position);
-                if (_lmb && _paint) PaintTo();
+                if (Tool == Tool.None) _m.Command.Motion(mm);
+                else if (_lmb && _paint) PaintTo();
                 break;
             case InputEventMouseButton mb when mb.ButtonIndex == MouseButton.Left && !mb.AltPressed:
                 Pick(mb.Position);
+                if (Tool == Tool.None && !_lmb) { _m.Command.Button(mb); break; }
                 if (mb.Pressed) Press(mb);
                 else if (_lmb) Release(mb);
                 break;
@@ -208,17 +243,20 @@ public partial class BuildTools : Node3D
         Tool t = code switch
         {
             global::Godot.Key.Key1 => Tool.Brush, global::Godot.Key.Key2 => Tool.Line, global::Godot.Key.Key3 => Tool.Box,
-            global::Godot.Key.Key4 => Tool.Circle, global::Godot.Key.Key5 => Tool.Extrude, global::Godot.Key.Key6 => Tool.Erase,
-            global::Godot.Key.Key7 => Tool.Dig, global::Godot.Key.Key8 or global::Godot.Key.B => Tool.Capture,
+            global::Godot.Key.Key4 => Tool.Circle, global::Godot.Key.Key5 => Tool.Extrude, global::Godot.Key.Key6 => Tool.Unmark,
+            global::Godot.Key.Key7 or global::Godot.Key.B => Tool.Capture,
             _ => Tool.None,
         };
         if (t != Tool.None) { SetTool(t); return true; }
         switch (code)
         {
-            case global::Godot.Key.Escape: SetTool(Tool.None); return true;
+            case global::Godot.Key.Escape:
+                if (Tool != Tool.None) SetTool(Tool.None); else _m.Command.ClearSelection();
+                return true;
             case global::Godot.Key.Z: SetMaterial(Mat.Stone); return true;
             case global::Godot.Key.X: SetMaterial(Mat.Wood); return true;
             case global::Godot.Key.C: SetMaterial(Mat.Rammed); return true;
+            case global::Godot.Key.V: SetDig(!Opt.Dig); return true;
             case global::Godot.Key.Bracketleft: StepWidth(-1); return true;
             case global::Godot.Key.Bracketright: StepWidth(1); return true;
             case global::Godot.Key.Minus: StepHeight(-1); return true;
@@ -236,18 +274,18 @@ public partial class BuildTools : Node3D
         _pressPos = mb.Position;
         _shift = mb.ShiftPressed;
         _hasStart = _hasHover;
-        _sumStone = _sumWood = _sumEarth = 0;
+        _strokeVox = 0; _strokeSec = 0; Array.Clear(_strokeEst);
         if (!_hasHover) return;
         var w = _m.World;
         _startPt = _hover.Ground(w);
-        _levelTop = Shapes.LevelTop(w, _startPt.x, _startPt.z, Opt.Height);
-        if (Tool is Tool.Brush or Tool.Erase or Tool.Dig)
+        _level = Shapes.Level(w, _startPt.x, _startPt.z, StrokeNow());
+        if (Tool == Tool.Brush)
         {
+            if (DigNow && _hasTree) { FellTree(); _lmb = false; return; }
             _paint = true;
             _lastG = (_startPt.x, _startPt.z);
             _lastHit = new Vector3(_hover.X, _hover.Y, _hover.Z);
-            if (Tool == Tool.Dig) _digFloor = (_hover.NY == 1 ? _hover.Y + 1 : _hover.Y) - Opt.DigDepth;
-            Dab(_hover, first: true);
+            Dab(_hover);
         }
     }
 
@@ -255,32 +293,40 @@ public partial class BuildTools : Node3D
     {
         _lmb = false;
         var w = _m.World;
+        bool click = (mb.Position - _pressPos).Length() <= 8;
+        bool dig = Opt.Dig || (Tool == Tool.Brush && _shift);
         if (_paint)
         {
             _paint = false;
-            var sum = new Cost(_sumStone, _sumWood, _sumEarth);
-            if (!sum.IsEmpty) _m.Hud.Log($"{ToolName(Tool)}: {Describe(sum)}");
+            if (_strokeVox > 0) _m.Hud.Log($"{(dig ? "Копать" : ToolName(Tool))}: {Summary(_strokeEst, dig, _strokeSec)}");
             return;
         }
-        if (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture)
+        if (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark)
         {
+            if (click && Tool == Tool.Unmark) { UnmarkAt(); return; }
+            if (click && dig && _hasTree) { FellTree(); return; }
             if (!_hasStart || !(_hasDrag || _hasHover)) return;
             var a = _startPt; var b = _hasDrag ? _dragPt : _hover.Ground(w);
             if (Tool == Tool.Capture) { Capture(a, b); return; }
-            var plan = PlanDrag(a, b);
-            if (plan == null || plan.Count == 0) { Refuse("здесь нечего класть: всё уже занято"); return; }
-            Build(plan, ToolName(Tool));
+            if (Tool == Tool.Unmark)
+            {
+                int n = _m.Sim.CancelArea(a.x, a.z, b.x, b.z);
+                if (n == 0) Refuse("в рамке нет разметки");
+                else _m.Hud.Float($"разметка снята: {Fmt.M3(n)} м³", Ornament.BronzeLight);
+                return;
+            }
+            Designate(PlanDrag(a, b, dig), dig, ToolName(Tool));
             return;
         }
-        if ((mb.Position - _pressPos).Length() > 8 || !_hasHover) return;
+        if (!click || !_hasHover) return;
         if (Tool == Tool.Extrude)
         {
-            var plan = Shapes.Extrude(w, _m.Site, _hover, Opt.Step, Opt.Material, MaxExtrudeFaces, out bool tooBig);
+            var plan = Shapes.Extrude(w, _m.Site, _hover, Opt.Step, Opt.Material, MaxExtrudeFaces, out bool tooBig, dig);
             if (tooBig) { Refuse($"грань слишком велика: больше {MaxExtrudeFaces} вокселей"); return; }
-            if (plan == null || plan.Count == 0) { Refuse("выдавить можно открытую ровную грань"); return; }
-            Build(plan, "Выдавить");
+            if (plan == null || plan.Count == 0) { Refuse(dig ? "вдавить можно открытую ровную грань" : "выдавить можно открытую ровную грань"); return; }
+            Designate(plan, dig, dig ? "Вдавить" : "Выдавить");
         }
-        else if (Tool == Tool.Paste && PasteBp != null) Build(PlanPasteAtHover(), PasteBp.Name);
+        else if (Tool == Tool.Paste && PasteBp != null) Designate(PlanPasteAtHover(), false, PasteBp.Name);
     }
 
     void Capture((int x, int y, int z) a, (int x, int y, int z) b)
@@ -293,22 +339,67 @@ public partial class BuildTools : Node3D
         SetTool(Tool.None);
     }
 
-    VoxelList PlanDrag((int x, int y, int z) a, (int x, int y, int z) b)
+    void UnmarkAt()
+    {
+        if (!_hasHover) return;
+        int n = _m.Sim.CancelOrders(_hover.X, _hover.Y, _hover.Z, UnmarkR);
+        if (n == 0) Refuse("здесь нет разметки");
+        else _m.Hud.Float($"разметка снята: {Fmt.M3(n)} м³", Ornament.BronzeLight);
+    }
+
+    void FellTree()
+    {
+        var plan = Shapes.Tree(_m.World, _tree.X, _tree.Y, _tree.Z);
+        Designate(plan, true, "Срубить дерево");
+    }
+
+    VoxelList PlanDrag((int x, int y, int z) a, (int x, int y, int z) b, bool dig)
     {
         var w = _m.World; var site = _m.Site; var st = StrokeNow();
-        return Tool switch
+        st.Dig = dig;
+        st.Height = dig ? Opt.Depth : Opt.Height;
+        var plan = Tool switch
         {
-            Tool.Line => Shapes.Line(w, site, a.x, a.z, b.x, b.z, st, _levelTop),
-            Tool.Box => Shapes.Box(w, site, a.x, a.z, b.x, b.z, st, _levelTop),
-            Tool.Circle => Shapes.Circle(w, site, a.x, a.z, Brushes.Dist(b.x - a.x, b.z - a.z) + .5, st, _levelTop),
+            Tool.Line => Shapes.Line(w, site, a.x, a.z, b.x, b.z, st, _level),
+            Tool.Box => Shapes.Box(w, site, a.x, a.z, b.x, b.z, st, _level),
+            Tool.Circle => Shapes.Circle(w, site, a.x, a.z, Brushes.Dist(b.x - a.x, b.z - a.z) + .5, st, _level),
             _ => null,
         };
+        return dig ? WithTrees(plan) : plan;
+    }
+
+    /// <summary>Trees a digging stroke cuts into come down whole, not as stumps under floating crowns.</summary>
+    VoxelList WithTrees(VoxelList L)
+    {
+        if (L == null) return null;
+        var w = _m.World;
+        int n0 = L.Count;
+        bool any = false;
+        for (int i = 0; i < n0 && !any; i++) any = w.Get(L.X(i), L.Y(i), L.Z(i)) == Mat.Trunk;
+        if (!any) return L;
+        long Key(int x, int y, int z) => ((long)y * w.SZ + z) * w.SX + x;
+        var seen = new HashSet<long>();
+        for (int i = 0; i < n0; i++) seen.Add(Key(L.X(i), L.Y(i), L.Z(i)));
+        var felled = new HashSet<long>();
+        for (int i = 0; i < n0; i++)
+        {
+            int x = L.X(i), y = L.Y(i), z = L.Z(i);
+            if (w.Get(x, y, z) != Mat.Trunk || felled.Contains(Key(x, y, z))) continue;
+            var tree = Shapes.Tree(w, x, y, z);
+            for (int t = 0; t < tree.Count; t++)
+            {
+                long k = Key(tree.X(t), tree.Y(t), tree.Z(t));
+                felled.Add(k);
+                if (seen.Add(k)) L.Add(tree.X(t), tree.Y(t), tree.Z(t), Mat.Air);
+            }
+        }
+        return L;
     }
 
     // ---------------------------------------------------------------- freehand strokes
 
     double NibR => Shapes.NibRadius(Opt.Width);
-    bool ColumnStroke => Tool == Tool.Brush && Opt.Form == BrushForm.Column && !_shift;
+    bool ColumnStroke => Tool == Tool.Brush && Opt.Form == BrushForm.Column;
 
     /// <summary>Carries the stroke from the last dab to the cursor without leaving gaps.</summary>
     void PaintTo()
@@ -318,7 +409,7 @@ public partial class BuildTools : Node3D
             if (!_hasDrag) return;
             var d = _dragPt;
             if (Math.Abs(d.x - _lastG.x) + Math.Abs(d.z - _lastG.z) < 1) return;
-            Lay(Shapes.Line(_m.World, _m.Site, _lastG.x, _lastG.z, d.x, d.z, StrokeNow(), _levelTop));
+            Mark(Shapes.Line(_m.World, _m.Site, _lastG.x, _lastG.z, d.x, d.z, StrokeNow(), _level));
             _lastG = (d.x, d.z);
             return;
         }
@@ -334,89 +425,66 @@ public partial class BuildTools : Node3D
             var p = _lastHit.Lerp(hit, i / (float)n);
             var at = h;
             at.X = (int)MathF.Round(p.X); at.Y = (int)MathF.Round(p.Y); at.Z = (int)MathF.Round(p.Z);
-            Dab(at, first: false);
+            Dab(at);
         }
         _lastHit = hit;
         _lastG = (g.x, g.z);
     }
 
-    void Dab(VoxelHit h, bool first)
+    void Dab(VoxelHit h)
     {
-        var w = _m.World; var site = _m.Site; var wal = _m.Wallet;
+        var w = _m.World; var site = _m.Site;
         double r = NibR;
-        if (Tool == Tool.Brush && _shift) Builder.RemoveSphere(w, wal, h.X, h.Y, h.Z, r, Chips(.15f));
-        else if (Tool == Tool.Brush && Opt.Form == BrushForm.Column)
+        if (ColumnStroke)
         {
             var g = h.Ground(w);
-            Lay(Shapes.Line(w, site, g.x, g.z, g.x, g.z, StrokeNow(), _levelTop));
+            Mark(Shapes.Line(w, site, g.x, g.z, g.x, g.z, StrokeNow(), _level));
         }
-        else if (Tool == Tool.Brush && Opt.Form == BrushForm.Ball)
+        else if (DigNow) Mark(Shapes.BallDig(w, site, h.X, h.Y, h.Z, Math.Max(.5, r)));
+        else
         {
             int off = Math.Max(1, (int)Math.Ceiling(r));
-            Lay(Shapes.Ball(w, site, h.X + h.NX * off, h.Y + h.NY * off, h.Z + h.NZ * off, r, Opt.Material));
+            Mark(Shapes.Ball(w, site, h.X + h.NX * off, h.Y + h.NY * off, h.Z + h.NZ * off, r, Opt.Material));
         }
-        else if (Tool == Tool.Brush)
-        {
-            var res = Builder.TryRepaint(w, wal, Shapes.Repaint(w, h.X, h.Y, h.Z, Math.Max(1, r), Opt.Material), out var c, out _);
-            if (res == BuildResult.Ok) Sum(c);
-            else if (res == BuildResult.NoGold) Refuse("не хватает золота на перекраску");
-            else if (res == BuildResult.NoEarth) Refuse("не хватает земли: копайте лопатой");
-        }
-        else if (Tool == Tool.Erase)
-        {
-            int n = Builder.RemoveSphere(w, wal, h.X, h.Y, h.Z, r, Chips(.15f));
-            if (n == 0 && first) Refuse("стереть можно только свою кладку");
-        }
-        else if (Tool == Tool.Dig)
-        {
-            var d = Builder.Dig(w, site, wal, h.X, h.Z, _digFloor, Math.Max(1, Opt.Width / 2), out _, Chips(.03f));
-            if (d == Builder.DigResult.NoGold) Refuse("нечем платить землекопам");
-        }
-        _m.Hud.Refresh();
     }
 
-    void Lay(VoxelList L)
+    /// <summary>One dab of a freehand stroke: marked quietly, summed up when the button is let go.</summary>
+    void Mark(VoxelList plan)
     {
-        var r = Builder.TryBuild(_m.World, _m.Wallet, L, out var c);
-        if (r == BuildResult.Ok) { Sum(c); _m.Hud.Refresh(); }
-        else if (r == BuildResult.NoGold) Refuse($"нужно {c.Gold} золота");
-        else if (r == BuildResult.NoEarth) Refuse($"нужно {Fmt.One(c.EarthM3)} м³ земли: копайте лопатой");
+        if (plan == null || plan.Count == 0) return;
+        bool dig = DigNow;
+        if (dig) plan = WithTrees(plan);
+        _strokeSec += Labour.Estimate(_m.World, plan, dig, _est);
+        for (int k = 0; k < 4; k++) _strokeEst[k] += _est[k];
+        _strokeVox += dig ? _m.Sim.DesignateRemove(plan) : _m.Sim.DesignateBuild(plan);
+        _planKey = "~";
     }
 
-    void Sum(Cost c) { _sumStone += c.Stone; _sumWood += c.Wood; _sumEarth += c.Earth; }
-
-    Action<int, int, int, byte> Chips(float chance) => (x, y, z, m) =>
+    /// <summary>Marks a whole shape for the pawns and writes in the chronicle what it will take.</summary>
+    bool Designate(VoxelList plan, bool dig, string what)
     {
-        if (Random.Shared.NextDouble() < chance) _m.Debris.Spawn(m, x, y, z, 1, 1.4f);
-    };
-
-    bool Build(VoxelList L, string what)
-    {
-        var r = Builder.TryBuild(_m.World, _m.Wallet, L, out var c);
-        switch (r)
-        {
-            case BuildResult.Ok:
-                _m.Hud.Log($"{what}: {Describe(c)}");
-                _m.Hud.Refresh();
-                _planKey = "~";
-                return true;
-            case BuildResult.NoGold: Refuse($"нужно {c.Gold} золота"); break;
-            case BuildResult.NoEarth: Refuse($"нужно {Fmt.One(c.EarthM3)} м³ земли: копайте лопатой"); break;
-            case BuildResult.Occupied: Refuse("здесь уже занято"); break;
-            default: Refuse("здесь не построить"); break;
-        }
-        return false;
+        if (plan == null || plan.Count == 0) { Refuse(dig ? "здесь нечего копать" : "здесь нечего класть: всё уже занято"); return false; }
+        double sec = Labour.Estimate(_m.World, plan, dig, _est);
+        int n = dig ? _m.Sim.DesignateRemove(plan) : _m.Sim.DesignateBuild(plan);
+        if (n == 0) { Refuse(dig ? "здесь нечего копать" : "здесь нечего класть: всё уже занято"); return false; }
+        _m.Hud.Log($"{what}: {Summary(_est, dig, sec)}");
+        _planKey = "~";
+        return true;
     }
 
-    /// <summary>"камень 2,5 · земля 5,8 м³ · 28 зол."</summary>
-    public static string Describe(Cost c)
+    /// <summary>"камень 2,5 м³ · 3 мин работы одного" or, digging, "земля +1,8 · камень +0,4 м³ · 2 мин работы одного".</summary>
+    public static string Summary(double[] stores, bool dig, double seconds)
     {
         var parts = new List<string>();
-        if (c.Stone > 0) parts.Add("камень " + Fmt.M3(c.Stone));
-        if (c.Wood > 0) parts.Add("брёвна " + Fmt.M3(c.Wood));
-        if (c.Earth > 0) parts.Add("земля " + Fmt.M3(c.Earth));
-        string vol = parts.Count > 0 ? string.Join(" · ", parts) + " м³" : "";
-        return c.Gold > 0 ? $"{vol} · {c.Gold} зол." : vol;
+        foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth })
+        {
+            double v = stores[k];
+            if (dig && v < -.5) parts.Add($"{Stockpile.Name(k)} +{Fmt.M3(-v)}");
+            else if (!dig && v > .5) parts.Add($"{Stockpile.Name(k)} {Fmt.M3(v)}");
+        }
+        string what = parts.Count > 0 ? string.Join(" · ", parts) + " м³" : dig ? "без добычи" : "";
+        string work = $"{Fmt.Duration(seconds)} работы одного";
+        return what.Length > 0 ? $"{what} · {work}" : work;
     }
 
     string _lastRefuse = ""; double _lastRefuseAt = -9;
@@ -433,9 +501,16 @@ public partial class BuildTools : Node3D
     {
         var (o, d) = _m.Rig.Ray(screen);
         var w = _m.World;
-        _hasHover = Raycast.Cast(w, (o.X - w.OriginX) / VoxelWorld.Vox, o.Y / VoxelWorld.Vox, (o.Z - w.OriginZ) / VoxelWorld.Vox, d.X, d.Y, d.Z, out _hover, skipVeg: true);
+        double ox = (o.X - w.OriginX) / VoxelWorld.Vox, oy = o.Y / VoxelWorld.Vox, oz = (o.Z - w.OriginZ) / VoxelWorld.Vox;
+        _hasHover = Raycast.Cast(w, ox, oy, oz, d.X, d.Y, d.Z, out _hover, skipVeg: true);
+        _hasTree = false;
+        if (DigNow && Raycast.Cast(w, ox, oy, oz, d.X, d.Y, d.Z, out var veg) && veg.M is Mat.Trunk or Mat.Leaf or Mat.Foliage)
+        {
+            _tree = veg;
+            _hasTree = true;
+        }
         _hasDrag = false;
-        if (_lmb && _hasStart && (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture || ColumnStroke) && Math.Abs(d.Y) > 1e-4f)
+        if (_lmb && _hasStart && (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark || ColumnStroke) && Math.Abs(d.Y) > 1e-4f)
         {
             float t = (w.WY(_startPt.y) - o.Y) / d.Y;
             if (t > 0)
@@ -448,7 +523,13 @@ public partial class BuildTools : Node3D
         if (!_hasHover) { HoverText = ""; return; }
         int ground = w.GroundTop(_hover.X, _hover.Z);
         float above = (_hover.Y + 1 - ground) * VoxelWorld.Vox;
-        HoverText = Mat.IsPlayer[_hover.M] && above > .05f ? $"{Mat.NameOf(_hover.M)} · {Fmt.One(above)} м над землёй" : Mat.NameOf(_hover.M);
+        string text = _hasTree ? (_tree.M == Mat.Trunk ? "дерево: ствол" : "дерево: крона")
+            : Mat.IsPlayer[_hover.M] && above > .05f ? $"{Mat.NameOf(_hover.M)} · {Fmt.One(above)} м над землёй" : Mat.NameOf(_hover.M);
+        byte order = _m.Sim.Orders.At(_hover.X, _hover.Y, _hover.Z);
+        if (order == 0) { var f = _hover.Front; order = _m.Sim.Orders.At(f.x, f.y, f.z); }
+        if (order == Orders.Remove) text += " · размечено: копать";
+        else if (order != 0) text += $" · размечено: {Mat.NameOf(order).ToLowerInvariant()}";
+        HoverText = text;
     }
 
     /// <summary>Points the tools at a spot on the map as if the mouse were there (screenshots and tests).</summary>
@@ -475,8 +556,9 @@ public partial class BuildTools : Node3D
         _cursor.Visible = _hasHover && Tool != Tool.None;
         if (!_cursor.Visible) return;
         var w = _m.World;
-        var p = new Vector3(w.WX(_hover.X + .5f + _hover.NX * .52f), w.WY(_hover.Y + .5f + _hover.NY * .52f), w.WZ(_hover.Z + .5f + _hover.NZ * .52f));
-        Basis b = _hover.NX != 0 ? new Basis(Vector3.Forward, Mathf.Pi / 2) : _hover.NZ != 0 ? new Basis(Vector3.Right, Mathf.Pi / 2) : Basis.Identity;
+        var h = _hasTree ? _tree : _hover;
+        var p = new Vector3(w.WX(h.X + .5f + h.NX * .52f), w.WY(h.Y + .5f + h.NY * .52f), w.WZ(h.Z + .5f + h.NZ * .52f));
+        Basis b = h.NX != 0 ? new Basis(Vector3.Forward, Mathf.Pi / 2) : h.NZ != 0 ? new Basis(Vector3.Right, Mathf.Pi / 2) : Basis.Identity;
         _cursor.Transform = new Transform3D(b, p);
     }
 
@@ -484,28 +566,20 @@ public partial class BuildTools : Node3D
     {
         var w = _m.World;
         bool show = false;
-        bool erasing = Tool == Tool.Erase || (Tool == Tool.Brush && Input.IsKeyPressed(global::Godot.Key.Shift));
-        if (_hasHover && Tool == Tool.Dig)
-        {
-            var g = _hover.Ground(w);
-            float h = Opt.DigDepth * VoxelWorld.Vox, r = Math.Max(1, Opt.Width / 2) * VoxelWorld.Vox + .02f;
-            SetShape(new CylinderMesh { TopRadius = r, BottomRadius = r, Height = h, RadialSegments = 32 },
-                new Vector3(w.WX(_hover.X + .5f), w.WY(g.y) - h / 2, w.WZ(_hover.Z + .5f)), new Color(.55f, .4f, .28f, .3f));
-            show = true;
-        }
-        else if (_hasHover && erasing)
-        {
-            float r = (float)(NibR + .5) * VoxelWorld.Vox;
-            SetShape(new SphereMesh { Radius = r, Height = r * 2, RadialSegments = 24, Rings = 12 },
-                new Vector3(w.WX(_hover.X + .5f), w.WY(_hover.Y + .5f), w.WZ(_hover.Z + .5f)), new Color(.83f, .3f, .22f, .32f));
-            show = true;
-        }
-        else if (Tool == Tool.Capture && _lmb && _hasStart && _hasDrag)
+        if ((Tool is Tool.Capture or Tool.Unmark) && _lmb && _hasStart && _hasDrag)
         {
             var a = _startPt; var b = _dragPt;
             int x0 = Math.Min(a.x, b.x), x1 = Math.Max(a.x, b.x) + 1, z0 = Math.Min(a.z, b.z), z1 = Math.Max(a.z, b.z) + 1;
+            var c = Tool == Tool.Unmark ? new Color(.83f, .3f, .22f, .26f) : new Color(.9f, .62f, .3f, .28f);
             SetShape(new BoxMesh { Size = new Vector3((x1 - x0) * VoxelWorld.Vox, .04f, (z1 - z0) * VoxelWorld.Vox) },
-                new Vector3(w.WX((x0 + x1) / 2f), w.WY(Math.Max(a.y, b.y)) + .05f, w.WZ((z0 + z1) / 2f)), new Color(.9f, .62f, .3f, .28f));
+                new Vector3(w.WX((x0 + x1) / 2f), w.WY(Math.Max(a.y, b.y)) + .05f, w.WZ((z0 + z1) / 2f)), c);
+            show = true;
+        }
+        else if (Tool == Tool.Unmark && _hasHover)
+        {
+            float r = (UnmarkR + .5f) * VoxelWorld.Vox;
+            SetShape(new SphereMesh { Radius = r, Height = r * 2, RadialSegments = 24, Rings = 12 },
+                new Vector3(w.WX(_hover.X + .5f), w.WY(_hover.Y + .5f), w.WZ(_hover.Z + .5f)), new Color(.83f, .3f, .22f, .22f));
             show = true;
         }
         _shape.Visible = show;
@@ -526,25 +600,30 @@ public partial class BuildTools : Node3D
     void UpdatePlan()
     {
         var w = _m.World;
+        // the valley changes all the time while the pawns work: re-plan for it twice a second, not every frame
+        if (w.Revision != _rev && _clock - _revAt > .5) { _rev = w.Revision; _revAt = _clock; }
+        var st = _m.Sim.Stock;
+        string stock = $"{(int)(st[1] / 400)}|{(int)(st[2] / 400)}|{(int)(st[3] / 400)}";
+        bool dig = DigNow;
+        string opts = $"{dig}|{Opt.Material}|{Opt.Width}|{Opt.Height}|{Opt.Depth}|{Opt.Step}|{Opt.Level}|{Opt.Hollow}|{Opt.Form}|{_rev}|{stock}";
         string key = "";
-        bool shift = Input.IsKeyPressed(global::Godot.Key.Shift);
         bool dragging = Tool is Tool.Line or Tool.Box or Tool.Circle && _lmb && _hasStart && _hasDrag;
-        if (dragging) key = $"D{Tool}|{_startPt}|{_dragPt}|{Opt.Material}|{Opt.Width}|{Opt.Height}|{Opt.Level}|{Opt.Hollow}|{w.Revision}|{(int)_m.Wallet.Gold}|{(int)(_m.Wallet.Earth * 10)}";
+        if (dragging) key = $"D{Tool}|{_startPt}|{_dragPt}|{opts}";
+        else if (dig && _hasTree && Tool is Tool.Brush or Tool.Line or Tool.Box or Tool.Circle) key = $"T|{_tree.X},{_tree.Y},{_tree.Z}|{_rev}";
         else if (_hasHover)
         {
             var g = _hover.Ground(w);
             string h = $"{_hover.X},{_hover.Y},{_hover.Z},{_hover.NX}{_hover.NY}{_hover.NZ}";
             key = Tool switch
             {
-                Tool.Line => $"L|{g}",
-                Tool.Brush when !shift && Opt.Form == BrushForm.Column => $"C|{g}|{(_paint ? _levelTop : -1)}",
-                Tool.Brush when !shift => $"B{Opt.Form}|{h}",
+                Tool.Line or Tool.Box or Tool.Circle => $"L|{g}",
+                Tool.Brush when Opt.Form == BrushForm.Column => $"C|{g}|{(_paint ? _level : -1)}",
+                Tool.Brush => $"B|{h}",
                 Tool.Extrude => $"E|{h}",
                 Tool.Paste when PasteBp != null => $"P|{PasteBp.Id}|{g}|{PasteRot}",
                 _ => "",
             };
-            if (key.Length > 0)
-                key += $"|{Opt.Material}|{Opt.Width}|{Opt.Height}|{Opt.Step}|{Opt.Level}|{Opt.Hollow}|{w.Revision}|{(int)_m.Wallet.Gold}|{(int)(_m.Wallet.Earth * 10)}";
+            if (key.Length > 0) key += "|" + opts;
         }
         if (key == _planKey) return;
         if (key.Length > 0 && _planKey.Length > 1 && _clock - _planClock < .05) return;
@@ -555,58 +634,73 @@ public partial class BuildTools : Node3D
         var site = _m.Site;
         var gp = _hover.Ground(w);
         double r = NibR;
-        bool repaint = false;
-        string name = ToolName(Tool);
-        int lt = Shapes.LevelTop(w, gp.x, gp.z, Opt.Height);
-        if (dragging) _plan = PlanDrag(_startPt, _dragPt);
-        else if (Tool == Tool.Line) { _plan = Shapes.Line(w, site, gp.x, gp.z, gp.x, gp.z, StrokeNow(), lt); name = "Линия, начало"; }
-        else if (Tool == Tool.Brush && Opt.Form == BrushForm.Column) _plan = Shapes.Line(w, site, gp.x, gp.z, gp.x, gp.z, StrokeNow(), _paint ? _levelTop : lt);
-        else if (Tool == Tool.Brush && Opt.Form == BrushForm.Ball)
+        string name = dig ? "Копать" : ToolName(Tool);
+        var stroke = StrokeNow();
+        int lv = Shapes.Level(w, gp.x, gp.z, stroke);
+        if (key[0] == 'T') { _plan = Shapes.Tree(w, _tree.X, _tree.Y, _tree.Z); name = "Срубить дерево"; }
+        else if (dragging) _plan = PlanDrag(_startPt, _dragPt, dig);
+        else if (Tool is Tool.Line or Tool.Box or Tool.Circle)
+        {
+            _plan = Shapes.Line(w, site, gp.x, gp.z, gp.x, gp.z, stroke, lv);
+            name = dig ? "Копать, начало" : ToolName(Tool) + ", начало";
+        }
+        else if (Tool == Tool.Brush && Opt.Form == BrushForm.Column) _plan = Shapes.Line(w, site, gp.x, gp.z, gp.x, gp.z, stroke, _paint ? _level : lv);
+        else if (Tool == Tool.Brush && dig) _plan = Shapes.BallDig(w, site, _hover.X, _hover.Y, _hover.Z, Math.Max(.5, r));
+        else if (Tool == Tool.Brush)
         {
             int off = Math.Max(1, (int)Math.Ceiling(r));
             _plan = Shapes.Ball(w, site, _hover.X + _hover.NX * off, _hover.Y + _hover.NY * off, _hover.Z + _hover.NZ * off, r, Opt.Material);
         }
-        else if (Tool == Tool.Brush) { _plan = Shapes.Repaint(w, _hover.X, _hover.Y, _hover.Z, Math.Max(1, r), Opt.Material); repaint = true; name = "Перекраска"; }
         else if (Tool == Tool.Extrude)
         {
-            _plan = Shapes.Extrude(w, site, _hover, Opt.Step, Opt.Material, MaxExtrudeFaces, out bool tooBig);
+            _plan = Shapes.Extrude(w, site, _hover, Opt.Step, Opt.Material, MaxExtrudeFaces, out bool tooBig, dig);
             if (tooBig) { _ghost.Visible = false; PlanText = $"Грань больше {MaxExtrudeFaces} вокселей"; PlanAffordable = false; return; }
+            if (dig) name = "Вдавить";
         }
-        else if (Tool == Tool.Paste) { _plan = PlanPasteAtHover(); name = PasteBp.Name; }
+        else if (Tool == Tool.Paste) { _plan = PlanPasteAtHover(); name = PasteBp.Name; dig = false; }
+        if (key[0] == 'T') dig = true;
+        _planDig = dig;
 
-        BuildResult check;
-        Cost cost;
-        if (repaint)
-        {
-            cost = Builder.CostOf(_plan);
-            check = _plan == null || _plan.Count == 0 ? BuildResult.Nothing : _m.Wallet.Gold + 1 >= cost.Gold ? BuildResult.Ok : BuildResult.NoGold;
-        }
-        else check = Builder.Check(_m.Wallet, _plan, out cost);
-        if (check is BuildResult.Nothing or BuildResult.Occupied) { _ghost.Visible = false; PlanText = null; return; }
-        PlanAffordable = check == BuildResult.Ok;
-        PlanText = $"{name}: {Describe(cost)}" + check switch
-        {
-            BuildResult.NoGold => " — не хватает золота",
-            BuildResult.NoEarth => " — не хватает земли",
-            _ => "",
-        };
-        _ghost.Mesh = MeshPlan(_plan);
+        double sec = Labour.Estimate(w, _plan, dig, _est);
+        Array.Copy(_est, PlanNeeds, 4);
+        PlanIsDig = dig;
+        if (_plan == null || _plan.Count == 0 || sec <= 0) { _ghost.Visible = false; PlanText = null; return; }
+        string shortOf = "";
+        if (!dig)
+            foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth })
+                if (_est[k] > st[k] + .5) shortOf += (shortOf.Length > 0 ? ", " : "") + $"{Stockpile.Name(k)} {Fmt.M3(st[k])}";
+        PlanAffordable = dig || shortOf.Length == 0;
+        PlanText = $"{name}: {Summary(_est, dig, sec)}" + (shortOf.Length > 0 ? $" — в запасе {shortOf}" : "");
+        _ghost.Mesh = MeshPlan(_plan, dig);
         _ghost.Visible = _ghost.Mesh != null;
-        _ghostMat.SetShaderParameter("tint", PlanAffordable ? new Vector3(.9f, .55f, .25f) : new Vector3(.85f, .2f, .16f));
-        _ghostMat.SetShaderParameter("tint_mix", PlanAffordable ? .35f : .6f);
+        _ghostMat.SetShaderParameter("tint", dig ? new Vector3(.85f, .2f, .14f) : PlanAffordable ? new Vector3(.9f, .55f, .25f) : new Vector3(.85f, .2f, .16f));
+        _ghostMat.SetShaderParameter("tint_mix", dig ? .62f : PlanAffordable ? .35f : .6f);
+        _ghostMat.SetShaderParameter("inflate", dig ? .1f : 0f);
     }
 
-    ArrayMesh MeshPlan(VoxelList L)
+    ArrayMesh MeshPlan(VoxelList L, bool dig)
     {
-        if (L == null || !L.Bounds(out int x0, out int y0, out int z0, out int x1, out int y1, out int z1)) return null;
+        if (L == null || L.Count == 0) return null;
+        int x0 = int.MaxValue, y0 = int.MaxValue, z0 = int.MaxValue, x1 = int.MinValue, y1 = int.MinValue, z1 = int.MinValue;
+        var w = _m.World;
+        for (int i = 0; i < L.Count; i++)
+        {
+            if (!dig && L.M(i) == 0) continue;
+            int x = L.X(i), y = L.Y(i), z = L.Z(i);
+            x0 = Math.Min(x0, x); y0 = Math.Min(y0, y); z0 = Math.Min(z0, z);
+            x1 = Math.Max(x1, x); y1 = Math.Max(y1, y); z1 = Math.Max(z1, z);
+        }
+        if (x0 == int.MaxValue) return null;
         int dx = x1 - x0 + 1, dy = y1 - y0 + 1, dz = z1 - z0 + 1, px = dx + 2, pz = dz + 2;
         long size = (long)px * (dy + 2) * pz;
         if (size > 24_000_000) return null;
         if (_grid.Length < size) _grid = new byte[size]; else Array.Clear(_grid, 0, (int)size);
         for (int i = 0; i < L.Count; i++)
         {
-            byte m = L.M(i);
-            if (m != 0) _grid[((L.Y(i) - y0 + 1) * pz + (L.Z(i) - z0 + 1)) * px + (L.X(i) - x0 + 1)] = m;
+            int x = L.X(i), y = L.Y(i), z = L.Z(i);
+            byte m = dig ? w.Get(x, y, z) : L.M(i);
+            if (m == 0 || (dig && !Labour.Diggable(m))) continue;
+            _grid[((y - y0 + 1) * pz + (z - z0 + 1)) * px + (x - x0 + 1)] = m;
         }
         return GodotMesh.From(_mesher.Mesh(_grid, dx, dy, dz, x0, y0, z0));
     }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Godot;
+using VoxelTower.Core;
 
 namespace VoxelTower.Game;
 
@@ -164,16 +165,25 @@ public partial class Choice : HBoxContainer
     public override GodotObject _MakeCustomTooltip(string forText) => Tooltip.Make(forText);
 }
 
-/// <summary>The treasury banner at the top of the screen: gold and dug earth.</summary>
+/// <summary>The treasury banner at the top of the screen: gold, and the stone, logs and earth in the stores.</summary>
 public partial class Banner : Control
 {
-    public string Gold = "0", Earth = "0";
+    /// <summary>Gold, then cubic metres of stone, logs and earth.</summary>
+    public readonly string[] Values = { "0", "0", "0", "0" };
+    /// <summary>A store the stroke under the cursor needs more of than there is: drawn in blood.</summary>
+    public readonly bool[] Short = new bool[4];
+
+    static readonly (Icons.Painter icon, string caption)[] Groups =
+    {
+        (Icons.Coin, "Казна"), (Icons.Material(Mat.Stone), "Камень, м³"), (Icons.Material(Mat.Wood), "Брёвна, м³"), (Icons.Earth, "Земля, м³"),
+    };
 
     public Banner()
     {
-        CustomMinimumSize = new Vector2(400, 60);
+        CustomMinimumSize = new Vector2(620, 60);
         MouseFilter = MouseFilterEnum.Stop;
-        TooltipText = "Казна и земля\nЗолото платится за каждый воксель камня и брёвен. Землю для насыпей и земляных стен даёт лопата.";
+        TooltipText = "Казна и запасы\nЗолото идёт на наём пешек; его дают убитые налётчики и ранний вызов орды. " +
+            "Камень, брёвна и землю добывают рабочие — киркой из скал, леса и грунта; стены кладутся из этих запасов.";
     }
 
     public override void _Draw()
@@ -192,18 +202,20 @@ public partial class Banner : Control
         DrawPolyline(rim, Ornament.BronzeDeep, 1.5f, true);
         Ornament.Rivet(this, new Vector2(k * .62f, s.Y / 2), 3);
         Ornament.Rivet(this, new Vector2(s.X - k * .62f, s.Y / 2), 3);
-        Ornament.Divider(this, new Vector2(s.X / 2, 12), new Vector2(s.X / 2, s.Y - 12), .9f);
 
-        float half = s.X / 2;
-        Group(new Rect2(30, 0, half - 40, s.Y), Icons.Coin, "Казна", Gold);
-        Group(new Rect2(half + 12, 0, half - 40, s.Y), Icons.Earth, "Земля, м³", Earth);
+        float x0 = 28, cell = (s.X - 2 * x0) / Groups.Length;
+        for (int g = 0; g < Groups.Length; g++)
+        {
+            if (g > 0) Ornament.Divider(this, new Vector2(x0 + g * cell, 12), new Vector2(x0 + g * cell, s.Y - 12), .9f);
+            Group(new Rect2(x0 + g * cell + 8, 0, cell - 12, s.Y), Groups[g].icon, Groups[g].caption, Values[g], Short[g]);
+        }
     }
 
-    void Group(Rect2 r, Icons.Painter icon, string caption, string value)
+    void Group(Rect2 r, Icons.Painter icon, string caption, string value, bool shortOf)
     {
-        icon(this, new Rect2(r.Position + new Vector2(0, 11), new Vector2(38, 38)), Ornament.BronzeLight);
-        DrawString(Ornament.Caps, r.Position + new Vector2(48, 24), caption.ToUpperInvariant(), HorizontalAlignment.Left, -1, 10, Ornament.Aged);
-        DrawString(Ornament.Display, r.Position + new Vector2(48, 48), value, HorizontalAlignment.Left, -1, 27, Ornament.Parchment);
+        icon(this, new Rect2(r.Position + new Vector2(0, 13), new Vector2(34, 34)), Ornament.BronzeLight);
+        DrawString(Ornament.Caps, r.Position + new Vector2(42, 24), caption.ToUpperInvariant(), HorizontalAlignment.Left, -1, 9, Ornament.Aged);
+        DrawString(Ornament.Display, r.Position + new Vector2(42, 48), value, HorizontalAlignment.Left, -1, 26, shortOf ? Ornament.Blood : Ornament.Parchment);
     }
 
     public override GodotObject _MakeCustomTooltip(string forText) => Tooltip.Make(forText);

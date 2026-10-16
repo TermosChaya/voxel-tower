@@ -304,6 +304,21 @@ if (args.Length == 0 || args[0] == "--sim")
     Check("workers fell a tree for wood", nTree > 300 && sim.Stock[Stockpile.Wood] > wood0 + 200 && w4.Get(trunk.x, trunk.y, trunk.z) != Mat.Trunk,
         $"{nTree} voxels of tree at {trunk}, wood +{Fmt.M3((int)(sim.Stock[Stockpile.Wood] - wood0))} m³, {sim.Orders.Total} orders left");
 
+    // a block of logs marked right where a soldier stands: the rest of it gets laid, nobody stalls over his spot
+    {
+        int fx = px - 60, fz = pz - 60;
+        var guard = sim.Spawn(Kinds.Archer, sim.NearestStand(fx + 12, fz + 12, 4));
+        sim.Command(new[] { guard }, guard.Cell);
+        int block = sim.DesignateBuild(Shapes.Box(w4, site4, fx, fz, fx + 24, fz + 24, new Stroke { Mat = Mat.Wood, Width = 1, Height = 12, Level = true }, Shapes.LevelTop(w4, fx, fz, 12)));
+        Run(90);
+        string why = "";
+        foreach (var u in crew) if (u.Why != "") why += $" #{u.Id}: {u.Why};";
+        Check("masonry where a soldier stands waits, the rest gets laid", block > 6000 && sim.Orders.BuildTotal > 0 && sim.Orders.BuildTotal <= 8 * 8 * 12,
+            $"{block} voxels planned, {sim.Orders.BuildTotal} left in his place;{why}");
+        sim.CancelArea(fx, fz, fx + 24, fz + 24);
+        guard.Dead = true; guard.DiedAt = -999;
+    }
+
     // the horde finds its way; through a stone ring it has to hack
     sw.Restart();
     sim.ComputeFields();
