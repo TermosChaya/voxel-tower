@@ -10,11 +10,11 @@ namespace VoxelTower.Game;
 public partial class CameraRig : Node3D
 {
     public Camera3D Cam { get; private set; }
-    /// <summary>Width of the panel on the right, in canvas pixels; the diorama centres in what is left.</summary>
-    public float PanelWidth = 380;
+    /// <summary>Height of the interface along the bottom and top edges, in canvas pixels; the diorama centres between them.</summary>
+    public float BottomInset = 0, TopInset = 0;
 
     const float Dist = 60f, ViewH = 15.5f, LookY = 3f;
-    const float HomeTx = .4f, HomeTz = .2f, HomeYaw = -.66f, HomePitch = .62f, HomeZoom = .8f;
+    const float HomeTx = .4f, HomeTz = .3f, HomeYaw = -.66f, HomePitch = .62f, HomeZoom = .74f;
 
     float _tx, _tz, _yaw, _pitch, _zoom;     // where the camera is heading
     float _cx, _cz, _cyaw, _cpitch, _czoom;  // where it is now
@@ -115,13 +115,38 @@ public partial class CameraRig : Node3D
     void Apply()
     {
         var vp = GetViewport().GetVisibleRect().Size;
-        float free = Math.Max(240f, vp.X - PanelWidth), aspect = free / Math.Max(1f, vp.Y);
+        float aspect = vp.X / Math.Max(1f, vp.Y - BottomInset - TopInset);
         Cam.Size = ViewH * Math.Max(1f, 1.45f / aspect) / _czoom;
         float cp = MathF.Cos(_cpitch), spn = MathF.Sin(_cpitch);
         var target = new Vector3(_cx, LookY, _cz);
         var pos = target + new Vector3(MathF.Sin(_cyaw) * cp * Dist, spn * Dist, MathF.Cos(_cyaw) * cp * Dist);
         Cam.LookAtFromPosition(pos, target, Vector3.Up);
-        Cam.HOffset = PanelWidth * .5f * Cam.Size / Math.Max(1f, vp.Y);
+        Cam.VOffset = -(BottomInset - TopInset) * .5f * Cam.Size / Math.Max(1f, vp.Y);
+    }
+
+    /// <summary>The point of the map the camera is heading for, in world metres (x, z).</summary>
+    public Vector2 Target => new(_tx, _tz);
+
+    /// <summary>Looks at a point of the map, in world metres.</summary>
+    public void Focus(float wx, float wz)
+    {
+        _tx = Math.Clamp(wx, -11f, 11f);
+        _tz = Math.Clamp(wz, -8f, 8f);
+    }
+
+    /// <summary>Where the corners of the screen land on a horizontal plane at height y, in world metres.</summary>
+    public Vector3[] GroundFootprint(float y)
+    {
+        var vp = GetViewport().GetVisibleRect().Size;
+        var corners = new[] { new Vector2(0, TopInset), new Vector2(vp.X, TopInset), new Vector2(vp.X, vp.Y - BottomInset), new Vector2(0, vp.Y - BottomInset) };
+        var pts = new Vector3[4];
+        for (int i = 0; i < 4; i++)
+        {
+            var o = Cam.ProjectRayOrigin(corners[i]); var d = Cam.ProjectRayNormal(corners[i]);
+            float t = Math.Abs(d.Y) < 1e-4f ? 0 : (y - o.Y) / d.Y;
+            pts[i] = o + d * t;
+        }
+        return pts;
     }
 
     /// <summary>A ray through a screen point, in world metres.</summary>

@@ -80,6 +80,31 @@ public static class Builder
         }
     }
 
+    /// <summary>
+    /// Re-lays the player's own voxels in another material: the new material is paid in full,
+    /// the old one returns at the usual share (earth goes back to the store whole).
+    /// </summary>
+    public static BuildResult TryRepaint(VoxelWorld w, Wallet wal, VoxelList L, out Cost cost, out double refund)
+    {
+        cost = default; refund = 0;
+        if (L == null || L.Count == 0) return BuildResult.Nothing;
+        cost = CostOf(L);
+        double earthBack = 0;
+        for (int i = 0; i < L.Count; i++)
+        {
+            byte old = w.Get(L.X(i), L.Y(i), L.Z(i));
+            if (old == Mat.Stone || old == Mat.Mortar) refund += Prices.Stone * Prices.Refund / VoxelWorld.PerM3;
+            else if (old == Mat.Wood) refund += Prices.Wood * Prices.Refund / VoxelWorld.PerM3;
+            else if (old == Mat.Rammed) earthBack += 1.0 / VoxelWorld.PerM3;
+        }
+        if (wal.Gold + refund < cost.Gold) return BuildResult.NoGold;
+        if (wal.Earth + earthBack + 1e-6 < cost.EarthM3) return BuildResult.NoEarth;
+        wal.Gold += refund - cost.Gold;
+        wal.Earth += earthBack - cost.EarthM3;
+        for (int i = 0; i < L.Count; i++) w.Set(L.X(i), L.Y(i), L.Z(i), L.M(i));
+        return BuildResult.Ok;
+    }
+
     public enum DigResult { Ok, Nothing, NoGold }
 
     /// <summary>
@@ -119,13 +144,16 @@ public static class Builder
 
     /// <summary>Takes apart a ball of the player's own masonry; half the price comes back, earth goes to the store.</summary>
     public static int RemoveSphere(VoxelWorld w, Wallet wal, int cx, int cy, int cz, int r, Action<int, int, int, byte> removed = null)
+        => RemoveSphere(w, wal, cx, cy, cz, r + .3, removed);
+
+    public static int RemoveSphere(VoxelWorld w, Wallet wal, int cx, int cy, int cz, double radius, Action<int, int, int, byte> removed = null)
     {
-        int st = 0, wd = 0, ea = 0;
+        int st = 0, wd = 0, ea = 0, r = (int)Math.Ceiling(radius);
         for (int y = Math.Max(1, cy - r); y <= Math.Min(w.SY - 1, cy + r); y++)
             for (int z = Math.Max(0, cz - r); z <= Math.Min(w.SZ - 1, cz + r); z++)
                 for (int x = Math.Max(0, cx - r); x <= Math.Min(w.SX - 1, cx + r); x++)
                 {
-                    if (Brushes.Dist(x - cx, y - cy, z - cz) > r + .3) continue;
+                    if (Brushes.Dist(x - cx, y - cy, z - cz) > radius + .01) continue;
                     byte m = w.Get(x, y, z);
                     if (m == 0 || !Mat.IsPlayer[m]) continue;
                     if (m == Mat.Stone || m == Mat.Mortar) st++; else if (m == Mat.Wood) wd++; else if (m == Mat.Rammed) ea++;

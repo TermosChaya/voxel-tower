@@ -10,7 +10,9 @@ public static class WorldGen
 {
     public const int SizeX = 320, SizeY = 160, SizeZ = 224;
 
-    public static Site Generate(VoxelWorld w)
+    /// <param name="starterFort">The prototype's ready-made wall, towers and stairs. The game starts without them:
+    /// the player draws every building. Tests keep them to compare against the prototype.</param>
+    public static Site Generate(VoxelWorld w, bool starterFort = true)
     {
         var site = new Site { HTop = new int[w.SX * w.SZ] };
         Terrain(w, site);
@@ -29,16 +31,25 @@ public static class WorldGen
 
         site.KeepBase = Keep(w, site);
 
-        int wx = site.WallX;
-        Builder.ApplyFree(w, Brushes.Wall(w, site, wx, 22, wx, 166, Brushes.Rampart), raw: true);
-        var t1 = Brushes.Tower(w, site, wx + 2, 170, 16, 60);
-        Builder.ApplyFree(w, t1, raw: true);
-        Brazier(w, site, wx + 2, t1.MetaPlat, 170);
-        var t2 = Brushes.Tower(w, site, wx + 2, 18, 14, 56);
-        Builder.ApplyFree(w, t2, raw: true);
-        Brazier(w, site, wx + 2, t2.MetaPlat, 18);
-        int walk = w.SurfAt(wx + 8, 70);
-        Builder.ApplyFree(w, Brushes.Stairs(w, site, wx + 10, 70, walk, wx + 60, 70, Mat.Stone), raw: true);
+        if (starterFort)
+        {
+            int wx = site.WallX;
+            Builder.ApplyFree(w, Brushes.Wall(w, site, wx, 22, wx, 166, Brushes.Rampart), raw: true);
+            var t1 = Brushes.Tower(w, site, wx + 2, 170, 16, 60);
+            Builder.ApplyFree(w, t1, raw: true);
+            Brazier(w, site, wx + 2, t1.MetaPlat, 170);
+            var t2 = Brushes.Tower(w, site, wx + 2, 18, 14, 56);
+            Builder.ApplyFree(w, t2, raw: true);
+            Brazier(w, site, wx + 2, t2.MetaPlat, 18);
+            int walk = w.SurfAt(wx + 8, 70);
+            Builder.ApplyFree(w, Brushes.Stairs(w, site, wx + 10, 70, walk, wx + 60, 70, Mat.Stone), raw: true);
+        }
+        else
+        {
+            // two braziers flank the citadel gate
+            int gx = site.KeepX - site.KeepR - 7;
+            foreach (int dz in new[] { -10, 10 }) Brazier(w, site, gx, w.SurfAt(gx, site.KeepZ + dz), site.KeepZ + dz);
+        }
         site.Torches.Add((site.KeepX - site.KeepR - 3, site.KeepBase + 22, site.KeepZ));
         return site;
     }

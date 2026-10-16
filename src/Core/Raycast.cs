@@ -20,8 +20,11 @@ public struct VoxelHit
 
 public static class Raycast
 {
-    /// <summary>Walks the voxel grid along a ray (origin in voxel units) and stops at the first solid voxel.</summary>
-    public static bool Cast(VoxelWorld w, double ox, double oy, double oz, double dx, double dy, double dz, out VoxelHit hit)
+    /// <summary>
+    /// Walks the voxel grid along a ray (origin in voxel units) and stops at the first solid voxel.
+    /// With skipVeg the ray passes through leaves, branches and grass, so tools reach the ground under trees.
+    /// </summary>
+    public static bool Cast(VoxelWorld w, double ox, double oy, double oz, double dx, double dy, double dz, out VoxelHit hit, bool skipVeg = false)
     {
         hit = default;
         Span<double> O = stackalloc double[] { ox, oy, oz };
@@ -50,7 +53,7 @@ public static class Raycast
         for (int s = 0; s < limit; s++)
         {
             byte m = w.Get(x, y, z);
-            if (m != 0)
+            if (m != 0 && !(skipVeg && Mat.IsVeg[m]))
             {
                 hit = new VoxelHit { X = x, Y = y, Z = z, NX = nx, NY = ny, NZ = nz, M = m };
                 return true;

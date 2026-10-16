@@ -84,10 +84,10 @@ public static class Brushes
 
     public static readonly WallProfile[] Profiles = { Palisade, StoneWall, Rampart, EarthBank };
 
-    static bool Free(byte cur) => cur == Mat.Air || Mat.IsVeg[cur];
+    internal static bool Free(byte cur) => cur == Mat.Air || Mat.IsVeg[cur];
 
     /// <summary>Clears grass and branches sitting on top of a new column.</summary>
-    static void ClearVegAbove(VoxelWorld w, VoxelList L, int x, int z, int from)
+    internal static void ClearVegAbove(VoxelWorld w, VoxelList L, int x, int z, int from)
     {
         for (int y = from; y < Math.Min(w.SY, from + 48); y++)
         {

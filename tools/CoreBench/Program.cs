@@ -146,5 +146,57 @@ var wal = new Wallet { Gold = 5000, Earth = 500 };
     Console.WriteLine($"     re-mesh after the edits: {list.Count} chunks in {sw.ElapsedMilliseconds} ms");
 }
 
+// ---- drawing brushes, on the map the game starts with: no ready-made buildings
+Console.WriteLine();
+var w2 = new VoxelWorld(WorldGen.SizeX, WorldGen.SizeY, WorldGen.SizeZ);
+var site2 = WorldGen.Generate(w2, starterFort: false);
+w2.Compact();
+var wal2 = new Wallet { Gold = 9000, Earth = 900 };
+Check("the map starts bare", w2.SurfAt(site2.WallX + 8, 70) < 90 && site2.Torches.Count == 3, $"ground {w2.SurfAt(site2.WallX + 8, 70)}, {site2.Torches.Count} lights");
+{
+    var st = new Stroke { Mat = Mat.Stone, Width = 16, Height = 32, Level = true };
+    int lt = Shapes.LevelTop(w2, 250, 40, st.Height);
+    var L = Shapes.Line(w2, site2, 250, 40, 250, 100, st, lt);
+    int mortar = 0; for (int i = 0; i < L.Count; i++) if (L.M(i) == Mat.Mortar) mortar++;
+    var r = Builder.TryBuild(w2, wal2, L, out var c);
+    Check("line lays a level wall", r == BuildResult.Ok && w2.SurfAt(250, 70) == lt && w2.SurfAt(250, 98) == lt, $"top {lt}, {L.Count} voxels");
+    Check("stone goes down coursed", mortar > L.Count / 5 && mortar < L.Count / 2, $"{mortar} mortar of {L.Count}");
+    Check("price is counted per voxel", c.Gold == (int)Math.Ceiling(c.Stone * Prices.Stone / VoxelWorld.PerM3), $"{c.Stone} stone voxels = {c.Gold} gold");
+
+    var wood = st; wood.Mat = Mat.Wood; wood.Height = 8;
+    int lt2 = Shapes.LevelTop(w2, 250, 70, wood.Height);
+    Builder.TryBuild(w2, wal2, Shapes.Line(w2, site2, 250, 40, 250, 100, wood, lt2), out _);
+    Check("a wooden course on top of the stone", w2.Get(250, lt2 - 1, 70) == Mat.Wood && w2.Get(250, lt - 1, 70) != Mat.Wood, $"top {lt2}");
+}
+{
+    var st = new Stroke { Mat = Mat.Stone, Width = 4, Height = 40, Level = true, Hollow = true };
+    int g = w2.SurfAt(285, 155);
+    var r = Builder.TryBuild(w2, wal2, Shapes.Box(w2, site2, 270, 140, 300, 170, st, Shapes.LevelTop(w2, 270, 140, 40)), out _);
+    Check("hollow rectangle leaves the inside open", r == BuildResult.Ok && w2.SurfAt(285, 155) == g && w2.SurfAt(271, 155) > g + 30);
+}
+{
+    var st = new Stroke { Mat = Mat.Stone, Width = 4, Height = 48, Level = true, Hollow = true };
+    int lt = Shapes.LevelTop(w2, 280, 60, 48);
+    var r = Builder.TryBuild(w2, wal2, Shapes.Circle(w2, site2, 280, 60, 14, st, lt), out _);
+    Check("ring of a round tower", r == BuildResult.Ok && w2.SurfAt(280 + 12, 60) == lt && w2.SurfAt(280, 60) < lt - 30);
+    var hit = new VoxelHit { X = 292, Y = lt - 1, Z = 60, NY = 1, M = w2.Get(292, lt - 1, 60) };
+    var L = Shapes.Extrude(w2, site2, hit, 8, Mat.Wood, 6000, out bool tooBig);
+    Builder.TryBuild(w2, wal2, L, out _);
+    Check("extrude raises the whole ring top", !tooBig && w2.SurfAt(292, 60) == lt + 8 && w2.SurfAt(268, 60) == lt + 8, $"{L?.Count} voxels");
+}
+{
+    int y = w2.SurfAt(250, 60) - 8 - 4;   // inside the stone, under the wooden course
+    var L = Shapes.Repaint(w2, 250, y, 60, 3, Mat.Wood);
+    var r = Builder.TryRepaint(w2, wal2, L, out var c, out double refund);
+    Check("repaint turns stone to wood", r == BuildResult.Ok && w2.Get(250, y, 60) == Mat.Wood && refund > 0, $"{L.Count} voxels, paid {c.Gold}, back {refund:0.00}");
+    int n = Builder.RemoveSphere(w2, wal2, 250, y, 60, 2.0);
+    Check("eraser takes own voxels out", n > 0 && w2.Get(250, y, 60) == 0, n.ToString());
+    var ball = Shapes.Ball(w2, site2, 200, w2.SurfAt(200, 40) + 2, 40, 2, Mat.Rammed);
+    Check("ball nib", ball.Count == 33, ball.Count.ToString());
+    Check("one-voxel nib", Shapes.Ball(w2, site2, 200, 120, 40, Shapes.NibRadius(1), Mat.Stone).Count == 1);
+}
+var cols = new System.Collections.Generic.List<int>();
+Check("edited columns are reported for the map", w2.TakeDirtyColumns(cols) > 0, $"{cols.Count} columns");
+
 Console.WriteLine(failures == 0 ? "\nall checks passed" : $"\n{failures} check(s) failed");
 return failures == 0 ? 0 : 1;

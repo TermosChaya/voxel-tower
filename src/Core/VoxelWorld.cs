@@ -23,6 +23,8 @@ public sealed class VoxelWorld
     readonly byte[] _uniform;
     readonly bool[] _dirty;
     readonly List<int> _dirtyList = new();
+    readonly bool[] _colDirty;
+    readonly List<int> _colDirtyList = new();
 
     public int Revision { get; private set; }
 
@@ -34,6 +36,7 @@ public sealed class VoxelWorld
         _data = new byte[ChunkCount][];
         _uniform = new byte[ChunkCount];
         _dirty = new bool[ChunkCount];
+        _colDirty = new bool[sx * sz];
         OriginX = -sx * Vox / 2;
         OriginZ = -sz * Vox / 2;
     }
@@ -75,7 +78,18 @@ public sealed class VoxelWorld
         SetRaw(x, y, z, m);
         Revision++;
         Touch(x, y, z);
+        int col = z * SX + x;
+        if (!_colDirty[col]) { _colDirty[col] = true; _colDirtyList.Add(col); }
         return true;
+    }
+
+    /// <summary>Hands over the columns (z·SX + x) edited since the last call, for the map in the corner.</summary>
+    public int TakeDirtyColumns(List<int> into)
+    {
+        foreach (int c in _colDirtyList) { _colDirty[c] = false; into.Add(c); }
+        int n = _colDirtyList.Count;
+        _colDirtyList.Clear();
+        return n;
     }
 
     void Touch(int x, int y, int z)
