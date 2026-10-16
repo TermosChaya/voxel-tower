@@ -1,0 +1,18 @@
+# Godot
+.godot/
+*.translation
+export_credentials.cfg
+/android/
+
+# .NET
+bin/
+obj/
+.vs/
+*.user
+
+# test bench output
+tools/**/bin/
+tools/**/obj/
+
+# macOS
+.DS_Store
