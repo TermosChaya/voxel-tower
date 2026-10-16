@@ -13,8 +13,15 @@ public partial class CameraRig : Node3D
     /// <summary>Height of the interface along the bottom and top edges, in canvas pixels; the diorama centres between them.</summary>
     public float BottomInset = 0, TopInset = 0;
 
-    const float Dist = 60f, ViewH = 15.5f, LookY = 3f;
-    const float HomeTx = .4f, HomeTz = .3f, HomeYaw = -.66f, HomePitch = .62f, HomeZoom = .74f;
+    const float Dist = 80f, ViewH = 15.5f, LookY = 4f;
+    const float HomeYaw = -.66f, HomePitch = .62f, HomeZoom = .74f, MinZoom = .28f, MaxZoom = 5f;
+    float _homeX = .4f, _homeZ = .3f;
+
+    /// <summary>The part of the map the camera may look at, in world metres (x, z).</summary>
+    public Rect2 Bounds = new(-11, -8, 22, 16);
+
+    /// <summary>Where H returns the view to.</summary>
+    public void HomeAt(float wx, float wz) { _homeX = wx; _homeZ = wz; Home(true); }
 
     float _tx, _tz, _yaw, _pitch, _zoom;     // where the camera is heading
     float _cx, _cz, _cyaw, _cpitch, _czoom;  // where it is now
@@ -37,11 +44,11 @@ public partial class CameraRig : Node3D
         Home(true);
     }
 
-    public void Home(bool snap = false) => Set(HomeTx, HomeTz, HomeYaw, HomePitch, HomeZoom, snap);
+    public void Home(bool snap = false) => Set(_homeX, _homeZ, HomeYaw, HomePitch, HomeZoom, snap);
 
     public void Set(float tx, float tz, float yaw, float pitch, float zoom, bool snap)
     {
-        (_tx, _tz, _yaw, _pitch, _zoom) = (tx, tz, yaw, Math.Clamp(pitch, .35f, 1.4f), Math.Clamp(zoom, .5f, 5f));
+        (_tx, _tz, _yaw, _pitch, _zoom) = (ClampX(tx), ClampZ(tz), yaw, Math.Clamp(pitch, .35f, 1.4f), Math.Clamp(zoom, MinZoom, MaxZoom));
         if (!snap) return;
         (_cx, _cz, _cyaw, _cpitch, _czoom) = (_tx, _tz, _yaw, _pitch, _zoom);
         Apply();
@@ -51,8 +58,8 @@ public partial class CameraRig : Node3D
     {
         if (e is InputEventMouseButton mb)
         {
-            if (mb.ButtonIndex == MouseButton.WheelUp && mb.Pressed) _zoom = Math.Clamp(_zoom * 1.12f, .5f, 5f);
-            else if (mb.ButtonIndex == MouseButton.WheelDown && mb.Pressed) _zoom = Math.Clamp(_zoom / 1.12f, .5f, 5f);
+            if (mb.ButtonIndex == MouseButton.WheelUp && mb.Pressed) _zoom = Math.Clamp(_zoom * 1.12f, MinZoom, MaxZoom);
+            else if (mb.ButtonIndex == MouseButton.WheelDown && mb.Pressed) _zoom = Math.Clamp(_zoom / 1.12f, MinZoom, MaxZoom);
             else if (mb.ButtonIndex == MouseButton.Middle) _rotating = mb.Pressed;
             else if (mb.ButtonIndex == MouseButton.Left && mb.AltPressed) _rotating = mb.Pressed;
             else if (mb.ButtonIndex == MouseButton.Left && !mb.Pressed) _rotating = false;
@@ -84,8 +91,8 @@ public partial class CameraRig : Node3D
     {
         float k = Cam.Size / Math.Max(1f, GetViewport().GetVisibleRect().Size.Y);
         float fx = -MathF.Sin(_cyaw), fz = -MathF.Cos(_cyaw), rx = MathF.Cos(_cyaw), rz = -MathF.Sin(_cyaw), kk = k / MathF.Sin(_cpitch);
-        _tx = Math.Clamp(_tx - rx * d.X * k + fx * d.Y * kk, -11f, 11f);
-        _tz = Math.Clamp(_tz - rz * d.X * k + fz * d.Y * kk, -8f, 8f);
+        _tx = ClampX(_tx - rx * d.X * k + fx * d.Y * kk);
+        _tz = ClampZ(_tz - rz * d.X * k + fz * d.Y * kk);
         _cx = _tx; _cz = _tz;
     }
 
@@ -99,7 +106,7 @@ public partial class CameraRig : Node3D
         if (Down(Key.S) || Down(Key.Down)) { mx -= fx; mz -= fz; }
         if (Down(Key.D) || Down(Key.Right)) { mx += rx; mz += rz; }
         if (Down(Key.A) || Down(Key.Left)) { mx -= rx; mz -= rz; }
-        if (mx != 0 || mz != 0) { _tx = Math.Clamp(_tx + mx * sp, -11f, 11f); _tz = Math.Clamp(_tz + mz * sp, -8f, 8f); }
+        if (mx != 0 || mz != 0) { _tx = ClampX(_tx + mx * sp); _tz = ClampZ(_tz + mz * sp); }
         if (Down(Key.Q)) _yaw += 1.6f * dt;
         if (Down(Key.E)) _yaw -= 1.6f * dt;
 
@@ -114,6 +121,7 @@ public partial class CameraRig : Node3D
 
     void Apply()
     {
+        if (Cam == null) return;
         var vp = GetViewport().GetVisibleRect().Size;
         float aspect = vp.X / Math.Max(1f, vp.Y - BottomInset - TopInset);
         Cam.Size = ViewH * Math.Max(1f, 1.45f / aspect) / _czoom;
@@ -130,9 +138,12 @@ public partial class CameraRig : Node3D
     /// <summary>Looks at a point of the map, in world metres.</summary>
     public void Focus(float wx, float wz)
     {
-        _tx = Math.Clamp(wx, -11f, 11f);
-        _tz = Math.Clamp(wz, -8f, 8f);
+        _tx = ClampX(wx);
+        _tz = ClampZ(wz);
     }
+
+    float ClampX(float x) => Math.Clamp(x, Bounds.Position.X, Bounds.End.X);
+    float ClampZ(float z) => Math.Clamp(z, Bounds.Position.Y, Bounds.End.Y);
 
     /// <summary>Where the corners of the screen land on a horizontal plane at height y, in world metres.</summary>
     public Vector3[] GroundFootprint(float y)

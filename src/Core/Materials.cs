@@ -24,7 +24,7 @@ public readonly struct MaterialDef
 public static class Mat
 {
     public const byte Air = 0, Bed = 1, Soil = 2, Grass = 3, Rock = 4, Stone = 5, Mortar = 6, Wood = 7, Rammed = 8,
-        Keep = 9, KeepDark = 10, Roof = 11, Leaf = 12, Trunk = 13, Ember = 14, Path = 15, Moss = 16, Iron = 17, Tuft = 18, Plank = 19;
+        Keep = 9, KeepDark = 10, Roof = 11, Leaf = 12, Trunk = 13, Ember = 14, Path = 15, Moss = 16, Iron = 17, Tuft = 18, Plank = 19, Foliage = 20;
     public const int Count = 64;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
@@ -57,8 +57,9 @@ public static class Mat
         D(Iron, "Железо", 0x2a2a30, .08f, MatGroup.Hard, 0);
         D(Tuft, "Трава", 0x46582e, .34f, MatGroup.Earth, Natural | Earthy);
         D(Plank, "Доски", 0x5a3d26, .18f, MatGroup.Hard, 0);
+        D(Foliage, "Листва", 0x34431f, .32f, MatGroup.Wood, Natural);
 
-        foreach (var m in new[] { Leaf, Trunk, Tuft }) IsVeg[m] = true;
+        foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage }) IsVeg[m] = true;
         // what holds the world up: loose pieces resting on these never fall
         foreach (var m in new[] { Bed, Soil, Grass, Rock, Path, Moss, Tuft, Keep, KeepDark, Roof, Ember, Iron, Plank }) IsAnchor[m] = true;
     }

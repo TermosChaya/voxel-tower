@@ -17,7 +17,7 @@ public static class WorldGen
         var site = new Site { HTop = new int[w.SX * w.SZ] };
         Terrain(w, site);
         foreach (var (x, z, r) in new[] { (58, 40, 7), (96, 150, 9), (150, 64, 6), (40, 190, 8), (178, 124, 7), (118, 24, 6) })
-            Boulder(w, site, x, z, r);
+            Flora.Boulder(w, x, z, r, site.HTop[z * w.SX + x]);
 
         var R = new Mulberry32(5);
         var trees = new[] { (30, 30), (46, 64), (80, 92), (22, 120), (70, 210), (100, 40), (132, 150), (160, 30), (188, 92), (60, 130), (112, 200), (172, 166), (256, 26), (300, 38), (302, 196), (262, 204), (312, 150) };
@@ -25,8 +25,8 @@ public static class WorldGen
         {
             var (x, z) = trees[n];
             if (x < 150 && Math.Abs(z - Site.PathZ(x)) < 10) continue;
-            if (n % 5 == 3) DeadTree(w, x, z);
-            else Cypress(w, x, z, 22 + (int)Math.Floor(R.Next() * 14));
+            if (n % 5 == 3) Flora.DeadTree(w, x, z);
+            else Flora.Cypress(w, x, z, 22 + (int)Math.Floor(R.Next() * 14));
         }
 
         site.KeepBase = Keep(w, site);
@@ -101,73 +101,8 @@ public static class WorldGen
             }
     }
 
-    static void Boulder(VoxelWorld w, Site site, int cx, int cz, int r)
-    {
-        int bse = site.HTop[cz * w.SX + cx];
-        for (int y = bse - 4; y < bse + r; y++)
-            for (int z = cz - r - 1; z <= cz + r + 1; z++)
-                for (int x = cx - r - 1; x <= cx + r + 1; x++)
-                {
-                    if (!w.InBounds(x, y, z)) continue;
-                    double d = Brushes.Dist(x - cx, (y - bse + 1) * 1.25, z - cz) + (Hash.H3(x, y, z) - .5) * 2.4;
-                    if (d < r) w.SetRaw(x, y, z, Mat.Rock);
-                }
-        for (int z = cz - r - 1; z <= cz + r + 1; z++)
-            for (int x = cx - r - 1; x <= cx + r + 1; x++)
-            {
-                if (x < 0 || x >= w.SX || z < 0 || z >= w.SZ) continue;
-                for (int y = Math.Min(w.SY - 1, bse + r); y >= bse; y--)
-                {
-                    byte m = w.Get(x, y, z);
-                    if (m == Mat.Rock) { if (Hash.H3(x, y, z) < .7) w.SetRaw(x, y, z, Mat.Moss); break; }
-                    if (m != 0) break;
-                }
-            }
-    }
-
-    static void Cypress(VoxelWorld w, int x0, int z0, int h)
-    {
-        int bse = w.SurfAt(x0, z0);
-        for (int y = bse; y < bse + 9; y++)
-            for (int dz = 0; dz < 2; dz++)
-                for (int dx = 0; dx < 2; dx++) Put(w, x0 + dx, y, z0 + dz, Mat.Trunk);
-        double cy = bse + 7 + h / 2.0, ry = h / 2.0, rx = 4.4 + Hash.H3(x0, z0, 3) * 1.2;
-        for (int y = bse + 5; y < bse + 8 + h; y++)
-        {
-            double t = (y - cy) / ry;
-            if (Math.Abs(t) > 1) continue;
-            double r = rx * Math.Sqrt(1 - t * t);
-            if (t > 0) r *= 1 - t * .5;
-            for (int z = (int)Math.Floor(z0 - r - 1); z <= z0 + r + 2; z++)
-                for (int x = (int)Math.Floor(x0 - r - 1); x <= x0 + r + 2; x++)
-                {
-                    double d = Brushes.Dist(x - x0 - .5, z - z0 - .5) + (Hash.H3(x, y, z) - .5) * 1.7;
-                    if (d < r) Put(w, x, y, z, Mat.Leaf);
-                }
-        }
-    }
-
-    static void DeadTree(VoxelWorld w, int x0, int z0)
-    {
-        int bse = w.SurfAt(x0, z0), H = 20 + (int)Math.Floor(Hash.H3(x0, z0, 5) * 8);
-        for (int y = bse; y < bse + H; y++)
-            for (int dz = 0; dz < 2; dz++)
-                for (int dx = 0; dx < 2; dx++) Put(w, x0 + dx, y, z0 + dz, Mat.Trunk);
-        var R = new Mulberry32((uint)(x0 * 31 + z0));
-        for (int b = 0; b < 4; b++)
-        {
-            double x = x0 + .5, z = z0 + .5, y = bse + H * (.45 + R.Next() * .45);
-            double a = R.Next() * 6.28, len = 6 + R.Next() * 6;
-            for (int s = 0; s < len; s++)
-            {
-                x += Math.Cos(a) * .9; z += Math.Sin(a) * .9; y += .45;
-                Put(w, Brushes.JsRound(x), Brushes.JsRound(y), Brushes.JsRound(z), Mat.Trunk);
-            }
-        }
-    }
-
     /// <summary>The citadel: a round brick keep with arrow slits that glow, a plank door and a slate cone.</summary>
-    static int Keep(VoxelWorld w, Site s)
+    internal static int Keep(VoxelWorld w, Site s)
     {
         int KX = s.KeepX, KZ = s.KeepZ, KR = s.KeepR, bse = 0;
         for (int z = KZ - KR; z <= KZ + KR; z++)
@@ -219,7 +154,7 @@ public static class WorldGen
         return bse;
     }
 
-    static void Brazier(VoxelWorld w, Site s, int x, int y, int z)
+    internal static void Brazier(VoxelWorld w, Site s, int x, int y, int z)
     {
         for (int dz = -2; dz <= 2; dz++)
             for (int dx = -2; dx <= 2; dx++)

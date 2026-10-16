@@ -194,23 +194,67 @@ public sealed class VoxelWorld
     // ---- columns ----
 
     /// <summary>Top of the highest solid voxel that is not plant growth.</summary>
-    public int SurfAt(int x, int z)
-    {
-        for (int y = SY - 1; y >= 0; y--) { byte m = Get(x, y, z); if (m != 0 && !Mat.IsVeg[m]) return y + 1; }
-        return 0;
-    }
+    public int SurfAt(int x, int z) => TopWhere(x, z, 1);
 
     /// <summary>Top of the natural ground, ignoring anything the player built.</summary>
-    public int GroundTop(int x, int z)
+    public int GroundTop(int x, int z) => TopWhere(x, z, 2);
+
+    /// <summary>Top of anything at all, plants included.</summary>
+    public int ColTop(int x, int z) => TopWhere(x, z, 0);
+
+    /// <summary>
+    /// Scans a column from the top, skipping whole chunks of air: 0 counts every voxel,
+    /// 1 skips plants, 2 skips plants and the player's own masonry.
+    /// </summary>
+    int TopWhere(int x, int z, int skip)
     {
-        for (int y = SY - 1; y >= 0; y--) { byte m = Get(x, y, z); if (m != 0 && !Mat.IsVeg[m] && !Mat.IsPlayer[m]) return y + 1; }
+        if ((uint)x >= (uint)SX || (uint)z >= (uint)SZ) return 0;
+        int cx = x >> Shift, cz = z >> Shift, local = ((z & Mask) << 5) | (x & Mask);
+        for (int cy = CY - 1; cy >= 0; cy--)
+        {
+            int ci = (cy * CZ + cz) * CX + cx;
+            var d = _data[ci];
+            if (d == null)
+            {
+                byte u = _uniform[ci];
+                if (u != 0 && Counts(u, skip)) return cy * CS + CS;
+                continue;
+            }
+            for (int ly = CS - 1; ly >= 0; ly--)
+            {
+                byte m = d[(ly << 10) | local];
+                if (m != 0 && Counts(m, skip)) return cy * CS + ly + 1;
+            }
+        }
         return 0;
     }
 
-    public int ColTop(int x, int z)
+    static bool Counts(byte m, int skip) => skip switch
     {
-        for (int y = SY - 1; y >= 0; y--) if (Get(x, y, z) != 0) return y + 1;
-        return 0;
+        0 => true,
+        1 => !Mat.IsVeg[m],
+        _ => !Mat.IsVeg[m] && !Mat.IsPlayer[m],
+    };
+
+    /// <summary>Writes a vertical run of one material straight into the chunk arrays (map generation).</summary>
+    public void FillColumnRaw(int x, int z, int y0, int y1, byte m)
+    {
+        if ((uint)x >= (uint)SX || (uint)z >= (uint)SZ) return;
+        y0 = Math.Max(0, y0); y1 = Math.Min(SY, y1);
+        int local = ((z & Mask) << 5) | (x & Mask);
+        for (int y = y0; y < y1;)
+        {
+            int cy = y >> Shift, ci = (cy * CZ + (z >> Shift)) * CX + (x >> Shift);
+            int end = Math.Min(y1, (cy + 1) * CS);
+            var d = _data[ci];
+            if (d == null)
+            {
+                if (_uniform[ci] == m) { y = end; continue; }
+                d = _data[ci] = new byte[CS3];
+                if (_uniform[ci] != 0) Array.Fill(d, _uniform[ci]);
+            }
+            for (; y < end; y++) d[((y & Mask) << 10) | local] = m;
+        }
     }
 
     // ---- coordinates ----

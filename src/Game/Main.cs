@@ -48,8 +48,9 @@ public partial class Main : Node3D
         }
 
         var sw = Stopwatch.StartNew();
-        World = new VoxelWorld(WorldGen.SizeX, WorldGen.SizeY, WorldGen.SizeZ);
-        Site = WorldGen.Generate(World, starterFort: false);
+        var mp = new MapParams();
+        World = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
+        Site = MapGen.Generate(World, mp);
         World.Compact();
         double genMs = sw.Elapsed.TotalMilliseconds;
 
@@ -62,7 +63,10 @@ public partial class Main : Node3D
         View.Init(World);
 
         Rig = new CameraRig { BottomInset = Hud.BottomBand, TopInset = Hud.TopBand };
+        Rig.Bounds = new Rect2(World.OriginX, World.OriginZ, World.SX * VoxelWorld.Vox, World.SZ * VoxelWorld.Vox);
         AddChild(Rig);
+        Rig.HomeAt(World.WX(Site.KeepX - Site.KeepR - 120), World.WZ(Site.KeepZ + 20));
+        atmo.Follow = Rig;
         Debris = new Debris();
         AddChild(Debris);
         Debris.Init(World);
@@ -97,6 +101,8 @@ public partial class Main : Node3D
     async void TakeShot()
     {
         await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        var vp = GetViewport();
+        GD.Print($"[voxel-tower] {Engine.GetFramesPerSecond()} fps, {vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.PrimitivesInFrame) / 1000} k triangles in {vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.DrawCallsInFrame)} draw calls (+{vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.PrimitivesInFrame) / 1000} k for shadows), {RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.VideoMemUsed) / 1048576} MB video memory");
         var img = GetViewport().GetTexture().GetImage();
         if (img.GetWidth() > 1600) img.Resize(1600, img.GetHeight() * 1600 / img.GetWidth(), Image.Interpolation.Lanczos);
         var err = img.SavePng(_shot);

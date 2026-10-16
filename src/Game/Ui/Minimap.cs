@@ -15,19 +15,30 @@ public partial class Minimap : Control
     Image _img;
     ImageTexture _tex;
     int[] _top;
+    byte[] _mat;
+    int _step, _w, _h;
     readonly List<int> _cols = new();
+    readonly HashSet<int> _pix = new();
     bool _drag;
 
     public void Init(Main m)
     {
         _m = m;
         var w = m.World;
-        _top = new int[w.SX * w.SZ];
-        _img = Image.CreateEmpty(w.SX, w.SZ, false, Image.Format.Rgba8);
-        for (int z = 0; z < w.SZ; z++)
-            for (int x = 0; x < w.SX; x++) _top[z * w.SX + x] = w.ColTop(x, z);
-        for (int z = 0; z < w.SZ; z++)
-            for (int x = 0; x < w.SX; x++) Paint(x, z);
+        // one pixel per block of columns, so a big valley stays a small picture
+        _step = Math.Max(1, (int)Math.Ceiling(Math.Max(w.SX, w.SZ) / 512.0));
+        _w = (w.SX + _step - 1) / _step; _h = (w.SZ + _step - 1) / _step;
+        _top = new int[_w * _h];
+        _mat = new byte[_w * _h];
+        System.Threading.Tasks.Parallel.For(0, _h, pz => { for (int px = 0; px < _w; px++) Sample(px, pz); });
+        var bytes = new byte[_w * _h * 4];
+        for (int pz = 0; pz < _h; pz++)
+            for (int px = 0; px < _w; px++)
+            {
+                var c = Shade(px, pz); int o = (pz * _w + px) * 4;
+                bytes[o] = (byte)(c.R * 255); bytes[o + 1] = (byte)(c.G * 255); bytes[o + 2] = (byte)(c.B * 255); bytes[o + 3] = 255;
+            }
+        _img = Image.CreateFromData(_w, _h, false, Image.Format.Rgba8, bytes);
         _tex = ImageTexture.CreateFromImage(_img);
         CustomMinimumSize = new Vector2(256, 256f * w.SZ / w.SX);
         MouseFilter = MouseFilterEnum.Stop;
@@ -35,16 +46,31 @@ public partial class Minimap : Control
         TooltipText = "Карта\nЩелчок или протяжка переносит взгляд. Светлая рамка — то, что видит камера, ромб — цитадель.";
     }
 
-    void Paint(int x, int z)
+    /// <summary>The highest column of a pixel's block, and what tops it.</summary>
+    void Sample(int px, int pz)
     {
         var w = _m.World;
-        int top = _top[z * w.SX + x];
-        byte m = top > 0 ? w.Get(x, top - 1, z) : Mat.Bed;
-        var c = Ornament.MatColor(m);
-        int nw = _top[Math.Max(0, z - 1) * w.SX + Math.Max(0, x - 1)];
-        float shade = 1 + Math.Clamp((top - nw) * .07f, -.35f, .35f);
-        float lift = .72f + .55f * top / w.SY;
-        _img.SetPixel(x, z, new Color(c.R * shade * lift, c.G * shade * lift, c.B * shade * lift));
+        int best = 0; byte mat = Mat.Bed;
+        for (int dz = 0; dz < _step; dz++)
+            for (int dx = 0; dx < _step; dx++)
+            {
+                int x = px * _step + dx, z = pz * _step + dz;
+                if (x >= w.SX || z >= w.SZ) continue;
+                int t = w.ColTop(x, z);
+                if (t > best) { best = t; mat = w.Get(x, t - 1, z); }
+            }
+        _top[pz * _w + px] = best;
+        _mat[pz * _w + px] = mat;
+    }
+
+    Color Shade(int px, int pz)
+    {
+        int top = _top[pz * _w + px];
+        var c = Ornament.MatColor(_mat[pz * _w + px]);
+        int nw = _top[Math.Max(0, pz - 1) * _w + Math.Max(0, px - 1)];
+        float shade = 1 + Math.Clamp((top - nw) * .07f / _step, -.35f, .35f);
+        float lift = .72f + .55f * top / _m.World.SY;
+        return new Color(Math.Min(1, c.R * shade * lift), Math.Min(1, c.G * shade * lift), Math.Min(1, c.B * shade * lift));
     }
 
     public override void _Process(double delta)
@@ -53,12 +79,14 @@ public partial class Minimap : Control
         var w = _m.World;
         if (w.TakeDirtyColumns(_cols) > 0)
         {
-            foreach (int c in _cols) _top[c] = w.ColTop(c % w.SX, c / w.SX);
-            foreach (int c in _cols)
+            _pix.Clear();
+            foreach (int c in _cols) _pix.Add((c / w.SX / _step) * _w + (c % w.SX) / _step);
+            foreach (int p in _pix) Sample(p % _w, p / _w);
+            foreach (int p in _pix)
             {
-                int x = c % w.SX, z = c / w.SX;
-                Paint(x, z);
-                if (x + 1 < w.SX && z + 1 < w.SZ) Paint(x + 1, z + 1);
+                int px = p % _w, pz = p / _w;
+                _img.SetPixel(px, pz, Shade(px, pz));
+                if (px + 1 < _w && pz + 1 < _h) _img.SetPixel(px + 1, pz + 1, Shade(px + 1, pz + 1));
             }
             _cols.Clear();
             _tex.Update(_img);

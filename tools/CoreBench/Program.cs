@@ -198,5 +198,45 @@ Check("the map starts bare", w2.SurfAt(site2.WallX + 8, 70) < 90 && site2.Torche
 var cols = new System.Collections.Generic.List<int>();
 Check("edited columns are reported for the map", w2.TakeDirtyColumns(cols) > 0, $"{cols.Count} columns");
 
+// ---- the big valley the game is played in
+Console.WriteLine();
+var variants = args.Length > 0 && args[0] == "--sizes"
+    ? new[] { (768, "as is", new MapParams()), (1024, "as is", new MapParams()), (1280, "as is", new MapParams()) }
+    : args.Length > 0 && args[0] == "--costs"
+    ? new[] { (1024, "as is", new MapParams()), (1024, "no trees", new MapParams { TreeDensity = 0 }), (1024, "no tufts", new MapParams { TuftChance = 0 }), (1024, "smooth", new MapParams { Roughness = 0 }), (1024, "bare", new MapParams { TreeDensity = 0, TuftChance = 0, Roughness = 0 }) }
+    : new[] { (1024, "game", new MapParams()) };
+foreach (var (size, label, mp) in variants)
+{
+    mp.SizeX = mp.SizeZ = size;
+    Console.Write(label + ": ");
+    long mem0 = GC.GetTotalMemory(true);
+    sw.Restart();
+    var w3 = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
+    var site3 = MapGen.Generate(w3, mp);
+    long gen3 = sw.ElapsedMilliseconds;
+    int freed3 = w3.Compact();
+    long mem = GC.GetTotalMemory(true) - mem0;
+    sw.Restart();
+    long q3 = 0; int meshed3 = 0;
+    Parallel.For(0, w3.ChunkCount, () => (new GreedyMesher(), new byte[34 * 34 * 34]), (ci, _, loc) =>
+    {
+        var mb = loc.Item1.MeshChunk(w3, ci, loc.Item2);
+        if (mb != null) { Interlocked.Add(ref q3, mb.Quads); Interlocked.Increment(ref meshed3); }
+        return loc;
+    }, _ => { });
+    long mesh3 = sw.ElapsedMilliseconds;
+    int trunk = 0, rock = 0;
+    for (int z = 0; z < w3.SZ; z += 4)
+        for (int x = 0; x < w3.SX; x += 4)
+            for (int y = 0; y < w3.SY; y += 2)
+            {
+                byte m = w3.Get(x, y, z);
+                if (m == Mat.Trunk) trunk++; else if (m == Mat.Rock || m == Mat.Moss) rock++;
+            }
+    Console.WriteLine($"valley {mp.SizeX * VoxelWorld.Vox:0}×{mp.SizeY * VoxelWorld.Vox:0}×{mp.SizeZ * VoxelWorld.Vox:0} m: generated in {gen3} ms, {w3.AllocatedChunks}/{w3.ChunkCount} chunks hold data ({mem / 1048576} MB), mesh {mesh3} ms on {Environment.ProcessorCount} threads, {q3 * 2 / 1000} k triangles in {meshed3} chunks");
+    Check($"valley {size}: the citadel stands on the plateau", w3.Get(site3.KeepX, site3.KeepBase + 10, site3.KeepZ) != 0 && site3.KeepBase > 70, $"keep base {site3.KeepBase}");
+    Check($"valley {size}: forests and rock to quarry", trunk > 50 && rock > 1000, $"{trunk} trunk and {rock} rock samples");
+}
+
 Console.WriteLine(failures == 0 ? "\nall checks passed" : $"\n{failures} check(s) failed");
 return failures == 0 ? 0 : 1;

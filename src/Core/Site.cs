@@ -9,6 +9,8 @@ public sealed class Site
     public int KeepX = 286, KeepZ = 112, KeepR = 24;
     public int KeepBase = 72;
     public int WallX = 232;
+    /// <summary>The strip along the western edge where the horde walks in; nothing may be built there.</summary>
+    public int SpawnStrip = 16;
 
     /// <summary>Torch and brazier lights, in voxel coordinates.</summary>
     public readonly List<(float X, float Y, float Z)> Torches = new();
@@ -19,7 +21,7 @@ public sealed class Site
     /// <summary>Columns nobody may build on: the map's western edge (the horde's entry), the citadel and its gate approach.</summary>
     public bool Forbidden(int x, int z)
     {
-        if (x < 16) return true;
+        if (x < SpawnStrip) return true;
         if (Math.Sqrt((double)(x - KeepX) * (x - KeepX) + (double)(z - KeepZ) * (z - KeepZ)) < KeepR + 3) return true;
         if (x >= KeepX - KeepR - 16 && x < KeepX - KeepR && Math.Abs(z - KeepZ) < 8) return true;
         return false;

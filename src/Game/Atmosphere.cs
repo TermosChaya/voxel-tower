@@ -13,6 +13,9 @@ public partial class Atmosphere : Node3D
     bool _calm;
 
     public Godot.Environment Env { get; private set; }
+    /// <summary>The embers hang around whatever this camera looks at.</summary>
+    public CameraRig Follow;
+    GpuParticles3D _embers;
 
     public void Build(VoxelWorld w, Site site, bool calm)
     {
@@ -43,8 +46,8 @@ public partial class Atmosphere : Node3D
             FogMode = Godot.Environment.FogModeEnum.Depth,
             FogLightColor = new Color(0.114f, 0.086f, 0.149f),
             FogDensity = .55f,
-            FogDepthBegin = 62f,
-            FogDepthEnd = 124f,
+            FogDepthBegin = 84f,
+            FogDepthEnd = 170f,
             FogSkyAffect = 0f,
         };
         AddChild(new WorldEnvironment { Environment = Env });
@@ -58,7 +61,7 @@ public partial class Atmosphere : Node3D
             ShadowBias = .04f,
             ShadowNormalBias = 1.0f,
             DirectionalShadowMode = DirectionalLight3D.ShadowMode.Orthogonal,
-            DirectionalShadowMaxDistance = 110f,
+            DirectionalShadowMaxDistance = 115f,
         };
         AddChild(sun);
         sun.LookAtFromPosition(new Vector3(-14, 16, 9), new Vector3(0, 3, 0), Vector3.Up);
@@ -83,7 +86,7 @@ public partial class Atmosphere : Node3D
             _torches.Add((l, (float)(rnd.NextDouble() * 6)));
         }
 
-        if (!calm) AddChild(Embers());
+        if (!calm) { _embers = Embers(); AddChild(_embers); }
     }
 
     /// <summary>Ash and sparks rising slowly over the field.</summary>
@@ -122,7 +125,8 @@ public partial class Atmosphere : Node3D
             Preprocess = 40,
             ProcessMaterial = process,
             DrawPass1 = new QuadMesh { Size = new Vector2(.035f, .035f), Material = mat },
-            Position = new Vector3(0, 6, 0),
+            Position = new Vector3(0, 9, 0),
+            LocalCoords = false,
             VisibilityAabb = new Aabb(new Vector3(-13, -7, -10), new Vector3(26, 16, 20)),
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         };
@@ -131,6 +135,7 @@ public partial class Atmosphere : Node3D
     public override void _Process(double delta)
     {
         _t += delta;
+        if (_embers != null && Follow != null) { var t0 = Follow.Target; _embers.Position = new Vector3(t0.X, 9, t0.Y); }
         float t = _calm ? 0 : (float)_t;
         foreach (var (l, ph) in _torches)
             l.LightEnergy = 2.4f * (.8f + .22f * MathF.Sin(t * 9 + ph) + .1f * MathF.Sin(t * 23 + ph * 2));
