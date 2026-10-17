@@ -89,7 +89,8 @@ public sealed partial class Sim
         ReleaseSite(u);
         StopCarve(u); StopBuild(u);
         u.Path = null; u.Target = null; u.Prey = null;
-        if (u.Team == Team.Horde) Stock.Gold += u.T.Bounty;
+        // a leader is worth thrice its kind
+        if (u.Team == Team.Horde) Stock.Gold += u.T.Bounty * (u.Leader ? 3 : 1);
         else if (u.Team == Team.Wild)
         {
             if (by?.Team == Team.Player) { Stock.Gold += u.T.Bounty; Hunted++; Say($"Добыт {u.T.Name.ToLowerInvariant()}: +{u.T.Bounty} золота.", 1); }

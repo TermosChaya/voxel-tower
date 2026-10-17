@@ -260,6 +260,14 @@ public partial class Commander : Node
 
     public void TogglePause() { _m.Paused = !_m.Paused; _m.Hud.Refresh(); }
 
+    /// <summary>Shows or hides where the horde's warbands will go.</summary>
+    public void ToggleTrails()
+    {
+        _m.Sim.WantTrails = !_m.Sim.WantTrails;
+        _m.Hud.Float(_m.Sim.WantTrails ? "пути орды видны" : "пути орды скрыты", Ornament.BronzeLight);
+        _m.Hud.Refresh();
+    }
+
     public void SetSpeed(int s) { _m.Speed = Math.Clamp(s, 1, 3); _m.Paused = false; _m.Hud.Refresh(); }
 
     public void CycleSpeed() => SetSpeed(_m.Speed % 3 + 1);
@@ -273,6 +281,7 @@ public partial class Commander : Node
             case Key.P: TogglePause(); break;
             case Key.Tab: CycleSpeed(); break;
             case Key.T: Alarm(); break;
+            case Key.J: ToggleTrails(); break;
             default: return;
         }
         GetViewport().SetInputAsHandled();

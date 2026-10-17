@@ -49,6 +49,7 @@ public sealed partial class Sim
         Goals = FlowField.Goals(Nav);
         Gate = NearestStand(s.KeepX - s.KeepR - 12, s.KeepZ, 4);
         FindMines();
+        PlanWave(1);
         Stock[Stockpile.Stone] = 16 * VoxelWorld.PerM3;
         Stock[Stockpile.Wood] = 24 * VoxelWorld.PerM3;
         Stock[Stockpile.Earth] = 16 * VoxelWorld.PerM3;
@@ -76,7 +77,7 @@ public sealed partial class Sim
 
     public Unit Spawn(UnitType t, int cell)
     {
-        var u = new Unit { Id = _nextId++, T = t, Hp = t.Hp, Cell = cell };
+        var u = new Unit { Id = _nextId++, T = t, Hp = t.Hp, MaxHp = t.Hp, Cell = cell };
         (u.X, u.Y, u.Z) = Nav.Feet(cell);
         float lane = Math.Max(.5f, NavGrid.CS / 2f - t.BodyR - .5f);
         u.OffX = (float)(Rng.NextDouble() * 2 - 1) * lane; u.OffZ = (float)(Rng.NextDouble() * 2 - 1) * lane;
@@ -109,6 +110,8 @@ public sealed partial class Sim
         if (Nav.PendingEdits > 0) Nav.Flush();
         UpdateFields();
         Waves.Tick(this, dt);
+        TickBands();
+        TickTrails();
         TendWildlife();
         CountBodies();
         for (int n = 0; n < Units.Count; n++)
@@ -188,7 +191,7 @@ public sealed partial class Sim
         bool climbing = Nav.I(next) == Nav.I(u.Cell) && Nav.K(next) == Nav.K(u.Cell) && next != u.Cell;
         if (climbing) { tx = u.X; tz = u.Z; ty = (Nav.Y(next) << NavGrid.Shift) + (Nav.Solid(Nav.I(next), Nav.Y(next) - 1, Nav.K(next)) ? Nav.Floor[next] - (Nav.Y(next) << NavGrid.Shift) : 0); }
         else { tx += u.OffX; tz += u.OffZ; }
-        float speed = u.T.Move.Speed * NavGrid.CS * pace * u.Pace * (u.Hp < u.T.Hp * .4f ? .7f : 1) * (Nav.Water[u.Cell] > 0 ? .6f : 1);
+        float speed = u.T.Move.Speed * NavGrid.CS * pace * u.Pace * (u.Hp < u.MaxHp * .4f ? .7f : 1) * (Nav.Water[u.Cell] > 0 ? .6f : 1);
         float step = speed * dt * (climbing ? .5f : 1);
         float dx = tx - u.X, dz = tz - u.Z, dyv = ty - u.Y;
         float dist = climbing ? MathF.Abs(dyv) : MathF.Sqrt(dx * dx + dz * dz);

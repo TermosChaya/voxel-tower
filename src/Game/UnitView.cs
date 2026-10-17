@@ -22,7 +22,7 @@ public partial class UnitView : Node3D
     }
 
     /// <summary>What the view remembers of a unit between frames: smoothed facing and how fast it is moving.</summary>
-    sealed class Look { public float Face, Move, LastX, LastZ; public bool Seen; }
+    sealed class Look { public float Face, Move, LastX, LastZ; public bool Seen; public Transform3D Body; }
 
     Main _m;
     VoxelWorld _w;
@@ -31,8 +31,8 @@ public partial class UnitView : Node3D
     readonly Dictionary<int, Look> _looks = new();
     readonly HashSet<int> _alive = new();
     readonly List<int> _gone = new();
-    MultiMeshInstance3D _arrows, _rings;
-    float[] _arrowBuf = Array.Empty<float>(), _ringBuf = Array.Empty<float>();
+    MultiMeshInstance3D _arrows, _rings, _standards;
+    float[] _arrowBuf = Array.Empty<float>(), _ringBuf = Array.Empty<float>(), _standardBuf = Array.Empty<float>();
     double _t;
 
     static readonly Aabb Everywhere = new(new Vector3(-100, -10, -100), new Vector3(200, 60, 200));
@@ -53,6 +53,9 @@ public partial class UnitView : Node3D
         var ringMat = new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, VertexColorUseAsAlbedo = true, AlbedoColor = Colors.White };
         _rings = Multi(ring, ringMat, true);
         _rings.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+        // a warband's leader carries its standard on its back: a pole and a rag of red cloth
+        var cube = new BoxMesh { Size = Vector3.One };
+        _standards = Multi(cube, new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = .9f, CullMode = BaseMaterial3D.CullModeEnum.Disabled }, true);
     }
 
     void Add(UnitType t)
@@ -108,6 +111,7 @@ public partial class UnitView : Node3D
         foreach (int id in _gone) _looks.Remove(id);
         DrawArrows(sim);
         DrawRings();
+        DrawStandards(sim);
     }
 
     void Track(Unit u, Look l, float dt)
@@ -218,13 +222,15 @@ public partial class UnitView : Node3D
         }
 
         var at = new Vector3(_w.WX(u.X), _w.WY(u.Y + bob - sink), _w.WZ(u.Z));
-        var root = new Transform3D(new Basis(Vector3.Up, MathF.PI / 2 - look.Face).Scaled(Vector3.One * VoxelWorld.Vox), at);
+        // a leader stands a little taller than its kind
+        var root = new Transform3D(new Basis(Vector3.Up, MathF.PI / 2 - look.Face).Scaled(Vector3.One * VoxelWorld.Vox * (u.Leader ? 1.15f : 1)), at);
         // the fallen lie down: on the back, or a beast on its side
         if (fall > 0)
             root *= f.Beast
                 ? new Transform3D(new Basis(Vector3.Back, MathF.PI / 2 * fall), new Vector3(0, fall * (u.T.BodyR * .7f), 0))
                 : new Transform3D(new Basis(Vector3.Right, -MathF.PI / 2 * fall), new Vector3(0, fall * (u.T.BodyR + .5f), 0));
         var body = root * Swing(f, Part.Body, lean);
+        look.Body = body;
         var tint = Tint(u);
         int o = slot * 16;
         Write(k, Part.Body, o, body, tint);
@@ -362,6 +368,44 @@ public partial class UnitView : Node3D
         }
         RenderingServer.MultimeshSetBuffer(mm.GetRid(), _arrowBuf);
         mm.VisibleInstanceCount = n;
+    }
+
+    static readonly Color Pole = new(.24f, .16f, .1f), Rag = new(.55f, .07f, .06f), RagDark = new(.3f, .04f, .04f);
+
+    /// <summary>The standards of the warbands' leaders: a pole up the back, a red rag stirring from its top.</summary>
+    void DrawStandards(Sim sim)
+    {
+        var mm = _standards.Multimesh;
+        int n = 0;
+        foreach (var u in sim.Units) if (u.Leader && !u.Dead) n += 3;
+        if (n == 0) { mm.VisibleInstanceCount = 0; return; }
+        if (mm.InstanceCount < n) { mm.InstanceCount = Math.Max(24, n * 2); _standardBuf = new float[mm.InstanceCount * 16]; }
+        int i = 0;
+        foreach (var u in sim.Units)
+        {
+            if (!u.Leader || u.Dead || !_looks.TryGetValue(u.Id, out var look)) continue;
+            float h = u.T.BodyH, back = -(u.T.BodyR + .6f), sway = MathF.Sin((float)_t * 2.1f + u.Id) * .25f;
+            var b = look.Body;
+            Box(ref i, b, new Vector3(0, h * .78f, back), new Vector3(.9f, h * 1.05f, .9f), 0, Pole);
+            // the rag: hangs back from the top of the pole and stirs
+            var top = new Vector3(0, h * 1.18f, back);
+            var cloth = b * new Transform3D(new Basis(Vector3.Up, sway), top);
+            Box(ref i, cloth, new Vector3(0, -2.4f, -2.8f), new Vector3(.35f, 5f, 5.4f), 0, Rag);
+            Box(ref i, cloth, new Vector3(0, -5.4f, -1.6f), new Vector3(.35f, 1.2f, 3f), 0, RagDark);
+        }
+        RenderingServer.MultimeshSetBuffer(mm.GetRid(), _standardBuf);
+        mm.VisibleInstanceCount = i;
+    }
+
+    void Box(ref int i, Transform3D parent, Vector3 at, Vector3 size, float turn, Color c)
+    {
+        var t = parent * new Transform3D(new Basis(Vector3.Up, turn).Scaled(size), at);
+        int o = i++ * 16;
+        var buf = _standardBuf;
+        buf[o] = t.Basis.X.X; buf[o + 1] = t.Basis.Y.X; buf[o + 2] = t.Basis.Z.X; buf[o + 3] = t.Origin.X;
+        buf[o + 4] = t.Basis.X.Y; buf[o + 5] = t.Basis.Y.Y; buf[o + 6] = t.Basis.Z.Y; buf[o + 7] = t.Origin.Y;
+        buf[o + 8] = t.Basis.X.Z; buf[o + 9] = t.Basis.Y.Z; buf[o + 10] = t.Basis.Z.Z; buf[o + 11] = t.Origin.Z;
+        buf[o + 12] = c.R; buf[o + 13] = c.G; buf[o + 14] = c.B; buf[o + 15] = 1;
     }
 
     void DrawRings()

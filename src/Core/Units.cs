@@ -124,7 +124,7 @@ public sealed class Unit
     /// <summary>Its own tempo, a little over or under the kind's, for walking and working.</summary>
     public float Pace = 1;
     public UnitState State;
-    public float Hp;
+    public float Hp, MaxHp;
     public bool Dead;
     public double DiedAt;
     /// <summary>What killed it, for the chronicle: a unit's name, "стрела" or "падение".</summary>
@@ -158,9 +158,11 @@ public sealed class Unit
     public double LastHurt = -99;
     public float Swing;
 
-    // the horde: camped at a mine it keeps, or sent to take one of ours
+    // the horde: camped at a mine it keeps, or sent to take one of ours; the warband it marches with, and whether it leads it
     public bool Guard;
     public Mine Raid;
+    public Warband Band;
+    public bool Leader;
 
     // the horde hacking its way
     public int CarveCell = -1;
@@ -203,5 +205,8 @@ public sealed class Unit
     /// <summary>Walk cycle phase, for the legs.</summary>
     public float Stride;
 
-    public float Alive => Dead ? 0 : Hp / T.Hp;
+    public float Alive => Dead ? 0 : Hp / MaxHp;
+
+    /// <summary>"Орк-рубака", or "Вожак — орк-рубака" for the one who leads a warband.</summary>
+    public string Name => Leader ? "Вожак — " + T.Name.ToLowerInvariant() : T.Name;
 }

@@ -942,6 +942,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--fort")
     var (_, standing6) = sim5.Soundness(fx0, fz0, fx1, fz1);
     Check("…and the workers set about it from the stores", standing6 > standing5 + 2000 && sim5.Stock[Stockpile.Stone] < stone6 - 2 * VoxelWorld.PerM3,
         $"{standing6 - standing5} voxels back in 2½ min, stone {Fmt.M3(stone6)} → {Fmt.M3(sim5.Stock[Stockpile.Stone])} m³");
+    // the rest at once, as if by many hands; the workers out of the way first (an idle one may stand in a breach)
+    foreach (var u in sim5.Units) if (u.Team == Team.Player) { u.Dead = true; u.DiedAt = -999; }
     sim5.InstantLabour = true;
     sim5.CompleteAll();
     sim5.InstantLabour = false;
@@ -1024,6 +1026,53 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bridges")
     var after = Across(null, sa - 6, bz8, sb + 6, bz8);
     Check("workers lay a timber bridge of their own from the banks outward, and it carries across", plan8.Count > 1000 && sim8.Orders.BuildTotal < plan8.Count / 10 && after.way && after.highest > MapGen.RiverLevel + 4 && after.cells <= before.cells,
         $"{plan8.Count} voxels over {sb - sa} of span at z {bz8}, {sim8.Orders.BuildTotal} left after 4 min; way across {before.cells} → {after.cells} cells, deck up to {after.highest}");
+}
+
+// ---- the horde in warbands: drawn up and shown before the wave, marching together, regrouping, storming, new leaders
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bands")
+{
+    Console.WriteLine();
+    var mp9 = new MapParams();
+    var w9 = new VoxelWorld(mp9.SizeX, mp9.SizeY, mp9.SizeZ);
+    var site9 = MapGen.Generate(w9, mp9);
+    w9.Compact();
+    var sim9 = new Sim(w9, site9);
+    sim9.WildTarget = 0;
+    sim9.WantTrails = true;
+    void Run9(double seconds) { for (double t = 0; t < seconds; t += .05) sim9.Step(.05f); }
+    sim9.Waves.Number = 3;
+    sim9.PlanWave(4);
+    sim9.ComputeFields(coming: true);
+    Run9(2);
+    var planned9 = sim9.Bands.FindAll(b => b.State == BandState.Coming);
+    var goals9 = new System.Collections.Generic.HashSet<int>(sim9.Goals);
+    bool led = planned9.TrueForAll(b => b.Roster.TrueForAll(t => Rank9(t) <= Rank9(b.Roster[0])));
+    bool trails = planned9.TrueForAll(b => b.Trail.Count > 30 && goals9.Contains(b.Trail[^1]));
+    Check("the next wave is drawn up in warbands, each with its strongest at its head, and their ways are shown", planned9.Count >= 2 && led && trails,
+        string.Join("; ", planned9.ConvertAll(b => $"{b.Name}: {string.Join(", ", b.Roster.ConvertAll(t => t.Key))}, way {b.Trail.Count} cells, {b.Marks.Count} to break or build")));
+
+    sim9.Waves.Countdown = 0;
+    float spread = 0;
+    var seen = new System.Collections.Generic.HashSet<BandState>();
+    Warband watched = null; Unit fallen = null; Unit successor = null;
+    for (int t = 0; t < 360 && (successor == null || sim9.Bands.Exists(b => b.State == BandState.Rally)); t++)
+    {
+        Run9(1);
+        foreach (var b in sim9.Bands)
+        {
+            foreach (var st in b.History) seen.Add(st);
+            if (b.State == BandState.March && sim9.Time - b.Since > 6 && b.Leader != null)
+                foreach (var u in b.Members)
+                    if (!u.Dead) spread = Math.Max(spread, MathF.Sqrt((u.X - b.Leader.X) * (u.X - b.Leader.X) + (u.Z - b.Leader.Z) * (u.Z - b.Leader.Z)));
+            // the leader of the first band to storm is struck down
+            if (b.State == BandState.Storm && watched == null && b.Alive > 2) { watched = b; fallen = b.Leader; fallen.Dead = true; fallen.DiedAt = sim9.Time; }
+        }
+        if (watched != null && successor == null && watched.Leader != fallen && watched.Leader is { Dead: false } nl) successor = nl;
+    }
+    Check("warbands gather, march together, regroup before the walls and storm; a fallen leader is replaced", spread < 22 * VoxelWorld.PerMetre
+        && seen.Contains(BandState.Forming) && seen.Contains(BandState.March) && seen.Contains(BandState.Rally) && seen.Contains(BandState.Storm) && successor is { Leader: true },
+        $"widest spread on the march {spread / VoxelWorld.PerMetre:0.0} m; states {string.Join(" → ", seen)}; leader {fallen?.T.Key} replaced by {successor?.T.Key}");
+    static int Rank9(UnitType t) => t == Kinds.Troll ? 5 : t == Kinds.Orc ? 4 : t == Kinds.Miner ? 3 : t == Kinds.Goblin ? 2 : 1;
 }
 
 // voxels of water in the whole valley

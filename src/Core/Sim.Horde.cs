@@ -23,12 +23,16 @@ public sealed partial class Sim
     bool HasWood => HordeStock[Stockpile.Wood] >= Siege.BridgeWood;
     bool HasEarth => HordeStock[Stockpile.Earth] >= Siege.FillEarth;
 
-    /// <summary>Builds every raider's field now, on this thread (tests and staged scenes).</summary>
-    public void ComputeFields()
+    /// <summary>
+    /// Builds every raider's field now, on this thread (tests and staged scenes), for what the horde holds, or
+    /// (<paramref name="coming"/>) for what the next wave will bring.
+    /// </summary>
+    public void ComputeFields(bool coming = false)
     {
         _fieldGen++;
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        _fieldWood = HasWood; _fieldEarth = HasEarth;
+        if (coming) Stores(out _fieldWood, out _fieldEarth);
+        else { _fieldWood = HasWood; _fieldEarth = HasEarth; }
         Fields = BuildFields(_fieldWood, _fieldEarth);
         LastFieldMs = sw.Elapsed.TotalMilliseconds;
         _fieldVersion = Nav.Version; _fieldAt = Time;
@@ -39,6 +43,14 @@ public sealed partial class Sim
         var d = new Dictionary<UnitType, FlowField>();
         foreach (var t in Kinds.HordeKinds) d[t] = FlowField.Compute(Nav, t.Move, Goals, 900, wood, earth);
         return d;
+    }
+
+    /// <summary>What the horde will have to build with: what it holds, or between waves what the next one brings (some of both).</summary>
+    void Stores(out bool wood, out bool earth)
+    {
+        bool between = !Waves.Active && !AnyRaider();
+        wood = HasWood || between;
+        earth = HasEarth || between;
     }
 
     /// <summary>The fields are out of date (the horde's stores changed): build them again in the background soon.</summary>
@@ -57,14 +69,16 @@ public sealed partial class Sim
             if (_fieldTask.Status == TaskStatus.RanToCompletion && _fieldTaskGen == _fieldGen) Fields = _fieldTask.Result;
             _fieldTask = null;
         }
-        // wanted while the horde is coming or here, and once at the start so an early call finds a way at hand
-        bool needed = Waves.Active || Waves.Countdown < 12 || Fields.Count == 0;
-        bool same = _fieldVersion == Nav.Version && _fieldWood == HasWood && _fieldEarth == HasEarth;
-        if (!needed || (same && Fields.Count > 0) || Time - _fieldAt < 2) return;
+        // wanted while the horde is coming or here, once at the start so an early call finds a way at hand, and between
+        // waves while the bands' ways are shown (every few seconds: the defences change as they are built)
+        bool between = !Waves.Active && Waves.Countdown >= 12 && !AnyRaider();
+        bool needed = !between || Fields.Count == 0 || WantTrails;
+        Stores(out bool wood, out bool earth);
+        bool same = _fieldVersion == Nav.Version && _fieldWood == wood && _fieldEarth == earth;
+        if (!needed || (same && Fields.Count > 0) || Time - _fieldAt < (between ? 4 : 2)) return;
         // the grid keeps changing while this runs; a field built from a slightly stale picture is still a good guide
         _fieldVersion = Nav.Version; _fieldAt = Time;
-        _fieldWood = HasWood; _fieldEarth = HasEarth;
-        bool wood = _fieldWood, earth = _fieldEarth;
+        _fieldWood = wood; _fieldEarth = earth;
         var sw = System.Diagnostics.Stopwatch.StartNew();
         _fieldTaskGen = _fieldGen;
         _fieldTask = Task.Run(() => { var f = BuildFields(wood, earth); LastFieldMs = sw.Elapsed.TotalMilliseconds; return f; });
@@ -98,6 +112,8 @@ public sealed partial class Sim
             return;
         }
         if (u.Guard) { GuardTick(u, dt); return; }
+        // a band gathers where it came in before it sets out
+        if (u.Band is { State: BandState.Forming }) { u.State = UnitState.Idle; return; }
         if (u.Raid != null && RaidTick(u, dt)) return;
         if (_goalSet.Contains(u.Cell))
         {
@@ -109,6 +125,7 @@ public sealed partial class Sim
         if (u.CarveCell >= 0) { Carve(u, dt); return; }
         if (u.BuildCell >= 0) { BuildTick(u, dt); return; }
         if (u.Path != null && u.PathI < u.Path.Count) { Walk(u, dt); return; }
+        if (BandStep(u, dt)) return;
         if (!Fields.TryGetValue(u.T, out var f)) { u.State = UnitState.Idle; return; }
         int next = f.Next(Nav, u.Cell, out float carve, out var works);
         if (next < 0) { u.State = UnitState.Idle; return; }
@@ -338,7 +355,8 @@ public sealed class Waves
     public double Countdown = Prep;
     /// <summary>How much the horde learnt of the defences before this wave (0 to 1): the share of the countdown it had.</summary>
     public double Intel;
-    readonly Queue<UnitType> _queue = new();
+    readonly Queue<(UnitType kind, Warband band)> _queue = new();
+    Warband _lastBand;
     double _spawnT;
 
     public int Coming => _queue.Count;
@@ -358,15 +376,21 @@ public sealed class Waves
         _spawnT -= dt;
         if (_queue.Count > 0 && _spawnT <= 0)
         {
-            s.SpawnRaider(_queue.Dequeue());
-            _spawnT = .6 + s.Rng.NextDouble() * .5;
+            var (kind, band) = _queue.Dequeue();
+            if (band != null) s.SpawnRaider(kind, band); else s.SpawnRaider(kind);
+            _lastBand = band;
+            // a band comes in at a run, one after another; the next band some seconds later, somewhere else
+            bool sameBand = _queue.Count > 0 && _queue.Peek().band == band;
+            _spawnT = sameBand ? .35 + s.Rng.NextDouble() * .2 : 4 + s.Rng.NextDouble() * 3;
         }
         if (_queue.Count == 0 && !s.AnyRaider())
         {
             Active = false;
             Countdown = Prep;
+            s.Bands.RemoveAll(b => b.State != BandState.Coming);
             s.Say($"Волна {Number} отбита. До следующей десять минут.", 1);
             if (Number >= Total) { s.Won = true; s.Over = true; s.Say("Осада снята: долина устояла.", 1); }
+            else s.PlanWave(Number + 1);
         }
     }
 
@@ -377,7 +401,11 @@ public sealed class Waves
         foreach (var u in s.Units) if (u.Team == Team.Horde && !u.Dead) { u.Dead = true; u.DiedAt = -999; }
         Active = false;
         Countdown = Prep;
+        s.Bands.Clear();
+        s.PlanWave(Number + 1);
     }
+
+    static string Bands(int n) => n == 1 ? "одна ватага" : n is >= 2 and <= 4 ? $"{n} ватаги" : $"{n} ватаг";
 
     /// <summary>Calls the horde before the time is up; it comes knowing only what it scouted so far.</summary>
     public double StartNow(Sim s)
@@ -394,15 +422,11 @@ public sealed class Waves
         Active = true;
         _queue.Clear();
         int n = Number;
-        var list = new List<UnitType>();
-        for (int i = 0; i < 2 + n; i++) list.Add(Kinds.Goblin);
-        for (int i = 0; i < n / 2 + 1; i++) list.Add(Kinds.Orc);
-        for (int i = 0; i < (n + 1) / 3; i++) list.Add(Kinds.Miner);
-        for (int i = 0; i < 1 + n / 3; i++) list.Add(Kinds.Sapper);
-        for (int i = 0; i < (n >= 5 ? (n - 3) / 3 : 0); i++) list.Add(Kinds.Troll);
-        // shuffle so the kinds come mixed
-        for (int i = list.Count - 1; i > 0; i--) { int j = s.Rng.Next(i + 1); (list[i], list[j]) = (list[j], list[i]); }
-        foreach (var t in list) _queue.Enqueue(t);
+        // the bands planned for this wave (and shown on the map while it was coming) march in one after another
+        if (!s.Bands.Exists(b => b.State == BandState.Coming)) s.PlanWave(n);
+        var bands = s.Muster();
+        int total = 0;
+        foreach (var b in bands) { foreach (var t in b.Roster) _queue.Enqueue((t, b)); total += b.Roster.Count; }
         // timber for ladders and bridges, earth for fills, brought along
         s.HordeStock[Stockpile.Wood] += (2.4 + 1 * n) * VoxelWorld.PerM3;
         s.HordeStock[Stockpile.Earth] += (3.2 + 2 * n) * VoxelWorld.PerM3;
@@ -412,6 +436,6 @@ public sealed class Waves
         s.InvalidateFields();
         s.Recall();
         string intel = Intel >= .995 ? "" : $" Разведать вас она успела на {Intel * 100:0} %.";
-        s.Say($"Рог! Волна {Number}: {list.Count} налётчиков идут с запада.{intel}", 2);
+        s.Say($"Рог! Волна {Number}: {total} налётчиков, {Bands(bands.Count)}, идут с запада.{intel}", 2);
     }
 }

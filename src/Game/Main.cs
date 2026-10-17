@@ -48,6 +48,8 @@ public partial class Main : Node3D
     int _look = -1;
     /// <summary>--cam=x,z,yaw,pitch,zoom: where the camera looks for a screenshot, x and z in voxels.</summary>
     float[] _cam;
+    /// <summary>--wave=seconds: a new game with the horde called at once and this long into its wave (screenshots).</summary>
+    double _waveAt = -1;
     uint _seed = 7;
     string _pose = "";
     /// <summary>How long the staged siege runs before the screenshot (--at=seconds).</summary>
@@ -64,6 +66,7 @@ public partial class Main : Node3D
             else if (a == "--top") _top = true;
             else if (a.StartsWith("--seed=") && uint.TryParse(a["--seed=".Length..], out uint sd)) _seed = sd;
             else if (a.StartsWith("--look=") && int.TryParse(a["--look=".Length..], out int lk)) _look = lk;
+            else if (a.StartsWith("--wave=") && double.TryParse(a["--wave=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double wa)) _waveAt = wa;
             else if (a.StartsWith("--cam=")) _cam = Array.ConvertAll(a["--cam=".Length..].Split(','), v => float.Parse(v, System.Globalization.CultureInfo.InvariantCulture));
             else if (a == "--selftest") _selfTest = true;
             else if (a.StartsWith("--pose=")) _pose = a["--pose=".Length..];
@@ -114,6 +117,12 @@ public partial class Main : Node3D
         Units = new UnitView();
         AddChild(Units);
         Units.Init(this);
+        var trails = new TrailView();
+        AddChild(trails);
+        trails.Init(this);
+        // where the warbands will go is shown in play; scripted runs keep the horde's ways to the waves
+        Sim.WantTrails = !_selfTest;
+        if (Sim.WantTrails && !_demo) Sim.ComputeFields(coming: true);
 
         Tools = new BuildTools();
         AddChild(Tools);
@@ -158,6 +167,7 @@ public partial class Main : Node3D
             var l = Site.Landmarks[_look];
             Rig.Set(World.WX(l.X), World.WZ(l.Z), -.7f, .6f, 2.4f, snap: true);
         }
+        if (_waveAt >= 0 && !_demo && !_selfTest) { Sim.ComputeFields(); Sim.Waves.StartNow(Sim); Advance(_waveAt); Hud.Refresh(); }
         if (_cam is { Length: 5 }) Rig.Set(World.WX(_cam[0]), World.WZ(_cam[1]), _cam[2], _cam[3], _cam[4], snap: true);
         if (_top) Rig.ToggleTopDown();
         if (_selfTest) SelfTest();

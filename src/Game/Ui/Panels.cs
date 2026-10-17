@@ -13,7 +13,7 @@ public partial class WaveClock : OrnatePanel
 {
     Main _m;
     Label _title, _note, _time, _unit;
-    Button _call;
+    Button _call, _trails;
     readonly List<Button> _speeds = new();
     KeepBar _keep;
 
@@ -67,6 +67,16 @@ public partial class WaveClock : OrnatePanel
             _speeds.Add(b);
             speeds.AddChild(b);
         }
+        _trails = new Button
+        {
+            Text = "Пути", ToggleMode = true, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(48, 24),
+            MouseDefaultCursorShape = CursorShape.PointingHand,
+            TooltipText = "Пути орды\nКуда пойдут ватаги следующей волны — каждая своей пунктирной линией от места, где войдёт в долину, до цитадели; " +
+                "красные кольца — где она будет прорубаться, янтарные — где поставит лестницу, наведёт мост или засыплет ров. " +
+                "Пути пересчитываются, пока вы строите: перекройте дорогу — и линия уйдёт в обход. Клавиша J.",
+        };
+        _trails.Pressed += () => _m.Command.ToggleTrails();
+        speeds.AddChild(_trails);
         right.AddChild(speeds);
         row.AddChild(right);
         col.AddChild(row);
@@ -98,7 +108,8 @@ public partial class WaveClock : OrnatePanel
         }
         else
         {
-            _title.Text = $"ВОЛНА {w.Number + 1} ИЗ {Waves.Total}";
+            int bands = sim.Bands.FindAll(b => b.State == BandState.Coming).Count;
+            _title.Text = $"ВОЛНА {w.Number + 1} ИЗ {Waves.Total}" + (bands > 0 ? $" · ВАТАГ {bands}" : "");
             _time.Text = Fmt.Clock(w.Countdown);
             _unit.Text = "ДО ПРИХОДА ОРДЫ";
             _call.Text = $"На штурм · разведка {w.IntelNow * 100:0} %";
@@ -106,6 +117,7 @@ public partial class WaveClock : OrnatePanel
         }
         _note.Text = _m.Paused ? "ПАУЗА" : _m.Speed > 1 ? $"×{_m.Speed}" : "";
         for (int i = 0; i < _speeds.Count; i++) _speeds[i].SetPressedNoSignal(i == 0 ? _m.Paused : !_m.Paused && _m.Speed == i);
+        _trails.SetPressedNoSignal(sim.WantTrails);
         _keep.Value = Math.Clamp(sim.KeepHp / sim.KeepMax, 0, 1);
         _keep.QueueRedraw();
     }
@@ -315,7 +327,7 @@ public partial class Retinue : OrnatePanel
         {
             foreach (var u in sel)
             {
-                _selTitle.Text = $"{u.T.Name} · {Math.Ceiling(Math.Max(0, u.Hp))} из {u.T.Hp}";
+                _selTitle.Text = $"{u.Name} · {Math.Ceiling(Math.Max(0, u.Hp))} из {Math.Ceiling(u.MaxHp)}";
                 _selNote.Text = Doing(u, _m.Sim) + (u.T.Work < 1 && u.Post >= 0 ? " · пост назначен" : "")
                     + (u.Duty != Stockpile.None ? $" · добывает: {Stockpile.Name(u.Duty)}" : "") + (u.Militia ? " · ополчение" : "");
             }
@@ -381,14 +393,14 @@ public partial class UnitOverlay : Control
         {
             if (u.Dead) continue;
             bool sel = _m.Selected.Contains(u);
-            bool hurt = u.Hp < u.T.Hp - .5f;
+            bool hurt = u.Hp < u.MaxHp - .5f;
             bool why = u.Team == Team.Player && !u.Hold && u.State == UnitState.Idle && u.Why != "";
             if (!sel && !hurt && !why) continue;
             var top = _m.Command.Screen(u, 1) - new Vector2(0, 7);
             if (top.X < -40 || top.Y < -40 || top.X > vp.X + 40 || top.Y > vp.Y + 40) continue;
             if (sel || hurt)
             {
-                float bw = Math.Clamp(u.T.BodyH * ppv * .8f, 22, 70), f = Math.Clamp(u.Hp / u.T.Hp, 0, 1);
+                float bw = Math.Clamp(u.T.BodyH * ppv * .8f, 22, 70), f = Math.Clamp(u.Hp / u.MaxHp, 0, 1);
                 var r = new Rect2(top.X - bw / 2, top.Y - 5, bw, 5);
                 DrawRect(r.Grow(1), new Color(0, 0, 0, .65f));
                 var c = u.Team == Team.Horde ? Ornament.Blood : f > .6f ? Ornament.Moss : f > .3f ? Ornament.Ember : Ornament.Blood;

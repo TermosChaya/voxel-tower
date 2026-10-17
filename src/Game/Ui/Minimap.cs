@@ -113,6 +113,7 @@ public partial class Minimap : Control
         }
         poly[^1] = poly[0];
         DrawPlaces();
+        if (_m.Sim.WantTrails) DrawTrails();
         DrawCreatures();
         DrawPolyline(poly, new Color(0, 0, 0, .6f), 3f, true);
         DrawPolyline(poly, Ornament.BronzeLight, 1.4f, true);
@@ -144,6 +145,27 @@ public partial class Minimap : Control
             DrawRect(new Rect2(p - new Vector2(5, 5), new Vector2(10, 10)), Rim);
             DrawRect(new Rect2(p - new Vector2(3.8f, 3.8f), new Vector2(7.6f, 7.6f)), c);
             DrawRect(new Rect2(p - new Vector2(1.4f, 1.4f), new Vector2(2.8f, 2.8f)), Ornament.BronzeLight);
+        }
+    }
+
+    /// <summary>Where the warbands will go: a line each, in its colour, from its head to the citadel.</summary>
+    void DrawTrails()
+    {
+        var nav = _m.Sim.Nav;
+        foreach (var b in _m.Sim.Bands)
+        {
+            if (b.Trail.Count < 2) continue;
+            var pts = new Vector2[(b.Trail.Count + 3) / 4 + 1];
+            int n = 0;
+            for (int i = 0; i < b.Trail.Count; i += 4) { var (x, _, z) = nav.Feet(b.Trail[i]); pts[n++] = ToMap(x, z); }
+            var (lx, _, lz) = nav.Feet(b.Trail[^1]);
+            pts[n++] = ToMap(lx, lz);
+            if (n < pts.Length) Array.Resize(ref pts, n);
+            var c = TrailView.ColorOf(b);
+            DrawPolyline(pts, new Color(0, 0, 0, .55f), 3f, true);
+            DrawPolyline(pts, new Color(c, .9f), 1.5f, true);
+            DrawCircle(pts[0], 3.2f, Rim);
+            DrawCircle(pts[0], 2.3f, c);
         }
     }
 
