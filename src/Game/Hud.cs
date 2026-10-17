@@ -26,7 +26,7 @@ public partial class Hud : CanvasLayer
         "[ и ] — толщина, − и = — высота (с киркой — глубина). F — форма или заливка, G — ровно или по рельефу.\n" +
         "Без кисти: ЛКМ — выбрать пешку, рамкой — нескольких; ПКМ по земле — послать, по зверю — охотиться, по врагу — атаковать.\n" +
         "Пробел — позвать орду раньше (она меньше узнает о вас), P — пауза, Tab — скорость, T — тревога.\n" +
-        "ПКМ тянет карту, колесо — масштаб, СКМ или Q/E — поворот, WASD — сдвиг, H — вернуть вид.";
+        "ПКМ тянет карту, колесо — масштаб, СКМ или Q/E — поворот, WASD — сдвиг, Y — вид сверху, H — вернуть вид.";
 
     static readonly (Tool tool, Icons.Painter icon, string key, string tip)[] ToolDefs =
     {
@@ -55,6 +55,7 @@ public partial class Hud : CanvasLayer
     VBoxContainer _chronicle;
     readonly List<(Label label, double born)> _lines = new();
     Minimap _map;
+    Button _topView;
     Label _toolName, _toolMat, _toolHint;
     HBoxContainer _opts;
     readonly Dictionary<Tool, Slot> _toolSlots = new();
@@ -137,7 +138,20 @@ public partial class Hud : CanvasLayer
         Pin(mapPanel, Control.LayoutPreset.BottomLeft, 16, -16);
         var mapBox = new VBoxContainer();
         mapBox.AddThemeConstantOverride("separation", 6);
-        mapBox.AddChild(CapsLabel("Карта долины"));
+        var mapHead = new HBoxContainer();
+        var mapTitle = CapsLabel("Карта долины");
+        mapTitle.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        mapHead.AddChild(mapTitle);
+        _topView = new Button
+        {
+            Text = "Сверху", ToggleMode = true, FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 22),
+            MouseDefaultCursorShape = Control.CursorShape.PointingHand,
+            TooltipText = "Вид сверху\nСмотреть на долину ровно сверху, как на карту, и обратно. Y. Поворот (Q/E, СКМ) работает и так.",
+        };
+        _topView.AddThemeFontSizeOverride("font_size", 11);
+        _topView.Pressed += () => _m.Rig.ToggleTopDown();
+        mapHead.AddChild(_topView);
+        mapBox.AddChild(mapHead);
         _map = new Minimap();
         mapBox.AddChild(_map);
         mapPanel.AddChild(mapBox);
@@ -265,6 +279,7 @@ public partial class Hud : CanvasLayer
         if (_banner == null) return;
         _clock += delta;
         _refreshAt -= delta;
+        if (_topView.ButtonPressed != _m.Rig.TopDown) _topView.SetPressedNoSignal(_m.Rig.TopDown);
         if (_refreshAt <= 0) { _refreshAt = .2; Refresh(); }
         foreach (var (label, born) in _lines)
         {

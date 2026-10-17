@@ -211,6 +211,7 @@ public partial class UnitView : Node3D
                         bob = breath * .12f;
                         main += breath * .04f;
                         off = -breath * .04f;
+                        if (u.State == UnitState.Idle) Leisure(u, f, seed, ref main, ref off, ref legR, ref legL, ref lean, ref bob);
                     }
                     break;
             }
@@ -232,6 +233,45 @@ public partial class UnitView : Node3D
         Write(k, Part.Off, o, arms * Swing(f, Part.Off, off), tint);
         Write(k, Part.LegR, o, root * Swing(f, Part.LegR, legR), tint);
         Write(k, Part.LegL, o, root * Swing(f, Part.LegL, legL), tint);
+    }
+
+    /// <summary>How a pawn holds itself while passing the time: sitting, talking with its hands, stretching, warming its hands, shading its eyes.</summary>
+    void Leisure(Unit u, Figure f, float seed, ref float main, ref float off, ref float legR, ref float legL, ref float lean, ref float bob)
+    {
+        float t = (float)_t;
+        switch (u.Pastime)
+        {
+            case Pastime.Sit:
+                bob = -f.Joint[(int)Part.LegR].Y * .8f;
+                legR = -1.5f; legL = -1.38f;
+                main = -.62f; off = -.5f;
+                lean = .12f;
+                break;
+            case Pastime.Talk:
+                float g = .5f + .5f * MathF.Sin(t * 3.1f + seed * 5);
+                main = -.3f - .8f * g * g;
+                off = -.15f - .25f * (.5f + .5f * MathF.Sin(t * 1.7f + seed));
+                lean = .03f;
+                break;
+            case Pastime.Stretch:
+                float p = Math.Clamp(1 - (float)((u.PastimeUntil - _m.Sim.Time) / 2.2), 0, 1);
+                float up = p < .35f ? p / .35f : p > .75f ? (1 - p) / .25f : 1;
+                up = up * up * (3 - 2 * up);
+                main = Mathf.Lerp(main, -3f, up);
+                off = Mathf.Lerp(off, -3f, up);
+                lean = -.1f * up;
+                bob += up * .25f;
+                break;
+            case Pastime.Warm:
+                main = -1.2f + MathF.Sin(t * 1.3f + seed) * .08f;
+                off = -1.25f - MathF.Sin(t * 1.3f + seed) * .08f;
+                lean = .1f;
+                break;
+            case Pastime.Watch:
+                off = -2.45f;
+                lean = .05f;
+                break;
+        }
     }
 
     /// <summary>A blow every so many seconds: a slow lift over the shoulder, then a quick swing down.</summary>

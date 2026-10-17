@@ -43,7 +43,8 @@ public partial class Minimap : Control
         CustomMinimumSize = new Vector2(256, 256f * w.SZ / w.SX);
         MouseFilter = MouseFilterEnum.Stop;
         MouseDefaultCursorShape = CursorShape.PointingHand;
-        TooltipText = "Карта\nЩелчок или протяжка переносит взгляд. Светлая рамка — то, что видит камера, ромб — цитадель.";
+        TooltipText = "Карта\nЩелчок или протяжка переносит взгляд. Светлая рамка — то, что видит камера, ромб — цитадель. " +
+            "Голубые точки — ваши люди (выбранные в кольце), красные — орда, бурые — звери.";
     }
 
     /// <summary>The highest column of a pixel's block, and what tops it.</summary>
@@ -110,6 +111,7 @@ public partial class Minimap : Control
             poly[i] = new Vector2(Math.Clamp(p.X, 1, Size.X - 1), Math.Clamp(p.Y, 1, Size.Y - 1));
         }
         poly[^1] = poly[0];
+        DrawCreatures();
         DrawPolyline(poly, new Color(0, 0, 0, .6f), 3f, true);
         DrawPolyline(poly, Ornament.BronzeLight, 1.4f, true);
         var keep = ToMap(_m.Site.KeepX, _m.Site.KeepZ);
@@ -117,6 +119,25 @@ public partial class Minimap : Control
         Ornament.Diamond(this, keep, 5f, Ornament.EmberGlow);
         DrawRect(r, new Color(0, 0, 0, .7f), false, 2);
         DrawRect(r.Grow(1), Ornament.BronzeDark, false, 1);
+    }
+
+    static readonly Color Ours = new(.62f, .86f, 1f), Horde = new(1f, .3f, .22f), Beast = new(.66f, .47f, .28f), Rim = new(0, 0, 0, .75f);
+
+    /// <summary>Everyone alive: beasts underneath, our people over them, the horde on top; the chosen ringed.</summary>
+    void DrawCreatures()
+    {
+        var units = _m.Sim.Units;
+        foreach (var team in new[] { Team.Wild, Team.Player, Team.Horde })
+            foreach (var u in units)
+            {
+                if (u.Dead || u.Team != team) continue;
+                float r = team switch { Team.Horde => 2.4f, Team.Player => 2.1f, _ => 1.5f };
+                var p = ToMap(u.X, u.Z);
+                DrawCircle(p, r + 1, Rim);
+                DrawCircle(p, r, team switch { Team.Horde => Horde, Team.Player => Ours, _ => Beast });
+            }
+        foreach (var u in _m.Selected)
+            if (!u.Dead) DrawArc(ToMap(u.X, u.Z), 4.4f, 0, Mathf.Tau, 14, Ornament.BronzeLight, 1.3f, true);
     }
 
     public override void _GuiInput(InputEvent e)

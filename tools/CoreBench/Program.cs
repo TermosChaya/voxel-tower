@@ -272,6 +272,29 @@ if (args.Length == 0 || args[0] == "--sim")
     for (int i = 0; i < 4; i++) crew.Add(sim.Hire(Kinds.Worker));
     Check("workers hired at the gate", crew.TrueForAll(u => u != null));
 
+    // with nothing to do they pass the time: stroll, sit, talk, look round, warm their hands, and stay close
+    {
+        var seen = new System.Collections.Generic.HashSet<Pastime>();
+        var start = crew.ConvertAll(u => (u.X, u.Z));
+        int talks = 0; float moved = 0, strayed = 0;
+        for (int t = 0; t < 60; t++)
+        {
+            Run(1);
+            foreach (var u in crew)
+            {
+                seen.Add(u.Pastime);
+                if (u.Pastime == Pastime.Talk && u.Mate != null) talks++;
+            }
+        }
+        for (int i = 0; i < crew.Count; i++)
+        {
+            float d = MathF.Sqrt((crew[i].X - start[i].X) * (crew[i].X - start[i].X) + (crew[i].Z - start[i].Z) * (crew[i].Z - start[i].Z));
+            moved = Math.Max(moved, d); strayed = Math.Max(strayed, d);
+        }
+        Check("idle workers pass the time and stay close", seen.Count >= 4 && talks > 0 && moved > 8 && strayed < 12 * VoxelWorld.PerMetre,
+            $"{string.Join(", ", seen)}; talking {talks} of 240 looks, the farthest {strayed / VoxelWorld.PerMetre:0.0} m from where it stood");
+    }
+
     int gx = site4.KeepX - site4.KeepR - 12, gz = site4.KeepZ;
     int far = sim.NearestStand(gx - 160, gz + 60, 4);
     sw.Restart();

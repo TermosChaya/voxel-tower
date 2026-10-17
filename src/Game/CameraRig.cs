@@ -5,7 +5,7 @@ namespace VoxelTower.Game;
 
 /// <summary>
 /// The orthographic diorama camera. Wheel zooms, middle button (or Alt + left) orbits,
-/// right button drags the map, WASD or arrows pan, Q/E turn, H returns home.
+/// right button drags the map, WASD or arrows pan, Q/E turn, Y looks straight down and back, H returns home.
 /// </summary>
 public partial class CameraRig : Node3D
 {
@@ -23,6 +23,19 @@ public partial class CameraRig : Node3D
 
     /// <summary>Where H returns the view to.</summary>
     public void HomeAt(float wx, float wz) { _homeX = wx; _homeZ = wz; Home(true); }
+
+    /// <summary>Looking straight down on the valley, like on a map. Turning still works; the slant comes back with Y or H.</summary>
+    public bool TopDown { get; private set; }
+    const float Overhead = MathF.PI / 2;
+    float _slant = HomePitch;
+
+    public void ToggleTopDown()
+    {
+        if (TopDown) { TopDown = false; _pitch = _slant; return; }
+        TopDown = true;
+        _slant = _pitch;
+        _pitch = Overhead;
+    }
 
     float _tx, _tz, _yaw, _pitch, _zoom;     // where the camera is heading
     float _cx, _cz, _cyaw, _cpitch, _czoom;  // where it is now
@@ -49,7 +62,8 @@ public partial class CameraRig : Node3D
 
     public void Set(float tx, float tz, float yaw, float pitch, float zoom, bool snap)
     {
-        (_tx, _tz, _yaw, _pitch, _zoom) = (ClampX(tx), ClampZ(tz), yaw, Math.Clamp(pitch, .35f, 1.4f), Math.Clamp(zoom, MinZoom, MaxZoom));
+        (_tx, _tz, _yaw, _pitch, _zoom) = (ClampX(tx), ClampZ(tz), yaw, Math.Clamp(pitch, .35f, Overhead), Math.Clamp(zoom, MinZoom, MaxZoom));
+        TopDown = _pitch > Overhead - .01f;
         if (!snap) return;
         (_cx, _cz, _cyaw, _cpitch, _czoom) = (_tx, _tz, _yaw, _pitch, _zoom);
         Apply();
@@ -75,7 +89,7 @@ public partial class CameraRig : Node3D
             if (_rotating)
             {
                 _yaw -= mm.Relative.X * .006f;
-                _pitch = Math.Clamp(_pitch + mm.Relative.Y * .004f, .35f, 1.4f);
+                if (!TopDown) _pitch = Math.Clamp(_pitch + mm.Relative.Y * .004f, .35f, 1.4f);
                 _cyaw = _yaw; _cpitch = _pitch;
             }
             if (_panning)
@@ -84,8 +98,13 @@ public partial class CameraRig : Node3D
                 if (_rmbMoved) Pan(mm.Relative);
             }
         }
-        else if (e is InputEventKey k && k.Pressed && !k.Echo && (k.PhysicalKeycode == Key.H || k.PhysicalKeycode == Key.Home))
-            Home();
+        else if (e is InputEventKey k && k.Pressed && !k.Echo && !k.CtrlPressed && !k.MetaPressed)
+        {
+            if (k.PhysicalKeycode is Key.H or Key.Home) Home();
+            else if (k.PhysicalKeycode == Key.Y) ToggleTopDown();
+            else return;
+            GetViewport().SetInputAsHandled();
+        }
     }
 
     void Pan(Vector2 d)
@@ -129,7 +148,9 @@ public partial class CameraRig : Node3D
         float cp = MathF.Cos(_cpitch), spn = MathF.Sin(_cpitch);
         var target = new Vector3(_cx, LookY, _cz);
         var pos = target + new Vector3(MathF.Sin(_cyaw) * cp * Dist, spn * Dist, MathF.Cos(_cyaw) * cp * Dist);
-        Cam.LookAtFromPosition(pos, target, Vector3.Up);
+        // straight down, "up" on the screen is the way the camera was facing
+        var up = cp < .02f ? new Vector3(-MathF.Sin(_cyaw), 0, -MathF.Cos(_cyaw)) : Vector3.Up;
+        Cam.LookAtFromPosition(pos, target, up);
         Cam.VOffset = -(BottomInset - TopInset) * .5f * Cam.Size / Math.Max(1f, vp.Y);
     }
 

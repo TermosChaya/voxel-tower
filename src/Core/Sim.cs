@@ -265,6 +265,7 @@ public sealed partial class Sim
         {
             if (u.Dead || u.Team != Team.Player) continue;
             ReleaseSite(u);
+            Busy(u);
             int spot = Spread(target, n++, u.T.Move.Height);
             u.Hold = true;
             u.Prey = null;
@@ -277,7 +278,7 @@ public sealed partial class Sim
     /// <summary>Lets pawns go back to work by themselves.</summary>
     public void ReleaseHold(IEnumerable<Unit> units)
     {
-        foreach (var u in units) { u.Hold = false; u.Prey = null; u.NextSearch = 0; }
+        foreach (var u in units) { u.Hold = false; u.Prey = null; u.NextSearch = 0; Busy(u); }
     }
 
     /// <summary>The horn: soldiers drop the hunt and whatever else they were at and hurry to their posts.</summary>
@@ -287,6 +288,7 @@ public sealed partial class Sim
             if (!u.Dead && u.Team == Team.Player && u.T.Work < 1 && u.Post >= 0)
             {
                 ReleaseSite(u);
+                Busy(u);
                 u.Prey = null;
                 GoTo(u, u.Post);
             }

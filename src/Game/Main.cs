@@ -12,7 +12,8 @@ namespace VoxelTower.Game;
 /// Builds the valley, the simulation, the view, the camera, the tools and the interface, and wires them together.
 /// Command-line options after "--": --shot=file.png [--frames=N] takes a screenshot and quits,
 /// --demo sets up a fort with pawns at work (--pose=battle: the horde bridging the moat and laddering the wall),
-/// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker.
+/// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
+/// --top looks straight down.
 /// </summary>
 public partial class Main : Node3D
 {
@@ -42,7 +43,7 @@ public partial class Main : Node3D
 
     string _shot;
     int _shotFrames = 45, _frames;
-    bool _demo, _calm, _selfTest, _finale;
+    bool _demo, _calm, _selfTest, _finale, _top;
     string _pose = "";
     /// <summary>How long the staged siege runs before the screenshot (--at=seconds).</summary>
     double _poseSeconds = 14;
@@ -55,6 +56,7 @@ public partial class Main : Node3D
             else if (a.StartsWith("--frames=") && int.TryParse(a["--frames=".Length..], out int f)) _shotFrames = f;
             else if (a == "--demo") _demo = true;
             else if (a == "--calm") _calm = true;
+            else if (a == "--top") _top = true;
             else if (a == "--selftest") _selfTest = true;
             else if (a.StartsWith("--pose=")) _pose = a["--pose=".Length..];
             else if (a.StartsWith("--at=") && double.TryParse(a["--at=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double at)) _poseSeconds = at;
@@ -128,6 +130,7 @@ public partial class Main : Node3D
         GD.Print($"[voxel-tower] world {genMs:0} ms, navigation {navMs:0} ms, mesh {View.LastFullMeshMs:0} ms, {View.Triangles()} triangles");
 
         if (_demo) Demo();
+        if (_top) Rig.ToggleTopDown();
         if (_selfTest) SelfTest();
         // a hidden or minimised window never draws a frame: don't let scripted runs hang
         if (_shot != null || _selfTest) GetTree().CreateTimer(120).Timeout += () => { GD.PrintErr("[voxel-tower] gave up waiting for a frame"); GetTree().Quit(2); };

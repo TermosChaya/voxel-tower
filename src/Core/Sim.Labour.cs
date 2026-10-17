@@ -58,19 +58,19 @@ public sealed partial class Sim
     {
         bool soldier = u.T.Work < 1;
         // a swordsman beside a siege ladder throws it down before anything else, climbers and all
-        if (soldier && !u.T.Ranged && PushLadders(u, dt)) return;
-        if (soldier && Fight(u, dt)) return;
-        if (!soldier && Flee(u, dt)) return;
-        if (u.Prey != null && HuntTick(u, dt)) return;
-        if (soldier && PushLadders(u, dt)) return;
-        if (u.Path != null && u.PathI < u.Path.Count && (u.Hold || u.Site < 0)) { Walk(u, dt); return; }
-        if (u.Hold) { u.State = UnitState.Idle; u.Why = ""; return; }
+        if (soldier && !u.T.Ranged && PushLadders(u, dt)) { Busy(u); return; }
+        if (soldier && Fight(u, dt)) { Busy(u); return; }
+        if (!soldier && Flee(u, dt)) { Busy(u); return; }
+        if (u.Prey != null && HuntTick(u, dt)) { Busy(u); return; }
+        if (soldier && PushLadders(u, dt)) { Busy(u); return; }
+        if (u.Path != null && u.PathI < u.Path.Count && (u.Hold || u.Site < 0) && u.Pastime != Pastime.Stroll) { Walk(u, dt); return; }
+        if (u.Hold) { u.Why = ""; Idle(u, dt, stay: true); return; }
         if (soldier && Waves.Active)
         {
-            // while the horde is in the valley soldiers keep to their posts
+            // while the horde is in the valley soldiers keep to their posts and look out
             ReleaseSite(u);
-            if (u.Post >= 0 && u.Cell != u.Post && Time >= u.NextSearch) { u.NextSearch = Time + 2; GoTo(u, u.Post); }
-            if (u.Path != null) Walk(u, dt); else u.State = UnitState.Idle;
+            if (u.Post >= 0 && u.Cell != u.Post && Time >= u.NextSearch) { u.NextSearch = Time + 2; Busy(u); GoTo(u, u.Post); }
+            if (u.Path != null && u.Pastime != Pastime.Stroll) Walk(u, dt); else Idle(u, dt, stay: true);
             return;
         }
         WorkTick(u, dt);
@@ -82,6 +82,8 @@ public sealed partial class Sim
         {
             u.State = UnitState.Idle;
             if (Time >= u.NextSearch) FindWork(u);
+            if (u.Site >= 0) { Busy(u); return; }
+            Idle(u, dt, stay: false);
             return;
         }
         if (u.Path != null && u.PathI < u.Path.Count) { Walk(u, dt); return; }

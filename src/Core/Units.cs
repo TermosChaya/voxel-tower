@@ -7,6 +7,9 @@ public enum Team : byte { Player, Horde, Wild }
 
 public enum UnitState : byte { Idle, Walk, Work, Fight, Carve, Siege, Flee, Dead }
 
+/// <summary>What a pawn with nothing to do passes the time with: for its pose and for the panel.</summary>
+public enum Pastime : byte { None, Stroll, Look, Sit, Talk, Stretch, Warm, Watch }
+
 /// <summary>A kind of pawn or attacker: how it moves, works, fights, and what it looks like.</summary>
 public sealed class UnitType
 {
@@ -173,9 +176,17 @@ public sealed class Unit
     public float PushEffort;
     public double NextLook;
 
-    // beasts
-    /// <summary>Where it grazes and wanders round.</summary>
+    // beasts, and pawns with nothing to do
+    /// <summary>Where it grazes and wanders round; for a pawn, where it idles round.</summary>
     public int Home = -1;
+    public Pastime Pastime;
+    /// <summary>What it takes up when a stroll ends.</summary>
+    public Pastime After;
+    public double PastimeUntil;
+    /// <summary>Who it is talking to.</summary>
+    public Unit Mate;
+    /// <summary>The way it looks while at it: at a fire, out over the wall.</summary>
+    public float Gaze;
 
     /// <summary>Walk cycle phase, for the legs.</summary>
     public float Stride;

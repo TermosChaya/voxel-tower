@@ -249,10 +249,18 @@ public partial class Retinue : OrnatePanel
                 return Mat.IsVeg[at] ? "рубит лес" : at is Mat.Rock or Mat.Moss or Mat.Stone or Mat.Mortar ? "ломает камень" : "копает";
             case UnitState.Fight: return "бьётся";
             case UnitState.Flee: return "бежит к цитадели";
-            case UnitState.Walk: return u.Site >= 0 ? "идёт к работе" : u.Hold ? "идёт по приказу" : "идёт";
+            case UnitState.Walk:
+                return u.Site >= 0 ? "идёт к работе" : u.Hold ? "идёт по приказу"
+                    : u.Pastime == Pastime.Stroll ? (u.After == Pastime.Warm ? "идёт погреться к огню" : "прогуливается") : "идёт";
         }
-        if (u.Hold) return "стоит по приказу";
-        return u.Why != "" ? u.Why : "без дела";
+        string leisure = u.Pastime switch
+        {
+            Pastime.Look => "осматривается", Pastime.Sit => "отдыхает", Pastime.Talk => "беседует", Pastime.Stretch => "потягивается",
+            Pastime.Warm => "греется у огня", Pastime.Watch => "смотрит на запад", _ => "",
+        };
+        if (u.Hold) return leisure == "" ? "стоит по приказу" : "стоит по приказу, " + leisure;
+        if (u.Why != "") return u.Why;
+        return leisure != "" ? leisure : "без дела";
     }
 
     public void Refresh()
