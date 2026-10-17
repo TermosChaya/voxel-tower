@@ -28,7 +28,7 @@ public sealed class Stockpile
 /// </summary>
 public static class Labour
 {
-    public const double WorkPerSecond = 180;
+    public const double WorkPerSecond = 300;
     /// <summary>How far from where they stand pawns reach: a cell to each side, 1.5 m down and 2.5 m up.</summary>
     public const int ReachDown = 24, ReachUp = 40;
 

@@ -320,6 +320,68 @@ if (args.Length == 0 || args[0] == "--sim")
         guard.Dead = true; guard.DiedAt = -999;
     }
 
+    // pawns sent to one spot don't stand inside each other
+    {
+        int spot = sim.NearestStand(px - 30, pz - 30, 2);
+        sim.Command(new[] { crew[0], crew[1] }, spot);
+        sim.Command(new[] { crew[2] }, spot);
+        Run(6);
+        float gap = MathF.Sqrt((crew[0].X - crew[2].X) * (crew[0].X - crew[2].X) + (crew[0].Z - crew[2].Z) * (crew[0].Z - crew[2].Z));
+        Check("pawns sent to one spot keep apart", gap >= crew[0].T.BodyR * 2 - .2f, $"{gap:0.0} voxels between two of them");
+        sim.ReleaseHold(crew);
+    }
+
+    // areas set aside for a resource: the workers fell, quarry and dig them by themselves when nothing else is marked
+    {
+        (int x, int z) Find(Func<int, int, bool> test)
+        {
+            for (int r = 40; r < 500; r += 6)
+                for (int a = 0; a < 360; a += 3)
+                {
+                    int x = site4.KeepX + (int)(Math.Cos(a * Math.PI / 180) * r), z = site4.KeepZ + (int)(Math.Sin(a * Math.PI / 180) * r);
+                    if (x > 40 && z > 40 && x < w4.SX - 40 && z < w4.SZ - 40 && test(x, z)) return (x, z);
+                }
+            return (-1, -1);
+        }
+        const int G = 40;
+        // the plateau's thickest grove within a walk of the citadel
+        (int x, int z) wood = (-1, -1); int most = 0;
+        for (int cz = 80; cz < w4.SZ - 80; cz += 40)
+            for (int cx = 80; cx < w4.SX - 80; cx += 40)
+            {
+                float dk = MathF.Sqrt((cx - site4.KeepX) * (cx - site4.KeepX) + (cz - site4.KeepZ) * (cz - site4.KeepZ));
+                if (dk < 150 || dk > 460 || w4.SurfAt(cx, cz) < 70) continue;
+                int t = sim.Survey(cx - G, cz - G, cx + G, cz + G, Stockpile.Wood, 0).trees;
+                if (t > most) { most = t; wood = (cx, cz); }
+            }
+        var (trees0, _) = sim.Survey(wood.x - G, wood.z - G, wood.x + G, wood.z + G, Stockpile.Wood, 0);
+        double w0 = sim.Stock[Stockpile.Wood];
+        var grove = sim.AddZone(wood.x - G, wood.z - G, wood.x + G, wood.z + G, Stockpile.Wood, 0);
+        Run(150);
+        var (trees1, _) = sim.Survey(wood.x - G, wood.z - G, wood.x + G, wood.z + G, Stockpile.Wood, 0);
+        Check("workers fell a set-aside grove by themselves", trees0 >= 3 && trees1 <= trees0 - 2 && sim.Stock[Stockpile.Wood] > w0 + 2000,
+            $"{trees0} → {trees1} trees round {wood}, wood +{Fmt.M3(sim.Stock[Stockpile.Wood] - w0)} m³, {grove.Marked} voxels marked so far");
+        sim.RemoveZones(wood.x - G, wood.z - G, wood.x + G, wood.z + G);
+        sim.CancelArea(wood.x - 70, wood.z - 70, wood.x + 70, wood.z + 70);
+
+        var rock = Find((x, z) => w4.Get(x, w4.SurfAt(x, z) - 1, z) == Mat.Rock && w4.SurfAt(x, z) > site4.HTop[z * w4.SX + x] + 4 && w4.SurfAt(x, z) > 70);
+        double s0 = sim.Stock[Stockpile.Stone];
+        var (_, rockVox) = sim.Survey(rock.x - 16, rock.z - 16, rock.x + 16, rock.z + 16, Stockpile.Stone, 16);
+        sim.AddZone(rock.x - 16, rock.z - 16, rock.x + 16, rock.z + 16, Stockpile.Stone, 16);
+        Run(120);
+        Check("…quarry a boulder in a set-aside pit", rockVox > 200 && sim.Stock[Stockpile.Stone] > s0 + 300,
+            $"boulder at {rock}, ≈{Fmt.M3(rockVox)} m³ of rock in reach, stone +{Fmt.M3(sim.Stock[Stockpile.Stone] - s0)} m³");
+        sim.RemoveZones(rock.x - 16, rock.z - 16, rock.x + 16, rock.z + 16);
+        sim.CancelArea(rock.x - 40, rock.z - 40, rock.x + 40, rock.z + 40);
+
+        int ex = px - 60, ez = pz + 40;
+        double e0 = sim.Stock[Stockpile.Earth];
+        var cut = sim.AddZone(ex, ez, ex + 15, ez + 15, Stockpile.Earth, 8);
+        Run(60);
+        Check("…and dig a set-aside cut until it is done, then let it go", !sim.Zones.Contains(cut) && sim.Stock[Stockpile.Earth] > e0 + 1000,
+            $"{cut.Marked} voxels dug, earth +{Fmt.M3(sim.Stock[Stockpile.Earth] - e0)} m³, zones left {sim.Zones.Count}");
+    }
+
     // a ladder against a wall: a worker climbs up onto it
     {
         int lx = px - 40, lz = pz + 80;

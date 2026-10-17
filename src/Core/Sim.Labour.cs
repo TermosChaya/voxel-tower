@@ -101,7 +101,7 @@ public sealed partial class Sim
             }
         }
         u.State = UnitState.Work;
-        u.Effort += (float)(Labour.WorkPerSecond * u.T.Work * dt);
+        u.Effort += (float)(Labour.WorkPerSecond * u.T.Work * u.Pace * dt);
         int guard = 0;
         while (u.JobI < u.Jobs.Count && guard++ < 256)
         {
@@ -147,7 +147,10 @@ public sealed partial class Sim
     /// <summary>Called for every voxel a pawn digs out, for chips and dust.</summary>
     public Action<int, int, int, byte> Mined;
 
-    /// <summary>The orders within reach of where the pawn stands: digging top-down first, then laying bottom-up.</summary>
+    /// <summary>
+    /// The orders within reach of where the pawn stands: digging top-down first, then laying bottom-up,
+    /// and within each course the voxels nearest to it first, so two at one site work different ends of it.
+    /// </summary>
     void Gather(Unit u)
     {
         u.Jobs.Clear(); u.JobI = 0; u.Why = "";
@@ -155,30 +158,41 @@ public sealed partial class Sim
         int x0 = Math.Max(0, (i - 1) * NavGrid.CS), x1 = Math.Min(World.SX, (i + 2) * NavGrid.CS);
         int z0 = Math.Max(0, (k - 1) * NavGrid.CS), z1 = Math.Min(World.SZ, (k + 2) * NavGrid.CS);
         int y0 = Math.Max(0, feet - Labour.ReachDown), y1 = Math.Min(World.SY, feet + Labour.ReachUp);
-        var builds = new List<(int, int, int, byte)>();
+        var digs = new List<(int x, int y, int z, byte m)>();
+        var builds = new List<(int x, int y, int z, byte m)>();
         string missing = "";
         bool crowded = false;
-        for (int y = y1 - 1; y >= y0 && u.Jobs.Count < 2048; y--)
+        for (int y = y1 - 1; y >= y0 && digs.Count < 2048; y--)
             for (int z = z0; z < z1; z++)
                 for (int x = x0; x < x1; x++)
                 {
                     byte o = Orders.At(x, y, z);
                     if (o == 0) continue;
-                    if (o == Orders.Remove) { u.Jobs.Add((x, y, z, o)); continue; }
+                    if (o == Orders.Remove) { digs.Add((x, y, z, o)); continue; }
                     int ck = Labour.CostKind(o);
                     if (ck != Stockpile.None && Stock[ck] < 1) { missing = Stockpile.Name(ck); continue; }
                     if (_bodies[Nav.CellOf(x, y, z)] > 0) { crowded = true; continue; }
                     builds.Add((x, y, z, o));
                 }
-        builds.Reverse();
+        float ux = u.X, uz = u.Z;
+        float Near((int x, int y, int z, byte m) j) => (j.x + .5f - ux) * (j.x + .5f - ux) + (j.z + .5f - uz) * (j.z + .5f - uz);
+        digs.Sort((a, b) => a.y != b.y ? b.y.CompareTo(a.y) : Near(a).CompareTo(Near(b)));
+        builds.Sort((a, b) => a.y != b.y ? a.y.CompareTo(b.y) : Near(a).CompareTo(Near(b)));
+        u.Jobs.AddRange(digs);
         u.Jobs.AddRange(builds);
         if (u.Jobs.Count == 0) u.Why = missing != "" ? "нет: " + missing : crowded ? "на месте кладки стоят" : "";
     }
 
     void FindWork(Unit u)
     {
-        u.NextSearch = Time + .5 + Rng.NextDouble() * .5;
-        if (Orders.Active.Count == 0) { u.Why = ""; return; }
+        u.NextSearch = Time + .3 + Rng.NextDouble() * .4;
+        if (Orders.Active.Count == 0)
+        {
+            u.Why = "";
+            // nothing marked: take a little more out of an area the player set aside for it
+            if (FeedFromZone(u)) u.NextSearch = Time;
+            return;
+        }
         int ui = Nav.I(u.Cell), uk = Nav.K(u.Cell);
         var near = new List<(float d, int col)>();
         foreach (int col in Orders.Active)
@@ -197,10 +211,13 @@ public sealed partial class Sim
         {
             if (!Orders.Span(col, out int y0, out int y1)) continue;
             int ci = col % Nav.NX, ck = col / Nav.NX;
-            // stand beside the work, or in its column if nothing is to be laid where the body would be
+            // stand beside the work (in its column only if nothing is to be laid where the body would be),
+            // and not where another pawn already stands
+            int self = u.Cell;
             bool Goal(int c) => Math.Abs(Nav.I(c) - ci) <= 1 && Math.Abs(Nav.K(c) - ck) <= 1
                 && Nav.Floor[c] - Labour.ReachDown <= y1 && Nav.Floor[c] + Labour.ReachUp > y0
-                && !(Nav.I(c) == ci && Nav.K(c) == ck && BuildsInBody(c, h));
+                && !(Nav.I(c) == ci && Nav.K(c) == ck && BuildsInBody(c, h))
+                && _bodies[c] - (c == self ? 1 : 0) <= 0;
             List<int> path = Goal(u.Cell) ? new List<int>() : Paths.Find(u.Cell, Goal, c => H(c, ci, ck), u.T.Move, 30000);
             if (path == null) { u.Unreachable[col] = Time + 12; continue; }
             u.Site = col; _claims[col]++;
@@ -209,6 +226,8 @@ public sealed partial class Sim
             return;
         }
         if (near.Count > 0) u.Why = "до работы не дойти";
+        // nothing marked that this one can get to: take a little more out of an area set aside for it
+        if (FeedFromZone(u)) { u.Why = ""; u.NextSearch = Time; }
     }
 
     /// <summary>Planned masonry where a pawn would stand: don't let it wall itself in.</summary>

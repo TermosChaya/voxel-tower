@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 namespace VoxelTower.Core;
 
 /// <summary>
-/// The walkable world on half-metre cells of 8³ voxels: how full each cell is and of what, and where feet rest in it.
+/// The walkable world on metre cells of 8³ voxels: how full each cell is and of what, and where feet rest in it.
 /// Leaves, bushes, grass, ladders and water don't block; trunks, earth, masonry and rock do once a cell is a quarter full.
 /// A cell with a ladder in it can be hung on and climbed; a cell more than a third full of water drowns whoever stands there.
 /// </summary>

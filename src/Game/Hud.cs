@@ -21,7 +21,7 @@ public partial class Hud : CanvasLayer
 
     const string HelpText = "Управление\n" +
         "Кисти ничего не строят сами: они размечают работу, а пешки делают её — кладут из запасов, копают, рубят.\n" +
-        "1–5 — кисти, 6 — снять разметку, 7 — лестница, B — снять чертёж, Esc — убрать кисть. Z, X, C — камень, брёвна, земля; " +
+        "1–5 — кисти, 6 — снять разметку, 7 — лестница, 8 — делянка (добыча с участка), B — снять чертёж, Esc — убрать кисть. Z, X, C — камень, брёвна, земля; " +
         "V — кирка: копать, рубить, ломать камень, разбирать свою кладку. Shift с кистью — тоже кирка.\n" +
         "[ и ] — толщина, − и = — высота (с киркой — глубина). F — форма или заливка, G — ровно или по рельефу.\n" +
         "Без кисти: ЛКМ — выбрать пешку, рамкой — нескольких; ПКМ по земле — послать, по зверю — охотиться, по врагу — атаковать.\n" +
@@ -37,6 +37,7 @@ public partial class Hud : CanvasLayer
         (Tool.Extrude, Icons.Extrude, "5", "Выдавить\nЩелчок по ровной грани: она нарастёт на шаг выбранным материалом. С киркой — грань вынут на шаг вглубь: ступени в склоне, проход в скале."),
         (Tool.Unmark, Icons.Erase, "6", "Снять разметку\nРамка снимает всю разметку внутри, щелчок — разметку поблизости. Что уже сделано, остаётся."),
         (Tool.Ladder, Icons.Ladder, "7", "Лестница\nЩелчок по боковой грани стены, башни или обрыва: рабочие приставят лестницу от земли до верха. По лестницам ваши пешки поднимаются на стены. Орда тоже ими пользуется — и ставит свои."),
+        (Tool.Gather, Icons.Gather, "8", "Делянка\nРамкой отметьте участок, откуда брать ресурс: Z — камень (скалы и валуны), X — лес, C — земля; у камня и земли — глубина. Размечать каждое дерево не нужно: свободные пешки сами берут оттуда работу понемногу, а разметка стен и рвов идёт первой."),
         (Tool.Capture, Icons.Scroll, "B", "Снять чертёж\nОбведите рамкой свою постройку — она станет чертежом. Копии ставятся из свитков справа, R поворачивает."),
     };
 
@@ -294,7 +295,8 @@ public partial class Hud : CanvasLayer
         foreach (var (mat, s) in _matSlots) s.Selected = !t.Opt.Dig && mat == t.Opt.Material;
         _pickSlot.Selected = t.Opt.Dig;
         _toolName.Text = t.Tool == Tool.Paste && t.PasteBp != null ? $"Чертёж «{t.PasteBp.Name}»" : BuildTools.ToolName(t.Tool);
-        _toolMat.Text = (t.Opt.Dig ? "кирка: копать и рубить" : "материал: " + Mat.NameOf(t.Opt.Material).ToLowerInvariant()).ToUpperInvariant();
+        _toolMat.Text = (t.Tool == Tool.Gather ? "добывать: " + (t.GatherKind switch { Stockpile.Wood => "лес", Stockpile.Earth => "землю", _ => "камень" })
+            : t.Opt.Dig ? "кирка: копать и рубить" : "материал: " + Mat.NameOf(t.Opt.Material).ToLowerInvariant()).ToUpperInvariant();
         _toolHint.Text = BuildTools.Hint(t.Tool, t.Opt.Dig);
         RebuildOptions();
         RebuildBlueprints();
@@ -343,6 +345,11 @@ public partial class Hud : CanvasLayer
                 break;
             case Tool.Extrude:
                 _opts.AddChild(new Stepper("Шаг", "Шаг\nНа сколько нарастает или уходит вглубь грань за щелчок. Клавиши − и =.", () => Len(o.Step), d => t.StepHeight(d)));
+                break;
+            case Tool.Gather:
+                _opts.AddChild(CapsLabel(t.GatherKind switch { Stockpile.Wood => "лес", Stockpile.Earth => "земля", _ => "камень" }, 11, Ornament.BronzeLight));
+                if (t.GatherKind != Stockpile.Wood)
+                    _opts.AddChild(new Stepper("Глубина", "Глубина\nДо какой глубины от нынешней поверхности брать камень или землю. Клавиши − и =.", () => Len(o.Depth), d => t.StepHeight(d)));
                 break;
             case Tool.Paste when t.PasteBp != null:
                 _opts.AddChild(CapsLabel($"поворот {t.PasteRot * 90}° · R — повернуть · {t.PasteBp.Describe()}", 10, Ornament.Aged));

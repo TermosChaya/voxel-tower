@@ -5,7 +5,7 @@ using VoxelTower.Core;
 
 namespace VoxelTower.Game;
 
-public enum Tool { None, Brush, Line, Box, Circle, Extrude, Ladder, Unmark, Capture, Paste }
+public enum Tool { None, Brush, Line, Box, Circle, Extrude, Ladder, Gather, Unmark, Capture, Paste }
 
 public enum BrushForm { Column, Ball }
 
@@ -48,7 +48,7 @@ public partial class BuildTools : Node3D
     public static string ToolName(Tool t) => t switch
     {
         Tool.Brush => "Кисть", Tool.Line => "Линия", Tool.Box => "Прямоугольник", Tool.Circle => "Круг",
-        Tool.Extrude => "Выдавить", Tool.Ladder => "Лестница", Tool.Unmark => "Снять разметку", Tool.Capture => "Снять чертёж",
+        Tool.Extrude => "Выдавить", Tool.Ladder => "Лестница", Tool.Gather => "Делянка", Tool.Unmark => "Снять разметку", Tool.Capture => "Снять чертёж",
         Tool.Paste => "Чертёж", _ => "Без кисти",
     };
 
@@ -65,7 +65,8 @@ public partial class BuildTools : Node3D
         (Tool.Extrude, false) => "Щёлкните по ровной грани: она нарастёт на шаг выбранным материалом.",
         (Tool.Extrude, true) => "Щёлкните по ровной грани: её вынут на шаг вглубь. Ступени в склоне, проход в скале.",
         (Tool.Ladder, _) => "Щёлкните по боковой грани стены, башни или обрыва — рабочие приставят лестницу от земли до верха. По ней ходят ваши пешки… и орда, если доберётся.",
-        (Tool.Unmark, _) => "Протяните рамку — вся разметка в ней снимается. Щелчок снимает разметку поблизости.",
+        (Tool.Gather, _) => "Протяните рамку — участок для добычи. Z — камень из скал и валунов, X — лес, C — земля. Свободные рабочие сами понемногу берут оттуда работу.",
+        (Tool.Unmark, _) => "Протяните рамку — вся разметка и делянки в ней снимаются. Щелчок снимает разметку поблизости и делянку под курсором.",
         (Tool.Capture, _) => "Обведите рамкой свою постройку — она станет чертежом.",
         (Tool.Paste, _) => "Щёлкните, чтобы разметить копию. R поворачивает, Esc отменяет.",
         _ => "ЛКМ — выбрать пешек, рамкой — нескольких, ПКМ — послать, ПКМ по зверю — охотиться. 1–5 — кисти, 7 — лестница, V — кирка.",
@@ -179,7 +180,7 @@ public partial class BuildTools : Node3D
     public void SetDig(bool dig)
     {
         Opt.Dig = dig;
-        if (dig && Tool is Tool.None or Tool.Capture or Tool.Unmark or Tool.Paste or Tool.Ladder) { Tool = Tool.Line; PasteBp = null; }
+        if (dig && Tool is Tool.None or Tool.Capture or Tool.Unmark or Tool.Paste or Tool.Ladder or Tool.Gather) { Tool = Tool.Line; PasteBp = null; }
         Changed();
     }
 
@@ -192,7 +193,7 @@ public partial class BuildTools : Node3D
     public void StepHeight(int dir)
     {
         if (Tool == Tool.Extrude) Opt.Step = ToolOptions.Next(ToolOptions.Steps, Opt.Step, dir);
-        else if (Opt.Dig) Opt.Depth = ToolOptions.Next(ToolOptions.Depths, Opt.Depth, dir);
+        else if (Opt.Dig || Tool == Tool.Gather) Opt.Depth = ToolOptions.Next(ToolOptions.Depths, Opt.Depth, dir);
         else Opt.Height = ToolOptions.Next(ToolOptions.Heights, Opt.Height, dir);
         Changed();
     }
@@ -205,6 +206,9 @@ public partial class BuildTools : Node3D
     }
 
     public void ToggleLevel() { Opt.Level = !Opt.Level; Changed(); }
+
+    /// <summary>What a gathering area takes: the material in hand says which.</summary>
+    public int GatherKind => Opt.Material switch { Mat.Wood => Stockpile.Wood, Mat.Rammed => Stockpile.Earth, _ => Stockpile.Stone };
 
     /// <summary>The pick is in hand, or Shift turns the brush into one for this stroke.</summary>
     bool DigNow => Opt.Dig || (Tool == Tool.Brush && (_lmb ? _shift : Input.IsKeyPressed(global::Godot.Key.Shift)));
@@ -245,7 +249,7 @@ public partial class BuildTools : Node3D
         {
             global::Godot.Key.Key1 => Tool.Brush, global::Godot.Key.Key2 => Tool.Line, global::Godot.Key.Key3 => Tool.Box,
             global::Godot.Key.Key4 => Tool.Circle, global::Godot.Key.Key5 => Tool.Extrude, global::Godot.Key.Key6 => Tool.Unmark,
-            global::Godot.Key.Key7 => Tool.Ladder, global::Godot.Key.Key8 or global::Godot.Key.B => Tool.Capture,
+            global::Godot.Key.Key7 => Tool.Ladder, global::Godot.Key.Key8 => Tool.Gather, global::Godot.Key.B => Tool.Capture,
             _ => Tool.None,
         };
         if (t != Tool.None) { SetTool(t); return true; }
@@ -302,20 +306,22 @@ public partial class BuildTools : Node3D
             if (_strokeVox > 0) _m.Hud.Log($"{(dig ? "Копать" : ToolName(Tool))}: {Summary(_strokeEst, dig, _strokeSec)}");
             return;
         }
-        if (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark)
+        if (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather)
         {
             if (click && Tool == Tool.Unmark) { UnmarkAt(); return; }
+            if (click && Tool == Tool.Gather) { Refuse("протяните рамку по участку"); return; }
             if (click && dig && _hasTree) { FellTree(); return; }
             if (!_hasStart || !(_hasDrag || _hasHover)) return;
             var a = _startPt; var b = _hasDrag ? _dragPt : _hover.Ground(w);
             if (Tool == Tool.Capture) { Capture(a, b); return; }
             if (Tool == Tool.Unmark)
             {
-                int n = _m.Sim.CancelArea(a.x, a.z, b.x, b.z);
-                if (n == 0) Refuse("в рамке нет разметки");
-                else _m.Hud.Float($"разметка снята: {Fmt.M3(n)} м³", Ornament.BronzeLight);
+                int n = _m.Sim.CancelArea(a.x, a.z, b.x, b.z), zones = _m.Sim.RemoveZones(a.x, a.z, b.x, b.z);
+                if (n == 0 && zones == 0) Refuse("в рамке нет разметки");
+                else _m.Hud.Float((n > 0 ? $"разметка снята: {Fmt.M3(n)} м³" : "") + (zones > 0 ? (n > 0 ? ", " : "") + $"делянок снято: {zones}" : ""), Ornament.BronzeLight);
                 return;
             }
+            if (Tool == Tool.Gather) { SetZone(a, b); return; }
             Designate(PlanDrag(a, b, dig), dig, ToolName(Tool));
             return;
         }
@@ -350,8 +356,35 @@ public partial class BuildTools : Node3D
     {
         if (!_hasHover) return;
         int n = _m.Sim.CancelOrders(_hover.X, _hover.Y, _hover.Z, UnmarkR);
-        if (n == 0) Refuse("здесь нет разметки");
-        else _m.Hud.Float($"разметка снята: {Fmt.M3(n)} м³", Ornament.BronzeLight);
+        int zones = _m.Sim.RemoveZones(_hover.X, _hover.Z, _hover.X, _hover.Z);
+        if (n == 0 && zones == 0) Refuse("здесь нет разметки");
+        else _m.Hud.Float(zones > 0 ? "делянка снята" : $"разметка снята: {Fmt.M3(n)} м³", Ornament.BronzeLight);
+    }
+
+    /// <summary>"Делянка: деревьев 12, ≈ 115 м³ брёвен" or "Каменоломня: ≈ 9,5 м³ камня до 2 м вглубь".</summary>
+    string SurveyText(int x0, int z0, int x1, int z1, out bool any)
+    {
+        int kind = GatherKind;
+        var (trees, vox) = _m.Sim.Survey(x0, z0, x1, z1, kind, Opt.Depth);
+        any = vox > 0;
+        string name = Zone.Name0(kind);
+        if (kind == Stockpile.Wood) return trees == 0 ? $"{name}: деревьев нет" : $"{name}: деревьев {trees}, ≈ {Fmt.M3(vox)} м³ брёвен";
+        string depth = Len(Opt.Depth);
+        return vox <= 0 ? $"{name}: {(kind == Stockpile.Stone ? "скалы" : "земли")} здесь нет" : $"{name}: ≈ {Fmt.M3(vox)} м³ {(kind == Stockpile.Stone ? "камня" : "земли")} до {depth} вглубь";
+    }
+
+    static string Len(int voxels)
+    {
+        double m = voxels / (double)VoxelWorld.PerMetre;
+        return m < 1 ? $"{Math.Round(m * 100)} см" : (Fmt.One(m) + " м").Replace(",0 м", " м");
+    }
+
+    void SetZone((int x, int y, int z) a, (int x, int y, int z) b)
+    {
+        string text = SurveyText(a.x, a.z, b.x, b.z, out bool any);
+        if (!any) { Refuse(text); return; }
+        _m.Sim.AddZone(a.x, a.z, b.x, b.z, GatherKind, Opt.Depth);
+        _m.Hud.Log(text + ". Свободные рабочие возьмутся за неё сами.");
     }
 
     void FellTree()
@@ -517,7 +550,7 @@ public partial class BuildTools : Node3D
             _hasTree = true;
         }
         _hasDrag = false;
-        if (_lmb && _hasStart && (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark || ColumnStroke) && Math.Abs(d.Y) > 1e-4f)
+        if (_lmb && _hasStart && (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather || ColumnStroke) && Math.Abs(d.Y) > 1e-4f)
         {
             float t = (w.WY(_startPt.y) - o.Y) / d.Y;
             if (t > 0)
@@ -536,6 +569,8 @@ public partial class BuildTools : Node3D
         if (order == 0) { var f = _hover.Front; order = _m.Sim.Orders.At(f.x, f.y, f.z); }
         if (order == Orders.Remove) text += " · размечено: копать";
         else if (order != 0) text += $" · размечено: {Mat.NameOf(order).ToLowerInvariant()}";
+        var zone = _m.Sim.ZoneAt(_hover.X, _hover.Z);
+        if (zone != null) text += $" · {zone.Name.ToLowerInvariant()}";
         HoverText = text;
     }
 
@@ -573,11 +608,11 @@ public partial class BuildTools : Node3D
     {
         var w = _m.World;
         bool show = false;
-        if ((Tool is Tool.Capture or Tool.Unmark) && _lmb && _hasStart && _hasDrag)
+        if ((Tool is Tool.Capture or Tool.Unmark or Tool.Gather) && _lmb && _hasStart && _hasDrag)
         {
             var a = _startPt; var b = _dragPt;
             int x0 = Math.Min(a.x, b.x), x1 = Math.Max(a.x, b.x) + 1, z0 = Math.Min(a.z, b.z), z1 = Math.Max(a.z, b.z) + 1;
-            var c = Tool == Tool.Unmark ? new Color(.83f, .3f, .22f, .26f) : new Color(.9f, .62f, .3f, .28f);
+            var c = Tool == Tool.Unmark ? new Color(.83f, .3f, .22f, .26f) : Tool == Tool.Gather ? ZoneView.Tint(GatherKind, .3f) : new Color(.9f, .62f, .3f, .28f);
             SetShape(new BoxMesh { Size = new Vector3((x1 - x0) * VoxelWorld.Vox, .04f, (z1 - z0) * VoxelWorld.Vox) },
                 new Vector3(w.WX((x0 + x1) / 2f), w.WY(Math.Max(a.y, b.y)) + .05f, w.WZ((z0 + z1) / 2f)), c);
             show = true;
@@ -615,6 +650,18 @@ public partial class BuildTools : Node3D
         string opts = $"{dig}|{Opt.Material}|{Opt.Width}|{Opt.Height}|{Opt.Depth}|{Opt.Step}|{Opt.Level}|{Opt.Hollow}|{Opt.Form}|{_rev}|{stock}";
         string key = "";
         bool dragging = Tool is Tool.Line or Tool.Box or Tool.Circle && _lmb && _hasStart && _hasDrag;
+        if (Tool == Tool.Gather)
+        {
+            // a gathering area shows what it holds, no ghost
+            string gk = _lmb && _hasStart && _hasDrag ? $"G|{_startPt}|{_dragPt}|{GatherKind}|{Opt.Depth}|{_rev}" : "";
+            if (gk == _planKey || (gk.Length > 0 && _clock - _planClock < .15)) return;
+            _planKey = gk; _planClock = _clock;
+            _ghost.Visible = false;
+            bool any = false;
+            PlanText = gk.Length == 0 ? null : SurveyText(_startPt.x, _startPt.z, _dragPt.x, _dragPt.z, out any);
+            PlanAffordable = any;
+            return;
+        }
         if (dragging) key = $"D{Tool}|{_startPt}|{_dragPt}|{opts}";
         else if (dig && _hasTree && Tool is Tool.Brush or Tool.Line or Tool.Box or Tool.Circle) key = $"T|{_tree.X},{_tree.Y},{_tree.Z}|{_rev}";
         else if (_hasHover)

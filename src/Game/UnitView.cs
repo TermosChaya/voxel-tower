@@ -190,7 +190,7 @@ public partial class UnitView : Node3D
                 case UnitState.Work:
                 case UnitState.Carve:
                 case UnitState.Siege:
-                    Chop(f, (float)_t + seed * f.Chop, out main, out lean);
+                    Chop(f.Chop / u.Pace, (float)_t + seed * f.Chop, out main, out lean);
                     off = -.35f;
                     break;
                 case UnitState.Fight when u.T.Ranged:
@@ -234,10 +234,10 @@ public partial class UnitView : Node3D
         Write(k, Part.LegL, o, root * Swing(f, Part.LegL, legL), tint);
     }
 
-    /// <summary>A blow every f.Chop seconds: a slow lift over the shoulder, then a quick swing down.</summary>
-    static void Chop(Figure f, float t, out float arm, out float lean)
+    /// <summary>A blow every so many seconds: a slow lift over the shoulder, then a quick swing down.</summary>
+    static void Chop(float period, float t, out float arm, out float lean)
     {
-        float c = t / f.Chop; c -= MathF.Floor(c);
+        float c = t / period; c -= MathF.Floor(c);
         if (c < .62f)
         {
             float s = c / .62f; s = s * s * (3 - 2 * s);

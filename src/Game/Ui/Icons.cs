@@ -160,6 +160,16 @@ public static class Icons
         Line(c, Shade(ink, .55f), S(r, .03f), P(r, .12f, .95f), P(r, .9f, .95f));
     }
 
+    /// <summary>An axe across a pick over a pile: the gathering area.</summary>
+    public static void Gather(CanvasItem c, Rect2 r, Color ink)
+    {
+        Fill(c, Shade(ink, .55f), P(r, .12f, .92f), P(r, .3f, .72f), P(r, .52f, .66f), P(r, .74f, .72f), P(r, .9f, .92f));
+        Line(c, Shade(ink, .8f), S(r, .06f), P(r, .2f, .78f), P(r, .72f, .16f));
+        Fill(c, ink, P(r, .62f, .1f), P(r, .82f, .14f), P(r, .86f, .3f), P(r, .7f, .3f));
+        Line(c, Shade(ink, .8f), S(r, .06f), P(r, .82f, .78f), P(r, .3f, .16f));
+        Line(c, ink, S(r, .07f), P(r, .14f, .26f), P(r, .3f, .14f), P(r, .46f, .1f));
+    }
+
     /// <summary>A horn: the call to arms.</summary>
     public static void Horn(CanvasItem c, Rect2 r, Color ink)
     {

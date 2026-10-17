@@ -35,20 +35,20 @@ public static class Kinds
     {
         Key = "worker", Name = "Рабочий", Team = Team.Player,
         // pawns scramble up a ledge a head higher than themselves: out of a two-metre pit, onto a low wall
-        Move = new Mover { Height = 2, Climb = 2, Speed = 2.3f },
+        Move = new Mover { Height = 2, Climb = 2, Speed = 2.8f },
         Work = 1, Yield = 1, Hp = 60, Damage = 6, AttackTime = 1.1f, Cost = 25,
         Tool = "pick",
     };
     public static readonly UnitType Archer = new()
     {
         Key = "archer", Name = "Лучник", Team = Team.Player,
-        Move = new Mover { Height = 2, Climb = 2, Speed = 2.3f },
+        Move = new Mover { Height = 2, Climb = 2, Speed = 2.6f },
         Work = .4f, Yield = .6f, Hp = 70, Damage = 18, AttackTime = 1.3f, Ranged = true, Range = 24 * VoxelWorld.PerMetre, Cost = 40, Tool = "bow",
     };
     public static readonly UnitType Swordsman = new()
     {
         Key = "sword", Name = "Мечник", Team = Team.Player,
-        Move = new Mover { Height = 2, Climb = 2, Speed = 2.1f },
+        Move = new Mover { Height = 2, Climb = 2, Speed = 2.4f },
         Work = .4f, Yield = .6f, Hp = 140, Damage = 16, AttackTime = 1f, Cost = 35, Tool = "sword", BodyR = 2.5f, Reach = 11,
     };
     public static readonly UnitType Goblin = new()
@@ -116,6 +116,10 @@ public sealed class Unit
     public Team Team => T.Team;
     public float X, Y, Z, Facing;
     public int Cell;
+    /// <summary>Where in a cell this one walks and stands, off the middle, so a file of them doesn't tread one track.</summary>
+    public float OffX, OffZ;
+    /// <summary>Its own tempo, a little over or under the kind's, for walking and working.</summary>
+    public float Pace = 1;
     public UnitState State;
     public float Hp;
     public bool Dead;

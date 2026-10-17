@@ -29,6 +29,7 @@ public partial class Main : Node3D
     public Debris Debris { get; private set; }
     public UnitView Units { get; private set; }
     public OrdersView Marks { get; private set; }
+    public ZoneView Areas { get; private set; }
     public Commander Command { get; private set; }
 
     /// <summary>The pawns the player has picked out.</summary>
@@ -89,6 +90,9 @@ public partial class Main : Node3D
         Marks = new OrdersView();
         AddChild(Marks);
         Marks.Init(Sim);
+        Areas = new ZoneView();
+        AddChild(Areas);
+        Areas.Init(Sim);
         Units = new UnitView();
         AddChild(Units);
         Units.Init(this);
@@ -112,12 +116,12 @@ public partial class Main : Node3D
         Sim.Raised = (x, y, z, m) => { if (Random.Shared.NextDouble() < .05) Debris.Spawn(m, x, y, z, 1, .8f); };
 
         // the household the siege finds at the citadel, and the beasts of the valley
-        foreach (var t in new[] { Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Archer, Kinds.Swordsman }) Sim.Spawn(t, Sim.Gate);
+        foreach (var t in new[] { Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Archer, Kinds.Swordsman }) Sim.Spawn(t, Sim.Gate);
         Sim.SeedWildlife();
 
         Hud.Log("Пробел — позвать орду раньше: золота за это нет, зато она меньше узнает о вашей обороне.");
         Hud.Log("Между волнами охотьтесь: выберите лучника и щёлкните ПКМ по зверю — добыча приносит золото.");
-        Hud.Log("Кисти размечают работу, пешки её делают: кладут из запасов, копают, рубят. V — кирка, 7 — лестница.");
+        Hud.Log("Кисти размечают работу, пешки её делают: кладут из запасов, копают, рубят. V — кирка, 7 — лестница, 8 — делянка: ресурс с участка.");
         Hud.Log("Орда придёт с запада через десять минут. Ройте, рубите и стройте, пока есть время.", Hud.Kind.Warn);
         GD.Print($"[voxel-tower] world {genMs:0} ms, navigation {navMs:0} ms, mesh {View.LastFullMeshMs:0} ms, {View.Triangles()} triangles");
 
@@ -286,7 +290,7 @@ public partial class Main : Node3D
         Sim.Waves.Countdown = 1e9;
         Sim.Stock.Gold = 500;
         Check("no ready-made blueprints", Blueprints.Count == 0);
-        Check("a household at the gate", Sim.Count(Kinds.Worker) == 3 && Sim.Count(Kinds.Archer) == 1 && Sim.Count(Kinds.Swordsman) == 1);
+        Check("a household at the gate", Sim.Count(Kinds.Worker) == 4 && Sim.Count(Kinds.Archer) == 1 && Sim.Count(Kinds.Swordsman) == 1);
         await Frames(2);
         Check("the pawns and the beasts are drawn", Units.Drawn() >= 5 + Sim.WildAlive() && Sim.WildAlive() >= 15, $"{Units.Drawn()} figures, {Sim.WildAlive()} beasts");
         Check("the river and the ponds are drawn", View.WaterChunks() >= 20, $"{View.WaterChunks()} chunks with water");
@@ -358,8 +362,23 @@ public partial class Main : Node3D
         for (int y = ground; y < ground + 48; y++) for (int z = 450; z < 472; z++) for (int x = face - 10; x < face; x++) if (World.Get(x, y, z) == Mat.Ladder) built++;
         Check("…the workers set it against the wall", rungs > 40 && built > 40, $"{rungs} voxels marked, {built} in place");
 
+        // an area set aside for stone: the boulder that is left goes to the workers by itself
+        KeyPress(Key.Key8); KeyPress(Key.Z);
+        Check("8 and Z set out a quarry", Tools.Tool == Tool.Gather && Tools.GatherKind == Stockpile.Stone);
+        await Look(bx, bz);
+        int zones0 = Sim.Zones.Count;
+        double st0 = Sim.Stock[Stockpile.Stone];
+        await Drag((bx - 18, bz - 18), (bx + 18, bz + 18));
+        Check("a frame sets the quarry", Sim.Zones.Count == zones0 + 1, $"{Sim.Zones.Count} zones, {Areas.GetChildCount()} drawn");
+        Advance(60);
+        Check("…and the workers quarry it unasked", Sim.Stock[Stockpile.Stone] > st0 + 200, $"stone +{Fmt.M3(Sim.Stock[Stockpile.Stone] - st0)} m³");
+        KeyPress(Key.Key6);
+        await Drag((bx - 24, bz - 24), (bx + 24, bz + 24));
+        Check("the unmarking frame takes the quarry back", Sim.Zones.Count == zones0, $"{Sim.Zones.Count} zones");
+
         // marking and unmarking
         KeyPress(Key.Key2);
+        if (!Tools.Opt.Dig) KeyPress(Key.V);
         await Look(640, 500);
         int r3 = Removals();
         await Drag((640, 440), (640, 560));
@@ -487,6 +506,10 @@ public partial class Main : Node3D
         if (!battle) sim.DesignateRemove(Shapes.Line(w, s, mx, z0 - 24, mx, 524, moat, 0));
         var (treeX, treeZ) = Nearest(691, 670, 80, (x, z) => w.Get(x, w.SurfAt(x, z) + 2, z) == Mat.Trunk);
         sim.DesignateRemove(Shapes.Tree(w, treeX, w.SurfAt(treeX, treeZ) + 4, treeZ));
+        // a grove and a quarry set aside: the workers turn to them whenever the marked work runs out
+        sim.AddZone(treeX + 20, treeZ - 40, treeX + 110, treeZ + 40, Stockpile.Wood, 0);
+        var (rx, rz) = Nearest(705, 475, 60, (x, z) => w.Get(x, w.SurfAt(x, z) - 1, z) == Mat.Rock && w.SurfAt(x, z) > s.HTop[z * w.SX + x] + 3);
+        sim.AddZone(rx - 16, rz - 16, rx + 16, rz + 16, Stockpile.Stone, 16);
 
         // more hands, the archers up on the wall, deer grazing out of the way
         for (int i = 0; i < 4; i++) sim.Spawn(Kinds.Worker, sim.Gate);

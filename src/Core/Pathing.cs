@@ -6,9 +6,9 @@ namespace VoxelTower.Core;
 /// <summary>How a body moves: its height, how high it steps, how far it drops, how fast it goes, hacks and builds.</summary>
 public sealed class Mover
 {
-    /// <summary>Cells: 4 is a man (2 m of headroom), 3 a goblin.</summary>
+    /// <summary>Cells (metres) of headroom: 2 for a man or a goblin, 3 for a troll; climb and drop in cells too.</summary>
     public int Height = 4, Climb = 1, Drop = 4;
-    /// <summary>Cells (half metres) per second on the flat.</summary>
+    /// <summary>Cells (metres) per second on the flat.</summary>
     public float Speed = 3;
     /// <summary>Voxels per second hacked out of earth, wood, stone and rock; null if it cannot hack at all.</summary>
     public float[] Carve;
@@ -37,12 +37,14 @@ public enum Works : byte { None, Ladder, Bridge, Fill }
 
 public static class Siege
 {
-    /// <summary>Work units (a worker does 180 a second) for half a metre of ladder, half a metre of bridge deck, one cell of fill.</summary>
+    /// <summary>Work units for a cell of ladder, a cell of bridge deck, one cell of fill; a sapper does <see cref="Rate"/> a second.</summary>
     public const float LadderWork = 240, BridgeWork = 320, FillWork = 540;
     /// <summary>Voxels of timber or earth each of those takes.</summary>
     public const int LadderWood = 24, BridgeWood = 128, FillEarth = 512;
+    /// <summary>A sapper's work a second, kept apart from the pawns' own so their pace can change without the horde's.</summary>
+    public const float Rate = 180;
 
-    public static float Seconds(float work, Mover m) => m.Build > 0 ? work / (float)(Labour.WorkPerSecond * m.Build) : float.PositiveInfinity;
+    public static float Seconds(float work, Mover m) => m.Build > 0 ? work / (Rate * m.Build) : float.PositiveInfinity;
 }
 
 /// <summary>A* over the cells pawns can be in, for those who walk around obstacles instead of through them.</summary>
@@ -265,7 +267,7 @@ public sealed class FlowField
 
     /// <summary>
     /// How many open cells lie between this one and a bottom close below (a moat, a ditch), or 9 over water;
-    /// 0 when there is no bottom within three metres (the plateau's cliffs are climbed, not bridged).
+    /// 0 when there is no bottom within six metres.
     /// </summary>
     public static int GapBelow(NavGrid g, int i, int y, int k)
     {

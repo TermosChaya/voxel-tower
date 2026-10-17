@@ -76,7 +76,10 @@ public sealed partial class Sim
     {
         var u = new Unit { Id = _nextId++, T = t, Hp = t.Hp, Cell = cell };
         (u.X, u.Y, u.Z) = Nav.Feet(cell);
-        u.X += (float)(Rng.NextDouble() - .5) * 3; u.Z += (float)(Rng.NextDouble() - .5) * 3;
+        float lane = Math.Max(.5f, NavGrid.CS / 2f - t.BodyR - .5f);
+        u.OffX = (float)(Rng.NextDouble() * 2 - 1) * lane; u.OffZ = (float)(Rng.NextDouble() * 2 - 1) * lane;
+        u.Pace = .9f + (float)Rng.NextDouble() * .2f;
+        u.X += u.OffX; u.Z += u.OffZ;
         u.Facing = (float)(Rng.NextDouble() * Math.PI * 2);
         if (t.Team == Team.Player && t.Work < 1) u.Post = cell;
         Units.Add(u);
@@ -114,6 +117,7 @@ public sealed partial class Sim
             else if (u.Team == Team.Horde) RaiderTick(u, dt);
             else WildTick(u, dt);
         }
+        Separate();
         TickArrows(dt);
         Units.RemoveAll(u => u.Dead && Time - u.DiedAt > 30);
         if (KeepHp <= 0 && !Over) { Over = true; Say("Цитадель пала.", 3); }
@@ -168,7 +172,8 @@ public sealed partial class Sim
         var (tx, ty, tz) = Nav.Feet(next);
         bool climbing = Nav.I(next) == Nav.I(u.Cell) && Nav.K(next) == Nav.K(u.Cell) && next != u.Cell;
         if (climbing) { tx = u.X; tz = u.Z; ty = (Nav.Y(next) << NavGrid.Shift) + (Nav.Solid(Nav.I(next), Nav.Y(next) - 1, Nav.K(next)) ? Nav.Floor[next] - (Nav.Y(next) << NavGrid.Shift) : 0); }
-        float speed = u.T.Move.Speed * NavGrid.CS * pace * (u.Hp < u.T.Hp * .4f ? .7f : 1) * (Nav.Water[u.Cell] > 0 ? .6f : 1);
+        else { tx += u.OffX; tz += u.OffZ; }
+        float speed = u.T.Move.Speed * NavGrid.CS * pace * u.Pace * (u.Hp < u.T.Hp * .4f ? .7f : 1) * (Nav.Water[u.Cell] > 0 ? .6f : 1);
         float step = speed * dt * (climbing ? .5f : 1);
         float dx = tx - u.X, dz = tz - u.Z, dyv = ty - u.Y;
         float dist = climbing ? MathF.Abs(dyv) : MathF.Sqrt(dx * dx + dz * dz);
@@ -194,6 +199,41 @@ public sealed partial class Sim
         int i = Nav.I(c), y = Nav.Y(c), k = Nav.K(c);
         if (Nav.Deep(c)) return false;
         return u.Team == Team.Horde ? Nav.Solid(i, y - 1, k) || Nav.Ladder[c] != 0 : Nav.CanBe(i, y, k, u.T.Move.Height);
+    }
+
+    /// <summary>
+    /// Bodies keep a little apart: two that come closer than their shoulders allow are eased away from each other,
+    /// the bigger one less. Someone standing still is kept inside its own cell, so where it stands stays true.
+    /// </summary>
+    void Separate()
+    {
+        for (int a = 0; a < Units.Count; a++)
+        {
+            var u = Units[a];
+            if (u.Dead || Nav.Ladder[u.Cell] != 0) continue;
+            for (int b = a + 1; b < Units.Count; b++)
+            {
+                var v = Units[b];
+                if (v.Dead || Nav.Ladder[v.Cell] != 0) continue;
+                float dx = v.X - u.X, dz = v.Z - u.Z, min = u.T.BodyR + v.T.BodyR + .5f;
+                if (dx * dx + dz * dz >= min * min || MathF.Abs(v.Y - u.Y) > Math.Min(u.T.BodyH, v.T.BodyH) * .8f) continue;
+                float d = MathF.Sqrt(dx * dx + dz * dz);
+                if (d < .01f) { dx = u.Id < v.Id ? 1 : -1; dz = .3f; d = MathF.Sqrt(dx * dx + dz * dz); }
+                float push = (min - d) * .5f, wu = v.T.BodyR / (u.T.BodyR + v.T.BodyR) * 2, wv = 2 - wu;
+                Nudge(u, -dx / d * push * wu, -dz / d * push * wu);
+                Nudge(v, dx / d * push * wv, dz / d * push * wv);
+            }
+        }
+    }
+
+    void Nudge(Unit u, float dx, float dz)
+    {
+        u.X += dx; u.Z += dz;
+        if (u.Path != null && u.PathI < u.Path.Count) return;
+        float r = Math.Min(u.T.BodyR, NavGrid.CS / 2f - .5f);
+        int x0 = Nav.I(u.Cell) << NavGrid.Shift, z0 = Nav.K(u.Cell) << NavGrid.Shift;
+        u.X = Math.Clamp(u.X, x0 + r, x0 + NavGrid.CS - r);
+        u.Z = Math.Clamp(u.Z, z0 + r, z0 + NavGrid.CS - r);
     }
 
     /// <summary>Whether a unit is hanging on a ladder rather than standing.</summary>

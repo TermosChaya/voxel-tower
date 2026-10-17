@@ -287,7 +287,7 @@ public sealed partial class Sim
         };
         int store = u.Building == Works.Fill ? Stockpile.Earth : Stockpile.Wood;
         // a fill goes in from the bottom up, so nothing hangs in the air while it rises
-        u.BuildEffort += (float)(Labour.WorkPerSecond * u.T.Move.Build * dt);
+        u.BuildEffort += Siege.Rate * u.T.Move.Build * dt;
         while (u.BuildI < u.BuildList.Count && u.BuildEffort >= perVoxel)
         {
             var (x, y, z, m) = u.BuildList[u.BuildI];
