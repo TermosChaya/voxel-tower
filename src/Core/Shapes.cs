@@ -233,6 +233,47 @@ public static class Shapes
 
     static long Key(VoxelWorld w, int x, int y, int z) => ((long)y * w.SZ + z) * w.SX + x;
 
+    /// <summary>
+    /// A ladder against the side face that was clicked: two rails and rungs every third voxel, from the ground in front of the
+    /// face to a step above its top. It stands in the first half-metre cell clear of the wall, so a body can hang on it.
+    /// </summary>
+    public static VoxelList LadderAt(VoxelWorld w, Site site, VoxelHit hit, byte mat = Mat.Ladder)
+    {
+        var L = new VoxelList();
+        if (hit.NY != 0 || (hit.NX == 0 && hit.NZ == 0)) return L;
+        int fx = hit.X + hit.NX, fz = hit.Z + hit.NZ;
+        // out of the wall's own cell if the wall fills most of it
+        for (int s = 0; s < 8 && CellBlocked(w, fx >> 3, hit.Y >> 3, fz >> 3); s++) { fx += hit.NX; fz += hit.NZ; }
+        if (!w.InBounds(fx, hit.Y, fz) || site.Forbidden(fx, fz)) return L;
+        int top = hit.Y;
+        while (top + 1 < w.SY && Blocking(w.Get(hit.X, top + 1, hit.Z))) top++;
+        int bottom = hit.Y;
+        while (bottom > 1 && !Blocking(w.Get(fx, bottom - 1, fz))) bottom--;
+        int tx = hit.NZ != 0 ? 1 : 0, tz = hit.NX != 0 ? 1 : 0;
+        for (int y = bottom; y <= top + 2 && y < w.SY; y++)
+            for (int t = -2; t <= 3; t++)
+            {
+                bool rail = t == -2 || t == 3, rung = y % 3 == 0 && y <= top;
+                if (!rail && !rung) continue;
+                int x = fx + tx * t, z = fz + tz * t;
+                if (w.InBounds(x, y, z) && w.Get(x, y, z) == Mat.Air && !site.Forbidden(x, z)) L.Add(x, y, z, mat);
+            }
+        return L;
+    }
+
+    static bool Blocking(byte m) => m != 0 && !Mat.Passable[m];
+
+    /// <summary>A half-metre cell a quarter full of what blocks: a body cannot be in it.</summary>
+    static bool CellBlocked(VoxelWorld w, int ci, int cy, int ck)
+    {
+        int n = 0;
+        for (int y = cy << 3; y < (cy + 1) << 3; y++)
+            for (int z = ck << 3; z < (ck + 1) << 3; z++)
+                for (int x = ci << 3; x < (ci + 1) << 3; x++)
+                    if (Blocking(w.Get(x, y, z)) && ++n >= NavGrid.SolidT) return true;
+        return false;
+    }
+
     /// <summary>The player's own voxels inside a ball, planned over in another material.</summary>
     public static VoxelList Repaint(VoxelWorld w, int cx, int cy, int cz, double radius, byte mat)
     {

@@ -4,8 +4,8 @@ using System.Collections.Generic;
 namespace VoxelTower.Core;
 
 /// <summary>
-/// The game without the engine: the valley, its navigation, the player's orders, the stores, the pawns and the horde.
-/// Step it with game seconds; the Godot layer only draws what is here and turns clicks into calls on it.
+/// The game without the engine: the valley, its navigation, the player's orders, the stores, the pawns, the horde and
+/// the beasts. Step it with game seconds; the Godot layer only draws what is here and turns clicks into calls on it.
 /// </summary>
 public sealed partial class Sim
 {
@@ -14,6 +14,8 @@ public sealed partial class Sim
     public readonly NavGrid Nav;
     public readonly Orders Orders;
     public readonly Stockpile Stock = new();
+    /// <summary>The horde's own timber and earth for siege works: what each wave brings, and half of what it hacks out.</summary>
+    public readonly Stockpile HordeStock = new() { Gold = 0 };
     public readonly List<Unit> Units = new();
     public readonly PathFinder Paths;
     public readonly Random Rng = new(17);
@@ -48,6 +50,7 @@ public sealed partial class Sim
         Stock[Stockpile.Stone] = 2 * VoxelWorld.PerM3;
         Stock[Stockpile.Wood] = 3 * VoxelWorld.PerM3;
         Stock[Stockpile.Earth] = 2 * VoxelWorld.PerM3;
+        w.Edited += OnEditWater;
     }
 
     public void Say(string text, int kind = 0) => Said?.Invoke(text, kind);
@@ -94,9 +97,11 @@ public sealed partial class Sim
     {
         if (Over) return;
         Time += dt;
+        FlowWater();
         if (Nav.PendingEdits > 0) Nav.Flush();
         UpdateFields();
         Waves.Tick(this, dt);
+        TendWildlife();
         CountBodies();
         for (int n = 0; n < Units.Count; n++)
         {
@@ -105,7 +110,9 @@ public sealed partial class Sim
             u.Swing = Math.Max(0, u.Swing - dt * 3);
             u.Cooldown -= dt;
             Settle(u);
-            if (u.Team == Team.Player) PawnTick(u, dt); else RaiderTick(u, dt);
+            if (u.Team == Team.Player) PawnTick(u, dt);
+            else if (u.Team == Team.Horde) RaiderTick(u, dt);
+            else WildTick(u, dt);
         }
         TickArrows(dt);
         Units.RemoveAll(u => u.Dead && Time - u.DiedAt > 30);
@@ -123,19 +130,19 @@ public sealed partial class Sim
 
     // ------------------------------------------------------------ moving
 
-    /// <summary>If the ground went from under its feet, it falls to the first footing below.</summary>
+    /// <summary>If the ground went from under its feet, it falls to the first footing below; out of deep water it swims ashore.</summary>
     void Settle(Unit u)
     {
         int h = u.T.Move.Height, i = Nav.I(u.Cell), k = Nav.K(u.Cell), y = Nav.Y(u.Cell);
         if (u.Team == Team.Horde && Nav.Fill[u.Cell] >= NavGrid.SolidT) return;   // standing in its own tunnel face
-        if (Nav.Fill[u.Cell] >= NavGrid.SolidT)
+        if (Nav.Fill[u.Cell] >= NavGrid.SolidT || Nav.Deep(u.Cell))
         {
-            // walled in: step out to the nearest free footing
+            // walled in, or the water rose over it: out to the nearest free footing
             int c = NearestStand((int)u.X, (int)u.Z, h);
-            if (c >= 0) { u.Cell = c; (u.X, u.Y, u.Z) = Nav.Feet(c); u.Path = null; }
+            if (c >= 0) { u.Cell = c; (u.X, u.Y, u.Z) = Nav.Feet(c); u.Path = null; StopCarve(u); StopBuild(u); }
             return;
         }
-        if (Nav.Stand(i, y, k, h) || (y >= 1 && Nav.Solid(i, y - 1, k))) return;
+        if (Nav.Stand(i, y, k, h) || (y >= 1 && Nav.Solid(i, y - 1, k)) || Nav.Ladder[u.Cell] != 0) return;
         for (int ny = y - 1; ny >= 1; ny--)
             if (Nav.Solid(i, ny - 1, k))
             {
@@ -143,22 +150,30 @@ public sealed partial class Sim
                 u.Cell = Nav.Id(i, ny, k);
                 u.Y = Nav.Floor[u.Cell];
                 u.Path = null;
+                StopCarve(u); StopBuild(u);
                 if (fall >= 4) Hurt(u, null, (fall - 3) * 12, "падение");
                 return;
             }
     }
 
-    /// <summary>Walks along its path; true when it has arrived (or the path broke and needs replanning).</summary>
-    bool Walk(Unit u, float dt)
+    /// <summary>
+    /// Walks along its path at a pace (1 is full speed); true when it has arrived (or the path broke and needs replanning).
+    /// Ladders are climbed at half speed, shallow water is waded slowly.
+    /// </summary>
+    bool Walk(Unit u, float dt, float pace = 1)
     {
         if (u.Path == null || u.PathI >= u.Path.Count) { u.Path = null; return true; }
         int next = u.Path[u.PathI];
         if (!Passable(u, next)) { u.Path = null; return true; }
         var (tx, ty, tz) = Nav.Feet(next);
-        float step = u.T.Move.Speed * NavGrid.CS * dt * (u.Hp < u.T.Hp * .4f ? .7f : 1);
-        float dx = tx - u.X, dz = tz - u.Z, dist = MathF.Sqrt(dx * dx + dz * dz);
+        bool climbing = Nav.I(next) == Nav.I(u.Cell) && Nav.K(next) == Nav.K(u.Cell) && next != u.Cell;
+        if (climbing) { tx = u.X; tz = u.Z; ty = (Nav.Y(next) << NavGrid.Shift) + (Nav.Solid(Nav.I(next), Nav.Y(next) - 1, Nav.K(next)) ? Nav.Floor[next] - (Nav.Y(next) << NavGrid.Shift) : 0); }
+        float speed = u.T.Move.Speed * NavGrid.CS * pace * (u.Hp < u.T.Hp * .4f ? .7f : 1) * (Nav.Water[u.Cell] > 0 ? .6f : 1);
+        float step = speed * dt * (climbing ? .5f : 1);
+        float dx = tx - u.X, dz = tz - u.Z, dyv = ty - u.Y;
+        float dist = climbing ? MathF.Abs(dyv) : MathF.Sqrt(dx * dx + dz * dz);
         u.State = u.State == UnitState.Flee ? UnitState.Flee : UnitState.Walk;
-        if (dist > .01f) u.Facing = MathF.Atan2(dz, dx);
+        if (!climbing && dist > .01f) u.Facing = MathF.Atan2(dz, dx);
         u.Stride += step;
         if (dist <= step)
         {
@@ -167,17 +182,22 @@ public sealed partial class Sim
             u.PathI++;
             return u.PathI >= u.Path.Count;
         }
+        if (climbing) { u.Y += MathF.Sign(dyv) * step; return false; }
         u.X += dx / dist * step;
         u.Z += dz / dist * step;
-        u.Y += (ty - u.Y) * Math.Min(1, step / dist);
+        u.Y += dyv * Math.Min(1, step / dist);
         return false;
     }
 
     bool Passable(Unit u, int c)
     {
         int i = Nav.I(c), y = Nav.Y(c), k = Nav.K(c);
-        return u.Team == Team.Horde ? Nav.Solid(i, y - 1, k) : Nav.Stand(i, y, k, u.T.Move.Height);
+        if (Nav.Deep(c)) return false;
+        return u.Team == Team.Horde ? Nav.Solid(i, y - 1, k) || Nav.Ladder[c] != 0 : Nav.CanBe(i, y, k, u.T.Move.Height);
     }
+
+    /// <summary>Whether a unit is hanging on a ladder rather than standing.</summary>
+    public bool Climbing(Unit u) => !u.Dead && Nav.Ladder[u.Cell] != 0 && !Nav.Solid(Nav.I(u.Cell), Nav.Y(u.Cell) - 1, Nav.K(u.Cell));
 
     float H(int c, int ti, int tk) => PathFinder.Octile(Nav.I(c) - ti, Nav.K(c) - tk) * .95f;
 
@@ -207,6 +227,7 @@ public sealed partial class Sim
             ReleaseSite(u);
             int spot = Spread(target, n++);
             u.Hold = true;
+            u.Prey = null;
             if (u.T.Work < 1) u.Post = spot;
             if (GoTo(u, spot) || GoTo(u, spot, adjacent: true)) ok++;
         }
@@ -216,16 +237,17 @@ public sealed partial class Sim
     /// <summary>Lets pawns go back to work by themselves.</summary>
     public void ReleaseHold(IEnumerable<Unit> units)
     {
-        foreach (var u in units) { u.Hold = false; u.NextSearch = 0; }
+        foreach (var u in units) { u.Hold = false; u.Prey = null; u.NextSearch = 0; }
     }
 
-    /// <summary>The horn: soldiers hurry to their posts.</summary>
+    /// <summary>The horn: soldiers drop the hunt and whatever else they were at and hurry to their posts.</summary>
     public void Recall()
     {
         foreach (var u in Units)
             if (!u.Dead && u.Team == Team.Player && u.T.Work < 1 && u.Post >= 0)
             {
                 ReleaseSite(u);
+                u.Prey = null;
                 GoTo(u, u.Post);
             }
     }

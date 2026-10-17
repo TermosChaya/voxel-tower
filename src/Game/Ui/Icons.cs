@@ -148,6 +148,18 @@ public static class Icons
         Dot(c, P(r, .14f, .86f), S(r, .06f), ink);
     }
 
+    public static void Ladder(CanvasItem c, Rect2 r, Color ink)
+    {
+        Line(c, ink, S(r, .07f), P(r, .3f, .92f), P(r, .42f, .08f));
+        Line(c, ink, S(r, .07f), P(r, .62f, .92f), P(r, .74f, .08f));
+        for (int i = 1; i <= 5; i++)
+        {
+            float t = i / 6f;
+            Line(c, Shade(ink, .8f), S(r, .05f), P(r, .3f + .12f * t, .92f - .84f * t), P(r, .62f + .12f * t, .92f - .84f * t));
+        }
+        Line(c, Shade(ink, .55f), S(r, .03f), P(r, .12f, .95f), P(r, .9f, .95f));
+    }
+
     /// <summary>A horn: the call to arms.</summary>
     public static void Horn(CanvasItem c, Rect2 r, Color ink)
     {

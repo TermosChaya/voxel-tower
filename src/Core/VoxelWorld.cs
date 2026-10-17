@@ -201,13 +201,13 @@ public sealed class VoxelWorld
 
     // ---- columns ----
 
-    /// <summary>Top of the highest solid voxel that is not plant growth.</summary>
+    /// <summary>Top of the highest solid voxel that is not plant growth or water: the bed under a pond.</summary>
     public int SurfAt(int x, int z) => TopWhere(x, z, 1);
 
     /// <summary>Top of the natural ground, ignoring anything the player built.</summary>
     public int GroundTop(int x, int z) => TopWhere(x, z, 2);
 
-    /// <summary>Top of anything at all, plants included.</summary>
+    /// <summary>Top of anything at all, plants and water included.</summary>
     public int ColTop(int x, int z) => TopWhere(x, z, 0);
 
     /// <summary>
@@ -240,8 +240,8 @@ public sealed class VoxelWorld
     static bool Counts(byte m, int skip) => skip switch
     {
         0 => true,
-        1 => !Mat.IsVeg[m],
-        _ => !Mat.IsVeg[m] && !Mat.IsPlayer[m],
+        1 => !Mat.IsVeg[m] && m != Mat.Water,
+        _ => !Mat.IsVeg[m] && m != Mat.Water && !Mat.IsPlayer[m],
     };
 
     /// <summary>Writes a vertical run of one material straight into the chunk arrays (map generation).</summary>

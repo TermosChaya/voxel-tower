@@ -43,20 +43,43 @@ public sealed class GreedyMesher
     }
 
     /// <summary>A world chunk, or null when nothing of it can be seen.</summary>
-    public MeshBuffers MeshChunk(VoxelWorld w, int ci, byte[] pad)
+    public MeshBuffers MeshChunk(VoxelWorld w, int ci, byte[] pad) => MeshChunk(w, ci, pad, null, out _);
+
+    /// <summary>
+    /// A world chunk in two parts: the solid voxels, meshed as if the water were not there so the bottom shows through it,
+    /// and the water's own surface where it meets the air (null when the chunk holds no water).
+    /// </summary>
+    public MeshBuffers MeshChunk(VoxelWorld w, int ci, byte[] pad, byte[] wet, out MeshBuffers water)
     {
+        water = null;
         if (w.IsEmpty(ci) || w.IsBuried(ci)) return null;
         w.CopyPadded(ci, pad);
         w.ChunkCoords(ci, out int cx, out int cy, out int cz);
-        var mb = Mesh(pad, VoxelWorld.CS, VoxelWorld.CS, VoxelWorld.CS, cx * VoxelWorld.CS, cy * VoxelWorld.CS, cz * VoxelWorld.CS);
+        int ox = cx * VoxelWorld.CS, oy = cy * VoxelWorld.CS, oz = cz * VoxelWorld.CS;
+        if (wet != null && Array.IndexOf(pad, Mat.Water) >= 0)
+        {
+            for (int i = 0; i < pad.Length; i++)
+            {
+                byte m = pad[i];
+                wet[i] = m == Mat.Water ? Mat.Water : m == 0 ? (byte)0 : Blocker;
+                if (m == Mat.Water) pad[i] = 0;
+            }
+            var wm = Mesh(wet, VoxelWorld.CS, VoxelWorld.CS, VoxelWorld.CS, ox, oy, oz, Blocker);
+            water = wm.Quads > 0 ? wm : null;
+        }
+        var mb = Mesh(pad, VoxelWorld.CS, VoxelWorld.CS, VoxelWorld.CS, ox, oy, oz);
         return mb.Quads > 0 ? mb : null;
     }
+
+    /// <summary>Stands in for anything solid when meshing water: it hides water faces but has none of its own.</summary>
+    const byte Blocker = 255;
 
     /// <summary>
     /// Meshes a block of dx·dy·dz voxels that comes padded with one voxel of neighbours on every side:
     /// index ((y+1)·(dz+2) + (z+1))·(dx+2) + (x+1). Output positions are offset by (ox, oy, oz).
+    /// Cells holding <paramref name="skip"/> hide their neighbours' faces but get none of their own.
     /// </summary>
-    public MeshBuffers Mesh(byte[] grid, int dx, int dy, int dz, int ox, int oy, int oz)
+    public MeshBuffers Mesh(byte[] grid, int dx, int dy, int dz, int ox, int oy, int oz, byte skip = 0)
     {
         _q = 0;
         int px = dx + 2, pz = dz + 2;
@@ -83,7 +106,7 @@ public sealed class GreedyMesher
                         for (int a = 0; a < du; a++, n++, idx += su)
                         {
                             byte m = grid[idx];
-                            if (m == 0) { mask[n] = 0; continue; }
+                            if (m == 0 || m == skip) { mask[n] = 0; continue; }
                             int q = idx + qoff;
                             if (grid[q] != 0) { mask[n] = 0; continue; }
                             int s1u = grid[q + su] != 0 ? 1 : 0, s0u = grid[q - su] != 0 ? 1 : 0;

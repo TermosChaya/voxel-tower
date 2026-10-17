@@ -21,11 +21,11 @@ public partial class Hud : CanvasLayer
 
     const string HelpText = "Управление\n" +
         "Кисти ничего не строят сами: они размечают работу, а пешки делают её — кладут из запасов, копают, рубят.\n" +
-        "1–5 — кисти, 6 — снять разметку, B — снять чертёж, Esc — убрать кисть. Z, X, C — камень, брёвна, земля; " +
+        "1–5 — кисти, 6 — снять разметку, 7 — лестница, B — снять чертёж, Esc — убрать кисть. Z, X, C — камень, брёвна, земля; " +
         "V — кирка: копать, рубить, ломать камень, разбирать свою кладку. Shift с кистью — тоже кирка.\n" +
         "[ и ] — толщина, − и = — высота (с киркой — глубина). F — форма или заливка, G — ровно или по рельефу.\n" +
-        "Без кисти: ЛКМ — выбрать пешку, рамкой — нескольких, ПКМ по земле — послать. " +
-        "Пробел — позвать орду раньше за золото, P — пауза, Tab — скорость, T — тревога.\n" +
+        "Без кисти: ЛКМ — выбрать пешку, рамкой — нескольких; ПКМ по земле — послать, по зверю — охотиться, по врагу — атаковать.\n" +
+        "Пробел — позвать орду раньше (она меньше узнает о вас), P — пауза, Tab — скорость, T — тревога.\n" +
         "ПКМ тянет карту, колесо — масштаб, СКМ или Q/E — поворот, WASD — сдвиг, H — вернуть вид.";
 
     static readonly (Tool tool, Icons.Painter icon, string key, string tip)[] ToolDefs =
@@ -36,6 +36,7 @@ public partial class Hud : CanvasLayer
         (Tool.Circle, Icons.Circle, "4", "Круг\nИз центра к краю. Кольцо — круглая башня, сплошной — бастион. С киркой — круглая яма или кольцевой ров. F — сплошной или кольцо."),
         (Tool.Extrude, Icons.Extrude, "5", "Выдавить\nЩелчок по ровной грани: она нарастёт на шаг выбранным материалом. С киркой — грань вынут на шаг вглубь: ступени в склоне, проход в скале."),
         (Tool.Unmark, Icons.Erase, "6", "Снять разметку\nРамка снимает всю разметку внутри, щелчок — разметку поблизости. Что уже сделано, остаётся."),
+        (Tool.Ladder, Icons.Ladder, "7", "Лестница\nЩелчок по боковой грани стены, башни или обрыва: рабочие приставят лестницу от земли до верха. По лестницам ваши пешки поднимаются на стены. Орда тоже ими пользуется — и ставит свои."),
         (Tool.Capture, Icons.Scroll, "B", "Снять чертёж\nОбведите рамкой свою постройку — она станет чертежом. Копии ставятся из свитков справа, R поворачивает."),
     };
 
@@ -271,8 +272,18 @@ public partial class Hud : CanvasLayer
         }
         var t = _m.Tools;
         bool overUi = GetViewport().GuiGetHoveredControl() != null;
-        if (t.Tool == Tool.None || overUi) _tag.Visible = false;
-        else _tag.Show(t.PlanText, t.PlanAffordable ? Ornament.EmberGlow : Ornament.Blood, t.HoverText);
+        if (overUi) _tag.Visible = false;
+        else if (t.Tool != Tool.None) _tag.Show(t.PlanText, t.PlanAffordable ? Ornament.EmberGlow : Ornament.Blood, t.HoverText);
+        else
+        {
+            // with no brush in hand the tag tells who is under the cursor
+            var u = _m.Command.UnitAt(GetViewport().GetMousePosition(), pawnsFirst: _m.Selected.Count == 0);
+            if (u == null) { _tag.Visible = false; return; }
+            string head = u.Team == Team.Wild ? $"{u.T.Name} · {u.T.Bounty} зол. за добычу" : $"{u.T.Name} · {Math.Ceiling(Math.Max(0, u.Hp))} из {u.T.Hp}";
+            string sub = Retinue.Doing(u, _m.Sim);
+            if (u.Team != Team.Player && _m.Selected.Count > 0) sub += u.Team == Team.Wild ? " · ПКМ — охотиться" : " · ПКМ — атаковать";
+            _tag.Show(head, u.Team == Team.Horde ? Ornament.Blood : u.Team == Team.Wild ? Ornament.Moss : Ornament.EmberGlow, sub);
+        }
     }
 
     public void OnToolChanged()

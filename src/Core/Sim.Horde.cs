@@ -13,24 +13,40 @@ public sealed partial class Sim
     /// <summary>The way to the citadel for each kind of raider; rebuilt in the background as the valley changes.</summary>
     public Dictionary<UnitType, FlowField> Fields { get; private set; } = new();
     Task<Dictionary<UnitType, FlowField>> _fieldTask;
+    // a field still being built when the valley or the horde's stores changed for good is thrown away when it arrives
+    int _fieldGen, _fieldTaskGen;
     int _fieldVersion = -1;
+    bool _fieldWood, _fieldEarth;
     double _fieldAt = -99;
     public double LastFieldMs { get; private set; }
 
-    /// <summary>Builds every raider's field now, on this thread (tests and the first wave).</summary>
+    bool HasWood => HordeStock[Stockpile.Wood] >= Siege.BridgeWood;
+    bool HasEarth => HordeStock[Stockpile.Earth] >= Siege.FillEarth;
+
+    /// <summary>Builds every raider's field now, on this thread (tests and staged scenes).</summary>
     public void ComputeFields()
     {
+        _fieldGen++;
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        Fields = BuildFields();
+        _fieldWood = HasWood; _fieldEarth = HasEarth;
+        Fields = BuildFields(_fieldWood, _fieldEarth);
         LastFieldMs = sw.Elapsed.TotalMilliseconds;
         _fieldVersion = Nav.Version; _fieldAt = Time;
     }
 
-    Dictionary<UnitType, FlowField> BuildFields()
+    Dictionary<UnitType, FlowField> BuildFields(bool wood, bool earth)
     {
         var d = new Dictionary<UnitType, FlowField>();
-        foreach (var t in Kinds.HordeKinds) d[t] = FlowField.Compute(Nav, t.Move, Goals, 900);
+        foreach (var t in Kinds.HordeKinds) d[t] = FlowField.Compute(Nav, t.Move, Goals, 900, wood, earth);
         return d;
+    }
+
+    /// <summary>The fields are out of date (the horde's stores changed): build them again in the background soon.</summary>
+    public void InvalidateFields()
+    {
+        _fieldGen++;
+        _fieldVersion = -1;
+        _fieldAt = -99;
     }
 
     void UpdateFields()
@@ -38,15 +54,20 @@ public sealed partial class Sim
         if (_fieldTask != null)
         {
             if (!_fieldTask.IsCompleted) return;
-            if (_fieldTask.Status == TaskStatus.RanToCompletion) Fields = _fieldTask.Result;
+            if (_fieldTask.Status == TaskStatus.RanToCompletion && _fieldTaskGen == _fieldGen) Fields = _fieldTask.Result;
             _fieldTask = null;
         }
-        bool needed = Waves.Active || Waves.Countdown < 12;
-        if (!needed || (_fieldVersion == Nav.Version && Fields.Count > 0) || Time - _fieldAt < 2) return;
+        // wanted while the horde is coming or here, and once at the start so an early call finds a way at hand
+        bool needed = Waves.Active || Waves.Countdown < 12 || Fields.Count == 0;
+        bool same = _fieldVersion == Nav.Version && _fieldWood == HasWood && _fieldEarth == HasEarth;
+        if (!needed || (same && Fields.Count > 0) || Time - _fieldAt < 2) return;
         // the grid keeps changing while this runs; a field built from a slightly stale picture is still a good guide
         _fieldVersion = Nav.Version; _fieldAt = Time;
+        _fieldWood = HasWood; _fieldEarth = HasEarth;
+        bool wood = _fieldWood, earth = _fieldEarth;
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        _fieldTask = Task.Run(() => { var f = BuildFields(); LastFieldMs = sw.Elapsed.TotalMilliseconds; return f; });
+        _fieldTaskGen = _fieldGen;
+        _fieldTask = Task.Run(() => { var f = BuildFields(wood, earth); LastFieldMs = sw.Elapsed.TotalMilliseconds; return f; });
     }
 
     // ------------------------------------------------------------ raiders
@@ -81,10 +102,25 @@ public sealed partial class Sim
             return;
         }
         if (u.CarveCell >= 0) { Carve(u, dt); return; }
+        if (u.BuildCell >= 0) { BuildTick(u, dt); return; }
         if (u.Path != null && u.PathI < u.Path.Count) { Walk(u, dt); return; }
         if (!Fields.TryGetValue(u.T, out var f)) { u.State = UnitState.Idle; return; }
-        int next = f.Next(Nav, u.Cell, out float carve);
+        int next = f.Next(Nav, u.Cell, out float carve, out var works);
         if (next < 0) { u.State = UnitState.Idle; return; }
+        if (works != Works.None)
+        {
+            // out of timber or earth a moment ago: wait for the way round that the next field will show
+            if (Time < u.NoBuildUntil) { u.State = UnitState.Idle; return; }
+            StartBuild(u, next, works);
+            if (u.BuildList.Count == 0)
+            {
+                // nothing can go there after all: let the next field find another way
+                StopBuild(u);
+                u.NoBuildUntil = Time + 3;
+                _fieldVersion = -1;
+            }
+            return;
+        }
         if (carve > 0) { StartCarve(u, next); return; }
         u.Path ??= new List<int>();
         u.Path.Clear(); u.Path.Add(next); u.PathI = 0;
@@ -114,7 +150,7 @@ public sealed partial class Sim
         u.State = UnitState.Carve;
     }
 
-    static bool Blocks(byte m) => m != 0 && m != Mat.Leaf && m != Mat.Foliage && m != Mat.Tuft;
+    static bool Blocks(byte m) => m != 0 && !Mat.Passable[m];
 
     static int Group(byte m) => Mat.Def[m].Group switch { MatGroup.Earth => 0, MatGroup.Wood => 1, MatGroup.Stone => 2, MatGroup.Rock => 3, _ => -1 };
 
@@ -139,6 +175,9 @@ public sealed partial class Sim
             u.CarveI++;
             World.Set(x, y, z, Mat.Air);
             if (Orders.At(x, y, z) == Orders.Remove) Orders.Clear(x, y, z);
+            // half of what is hacked out is fit to build with
+            int kind = Labour.YieldKind(m);
+            if (kind != Stockpile.None) HordeStock[kind] += Labour.YieldShare(m) * .5;
             Hacked?.Invoke(x, y, z, m);
             removed++;
             u.Swing = 1;
@@ -148,6 +187,9 @@ public sealed partial class Sim
 
     /// <summary>Called for every voxel the horde hacks out, for chips.</summary>
     public Action<int, int, int, byte> Hacked;
+
+    /// <summary>Called for every voxel the horde puts down in a siege work.</summary>
+    public Action<int, int, int, byte> Raised;
 
     bool WayOpen(Unit u)
     {
@@ -170,21 +212,134 @@ public sealed partial class Sim
         u.CarveList.Clear();
         u.CarveI = 0;
     }
+
+    // ------------------------------------------------------------ siege works
+
+    /// <summary>Lists what is to be put down before stepping into the next cell: a length of ladder, a deck, a fill.</summary>
+    void StartBuild(Unit u, int next, Works works)
+    {
+        u.BuildCell = next; u.Building = works; u.BuildList.Clear(); u.BuildI = 0; u.BuildEffort = 0;
+        int qi = Nav.I(next), qy = Nav.Y(next), qk = Nav.K(next);
+        if (works == Works.Ladder)
+        {
+            // against whatever it leans on, from the feet if it starts on the ground
+            int from = Nav.Ladder[u.Cell] != 0 || !Nav.Solid(Nav.I(u.Cell), Nav.Y(u.Cell) - 1, Nav.K(u.Cell)) ? qy << NavGrid.Shift : Nav.Floor[u.Cell];
+            LadderVoxels(qi, qy, qk, from, (qy + 1) << NavGrid.Shift, Mat.SiegeLadder, u.BuildList);
+        }
+        else
+        {
+            int x0 = qi << NavGrid.Shift, z0 = qk << NavGrid.Shift, top = qy << NavGrid.Shift;
+            int y0 = works == Works.Bridge ? top - 2 : top - NavGrid.CS * Math.Clamp(FlowField.GapBelow(Nav, qi, qy, qk), 1, FlowField.MaxFill);
+            byte m = works == Works.Bridge ? Mat.Deck : Mat.Soil;
+            for (int y = y0; y < top; y++)
+                for (int z = z0; z < z0 + NavGrid.CS; z++)
+                    for (int x = x0; x < x0 + NavGrid.CS; x++)
+                        if (Brushes.Free(World.Get(x, y, z))) u.BuildList.Add((x, y, z, m));
+        }
+        u.State = UnitState.Work;
+    }
+
+    /// <summary>
+    /// A ladder up the column of cell (i, k), from voxel height y0 to y1: two rails and rungs every third voxel, laid against
+    /// the face of whatever solid stands beside it.
+    /// </summary>
+    public void LadderVoxels(int i, int cy, int k, int y0, int y1, byte mat, List<(int, int, int, byte)> into)
+    {
+        int best = 0, dir = 0;
+        for (int d = 0; d < 4; d++)
+        {
+            int n = 0;
+            for (int yy = cy - 1; yy <= cy + 1; yy++) if (Nav.Solid(i + DX4[d], yy, k + DK4[d])) n++;
+            if (n > best) { best = n; dir = d; }
+        }
+        int x0 = i << NavGrid.Shift, z0 = k << NavGrid.Shift;
+        for (int y = Math.Max(1, y0); y < y1 && y < World.SY; y++)
+            for (int t = 1; t <= 6; t++)
+            {
+                bool rail = t == 1 || t == 6, rung = (y % 3) == 0;
+                if (!rail && !rung) continue;
+                // from the side it leans on inward, to the first free voxel: right against the face
+                for (int s = 0; s < NavGrid.CS; s++)
+                {
+                    int x, z;
+                    if (dir < 2) { x = dir == 0 ? x0 + NavGrid.CS - 1 - s : x0 + s; z = z0 + t; }
+                    else { z = dir == 2 ? z0 + NavGrid.CS - 1 - s : z0 + s; x = x0 + t; }
+                    byte m = World.Get(x, y, z);
+                    if (m == Mat.Air) { into.Add((x, y, z, mat)); break; }
+                    if (Mat.Passable[m]) break;
+                }
+            }
+    }
+
+    static readonly int[] DX4 = { 1, -1, 0, 0 }, DK4 = { 0, 0, 1, -1 };
+
+    void BuildTick(Unit u, float dt)
+    {
+        u.State = UnitState.Work;
+        var b = u.BuildCell;
+        u.Facing = MathF.Atan2((Nav.K(b) << NavGrid.Shift) + 4 - u.Z, (Nav.I(b) << NavGrid.Shift) + 4 - u.X);
+        if (u.Building != Works.Ladder) CountBodies();
+        float perVoxel = u.Building switch
+        {
+            Works.Ladder => Siege.LadderWork / Siege.LadderWood,
+            Works.Bridge => Siege.BridgeWork / Siege.BridgeWood,
+            _ => Siege.FillWork / Siege.FillEarth,
+        };
+        int store = u.Building == Works.Fill ? Stockpile.Earth : Stockpile.Wood;
+        // a fill goes in from the bottom up, so nothing hangs in the air while it rises
+        u.BuildEffort += (float)(Labour.WorkPerSecond * u.T.Move.Build * dt);
+        while (u.BuildI < u.BuildList.Count && u.BuildEffort >= perVoxel)
+        {
+            var (x, y, z, m) = u.BuildList[u.BuildI];
+            if (!Brushes.Free(World.Get(x, y, z))) { u.BuildI++; continue; }
+            // nobody gets buried under a fill
+            if (m == Mat.Soil && _bodies[Nav.CellOf(x, y, z)] > 0) break;
+            if (!HordeStock.Take(store, 1))
+            {
+                u.NoBuildUntil = Time + 4;
+                StopBuild(u);
+                return;
+            }
+            u.BuildEffort -= perVoxel;
+            u.BuildI++;
+            World.Set(x, y, z, m);
+            Raised?.Invoke(x, y, z, m);
+            u.Swing = 1;
+        }
+        u.BuildEffort = Math.Min(u.BuildEffort, 40);
+        if (u.BuildI >= u.BuildList.Count) StopBuild(u);
+    }
+
+    void StopBuild(Unit u)
+    {
+        u.BuildCell = -1;
+        u.Building = Works.None;
+        u.BuildList.Clear();
+        u.BuildI = 0;
+    }
 }
 
-/// <summary>Preparation and assault: a countdown between waves, an early call for a bounty, and the horn.</summary>
+/// <summary>
+/// Preparation and assault: ten minutes between waves, the horn, and an early call. Calling the horde early pays nothing,
+/// but it comes knowing less about the defences: the share of the countdown it had for scouting is its intel.
+/// </summary>
 public sealed class Waves
 {
     public const int Total = 12;
-    public const double Prep = 300;
+    public const double Prep = 600;
 
     public int Number;
     public bool Active;
     public double Countdown = Prep;
+    /// <summary>How much the horde learnt of the defences before this wave (0 to 1): the share of the countdown it had.</summary>
+    public double Intel;
     readonly Queue<UnitType> _queue = new();
     double _spawnT;
 
     public int Coming => _queue.Count;
+
+    /// <summary>What the horde would know if it were called now.</summary>
+    public double IntelNow => Math.Clamp(1 - Countdown / Prep, 0, 1);
 
     public void Tick(Sim s, float dt)
     {
@@ -205,23 +360,31 @@ public sealed class Waves
         {
             Active = false;
             Countdown = Prep;
-            s.Say($"Волна {Number} отбита. До следующей пять минут.", 1);
+            s.Say($"Волна {Number} отбита. До следующей десять минут.", 1);
             if (Number >= Total) { s.Won = true; s.Over = true; s.Say("Осада снята: долина устояла.", 1); }
         }
     }
 
-    /// <summary>Calls the horde before the time is up; the rest of the countdown pays a bounty.</summary>
-    public int StartNow(Sim s)
+    /// <summary>Ends the assault at once: no more raiders come, those in the valley vanish (tests and staged scenes).</summary>
+    public void CallOff(Sim s)
+    {
+        _queue.Clear();
+        foreach (var u in s.Units) if (u.Team == Team.Horde && !u.Dead) { u.Dead = true; u.DiedAt = -999; }
+        Active = false;
+        Countdown = Prep;
+    }
+
+    /// <summary>Calls the horde before the time is up; it comes knowing only what it scouted so far.</summary>
+    public double StartNow(Sim s)
     {
         if (Active || s.Over) return 0;
-        int bonus = (int)(Countdown / 5);
-        s.Stock.Gold += bonus;
         Start(s);
-        return bonus;
+        return Intel;
     }
 
     void Start(Sim s)
     {
+        Intel = IntelNow;
         Number++;
         Active = true;
         _queue.Clear();
@@ -230,13 +393,20 @@ public sealed class Waves
         for (int i = 0; i < 2 + n; i++) list.Add(Kinds.Goblin);
         for (int i = 0; i < n / 2 + 1; i++) list.Add(Kinds.Orc);
         for (int i = 0; i < (n + 1) / 3; i++) list.Add(Kinds.Miner);
+        for (int i = 0; i < 1 + n / 3; i++) list.Add(Kinds.Sapper);
         for (int i = 0; i < (n >= 5 ? (n - 3) / 3 : 0); i++) list.Add(Kinds.Troll);
         // shuffle so the kinds come mixed
         for (int i = list.Count - 1; i > 0; i--) { int j = s.Rng.Next(i + 1); (list[i], list[j]) = (list[j], list[i]); }
         foreach (var t in list) _queue.Enqueue(t);
+        // timber for ladders and bridges, earth for fills, brought along
+        s.HordeStock[Stockpile.Wood] += (.3 + .12 * n) * VoxelWorld.PerM3;
+        s.HordeStock[Stockpile.Earth] += (.4 + .25 * n) * VoxelWorld.PerM3;
         _spawnT = 1;
+        // the fields are rebuilt in the background for what the horde brought; until then the old ones lead the way
         if (s.Fields.Count == 0) s.ComputeFields();
+        s.InvalidateFields();
         s.Recall();
-        s.Say($"Рог! Волна {Number}: {list.Count} налётчиков идут с запада.", 2);
+        string intel = Intel >= .995 ? "" : $" Разведать вас она успела на {Intel * 100:0} %.";
+        s.Say($"Рог! Волна {Number}: {list.Count} налётчиков идут с запада.{intel}", 2);
     }
 }

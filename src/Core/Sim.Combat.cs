@@ -7,7 +7,7 @@ namespace VoxelTower.Core;
 public sealed class Arrow
 {
     public float X0, Y0, Z0, X1, Y1, Z1, T, Dur;
-    public Unit Target;
+    public Unit Target, From;
     public bool Hits, Done;
     public float Damage;
 }
@@ -76,6 +76,8 @@ public sealed partial class Sim
         if (b.Dead) return;
         b.Hp -= dmg;
         b.LastHurt = Time;
+        // a wounded boar turns on whoever wounded it
+        if (b.Team == Team.Wild && b.T.Damage > 0 && by != null && !by.Dead) b.Target = by;
         if (b.Hp <= 0) Kill(b, by, cause);
     }
 
@@ -85,9 +87,61 @@ public sealed partial class Sim
         u.KilledBy = cause ?? by?.T.Name ?? "";
         if (u.Team == Team.Horde) Kills++;
         ReleaseSite(u);
-        u.Path = null; u.Target = null;
+        StopCarve(u); StopBuild(u);
+        u.Path = null; u.Target = null; u.Prey = null;
         if (u.Team == Team.Horde) Stock.Gold += u.T.Bounty;
+        else if (u.Team == Team.Wild)
+        {
+            if (by?.Team == Team.Player) { Stock.Gold += u.T.Bounty; Hunted++; Say($"Добыт {u.T.Name.ToLowerInvariant()}: +{u.T.Bounty} золота.", 1); }
+        }
         else Say($"{u.T.Name} пал.", 3);
+    }
+
+    /// <summary>Beasts taken by the pawns since the start.</summary>
+    public int Hunted;
+
+    // ------------------------------------------------------------ the player's quarry
+
+    /// <summary>Sends pawns after a beast to hunt, or after a raider to strike down.</summary>
+    public int Hunt(IEnumerable<Unit> hunters, Unit prey)
+    {
+        if (prey == null || prey.Dead || prey.Team == Team.Player) return 0;
+        int n = 0;
+        foreach (var u in hunters)
+        {
+            if (u.Dead || u.Team != Team.Player) continue;
+            ReleaseSite(u);
+            u.Prey = prey; u.Hold = false; u.Path = null; u.NextSearch = 0;
+            n++;
+        }
+        return n;
+    }
+
+    /// <summary>Chasing what the player pointed at: archers shoot from range, the rest close in. False when it is over.</summary>
+    bool HuntTick(Unit u, float dt)
+    {
+        var p = u.Prey;
+        if (p == null || p.Dead || Dist(u, p) > 70 * 16) { u.Prey = null; u.Path = null; return false; }
+        u.State = UnitState.Fight;
+        if (u.T.Ranged ? Dist(u, p) <= u.T.Range && Sight(u, p) : InReach(u, p))
+        {
+            u.Path = null;
+            u.Facing = MathF.Atan2(p.Z - u.Z, p.X - u.X);
+            if (u.Cooldown <= 0)
+            {
+                if (u.T.Ranged) Shoot(u, p); else Strike(u, p);
+                u.Cooldown = u.T.AttackTime * (.9f + (float)Rng.NextDouble() * .2f);
+            }
+            return true;
+        }
+        if (u.Path == null || Time >= u.NextSearch)
+        {
+            u.NextSearch = Time + .7;
+            if (!GoTo(u, p.Cell, adjacent: true, budget: 8000)) u.Path = null;
+        }
+        if (u.Path != null) Walk(u, dt);
+        else u.State = UnitState.Idle;
+        return true;
     }
 
     /// <summary>Soldiers: shoot or close in; true while busy fighting.</summary>
@@ -150,7 +204,9 @@ public sealed partial class Sim
             if (o.Dead || o.Team != Team.Horde) continue;
             float d = Dist(u, o);
             if (d > u.T.Range) continue;
-            float pri = d - (o.State is UnitState.Carve or UnitState.Siege ? 48 : 0);
+            // those hacking the walls, battering the citadel, raising ladders or climbing them come first
+            bool busy = o.State is UnitState.Carve or UnitState.Siege or UnitState.Work || Climbing(o);
+            float pri = d - (busy ? 48 : 0);
             if (pri >= bd || !Sight(u, o)) continue;
             bd = pri; best = o;
         }
@@ -179,7 +235,7 @@ public sealed partial class Sim
         {
             X0 = u.X, Y0 = u.Y + u.T.BodyH * .85f, Z0 = u.Z,
             X1 = t.X + (float)(Rng.NextDouble() - .5) * 4, Y1 = t.Y + t.T.BodyH * .55f, Z1 = t.Z + (float)(Rng.NextDouble() - .5) * 4,
-            Dur = Math.Max(.08f, d / ArrowSpeed), Target = t, Hits = Rng.NextDouble() < chance,
+            Dur = Math.Max(.08f, d / ArrowSpeed), Target = t, From = u, Hits = Rng.NextDouble() < chance,
             Damage = u.T.Damage * (.8f + (float)Rng.NextDouble() * .5f),
         });
     }
@@ -191,7 +247,7 @@ public sealed partial class Sim
             a.T += dt;
             if (a.T < a.Dur || a.Done) continue;
             a.Done = true;
-            if (a.Hits && a.Target != null && !a.Target.Dead) { ShotHits++; Hurt(a.Target, null, a.Damage, "стрела"); }
+            if (a.Hits && a.Target != null && !a.Target.Dead) { ShotHits++; Hurt(a.Target, a.From, a.Damage, "стрела"); }
         }
         Arrows.RemoveAll(a => a.Done && a.T > a.Dur + 1.5f);
     }

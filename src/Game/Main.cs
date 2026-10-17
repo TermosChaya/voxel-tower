@@ -11,7 +11,7 @@ namespace VoxelTower.Game;
 /// <summary>
 /// Builds the valley, the simulation, the view, the camera, the tools and the interface, and wires them together.
 /// Command-line options after "--": --shot=file.png [--frames=N] takes a screenshot and quits,
-/// --demo sets up a fort with pawns at work (--pose=battle: with the horde at the wall),
+/// --demo sets up a fort with pawns at work (--pose=battle: the horde bridging the moat and laddering the wall),
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker.
 /// </summary>
 public partial class Main : Node3D
@@ -43,6 +43,8 @@ public partial class Main : Node3D
     int _shotFrames = 45, _frames;
     bool _demo, _calm, _selfTest, _finale;
     string _pose = "";
+    /// <summary>How long the staged siege runs before the screenshot (--at=seconds).</summary>
+    double _poseSeconds = 14;
 
     public override void _Ready()
     {
@@ -54,6 +56,7 @@ public partial class Main : Node3D
             else if (a == "--calm") _calm = true;
             else if (a == "--selftest") _selfTest = true;
             else if (a.StartsWith("--pose=")) _pose = a["--pose=".Length..];
+            else if (a.StartsWith("--at=") && double.TryParse(a["--at=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double at)) _poseSeconds = at;
         }
 
         var sw = Stopwatch.StartNew();
@@ -106,13 +109,16 @@ public partial class Main : Node3D
         Sim.Said += (text, kind) => Hud.Log(text, (Hud.Kind)Math.Clamp(kind, 0, 3));
         Sim.Mined = (x, y, z, m) => { if (Random.Shared.NextDouble() < .045) Debris.Spawn(m, x, y, z, 1, 1.3f); };
         Sim.Hacked = (x, y, z, m) => { if (Random.Shared.NextDouble() < .16) Debris.Spawn(m, x, y, z, 1, 1.8f); };
+        Sim.Raised = (x, y, z, m) => { if (Random.Shared.NextDouble() < .05) Debris.Spawn(m, x, y, z, 1, .8f); };
 
-        // the household the siege finds at the citadel
+        // the household the siege finds at the citadel, and the beasts of the valley
         foreach (var t in new[] { Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Archer, Kinds.Swordsman }) Sim.Spawn(t, Sim.Gate);
+        Sim.SeedWildlife();
 
-        Hud.Log("Пробел — позвать орду раньше: оставшееся время станет золотом.");
-        Hud.Log("Кисти размечают работу, пешки её делают: кладут из запасов, копают, рубят. V — кирка.");
-        Hud.Log("Орда придёт с запада через пять минут. Ройте, рубите и стройте, пока есть время.", Hud.Kind.Warn);
+        Hud.Log("Пробел — позвать орду раньше: золота за это нет, зато она меньше узнает о вашей обороне.");
+        Hud.Log("Между волнами охотьтесь: выберите лучника и щёлкните ПКМ по зверю — добыча приносит золото.");
+        Hud.Log("Кисти размечают работу, пешки её делают: кладут из запасов, копают, рубят. V — кирка, 7 — лестница.");
+        Hud.Log("Орда придёт с запада через десять минут. Ройте, рубите и стройте, пока есть время.", Hud.Kind.Warn);
         GD.Print($"[voxel-tower] world {genMs:0} ms, navigation {navMs:0} ms, mesh {View.LastFullMeshMs:0} ms, {View.Triangles()} triangles");
 
         if (_demo) Demo();
@@ -153,7 +159,18 @@ public partial class Main : Node3D
         var vp = GetViewport();
         GD.Print($"[voxel-tower] {Engine.GetFramesPerSecond()} fps, {vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.PrimitivesInFrame) / 1000} k triangles in {vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.DrawCallsInFrame)} draw calls (+{vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.PrimitivesInFrame) / 1000} k for shadows), {RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.VideoMemUsed) / 1048576} MB video memory");
         GD.Print($"[voxel-tower] {Sim.Units.Count} units, {Sim.Orders.Total} voxels marked, game time {Sim.Time:0} s, slowest frame {_slowest * 1000:0} ms, {Units.Drawn()} figures and {Units.ArrowsDrawn} arrows drawn");
-        if (OS.IsDebugBuild()) foreach (var u in Sim.Units) GD.Print($"[voxel-tower]   {u.T.Name} #{u.Id}: {u.State} at {u.X / 16:0.0},{u.Y / 16:0.0},{u.Z / 16:0.0} m{(u.Why != "" ? ", " + u.Why : "")}");
+        if (OS.IsDebugBuild())
+            foreach (var u in Sim.Units)
+            {
+                if (u.Team == Team.Wild) continue;
+                string field = "";
+                if (u.Team == Team.Horde && Sim.Fields.TryGetValue(u.T, out var f))
+                {
+                    int next = f.Next(Sim.Nav, u.Cell, out float carve, out var works);
+                    field = $", field {f.Dist[u.Cell]:0} s, next {next} {works} carve {carve:0.0}, no build until {u.NoBuildUntil:0.0}";
+                }
+                GD.Print($"[voxel-tower]   {u.T.Name} #{u.Id}: {u.State} {u.Building} at {u.X / 16:0.0},{u.Y / 16:0.0},{u.Z / 16:0.0} m{(u.Why != "" ? ", " + u.Why : "")}{field}");
+            }
         var img = GetViewport().GetTexture().GetImage();
         if (img.GetWidth() > 1600) img.Resize(1600, img.GetHeight() * 1600 / img.GetWidth(), Image.Interpolation.Lanczos);
         var err = img.SavePng(_shot);
@@ -218,6 +235,20 @@ public partial class Main : Node3D
         for (double t = 0; t < seconds; t += .05) Sim.Step(.05f);
     }
 
+    /// <summary>The column nearest a point (within a radius) that passes a test; the point itself if none does.</summary>
+    (int x, int z) Nearest(int cx, int cz, int radius, Func<int, int, bool> test)
+    {
+        for (int r = 0; r <= radius; r++)
+            for (int dz = -r; dz <= r; dz++)
+                for (int dx = -r; dx <= r; dx++)
+                {
+                    if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != r) continue;
+                    int x = cx + dx, z = cz + dz;
+                    if (World.InBounds(x, 1, z) && test(x, z)) return (x, z);
+                }
+        return (cx, cz);
+    }
+
     // ---------------------------------------------------------------- self-test
 
     /// <summary>
@@ -257,7 +288,8 @@ public partial class Main : Node3D
         Check("no ready-made blueprints", Blueprints.Count == 0);
         Check("a household at the gate", Sim.Count(Kinds.Worker) == 3 && Sim.Count(Kinds.Archer) == 1 && Sim.Count(Kinds.Swordsman) == 1);
         await Frames(2);
-        Check("the pawns are drawn", Units.Drawn() >= 5, $"{Units.Drawn()} figures");
+        Check("the pawns and the beasts are drawn", Units.Drawn() >= 5 + Sim.WildAlive() && Sim.WildAlive() >= 15, $"{Units.Drawn()} figures, {Sim.WildAlive()} beasts");
+        Check("the river and the ponds are drawn", View.WaterChunks() >= 20, $"{View.WaterChunks()} chunks with water");
 
         int w0 = Sim.Count(Kinds.Worker);
         Command.Hire(Kinds.Worker);
@@ -282,21 +314,21 @@ public partial class Main : Node3D
         Check("a box with the pick marks a pit", pit > 2000, $"{pit} voxels to dig");
 
         // a boulder broken up for stone with the ball of the brush
-        await Look(710, 473);
+        var (bx, bz) = Nearest(705, 475, 60, (x, z) => World.Get(x, World.SurfAt(x, z) - 1, z) == Mat.Rock && World.SurfAt(x, z) > Site.HTop[z * World.SX + x] + 3);
+        await Look(bx, bz);
         KeyPress(Key.Key1); KeyPress(Key.F);
         Check("the brush becomes a ball", Tools.Tool == Tool.Brush && Tools.Opt.Form == BrushForm.Ball);
         int r1 = Removals();
-        var rockTop = ScreenAt(710.5f, World.SurfAt(710, 473), 473.5f);
-        await ClickAt(rockTop);
-        Check("the ball pick marks rock to break", Removals() > r1 + 50, $"{Removals() - r1} voxels");
+        await ClickAt(ScreenAt(bx + .5f, World.SurfAt(bx, bz), bz + .5f));
+        Check("the ball pick marks rock to break", Removals() > r1 + 50, $"{Removals() - r1} voxels of the boulder at {bx},{bz}");
         KeyPress(Key.F);
 
         // a tree, felled whole by clicking it
-        await Look(691, 670);
+        var (tx, tz) = Nearest(691, 670, 80, (x, z) => World.Get(x, World.SurfAt(x, z) + 2, z) == Mat.Trunk);
+        await Look(tx, tz);
         int r2 = Removals();
-        var trunk = ScreenAt(691.5f, 92, 670.5f);
-        await ClickAt(trunk);
-        Check("a click with the pick fells a whole tree", Removals() > r2 + 300, $"{Removals() - r2} voxels of tree");
+        await ClickAt(ScreenAt(tx + .5f, World.SurfAt(tx, tz) + 6, tz + .5f));
+        Check("a click with the pick fells a whole tree", Removals() > r2 + 300, $"{Removals() - r2} voxels of the tree at {tx},{tz}");
 
         // the pawns at work
         double earth0 = Sim.Stock[Stockpile.Earth], stone0 = Sim.Stock[Stockpile.Stone], wood0 = Sim.Stock[Stockpile.Wood];
@@ -311,6 +343,20 @@ public partial class Main : Node3D
         Check("…lay the wall from the stores", World.SurfAt(lx, 460) > ground + 16, $"top {World.SurfAt(lx, 460)} over ground {ground}, stone {Fmt.M3(stone0)} → {Fmt.M3(Sim.Stock[Stockpile.Stone])} m³");
         Check("…and fell the tree for wood", Sim.Stock[Stockpile.Wood] > wood0 + 100, $"wood +{Fmt.M3(Sim.Stock[Stockpile.Wood] - wood0)} m³, {Sim.Orders.Total} of {left0} voxels left; 150 s in {ms} ms");
         foreach (var u in Sim.Units) if (u.Why != "") GD.Print($"[selftest]      {u.T.Name} #{u.Id}: {u.Why}");
+
+        // a ladder against the new wall, from the side the camera sees
+        KeyPress(Key.Key7);
+        Check("7 picks up the ladder", Tools.Tool == Tool.Ladder);
+        await Look(lx, 460);
+        int fy = ground + 10, face = lx;
+        while (World.Get(face - 1, fy, 460) != Mat.Air) face--;
+        int b2 = Sim.Orders.BuildTotal;
+        await ClickAt(ScreenAt(face - .02f, fy + .5f, 460.5f));
+        int rungs = Sim.Orders.BuildTotal - b2;
+        Advance(40);
+        int built = 0;
+        for (int y = ground; y < ground + 48; y++) for (int z = 450; z < 472; z++) for (int x = face - 10; x < face; x++) if (World.Get(x, y, z) == Mat.Ladder) built++;
+        Check("…the workers set it against the wall", rungs > 40 && built > 40, $"{rungs} voxels marked, {built} in place");
 
         // marking and unmarking
         KeyPress(Key.Key2);
@@ -359,11 +405,27 @@ public partial class Main : Node3D
         Check("«За работу» lets it go", !worker.Hold);
         Command.ClearSelection();
 
-        // the horde called early
+        // a hunt: the archer after a boar, for gold
+        var boar = Sim.Spawn(Kinds.Boar, Sim.NearestStand(kx - 150, kz + 110, 2));
+        Unit archer = null;
+        foreach (var u in Sim.Units) if (!u.Dead && u.T == Kinds.Archer) { archer = u; break; }
+        Selected.Clear(); Selected.Add(archer);
+        await Look(boar.X, boar.Z);
+        var at = Command.Screen(boar, .5f);
+        Rig._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true, Position = at });
+        Rig._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = false, Position = at });
+        Check("a right click on a beast sends the archer hunting", archer.Prey == boar, $"prey {archer.Prey?.T.Name}");
+        double gold1 = Sim.Stock.Gold;
+        Advance(60);
+        Check("…and the boar is taken for gold", boar.Dead && Sim.Stock.Gold >= gold1 + Kinds.Boar.Bounty, $"boar {(boar.Dead ? "taken" : $"{boar.Hp:0} hp")}, +{Sim.Stock.Gold - gold1:0} gold");
+        Command.ClearSelection();
+
+        // the horde called early: no gold for it, only less known of the defences
         Sim.Waves.Countdown = 200;
         double gold0 = Sim.Stock.Gold;
         KeyPress(Key.Space);
-        Check("Space calls the horde for a bounty", Sim.Waves.Active && Sim.Waves.Number == 1 && Sim.Stock.Gold >= gold0 + 39, $"+{Sim.Stock.Gold - gold0:0} gold");
+        Check("Space calls the horde early: no gold, less scouted", Sim.Waves.Active && Sim.Waves.Number == 1 && Math.Abs(Sim.Stock.Gold - gold0) < .01 && Math.Abs(Sim.Waves.Intel - 400.0 / 600) < .01,
+            $"intel {Sim.Waves.Intel * 100:0} %, gold {gold0:0} → {Sim.Stock.Gold:0}");
         Advance(90);
         Check("the first wave comes and fights", Sim.Kills > 0 && Sim.Shots > 0, $"{Sim.Kills} killed, {Sim.RaidersAlive()} alive, {Sim.Shots} arrows, citadel {Sim.KeepHp:0}");
         KeyPress(Key.P);
@@ -385,11 +447,13 @@ public partial class Main : Node3D
     // ---------------------------------------------------------------- demo
 
     /// <summary>
-    /// A fort in the making, set up the way a player would: a finished curtain wall with round towers and stairs,
-    /// a wooden walk and a moat marked out, a tree to fell, and the pawns at it. With --pose=battle the horde is at the wall.
+    /// A fort in the making, set up the way a player would: a curtain wall with round towers and stairs, a moat let in from
+    /// the pond (the rest of it marked for the workers), merlons and a wooden walk marked on the wall, a tree to fell,
+    /// deer grazing beyond. With --pose=battle the moat is full and the horde is at it, bridging and raising ladders.
     /// </summary>
     void Demo()
     {
+        if (_pose == "battle") { Siege(); return; }
         var w = World; var s = Site; var sim = Sim;
         sim.Waves.Countdown = Waves.Prep;
         sim.Stock.Gold = 140;
@@ -397,9 +461,10 @@ public partial class Main : Node3D
         sim.Stock[Stockpile.Wood] = 14 * VoxelWorld.PerM3;
         sim.Stock[Stockpile.Earth] = 6 * VoxelWorld.PerM3;
         Stroke St(byte m, int width, int height, bool hollow = false) => new() { Mat = m, Width = width, Height = height, Level = true, Hollow = hollow };
-        const int wx = 676, z0 = 436, z1 = 596;
+        const int wx = 676, z0 = 436, z1 = 596, mx = wx - 30;
+        bool battle = _pose == "battle";
 
-        // what was built before the first wave: the wall, two towers, stairs up from the yard
+        // what was built before: the wall, two towers, stairs up from the yard
         sim.InstantLabour = true;
         int top = Shapes.LevelTop(w, wx, 516, 40);
         sim.DesignateBuild(Shapes.Line(w, s, wx, z0, wx, z1, St(Mat.Stone, 12, 40), top));
@@ -411,45 +476,56 @@ public partial class Main : Node3D
         }
         for (int k = 0; k < 5; k++)
             sim.DesignateBuild(Shapes.Line(w, s, wx + 10 + k * 8, 540, wx + 10 + k * 8, 552, St(Mat.Stone, 8, 0), top - k * 8));
+        // the moat's southern half is dug through to the pond and lets the water in; in battle all of it
+        var moat = new Stroke { Width = 16, Height = 20, Dig = true };
+        sim.DesignateRemove(Shapes.Line(w, s, mx, battle ? z0 - 24 : 524, mx, 684, moat, 0));
         sim.InstantLabour = false;
 
-        // what is marked for the pawns now: merlons and a wooden walk on the wall, a moat before it, a tree to fell
+        // what is marked for the pawns now: merlons and a wooden walk on the wall, the rest of the moat, a tree to fell
         for (int z = z0 + 4; z <= z1 - 8; z += 12) sim.DesignateBuild(Shapes.Box(w, s, wx - 6, z, wx - 3, z + 5, St(Mat.Stone, 4, 10), top + 10));
         sim.DesignateBuild(Shapes.Line(w, s, wx + 2, z0, wx + 2, z1, St(Mat.Wood, 6, 3), top + 3));
-        sim.DesignateRemove(Shapes.Line(w, s, wx - 28, z0 - 20, wx - 28, z1 + 20, new Stroke { Width = 16, Height = 20, Dig = true }, 0));
-        sim.DesignateRemove(Shapes.Tree(w, 691, 92, 670));
+        if (!battle) sim.DesignateRemove(Shapes.Line(w, s, mx, z0 - 24, mx, 524, moat, 0));
+        var (treeX, treeZ) = Nearest(691, 670, 80, (x, z) => w.Get(x, w.SurfAt(x, z) + 2, z) == Mat.Trunk);
+        sim.DesignateRemove(Shapes.Tree(w, treeX, w.SurfAt(treeX, treeZ) + 4, treeZ));
 
-        // more hands, and the archers up on the wall
+        // more hands, the archers up on the wall, deer grazing out of the way
         for (int i = 0; i < 4; i++) sim.Spawn(Kinds.Worker, sim.Gate);
         var archers = new List<Unit> { sim.Spawn(Kinds.Archer, sim.Gate) };
         foreach (var u in sim.Units) if (u.T == Kinds.Archer && !archers.Contains(u)) archers.Add(u);
         var swords = new List<Unit>();
         foreach (var u in sim.Units) if (u.T == Kinds.Swordsman) swords.Add(u);
         swords.Add(sim.Spawn(Kinds.Swordsman, sim.Gate));
-        int walk = sim.NearestStand(wx, 510, 4), walk2 = sim.NearestStand(wx, 560, 4);
+        int walk = sim.NearestStand(wx, 500, 4), walk2 = sim.NearestStand(wx, 560, 4);
         if (walk >= 0) sim.Command(archers.GetRange(0, 1), walk);
         if (walk2 >= 0) sim.Command(archers.GetRange(1, archers.Count - 1), walk2);
         int yard = sim.NearestStand(wx + 30, 500, 4);
         if (yard >= 0) sim.Command(swords, yard);
-        Advance(_pose == "battle" ? 40 : 55);
-
-        if (_pose == "battle")
+        foreach (var (dx, dz) in new[] { (0, 0), (14, 9), (-10, 16), (6, -14) })
         {
-            // the horde already at the wall: goblins and orcs hacking, a miner digging under, a troll behind
+            var deer = sim.Spawn(Kinds.Deer, sim.NearestStand(wx + 70 + dx, 770 + dz, 3));
+            deer.Home = deer.Cell;
+        }
+        Advance(battle ? 30 : 55);
+
+        if (battle)
+        {
+            // the horde already at the moat with timber for bridges and ladders
             sim.Waves.Countdown = 0;
             sim.Step(.05f);
             sim.Waves.Countdown = 1e9;
-            int n = 0;
-            foreach (var (t, x, z) in new[] { (Kinds.Orc, wx - 44, 500), (Kinds.Goblin, wx - 40, 520), (Kinds.Goblin, wx - 46, 480), (Kinds.Orc, wx - 50, 548), (Kinds.Miner, wx - 42, 530), (Kinds.Goblin, wx - 60, 560), (Kinds.Troll, wx - 80, 512) })
+            sim.HordeStock[Stockpile.Wood] = 3 * VoxelWorld.PerM3;
+            foreach (var (t, x, z) in new[] { (Kinds.Sapper, wx - 64, 492), (Kinds.Sapper, wx - 62, 532), (Kinds.Sapper, wx - 66, 566), (Kinds.Goblin, wx - 70, 510),
+                (Kinds.Goblin, wx - 74, 548), (Kinds.Orc, wx - 80, 520), (Kinds.Orc, wx - 84, 500), (Kinds.Troll, wx - 100, 530) })
             {
                 int c = sim.NearestStand(x, z, t.Move.Height);
-                if (c >= 0) { sim.Spawn(t, c); n++; }
+                if (c >= 0) sim.Spawn(t, c);
             }
-            Advance(9);
-            Rig.Set(World.WX(wx - 18), World.WZ(518), -.9f, .6f, 1.25f, snap: true);
+            sim.ComputeFields();
+            Advance(16);
+            Rig.Set(World.WX(wx - 22), World.WZ(520), -.95f, .62f, 1.3f, snap: true);
         }
         else if (_pose == "close") Rig.Set(World.WX(wx - 22), World.WZ(526), -.75f, .55f, 3.4f, snap: true);
-        else Rig.Set(World.WX(wx + 6), World.WZ(560), -.7f, .62f, 1.15f, snap: true);
+        else Rig.Set(World.WX(wx + 4), World.WZ(600), -.7f, .62f, 1.1f, snap: true);
 
         AddBlueprint(Blueprint.Capture(w, wx - 16, z1 - 6, wx + 16, z1 + 26, NextBlueprintId++, "Круглая башня"), save: false);
         AddBlueprint(Blueprint.Capture(w, wx - 7, 500, wx + 7, 530, NextBlueprintId++, "Пролёт стены"), save: false);
@@ -460,6 +536,53 @@ public partial class Main : Node3D
         else if (_pose is not ("battle" or "close")) Tools.StartPaste(Blueprints[0]);
         foreach (var u in archers) Selected.Add(u);
         CallDeferred(MethodName.PoseDemo);
+    }
+
+    /// <summary>
+    /// The citadel ringed by a stone wall and a moat full of water, archers on the wall, and the horde arrived with timber:
+    /// sappers laying bridges over the water and raising ladders against the wall, goblins and orcs behind them.
+    /// </summary>
+    void Siege()
+    {
+        var w = World; var s = Site; var sim = Sim;
+        sim.Waves.Countdown = 1e9;
+        sim.Stock.Gold = 90;
+        int kx = s.KeepX, kz = s.KeepZ;
+        sim.InstantLabour = true;
+        int top = Shapes.LevelTop(w, kx - 64, kz, 40);
+        sim.DesignateBuild(Shapes.Circle(w, s, kx, kz, s.KeepR + 44, new Stroke { Mat = Mat.Stone, Width = 10, Height = 40, Level = true, Hollow = true }, top));
+        var moat = Shapes.Circle(w, s, kx, kz, s.KeepR + 84, new Stroke { Width = 18, Height = 24, Dig = true, Hollow = true }, 0);
+        sim.DesignateRemove(moat);
+        sim.InstantLabour = false;
+        // let the water in, up to a hand below the brim
+        int level = w.SurfAt(kx - 130, kz) - 3;
+        for (int i = 0; i < moat.Count; i++)
+            if (moat.Y(i) < level && w.Get(moat.X(i), moat.Y(i), moat.Z(i)) == Mat.Air) w.Set(moat.X(i), moat.Y(i), moat.Z(i), Mat.Water);
+        var archers = new List<Unit>();
+        foreach (var (dx, dz) in new[] { (-62, -14), (-60, 18), (-52, -36), (-48, 40), (-63, 2) })
+        {
+            int c = sim.NearestStand(kx + dx, kz + dz, 4);
+            var a = sim.Spawn(Kinds.Archer, c);
+            sim.Command(new[] { a }, c);
+            archers.Add(a);
+        }
+        Advance(2);
+        sim.Waves.Countdown = 0;
+        sim.Step(.05f);
+        sim.Waves.Countdown = 1e9;
+        sim.HordeStock[Stockpile.Wood] = 3 * VoxelWorld.PerM3;
+        foreach (var (t, dx, dz) in new[] { (Kinds.Sapper, -122, -20), (Kinds.Sapper, -120, 12), (Kinds.Sapper, -118, 36), (Kinds.Goblin, -130, 0),
+            (Kinds.Goblin, -134, 24), (Kinds.Orc, -138, -8), (Kinds.Orc, -142, 18), (Kinds.Troll, -150, 4), (Kinds.Goblin, -126, -34) })
+        {
+            int c = sim.NearestStand(kx + dx, kz + dz, t.Move.Height);
+            if (c >= 0) sim.Spawn(t, c);
+        }
+        sim.ComputeFields();
+        Advance(_poseSeconds);
+        Rig.Set(World.WX(kx - 64), World.WZ(kz + 2), -1.0f, .6f, 1.7f, snap: true);
+        Hud.Refresh();
+        Marks.Flush();
+        foreach (var u in archers) Selected.Add(u);
     }
 
     /// <summary>Points the cursor for the screenshot: a blueprint copy beside the fort, or a moat half drawn.</summary>

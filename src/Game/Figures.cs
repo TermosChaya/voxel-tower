@@ -5,7 +5,10 @@ using VoxelTower.Core;
 
 namespace VoxelTower.Game;
 
-/// <summary>The parts of a figure that move on their own: the body with the head, the arms with what they hold, the legs.</summary>
+/// <summary>
+/// The parts of a figure that move on their own: the body with the head, the arms with what they hold, the legs.
+/// A beast's front legs take the arms' places.
+/// </summary>
 public enum Part { Body, Main, Off, LegR, LegL }
 
 /// <summary>
@@ -27,6 +30,8 @@ public sealed class Figure
     public float Carry;
     /// <summary>A shield on the off arm, raised when fighting.</summary>
     public bool Shield;
+    /// <summary>Four legs: the arms are front legs.</summary>
+    public bool Beast;
 
     static readonly Dictionary<UnitType, Figure> Cache = new();
 
@@ -42,6 +47,10 @@ public sealed class Figure
             "orc" => Orc(),
             "miner" => Miner(),
             "troll" => Troll(),
+            "sapper" => Sapper(),
+            "deer" => Deer(),
+            "boar" => Boar(),
+            "hare" => Hare(),
             _ => Worker(),
         };
         Cache[t] = f;
@@ -327,6 +336,106 @@ public sealed class Figure
         s.Box(Part.Body, -2, b.Neck - 2, b.FaceZ, 2, b.Neck + 2, b.FaceZ + 1, Mat.Hair);
         s.Box(Part.Body, -3, b.Waist, b.Z0 - 3, 3, b.Neck, b.Z0, Mat.Linen);
         Pick(s, b, Mat.Iron, 11);
+        return s.Into(f);
+    }
+
+    static Figure Sapper()
+    {
+        var f = new Figure { Chop = .55f, Stride = 12 };
+        var b = new Build
+        {
+            Leg = 7, LegW = 2, LegD = 2, Hip = 3, Torso = 7, Chest = 3, ChestD = 3, Head = 7, HeadW = 3, HeadD = 6, HeadZ = -2,
+            Arm = 8, ArmW = 2, ArmD = 2, Skin = Mat.SkinGoblin, Shirt = Mat.Leather, Trousers = Mat.Rag, Boots = Mat.Leather,
+            Hair = Mat.SkinGoblin, Eye = Mat.Brass, Sleeve = Mat.Rag,
+        };
+        var s = Humanoid(b, f);
+        // goblin ears, a leather cap, a bundle of poles for ladders across the back and a mallet in the fist
+        s.Pair(Part.Body, Part.Body, -b.HeadW - 3, b.Neck + 3, 0, -b.HeadW, b.Neck + 5, 1, Mat.SkinGoblin);
+        s.Box(Part.Body, -1, b.Neck + 2, b.FaceZ + 1, 1, b.Neck + 4, b.FaceZ + 2, Mat.SkinGoblin);
+        s.Box(Part.Body, -b.HeadW, b.Crown, b.HeadZ, b.HeadW, b.Crown + 1, b.HeadZ + b.HeadD, Mat.Leather);
+        s.Box(Part.Body, -5, b.Waist + 1, b.Z0 - 2, 5, b.Waist + 2, b.Z0 - 1, Mat.Handle);
+        s.Box(Part.Body, -5, b.Neck - 1, b.Z0 - 2, 5, b.Neck, b.Z0 - 1, Mat.Handle);
+        s.Box(Part.Body, -4, b.Waist + 1, b.Z0 - 3, -3, b.Neck + 6, b.Z0 - 2, Mat.Handle);
+        s.Box(Part.Body, 3, b.Waist + 1, b.Z0 - 3, 4, b.Neck + 6, b.Z0 - 2, Mat.Handle);
+        s.Box(Part.Body, -4, b.Neck + 2, b.Z0 - 3, 4, b.Neck + 3, b.Z0 - 2, Mat.Handle);
+        int x = b.ArmX0 + b.ArmW / 2, y = b.HandY, z0 = b.ArmZ1;
+        s.Box(Part.Main, x, y, z0, x + 1, y + 1, z0 + 7, Mat.Handle);
+        s.Box(Part.Main, x - 1, y - 2, z0 + 6, x + 2, y + 3, z0 + 9, Mat.Wood);
+        return s.Into(f);
+    }
+
+    // ---------------------------------------------------------------- beasts: Main and Off are the front legs
+
+    /// <summary>Four legs at the corners of a body, with hooves (or paws) at the bottom.</summary>
+    static Sculpt Quadruped(Figure f, int legH, int legW, int halfX, int frontZ, int backZ, byte fur, byte foot)
+    {
+        var s = new Sculpt();
+        foreach (var (p, x0, z0) in new[] { (Part.Main, -halfX, frontZ), (Part.Off, halfX - legW, frontZ), (Part.LegR, -halfX, backZ), (Part.LegL, halfX - legW, backZ) })
+        {
+            s.Box(p, x0, 0, z0, x0 + legW, legH, z0 + legW, fur);
+            s.Box(p, x0, 0, z0, x0 + legW, 1, z0 + legW, foot);
+            f.Joint[(int)p] = new Vector3(x0 + legW / 2f, legH, z0 + legW / 2f);
+        }
+        f.Beast = true;
+        return s;
+    }
+
+    static Figure Deer()
+    {
+        var f = new Figure { Stride = 26 };
+        var s = Quadruped(f, 11, 2, 3, 5, -8, Mat.FurDeer, Mat.Hoof);
+        // a long body with a pale belly and a white scut, a neck held high, ears and antlers
+        s.Box(Part.Body, -3, 10, -9, 3, 17, 8, Mat.FurDeer);
+        s.Box(Part.Body, -2, 10, -8, 2, 11, 7, Mat.Belly);
+        s.Box(Part.Body, -1, 14, -10, 1, 17, -9, Mat.Belly);
+        s.Box(Part.Body, -2, 15, 5, 2, 22, 9, Mat.FurDeer);
+        s.Box(Part.Body, -2, 20, 8, 2, 24, 14, Mat.FurDeer);
+        s.Box(Part.Body, -1, 20, 14, 1, 22, 15, Mat.Hoof);
+        s.Dot(Part.Body, -2, 22, 12, Mat.Eye); s.Dot(Part.Body, 1, 22, 12, Mat.Eye);
+        s.Pair(Part.Body, Part.Body, -4, 23, 9, -2, 25, 10, Mat.FurDeer);
+        foreach (int sx in new[] { -1, 1 })
+        {
+            int bx = sx < 0 ? -2 : 1;
+            s.Box(Part.Body, bx, 24, 10, bx + 1, 30, 11, Mat.Bone);
+            s.Box(Part.Body, bx + sx, 27, 10, bx + sx + 1, 28, 11, Mat.Bone);
+            s.Box(Part.Body, bx + 2 * sx, 28, 10, bx + 2 * sx + 1, 31, 11, Mat.Bone);
+            s.Box(Part.Body, bx, 29, 11, bx + 1, 32, 12, Mat.Bone);
+        }
+        f.Joint[(int)Part.Body] = new Vector3(0, 11, 5);
+        return s.Into(f);
+    }
+
+    static Figure Boar()
+    {
+        var f = new Figure { Stride = 16 };
+        var s = Quadruped(f, 5, 2, 4, 3, -7, Mat.FurBoar, Mat.Hoof);
+        // a heavy dark body with a bristled ridge, a wedge of a head, a pale snout and tusks
+        s.Box(Part.Body, -4, 4, -8, 4, 13, 6, Mat.FurBoar);
+        s.Box(Part.Body, -1, 13, -6, 1, 15, 5, Mat.Hair);
+        s.Box(Part.Body, -3, 5, 6, 3, 12, 11, Mat.FurBoar);
+        s.Box(Part.Body, -2, 5, 11, 2, 9, 14, Mat.SkinHuman);
+        s.Box(Part.Body, -2, 8, 11, -1, 11, 12, Mat.Bone);
+        s.Box(Part.Body, 1, 8, 11, 2, 11, 12, Mat.Bone);
+        s.Dot(Part.Body, -2, 10, 10, Mat.Eye); s.Dot(Part.Body, 1, 10, 10, Mat.Eye);
+        s.Pair(Part.Body, Part.Body, -3, 12, 7, -1, 14, 8, Mat.FurBoar);
+        s.Box(Part.Body, 0, 9, -9, 1, 12, -8, Mat.Hair);
+        f.Joint[(int)Part.Body] = new Vector3(0, 5, 3);
+        return s.Into(f);
+    }
+
+    static Figure Hare()
+    {
+        var f = new Figure { Stride = 9 };
+        var s = Quadruped(f, 3, 1, 2, 2, -3, Mat.FurHare, Mat.FurHare);
+        // a round crouched body, strong haunches, a white tail and long ears tipped dark
+        s.Box(Part.Body, -2, 2, -4, 2, 7, 3, Mat.FurHare);
+        s.Box(Part.Body, -2, 2, -4, 2, 3, 1, Mat.Belly);
+        s.Box(Part.Body, -1, 4, -5, 1, 6, -4, Mat.Belly);
+        s.Box(Part.Body, -2, 5, 2, 2, 9, 6, Mat.FurHare);
+        s.Dot(Part.Body, -2, 7, 5, Mat.Eye); s.Dot(Part.Body, 1, 7, 5, Mat.Eye);
+        s.Box(Part.Body, -2, 9, 3, -1, 14, 4, Mat.FurHare); s.Dot(Part.Body, -2, 14, 3, Mat.Hoof);
+        s.Box(Part.Body, 1, 9, 3, 2, 14, 4, Mat.FurHare); s.Dot(Part.Body, 1, 14, 3, Mat.Hoof);
+        f.Joint[(int)Part.Body] = new Vector3(0, 3, 2);
         return s.Into(f);
     }
 

@@ -250,6 +250,7 @@ if (args.Length == 0 || args[0] == "--sim")
     var sim = new Sim(w4, site4);
     Console.WriteLine($"navigation {sim.Nav.NX}×{sim.Nav.NY}×{sim.Nav.NZ} cells built in {sw.ElapsedMilliseconds} ms");
     sim.Waves.Countdown = 1e9;
+    sim.WildTarget = 0;
     void Run(double seconds) { for (double t = 0; t < seconds; t += .05) sim.Step(.05f); }
     Check("a gate before the citadel", sim.Gate >= 0, sim.Gate.ToString());
     Check("cells beside the citadel to batter", sim.Goals.Count > 20, sim.Goals.Count.ToString());
@@ -319,8 +320,73 @@ if (args.Length == 0 || args[0] == "--sim")
         guard.Dead = true; guard.DiedAt = -999;
     }
 
-    // the horde finds its way; through a stone ring it has to hack
+    // a ladder against a wall: a worker climbs up onto it
+    {
+        int lx = px - 40, lz = pz + 80;
+        sim.InstantLabour = true;
+        int ltop = Shapes.LevelTop(w4, lx, lz, 40);
+        sim.DesignateBuild(Shapes.Line(w4, site4, lx, lz - 24, lx, lz + 24, new Stroke { Mat = Mat.Stone, Width = 12, Height = 40, Level = true }, ltop));
+        int fy = w4.SurfAt(lx + 20, lz) + 6, fx = lx + 20;
+        while (fx > lx && w4.Get(fx - 1, fy, lz) == Mat.Air) fx--;
+        var face = new VoxelHit { X = fx - 1, Y = fy, Z = lz, NX = 1, M = w4.Get(fx - 1, fy, lz) };
+        int rungs = sim.DesignateBuild(Shapes.LadderAt(w4, site4, face));
+        sim.InstantLabour = false;
+        var climber = crew[0];
+        int wallTop = sim.NearestStand(lx, lz, 4);
+        bool path = sim.GoTo(climber, wallTop);
+        climber.Hold = true;
+        Run(30);
+        Check("a worker climbs a ladder onto a wall", rungs > 50 && path && climber.Cell == wallTop, $"{rungs} voxels of ladder, path {path}, at {sim.Nav.Floor[climber.Cell]} (wall top {ltop})");
+        sim.ReleaseHold(new[] { climber });
+        Run(10);
+    }
+
+    // water runs into a trench dug from the edge of a pond
+    {
+        (int x, int z) shore = (-1, -1);
+        for (int r = 160; r < 420 && shore.x < 0; r += 6)
+            for (int a = 0; a < 360 && shore.x < 0; a += 2)
+            {
+                int x = site4.KeepX + (int)(Math.Cos(a * Math.PI / 180) * r), z = site4.KeepZ + (int)(Math.Sin(a * Math.PI / 180) * r);
+                if (x < 0 || z < 0 || x >= w4.SX || z >= w4.SZ) continue;
+                int t = w4.ColTop(x, z);
+                if (w4.Get(x, t - 1, z) == Mat.Water && w4.SurfAt(x, z) > 60) shore = (x, z);
+            }
+        int before = sim.Flooded;
+        int dx = Math.Sign(site4.KeepX - shore.x), dz = Math.Sign(site4.KeepZ - shore.z);
+        sim.InstantLabour = true;
+        sim.DesignateRemove(Shapes.Line(w4, site4, shore.x, shore.z, shore.x + dx * 30, shore.z + dz * 30, new Stroke { Width = 6, Height = 10, Dig = true }, 0));
+        sim.InstantLabour = false;
+        Run(4);
+        Check("water runs into a trench dug from a pond", shore.x >= 0 && sim.Flooded > 300, $"pond at {shore}, {sim.Flooded - before} voxels of water ran in");
+    }
+
+    // the beasts: a deer bolts from a worker, archers hunt a boar for gold
+    {
+        sim.WildTarget = 0;
+        int meadow = sim.NearestStand(site4.KeepX - 230, site4.KeepZ - 120, 3);
+        var deer = sim.Spawn(Kinds.Deer, meadow);
+        var (mx, _, mz) = sim.Nav.Feet(meadow);
+        var walker = sim.Spawn(Kinds.Worker, sim.NearestStand((int)mx + 40, (int)mz, 4));
+        sim.Command(new[] { walker }, walker.Cell);
+        float dd0 = Sim.Dist(deer, walker);
+        Run(4);
+        float dd1 = Sim.Dist(deer, walker);
+        Check("a deer bolts from a worker", dd1 > dd0 + 48, $"{dd0 / 16:0.0} → {dd1 / 16:0.0} m, {deer.State}");
+        walker.Dead = true; walker.DiedAt = -999;
+        var boar = sim.Spawn(Kinds.Boar, sim.NearestStand((int)mx + 120, (int)mz + 160, 2));
+        var hunters = new[] { sim.Spawn(Kinds.Archer, sim.NearestStand((int)boar.X - 150, (int)boar.Z, 4)), sim.Spawn(Kinds.Archer, sim.NearestStand((int)boar.X - 150, (int)boar.Z + 20, 4)) };
+        double g0 = sim.Stock.Gold;
+        int sent = sim.Hunt(hunters, boar);
+        Run(40);
+        Check("archers hunt a boar down for gold", sent == 2 && boar.Dead && sim.Stock.Gold >= g0 + Kinds.Boar.Bounty, $"boar {(boar.Dead ? "taken" : $"{boar.Hp:0} hp")}, gold +{sim.Stock.Gold - g0:0}, archers {hunters[0].Hp:0}/{hunters[1].Hp:0} hp");
+        foreach (var u in hunters) { u.Dead = true; u.DiedAt = -999; }
+        deer.Dead = true; deer.DiedAt = -999;
+    }
+
+    // the horde finds its way
     sw.Restart();
+    sim.HordeStock[Stockpile.Wood] = sim.HordeStock[Stockpile.Earth] = 0;
     sim.ComputeFields();
     Console.WriteLine($"     raider fields for {Kinds.HordeKinds.Length} kinds in {sw.ElapsedMilliseconds} ms");
     int spawn = sim.NearestStand(site4.SpawnStrip / 2, w4.SZ / 2, 4);
@@ -339,8 +405,19 @@ if (args.Length == 0 || args[0] == "--sim")
     Check("the first wave comes and fights", sim.Waves.Number == 1 && sim.Kills > 0 && sim.Shots > 0,
         $"{sim.Kills} raiders killed, {alive} alive, {sim.Shots} arrows loosed, {sim.ShotHits} hit, citadel {keep0:0} → {sim.KeepHp:0}; 180 s in {sw.ElapsedMilliseconds} ms, fields {sim.LastFieldMs:0} ms");
     foreach (var u in sim.Units)
-        if (!u.Dead) Console.WriteLine($"     {u.T.Name} #{u.Id}: {u.State}, {u.Hp:0} hp, at {u.X / 16:0.0},{u.Y / 16:0.0},{u.Z / 16:0.0} m{(u.Why != "" ? ", " + u.Why : "")}");
-    sim.Waves.Countdown = 1e9;
+        if (!u.Dead && u.Team != Team.Wild) Console.WriteLine($"     {u.T.Name} #{u.Id}: {u.State}, {u.Hp:0} hp, at {u.X / 16:0.0},{u.Y / 16:0.0},{u.Z / 16:0.0} m{(u.Why != "" ? ", " + u.Why : "")}");
+
+    // calling the horde early pays nothing: it only comes knowing less of the defences
+    {
+        sim.Waves.CallOff(sim);
+        double gold = sim.Stock.Gold;
+        sim.Waves.Countdown = Waves.Prep * .75;
+        sim.Waves.StartNow(sim);
+        Check("an early call pays nothing and the horde comes knowing less", sim.Waves.Active && Math.Abs(sim.Stock.Gold - gold) < .01 && Math.Abs(sim.Waves.Intel - .25) < .01,
+            $"intel {sim.Waves.Intel * 100:0} %, gold {gold:0} → {sim.Stock.Gold:0}");
+        sim.Waves.CallOff(sim);
+        sim.Waves.Countdown = 1e9;
+    }
 
     sim.InstantLabour = true;
     {
@@ -353,21 +430,78 @@ if (args.Length == 0 || args[0] == "--sim")
             if (!u.Dead && u.Team == Team.Player) { there++; if (sim.Nav.Fill[u.Cell] >= NavGrid.SolidT) walled++; }
         Check("instant building leaves room for the garrison", there > 0 && walled == 0, $"{there} pawns at the gate, {walled} walled in");
     }
-    // the orc alone against the stone: the garrison leaves the field
+    // the horde alone against a stone ring: the garrison leaves the field
     foreach (var u in sim.Units) if (u.Team == Team.Player) { u.Dead = true; u.DiedAt = -999; }
     sim.Step(.05f);
-    var ringStroke = new Stroke { Mat = Mat.Stone, Width = 8, Height = 48, Hollow = true };
-    sim.DesignateBuild(Shapes.Circle(w4, site4, site4.KeepX, site4.KeepZ, site4.KeepR + 44, ringStroke, 0));
+    float DistKeep(Unit u) => MathF.Sqrt((u.X - site4.KeepX) * (u.X - site4.KeepX) + (u.Z - site4.KeepZ) * (u.Z - site4.KeepZ));
+    int Ring(int r, Stroke st) => st.Dig ? sim.DesignateRemove(Shapes.Circle(w4, site4, site4.KeepX, site4.KeepZ, r, st, 0)) : sim.DesignateBuild(Shapes.Circle(w4, site4, site4.KeepX, site4.KeepZ, r, st, 0));
+    var wallRing = new Stroke { Mat = Mat.Stone, Width = 8, Height = 48, Hollow = true };
+    Ring(site4.KeepR + 44, wallRing);
     sim.InstantLabour = false;
-    sim.ComputeFields();
-    int hacked = 0;
+    int hacked = 0, ladder = 0, decked = 0, filled = 0;
+    (int x, int y, int z) rung = (-1, -1, 0);
     sim.Hacked = (x, y, z, m) => hacked++;
-    var orc = sim.Spawn(Kinds.Orc, sim.NearestStand(site4.KeepX - site4.KeepR - 100, site4.KeepZ, 4));
-    float d0 = MathF.Sqrt((orc.X - site4.KeepX) * (orc.X - site4.KeepX) + (orc.Z - site4.KeepZ) * (orc.Z - site4.KeepZ));
-    Run(120);
-    float d1 = MathF.Sqrt((orc.X - site4.KeepX) * (orc.X - site4.KeepX) + (orc.Z - site4.KeepZ) * (orc.Z - site4.KeepZ));
-    Check("an orc hacks through the stone ring", hacked > 200 && d1 < d0 - 40, $"{hacked} voxels hacked, {d0 / 16:0.0} → {d1 / 16:0.0} m from the citadel, {orc.State}{(orc.Dead ? " (" + orc.KilledBy + ")" : "")}");
+    sim.Raised = (x, y, z, m) =>
+    {
+        if (m == Mat.SiegeLadder) { ladder++; if (y > rung.y) rung = (x, y, z); }
+        else if (m == Mat.Deck) decked++;
+        else if (m == Mat.Soil) filled++;
+    };
 
+    // with nothing to build from, an orc has to hack its way through
+    sim.HordeStock[Stockpile.Wood] = sim.HordeStock[Stockpile.Earth] = 0;
+    sim.ComputeFields();
+    var orc = sim.Spawn(Kinds.Orc, sim.NearestStand(site4.KeepX - site4.KeepR - 100, site4.KeepZ, 4));
+    float d0 = DistKeep(orc);
+    Run(120);
+    float d1 = DistKeep(orc);
+    Check("with nothing to build from, an orc hacks through the stone ring", hacked > 200 && ladder == 0 && d1 < d0 - 40, $"{hacked} voxels hacked, {d0 / 16:0.0} → {d1 / 16:0.0} m from the citadel, {orc.State}");
+    orc.Dead = true; orc.DiedAt = -999;
+
+    // with timber a sapper raises a ladder against a fresh ring and climbs over it
+    sim.InstantLabour = true;
+    Ring(site4.KeepR + 76, wallRing);
+    sim.InstantLabour = false;
+    sim.HordeStock[Stockpile.Wood] = VoxelWorld.PerM3;
+    sim.ComputeFields();
+    hacked = 0;
+    var sapper = sim.Spawn(Kinds.Sapper, sim.NearestStand(site4.KeepX - site4.KeepR - 120, site4.KeepZ, 3));
+    d0 = DistKeep(sapper);
+    Run(60);
+    d1 = DistKeep(sapper);
+    Check("a sapper raises a ladder against the wall and climbs over", ladder > 30 && d1 < site4.KeepR + 70 && hacked < 100, $"{ladder} voxels of ladder, {hacked} hacked, {d0 / 16:0.0} → {d1 / 16:0.0} m, {sapper.State}");
+    sapper.Dead = true; sapper.DiedAt = -999;
+
+    // a swordsman on the wall throws that ladder down
+    {
+        int onWall = sim.NearestStand(rung.x, rung.z, 4);
+        var guard = sim.Spawn(Kinds.Swordsman, onWall);
+        sim.Command(new[] { guard }, guard.Cell);
+        Run(4);
+        Check("a swordsman on the wall throws the siege ladder down", rung.x >= 0 && w4.Get(rung.x, rung.y, rung.z) != Mat.SiegeLadder, $"ladder top at {rung}, swordsman at {sim.Nav.Floor[guard.Cell]}");
+        guard.Dead = true; guard.DiedAt = -999;
+    }
+
+    // a moat round the citadel: the sapper bridges it
+    sim.InstantLabour = true;
+    Ring(site4.KeepR + 130, new Stroke { Width = 24, Height = 24, Dig = true, Hollow = true });
+    sim.InstantLabour = false;
+    sim.HordeStock[Stockpile.Wood] = VoxelWorld.PerM3; sim.HordeStock[Stockpile.Earth] = 0;
+    sim.ComputeFields();
+    var bridger = sim.Spawn(Kinds.Sapper, sim.NearestStand(site4.KeepX - site4.KeepR - 160, site4.KeepZ, 3));
+    Run(60);
+    Check("a sapper lays a bridge over the moat", decked > 200 && DistKeep(bridger) < site4.KeepR + 104, $"{decked} voxels of deck, now {DistKeep(bridger) / 16:0.0} m from the citadel, {bridger.State}");
+    bridger.Dead = true; bridger.DiedAt = -999;
+
+    // a ditch too deep to climb out of and no timber left: earth is heaped in
+    sim.InstantLabour = true;
+    Ring(site4.KeepR + 200, new Stroke { Width = 16, Height = 16, Dig = true, Hollow = true });
+    sim.InstantLabour = false;
+    sim.HordeStock[Stockpile.Wood] = 0; sim.HordeStock[Stockpile.Earth] = 2 * VoxelWorld.PerM3;
+    sim.ComputeFields();
+    var filler = sim.Spawn(Kinds.Sapper, sim.NearestStand(site4.KeepX - site4.KeepR - 230, site4.KeepZ, 3));
+    Run(60);
+    Check("without timber a sapper fills the ditch with earth", filled > 400 && DistKeep(filler) < site4.KeepR + 184, $"{filled} voxels of fill, now {DistKeep(filler) / 16:0.0} m from the citadel, {filler.State}");
 }
 
 Console.WriteLine(failures == 0 ? "\nall checks passed" : $"\n{failures} check(s) failed");

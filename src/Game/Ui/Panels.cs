@@ -6,8 +6,8 @@ using VoxelTower.Core;
 namespace VoxelTower.Game;
 
 /// <summary>
-/// The clock in the top right corner: which wave is next and how long until it comes, the call to arms that turns the
-/// time left into gold, the speed of the game, and how much of the citadel still stands.
+/// The clock in the top right corner: which wave is next and how long until it comes, how much the horde has scouted of
+/// the defences so far, the early call, the speed of the game, and how much of the citadel still stands.
 /// </summary>
 public partial class WaveClock : OrnatePanel
 {
@@ -46,7 +46,8 @@ public partial class WaveClock : OrnatePanel
         _call = new Button
         {
             FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(176, 30), MouseDefaultCursorShape = CursorShape.PointingHand,
-            TooltipText = "Позвать орду сейчас\nВремя, что осталось до волны, превращается в золото: пять секунд — монета. Пробел.",
+            TooltipText = "Позвать орду сейчас\nЗолота за это не дают. Зато орда придёт, зная о вашей обороне меньше: сколько времени до волны прошло, столько она и разведала. " +
+                "Пока разведка ни на что не влияет — тактика орды против ваших слабых мест будет следующим шагом. Пробел.",
         };
         _call.Pressed += () => _m.Command.CallWave();
         right.AddChild(_call);
@@ -88,17 +89,19 @@ public partial class WaveClock : OrnatePanel
         }
         else if (w.Active)
         {
-            _title.Text = $"ВОЛНА {w.Number} ИЗ {Waves.Total}";
+            _title.Text = $"ВОЛНА {w.Number} ИЗ {Waves.Total} · РАЗВЕДКА {w.Intel * 100:0} %";
             _time.Text = (sim.RaidersAlive() + w.Coming).ToString();
             _unit.Text = "НАЛЁТЧИКОВ В ДОЛИНЕ";
             _call.Text = "Орда в долине"; _call.Disabled = true;
+            _call.TooltipText = $"Запасы орды\nНа лестницы и мосты: брёвна {Fmt.M3(sim.HordeStock[Stockpile.Wood])} м³. На засыпку рвов: земля {Fmt.M3(sim.HordeStock[Stockpile.Earth])} м³. " +
+                "Каждая волна приносит свои, и половина того, что орда прорубит, идёт в дело.";
         }
         else
         {
             _title.Text = $"ВОЛНА {w.Number + 1} ИЗ {Waves.Total}";
             _time.Text = Fmt.Clock(w.Countdown);
             _unit.Text = "ДО ПРИХОДА ОРДЫ";
-            _call.Text = $"На штурм · +{(int)(w.Countdown / 5)} зол.";
+            _call.Text = $"На штурм · разведка {w.IntelNow * 100:0} %";
             _call.Disabled = false;
         }
         _note.Text = _m.Paused ? "ПАУЗА" : _m.Speed > 1 ? $"×{_m.Speed}" : "";
@@ -149,8 +152,8 @@ public partial class Retinue : OrnatePanel
     static readonly (UnitType t, Icons.Painter icon, string tip)[] Defs =
     {
         (Kinds.Worker, Icons.Pick, "Рабочий\nКопает, рубит, ломает камень и кладёт стены — всё, что вы разметили. Работает вдвое с лишним быстрее солдата и приносит больше. От орды бежит к цитадели. Щелчок — выбрать всех."),
-        (Kinds.Archer, Icons.Bow, "Лучник\nСтреляет на 12 м, первыми бьёт тех, кто ломает стены. Ставьте его повыше: сверху бьёт точнее. Между волнами помогает с работой. Щелчок — выбрать всех."),
-        (Kinds.Swordsman, Icons.Sword, "Мечник\nДержит землю на 6 м вокруг поста, в броне и со щитом. Между волнами помогает с работой. Щелчок — выбрать всех."),
+        (Kinds.Archer, Icons.Bow, "Лучник\nСтреляет на 12 м, первыми бьёт тех, кто ломает стены, ставит лестницы или лезет по ним. Сверху бьёт точнее. Лучший охотник: ПКМ по зверю. Между волнами помогает с работой. Щелчок — выбрать всех."),
+        (Kinds.Swordsman, Icons.Sword, "Мечник\nДержит землю на 6 м вокруг поста, в броне и со щитом. Сбрасывает осадные лестницы, до которых дотянется. Между волнами помогает с работой. Щелчок — выбрать всех."),
     };
 
     public Retinue() : base(12) { }
@@ -220,10 +223,22 @@ public partial class Retinue : OrnatePanel
         return b;
     }
 
-    /// <summary>What a pawn is doing, in a few words.</summary>
-    public static string Doing(Unit u)
+    /// <summary>What a pawn (or anyone) is doing, in a few words.</summary>
+    public static string Doing(Unit u, Sim sim)
     {
-        if (u.Dead) return "пал";
+        if (u.Dead) return u.Team == Team.Wild ? "добыт" : "пал";
+        if (u.PushCell >= 0) return "сбрасывает лестницу";
+        if (sim.Climbing(u)) return "лезет по лестнице";
+        if (u.Team == Team.Wild)
+            return u.State switch { UnitState.Flee => "убегает", UnitState.Fight => "бросается в атаку", UnitState.Walk => "бродит", _ => "пасётся" };
+        if (u.Team == Team.Horde)
+            return u.State switch
+            {
+                UnitState.Carve => "прорубает дорогу", UnitState.Siege => "бьёт в цитадель", UnitState.Fight => "бьётся",
+                UnitState.Work => u.Building switch { Works.Ladder => "ставит лестницу", Works.Bridge => "кладёт мост", Works.Fill => "засыпает ров", _ => "строит" },
+                _ => "идёт к цитадели",
+            };
+        if (u.Prey is { Dead: false } prey) return (prey.Team == Team.Wild ? "охотится: " : "атакует: ") + prey.T.Name.ToLowerInvariant();
         switch (u.State)
         {
             case UnitState.Work:
@@ -243,12 +258,13 @@ public partial class Retinue : OrnatePanel
         int total = 0;
         foreach (var (t, (name, note, hire)) in _rows)
         {
-            int n = 0, busy = 0, idle = 0, fight = 0;
+            int n = 0, busy = 0, idle = 0, fight = 0, hunt = 0;
             foreach (var u in sim.Units)
             {
                 if (u.Dead || u.T != t) continue;
                 n++;
                 if (u.State is UnitState.Work) busy++;
+                else if (u.Prey != null) hunt++;
                 else if (u.State is UnitState.Fight) fight++;
                 else if (u.State == UnitState.Idle && !u.Hold) idle++;
             }
@@ -257,6 +273,7 @@ public partial class Retinue : OrnatePanel
             var parts = new List<string>();
             if (busy > 0) parts.Add($"за работой {busy}");
             if (fight > 0) parts.Add($"в бою {fight}");
+            if (hunt > 0) parts.Add($"на охоте {hunt}");
             if (idle > 0) parts.Add($"без дела {idle}");
             note.Text = n == 0 ? "никого" : parts.Count > 0 ? string.Join(" · ", parts) : "в пути";
             hire.Disabled = sim.Stock.Gold < t.Cost || sim.Over;
@@ -279,7 +296,7 @@ public partial class Retinue : OrnatePanel
             foreach (var u in sel)
             {
                 _selTitle.Text = $"{u.T.Name} · {Math.Ceiling(Math.Max(0, u.Hp))} из {u.T.Hp}";
-                _selNote.Text = Doing(u) + (u.T.Work < 1 && u.Post >= 0 ? " · пост назначен" : "");
+                _selNote.Text = Doing(u, _m.Sim) + (u.T.Work < 1 && u.Post >= 0 ? " · пост назначен" : "");
             }
             return;
         }

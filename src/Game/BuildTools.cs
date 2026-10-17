@@ -5,7 +5,7 @@ using VoxelTower.Core;
 
 namespace VoxelTower.Game;
 
-public enum Tool { None, Brush, Line, Box, Circle, Extrude, Unmark, Capture, Paste }
+public enum Tool { None, Brush, Line, Box, Circle, Extrude, Ladder, Unmark, Capture, Paste }
 
 public enum BrushForm { Column, Ball }
 
@@ -48,7 +48,7 @@ public partial class BuildTools : Node3D
     public static string ToolName(Tool t) => t switch
     {
         Tool.Brush => "Кисть", Tool.Line => "Линия", Tool.Box => "Прямоугольник", Tool.Circle => "Круг",
-        Tool.Extrude => "Выдавить", Tool.Unmark => "Снять разметку", Tool.Capture => "Снять чертёж",
+        Tool.Extrude => "Выдавить", Tool.Ladder => "Лестница", Tool.Unmark => "Снять разметку", Tool.Capture => "Снять чертёж",
         Tool.Paste => "Чертёж", _ => "Без кисти",
     };
 
@@ -64,10 +64,11 @@ public partial class BuildTools : Node3D
         (Tool.Circle, true) => "Из центра к краю — круглая яма или кольцевой ров вокруг башни (F).",
         (Tool.Extrude, false) => "Щёлкните по ровной грани: она нарастёт на шаг выбранным материалом.",
         (Tool.Extrude, true) => "Щёлкните по ровной грани: её вынут на шаг вглубь. Ступени в склоне, проход в скале.",
+        (Tool.Ladder, _) => "Щёлкните по боковой грани стены, башни или обрыва — рабочие приставят лестницу от земли до верха. По ней ходят ваши пешки… и орда, если доберётся.",
         (Tool.Unmark, _) => "Протяните рамку — вся разметка в ней снимается. Щелчок снимает разметку поблизости.",
         (Tool.Capture, _) => "Обведите рамкой свою постройку — она станет чертежом.",
         (Tool.Paste, _) => "Щёлкните, чтобы разметить копию. R поворачивает, Esc отменяет.",
-        _ => "ЛКМ — выбрать пешек, рамкой — нескольких, ПКМ — послать. 1–5 — кисти, Z X C — материал, V — кирка.",
+        _ => "ЛКМ — выбрать пешек, рамкой — нескольких, ПКМ — послать, ПКМ по зверю — охотиться. 1–5 — кисти, 7 — лестница, V — кирка.",
     };
 
     const int MaxExtrudeFaces = 6000;
@@ -178,7 +179,7 @@ public partial class BuildTools : Node3D
     public void SetDig(bool dig)
     {
         Opt.Dig = dig;
-        if (dig && Tool is Tool.None or Tool.Capture or Tool.Unmark or Tool.Paste) { Tool = Tool.Line; PasteBp = null; }
+        if (dig && Tool is Tool.None or Tool.Capture or Tool.Unmark or Tool.Paste or Tool.Ladder) { Tool = Tool.Line; PasteBp = null; }
         Changed();
     }
 
@@ -244,7 +245,7 @@ public partial class BuildTools : Node3D
         {
             global::Godot.Key.Key1 => Tool.Brush, global::Godot.Key.Key2 => Tool.Line, global::Godot.Key.Key3 => Tool.Box,
             global::Godot.Key.Key4 => Tool.Circle, global::Godot.Key.Key5 => Tool.Extrude, global::Godot.Key.Key6 => Tool.Unmark,
-            global::Godot.Key.Key7 or global::Godot.Key.B => Tool.Capture,
+            global::Godot.Key.Key7 => Tool.Ladder, global::Godot.Key.Key8 or global::Godot.Key.B => Tool.Capture,
             _ => Tool.None,
         };
         if (t != Tool.None) { SetTool(t); return true; }
@@ -319,7 +320,13 @@ public partial class BuildTools : Node3D
             return;
         }
         if (!click || !_hasHover) return;
-        if (Tool == Tool.Extrude)
+        if (Tool == Tool.Ladder)
+        {
+            var plan = Shapes.LadderAt(w, _m.Site, _hover);
+            if (plan.Count == 0) { Refuse("лестницу ставят к боковой грани стены или обрыва"); return; }
+            Designate(plan, false, "Лестница");
+        }
+        else if (Tool == Tool.Extrude)
         {
             var plan = Shapes.Extrude(w, _m.Site, _hover, Opt.Step, Opt.Material, MaxExtrudeFaces, out bool tooBig, dig);
             if (tooBig) { Refuse($"грань слишком велика: больше {MaxExtrudeFaces} вокселей"); return; }
@@ -620,6 +627,7 @@ public partial class BuildTools : Node3D
                 Tool.Brush when Opt.Form == BrushForm.Column => $"C|{g}|{(_paint ? _level : -1)}",
                 Tool.Brush => $"B|{h}",
                 Tool.Extrude => $"E|{h}",
+                Tool.Ladder => $"A|{h}",
                 Tool.Paste when PasteBp != null => $"P|{PasteBp.Id}|{g}|{PasteRot}",
                 _ => "",
             };
@@ -657,6 +665,7 @@ public partial class BuildTools : Node3D
             if (tooBig) { _ghost.Visible = false; PlanText = $"Грань больше {MaxExtrudeFaces} вокселей"; PlanAffordable = false; return; }
             if (dig) name = "Вдавить";
         }
+        else if (Tool == Tool.Ladder) { _plan = Shapes.LadderAt(w, site, _hover); name = "Лестница"; dig = false; }
         else if (Tool == Tool.Paste) { _plan = PlanPasteAtHover(); name = PasteBp.Name; dig = false; }
         if (key[0] == 'T') dig = true;
         _planDig = dig;

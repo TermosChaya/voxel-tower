@@ -13,14 +13,18 @@ public sealed class MapParams
 }
 
 /// <summary>
-/// The valley the game is played in: rolling lowland with forests, rocky knolls and boulders, an old road from the
-/// west, and a cliff-edged plateau with two ramps where the citadel stands. Everything in it can be dug, chopped
-/// or quarried, down to the bedrock.
+/// The valley the game is played in: rolling lowland with ridges, forests, rocky knolls and boulders; a river winding
+/// through it with a few fords; an old road from the west; and a cliff-edged plateau with two ramps, ponds and a clearing
+/// round the citadel. Everything in it can be dug, chopped or quarried, down to the bedrock, and water runs into what is dug
+/// beside it.
 /// </summary>
 public static class MapGen
 {
     // terrain kinds per column
-    const byte Low = 0, Plateau = 1, Rim = 2, Ramp = 3, Road = 4, Knoll = 5;
+    const byte Low = 0, Plateau = 1, Rim = 2, Ramp = 3, Road = 4, Knoll = 5, River = 6, Pond = 7, Bank = 8;
+
+    /// <summary>The river's surface: water stands below this height.</summary>
+    public const int RiverLevel = 31;
 
     public static Site Generate(VoxelWorld w, MapParams p)
     {
@@ -29,7 +33,7 @@ public static class MapGen
         var site = new Site { HTop = new int[SX * SZ], SpawnStrip = 24, KeepR = 24, KeepX = (int)(SX * .8), KeepZ = SZ / 2 };
         var nHill = new ValueNoise(seed * 11 + 1); var nHill2 = new ValueNoise(seed * 13 + 2); var nFine = new ValueNoise(seed * 17 + 3);
         var nEdge = new ValueNoise(seed * 19 + 4); var nKnoll = new ValueNoise(seed * 23 + 5); var nSoil = new ValueNoise(seed * 29 + 6);
-        var nForest = new ValueNoise(seed * 31 + 7);
+        var nForest = new ValueNoise(seed * 31 + 7); var nRidge = new ValueNoise(seed * 37 + 8); var nRiver = new ValueNoise(seed * 41 + 9);
 
         const int baseH = 40, rise = 44, rampHalf = 26, rampLen = 150;
         double EdgeX(double z) => SX * .58 + (nEdge.Sample(z * .008, 7.7) - .5) * 140 + (nEdge.Sample(z * .03, 3.1) - .5) * 26;
@@ -41,16 +45,43 @@ public static class MapGen
             return SZ * .56 + (rampS - SZ * .56) * t + Math.Sin(x * .018) * 18 * (1 - t);
         }
 
+        // the river runs north to south across the lowland, between the horde's edge and the plateau
+        double RiverX(double z) => SX * .3 + Math.Sin(z * .0062 + 1.3) * 64 + (nRiver.Sample(z * .009, 2.2) - .5) * 70;
+        double RiverHalf(double z) => 15 + nRiver.Sample(z * .02, 9.4) * 12;
+        // fords: where the road crosses, and one more to the north
+        double roadCross = 0;
+        for (int x = 0; x < SX; x++) if (Math.Abs(x - RiverX(RoadZ(x))) < 2) { roadCross = RoadZ(x); break; }
+        double[] fords = { roadCross, SZ * .22 };
+
+        // two ponds on the plateau, away from the citadel and the cliff
+        var ponds = new (int x, int z, int r)[2];
+        for (int n = 0; n < ponds.Length; n++)
+        {
+            double a = 2.1 + n * 2.2 + Hash.H3((int)seed, n, 3) * .6;
+            int px = site.KeepX + (int)(Math.Cos(a) * 250), pz = site.KeepZ + (int)(Math.Sin(a) * 260);
+            ponds[n] = (Math.Clamp(px, (int)EdgeX(pz) + 70, SX - 60), Math.Clamp(pz, 60, SZ - 60), 24 + (int)(Hash.H3((int)seed, n, 5) * 10));
+        }
+
         var kind = new byte[SX * SZ];
         var soil = new byte[SX * SZ];
+        var water = new short[SX * SZ];
         Parallel.For(0, SZ, z =>
         {
-            double edge = EdgeX(z);
+            double edge = EdgeX(z), rx = RiverX(z), rh = RiverHalf(z);
             bool ramp = Math.Abs(z - rampN) < rampHalf || Math.Abs(z - rampS) < rampHalf;
+            double ford = 1e9;
+            foreach (double f in fords) ford = Math.Min(ford, Math.Abs(z - f));
             for (int x = 0; x < SX; x++)
             {
-                double low = baseH + (nHill.Sample(x * .010, z * .010) - .5) * 26 + (nHill2.Sample(x * .033, z * .033) - .5) * 9 + (nFine.Sample(x * .11, z * .11) - .5) * p.Roughness;
-                double plat = baseH + rise + (nHill2.Sample(x * .02 + 40, z * .02 + 9) - .5) * 3;
+                // rolling lowland with long ridges
+                double ridge = 1 - Math.Abs(nRidge.Sample(x * .0065, z * .0065) * 2 - 1);
+                double low = baseH + (nHill.Sample(x * .010, z * .010) - .5) * 34 + (nHill2.Sample(x * .033, z * .033) - .5) * 11
+                    + Math.Pow(ridge, 3) * 24 + (nFine.Sample(x * .11, z * .11) - .5) * p.Roughness;
+                low = Math.Min(low, baseH + 30);
+                // the plateau rolls gently away from the citadel and lies flat round it
+                double dk = Brushes.Dist(x - site.KeepX, z - site.KeepZ);
+                double roll = Site.Smooth01((dk - 190) / 140) * ((nHill.Sample(x * .013 + 30, z * .013) - .5) * 16);
+                double plat = baseH + rise + (nHill2.Sample(x * .02 + 40, z * .02 + 9) - .5) * 3 + roll;
                 double h = low; byte k = Low;
                 if (x >= edge) { h = plat; k = x - edge < 5 && !ramp ? Rim : Plateau; }
                 else if (ramp && x >= edge - rampLen)
@@ -62,12 +93,41 @@ public static class MapGen
                 else
                 {
                     double kn = nKnoll.Sample(x * .018, z * .018);
-                    if (kn > .7 && x > site.SpawnStrip + 16) { h = low + (kn - .7) * 140; k = Knoll; }
+                    if (kn > .7 && x > site.SpawnStrip + 16) { h = low + (kn - .7) * 190; k = Knoll; }
                 }
                 int i = z * SX + x;
+                short wl = 0;
+                if (x < edge - 8)
+                {
+                    // the river valley: banks that slope down to the water, a bed that drops away from them
+                    double d = Math.Abs(x - rx);
+                    if (d < rh)
+                    {
+                        double t = d / rh;
+                        double depth = ford < 14 ? 2 : 3 + (1 - t * t) * 13;
+                        h = RiverLevel - depth;
+                        k = River;
+                        wl = RiverLevel;
+                    }
+                    else if (d < rh + 70)
+                    {
+                        double bank = RiverLevel + 2 + (d - rh) * .42;
+                        if (h > bank) { h = bank; if (k == Low || k == Knoll) k = Bank; }
+                    }
+                }
+                foreach (var (px, pz, pr) in ponds)
+                {
+                    double d = Brushes.Dist(x - px, z - pz);
+                    if (d >= pr + 3 || k is not (Plateau or Rim)) continue;
+                    int surf = (int)Math.Round(plat) - 1;
+                    double t = Math.Min(1, d / pr);
+                    h = d < pr ? surf - 1 - (1 - t * t) * 11 : surf;
+                    if (d < pr) { k = Pond; wl = (short)surf; }
+                }
                 kind[i] = k;
+                water[i] = wl;
                 site.HTop[i] = (int)Math.Round(h);
-                soil[i] = (byte)(k switch { Knoll or Rim => 0, Plateau => 7, _ => 9 + (int)(nSoil.Sample(x * .02, z * .02) * 6) });
+                soil[i] = (byte)(k switch { Knoll or Rim => 0, Plateau or Pond => 7, River => 4, _ => 9 + (int)(nSoil.Sample(x * .02, z * .02) * 6) });
             }
         });
 
@@ -86,10 +146,12 @@ public static class MapGen
                         Rim => Mat.Moss,
                         Ramp or Road => Mat.Path,
                         Knoll => Hash.H3(x, z, 41) < .35 ? Mat.Moss : Mat.Rock,
+                        River or Pond => Mat.Soil,
                         _ => Mat.Grass,
                     };
                     w.FillColumnRaw(x, z, h - 1, h, top);
-                    if (top == Mat.Grass && Hash.H3(x, z, 77) < p.TuftChance)
+                    if (water[i] > h) w.FillColumnRaw(x, z, h, water[i], Mat.Water);
+                    else if (top == Mat.Grass && Hash.H3(x, z, 77) < p.TuftChance)
                     {
                         w.FillColumnRaw(x, z, h, h + 1, Mat.Tuft);
                         if (Hash.H3(x, z, 78) < .35) w.FillColumnRaw(x, z, h + 1, h + 2, Mat.Tuft);
@@ -102,7 +164,7 @@ public static class MapGen
         {
             if (x < site.SpawnStrip + 8 || x >= SX - 8 || z < 8 || z >= SZ - 8) return false;
             byte k = kind[z * SX + x];
-            return k is Low or Plateau && !NearKeep(x, z, 48);
+            return k is Low or Plateau or Bank && !NearKeep(x, z, 48);
         }
 
         // boulders, more of them on the rocky ground

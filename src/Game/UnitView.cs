@@ -44,6 +44,7 @@ public partial class UnitView : Node3D
         _mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/voxel.gdshader") };
         foreach (var t in Kinds.PlayerKinds) Add(t);
         foreach (var t in Kinds.HordeKinds) Add(t);
+        foreach (var t in Kinds.WildKinds) Add(t);
 
         var shaft = new BoxMesh { Size = new Vector3(.035f, .035f, .7f), Material = new StandardMaterial3D { AlbedoColor = new Color("4a3424"), Roughness = .9f } };
         _arrows = Multi(shaft, null, false);
@@ -146,7 +147,33 @@ public partial class UnitView : Node3D
             fall = Math.Clamp(since / .45f, 0, 1);
             fall = 1 - (1 - fall) * (1 - fall);
             sink = Math.Max(0, since - 18) * 1.4f;
-            main = -.4f; off = .3f;
+            main = f.Beast ? .5f : -.4f; off = f.Beast ? .4f : .3f;
+            if (f.Beast) { legR = -.4f; legL = -.3f; }
+        }
+        else if (f.Beast)
+        {
+            // diagonal pairs of legs together; a gallop when bolting or charging
+            float phase = u.Stride / f.Stride * MathF.Tau, a = look.Move;
+            bool run = u.State is UnitState.Flee or UnitState.Fight;
+            float sw = MathF.Sin(phase) * (run ? .85f : .45f) * a;
+            main = sw; legL = sw; off = -sw; legR = -sw;
+            bob = MathF.Abs(MathF.Sin(phase)) * a * (run ? 1.6f : .4f);
+            if (a < .05f)
+            {
+                // grazing: now and then the head goes down to the grass
+                float graze = MathF.Max(0, MathF.Sin((float)_t * .35f + seed * 3));
+                lean = graze * graze * .38f;
+            }
+            if (u.State == UnitState.Fight) lean = -.08f + u.Swing * .3f;
+        }
+        else if (_m.Sim.Climbing(u))
+        {
+            // hand over hand up the ladder
+            float phase = u.Y / 6f * MathF.Tau;
+            main = -2.6f + MathF.Sin(phase) * .35f;
+            off = -2.6f - MathF.Sin(phase) * .35f;
+            legR = -.5f + MathF.Sin(phase) * .45f;
+            legL = -.5f - MathF.Sin(phase) * .45f;
         }
         else
         {
@@ -190,14 +217,18 @@ public partial class UnitView : Node3D
 
         var at = new Vector3(_w.WX(u.X), _w.WY(u.Y + bob - sink), _w.WZ(u.Z));
         var root = new Transform3D(new Basis(Vector3.Up, MathF.PI / 2 - look.Face).Scaled(Vector3.One * VoxelWorld.Vox), at);
+        // the fallen lie down: on the back, or a beast on its side
         if (fall > 0)
-            root *= new Transform3D(new Basis(Vector3.Right, -MathF.PI / 2 * fall), new Vector3(0, fall * (u.T.BodyR + .5f), 0));
+            root *= f.Beast
+                ? new Transform3D(new Basis(Vector3.Back, MathF.PI / 2 * fall), new Vector3(0, fall * (u.T.BodyR * .7f), 0))
+                : new Transform3D(new Basis(Vector3.Right, -MathF.PI / 2 * fall), new Vector3(0, fall * (u.T.BodyR + .5f), 0));
         var body = root * Swing(f, Part.Body, lean);
         var tint = Tint(u);
         int o = slot * 16;
         Write(k, Part.Body, o, body, tint);
-        Write(k, Part.Main, o, body * Swing(f, Part.Main, main), tint);
-        Write(k, Part.Off, o, body * Swing(f, Part.Off, off), tint);
+        var arms = f.Beast ? root : body;
+        Write(k, Part.Main, o, arms * Swing(f, Part.Main, main), tint);
+        Write(k, Part.Off, o, arms * Swing(f, Part.Off, off), tint);
         Write(k, Part.LegR, o, root * Swing(f, Part.LegR, legR), tint);
         Write(k, Part.LegL, o, root * Swing(f, Part.LegL, legL), tint);
     }

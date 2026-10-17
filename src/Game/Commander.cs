@@ -6,9 +6,9 @@ using VoxelTower.Core;
 namespace VoxelTower.Game;
 
 /// <summary>
-/// The player's word to the pawns: picking them out with a click or a frame, sending them with the right button,
-/// hiring at the gate, the horn, calling the horde early, and how fast the game runs.
-/// Space calls the horde, P pauses, Tab changes the speed, T sounds the horn.
+/// The player's word to the pawns: picking them out with a click or a frame, sending them with the right button (onto a
+/// beast to hunt it, onto a raider to strike it down), hiring at the gate, the horn, calling the horde early, and how fast
+/// the game runs. Space calls the horde, P pauses, Tab changes the speed, T sounds the horn.
 /// </summary>
 public partial class Commander : Node
 {
@@ -65,8 +65,8 @@ public partial class Commander : Node
         return _m.Rig.Cam.UnprojectPosition(new Vector3(w.WX(u.X), w.WY(u.Y + u.T.BodyH * up), w.WZ(u.Z)));
     }
 
-    /// <summary>The living unit drawn nearest the cursor; pawns before raiders.</summary>
-    public Unit UnitAt(Vector2 p)
+    /// <summary>The living unit drawn nearest the cursor; pawns first, or anyone but pawns first.</summary>
+    public Unit UnitAt(Vector2 p, bool pawnsFirst = true)
     {
         Unit best = null; float bd = float.MaxValue;
         float pxPerVox = PixelsPerVoxel();
@@ -77,7 +77,7 @@ public partial class Commander : Node
             float rad = Math.Max(10, (u.T.BodyR + 3) * pxPerVox);
             float d = DistToSegment(p, a, b) - rad;
             if (d > 0) continue;
-            float score = d + (u.Team == Team.Player ? -1000 : 0);
+            float score = d + ((u.Team == Team.Player) == pawnsFirst ? -1000 : 0);
             if (score < bd) { bd = score; best = u; }
         }
         return best;
@@ -129,11 +129,22 @@ public partial class Commander : Node
 
     // ---------------------------------------------------------------- orders
 
-    /// <summary>Right click on the ground with pawns chosen: they go there and stay; soldiers make it their post.</summary>
+    /// <summary>
+    /// Right click with pawns chosen: on a beast they hunt it, on a raider they go for it,
+    /// on the ground they go there and stay (soldiers make it their post).
+    /// </summary>
     public void OrderTo(Vector2 screen)
     {
         Prune();
         if (_m.Selected.Count == 0) return;
+        var prey = UnitAt(screen, pawnsFirst: false);
+        if (prey != null && prey.Team != Team.Player)
+        {
+            int n = _m.Sim.Hunt(_m.Selected, prey);
+            if (n > 0) _m.Hud.Float((prey.Team == Team.Wild ? "охота: " : "в атаку: ") + prey.T.Name.ToLowerInvariant(), Ornament.EmberGlow);
+            _m.Hud.OnSelectionChanged();
+            return;
+        }
         var (o, d) = _m.Rig.Ray(screen);
         var w = _m.World;
         if (!Raycast.Cast(w, (o.X - w.OriginX) / VoxelWorld.Vox, o.Y / VoxelWorld.Vox, (o.Z - w.OriginZ) / VoxelWorld.Vox, d.X, d.Y, d.Z, out var hit, skipVeg: true)) return;
@@ -190,13 +201,12 @@ public partial class Commander : Node
         return u;
     }
 
-    /// <summary>Calls the horde before the time is up; what is left of the countdown pays.</summary>
+    /// <summary>Calls the horde before the time is up: no reward, but it comes knowing less of the defences.</summary>
     public void CallWave()
     {
         var w = _m.Sim.Waves;
         if (w.Active || _m.Sim.Over) return;
-        int bonus = w.StartNow(_m.Sim);
-        if (bonus > 0) _m.Hud.Log($"Вы позвали орду раньше срока: +{bonus} золота за смелость.", Hud.Kind.Ok);
+        w.StartNow(_m.Sim);
         _m.Hud.Refresh();
     }
 

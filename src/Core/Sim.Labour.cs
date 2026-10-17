@@ -57,8 +57,12 @@ public sealed partial class Sim
     void PawnTick(Unit u, float dt)
     {
         bool soldier = u.T.Work < 1;
+        // a swordsman beside a siege ladder throws it down before anything else, climbers and all
+        if (soldier && !u.T.Ranged && PushLadders(u, dt)) return;
         if (soldier && Fight(u, dt)) return;
         if (!soldier && Flee(u, dt)) return;
+        if (u.Prey != null && HuntTick(u, dt)) return;
+        if (soldier && PushLadders(u, dt)) return;
         if (u.Path != null && u.PathI < u.Path.Count && (u.Hold || u.Site < 0)) { Walk(u, dt); return; }
         if (u.Hold) { u.State = UnitState.Idle; u.Why = ""; return; }
         if (soldier && Waves.Active)
@@ -226,6 +230,75 @@ public sealed partial class Sim
         if (u.Site >= 0) { _claims[u.Site] = Math.Max(0, _claims[u.Site] - 1); u.Site = -1; }
         u.Jobs.Clear(); u.JobI = 0;
     }
+
+    /// <summary>Soldiers throw down the horde's ladders within reach; true while at it.</summary>
+    bool PushLadders(Unit u, float dt)
+    {
+        if (u.PushCell < 0)
+        {
+            if (Time < u.NextLook) return false;
+            u.NextLook = Time + .4 + Rng.NextDouble() * .3;
+            int i = Nav.I(u.Cell), y = Nav.Y(u.Cell), k = Nav.K(u.Cell);
+            for (int dy = -3; dy <= 1 && u.PushCell < 0; dy++)
+                for (int dk = -1; dk <= 1 && u.PushCell < 0; dk++)
+                    for (int di = -1; di <= 1 && u.PushCell < 0; di++)
+                    {
+                        if (!Nav.In(i + di, y + dy, k + dk)) continue;
+                        int c = Nav.Id(i + di, y + dy, k + dk);
+                        if (Nav.Ladder[c] != 0 && SiegeVoxel(c, out var v)) { u.PushCell = c; u.PushVoxel = v; u.PushEffort = 0; }
+                    }
+            if (u.PushCell < 0) return false;
+            ReleaseSite(u);
+        }
+        u.State = UnitState.Work;
+        u.Path = null;
+        u.Facing = MathF.Atan2(u.PushVoxel.z + .5f - u.Z, u.PushVoxel.x + .5f - u.X);
+        u.PushEffort += dt;
+        if (u.PushEffort < 1.2f) return true;
+        u.Swing = 1;
+        int n = ThrowDown(u.PushVoxel.x, u.PushVoxel.y, u.PushVoxel.z);
+        if (n > 20) Say($"{u.T.Name} сбросил осадную лестницу.", 1);
+        u.PushCell = -1;
+        return true;
+    }
+
+    bool SiegeVoxel(int c, out (int x, int y, int z) v)
+    {
+        int x0 = Nav.I(c) << NavGrid.Shift, y0 = Nav.Y(c) << NavGrid.Shift, z0 = Nav.K(c) << NavGrid.Shift;
+        for (int y = y0; y < y0 + NavGrid.CS; y++)
+            for (int z = z0; z < z0 + NavGrid.CS; z++)
+                for (int x = x0; x < x0 + NavGrid.CS; x++)
+                    if (World.Get(x, y, z) == Mat.SiegeLadder) { v = (x, y, z); return true; }
+        v = default;
+        return false;
+    }
+
+    /// <summary>Takes away a whole siege ladder from one of its voxels; whoever was on it falls.</summary>
+    public int ThrowDown(int x0, int y0, int z0)
+    {
+        var queue = new Queue<(int x, int y, int z)>();
+        var seen = new HashSet<long>();
+        long Key(int x, int y, int z) => ((long)y * World.SZ + z) * World.SX + x;
+        queue.Enqueue((x0, y0, z0)); seen.Add(Key(x0, y0, z0));
+        int n = 0;
+        while (queue.Count > 0 && n < 3000)
+        {
+            var (x, y, z) = queue.Dequeue();
+            if (World.Get(x, y, z) != Mat.SiegeLadder) continue;
+            World.Set(x, y, z, Mat.Air);
+            Hacked?.Invoke(x, y, z, Mat.SiegeLadder);
+            n++;
+            foreach (var (dx, dy, dz) in Around)
+            {
+                int nx = x + dx, ny = y + dy, nz = z + dz;
+                if (Math.Abs(nx - x0) > 12 || Math.Abs(nz - z0) > 12 || !seen.Add(Key(nx, ny, nz))) continue;
+                queue.Enqueue((nx, ny, nz));
+            }
+        }
+        return n;
+    }
+
+    static readonly (int, int, int)[] Around = { (1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1) };
 
     /// <summary>Workers run for the citadel when a raider comes close; true while running.</summary>
     bool Flee(Unit u, float dt)

@@ -6,7 +6,8 @@ namespace VoxelTower.Core;
 
 /// <summary>
 /// The walkable world on half-metre cells of 8³ voxels: how full each cell is and of what, and where feet rest in it.
-/// Leaves, bushes and grass don't block; trunks, earth, masonry and rock do once a cell is a quarter full.
+/// Leaves, bushes, grass, ladders and water don't block; trunks, earth, masonry and rock do once a cell is a quarter full.
+/// A cell with a ladder in it can be hung on and climbed; a cell more than a third full of water drowns whoever stands there.
 /// </summary>
 public sealed class NavGrid
 {
@@ -22,6 +23,12 @@ public sealed class NavGrid
     public readonly byte[] Hard, Keep;
     /// <summary>Height (voxels) where the feet of someone standing in the cell rest.</summary>
     public readonly ushort[] Floor;
+    /// <summary>The cell holds a ladder (the player's or the horde's): bodies hang in it and climb through it.</summary>
+    public readonly byte[] Ladder;
+    /// <summary>Water voxels in the cell.</summary>
+    public readonly ushort[] Water;
+    /// <summary>A cell with this much water in it is too deep to stand in.</summary>
+    public const int DeepT = 192;
 
     readonly bool[] _dirty;
     readonly List<int> _dirtyList = new();
@@ -36,8 +43,7 @@ public sealed class NavGrid
     {
         for (int m = 1; m < Mat.Count; m++)
         {
-            if (Mat.Def[m].Name == null) continue;
-            if (m == Mat.Leaf || m == Mat.Foliage || m == Mat.Tuft) continue;
+            if (Mat.Def[m].Name == null || Mat.Passable[m]) continue;
             Cls[m] = Mat.Def[m].Group switch { MatGroup.Earth => 1, MatGroup.Wood => 2, MatGroup.Stone => 3, MatGroup.Rock => 4, _ => 5 };
         }
         foreach (var m in new[] { Mat.Keep, Mat.KeepDark, Mat.Roof }) Cls[m] = 6;
@@ -49,6 +55,7 @@ public sealed class NavGrid
         NX = w.SX >> Shift; NY = w.SY >> Shift; NZ = w.SZ >> Shift; Layer = NX * NZ; Count = Layer * NY;
         Fill = new ushort[Count]; Earth = new ushort[Count]; Wood = new ushort[Count]; Stone = new ushort[Count]; Rock = new ushort[Count];
         Hard = new byte[Count]; Keep = new byte[Count]; Floor = new ushort[Count];
+        Ladder = new byte[Count]; Water = new ushort[Count];
         _dirty = new bool[Count];
         w.Edited += OnEdit;
     }
@@ -75,13 +82,25 @@ public sealed class NavGrid
         return Fill[Id(i, y, k)] < SolidT;
     }
 
-    /// <summary>Someone h cells tall can stand here: ground below, room for the body.</summary>
+    /// <summary>Someone h cells tall can stand here: ground below, room for the body, no deep water.</summary>
     public bool Stand(int i, int y, int k, int h)
     {
-        if (!In(i, y, k) || y < 1 || !Solid(i, y - 1, k)) return false;
+        if (!In(i, y, k) || y < 1 || !Solid(i, y - 1, k) || Water[Id(i, y, k)] >= DeepT) return false;
         for (int d = 0; d < h; d++) if (!Open(i, y + d, k)) return false;
         return true;
     }
+
+    /// <summary>Someone h cells tall can be here: standing on the ground or hanging on a ladder.</summary>
+    public bool CanBe(int i, int y, int k, int h)
+    {
+        if (!In(i, y, k) || y < 1) return false;
+        int c = Id(i, y, k);
+        if (Water[c] >= DeepT || (Ladder[c] == 0 && !Solid(i, y - 1, k))) return false;
+        for (int d = 0; d < h; d++) if (!Open(i, y + d, k)) return false;
+        return true;
+    }
+
+    public bool Deep(int c) => Water[c] >= DeepT;
 
     /// <summary>The cell a voxel position belongs to.</summary>
     public int CellOf(float x, float y, float z) => Id(Math.Clamp((int)x >> Shift, 0, NX - 1), Math.Clamp((int)y >> Shift, 0, NY - 1), Math.Clamp((int)z >> Shift, 0, NZ - 1));
@@ -120,9 +139,9 @@ public sealed class NavGrid
         foreach (int c in _dirtyList)
         {
             _dirty[c] = false;
-            bool was = Fill[c] >= SolidT;
+            bool was = Fill[c] >= SolidT, ladder = Ladder[c] != 0, deep = Water[c] >= DeepT;
             Recompute(c);
-            if ((Fill[c] >= SolidT) != was) changed++;
+            if ((Fill[c] >= SolidT) != was || (Ladder[c] != 0) != ladder || (Water[c] >= DeepT) != deep) changed++;
         }
         _dirtyList.Clear();
         if (changed > 0) Version++;
@@ -136,11 +155,12 @@ public sealed class NavGrid
         int i = I(c), k = K(c), y = Y(c), x0 = i << Shift, y0 = y << Shift, z0 = k << Shift;
         int ci = World.ChunkIndex(x0 >> VoxelWorld.Shift, y0 >> VoxelWorld.Shift, z0 >> VoxelWorld.Shift);
         var d = World.ChunkData(ci);
-        int fill = 0, e = 0, wd = 0, st = 0, rk = 0, hard = 0, keep = 0;
+        int fill = 0, e = 0, wd = 0, st = 0, rk = 0, hard = 0, keep = 0, lad = 0, wat = 0;
         if (d == null)
         {
-            byte cls = Cls[World.ChunkUniform(ci)];
+            byte u = World.ChunkUniform(ci), cls = Cls[u];
             if (cls != 0) Tally(cls, CS * CS * CS, ref fill, ref e, ref wd, ref st, ref rk, ref hard, ref keep);
+            else if (u == Mat.Water) wat = CS * CS * CS;
         }
         else
         {
@@ -150,14 +170,18 @@ public sealed class NavGrid
                     int row = (((y0 + yy) & VoxelWorld.Mask) << 10) | (((z0 + zz) & VoxelWorld.Mask) << 5) | (x0 & VoxelWorld.Mask);
                     for (int xx = 0; xx < CS; xx++)
                     {
-                        byte cls = Cls[d[row + xx]];
+                        byte v = d[row + xx], cls = Cls[v];
                         if (cls != 0) Tally(cls, 1, ref fill, ref e, ref wd, ref st, ref rk, ref hard, ref keep);
+                        else if (v == Mat.Water) wat++;
+                        else if (Mat.IsLadder[v]) lad++;
                     }
                 }
         }
         Fill[c] = (ushort)fill; Earth[c] = (ushort)e; Wood[c] = (ushort)wd; Stone[c] = (ushort)st; Rock[c] = (ushort)rk;
         Hard[c] = (byte)(hard > 0 ? 1 : 0);
         Keep[c] = (byte)(keep >= 64 ? 1 : 0);
+        Ladder[c] = (byte)(lad >= 6 ? 1 : 0);
+        Water[c] = (ushort)wat;
         Floor[c] = (ushort)FloorIn(x0, y0, z0);
     }
 
