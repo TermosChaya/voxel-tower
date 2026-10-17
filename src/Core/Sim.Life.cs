@@ -106,7 +106,7 @@ public sealed partial class Sim
                 if (!Nav.Stand(i, y, k, h)) continue;
                 int c = Nav.Id(i, y, k);
                 if (c == u.Cell || _bodies[c] > 0 || Nav.Water[c] > 0) break;
-                var path = Paths.Find(u.Cell, x => x == c, x => H(x, i, k), u.T.Move, 600);
+                var path = Paths.Find(u.Cell, x => x == c, x => H(x, i, k), u.T.Move, 600, gates: true);
                 if (path == null || path.Count > radius * 3) break;
                 u.Path = path; u.PathI = 0;
                 u.Pastime = Pastime.Stroll; u.After = Pastime.None; u.PastimeUntil = Time + 30;
@@ -147,7 +147,7 @@ public sealed partial class Sim
             int c = NearestStand((int)(fx + Math.Cos(a) * 13), (int)(fz + Math.Sin(a) * 13), u.T.Move.Height);
             if (c < 0 || c != u.Cell && _bodies[c] > 0) continue;
             int ci = Nav.I(c), ck = Nav.K(c);
-            var path = c == u.Cell ? new List<int>() : Paths.Find(u.Cell, x => x == c, x => H(x, ci, ck), u.T.Move, 1500);
+            var path = c == u.Cell ? new List<int>() : Paths.Find(u.Cell, x => x == c, x => H(x, ci, ck), u.T.Move, 1500, gates: true);
             if (path == null) continue;
             var (cx, _, cz) = Nav.Feet(c);
             u.Path = path.Count > 0 ? path : null; u.PathI = 0;

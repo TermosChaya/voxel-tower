@@ -101,6 +101,7 @@ public sealed partial class Sim
         if (Over) return;
         Time += dt;
         TickWater(dt);
+        TickGates(dt);
         if (Nav.PendingEdits > 0) Nav.Flush();
         UpdateFields();
         Waves.Tick(this, dt);
@@ -168,7 +169,16 @@ public sealed partial class Sim
     {
         if (u.Path == null || u.PathI >= u.Path.Count) { u.Path = null; return true; }
         int next = u.Path[u.PathI];
-        if (!Passable(u, next)) { u.Path = null; return true; }
+        if (u.Team == Team.Player && Gates.Count > 0)
+            // knock ahead, so the gate is opening by the time we are there
+            for (int n = u.PathI + 1; n < Math.Min(u.Path.Count, u.PathI + 4); n++) Knock(u.Path[n]);
+        if (!Passable(u, next))
+        {
+            // a shut gate of ours opens for us: wait for it
+            if (u.Team == Team.Player && Knock(next)) { u.State = UnitState.Idle; return false; }
+            u.Path = null;
+            return true;
+        }
         var (tx, ty, tz) = Nav.Feet(next);
         bool climbing = Nav.I(next) == Nav.I(u.Cell) && Nav.K(next) == Nav.K(u.Cell) && next != u.Cell;
         if (climbing) { tx = u.X; tz = u.Z; ty = (Nav.Y(next) << NavGrid.Shift) + (Nav.Solid(Nav.I(next), Nav.Y(next) - 1, Nav.K(next)) ? Nav.Floor[next] - (Nav.Y(next) << NavGrid.Shift) : 0); }
@@ -249,7 +259,7 @@ public sealed partial class Sim
             ? c => Math.Abs(Nav.I(c) - ti) <= 1 && Math.Abs(Nav.K(c) - tk) <= 1 && Math.Abs(Nav.Y(c) - ty) <= 2
             : c => c == target;
         if (goal(u.Cell)) { u.Path = null; return true; }
-        var path = Paths.Find(u.Cell, goal, c => H(c, ti, tk), u.T.Move, budget);
+        var path = Paths.Find(u.Cell, goal, c => H(c, ti, tk), u.T.Move, budget, gates: u.Team == Team.Player);
         if (path == null) return false;
         u.Path = path; u.PathI = 0;
         return true;
@@ -268,6 +278,7 @@ public sealed partial class Sim
             Busy(u);
             int spot = Spread(target, n++, u.T.Move.Height);
             u.Hold = true;
+            u.Dest = spot;
             u.Prey = null;
             if (u.T.Work < 1) u.Post = spot;
             if (GoTo(u, spot) || GoTo(u, spot, adjacent: true)) ok++;
@@ -278,7 +289,7 @@ public sealed partial class Sim
     /// <summary>Lets pawns go back to work by themselves.</summary>
     public void ReleaseHold(IEnumerable<Unit> units)
     {
-        foreach (var u in units) { u.Hold = false; u.Prey = null; u.NextSearch = 0; Busy(u); }
+        foreach (var u in units) { u.Hold = false; u.Dest = -1; u.Prey = null; u.NextSearch = 0; Busy(u); }
     }
 
     /// <summary>The horn: soldiers drop the hunt and whatever else they were at and hurry to their posts.</summary>

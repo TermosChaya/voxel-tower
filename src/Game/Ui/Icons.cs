@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Godot;
 using VoxelTower.Core;
 
@@ -158,6 +159,28 @@ public static class Icons
             Line(c, Shade(ink, .8f), S(r, .05f), P(r, .3f + .12f * t, .92f - .84f * t), P(r, .62f + .12f * t, .92f - .84f * t));
         }
         Line(c, Shade(ink, .55f), S(r, .03f), P(r, .12f, .95f), P(r, .9f, .95f));
+    }
+
+    /// <summary>A round-headed gateway in a wall: the left leaf shut, banded with iron, the right one swung open.</summary>
+    public static void GateIcon(CanvasItem c, Rect2 r, Color ink)
+    {
+        var arch = new List<Vector2> { P(r, .16f, .94f), P(r, .16f, .44f) };
+        for (int i = 1; i < 12; i++)
+        {
+            float a = MathF.PI * (1 - i / 12f);
+            arch.Add(P(r, .5f + .34f * MathF.Cos(a), .44f - .3f * MathF.Sin(a)));
+        }
+        arch.Add(P(r, .84f, .44f));
+        arch.Add(P(r, .84f, .94f));
+        Line(c, ink, S(r, .075f), arch.ToArray());
+        Fill(c, Shade(ink, .72f), P(r, .24f, .9f), P(r, .24f, .46f), P(r, .34f, .27f), P(r, .5f, .2f), P(r, .5f, .9f));
+        for (int i = 0; i < 3; i++)
+        {
+            float y = .42f + i * .19f;
+            Line(c, Shade(ink, .4f), S(r, .035f), P(r, .25f, y), P(r, .49f, y));
+        }
+        Fill(c, Shade(ink, .55f), P(r, .56f, .9f), P(r, .56f, .3f), P(r, .7f, .38f), P(r, .7f, .84f));
+        Line(c, Shade(ink, .5f), S(r, .03f), P(r, .06f, .96f), P(r, .94f, .96f));
     }
 
     /// <summary>An axe across a pick over a pile: the gathering area.</summary>

@@ -43,6 +43,7 @@ public partial class Commander : Node
             return;
         }
         var hit = UnitAt(mb.Position);
+        if (hit == null && _m.Tools.HoverGate is { } gate) { Toggle(gate); return; }
         if (!add) _m.Selected.Clear();
         if (hit != null && hit.Team == Team.Player)
         {
@@ -50,6 +51,33 @@ public partial class Commander : Node
         }
         _m.Hud.OnSelectionChanged();
     }
+
+    /// <summary>A click on a gate: opens for our people → stands open → barred → round again; a holed one is mended.</summary>
+    void Toggle(Gateway g)
+    {
+        var sim = _m.Sim;
+        if (g.Broken)
+        {
+            int n = sim.MendGate(g);
+            _m.Hud.Float(n > 0 ? "ворота чинят: створки сколотят заново" : "чинить нечего", Ornament.BronzeLight);
+            return;
+        }
+        if (!g.Ready) { _m.Hud.Float("ворота ещё навешивают", Ornament.Aged); return; }
+        var next = g.Mode switch { GateMode.Auto => GateMode.Open, GateMode.Open => GateMode.Shut, _ => GateMode.Auto };
+        sim.SetGateMode(g, next);
+        _m.Hud.Float(GateWord(g), Ornament.BronzeLight);
+    }
+
+    /// <summary>What a gate does now, for the tag and the float.</summary>
+    public static string GateWord(Gateway g) =>
+        g.Broken ? "прорублены — щелчок: починить"
+        : !g.Ready ? "навешивают"
+        : g.Mode switch
+        {
+            GateMode.Open => "стоят открытыми",
+            GateMode.Shut => "на засове: никого не пускают",
+            _ => "открываются своим, перед ордой закрыты",
+        };
 
     public void Motion(InputEventMouseMotion mm)
     {

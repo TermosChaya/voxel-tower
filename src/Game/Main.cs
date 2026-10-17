@@ -72,6 +72,8 @@ public partial class Main : Node3D
         Sim = new Sim(World, Site);
         // in play, where water goes is worked out off the main thread; scripted runs want it at once
         Sim.WaterInBackground = !_selfTest && !_demo && _shot == null;
+        // a new game finds a fort half raised round the citadel; scripted runs set up their own scenes
+        if (!_selfTest && !_demo) StartingFort.Raise(Sim);
         double navMs = sw.Elapsed.TotalMilliseconds;
 
         var atmo = new Atmosphere();
@@ -126,6 +128,9 @@ public partial class Main : Node3D
         Hud.Log("Пробел — позвать орду раньше: золота за это нет, зато она меньше узнает о вашей обороне.");
         Hud.Log("Между волнами охотьтесь: выберите лучника и щёлкните ПКМ по зверю — добыча приносит золото.");
         Hud.Log("Кисти размечают работу, пешки её делают: кладут из запасов, копают, рубят. V — кирка, 7 — лестница, 8 — делянка: ресурс с участка.");
+        if (!_selfTest && !_demo)
+            Hud.Log("Крепость вокруг цитадели не достроена: западная стена с воротами стоит, остальное размечено, и рабочие возьмутся сами. " +
+                "Камня на всё не хватит — ломайте его в скалах и валунах (8 и Z).", Hud.Kind.Warn);
         Hud.Log("Орда придёт с запада через десять минут. Ройте, рубите и стройте, пока есть время.", Hud.Kind.Warn);
         GD.Print($"[voxel-tower] world {genMs:0} ms, navigation {navMs:0} ms, mesh {View.LastFullMeshMs:0} ms, {View.Triangles()} triangles");
 

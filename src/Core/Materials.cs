@@ -30,7 +30,7 @@ public static class Mat
 
     public const byte Air = 0, Bed = 1, Soil = 2, Grass = 3, Rock = 4, Stone = 5, Mortar = 6, Wood = 7, Rammed = 8,
         Keep = 9, KeepDark = 10, Roof = 11, Leaf = 12, Trunk = 13, Ember = 14, Path = 15, Moss = 16, Iron = 17, Tuft = 18, Plank = 19, Foliage = 20,
-        Ladder = 21, SiegeLadder = 22, Deck = 23, Water = 24;
+        Ladder = 21, SiegeLadder = 22, Deck = 23, Water = 24, Gate = 25, GateShut = 26;
     public const int Count = 64;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
@@ -72,6 +72,9 @@ public static class Mat
         D(SiegeLadder, "Осадная лестница", 0x4a3726, .22f, MatGroup.Wood, 0);
         D(Deck, "Настил орды", 0x4f3d2c, .26f, MatGroup.Wood, 0);
         D(Water, "Вода", 0x1f3a44, .04f, MatGroup.Hard, Natural);
+        // oak bound with iron: the horde hacks it no faster than masonry
+        D(Gate, "Ворота", 0x4b3322, .26f, MatGroup.Stone, Player);
+        D(GateShut, "Ворота на засове", 0x45301f, .26f, MatGroup.Stone, Player);
 
         D(SkinHuman, "кожа", 0xc29878, .08f, MatGroup.Hard, 0); D(SkinGoblin, "кожа", 0x6d8a39, .12f, MatGroup.Hard, 0);
         D(SkinOrc, "кожа", 0x56673f, .12f, MatGroup.Hard, 0); D(SkinTroll, "кожа", 0x66705f, .16f, MatGroup.Hard, 0);

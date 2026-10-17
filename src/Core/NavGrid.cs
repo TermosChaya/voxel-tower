@@ -27,6 +27,11 @@ public sealed class NavGrid
     public readonly byte[] Ladder;
     /// <summary>Water voxels in the cell.</summary>
     public readonly ushort[] Water;
+    /// <summary>
+    /// Gate leaves our people can open: for them those don't block (they knock and wait), for the horde they do. A leaf
+    /// voxel weighs double, so a leaf hung across a cell boundary still shuts both cells.
+    /// </summary>
+    public readonly ushort[] GateFill;
     /// <summary>A cell with this much water in it is too deep to stand in.</summary>
     public const int DeepT = 192;
 
@@ -55,7 +60,7 @@ public sealed class NavGrid
         NX = w.SX >> Shift; NY = w.SY >> Shift; NZ = w.SZ >> Shift; Layer = NX * NZ; Count = Layer * NY;
         Fill = new ushort[Count]; Earth = new ushort[Count]; Wood = new ushort[Count]; Stone = new ushort[Count]; Rock = new ushort[Count];
         Hard = new byte[Count]; Keep = new byte[Count]; Floor = new ushort[Count];
-        Ladder = new byte[Count]; Water = new ushort[Count];
+        Ladder = new byte[Count]; Water = new ushort[Count]; GateFill = new ushort[Count];
         _dirty = new bool[Count];
         w.Edited += OnEdit;
     }
@@ -66,37 +71,39 @@ public sealed class NavGrid
     public int Y(int c) => c / Layer;
     public bool In(int i, int y, int k) => (uint)i < (uint)NX && (uint)y < (uint)NY && (uint)k < (uint)NZ;
 
-    /// <summary>Blocked. Below the field everything is solid.</summary>
-    public bool Solid(int i, int y, int k)
+    /// <summary>Blocked. Below the field everything is solid. With <paramref name="gates"/>, gates our people open don't count.</summary>
+    public bool Solid(int i, int y, int k, bool gates = false)
     {
         if (y < 0) return true;
         if (!In(i, y, k)) return false;
-        return Fill[Id(i, y, k)] >= SolidT;
+        int c = Id(i, y, k);
+        return Fill[c] - (gates ? GateFill[c] : 0) >= SolidT;
     }
 
     /// <summary>Free to be in. Outside the field's sides nothing is; above the field the sky is.</summary>
-    public bool Open(int i, int y, int k)
+    public bool Open(int i, int y, int k, bool gates = false)
     {
         if ((uint)i >= (uint)NX || (uint)k >= (uint)NZ || y < 0) return false;
         if (y >= NY) return true;
-        return Fill[Id(i, y, k)] < SolidT;
+        int c = Id(i, y, k);
+        return Fill[c] - (gates ? GateFill[c] : 0) < SolidT;
     }
 
     /// <summary>Someone h cells tall can stand here: ground below, room for the body, no deep water.</summary>
-    public bool Stand(int i, int y, int k, int h)
+    public bool Stand(int i, int y, int k, int h, bool gates = false)
     {
-        if (!In(i, y, k) || y < 1 || !Solid(i, y - 1, k) || Water[Id(i, y, k)] >= DeepT) return false;
-        for (int d = 0; d < h; d++) if (!Open(i, y + d, k)) return false;
+        if (!In(i, y, k) || y < 1 || !Solid(i, y - 1, k, gates) || Water[Id(i, y, k)] >= DeepT) return false;
+        for (int d = 0; d < h; d++) if (!Open(i, y + d, k, gates)) return false;
         return true;
     }
 
     /// <summary>Someone h cells tall can be here: standing on the ground or hanging on a ladder.</summary>
-    public bool CanBe(int i, int y, int k, int h)
+    public bool CanBe(int i, int y, int k, int h, bool gates = false)
     {
         if (!In(i, y, k) || y < 1) return false;
         int c = Id(i, y, k);
-        if (Water[c] >= DeepT || (Ladder[c] == 0 && !Solid(i, y - 1, k))) return false;
-        for (int d = 0; d < h; d++) if (!Open(i, y + d, k)) return false;
+        if (Water[c] >= DeepT || (Ladder[c] == 0 && !Solid(i, y - 1, k, gates))) return false;
+        for (int d = 0; d < h; d++) if (!Open(i, y + d, k, gates)) return false;
         return true;
     }
 
@@ -155,7 +162,7 @@ public sealed class NavGrid
         int i = I(c), k = K(c), y = Y(c), x0 = i << Shift, y0 = y << Shift, z0 = k << Shift;
         int ci = World.ChunkIndex(x0 >> VoxelWorld.Shift, y0 >> VoxelWorld.Shift, z0 >> VoxelWorld.Shift);
         var d = World.ChunkData(ci);
-        int fill = 0, e = 0, wd = 0, st = 0, rk = 0, hard = 0, keep = 0, lad = 0, wat = 0;
+        int fill = 0, e = 0, wd = 0, st = 0, rk = 0, hard = 0, keep = 0, lad = 0, wat = 0, gate = 0;
         if (d == null)
         {
             byte u = World.ChunkUniform(ci), cls = Cls[u];
@@ -171,7 +178,13 @@ public sealed class NavGrid
                     for (int xx = 0; xx < CS; xx++)
                     {
                         byte v = d[row + xx], cls = Cls[v];
-                        if (cls != 0) Tally(cls, 1, ref fill, ref e, ref wd, ref st, ref rk, ref hard, ref keep);
+                        if (cls != 0)
+                        {
+                            Tally(cls, 1, ref fill, ref e, ref wd, ref st, ref rk, ref hard, ref keep);
+                            // a leaf voxel shuts twice its share of the cell, but takes no longer to hack
+                            if (v is Mat.Gate or Mat.GateShut) fill++;
+                            if (v == Mat.Gate) gate += 2;
+                        }
                         else if (v == Mat.Water) wat++;
                         else if (Mat.IsLadder[v]) lad++;
                     }
@@ -182,6 +195,7 @@ public sealed class NavGrid
         Keep[c] = (byte)(keep >= 64 ? 1 : 0);
         Ladder[c] = (byte)(lad >= 6 ? 1 : 0);
         Water[c] = (ushort)wat;
+        GateFill[c] = (ushort)gate;
         Floor[c] = (ushort)FloorIn(x0, y0, z0);
     }
 

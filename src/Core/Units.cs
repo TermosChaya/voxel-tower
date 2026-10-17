@@ -135,6 +135,8 @@ public sealed class Unit
     public int PathI;
     /// <summary>The player sent it here and it stays until told to work again.</summary>
     public bool Hold;
+    /// <summary>Where the player sent it; it keeps finding its way there if the way breaks.</summary>
+    public int Dest = -1;
     /// <summary>Where a soldier goes when the horn sounds; -1 for none.</summary>
     public int Post = -1;
 

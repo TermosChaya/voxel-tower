@@ -48,9 +48,11 @@ public static class Labour
         D(Mat.Leaf, .25f, Stockpile.Wood, .15f); D(Mat.Foliage, .25f, Stockpile.Wood, .15f);
         // ladders come apart quickly, and what the horde leaves behind is timber too
         D(Mat.Ladder, 1, Stockpile.Wood, .75f); D(Mat.SiegeLadder, .5f, Stockpile.Wood, .75f); D(Mat.Deck, 1.5f, Stockpile.Wood, .75f);
+        D(Mat.Gate, 2.5f, Stockpile.Wood, .75f); D(Mat.GateShut, 2.5f, Stockpile.Wood, .75f);
         LayCost[Mat.Rammed] = 1; LayCost[Mat.Wood] = 1.5f; LayCost[Mat.Stone] = 2; LayCost[Mat.Mortar] = 2;
-        // a ladder is joinery: rails and rungs take longer than the logs they are made of
+        // a ladder is joinery: rails and rungs take longer than the logs they are made of; a gate more so
         LayCost[Mat.Ladder] = 6;
+        LayCost[Mat.Gate] = 4;
     }
 
     /// <summary>Pawns can take this out of the world (bedrock and the citadel they cannot).</summary>
@@ -64,7 +66,7 @@ public static class Labour
     public static int CostKind(byte m) => m switch
     {
         Mat.Stone or Mat.Mortar => Stockpile.Stone,
-        Mat.Wood or Mat.Ladder => Stockpile.Wood,
+        Mat.Wood or Mat.Ladder or Mat.Gate or Mat.GateShut => Stockpile.Wood,
         Mat.Rammed => Stockpile.Earth,
         _ => Stockpile.None,
     };

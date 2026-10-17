@@ -5,7 +5,7 @@ using VoxelTower.Core;
 
 namespace VoxelTower.Game;
 
-public enum Tool { None, Brush, Line, Box, Circle, Extrude, Ladder, Gather, Unmark, Capture, Paste }
+public enum Tool { None, Brush, Line, Box, Circle, Extrude, Ladder, Gate, Gather, Unmark, Capture, Paste }
 
 public enum BrushForm { Column, Ball }
 
@@ -48,7 +48,7 @@ public partial class BuildTools : Node3D
     public static string ToolName(Tool t) => t switch
     {
         Tool.Brush => "Кисть", Tool.Line => "Линия", Tool.Box => "Прямоугольник", Tool.Circle => "Круг",
-        Tool.Extrude => "Выдавить", Tool.Ladder => "Лестница", Tool.Gather => "Делянка", Tool.Unmark => "Снять разметку", Tool.Capture => "Снять чертёж",
+        Tool.Extrude => "Выдавить", Tool.Ladder => "Лестница", Tool.Gate => "Ворота", Tool.Gather => "Делянка", Tool.Unmark => "Снять разметку", Tool.Capture => "Снять чертёж",
         Tool.Paste => "Чертёж", _ => "Без кисти",
     };
 
@@ -65,6 +65,7 @@ public partial class BuildTools : Node3D
         (Tool.Extrude, false) => "Щёлкните по ровной грани: она нарастёт на шаг выбранным материалом.",
         (Tool.Extrude, true) => "Щёлкните по ровной грани: её вынут на шаг вглубь. Ступени в склоне, проход в скале.",
         (Tool.Ladder, _) => "Щёлкните по боковой грани стены, башни или обрыва — рабочие приставят лестницу от земли до верха. По ней ходят ваши пешки… и орда, если доберётся.",
+        (Tool.Gate, _) => "Щёлкните по боковой грани стены — рабочие прорубят в ней проём и навесят ворота: створки внутри, со стороны цитадели. Своим они открываются сами, орде их придётся рубить.",
         (Tool.Gather, _) => "Протяните рамку — участок для добычи. Z — камень из скал и валунов, X — лес, C — земля. Свободные рабочие сами понемногу берут оттуда работу.",
         (Tool.Unmark, _) => "Протяните рамку — вся разметка и делянки в ней снимаются. Щелчок снимает разметку поблизости и делянку под курсором.",
         (Tool.Capture, _) => "Обведите рамкой свою постройку — она станет чертежом.",
@@ -121,6 +122,25 @@ public partial class BuildTools : Node3D
     public bool PlanIsDig { get; private set; }
     /// <summary>The material under the cursor and what is marked there.</summary>
     public string HoverText { get; private set; } = "";
+    /// <summary>The gate under the cursor, if the cursor is on one of its leaves.</summary>
+    public Gateway HoverGate { get; private set; }
+    GatePlan _gatePlan;
+
+    /// <summary>"брёвна 3,4 м³ · проём: камень +4,0 м³ · 6 мин работы одного".</summary>
+    string GateSummary(GatePlan gp)
+    {
+        var lay = new double[4]; var cut = new double[4];
+        double sec = Labour.Estimate(_m.World, gp.Leaves, false, lay) + Labour.Estimate(_m.World, gp.Cut, true, cut);
+        var parts = new List<string>();
+        foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth })
+            if (lay[k] > .5) parts.Add($"{Stockpile.Name(k)} {Fmt.M3(lay[k])} м³");
+        var got = new List<string>();
+        foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth })
+            if (cut[k] < -.5) got.Add($"{Stockpile.Name(k)} +{Fmt.M3(-cut[k])} м³");
+        if (got.Count > 0) parts.Add("проём: " + string.Join(", ", got));
+        parts.Add($"{Fmt.Duration(sec)} работы одного");
+        return string.Join(" · ", parts);
+    }
 
     public void Init(Main m)
     {
@@ -180,7 +200,7 @@ public partial class BuildTools : Node3D
     public void SetDig(bool dig)
     {
         Opt.Dig = dig;
-        if (dig && Tool is Tool.None or Tool.Capture or Tool.Unmark or Tool.Paste or Tool.Ladder or Tool.Gather) { Tool = Tool.Line; PasteBp = null; }
+        if (dig && Tool is Tool.None or Tool.Capture or Tool.Unmark or Tool.Paste or Tool.Ladder or Tool.Gate or Tool.Gather) { Tool = Tool.Line; PasteBp = null; }
         Changed();
     }
 
@@ -249,7 +269,7 @@ public partial class BuildTools : Node3D
         {
             global::Godot.Key.Key1 => Tool.Brush, global::Godot.Key.Key2 => Tool.Line, global::Godot.Key.Key3 => Tool.Box,
             global::Godot.Key.Key4 => Tool.Circle, global::Godot.Key.Key5 => Tool.Extrude, global::Godot.Key.Key6 => Tool.Unmark,
-            global::Godot.Key.Key7 => Tool.Ladder, global::Godot.Key.Key8 => Tool.Gather, global::Godot.Key.B => Tool.Capture,
+            global::Godot.Key.Key7 => Tool.Ladder, global::Godot.Key.Key8 => Tool.Gather, global::Godot.Key.Key9 => Tool.Gate, global::Godot.Key.B => Tool.Capture,
             _ => Tool.None,
         };
         if (t != Tool.None) { SetTool(t); return true; }
@@ -331,6 +351,14 @@ public partial class BuildTools : Node3D
             var plan = Shapes.LadderAt(w, _m.Site, _hover);
             if (plan.Count == 0) { Refuse("лестницу ставят к боковой грани стены или обрыва"); return; }
             Designate(plan, false, "Лестница");
+        }
+        else if (Tool == Tool.Gate)
+        {
+            var gp = GatePlan.At(w, _m.Site, _hover);
+            if (gp == null) { Refuse("ворота ставят в боковую грань стены толщиной до 4 м"); return; }
+            _m.Sim.AddGate(gp);
+            _m.Hud.Log("Ворота: " + GateSummary(gp));
+            _planKey = "~";
         }
         else if (Tool == Tool.Extrude)
         {
@@ -532,6 +560,7 @@ public partial class BuildTools : Node3D
                 _hasDrag = true;
             }
         }
+        HoverGate = _hasHover && _hover.M is Mat.Gate or Mat.GateShut ? _m.Sim.GateAt(_hover.X, _hover.Y, _hover.Z) : null;
         if (!_hasHover) { HoverText = ""; return; }
         int ground = w.GroundTop(_hover.X, _hover.Z);
         float above = (_hover.Y + 1 - ground) / (float)VoxelWorld.PerMetre;
@@ -647,6 +676,7 @@ public partial class BuildTools : Node3D
                 Tool.Brush => $"B|{h}",
                 Tool.Extrude => $"E|{h}",
                 Tool.Ladder => $"A|{h}",
+                Tool.Gate => $"W|{h}",
                 Tool.Paste when PasteBp != null => $"P|{PasteBp.Id}|{g}|{PasteRot}",
                 _ => "",
             };
@@ -685,6 +715,7 @@ public partial class BuildTools : Node3D
             if (dig) name = "Вдавить";
         }
         else if (Tool == Tool.Ladder) { _plan = Shapes.LadderAt(w, site, _hover); name = "Лестница"; dig = false; }
+        else if (Tool == Tool.Gate) { _gatePlan = GatePlan.At(w, site, _hover); _plan = _gatePlan?.Leaves; name = "Ворота"; dig = false; }
         else if (Tool == Tool.Paste) { _plan = PlanPasteAtHover(); name = PasteBp.Name; dig = false; }
         if (key[0] == 'T') dig = true;
         _planDig = dig;
@@ -698,7 +729,7 @@ public partial class BuildTools : Node3D
             foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth })
                 if (_est[k] > st[k] + .5) shortOf += (shortOf.Length > 0 ? ", " : "") + $"{Stockpile.Name(k)} {Fmt.M3(st[k])}";
         PlanAffordable = dig || shortOf.Length == 0;
-        PlanText = $"{name}: {Summary(_est, dig, sec)}" + (shortOf.Length > 0 ? $" — в запасе {shortOf}" : "");
+        PlanText = $"{name}: {(Tool == Tool.Gate && _gatePlan != null ? GateSummary(_gatePlan) : Summary(_est, dig, sec))}" + (shortOf.Length > 0 ? $" — в запасе {shortOf}" : "");
         _ghost.Mesh = MeshPlan(_plan, dig);
         _ghost.Visible = _ghost.Mesh != null;
         _ghostMat.SetShaderParameter("tint", dig ? new Vector3(.85f, .2f, .14f) : PlanAffordable ? new Vector3(.9f, .55f, .25f) : new Vector3(.85f, .2f, .16f));

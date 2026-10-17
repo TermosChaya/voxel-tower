@@ -64,7 +64,18 @@ public sealed partial class Sim
         if (u.Prey != null && HuntTick(u, dt)) { Busy(u); return; }
         if (soldier && PushLadders(u, dt)) { Busy(u); return; }
         if (u.Path != null && u.PathI < u.Path.Count && (u.Hold || u.Site < 0) && u.Pastime != Pastime.Stroll) { Walk(u, dt); return; }
-        if (u.Hold) { u.Why = ""; Idle(u, dt, stay: true); return; }
+        if (u.Hold)
+        {
+            u.Why = "";
+            // the way broke (a gate shut in its face, something built across it): find it again now and then
+            if (u.Dest >= 0 && u.Cell != u.Dest && Time >= u.NextSearch)
+            {
+                u.NextSearch = Time + 2;
+                if (CellsApart(u.Cell, u.Dest) > 1 && (GoTo(u, u.Dest) || GoTo(u, u.Dest, adjacent: true))) { Busy(u); return; }
+            }
+            Idle(u, dt, stay: true);
+            return;
+        }
         if (soldier && Waves.Active)
         {
             // while the horde is in the valley soldiers keep to their posts and look out
@@ -220,7 +231,7 @@ public sealed partial class Sim
                 && Nav.Floor[c] - Labour.ReachDown <= y1 && Nav.Floor[c] + Labour.ReachUp > y0
                 && !(Nav.I(c) == ci && Nav.K(c) == ck && BuildsInBody(c, h))
                 && _bodies[c] - (c == self ? 1 : 0) <= 0;
-            List<int> path = Goal(u.Cell) ? new List<int>() : Paths.Find(u.Cell, Goal, c => H(c, ci, ck), u.T.Move, 30000);
+            List<int> path = Goal(u.Cell) ? new List<int>() : Paths.Find(u.Cell, Goal, c => H(c, ci, ck), u.T.Move, 30000, gates: true);
             if (path == null) { u.Unreachable[col] = Time + 12; continue; }
             u.Site = col; _claims[col]++;
             u.Path = path.Count > 0 ? path : null; u.PathI = 0;

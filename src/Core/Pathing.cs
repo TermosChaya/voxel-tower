@@ -68,8 +68,9 @@ public sealed class PathFinder
     /// Cells from start (exclusive) to the first cell that satisfies goal, or null.
     /// The heuristic should not overestimate; cost is in cells walked. Ladders are climbed, slowly.
     /// </summary>
-    public List<int> Find(int start, Func<int, bool> goal, Func<int, float> heuristic, Mover m, int maxExpand = 40000)
+    public List<int> Find(int start, Func<int, bool> goal, Func<int, float> heuristic, Mover m, int maxExpand = 40000, bool gates = false)
     {
+        _gates = gates;
         var g = _g;
         _gen++;
         _open.Clear();
@@ -83,7 +84,7 @@ public sealed class PathFinder
             if (goal(c)) return Trace(c, start);
             if (++expanded > maxExpand) return null;
             int i = g.I(c), y = g.Y(c), k = g.K(c);
-            bool standing = g.Solid(i, y - 1, k);
+            bool standing = g.Solid(i, y - 1, k, gates);
             for (int dir = 0; dir < 8; dir++)
             {
                 int ni = i + DX[dir], nk = k + DK[dir];
@@ -91,7 +92,7 @@ public sealed class PathFinder
                 if (diag)
                 {
                     // no cutting corners: both sides must be walkable at this level, and only on the ground
-                    if (!standing || !g.Stand(ni, y, nk, m.Height) || !g.Stand(i + DX[dir], y, k, m.Height) || !g.Stand(i, y, k + DK[dir], m.Height)) continue;
+                    if (!standing || !g.Stand(ni, y, nk, m.Height, gates) || !g.Stand(i + DX[dir], y, k, m.Height, gates) || !g.Stand(i, y, k + DK[dir], m.Height, gates)) continue;
                     Relax(c, g.Id(ni, y, nk), 1.414f, heuristic);
                     continue;
                 }
@@ -101,7 +102,7 @@ public sealed class PathFinder
                 {
                     int dy = s <= m.Climb ? s : m.Climb - s;
                     int ny = y + dy;
-                    if (!g.CanBe(ni, ny, nk, m.Height)) continue;
+                    if (!g.CanBe(ni, ny, nk, m.Height, gates)) continue;
                     if (!FlowField.StepsOk(m, g.Floor[c], g.Floor[g.Id(ni, ny, nk)])) continue;
                     if (dy > 0 && !OpenColumn(i, k, y + m.Height, y + m.Height + dy - 1)) continue;
                     if (dy < 0 && !OpenColumn(ni, nk, ny + m.Height, y + m.Height - 1)) continue;
@@ -110,17 +111,19 @@ public sealed class PathFinder
                 }
             }
             // up and down a ladder
-            if (y + 1 < g.NY && (g.Ladder[c] != 0 || g.Ladder[c + g.Layer] != 0) && g.CanBe(i, y + 1, k, m.Height))
+            if (y + 1 < g.NY && (g.Ladder[c] != 0 || g.Ladder[c + g.Layer] != 0) && g.CanBe(i, y + 1, k, m.Height, gates))
                 Relax(c, c + g.Layer, 1.8f, heuristic);
-            if (y >= 2 && (g.Ladder[c] != 0 || g.Ladder[c - g.Layer] != 0) && g.CanBe(i, y - 1, k, m.Height))
+            if (y >= 2 && (g.Ladder[c] != 0 || g.Ladder[c - g.Layer] != 0) && g.CanBe(i, y - 1, k, m.Height, gates))
                 Relax(c, c - g.Layer, 1.4f, heuristic);
         }
         return null;
     }
 
+    bool _gates;
+
     bool OpenColumn(int i, int k, int y0, int y1)
     {
-        for (int y = y0; y <= y1; y++) if (!_g.Open(i, y, k)) return false;
+        for (int y = y0; y <= y1; y++) if (!_g.Open(i, y, k, _gates)) return false;
         return true;
     }
 

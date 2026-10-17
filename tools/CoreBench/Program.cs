@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Linq;
 using VoxelTower.Core;
 
 // Checks the engine-free core against numbers measured in the browser prototype, and times the heavy parts.
@@ -490,6 +491,57 @@ if (args.Length == 0 || args[0] == "--sim")
             $"pit at {pit}: {sim.Flooded - ran0} voxels of water moved in {waited.ElapsedMilliseconds} ms, {water0} → {water2} in the valley");
     }
 
+    // a gate in a walled yard: our worker knocks, it opens and shuts behind him; barred, there is no way through;
+    // an brute shut in the yard gets no help from it and hacks his way out
+    {
+        int yx = site4.KeepX + 120, yz = site4.KeepZ - 150;
+        sim.InstantLabour = true;
+        int ytop = Shapes.LevelTop(w4, yx, yz, 32);
+        sim.DesignateBuild(Shapes.Box(w4, site4, yx - 32, yz - 32, yx + 32, yz + 32, new Stroke { Mat = Mat.Stone, Width = 8, Height = 32, Level = true, Hollow = true }, ytop));
+        sim.InstantLabour = false;
+        // the south wall, toward the citadel, clicked from outside in its middle: the leaves hang on its outer face
+        int fy = w4.SurfAt(yx, yz) + 6, fz = yz;
+        while (w4.Get(yx, fy, fz) == Mat.Air) fz++;
+        while (w4.Get(yx, fy, fz) != Mat.Air) fz++;
+        var face = new VoxelHit { X = yx, Y = fy, Z = fz - 1, NZ = 1, M = w4.Get(yx, fy, fz - 1) };
+        var plan = GatePlan.At(w4, site4, face);
+        var gate = plan == null ? null : sim.AddGate(plan, built: true);
+        Run(1);
+        int outside = sim.NearestStand(yx, fz + 40, 4), inside = sim.NearestStand(yx, yz, 4);
+        var porter = sim.Spawn(Kinds.Worker, outside);
+        bool shutAtFirst = gate != null && gate.Open == 0 && !sim.Nav.Open(sim.Nav.I(gate.Cells.First()), sim.Nav.Y(gate.Cells.First()), sim.Nav.K(gate.Cells.First()));
+        sim.Command(new[] { porter }, inside);
+        float widest = 0;
+        for (int t = 0; t < 40 * 20 && porter.Cell != inside; t++) { sim.Step(.05f); widest = Math.Max(widest, gate?.Open ?? 0); }
+        bool got = porter.Cell == inside;
+        Run(6);
+        Check("a gate opens for our worker and shuts behind him", gate != null && shutAtFirst && got && widest >= .99f && gate.Open == 0,
+            gate == null ? "no gate fits the wall" : $"leaves on the {(gate.In > 0 ? "south (outer)" : "north")} side, opened to {widest:0.00}, worker in: {got}, now {gate.Open:0.00}");
+
+        sim.SetGateMode(gate, GateMode.Shut);
+        Run(1);
+        int barred = sim.Command(new[] { porter }, outside);
+        sim.SetGateMode(gate, GateMode.Auto);
+        porter.Dead = true; porter.DiedAt = -999;
+
+        var brute = sim.Spawn(Kinds.Orc, sim.NearestStand(yx, yz + 10, 2));
+        sim.ComputeFields();
+        float opened = 0;
+        bool Out(Unit u) => Math.Abs(u.X - yx) > 36 || Math.Abs(u.Z - yz) > 36;
+        for (int t = 0; t < 120 * 20 && !Out(brute); t++) { sim.Step(.05f); opened = Math.Max(opened, gate.Open); }
+        Check("barred, it lets nobody through; it never opens for the horde, which hacks through it", barred == 0 && opened == 0 && gate.Broken && Out(brute),
+            $"way out while barred: {barred}, opened for the orc to {opened:0.00}, leaf voxels hacked {gate.Hacked} of {Gateway.Voxels}, broken {gate.Broken}, orc out of the yard {Out(brute)} at ({brute.X:0}, {brute.Z:0})");
+        brute.Dead = true; brute.DiedAt = -999;
+        int mended = sim.MendGate(gate);
+        sim.CompleteAll();
+        Run(2);
+        Check("a broken gate is mended and works again", mended > 1000 && gate.Ready && !gate.Broken && gate.Hacked == 0,
+            $"{mended} leaf voxels to lay anew, ready {gate.Ready}");
+        sim.InstantLabour = true;
+        sim.DesignateRemove(Shapes.Box(w4, site4, yx - 36, yz - 36, yx + 36, yz + 36, new Stroke { Width = 14, Height = 40, Dig = true, Hollow = true }, 0));
+        sim.InstantLabour = false;
+    }
+
     // the beasts: a deer bolts from a worker, archers hunt a boar for gold
     {
         sim.WildTarget = 0;
@@ -656,6 +708,37 @@ if (args.Length == 0 || args[0] == "--sim")
             $"pond at ({qx}, {qz}) standing to {plevel}, now to {surface}; trench to the cliff at x {cliff}: {sim.Flooded - ran0} voxels moved in {sim.Time - t0:0} s ({sw2.ElapsedMilliseconds} ms), " +
             $"{over} out over the land, {water0} → {water1} in the valley");
     }
+}
+
+// ---- a new game: the half-built fort round the citadel
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--fort")
+{
+    Console.WriteLine();
+    var mp5 = new MapParams();
+    var w5 = new VoxelWorld(mp5.SizeX, mp5.SizeY, mp5.SizeZ);
+    var site5 = MapGen.Generate(w5, mp5);
+    w5.Compact();
+    var sim5 = new Sim(w5, site5);
+    sim5.Waves.Countdown = 1e9; sim5.WildTarget = 0;
+    void Run5(double seconds) { for (double t = 0; t < seconds; t += .05) sim5.Step(.05f); }
+    var gate5 = StartingFort.Raise(sim5);
+    Run5(.5);
+    int marked = sim5.Orders.Total;
+    double stone0 = sim5.Stock[Stockpile.Stone], wood0 = sim5.Stock[Stockpile.Wood];
+    var crew5 = new System.Collections.Generic.List<Unit>();
+    for (int i = 0; i < 4; i++) crew5.Add(sim5.Spawn(Kinds.Worker, sim5.Gate));
+    // the west curtain stands, and nothing but its gate leads through it
+    int kx = site5.KeepX, kz = site5.KeepZ;
+    int outside = sim5.NearestStand(kx - 140, kz, 4);
+    var probe = sim5.Spawn(Kinds.Worker, outside);
+    bool way = sim5.GoTo(probe, sim5.Gate);
+    bool throughGate = way && probe.Path.Exists(c => gate5.Cells.Contains(c));
+    probe.Path = null; probe.Dead = true; probe.DiedAt = -999;
+    Check("a new game finds a fort half raised round the citadel", gate5 != null && gate5.Ready && marked > 10000 && throughGate,
+        $"gate ready {gate5?.Ready}, {marked} voxels marked to finish it, the way in from the west through the gate {throughGate}");
+    Run5(120);
+    Check("…and the workers set about finishing it from the stores", sim5.Orders.Total < marked && sim5.Stock[Stockpile.Wood] < wood0 - 2 * VoxelWorld.PerM3,
+        $"{marked - sim5.Orders.Total} voxels laid in 2 min, wood {Fmt.M3(wood0)} → {Fmt.M3(sim5.Stock[Stockpile.Wood])} m³, stone {Fmt.M3(stone0)} → {Fmt.M3(sim5.Stock[Stockpile.Stone])} m³");
 }
 
 // voxels of water in the whole valley
