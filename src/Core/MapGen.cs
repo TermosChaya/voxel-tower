@@ -366,6 +366,8 @@ public static class MapGen
             }
 
         site.WaterTop = water;
+        site.RiverMid = new float[SZ]; site.RiverHalfWidth = new float[SZ];
+        for (int z = 0; z < SZ; z++) { site.RiverMid[z] = (float)RiverX(z); site.RiverHalfWidth[z] = (float)RiverHalf(z); }
         site.KeepBase = WorldGen.Keep(w, site);
         int gx2 = site.KeepX - site.KeepR - 7;
         foreach (int dz in new[] { -10, 10 }) WorldGen.Brazier(w, site, gx2, w.SurfAt(gx2, site.KeepZ + dz), site.KeepZ + dz, post: 4);

@@ -100,6 +100,7 @@ public partial class Main : Node3D
         View = new WorldView();
         AddChild(View);
         View.Init(World);
+        View.InitFlow(Site);
 
         Rig = new CameraRig { BottomInset = Hud.BottomBand, TopInset = Hud.TopBand };
         Rig.Bounds = new Rect2(World.OriginX, World.OriginZ, World.SX * VoxelWorld.Vox, World.SZ * VoxelWorld.Vox);
@@ -202,6 +203,7 @@ public partial class Main : Node3D
         }
         Command.Prune();
         View.RemeshDirty();
+        View.UpdateFlow(Sim);
         if (Sim.Over && !_finale)
         {
             _finale = true;

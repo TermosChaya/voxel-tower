@@ -23,6 +23,23 @@ public sealed partial class Sim
     /// <summary>Voxels of water moved a second of game time while it runs.</summary>
     public const float PourRate = 24000;
 
+    /// <summary>
+    /// When water last ran into each 4×4 patch of the valley (game seconds; far in the past where it never has): the
+    /// way it spreads, earlier to later, is the way the current runs for a while after.
+    /// </summary>
+    public float[] WaterArrived;
+    public const int FlowPatch = 4;
+    /// <summary>When water last ran anywhere.</summary>
+    public double LastPour = -1e9;
+
+    void MarkArrival(int x, int z)
+    {
+        int w = World.SX / FlowPatch;
+        if (WaterArrived == null) { WaterArrived = new float[w * (World.SZ / FlowPatch)]; Array.Fill(WaterArrived, -1e9f); }
+        WaterArrived[z / FlowPatch * w + x / FlowPatch] = (float)Time;
+        LastPour = Time;
+    }
+
     /// <summary>Water still finding its level: something to work out, being worked out, or running.</summary>
     public bool WaterBusy => _waterEvents.Count > 0 || _pourTask != null || _pour != null;
 
@@ -114,6 +131,7 @@ public sealed partial class Sim
                 if (!ok) { Replan(); return; }
                 if (from >= 0) World.Set(fx, fy, fz, Mat.Air);
                 World.Set(tx, ty, tz, Mat.Water);
+                MarkArrival(tx, tz);
                 Flooded++;
                 _pourAt += 2;
                 _pourDue--;

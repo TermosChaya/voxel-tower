@@ -34,6 +34,9 @@ public sealed class Site
     /// <summary>How high water stood in each column when the valley was made; 0 where it was dry, null if there was none.</summary>
     public short[] WaterTop;
 
+    /// <summary>The river's middle and half its width at each z (it runs north to south, toward larger z); null if none.</summary>
+    public float[] RiverMid, RiverHalfWidth;
+
     /// <summary>The ponds the valley was made with: centre, radius and the height their water stood to.</summary>
     public readonly List<(int X, int Z, int R, int Level)> Ponds = new();
 
