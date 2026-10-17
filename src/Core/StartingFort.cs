@@ -59,6 +59,8 @@ public static class StartingFort
         for (int z = z0 + 16; z <= z1 - 16; z += 10)
             Mark(Shapes.Box(w, s, x0 - 3, z, x0 - 1, z + 4, new Stroke { Mat = Mat.Stone, Width = 1, Height = 6 }, 0));
         Mark(Wall(x1, z0, x1, z1, s.KeepBase + 22, Mat.Wood, 3));
+        sim.FortArea = (x0 - 16, z0 - 16, x1 + 16, z1 + 16);
+        sim.FortLeft0 = sim.FortLeft();
         return gate;
     }
 

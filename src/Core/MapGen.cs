@@ -187,11 +187,55 @@ public static class MapGen
         });
 
         bool NearKeep(int x, int z, int margin) => Brushes.Dist(x - site.KeepX, z - site.KeepZ) < site.KeepR + margin;
+
+        // the named places, before the rocks and trees: mines worth holding, and ruins of what stood here before
+        (int x, int z) Free(int x, int z, int r)
+        {
+            bool Ok(int cx, int cz)
+            {
+                if (cx < r + 16 || cz < r + 16 || cx >= SX - r - 16 || cz >= SZ - r - 16 || NearKeep(cx, cz, 100 + r)) return false;
+                foreach (var (px, pz, pr, _) in ponds) if (Brushes.Dist(cx - px, cz - pz) < pr + r + 16) return false;
+                foreach (var l in site.Landmarks) if (Brushes.Dist(cx - l.X, cz - l.Z) < l.R + r + 12) return false;
+                for (int dz = -r; dz <= r; dz += 4)
+                    for (int dx = -r; dx <= r; dx += 4)
+                        if (dx * dx + dz * dz <= r * r && kind[(cz + dz) * SX + cx + dx] is River or Pond or Road or Ramp or Rim) return false;
+                return true;
+            }
+            for (int ring = 0; ring <= 200; ring += 12)
+                for (int a = 0; a < 360; a += ring == 0 ? 360 : 30)
+                {
+                    int cx = x + (int)(Math.Cos(a * Math.PI / 180) * ring), cz = z + (int)(Math.Sin(a * Math.PI / 180) * ring);
+                    if (Ok(cx, cz)) return (cx, cz);
+                }
+            return (x, z);
+        }
+        var copper = Free(site.KeepX + 150, site.KeepZ + 64, 30);
+        Landmarks.Mine(w, site, copper.x, copper.z, "Медный рудник", 3, false, seed + 1);
+        var houses = Free(copper.x - 52, copper.z + 46, 34);
+        Landmarks.Houses(w, site, houses.x, houses.z, "Брошенные дома рудокопов", seed + 2);
+        {
+            // the silver lies in the lowland between the river and the cliff, on the horde's way
+            int sz = (int)(SZ * .36), sx = (int)((RiverX(sz) + RiverHalf(sz) + EdgeX(sz)) / 2);
+            var silver = Free(sx, sz, 30);
+            Landmarks.Mine(w, site, silver.x, silver.z, "Серебряная жила", 6, true, seed + 3);
+        }
+        var gold = Free((int)(SX * .12), (int)(SZ * .17), 30);
+        Landmarks.Mine(w, site, gold.x, gold.z, "Золотой прииск", 10, false, seed + 4);
+        var outpost = Free(gold.x + 64, gold.z + 56, 32);
+        Landmarks.Outpost(w, site, outpost.x, outpost.z, "Старая застава", seed + 5);
+        {
+            double f = fords[1];
+            var tower = Free((int)(RiverX(f) + RiverHalf(f) + 36), (int)f + 24, 20);
+            Landmarks.Watchtower(w, site, tower.x, tower.z, "Руины сторожевой башни", seed + 6);
+        }
+        var fallen = Free((int)EdgeX(rampN) + 34, rampN + 64, 20);
+        Landmarks.Watchtower(w, site, fallen.x, fallen.z, "Обвалившаяся башня", seed + 7, .45);
+
         bool Clear(int x, int z)
         {
             if (x < site.SpawnStrip + 8 || x >= SX - 8 || z < 8 || z >= SZ - 8) return false;
             byte k = kind[z * SX + x];
-            return k is Low or Plateau or Bank && !NearKeep(x, z, 48);
+            return k is Low or Plateau or Bank && !NearKeep(x, z, 48) && !Landmarks.Taken(site, x, z, 6);
         }
 
         // boulders, more of them on the rocky ground

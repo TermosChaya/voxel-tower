@@ -47,6 +47,7 @@ public sealed partial class Sim
         _claims = new int[Nav.NX * Nav.NZ];
         Goals = FlowField.Goals(Nav);
         Gate = NearestStand(s.KeepX - s.KeepR - 12, s.KeepZ, 4);
+        FindMines();
         Stock[Stockpile.Stone] = 16 * VoxelWorld.PerM3;
         Stock[Stockpile.Wood] = 24 * VoxelWorld.PerM3;
         Stock[Stockpile.Earth] = 16 * VoxelWorld.PerM3;
@@ -102,6 +103,7 @@ public sealed partial class Sim
         Time += dt;
         TickWater(dt);
         TickGates(dt);
+        TickMines(dt);
         if (Nav.PendingEdits > 0) Nav.Flush();
         UpdateFields();
         Waves.Tick(this, dt);

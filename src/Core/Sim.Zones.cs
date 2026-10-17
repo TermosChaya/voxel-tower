@@ -136,7 +136,7 @@ public sealed partial class Sim
     /// <summary>The voxels a zone of this kind takes: rock for stone, natural earth for earth.</summary>
     static bool Takes(int kind, byte m) => kind switch
     {
-        Stockpile.Stone => m is Mat.Rock or Mat.Moss,
+        Stockpile.Stone => m is Mat.Rock or Mat.Moss or Mat.Ore or Mat.Ruin,
         Stockpile.Earth => m is Mat.Soil or Mat.Grass or Mat.Path,
         _ => false,
     };

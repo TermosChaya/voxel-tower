@@ -158,6 +158,10 @@ public sealed class Unit
     public double LastHurt = -99;
     public float Swing;
 
+    // the horde: camped at a mine it keeps, or sent to take one of ours
+    public bool Guard;
+    public Mine Raid;
+
     // the horde hacking its way
     public int CarveCell = -1;
     public readonly List<(int x, int y, int z)> CarveList = new();

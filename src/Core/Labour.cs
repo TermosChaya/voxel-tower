@@ -29,6 +29,8 @@ public sealed class Stockpile
 public static class Labour
 {
     public const double WorkPerSecond = 300;
+    /// <summary>Gold a voxel of ore gives when it is broken out.</summary>
+    public const double OreGold = .05;
     /// <summary>How far from where they stand pawns reach: a cell to each side, 1.5 m down and 2.5 m up.</summary>
     public const int ReachDown = 24, ReachUp = 40;
 
@@ -49,6 +51,8 @@ public static class Labour
         // ladders come apart quickly, and what the horde leaves behind is timber too
         D(Mat.Ladder, 1, Stockpile.Wood, .75f); D(Mat.SiegeLadder, .5f, Stockpile.Wood, .75f); D(Mat.Deck, 1.5f, Stockpile.Wood, .75f);
         D(Mat.Gate, 2.5f, Stockpile.Wood, .75f); D(Mat.GateShut, 2.5f, Stockpile.Wood, .75f);
+        // ore is hard and gives gold (see OreGold), old masonry comes apart like any
+        D(Mat.Ore, 5, Stockpile.None, 0); D(Mat.Ruin, 2.5f, Stockpile.Stone, .75f);
         LayCost[Mat.Rammed] = 1; LayCost[Mat.Wood] = 1.5f; LayCost[Mat.Stone] = 2; LayCost[Mat.Mortar] = 2;
         // a ladder is joinery: rails and rungs take longer than the logs they are made of; a gate more so
         LayCost[Mat.Ladder] = 6;

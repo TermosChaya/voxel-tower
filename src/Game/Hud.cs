@@ -57,6 +57,8 @@ public partial class Hud : CanvasLayer
     readonly List<(Label label, double born)> _lines = new();
     Minimap _map;
     Button _topView;
+    VBoxContainer _goals;
+    readonly List<Label> _goalLines = new();
     Label _toolName, _toolMat, _toolHint;
     HBoxContainer _opts;
     readonly Dictionary<Tool, Slot> _toolSlots = new();
@@ -133,6 +135,19 @@ public partial class Hud : CanvasLayer
         root.AddChild(right);
         _clockPanel.Init(m);
         _retinue.Init(m);
+
+        // what to do, over the map: finish the fort, take the mines, hold out
+        var goalsPanel = new OrnatePanel(12);
+        Pin(goalsPanel, Control.LayoutPreset.BottomLeft, 16, -344);
+        var goalsBox = new VBoxContainer();
+        goalsBox.AddThemeConstantOverride("separation", 5);
+        goalsBox.AddChild(CapsLabel("Задачи"));
+        _goals = new VBoxContainer();
+        _goals.AddThemeConstantOverride("separation", 2);
+        goalsBox.AddChild(_goals);
+        goalsPanel.AddChild(goalsBox);
+        goalsPanel.TooltipText = "Задачи\nЧем заняться: достроить крепость, занять рудники и держать их — они платят золотом, которое идёт на наём, — и выстоять все волны.";
+        root.AddChild(goalsPanel);
 
         // the map, bottom left
         var mapPanel = new OrnatePanel(14);
@@ -256,6 +271,7 @@ public partial class Hud : CanvasLayer
     public void Refresh()
     {
         if (_banner == null) return;
+        RefreshGoals();
         var st = _m.Sim.Stock;
         _banner.Values[0] = Fmt.Int(Math.Floor(st.Gold));
         var t = _m.Tools;
@@ -301,12 +317,74 @@ public partial class Hud : CanvasLayer
                     gate.Broken || !gate.Ready ? "" : "щелчок — сменить: открываются сами / стоят открытыми / на засове");
                 return;
             }
+            if (u == null && t.HoverPlace is { } place)
+            {
+                var (head2, sub2, col) = PlaceTag(place);
+                _tag.Show(head2, col, sub2);
+                return;
+            }
             if (u == null) { _tag.Visible = false; return; }
             string head = u.Team == Team.Wild ? $"{u.T.Name} · {u.T.Bounty} зол. за добычу" : $"{u.T.Name} · {Math.Ceiling(Math.Max(0, u.Hp))} из {u.T.Hp}";
             string sub = Retinue.Doing(u, _m.Sim);
             if (u.Team != Team.Player && _m.Selected.Count > 0) sub += u.Team == Team.Wild ? " · ПКМ — охотиться" : " · ПКМ — атаковать";
             _tag.Show(head, u.Team == Team.Horde ? Ornament.Blood : u.Team == Team.Wild ? Ornament.Moss : Ornament.EmberGlow, sub);
         }
+    }
+
+    /// <summary>The lines of the goals panel: what is done and what is still to do.</summary>
+    IEnumerable<(string text, bool done)> Goals()
+    {
+        var sim = _m.Sim;
+        if (sim.FortLeft0 > 0)
+        {
+            int left = sim.FortLeft();
+            yield return left == 0 ? ("Крепость достроена", true) : ($"Достроить крепость: готово {100 - left * 100 / sim.FortLeft0} %", false);
+        }
+        foreach (var m in sim.Mines)
+            yield return m.Holder switch
+            {
+                Holder.Ours => ($"{m.Name} ваш: +{m.Income} зол./мин", true),
+                Holder.Horde => ($"Отбить у орды: {m.Name}, +{m.Income} зол./мин", false),
+                _ => ($"Занять: {m.Name}, +{m.Income} зол./мин", false),
+            };
+        var w = sim.Waves;
+        int held = Math.Max(0, w.Number - (w.Active ? 1 : 0));
+        yield return sim.Won ? ("Осада снята", true) : ($"Выстоять: отбито волн {held} из {Waves.Total}", false);
+    }
+
+    void RefreshGoals()
+    {
+        int i = 0;
+        foreach (var (text, done) in Goals())
+        {
+            if (i >= _goalLines.Count)
+            {
+                var l = Text("", Ornament.Serif, 14, Ornament.Parchment);
+                _goals.AddChild(l);
+                _goalLines.Add(l);
+            }
+            var line = _goalLines[i++];
+            line.Text = (done ? "◆ " : "◇ ") + text;
+            line.AddThemeColorOverride("font_color", done ? Ornament.Moss : Ornament.Parchment);
+            line.Visible = true;
+        }
+        for (; i < _goalLines.Count; i++) _goalLines[i].Visible = false;
+    }
+
+    /// <summary>What the tag says over a mine or a ruin.</summary>
+    (string head, string sub, Color color) PlaceTag(Landmark l)
+    {
+        if (l.Kind == LandmarkKind.Ruin) return (l.Name, "старая кладка — её ломают на камень: 8 и Z, рамкой по руинам", Ornament.Aged);
+        var m = _m.Sim.Mines.Find(x => x.Place == l);
+        if (m == null) return (l.Name, "", Ornament.Aged);
+        string pay = $"+{m.Income} зол./мин";
+        if (m.Ours > 0 && m.Theirs > 0) return ($"{m.Name} · за него бьются", pay, Ornament.EmberGlow);
+        return m.Holder switch
+        {
+            Holder.Ours => ($"{m.Name} · ваш · {pay}", "держите людей у входа: орда придёт его отбивать. Руда в жиле — ещё золото", Ornament.Moss),
+            Holder.Horde => ($"{m.Name} · у орды", $"перебейте её у входа и встаньте там сами · {pay}", Ornament.Blood),
+            _ => ($"{m.Name} · ничей", $"пошлите людей к входу — займут за несколько секунд · {pay}", Ornament.EmberGlow),
+        };
     }
 
     public void OnToolChanged()

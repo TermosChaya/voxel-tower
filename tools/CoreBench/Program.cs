@@ -542,6 +542,61 @@ if (args.Length == 0 || args[0] == "--sim")
         sim.InstantLabour = false;
     }
 
+    // the mines: workers sent to one take it and it pays; ore broken out of its vein pays more; the horde camped at
+    // another keeps it till our soldiers clear the camp; a raider left alone at a mine of ours takes it back
+    {
+        int ruins = site4.Landmarks.Count(l => l.Kind == LandmarkKind.Ruin);
+        var copper = sim.Mines.Find(m => m.Name == "Медный рудник");
+        int stand = sim.NearestStand(copper.Place.StandX, copper.Place.StandZ, 4);
+        var miners = new System.Collections.Generic.List<Unit> { sim.Spawn(Kinds.Worker, sim.Gate), sim.Spawn(Kinds.Worker, sim.Gate) };
+        sim.Command(miners, stand);
+        for (int t = 0; t < 120 && copper.Holder != Holder.Ours; t++) Run(1);
+        bool taken = copper.Holder == Holder.Ours;
+        double g1 = sim.Stock.Gold;
+        Run(60);
+        double paid = sim.Stock.Gold - g1;
+        Check("workers sent to a mine take it, and it pays while it is ours", sim.Mines.Count == 3 && ruins == 4 && taken && paid > copper.Income * .9,
+            $"{sim.Mines.Count} mines, {ruins} ruins; {copper.Name} {(taken ? "taken" : "not taken")}, +{paid:0.0} gold in a minute (pays {copper.Income})");
+
+        // the vein: the ore showing in the adit, marked for the pick
+        var ore = new VoxelList();
+        for (int y = 40; y < 140 && ore.Count < 240; y++)
+            for (int z = copper.Place.Z - 20; z <= copper.Place.Z + 20 && ore.Count < 240; z++)
+                for (int x = copper.Place.X - 20; x <= copper.Place.X + 20 && ore.Count < 240; x++)
+                    if (w4.Get(x, y, z) == Mat.Ore && (w4.Get(x + 1, y, z) == 0 || w4.Get(x - 1, y, z) == 0 || w4.Get(x, y, z + 1) == 0 || w4.Get(x, y, z - 1) == 0))
+                        ore.Add(x, y, z, Mat.Air);
+        sim.DesignateRemove(ore);
+        sim.ReleaseHold(miners);
+        double g2 = sim.Stock.Gold;
+        Run(90);
+        double fromOre = sim.Stock.Gold - g2 - copper.Income * 1.5;
+        Check("ore broken out of the vein pays gold besides", ore.Count > 50 && fromOre > ore.Count * Labour.OreGold * .5,
+            $"{ore.Count} voxels of ore showing in the adit, +{fromOre:0.0} gold for what was broken out");
+
+        sim.SeedMines();
+        var silver = sim.Mines.Find(m => m.Place.Guarded);
+        var guards = sim.Units.FindAll(u => u.Guard && !u.Dead);
+        bool held = silver.Holder == Holder.Horde && sim.RaidersAlive() == 0;
+        var squad = new System.Collections.Generic.List<Unit>();
+        foreach (var t in new[] { Kinds.Archer, Kinds.Archer, Kinds.Archer, Kinds.Swordsman, Kinds.Swordsman }) squad.Add(sim.Spawn(t, sim.Gate));
+        sim.Command(squad, sim.NearestStand(silver.Place.StandX, silver.Place.StandZ, 4));
+        for (int t = 0; t < 240 && silver.Holder != Holder.Ours; t++) Run(1);
+        Check("the horde camped at a mine keeps it until our soldiers clear the camp", guards.Count == 4 && held && guards.TrueForAll(u => u.Dead) && silver.Holder == Holder.Ours,
+            $"{guards.Count} guards, the horde's at first {held}; dead {guards.Count(u => u.Dead)}, {silver.Name} now {silver.Holder}; soldiers alive {squad.Count(u => !u.Dead)} of {squad.Count}");
+        foreach (var u in squad) { u.Dead = true; u.DiedAt = -999; }
+
+        sim.Command(miners, sim.Gate);
+        Run(20);
+        var raider = sim.Spawn(Kinds.Goblin, sim.NearestStand(copper.Place.StandX - 70, copper.Place.StandZ, 2));
+        raider.Raid = copper;
+        for (int t = 0; t < 90 && copper.Holder != Holder.Horde; t++) Run(1);
+        Check("a raider left alone at a mine of ours takes it back", copper.Holder == Holder.Horde,
+            $"{copper.Name} now {copper.Holder}, the goblin {(raider.Dead ? "dead" : "alive")}");
+        raider.Dead = true; raider.DiedAt = -999;
+        foreach (var u in miners) { u.Dead = true; u.DiedAt = -999; }
+        foreach (var m in sim.Mines) { m.Holder = Holder.None; m.Grip = 0; }
+    }
+
     // the beasts: a deer bolts from a worker, archers hunt a boar for gold
     {
         sim.WildTarget = 0;

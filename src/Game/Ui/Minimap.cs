@@ -44,7 +44,8 @@ public partial class Minimap : Control
         MouseFilter = MouseFilterEnum.Stop;
         MouseDefaultCursorShape = CursorShape.PointingHand;
         TooltipText = "Карта\nЩелчок или протяжка переносит взгляд. Светлая рамка — то, что видит камера, ромб — цитадель. " +
-            "Голубые точки — ваши люди (выбранные в кольце), красные — орда, бурые — звери.";
+            "Голубые точки — ваши люди (выбранные в кольце), красные — орда, бурые — звери. " +
+            "Квадраты — рудники в цвете хозяина (светлый — ничей), серые ромбики — руины.";
     }
 
     /// <summary>The highest column of a pixel's block, and what tops it.</summary>
@@ -111,6 +112,7 @@ public partial class Minimap : Control
             poly[i] = new Vector2(Math.Clamp(p.X, 1, Size.X - 1), Math.Clamp(p.Y, 1, Size.Y - 1));
         }
         poly[^1] = poly[0];
+        DrawPlaces();
         DrawCreatures();
         DrawPolyline(poly, new Color(0, 0, 0, .6f), 3f, true);
         DrawPolyline(poly, Ornament.BronzeLight, 1.4f, true);
@@ -122,6 +124,28 @@ public partial class Minimap : Control
     }
 
     static readonly Color Ours = new(.62f, .86f, 1f), Horde = new(1f, .3f, .22f), Beast = new(.66f, .47f, .28f), Rim = new(0, 0, 0, .75f);
+
+    static readonly Color RuinGrey = new(.66f, .64f, .6f);
+
+    /// <summary>The named places: ruins as grey diamonds, mines as squares in the colours of whoever holds them.</summary>
+    void DrawPlaces()
+    {
+        foreach (var l in _m.Site.Landmarks)
+        {
+            if (l.Kind != LandmarkKind.Ruin) continue;
+            var p = ToMap(l.X, l.Z);
+            Ornament.Diamond(this, p, 4.6f, Rim);
+            Ornament.Diamond(this, p, 3.3f, RuinGrey);
+        }
+        foreach (var m in _m.Sim.Mines)
+        {
+            var p = ToMap(m.Place.X, m.Place.Z);
+            var c = m.Holder switch { Holder.Ours => MineView.Ours, Holder.Horde => MineView.Horde, _ => MineView.Nobody };
+            DrawRect(new Rect2(p - new Vector2(5, 5), new Vector2(10, 10)), Rim);
+            DrawRect(new Rect2(p - new Vector2(3.8f, 3.8f), new Vector2(7.6f, 7.6f)), c);
+            DrawRect(new Rect2(p - new Vector2(1.4f, 1.4f), new Vector2(2.8f, 2.8f)), Ornament.BronzeLight);
+        }
+    }
 
     /// <summary>Everyone alive: beasts underneath, our people over them, the horde on top; the chosen ringed.</summary>
     void DrawCreatures()

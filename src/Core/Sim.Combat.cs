@@ -23,7 +23,7 @@ public sealed partial class Sim
 
     public bool AnyRaider()
     {
-        foreach (var u in Units) if (!u.Dead && u.Team == Team.Horde) return true;
+        foreach (var u in Units) if (!u.Dead && u.Team == Team.Horde && !u.Guard) return true;
         return false;
     }
 
@@ -31,7 +31,7 @@ public sealed partial class Sim
     public int RaidersAlive()
     {
         int n = 0;
-        foreach (var u in Units) if (!u.Dead && u.Team == Team.Horde) n++;
+        foreach (var u in Units) if (!u.Dead && u.Team == Team.Horde && !u.Guard) n++;
         return n;
     }
 

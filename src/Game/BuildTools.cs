@@ -124,6 +124,8 @@ public partial class BuildTools : Node3D
     public string HoverText { get; private set; } = "";
     /// <summary>The gate under the cursor, if the cursor is on one of its leaves.</summary>
     public Gateway HoverGate { get; private set; }
+    /// <summary>The named place (a mine, a ruin) the cursor is over.</summary>
+    public Landmark HoverPlace { get; private set; }
     GatePlan _gatePlan;
 
     /// <summary>"брёвна 3,4 м³ · проём: камень +4,0 м³ · 6 мин работы одного".</summary>
@@ -561,6 +563,10 @@ public partial class BuildTools : Node3D
             }
         }
         HoverGate = _hasHover && _hover.M is Mat.Gate or Mat.GateShut ? _m.Sim.GateAt(_hover.X, _hover.Y, _hover.Z) : null;
+        HoverPlace = null;
+        if (_hasHover)
+            foreach (var l in _m.Site.Landmarks)
+                if (Brushes.Dist(_hover.X - l.X, _hover.Z - l.Z) < l.R) { HoverPlace = l; break; }
         if (!_hasHover) { HoverText = ""; return; }
         int ground = w.GroundTop(_hover.X, _hover.Z);
         float above = (_hover.Y + 1 - ground) / (float)VoxelWorld.PerMetre;

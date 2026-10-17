@@ -3,6 +3,19 @@ using System.Collections.Generic;
 
 namespace VoxelTower.Core;
 
+public enum LandmarkKind : byte { Mine, Ruin }
+
+/// <summary>A named place of the valley: a mine (what it pays a minute while it is ours, whether the horde camps at it) or a ruin.</summary>
+public sealed class Landmark
+{
+    public LandmarkKind Kind;
+    public string Name;
+    /// <summary>Its middle and how far it spreads, in voxels; for a mine, the spot in front of the adit to hold.</summary>
+    public int X, Z, R, StandX, StandZ;
+    public int Income;
+    public bool Guarded;
+}
+
 /// <summary>Where things stand on the map: the citadel, the starter wall, torch positions.</summary>
 public sealed class Site
 {
@@ -23,6 +36,9 @@ public sealed class Site
 
     /// <summary>The ponds the valley was made with: centre, radius and the height their water stood to.</summary>
     public readonly List<(int X, int Z, int R, int Level)> Ponds = new();
+
+    /// <summary>Mines worth holding and ruins of what stood here before: things to find, take and keep.</summary>
+    public readonly List<Landmark> Landmarks = new();
 
     /// <summary>Columns nobody may build on: the map's western edge (the horde's entry), the citadel and its gate approach.</summary>
     public bool Forbidden(int x, int z)

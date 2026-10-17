@@ -78,7 +78,10 @@ public sealed partial class Sim
         {
             int z = 24 + Rng.Next(World.SZ - 48);
             int c = NearestStand(Site.SpawnStrip / 2, z, t.Move.Height);
-            if (c >= 0) return Spawn(t, c);
+            if (c < 0) continue;
+            var u = Spawn(t, c);
+            SendRaid(u);
+            return u;
         }
         return null;
     }
@@ -94,6 +97,8 @@ public sealed partial class Sim
             if (u.Cooldown <= 0) { Strike(u, foe); u.Cooldown = u.T.AttackTime * (.9f + (float)Rng.NextDouble() * .2f); }
             return;
         }
+        if (u.Guard) { GuardTick(u, dt); return; }
+        if (u.Raid != null && RaidTick(u, dt)) return;
         if (_goalSet.Contains(u.Cell))
         {
             u.State = UnitState.Siege;

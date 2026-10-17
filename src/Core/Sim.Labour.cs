@@ -28,6 +28,21 @@ public sealed partial class Sim
     /// <summary>Takes back every order on the columns of a rectangle.</summary>
     public int CancelArea(int x0, int z0, int x1, int z1) => Orders.CancelArea(x0, z0, x1, z1);
 
+    /// <summary>The fort a new game begins with: its area, and how much was left to do on it then.</summary>
+    public (int x0, int z0, int x1, int z1) FortArea;
+    public int FortLeft0;
+
+    /// <summary>Voxels still marked inside the fort's area.</summary>
+    public int FortLeft()
+    {
+        var (x0, z0, x1, z1) = FortArea;
+        int n = 0;
+        for (int k = Math.Max(0, z0 >> NavGrid.Shift); k <= Math.Min(Nav.NZ - 1, z1 >> NavGrid.Shift); k++)
+            for (int i = Math.Max(0, x0 >> NavGrid.Shift); i <= Math.Min(Nav.NX - 1, x1 >> NavGrid.Shift); i++)
+                n += Orders.ColCount[k * Nav.NX + i];
+        return n;
+    }
+
     /// <summary>Tests: every order done at once, as if by an army of workers with full stores.</summary>
     public void CompleteAll()
     {
@@ -145,6 +160,7 @@ public sealed partial class Sim
             Orders.Clear(j.x, j.y, j.z);
             int kind = Labour.YieldKind(cur);
             if (kind != Stockpile.None) Stock[kind] += Labour.YieldShare(cur) * u.T.Yield;
+            if (cur == Mat.Ore) Stock.Gold += Labour.OreGold * u.T.Yield;
             Mined?.Invoke(j.x, j.y, j.z, cur);
             return true;
         }

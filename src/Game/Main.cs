@@ -13,7 +13,7 @@ namespace VoxelTower.Game;
 /// Command-line options after "--": --shot=file.png [--frames=N] takes a screenshot and quits,
 /// --demo sets up a fort with pawns at work (--pose=battle: the horde bridging the moat and laddering the wall),
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
-/// --top looks straight down.
+/// --top looks straight down, --look=N at the Nth named place of the valley.
 /// </summary>
 public partial class Main : Node3D
 {
@@ -44,6 +44,7 @@ public partial class Main : Node3D
     string _shot;
     int _shotFrames = 45, _frames;
     bool _demo, _calm, _selfTest, _finale, _top;
+    int _look = -1;
     string _pose = "";
     /// <summary>How long the staged siege runs before the screenshot (--at=seconds).</summary>
     double _poseSeconds = 14;
@@ -57,6 +58,7 @@ public partial class Main : Node3D
             else if (a == "--demo") _demo = true;
             else if (a == "--calm") _calm = true;
             else if (a == "--top") _top = true;
+            else if (a.StartsWith("--look=") && int.TryParse(a["--look=".Length..], out int lk)) _look = lk;
             else if (a == "--selftest") _selfTest = true;
             else if (a.StartsWith("--pose=")) _pose = a["--pose=".Length..];
             else if (a.StartsWith("--at=") && double.TryParse(a["--at=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double at)) _poseSeconds = at;
@@ -99,6 +101,9 @@ public partial class Main : Node3D
         Areas = new ZoneView();
         AddChild(Areas);
         Areas.Init(Sim);
+        var flags = new MineView();
+        AddChild(flags);
+        flags.Init(this);
         Units = new UnitView();
         AddChild(Units);
         Units.Init(this);
@@ -121,20 +126,30 @@ public partial class Main : Node3D
         Sim.Hacked = (x, y, z, m) => { if (Random.Shared.NextDouble() < .16) Debris.Spawn(m, x, y, z, 1, 1.8f); };
         Sim.Raised = (x, y, z, m) => { if (Random.Shared.NextDouble() < .05) Debris.Spawn(m, x, y, z, 1, .8f); };
 
-        // the household the siege finds at the citadel, and the beasts of the valley
+        // the household the siege finds at the citadel, the beasts of the valley, and the horde's camp at a mine
         foreach (var t in new[] { Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Archer, Kinds.Swordsman }) Sim.Spawn(t, Sim.Gate);
         Sim.SeedWildlife();
+        if (!_selfTest && !_demo) Sim.SeedMines();
 
         Hud.Log("Пробел — позвать орду раньше: золота за это нет, зато она меньше узнает о вашей обороне.");
         Hud.Log("Между волнами охотьтесь: выберите лучника и щёлкните ПКМ по зверю — добыча приносит золото.");
         Hud.Log("Кисти размечают работу, пешки её делают: кладут из запасов, копают, рубят. V — кирка, 7 — лестница, 8 — делянка: ресурс с участка.");
         if (!_selfTest && !_demo)
+        {
+            Hud.Log("Рудники платят золотом, пока они ваши: медный — к востоку от крепости, серебряную жилу в низине стерегут гоблины. " +
+                "Пошлите людей к входу. Задачи — над картой.", Hud.Kind.Ok);
             Hud.Log("Крепость вокруг цитадели не достроена: западная стена с воротами стоит, остальное размечено, и рабочие возьмутся сами. " +
-                "Камня на всё не хватит — ломайте его в скалах и валунах (8 и Z).", Hud.Kind.Warn);
+                "Камня на всё не хватит — ломайте его в скалах, валунах и руинах (8 и Z).", Hud.Kind.Warn);
+        }
         Hud.Log("Орда придёт с запада через десять минут. Ройте, рубите и стройте, пока есть время.", Hud.Kind.Warn);
         GD.Print($"[voxel-tower] world {genMs:0} ms, navigation {navMs:0} ms, mesh {View.LastFullMeshMs:0} ms, {View.Triangles()} triangles");
 
         if (_demo) Demo();
+        if (_look >= 0 && _look < Site.Landmarks.Count)
+        {
+            var l = Site.Landmarks[_look];
+            Rig.Set(World.WX(l.X), World.WZ(l.Z), -.7f, .6f, 2.4f, snap: true);
+        }
         if (_top) Rig.ToggleTopDown();
         if (_selfTest) SelfTest();
         // a hidden or minimised window never draws a frame: don't let scripted runs hang
@@ -371,6 +386,18 @@ public partial class Main : Node3D
         int built = 0;
         for (int y = ground; y < ground + 48; y++) for (int z = 450; z < 472; z++) for (int x = face - 10; x < face; x++) if (World.Get(x, y, z) == Mat.Ladder) built++;
         Check("…the workers set it against the wall", rungs > 40 && built > 40, $"{rungs} voxels marked, {built} in place");
+
+        // a gate through the same wall, further along it
+        KeyPress(Key.Key9);
+        Check("9 picks up the gate", Tools.Tool == Tool.Gate);
+        int gz = 472, gface = lx;
+        while (World.Get(gface - 1, fy, gz) != Mat.Air) gface--;
+        int gates0 = Sim.Gates.Count;
+        await ClickAt(ScreenAt(gface - .02f, fy + .5f, gz + .5f));
+        var hung = Sim.Gates.Count > gates0 ? Sim.Gates[^1] : null;
+        Advance(60);
+        Check("…the workers cut the gateway and hang the gate", hung != null && hung.Ready,
+            hung == null ? "no gate planned" : $"leaves on the {(hung.In > 0 ? "east" : "west")}, ready {hung.Ready}");
 
         // an area set aside for stone: the boulder that is left goes to the workers by itself
         KeyPress(Key.Key8); KeyPress(Key.Z);
