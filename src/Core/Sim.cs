@@ -50,7 +50,7 @@ public sealed partial class Sim
         Stock[Stockpile.Stone] = 16 * VoxelWorld.PerM3;
         Stock[Stockpile.Wood] = 24 * VoxelWorld.PerM3;
         Stock[Stockpile.Earth] = 16 * VoxelWorld.PerM3;
-        w.Edited += OnEditWater;
+        w.Replaced += OnWaterEdit;
     }
 
     public void Say(string text, int kind = 0) => Said?.Invoke(text, kind);
@@ -100,7 +100,7 @@ public sealed partial class Sim
     {
         if (Over) return;
         Time += dt;
-        FlowWater();
+        TickWater(dt);
         if (Nav.PendingEdits > 0) Nav.Flush();
         UpdateFields();
         Waves.Tick(this, dt);

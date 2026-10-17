@@ -36,6 +36,9 @@ public sealed class VoxelWorld
     /// <summary>Called after every voxel written with Set: navigation and the map listen to it.</summary>
     public Action<int, int, int> Edited;
 
+    /// <summary>Called after Edited with what the voxel held before: the water listens to it.</summary>
+    public Action<int, int, int, byte> Replaced;
+
     public VoxelWorld(int sx, int sy, int sz)
     {
         if (sx % CS != 0 || sy % CS != 0 || sz % CS != 0) throw new ArgumentException("world size must be a multiple of 32");
@@ -82,13 +85,16 @@ public sealed class VoxelWorld
     /// <summary>Write one voxel and queue the chunks whose faces it touches for re-meshing.</summary>
     public bool Set(int x, int y, int z, byte m)
     {
-        if (!InBounds(x, y, z) || Get(x, y, z) == m) return false;
+        if (!InBounds(x, y, z)) return false;
+        byte old = Get(x, y, z);
+        if (old == m) return false;
         SetRaw(x, y, z, m);
         Revision++;
         Touch(x, y, z);
         int col = z * SX + x;
         if (!_colDirty[col]) { _colDirty[col] = true; _colDirtyList.Add(col); }
         Edited?.Invoke(x, y, z);
+        Replaced?.Invoke(x, y, z, old);
         return true;
     }
 

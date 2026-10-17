@@ -1,33 +1,62 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace VoxelTower.Core;
 
+/// <summary>
+/// Water is finite and goes wherever the ground lets it. A body of water is just the voxels of it that touch. When
+/// something opens at its edge below its level (a ditch cut into a pond, the bed dug out from under it) or is built
+/// into it, the body is worked out afresh: its top layer runs off, the far side first, into the lowest open voxel at
+/// its edge, again and again, so the water runs down slopes and over cliffs, pools in the lowest hollow it reaches and
+/// settles level, and the pond drops by as much as ran out of it. The working out is done on a worker thread in the
+/// game (at once in tests and scripted runs), then played back a few tens of thousands of voxels a second.
+/// </summary>
 public sealed partial class Sim
 {
-    // air that water may run into, and the level of the water it came from (it fills below that, never above)
-    readonly Queue<(int x, int y, int z, int level)> _flood = new();
-
-    /// <summary>Voxels water ran into since the start.</summary>
+    /// <summary>Voxels water has run into since the start.</summary>
     public int Flooded { get; private set; }
 
-    /// <summary>Called for every voxel written: one emptied beside water or under it lets the water in.</summary>
-    void OnEditWater(int x, int y, int z)
-    {
-        if (World.Get(x, y, z) != Mat.Air) return;
-        foreach (var (dx, dy, dz) in Inflow)
-        {
-            int nx = x + dx, ny = y + dy, nz = z + dz;
-            if (World.Get(nx, ny, nz) != Mat.Water) continue;
-            int level = Surface(nx, ny, nz);
-            if (y < level && Dug(x, y, z)) _flood.Enqueue((x, y, z, level));
-            return;
-        }
-    }
+    /// <summary>Work out where water goes on a worker thread (the game) rather than inside the step (tests, scripted runs).</summary>
+    public bool WaterInBackground;
+
+    /// <summary>Voxels of water moved a second of game time while it runs.</summary>
+    public const float PourRate = 24000;
+
+    /// <summary>Water still finding its level: something to work out, being worked out, or running.</summary>
+    public bool WaterBusy => _waterEvents.Count > 0 || _pourTask != null || _pour != null;
+
+    // where water may have to move: something opened beside or under it, or was built into it (extra: voxels pushed aside)
+    readonly List<(int x, int y, int z, int extra)> _waterEvents = new();
+    WaterPlanner _planner;
+    Task<WaterPlanner.Result> _pourTask;
+    WaterPlanner.Result _pour;
+    int _pourAt;
+    float _pourDue;
+    bool _pouring;
 
     // water comes in from the sides and from above, never up from below
     static readonly (int, int, int)[] Inflow = { (1, 0, 0), (-1, 0, 0), (0, 0, 1), (0, 0, -1), (0, 1, 0) };
-    static readonly (int, int, int)[] Seep = { (1, 0, 0), (-1, 0, 0), (0, 0, 1), (0, 0, -1), (0, -1, 0), (0, 1, 0) };
+
+    /// <summary>Every voxel written: one emptied beside water below its level, or under it, lets the water move; one built into it pushes the water aside.</summary>
+    void OnWaterEdit(int x, int y, int z, byte old)
+    {
+        if (_pouring) return;
+        byte now = World.Get(x, y, z);
+        if (old == Mat.Water)
+        {
+            if (now != Mat.Air) _waterEvents.Add((x, y, z, 1));
+            return;
+        }
+        if (now != Mat.Air) return;
+        foreach (var (dx, dy, dz) in Inflow)
+        {
+            int nx = x + dx, ny = y + dy, nz = z + dz;
+            if (World.Get(nx, ny, nz) != Mat.Water || y >= Surface(nx, ny, nz)) continue;
+            _waterEvents.Add((x, y, z, 0));
+            return;
+        }
+    }
 
     /// <summary>The height a body of water stands to (exclusive): up its column from a voxel of it.</summary>
     int Surface(int x, int y, int z)
@@ -36,35 +65,360 @@ public sealed partial class Sim
         return y + 1;
     }
 
-    /// <summary>
-    /// Whether a voxel lies in something dug out: below the bare ground, or the water over it, as the valley was made.
-    /// Water runs only into such hollows and never out over the land, so a ditch cut from a pond fills, and the
-    /// meadow beyond it stays dry even where it lies lower than the pond.
-    /// </summary>
-    bool Dug(int x, int y, int z)
+    /// <summary>Works out where water has to go when something happened at its edge, and lets it run there.</summary>
+    void TickWater(float dt)
     {
-        if (Site.HTop == null) return true;
-        int i = z * World.SX + x;
-        return y < Site.HTop[i] || Site.WaterTop != null && y < Site.WaterTop[i];
+        if (_pour == null && _pourTask != null)
+        {
+            if (!_pourTask.IsCompleted) return;
+            if (_pourTask.Status == TaskStatus.RanToCompletion) { _pour = _pourTask.Result; _pourAt = 0; }
+            _pourTask = null;
+        }
+        if (_pour == null)
+        {
+            if (_waterEvents.Count == 0) return;
+            var events = _waterEvents.ToArray();
+            _waterEvents.Clear();
+            _planner ??= new WaterPlanner(World);
+            if (WaterInBackground)
+            {
+                var planner = _planner;
+                _pourTask = Task.Run(() => planner.Plan(events));
+                return;
+            }
+            _pour = _planner.Plan(events);
+            _pourAt = 0;
+        }
+        Pour(dt);
     }
 
-    /// <summary>Lets water run into the hollows dug beside it, a few thousand voxels a step, up to the level it came from.</summary>
-    void FlowWater(int budget = 3000)
+    /// <summary>Plays a worked-out pour back, so many voxels a second; starts over if the ground changed under it.</summary>
+    void Pour(float dt)
     {
-        while (_flood.Count > 0 && budget-- > 0)
+        var moves = _pour.Moves;
+        _pourDue += PourRate * dt;
+        _pouring = true;
+        try
         {
-            var (x, y, z, level) = _flood.Dequeue();
-            if (y >= level || y < 1 || World.Get(x, y, z) != Mat.Air || !Dug(x, y, z)) continue;
-            World.Set(x, y, z, Mat.Water);
-            Flooded++;
-            foreach (var (dx, dy, dz) in Seep)
+            while (_pourDue >= 1 && _pourAt < moves.Count)
+            {
+                int from = moves[_pourAt], to = moves[_pourAt + 1];
+                var (tx, ty, tz) = WaterPlanner.Unpack(to);
+                bool ok = World.Get(tx, ty, tz) == Mat.Air;
+                int fx = 0, fy = 0, fz = 0;
+                if (from >= 0)
+                {
+                    (fx, fy, fz) = WaterPlanner.Unpack(from);
+                    ok &= World.Get(fx, fy, fz) == Mat.Water;
+                }
+                if (!ok) { Replan(); return; }
+                if (from >= 0) World.Set(fx, fy, fz, Mat.Air);
+                World.Set(tx, ty, tz, Mat.Water);
+                Flooded++;
+                _pourAt += 2;
+                _pourDue--;
+            }
+        }
+        finally { _pouring = false; }
+        if (_pourAt < moves.Count) return;
+        foreach (int p in _pour.Again) { var (x, y, z) = WaterPlanner.Unpack(p); _waterEvents.Add((x, y, z, 0)); }
+        _pour = null;
+        _pourDue = 0;
+    }
+
+    /// <summary>The ground changed under a pour (something built or dug where the water was going): drop the rest and work it out again.</summary>
+    void Replan()
+    {
+        var moves = _pour.Moves;
+        int pushed = 0;
+        for (int i = _pourAt; i < moves.Count; i += 2) if (moves[i] < 0) pushed++;
+        var (x, y, z) = WaterPlanner.Unpack(moves[_pourAt + 1]);
+        _waterEvents.Add((x, y, z, pushed));
+        if (moves[_pourAt] >= 0) { (x, y, z) = WaterPlanner.Unpack(moves[_pourAt]); _waterEvents.Add((x, y, z, 0)); }
+        foreach (int p in _pour.Again) { (x, y, z) = WaterPlanner.Unpack(p); _waterEvents.Add((x, y, z, 0)); }
+        _pour = null;
+        _pourDue = 0;
+    }
+}
+
+/// <summary>
+/// Works out where bodies of water end up. Keeps its own scratch copy of what has turned to water or to air, reads the
+/// world and writes nothing to it, so it can run on a worker thread; one plan at a time.
+/// </summary>
+sealed class WaterPlanner
+{
+    public sealed class Result
+    {
+        /// <summary>Pairs: the voxel the water leaves (−1 for water pushed aside by building) and the voxel it runs into.</summary>
+        public readonly List<int> Moves = new();
+        /// <summary>Places to look at again after the pour: bodies given up on before they settled.</summary>
+        public readonly List<int> Again = new();
+    }
+
+    /// <summary>Moves in one plan; a body still moving after that is picked up again when the pour has run.</summary>
+    const int MaxMoves = 1 << 21;
+
+    static readonly (int, int, int)[] Six = { (1, 0, 0), (-1, 0, 0), (0, 0, 1), (0, 0, -1), (0, -1, 0), (0, 1, 0) };
+    const byte Solid = 0, Wet = 1, Dry = 2;
+
+    readonly VoxelWorld _w;
+    // per voxel, what the plan has made of it so far (0: as in the world), and the pass that last reached it
+    readonly byte[][] _state;
+    readonly int[][] _mark;
+    readonly List<int> _used = new();
+    // air at the edge of the body, by height, first come first served at each height
+    readonly Queue<int>[] _open;
+    int _openLow, _openCount, _pass, _top;
+    readonly Queue<int> _bfs = new();
+    readonly List<int> _body = new();
+
+    public WaterPlanner(VoxelWorld w)
+    {
+        if (w.SX > 1024 || w.SZ > 1024 || w.SY > 2048) throw new ArgumentException("the water planner packs voxels into 10 + 10 + 11 bits");
+        _w = w;
+        _state = new byte[w.ChunkCount][];
+        _mark = new int[w.ChunkCount][];
+        _open = new Queue<int>[w.SY];
+        for (int y = 0; y < w.SY; y++) _open[y] = new Queue<int>();
+    }
+
+    public static int Pack(int x, int y, int z) => (y << 20) | (z << 10) | x;
+    public static (int x, int y, int z) Unpack(int p) => (p & 1023, p >> 20, (p >> 10) & 1023);
+
+    int ChunkOf(int x, int y, int z) => _w.ChunkIndex(x >> VoxelWorld.Shift, y >> VoxelWorld.Shift, z >> VoxelWorld.Shift);
+    static int Local(int x, int y, int z) => ((y & VoxelWorld.Mask) << 10) | ((z & VoxelWorld.Mask) << 5) | (x & VoxelWorld.Mask);
+
+    /// <summary>Solid (or outside the field), water or air, as the plan has it.</summary>
+    byte Kind(int x, int y, int z)
+    {
+        if (!_w.InBounds(x, y, z)) return Solid;
+        var s = _state[ChunkOf(x, y, z)];
+        if (s != null)
+        {
+            byte v = s[Local(x, y, z)];
+            if (v != 0) return v;
+        }
+        byte m = _w.Get(x, y, z);
+        return m == Mat.Water ? Wet : m == Mat.Air ? Dry : Solid;
+    }
+
+    byte Kind(int p) { var (x, y, z) = Unpack(p); return Kind(x, y, z); }
+
+    void Make(int p, byte kind)
+    {
+        var (x, y, z) = Unpack(p);
+        int ci = ChunkOf(x, y, z);
+        if (_state[ci] == null) { _state[ci] = new byte[VoxelWorld.CS3]; _used.Add(ci); }
+        _state[ci][Local(x, y, z)] = kind;
+    }
+
+    int MarkOf(int x, int y, int z)
+    {
+        var m = _mark[ChunkOf(x, y, z)];
+        return m == null ? 0 : m[Local(x, y, z)];
+    }
+
+    void SetMark(int x, int y, int z, int pass)
+    {
+        int ci = ChunkOf(x, y, z);
+        if (_mark[ci] == null) { _mark[ci] = new int[VoxelWorld.CS3]; _used.Add(ci); }
+        _mark[ci][Local(x, y, z)] = pass;
+    }
+
+    /// <summary>Works out where the water touched by these events ends up.</summary>
+    public Result Plan((int x, int y, int z, int extra)[] events)
+    {
+        var r = new Result();
+        try
+        {
+            var todo = new List<(int x, int y, int z, int extra)>(events);
+            while (todo.Count > 0 && r.Moves.Count < MaxMoves)
+            {
+                var e = todo[^1];
+                todo.RemoveAt(todo.Count - 1);
+                int seed = WaterAt(e.x, e.y, e.z);
+                if (seed < 0) continue;
+                int pass = Gather(seed);
+                // every other event at the same body comes along
+                int extra = e.extra;
+                for (int i = todo.Count - 1; i >= 0; i--)
+                {
+                    int s = WaterAt(todo[i].x, todo[i].y, todo[i].z);
+                    if (s < 0) continue;
+                    var (sx, sy, sz) = Unpack(s);
+                    if (MarkOf(sx, sy, sz) != pass) continue;
+                    extra += todo[i].extra;
+                    todo.RemoveAt(i);
+                }
+                Settle(r, seed, extra);
+            }
+        }
+        finally { Release(); }
+        return r;
+    }
+
+    /// <summary>A voxel of water at a place or beside it, or −1.</summary>
+    int WaterAt(int x, int y, int z)
+    {
+        if (Kind(x, y, z) == Wet) return Pack(x, y, z);
+        foreach (var (dx, dy, dz) in Six)
+            if (Kind(x + dx, y + dy, z + dz) == Wet) return Pack(x + dx, y + dy, z + dz);
+        return -1;
+    }
+
+    /// <summary>
+    /// The body of water a voxel belongs to, in order of distance from it (into <see cref="_body"/>), marked with a new
+    /// pass; its top layer's height goes to <see cref="_top"/>.
+    /// </summary>
+    int Gather(int seed)
+    {
+        int pass = ++_pass;
+        _body.Clear();
+        _bfs.Clear();
+        _top = -1;
+        var (x0, y0, z0) = Unpack(seed);
+        SetMark(x0, y0, z0, pass);
+        _bfs.Enqueue(seed);
+        while (_bfs.Count > 0)
+        {
+            int p = _bfs.Dequeue();
+            _body.Add(p);
+            var (x, y, z) = Unpack(p);
+            if (y > _top) _top = y;
+            foreach (var (dx, dy, dz) in Six)
             {
                 int nx = x + dx, ny = y + dy, nz = z + dz;
-                if (ny < level && World.InBounds(nx, ny, nz) && World.Get(nx, ny, nz) == Mat.Air && Dug(nx, ny, nz)) _flood.Enqueue((nx, ny, nz, level));
+                if (Kind(nx, ny, nz) != Wet || MarkOf(nx, ny, nz) == pass) continue;
+                SetMark(nx, ny, nz, pass);
+                _bfs.Enqueue(Pack(nx, ny, nz));
             }
+        }
+        return pass;
+    }
+
+    /// <summary>
+    /// Lets one body find its level: water pushed aside by building goes into the lowest open voxels at its edge first,
+    /// then, layer by layer, its top runs off into the lowest open voxel as long as that lies below it.
+    /// </summary>
+    void Settle(Result r, int seed, int extra)
+    {
+        for (int layers = 0; layers < 4096 && r.Moves.Count < MaxMoves; layers++)
+        {
+            int pass = Gather(seed);
+            OpenAll(pass);
+            if (extra > 0)
+            {
+                while (extra > 0 && PeekOpen(pass, out int f))
+                {
+                    TakeOpen();
+                    Fill(f, pass);
+                    r.Moves.Add(-1); r.Moves.Add(f);
+                    extra--;
+                }
+                extra = 0;
+                continue;
+            }
+            if (!PeekOpen(pass, out int low) || (low >> 20) >= _top) return;
+            // the top layer runs off, the far side first, so what is left of it stays joined to where it runs out
+            int outflow = WetBeside(low, pass);
+            int top = _top;
+            pass = Gather(outflow);
+            int moved = 0;
+            for (int i = _body.Count - 1; i >= 0; i--)
+            {
+                int t = _body[i];
+                if (t >> 20 != top) continue;
+                if (!PeekOpen(pass, out int f) || (f >> 20) >= top) return;
+                TakeOpen();
+                Make(t, Dry);
+                Fill(f, pass);
+                r.Moves.Add(t); r.Moves.Add(f);
+                moved++;
+                if (r.Moves.Count >= MaxMoves) { r.Again.Add(f); return; }
+            }
+            if (moved == 0) return;
+            seed = Kind(outflow) == Wet ? outflow : r.Moves[^1];
         }
     }
 
-    /// <summary>Water still on its way somewhere.</summary>
-    public int FloodPending => _flood.Count;
+    void Fill(int f, int pass)
+    {
+        Make(f, Wet);
+        var (x, y, z) = Unpack(f);
+        SetMark(x, y, z, pass);
+        OpenAround(x, y, z);
+    }
+
+    /// <summary>A voxel of the gathered body next to an open one.</summary>
+    int WetBeside(int p, int pass)
+    {
+        var (x, y, z) = Unpack(p);
+        foreach (var (dx, dy, dz) in Six)
+        {
+            int nx = x + dx, ny = y + dy, nz = z + dz;
+            if (Kind(nx, ny, nz) == Wet && MarkOf(nx, ny, nz) == pass) return Pack(nx, ny, nz);
+        }
+        return -1;
+    }
+
+    // ---------------------------------------------------------------- the open voxels at the body's edge
+
+    int _openPass;
+
+    /// <summary>Starts the edge afresh: every air voxel touching the gathered body.</summary>
+    void OpenAll(int pass)
+    {
+        foreach (var q in _open) q.Clear();
+        _openCount = 0;
+        _openLow = _w.SY;
+        _openPass = ++_pass;
+        foreach (int p in _body)
+        {
+            var (x, y, z) = Unpack(p);
+            OpenAround(x, y, z);
+        }
+    }
+
+    void OpenAround(int x, int y, int z)
+    {
+        foreach (var (dx, dy, dz) in Six)
+        {
+            int nx = x + dx, ny = y + dy, nz = z + dz;
+            if (Kind(nx, ny, nz) != Dry || MarkOf(nx, ny, nz) == _openPass) continue;
+            SetMark(nx, ny, nz, _openPass);
+            _open[ny].Enqueue(Pack(nx, ny, nz));
+            _openCount++;
+            if (ny < _openLow) _openLow = ny;
+        }
+    }
+
+    /// <summary>The lowest open voxel still air and still touching the body; stale ones are dropped (and may come back).</summary>
+    bool PeekOpen(int pass, out int p)
+    {
+        while (_openCount > 0)
+        {
+            while (_open[_openLow].Count == 0) _openLow++;
+            p = _open[_openLow].Peek();
+            if (Kind(p) == Dry && WetBeside(p, pass) >= 0) return true;
+            _open[_openLow].Dequeue();
+            _openCount--;
+            var (x, y, z) = Unpack(p);
+            SetMark(x, y, z, 0);
+        }
+        p = -1;
+        return false;
+    }
+
+    void TakeOpen() { _open[_openLow].Dequeue(); _openCount--; }
+
+    /// <summary>Lets go of the scratch layers between plans.</summary>
+    void Release()
+    {
+        foreach (int ci in _used) { _state[ci] = null; _mark[ci] = null; }
+        _used.Clear();
+        foreach (var q in _open) q.Clear();
+        _openCount = 0;
+        _body.Clear();
+        _bfs.Clear();
+    }
 }

@@ -415,52 +415,56 @@ if (args.Length == 0 || args[0] == "--sim")
         Run(10);
     }
 
-    // crews cutting earth beside a pond leave its shore alone; a trench dug from it fills, and the land beyond stays dry
+    // crews cutting earth beside a pond leave its shore alone; a trench cut from the pond into rising ground fills,
+    // and the pond gives up just as much
     {
-        (int x, int z) shore = (-1, -1);
-        for (int r = 160; r < 420 && shore.x < 0; r += 6)
-            for (int a = 0; a < 360 && shore.x < 0; a += 2)
-            {
-                int x = site4.KeepX + (int)(Math.Cos(a * Math.PI / 180) * r), z = site4.KeepZ + (int)(Math.Sin(a * Math.PI / 180) * r);
-                if (x < 0 || z < 0 || x >= w4.SX || z >= w4.SZ) continue;
-                int t = w4.ColTop(x, z);
-                if (w4.Get(x, t - 1, z) == Mat.Water && w4.SurfAt(x, z) > 60) shore = (x, z);
-            }
-        int level = site4.WaterTop[shore.z * w4.SX + shore.x];
-        int over = 0;
-        Action<int, int, int> spy = (x, y, z) =>
-        {
-            int i = z * w4.SX + x;
-            if (w4.Get(x, y, z) == Mat.Water && y >= site4.HTop[i] && y >= site4.WaterTop[i]) over++;
-        };
-        w4.Edited += spy;
-
+        var (qx, qz, pr, _) = site4.Ponds[0];
+        double kd = Math.Sqrt((double)(site4.KeepX - qx) * (site4.KeepX - qx) + (double)(site4.KeepZ - qz) * (site4.KeepZ - qz));
+        (int x, int z) At(double r) => (qx + (int)Math.Round((site4.KeepX - qx) / kd * r), qz + (int)Math.Round((site4.KeepZ - qz) / kd * r));
+        var edge = At(pr);
         int before = sim.Flooded;
         double e0 = sim.Stock[Stockpile.Earth];
-        var (_, cutVox) = sim.Survey(shore.x - 16, shore.z - 16, shore.x + 16, shore.z + 16, Stockpile.Earth, 16);
-        sim.AddZone(shore.x - 16, shore.z - 16, shore.x + 16, shore.z + 16, Stockpile.Earth, 16);
+        var (_, cutVox) = sim.Survey(edge.x - 16, edge.z - 16, edge.x + 16, edge.z + 16, Stockpile.Earth, 16);
+        sim.AddZone(edge.x - 16, edge.z - 16, edge.x + 16, edge.z + 16, Stockpile.Earth, 16);
         Run(90);
         Check("crews cutting earth beside a pond leave its shore alone", sim.Stock[Stockpile.Earth] > e0 + 300 && sim.Flooded == before,
-            $"pond at {shore}, ≈{Fmt.M3(cutVox)} m³ of earth in reach, earth +{Fmt.M3(sim.Stock[Stockpile.Earth] - e0)} m³, {sim.Flooded - before} voxels of water let in");
-        sim.RemoveZones(shore.x - 16, shore.z - 16, shore.x + 16, shore.z + 16);
-        sim.CancelArea(shore.x - 40, shore.z - 40, shore.x + 40, shore.z + 40);
+            $"pond at ({qx}, {qz}), ≈{Fmt.M3(cutVox)} m³ of earth in reach, earth +{Fmt.M3(sim.Stock[Stockpile.Earth] - e0)} m³, {sim.Flooded - before} voxels of water let in");
+        sim.RemoveZones(edge.x - 16, edge.z - 16, edge.x + 16, edge.z + 16);
+        sim.CancelArea(edge.x - 40, edge.z - 40, edge.x + 40, edge.z + 40);
 
-        // the trench runs from the pond to the lowest ground within reach beyond it
-        (int x, int z) low = (shore.x, shore.z); int lowY = int.MaxValue;
+        // the trench runs from just inside the water to the highest ground a few metres beyond the shore
+        var shore = At(pr - 3);
+        (int x, int z) high = shore; int highY = int.MinValue;
         for (int z = shore.z - 40; z <= shore.z + 40; z += 2)
             for (int x = shore.x - 40; x <= shore.x + 40; x += 2)
             {
-                int g = w4.SurfAt(x, z);
-                if (w4.Get(x, g, z) == Mat.Water || site4.Forbidden(x, z) || Math.Abs(x - shore.x) + Math.Abs(z - shore.z) < 24) continue;
-                if (g < lowY) { lowY = g; low = (x, z); }
+                int g = w4.SurfAt(x, z), d2 = (x - qx) * (x - qx) + (z - qz) * (z - qz);
+                if (w4.Get(x, g, z) == Mat.Water || site4.Forbidden(x, z) || d2 < (pr + 12) * (pr + 12) || d2 > (pr + 30) * (pr + 30)) continue;
+                if (g > highY) { highY = g; high = (x, z); }
             }
+        long water0 = WaterIn(w4);
+        int ran0 = sim.Flooded, over0 = OverLand(w4, site4);
         sim.InstantLabour = true;
-        sim.DesignateRemove(Shapes.Line(w4, site4, shore.x, shore.z, low.x, low.z, new Stroke { Width = 6, Height = 16, Dig = true }, 0));
+        sim.DesignateRemove(Shapes.Line(w4, site4, shore.x, shore.z, high.x, high.z, new Stroke { Width = 6, Height = 16, Dig = true }, 0));
         sim.InstantLabour = false;
-        for (int i = 0; i < 40 && (i < 4 || sim.FloodPending > 0); i++) Run(1);
-        w4.Edited -= spy;
-        Check("water runs into a trench dug from a pond, and no further", shore.x >= 0 && sim.Flooded - before > 300 && over == 0,
-            $"pond at {shore} standing to {level}, trench to {low} at {lowY}: {sim.Flooded - before} voxels of water ran in, {over} out over the land");
+        for (int i = 0; i < 120 && sim.WaterBusy; i++) Run(1);
+        long water1 = WaterIn(w4);
+        Check("a trench cut from a pond fills, and the pond gives up just as much", sim.Flooded - ran0 > 300 && water1 == water0 && !sim.WaterBusy && Floating(w4) == 0,
+            $"pond at ({qx}, {qz}), trench to {high} at {highY}: {sim.Flooded - ran0} voxels of water moved, {water0} → {water1} in the valley, {OverLand(w4, site4) - over0} over the land");
+
+        // the same worked out on a worker thread, as in the game: a pit dug into the pit shore
+        var pit = (x: qx - (int)Math.Round((site4.KeepX - qx) / kd * (pr + 6)), z: qz - (int)Math.Round((site4.KeepZ - qz) / kd * (pr + 6)));
+        sim.WaterInBackground = true;
+        ran0 = sim.Flooded;
+        sim.InstantLabour = true;
+        sim.DesignateRemove(Shapes.Box(w4, site4, pit.x - 6, pit.z - 6, pit.x + 6, pit.z + 6, new Stroke { Height = 12, Dig = true }, 0));
+        sim.InstantLabour = false;
+        var waited = Stopwatch.StartNew();
+        while (sim.WaterBusy && waited.ElapsedMilliseconds < 20000) { Run(.05); if (sim.WaterBusy) Thread.Sleep(1); }
+        sim.WaterInBackground = false;
+        long water2 = WaterIn(w4);
+        Check("…and on a worker thread, as in the game", sim.Flooded - ran0 > 100 && water2 == water0 && !sim.WaterBusy && Floating(w4) == 0,
+            $"pit at {pit}: {sim.Flooded - ran0} voxels of water moved in {waited.ElapsedMilliseconds} ms, {water0} → {water2} in the valley");
     }
 
     // the beasts: a deer bolts from a worker, archers hunt a boar for gold
@@ -605,6 +609,77 @@ if (args.Length == 0 || args[0] == "--sim")
     var filler = sim.Spawn(Kinds.Sapper, sim.NearestStand(site4.KeepX - site4.KeepR - 206, site4.KeepZ, 3));
     Run(60);
     Check("without timber a sapper fills the ditch with earth", filled > 400 && DistKeep(filler) < site4.KeepR + 160, $"{filled} voxels of fill, now {DistKeep(filler) / VoxelWorld.PerMetre:0.0} m from the citadel, {filler.State}");
+
+    // the other pond breached by a trench run out to the cliff: the water pours out over the land and down into the
+    // lowland as far as it goes, the pond drops by as much as left it, and nothing is made or lost
+    {
+        var (qx, qz, pr, plevel) = site4.Ponds[1];
+        int cliff = qx - pr;
+        while (cliff > 0 && w4.SurfAt(cliff - 1, qz) > w4.SurfAt(cliff, qz) - 12) cliff--;
+        long water0 = WaterIn(w4);
+        int ran0 = sim.Flooded, over0 = OverLand(w4, site4);
+        var sw2 = Stopwatch.StartNew();
+        sim.InstantLabour = true;
+        sim.DesignateRemove(Shapes.Line(w4, site4, qx - pr + 6, qz, cliff, qz, new Stroke { Width = 6, Height = 16, Dig = true }, 0));
+        sim.InstantLabour = false;
+        double t0 = sim.Time;
+        for (int i = 0; i < 600 && sim.WaterBusy; i++) Run(1);
+        int surface = w4.SurfAt(qx, qz);
+        while (w4.Get(qx, surface, qz) == Mat.Water) surface++;
+        long water1 = WaterIn(w4);
+        int over = OverLand(w4, site4) - over0;
+        Check("a pond breached out to the cliff pours over the land and settles; no water is made or lost",
+            water1 == water0 && over > 1000 && surface < plevel && !sim.WaterBusy && Floating(w4) == 0,
+            $"pond at ({qx}, {qz}) standing to {plevel}, now to {surface}; trench to the cliff at x {cliff}: {sim.Flooded - ran0} voxels moved in {sim.Time - t0:0} s ({sw2.ElapsedMilliseconds} ms), " +
+            $"{over} out over the land, {water0} → {water1} in the valley");
+    }
+}
+
+// voxels of water in the whole valley
+static long WaterIn(VoxelWorld w)
+{
+    long n = 0;
+    for (int ci = 0; ci < w.ChunkCount; ci++)
+    {
+        var d = w.ChunkData(ci);
+        if (d == null) { if (w.ChunkUniform(ci) == Mat.Water) n += VoxelWorld.CS3; continue; }
+        foreach (byte b in d) if (b == Mat.Water) n++;
+    }
+    return n;
+}
+
+// water hanging over air: there should be none once it has settled
+static int Floating(VoxelWorld w)
+{
+    int n = 0;
+    for (int ci = 0; ci < w.ChunkCount; ci++)
+    {
+        var d = w.ChunkData(ci);
+        if (d == null) continue;
+        w.ChunkCoords(ci, out int cx, out int cy, out int cz);
+        for (int i = 0; i < d.Length; i++)
+            if (d[i] == Mat.Water && w.Get(cx * 32 + (i & 31), cy * 32 + (i >> 10) - 1, cz * 32 + (i >> 5 & 31)) == Mat.Air) n++;
+    }
+    return n;
+}
+
+// water standing above the bare ground and the water as the valley was made: what has run out over the land
+static int OverLand(VoxelWorld w, Site site)
+{
+    int n = 0;
+    for (int ci = 0; ci < w.ChunkCount; ci++)
+    {
+        var d = w.ChunkData(ci);
+        if (d == null) continue;
+        w.ChunkCoords(ci, out int cx, out int cy, out int cz);
+        for (int i = 0; i < d.Length; i++)
+        {
+            if (d[i] != Mat.Water) continue;
+            int x = cx * 32 + (i & 31), y = cy * 32 + (i >> 10), z = cz * 32 + (i >> 5 & 31), c = z * w.SX + x;
+            if (y >= site.HTop[c] && y >= site.WaterTop[c]) n++;
+        }
+    }
+    return n;
 }
 
 Console.WriteLine(failures == 0 ? "\nall checks passed" : $"\n{failures} check(s) failed");

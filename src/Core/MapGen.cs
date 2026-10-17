@@ -61,19 +61,21 @@ public static class MapGen
             return baseH + rise + (nHill2.Sample(x * .02 + 40, z * .02 + 9) - .5) * 3 + roll;
         }
 
-        // two ponds on the plateau, away from the citadel and the cliff. Each lies level, its surface flush with the
-        // lowest ground round its shore, so the plateau never stands lower than the water beside it.
-        const int shore = 3;
+        // two big ponds on the plateau, north and south of the citadel a good way off (40 m), 15–20 m across and up to
+        // 2.5 m deep. Each lies level, its surface flush with the lowest ground round its shore, so it holds still
+        // until someone digs into it.
+        const int shore = 5;
         var ponds = new (int x, int z, int r, int level)[2];
         for (int n = 0; n < ponds.Length; n++)
         {
-            double a = 2.1 + n * 2.2 + Hash.H3((int)seed, n, 3) * .6;
-            int px = site.KeepX + (int)(Math.Cos(a) * 250), pz = Math.Clamp(site.KeepZ + (int)(Math.Sin(a) * 260), 60, SZ - 60);
-            int pr = 24 + (int)(Hash.H3((int)seed, n, 5) * 10), level = int.MaxValue;
+            double a = (n == 0 ? 1.62 : 4.66) + (Hash.H3((int)seed, n, 3) - .5) * .4, dist = 300 + Hash.H3((int)seed, n, 4) * 30;
+            int pr = 60 + (int)(Hash.H3((int)seed, n, 5) * 24), level = int.MaxValue;
+            int px = site.KeepX + (int)(Math.Cos(a) * dist);
+            int pz = Math.Clamp(site.KeepZ + (int)(Math.Sin(a) * dist), pr + shore + 16, SZ - pr - shore - 16);
             // the whole shore on the plateau, well back from the cliff wherever the cliff wanders
             double edge = EdgeX(pz) + 70;
             for (int z = pz - pr - shore; z <= pz + pr + shore; z++) edge = Math.Max(edge, EdgeX(z) + pr + shore + 8);
-            px = Math.Clamp(px, (int)Math.Ceiling(edge), SX - 60);
+            px = Math.Clamp(px, (int)Math.Ceiling(edge), SX - pr - shore - 16);
             for (int z = pz - pr - shore; z <= pz + pr + shore; z++)
                 for (int x = px - pr - shore; x <= px + pr + shore; x++)
                 {
@@ -81,6 +83,7 @@ public static class MapGen
                     if (d >= pr && d < pr + shore) level = Math.Min(level, (int)Math.Round(Plat(x, z)) - 1);
                 }
             ponds[n] = (px, pz, pr, level);
+            site.Ponds.Add((px, pz, pr, level));
         }
 
         var kind = new byte[SX * SZ];
@@ -142,7 +145,7 @@ public static class MapGen
                     if (d < pr)
                     {
                         double t = d / pr;
-                        h = level - 1 - (1 - t * t) * 11;
+                        h = level - 1 - (1 - t * t) * 19;
                         k = Pond; wl = (short)level;
                     }
                     // the shore climbs from the water's edge to the plateau

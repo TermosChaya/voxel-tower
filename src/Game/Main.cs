@@ -68,6 +68,8 @@ public partial class Main : Node3D
         double genMs = sw.Elapsed.TotalMilliseconds;
         sw.Restart();
         Sim = new Sim(World, Site);
+        // in play, where water goes is worked out off the main thread; scripted runs want it at once
+        Sim.WaterInBackground = !_selfTest && !_demo && _shot == null;
         double navMs = sw.Elapsed.TotalMilliseconds;
 
         var atmo = new Atmosphere();
@@ -473,6 +475,7 @@ public partial class Main : Node3D
     void Demo()
     {
         if (_pose == "battle") { Siege(); return; }
+        if (_pose == "flood") { Flood(); return; }
         var w = World; var s = Site; var sim = Sim;
         sim.Waves.Countdown = Waves.Prep;
         sim.Stock.Gold = 140;
@@ -495,9 +498,15 @@ public partial class Main : Node3D
         }
         for (int k = 0; k < 5; k++)
             sim.DesignateBuild(Shapes.Line(w, s, wx + 10 + k * 8, 540, wx + 10 + k * 8, 552, St(Mat.Stone, 8, 0), top - k * 8));
-        // the moat's southern half is dug through to the pond and lets the water in; in battle all of it
+        // the moat's southern half is dug, and a cut from its end into the nearest pond lets the water in; in battle all of it
         var moat = new Stroke { Width = 16, Height = 20, Dig = true };
         sim.DesignateRemove(Shapes.Line(w, s, mx, battle ? z0 - 24 : 524, mx, 684, moat, 0));
+        var pond = s.Ponds[0];
+        foreach (var p in s.Ponds)
+            if (Brushes.Dist(p.X - mx, p.Z - 684) < Brushes.Dist(pond.X - mx, pond.Z - 684)) pond = p;
+        double pd = Brushes.Dist(mx - pond.X, 684 - pond.Z);
+        int cutX = pond.X + (int)((mx - pond.X) / pd * (pond.R - 6)), cutZ = pond.Z + (int)((684 - pond.Z) / pd * (pond.R - 6));
+        sim.DesignateRemove(Shapes.Line(w, s, mx, 684, cutX, cutZ, new Stroke { Width = 8, Height = 20, Dig = true }, 0));
         sim.InstantLabour = false;
 
         // what is marked for the pawns now: merlons and a wooden walk on the wall, the rest of the moat, a tree to fell
@@ -608,6 +617,25 @@ public partial class Main : Node3D
         foreach (var u in archers) Selected.Add(u);
     }
 
+    /// <summary>
+    /// A pond breached by a cut run out to the cliff: the water pours along it, over the edge and down into the lowland,
+    /// and the pond drops (--at=seconds: how long it has been running).
+    /// </summary>
+    void Flood()
+    {
+        var w = World; var s = Site; var sim = Sim;
+        sim.Waves.Countdown = 1e9;
+        var (px, pz, pr, _) = s.Ponds[1];
+        int cliff = px - pr;
+        while (cliff > 0 && w.SurfAt(cliff - 1, pz) > w.SurfAt(cliff, pz) - 12) cliff--;
+        sim.InstantLabour = true;
+        sim.DesignateRemove(Shapes.Line(w, s, px - pr + 6, pz, cliff, pz, new Stroke { Width = 6, Height = 16, Dig = true }, 0));
+        sim.InstantLabour = false;
+        Advance(_poseSeconds);
+        Rig.Set(World.WX(cliff + 24), World.WZ(pz + 10), -2.2f, .7f, 2.6f, snap: true);
+        Hud.Refresh();
+    }
+
     /// <summary>Points the cursor for the screenshot: a blueprint copy beside the fort, or a moat half drawn.</summary>
     void PoseDemo()
     {
@@ -620,7 +648,7 @@ public partial class Main : Node3D
             for (int i = 1; i <= 6; i++) Tools._UnhandledInput(new InputEventMouseMotion { Position = a.Lerp(b, i / 6f) });
             return;
         }
-        if (_pose is "battle" or "close") return;
+        if (_pose is "battle" or "close" or "flood") return;
         int x = 720, z = 640;
         Tools.PointAt(new Vector3(World.WX(x), World.WY(World.SurfAt(x, z)), World.WZ(z)));
     }

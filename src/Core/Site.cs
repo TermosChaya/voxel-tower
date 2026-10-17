@@ -21,6 +21,9 @@ public sealed class Site
     /// <summary>How high water stood in each column when the valley was made; 0 where it was dry, null if there was none.</summary>
     public short[] WaterTop;
 
+    /// <summary>The ponds the valley was made with: centre, radius and the height their water stood to.</summary>
+    public readonly List<(int X, int Z, int R, int Level)> Ponds = new();
+
     /// <summary>Columns nobody may build on: the map's western edge (the horde's entry), the citadel and its gate approach.</summary>
     public bool Forbidden(int x, int z)
     {
