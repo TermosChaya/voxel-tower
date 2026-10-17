@@ -164,7 +164,11 @@ public sealed partial class Sim
         Gates.Add(g);
         if (built)
         {
-            for (int i = 0; i < plan.Cut.Count; i++) World.Set(plan.Cut.X(i), plan.Cut.Y(i), plan.Cut.Z(i), Mat.Air);
+            for (int i = 0; i < plan.Cut.Count; i++)
+            {
+                World.Set(plan.Cut.X(i), plan.Cut.Y(i), plan.Cut.Z(i), Mat.Air);
+                Forget(plan.Cut.X(i), plan.Cut.Y(i), plan.Cut.Z(i));
+            }
             for (int i = 0; i < plan.Leaves.Count; i++) World.Set(plan.Leaves.X(i), plan.Leaves.Y(i), plan.Leaves.Z(i), Mat.Gate);
             Mount(g);
         }
@@ -202,6 +206,24 @@ public sealed partial class Sim
             byte cur = World.Get(x, y, z);
             if (Mat.IsLeaf(cur) && cur != m) World.Set(x, y, z, m);
         }
+    }
+
+    /// <summary>Takes the leaves off a gate (they rotted, they fell): the gateway stands open until the gate is mended.</summary>
+    public void UnhangGate(Gateway g)
+    {
+        for (int i = 0; i < Gateway.Voxels; i++)
+        {
+            if (g.At[i] >= 0)
+            {
+                var (x, y, z) = WaterPlanner.Unpack(g.At[i]);
+                if (Mat.IsLeaf(World.Get(x, y, z))) World.Set(x, y, z, Mat.Air);
+            }
+            g.At[i] = -1;
+            g.Gone[i] = true;
+        }
+        g.Missing = 0;
+        g.Broken = true;
+        g.Open = g.Want = 0;
     }
 
     /// <summary>Lays the leaves of a broken gate anew where they hang shut.</summary>

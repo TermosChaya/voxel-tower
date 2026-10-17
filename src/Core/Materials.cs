@@ -33,7 +33,7 @@ public static class Mat
         Ladder = 21, SiegeLadder = 22, Deck = 23, Water = 24, Gate = 25, GateShut = 26, Ore = 27, Ruin = 28, GateOpen = 29,
         StoneDark = 30, StoneLight = 31;
     /// <summary>More of the world, past the figures' colours: grass of other shades, flowers, birch bark.</summary>
-    public const byte GrassDry = 54, GrassLush = 55, Flower = 56, Bloom = 57, Birch = 58;
+    public const byte GrassDry = 54, GrassLush = 55, Flower = 56, Bloom = 57, Birch = 58, KeepShade = 59;
     public const int Count = 64;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
@@ -60,8 +60,10 @@ public static class Mat
         D(Mortar, "Раствор", 0x2c282d, .08f, MatGroup.Stone, Player);
         D(Wood, "Брёвна", 0x4c3423, .22f, MatGroup.Wood, Player);
         D(Rammed, "Земля", 0x4b3829, .16f, MatGroup.Earth, Player | Earthy);
-        D(Keep, "Камень цитадели", 0x8e867f, .10f, MatGroup.Hard, 0);
-        D(KeepDark, "Камень цитадели", 0x48414b, .08f, MatGroup.Hard, 0);
+        // the citadel: rough masonry of big stones in two shades, darker mortar
+        D(Keep, "Камень цитадели", 0x756e68, .10f, MatGroup.Hard, 0);
+        D(KeepShade, "Камень цитадели", 0x5f5a57, .10f, MatGroup.Hard, 0);
+        D(KeepDark, "Камень цитадели", 0x3a343b, .08f, MatGroup.Hard, 0);
         D(Roof, "Сланец", 0x3b3349, .16f, MatGroup.Hard, 0);
         D(Leaf, "Хвоя", 0x263828, .30f, MatGroup.Wood, Natural);
         D(Trunk, "Ствол", 0x45332a, .18f, MatGroup.Wood, Natural);
@@ -110,7 +112,7 @@ public static class Mat
         foreach (var m in new[] { Leaf, Tuft, Foliage, Ladder, SiegeLadder, Water, Flower, Bloom }) Passable[m] = true;
         IsLadder[Ladder] = IsLadder[SiegeLadder] = true;
         // what holds the world up: loose pieces resting on these never fall
-        foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Rock, Path, Moss, Tuft, Keep, KeepDark, Roof, Ember, Iron, Plank }) IsAnchor[m] = true;
+        foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank }) IsAnchor[m] = true;
     }
 
     static void D(byte id, string name, uint srgb, float variance, MatGroup group, int flags)

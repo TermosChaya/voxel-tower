@@ -19,6 +19,8 @@ public sealed class VoxelList
         Count++;
     }
 
+    public void Clear() => Count = 0;
+
     public int X(int i) => _a[i * 4];
     public int Y(int i) => _a[i * 4 + 1];
     public int Z(int i) => _a[i * 4 + 2];

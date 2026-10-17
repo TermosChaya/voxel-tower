@@ -10,7 +10,8 @@ namespace VoxelTower.Game;
 
 /// <summary>
 /// Builds the valley, the simulation, the view, the camera, the tools and the interface, and wires them together.
-/// Command-line options after "--": --shot=file.png [--frames=N] takes a screenshot and quits,
+/// Command-line options after "--": --shot=file.png [--frames=N] takes a screenshot and quits (--cam=x,z,yaw,pitch,zoom
+/// points the camera first),
 /// --demo sets up a fort with pawns at work (--pose=battle: the horde bridging the moat and laddering the wall),
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
 /// --top looks straight down, --look=N at the Nth named place of the valley, --seed=N makes another valley.
@@ -45,6 +46,8 @@ public partial class Main : Node3D
     int _shotFrames = 45, _frames;
     bool _demo, _calm, _selfTest, _finale, _top;
     int _look = -1;
+    /// <summary>--cam=x,z,yaw,pitch,zoom: where the camera looks for a screenshot, x and z in voxels.</summary>
+    float[] _cam;
     uint _seed = 7;
     string _pose = "";
     /// <summary>How long the staged siege runs before the screenshot (--at=seconds).</summary>
@@ -61,6 +64,7 @@ public partial class Main : Node3D
             else if (a == "--top") _top = true;
             else if (a.StartsWith("--seed=") && uint.TryParse(a["--seed=".Length..], out uint sd)) _seed = sd;
             else if (a.StartsWith("--look=") && int.TryParse(a["--look=".Length..], out int lk)) _look = lk;
+            else if (a.StartsWith("--cam=")) _cam = Array.ConvertAll(a["--cam=".Length..].Split(','), v => float.Parse(v, System.Globalization.CultureInfo.InvariantCulture));
             else if (a == "--selftest") _selfTest = true;
             else if (a.StartsWith("--pose=")) _pose = a["--pose=".Length..];
             else if (a.StartsWith("--at=") && double.TryParse(a["--at=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double at)) _poseSeconds = at;
@@ -140,7 +144,8 @@ public partial class Main : Node3D
         {
             Hud.Log("Рудники платят золотом, пока они ваши: медный — к востоку от крепости, серебряную жилу в низине стерегут гоблины. " +
                 "Пошлите людей к входу. Задачи — над картой.", Hud.Kind.Ok);
-            Hud.Log("Крепость вокруг цитадели не достроена: западная стена с воротами стоит, остальное размечено, и рабочие возьмутся сами. " +
+            Hud.Log("Старая крепость вокруг цитадели наполовину разрушена: стены проломлены, ворота сорваны с петель. Возьмите починку (0) " +
+                "и щёлкните по стене — рабочие разберут завал и вернут ей прежний вид. Рамкой — только проломы. " +
                 "Камня на всё не хватит — ломайте его в скалах, валунах и руинах (8 и Z).", Hud.Kind.Warn);
         }
         Hud.Log("Орда придёт с запада через десять минут. Ройте, рубите и стройте, пока есть время.", Hud.Kind.Warn);
@@ -152,6 +157,7 @@ public partial class Main : Node3D
             var l = Site.Landmarks[_look];
             Rig.Set(World.WX(l.X), World.WZ(l.Z), -.7f, .6f, 2.4f, snap: true);
         }
+        if (_cam is { Length: 5 }) Rig.Set(World.WX(_cam[0]), World.WZ(_cam[1]), _cam[2], _cam[3], _cam[4], snap: true);
         if (_top) Rig.ToggleTopDown();
         if (_selfTest) SelfTest();
         // a hidden or minimised window never draws a frame: don't let scripted runs hang
@@ -401,6 +407,32 @@ public partial class Main : Node3D
         Check("…the workers cut the gateway and hang the gate", hung != null && hung.Ready,
             hung == null ? "no gate planned" : $"leaves on the {(hung.In > 0 ? "east" : "west")}, ready {hung.Ready}");
 
+        // the horde knocks a hole into the new wall: a click with the mending tool lays it again as it was
+        int hy = ground + 8, holed = 0;
+        var was = new Dictionary<(int x, int y, int z), byte>();
+        for (int y = hy; y < hy + 10; y++)
+            for (int z = 450; z < 458; z++)
+                for (int x = lx - 6; x <= lx + 6; x++)
+                {
+                    byte m = World.Get(x, y, z);
+                    if (!Mat.IsMasonry(m)) continue;
+                    was[(x, y, z)] = m;
+                    World.Set(x, y, z, Mat.Air);
+                    holed++;
+                }
+        Sim.Stock[Stockpile.Stone] += 4 * VoxelWorld.PerM3;
+        KeyPress(Key.Key0);
+        Check("0 picks up mending", Tools.Tool == Tool.Repair);
+        // on the top of the wall beside the hole, where the ladder is not in the way
+        int b3 = Sim.Orders.BuildTotal, wtop = World.SurfAt(lx, 446);
+        await ClickAt(ScreenAt(lx + .5f, wtop + .02f, 446.5f));
+        int mended = Sim.Orders.BuildTotal - b3;
+        Advance(40);
+        int back = 0;
+        foreach (var (v, m) in was) if (World.Get(v.x, v.y, v.z) == m) back++;
+        Check("…a click on the holed wall has it laid again as it was", holed > 100 && mended >= holed * 9 / 10 && back >= holed * 9 / 10,
+            $"{holed} knocked out, {mended} marked, {back} back stone for stone");
+
         // an area set aside for stone: the boulder that is left goes to the workers by itself
         KeyPress(Key.Key8); KeyPress(Key.Z);
         Check("8 and Z set out a quarry", Tools.Tool == Tool.Gather && Tools.GatherKind == Stockpile.Stone);
@@ -415,14 +447,27 @@ public partial class Main : Node3D
         await Drag((bx - 24, bz - 24), (bx + 24, bz + 24));
         Check("the unmarking frame takes the quarry back", Sim.Zones.Count == zones0, $"{Sim.Zones.Count} zones");
 
-        // marking and unmarking
+        // marking and unmarking; on the grid, a line drawn askew comes out straight along it
         KeyPress(Key.Key2);
         if (!Tools.Opt.Dig) KeyPress(Key.V);
+        KeyPress(Key.N);
+        Check("N snaps to the grid", Tools.Opt.Grid == 8);
         await Look(640, 500);
         int r3 = Removals();
-        await Drag((640, 440), (640, 560));
+        await Drag((641, 441), (646, 558));
         int moat = Removals() - r3;
-        Check("a line with the pick marks a moat", moat > 5000, $"{moat} voxels");
+        int gx = kx + (int)Math.Round((641 - kx) / 8.0) * 8, askew = 0, minZ = int.MaxValue, maxZ = 0;
+        for (int z = 420; z < 580; z++)
+            for (int x = 600; x < 690; x++)
+                for (int y = World.SurfAt(x, z) - 20; y < World.SurfAt(x, z) + 2; y++)
+                    if (Sim.Orders.At(x, y, z) == Orders.Remove)
+                    {
+                        if (Math.Abs(x - gx) > 5) askew++;
+                        minZ = Math.Min(minZ, z); maxZ = Math.Max(maxZ, z);
+                    }
+        Check("a line with the pick marks a moat, straight along the grid", moat > 5000 && askew == 0,
+            $"{moat} voxels, {askew} off the line x = {gx}, z {minZ}…{maxZ}");
+        KeyPress(Key.N);
         KeyPress(Key.Key6);
         Check("6 picks up the unmarking tool", Tools.Tool == Tool.Unmark);
         await Drag((630, 430), (652, 570));

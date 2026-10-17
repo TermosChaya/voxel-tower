@@ -21,7 +21,7 @@ public partial class Hud : CanvasLayer
 
     const string HelpText = "Управление\n" +
         "Кисти ничего не строят сами: они размечают работу, а пешки делают её — кладут из запасов, копают, рубят.\n" +
-        "1–5 — кисти, 6 — снять разметку, 7 — лестница, 8 — делянка (добыча с участка), 9 — ворота, B — снять чертёж, Esc — убрать кисть. Z, X, C — камень, брёвна, земля; " +
+        "1–5 — кисти, 6 — снять разметку, 7 — лестница, 8 — делянка (добыча с участка), 9 — ворота, 0 — починка, B — снять чертёж, N — сетка, Esc — убрать кисть. Z, X, C — камень, брёвна, земля; " +
         "V — кирка: копать, рубить, ломать камень, разбирать свою кладку. Shift с кистью — тоже кирка.\n" +
         "[ и ] — толщина, − и = — высота (с киркой — глубина). F — форма или заливка, G — ровно или по рельефу.\n" +
         "Без кисти: ЛКМ — выбрать пешку, рамкой — нескольких; ПКМ по земле — послать, по зверю — охотиться, по врагу — атаковать.\n" +
@@ -39,6 +39,7 @@ public partial class Hud : CanvasLayer
         (Tool.Ladder, Icons.Ladder, "7", "Лестница\nЩелчок по боковой грани стены, башни или обрыва: рабочие приставят лестницу от земли до верха. По лестницам ваши пешки поднимаются на стены. Орда тоже ими пользуется — и ставит свои."),
         (Tool.Gather, Icons.Gather, "8", "Делянка\nРамкой отметьте участок, откуда брать ресурс: Z — камень (скалы и валуны), X — лес, C — земля; у камня и земли — глубина. Размечать каждое дерево не нужно: свободные пешки сами берут оттуда работу понемногу, а разметка стен и рвов идёт первой."),
         (Tool.Gate, Icons.GateIcon, "9", "Ворота\nЩелчок по боковой грани стены: рабочие прорубят проём в два метра шириной и три высотой и навесят дубовые створки на железе. Свои открывают их на ходу, перед ордой они закрыты, и рубить их ей не легче камня. Щелчок по воротам без кисти — держать открытыми, на засов или снова сами."),
+        (Tool.Repair, Icons.Mend, "0", "Починка\nЩелчок по разрушенной постройке: рабочие вернут ей прежний вид — разберут завал, где он лёг на кладку, доложат недостающее тем же камнем, навесят ворота. Помнится всё, что вы построили, и старая крепость тоже. Рамка чинит только то, что в ней."),
         (Tool.Capture, Icons.Scroll, "B", "Снять чертёж\nОбведите рамкой свою постройку — она станет чертежом. Копии ставятся из свитков справа, R поворачивает."),
     };
 
@@ -72,7 +73,8 @@ public partial class Hud : CanvasLayer
     Retinue _retinue;
     UnitOverlay _overlay;
     Control _finale;
-    double _clock, _refreshAt;
+    double _clock, _refreshAt, _soundAt;
+    (int meant, int standing) _sound;
 
     public static Label CapsLabel(string text, int size = 10, Color? color = null)
     {
@@ -343,10 +345,20 @@ public partial class Hud : CanvasLayer
     IEnumerable<(string text, bool done)> Goals()
     {
         var sim = _m.Sim;
-        if (sim.FortLeft0 > 0)
+        if (sim.FortArea != default)
         {
-            int left = sim.FortLeft();
-            yield return left == 0 ? ("Крепость достроена", true) : ($"Достроить крепость: готово {100 - left * 100 / sim.FortLeft0} %", false);
+            // how sound the fort is: counted over its whole design, so not every fifth of a second
+            if (_clock >= _soundAt)
+            {
+                _soundAt = _clock + 2;
+                var (x0, z0, x1, z1) = sim.FortArea;
+                _sound = sim.Soundness(x0, z0, x1, z1);
+            }
+            var (meant, standing) = _sound;
+            int whole = meant == 0 ? 100 : (int)(standing * 100L / meant);
+            yield return standing >= meant - meant / 200 ? ("Крепость цела", true) : ($"Починить крепость (0 — починка): цела на {whole} %", false);
+            if (sim.FortGate is { } g)
+                yield return g.Ready && !g.Broken ? ("Ворота навешены", true) : g.Broken ? ("Навесить ворота: починкой по проёму", false) : ("Ворота навешивают", false);
         }
         foreach (var m in sim.Mines)
             yield return m.Holder switch
@@ -382,7 +394,7 @@ public partial class Hud : CanvasLayer
     /// <summary>What the tag says over a mine or a ruin.</summary>
     (string head, string sub, Color color) PlaceTag(Landmark l)
     {
-        if (l.Kind == LandmarkKind.Ruin) return (l.Name, "старая кладка — её ломают на камень: 8 и Z, рамкой по руинам", Ornament.Aged);
+        if (l.Kind == LandmarkKind.Ruin) return (l.Name, "старая кладка: её можно поднять как стояла (0 — починка) или разобрать на камень (8 и Z)", Ornament.Aged);
         var m = _m.Sim.Mines.Find(x => x.Place == l);
         if (m == null) return (l.Name, "", Ornament.Aged);
         string pay = $"+{m.Income} зол./мин";
@@ -463,6 +475,10 @@ public partial class Hud : CanvasLayer
                 _opts.AddChild(CapsLabel($"поворот {t.PasteRot * 90}° · R — повернуть · {t.PasteBp.Describe()}", 10, Ornament.Aged));
                 break;
         }
+        if (t.Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Paste or Tool.Gather or Tool.Repair or Tool.Capture or Tool.Unmark)
+            _opts.AddChild(new Choice("Сетка", "Сетка\nПривязка к сетке от центра цитадели: начало и конец штриха встают в её узлы, линии идут вдоль осей или под 45°, " +
+                "круги — целыми шагами. Стены выходят ровными, а одинаковое по обе стороны цитадели — симметричным. Клавиша N.",
+                new[] { "нет", "50 см", "1 м", "2 м" }, Array.IndexOf(ToolOptions.Grids, o.Grid), i => t.SetGrid(ToolOptions.Grids[i])));
         _opts.Visible = _opts.GetChildCount() > 0;
     }
 

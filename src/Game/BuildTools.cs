@@ -5,7 +5,7 @@ using VoxelTower.Core;
 
 namespace VoxelTower.Game;
 
-public enum Tool { None, Brush, Line, Box, Circle, Extrude, Ladder, Gate, Gather, Unmark, Capture, Paste }
+public enum Tool { None, Brush, Line, Box, Circle, Extrude, Ladder, Gate, Repair, Gather, Unmark, Capture, Paste }
 
 public enum BrushForm { Column, Ball }
 
@@ -23,11 +23,14 @@ public sealed class ToolOptions
     public BrushForm Form = BrushForm.Column;
     public bool Hollow;
     public bool Level = true;
+    /// <summary>Snapping to a grid round the citadel's middle, its step in voxels (0: off); the step it had when it was last on.</summary>
+    public int Grid, GridLast = 8;
 
     public static readonly int[] Widths = { 1, 2, 3, 4, 6, 8, 12, 16, 24, 32 };
     public static readonly int[] Heights = { 4, 8, 12, 16, 24, 32, 40, 48, 56, 64, 80, 96 };
     public static readonly int[] Depths = { 4, 8, 12, 16, 24, 32, 48, 64, 96 };
     public static readonly int[] Steps = { 1, 2, 4, 8, 16 };
+    public static readonly int[] Grids = { 0, 4, 8, 16 };
 
     public static int Next(int[] values, int current, int dir)
     {
@@ -48,7 +51,7 @@ public partial class BuildTools : Node3D
     public static string ToolName(Tool t) => t switch
     {
         Tool.Brush => "Кисть", Tool.Line => "Линия", Tool.Box => "Прямоугольник", Tool.Circle => "Круг",
-        Tool.Extrude => "Выдавить", Tool.Ladder => "Лестница", Tool.Gate => "Ворота", Tool.Gather => "Делянка", Tool.Unmark => "Снять разметку", Tool.Capture => "Снять чертёж",
+        Tool.Extrude => "Выдавить", Tool.Ladder => "Лестница", Tool.Gate => "Ворота", Tool.Repair => "Починка", Tool.Gather => "Делянка", Tool.Unmark => "Снять разметку", Tool.Capture => "Снять чертёж",
         Tool.Paste => "Чертёж", _ => "Без кисти",
     };
 
@@ -66,11 +69,12 @@ public partial class BuildTools : Node3D
         (Tool.Extrude, true) => "Щёлкните по ровной грани: её вынут на шаг вглубь. Ступени в склоне, проход в скале.",
         (Tool.Ladder, _) => "Щёлкните по боковой грани стены, башни или обрыва — рабочие приставят лестницу от земли до верха. По ней ходят ваши пешки… и орда, если доберётся.",
         (Tool.Gate, _) => "Щёлкните по боковой грани стены — рабочие прорубят в ней проём и навесят ворота: створки внутри, со стороны цитадели. Своим они открываются сами, орде их придётся рубить.",
+        (Tool.Repair, _) => "Щёлкните по разрушенной постройке — рабочие вернут ей прежний вид: разберут завал, доложат недостающее, навесят ворота. Рамкой — чинить только то, что в ней.",
         (Tool.Gather, _) => "Протяните рамку — участок для добычи. Z — камень из скал и валунов, X — лес, C — земля. Свободные рабочие сами понемногу берут оттуда работу.",
         (Tool.Unmark, _) => "Протяните рамку — вся разметка и делянки в ней снимаются. Щелчок снимает разметку поблизости и делянку под курсором.",
         (Tool.Capture, _) => "Обведите рамкой свою постройку — она станет чертежом.",
         (Tool.Paste, _) => "Щёлкните, чтобы разметить копию. R поворачивает, Esc отменяет.",
-        _ => "ЛКМ — выбрать пешек, рамкой — нескольких, ПКМ — послать, ПКМ по зверю — охотиться. 1–5 — кисти, 7 — лестница, V — кирка.",
+        _ => "ЛКМ — выбрать пешек, рамкой — нескольких, ПКМ — послать, ПКМ по зверю — охотиться. 1–5 — кисти, 7 — лестница, 0 — починка, V — кирка.",
     };
 
     const int MaxExtrudeFaces = 6000;
@@ -104,6 +108,9 @@ public partial class BuildTools : Node3D
 
     Node3D _voxSpace;
     MeshInstance3D _ghost, _shape, _cursor;
+    // the grid's nodes round the cursor while snapping
+    MultiMeshInstance3D _gridDots;
+    string _gridKey = "";
     ShaderMaterial _ghostMat;
     StandardMaterial3D _shapeMat;
     readonly GreedyMesher _mesher = new();
@@ -170,6 +177,20 @@ public partial class BuildTools : Node3D
             Visible = false,
         };
         AddChild(_cursor);
+        _gridDots = new MultiMeshInstance3D
+        {
+            Multimesh = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, UseColors = true, Mesh = new PlaneMesh { Size = Vector2.One } },
+            MaterialOverride = new StandardMaterial3D
+            {
+                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+                Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+                VertexColorUseAsAlbedo = true,
+                CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+            },
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            Visible = false,
+        };
+        AddChild(_gridDots);
     }
 
     // ---------------------------------------------------------------- state
@@ -202,7 +223,7 @@ public partial class BuildTools : Node3D
     public void SetDig(bool dig)
     {
         Opt.Dig = dig;
-        if (dig && Tool is Tool.None or Tool.Capture or Tool.Unmark or Tool.Paste or Tool.Ladder or Tool.Gate or Tool.Gather) { Tool = Tool.Line; PasteBp = null; }
+        if (dig && Tool is Tool.None or Tool.Capture or Tool.Unmark or Tool.Paste or Tool.Ladder or Tool.Gate or Tool.Repair or Tool.Gather) { Tool = Tool.Line; PasteBp = null; }
         Changed();
     }
 
@@ -228,6 +249,46 @@ public partial class BuildTools : Node3D
     }
 
     public void ToggleLevel() { Opt.Level = !Opt.Level; Changed(); }
+
+    /// <summary>Snapping to the grid on or off; it comes back with the step it had.</summary>
+    public void ToggleGrid()
+    {
+        if (Opt.Grid > 0) { Opt.GridLast = Opt.Grid; Opt.Grid = 0; }
+        else Opt.Grid = Opt.GridLast;
+        Changed();
+    }
+
+    public void SetGrid(int step) { Opt.Grid = step; if (step > 0) Opt.GridLast = step; Changed(); }
+
+    /// <summary>Strokes of this tool start and end on the grid while snapping is on.</summary>
+    bool Snapping => Opt.Grid > 0 && Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather or Tool.Repair or Tool.Paste;
+
+    /// <summary>
+    /// A point moved to the nearest node of the grid, which runs from the citadel's middle: what is drawn on it comes
+    /// out even, and what is drawn the same on either side of the citadel comes out symmetrical.
+    /// </summary>
+    (int x, int y, int z) Snap((int x, int y, int z) p)
+    {
+        if (!Snapping) return p;
+        int g = Opt.Grid, ox = _m.Site.KeepX, oz = _m.Site.KeepZ;
+        int x = ox + (int)Math.Round((p.x - ox) / (double)g) * g, z = oz + (int)Math.Round((p.z - oz) / (double)g) * g;
+        return (Math.Clamp(x, 0, _m.World.SX - 1), p.y, Math.Clamp(z, 0, _m.World.SZ - 1));
+    }
+
+    /// <summary>A line on the grid keeps to the eight directions: along x, along z or at 45°, a whole number of steps long.</summary>
+    (int x, int y, int z) Straighten((int x, int y, int z) a, (int x, int y, int z) b)
+    {
+        int g = Opt.Grid, dx = b.x - a.x, dz = b.z - a.z;
+        if (dx == 0 && dz == 0) return b;
+        int oct = ((int)Math.Round(Math.Atan2(dz, dx) / (Math.PI / 4)) % 8 + 8) % 8;
+        int ux = oct is 0 or 1 or 7 ? 1 : oct is 3 or 4 or 5 ? -1 : 0, uz = oct is 1 or 2 or 3 ? 1 : oct is 5 or 6 or 7 ? -1 : 0;
+        double along = ux != 0 && uz != 0 ? (Math.Abs(dx) + Math.Abs(dz)) / 2.0 : Math.Abs(ux != 0 ? dx : dz);
+        int n = (int)Math.Round(along / g) * g;
+        return (Math.Clamp(a.x + ux * n, 0, _m.World.SX - 1), b.y, Math.Clamp(a.z + uz * n, 0, _m.World.SZ - 1));
+    }
+
+    /// <summary>The ground under the cursor, on the grid when snapping.</summary>
+    (int x, int y, int z) HoverGround() => Snap(_hover.Ground(_m.World));
 
     /// <summary>What a gathering area takes: the material in hand says which.</summary>
     public int GatherKind => Opt.Material switch { Mat.Wood => Stockpile.Wood, Mat.Rammed => Stockpile.Earth, _ => Stockpile.Stone };
@@ -271,7 +332,7 @@ public partial class BuildTools : Node3D
         {
             global::Godot.Key.Key1 => Tool.Brush, global::Godot.Key.Key2 => Tool.Line, global::Godot.Key.Key3 => Tool.Box,
             global::Godot.Key.Key4 => Tool.Circle, global::Godot.Key.Key5 => Tool.Extrude, global::Godot.Key.Key6 => Tool.Unmark,
-            global::Godot.Key.Key7 => Tool.Ladder, global::Godot.Key.Key8 => Tool.Gather, global::Godot.Key.Key9 => Tool.Gate, global::Godot.Key.B => Tool.Capture,
+            global::Godot.Key.Key7 => Tool.Ladder, global::Godot.Key.Key8 => Tool.Gather, global::Godot.Key.Key9 => Tool.Gate, global::Godot.Key.Key0 => Tool.Repair, global::Godot.Key.B => Tool.Capture,
             _ => Tool.None,
         };
         if (t != Tool.None) { SetTool(t); return true; }
@@ -290,6 +351,7 @@ public partial class BuildTools : Node3D
             case global::Godot.Key.Equal: StepHeight(1); return true;
             case global::Godot.Key.F: ToggleForm(); return true;
             case global::Godot.Key.G: ToggleLevel(); return true;
+            case global::Godot.Key.N: ToggleGrid(); return true;
             case global::Godot.Key.R when Tool == Tool.Paste: PasteRot = (PasteRot + 1) & 3; Changed(); return true;
         }
         return false;
@@ -304,7 +366,7 @@ public partial class BuildTools : Node3D
         _strokeVox = 0; _strokeSec = 0; Array.Clear(_strokeEst);
         if (!_hasHover) return;
         var w = _m.World;
-        _startPt = _hover.Ground(w);
+        _startPt = Tool == Tool.Brush ? _hover.Ground(w) : HoverGround();
         _level = Shapes.Level(w, _startPt.x, _startPt.z, StrokeNow());
         if (Tool == Tool.Brush)
         {
@@ -328,13 +390,14 @@ public partial class BuildTools : Node3D
             if (_strokeVox > 0) _m.Hud.Log($"{(dig ? "Копать" : ToolName(Tool))}: {Summary(_strokeEst, dig, _strokeSec)}");
             return;
         }
-        if (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather)
+        if (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather or Tool.Repair)
         {
             if (click && Tool == Tool.Unmark) { UnmarkAt(); return; }
+            if (click && Tool == Tool.Repair) { RepairAt(); return; }
             if (click && Tool == Tool.Gather) { Refuse("протяните рамку по участку"); return; }
             if (click && dig && _hasTree) { FellTree(); return; }
             if (!_hasStart || !(_hasDrag || _hasHover)) return;
-            var a = _startPt; var b = _hasDrag ? _dragPt : _hover.Ground(w);
+            var a = _startPt; var b = _hasDrag ? _dragPt : HoverGround();
             if (Tool == Tool.Capture) { Capture(a, b); return; }
             if (Tool == Tool.Unmark)
             {
@@ -344,6 +407,7 @@ public partial class BuildTools : Node3D
                 return;
             }
             if (Tool == Tool.Gather) { SetZone(a, b); return; }
+            if (Tool == Tool.Repair) { RepairIn(a, b); return; }
             Designate(PlanDrag(a, b, dig), dig, ToolName(Tool));
             return;
         }
@@ -370,6 +434,106 @@ public partial class BuildTools : Node3D
             Designate(plan, dig, dig ? "Вдавить" : "Выдавить");
         }
         else if (Tool == Tool.Paste && PasteBp != null) Designate(PlanPasteAtHover(), false, PasteBp.Name);
+    }
+
+    // ---------------------------------------------------------------- mending
+
+    // the building under the cursor, kept while the cursor stays on it and nothing meant changes
+    List<int> _bld;
+    readonly HashSet<int> _bldSet = new();
+    int _bldRev = -1;
+    (int x0, int z0, int x1, int z1) _bldBox;
+    readonly VoxelList _mendLay = new(), _mendClear = new(), _mendGhost = new();
+    List<Gateway> _mendGates = new();
+
+    /// <summary>The building under the cursor (the voxel hit, the air in front of it, or right beside), or null.</summary>
+    List<int> HoverBuilding()
+    {
+        if (!_hasHover) return null;
+        var sim = _m.Sim;
+        var f = _hover.Front;
+        int seed = sim.MeantNear(f.x, f.y, f.z);
+        if (seed < 0) return null;
+        if (_bld != null && _bldRev == sim.DesignRev && _bldSet.Contains(seed)) return _bld;
+        _bld = sim.BuildingFrom(seed, _bldSet);
+        _bldRev = sim.DesignRev;
+        int x0 = int.MaxValue, z0 = int.MaxValue, x1 = int.MinValue, z1 = int.MinValue;
+        foreach (int p in _bld)
+        {
+            var (x, _, z) = WaterPlanner.Unpack(p);
+            x0 = Math.Min(x0, x); z0 = Math.Min(z0, z); x1 = Math.Max(x1, x); z1 = Math.Max(z1, z);
+        }
+        _bldBox = (x0, z0, x1, z1);
+        return _bld;
+    }
+
+    /// <summary>What mending these meant voxels takes, and the broken gates in the rectangle with them.</summary>
+    void PlanMend(List<int> voxels, int x0, int z0, int x1, int z1)
+    {
+        _mendLay.Clear(); _mendClear.Clear(); _mendGhost.Clear();
+        _m.Sim.MendPlan(voxels, _mendLay, _mendClear);
+        _mendGates = _m.Sim.BrokenGatesIn(x0, z0, x1, z1);
+        for (int i = 0; i < _mendLay.Count; i++) _mendGhost.Add(_mendLay.X(i), _mendLay.Y(i), _mendLay.Z(i), _mendLay.M(i));
+        foreach (var g in _mendGates) _m.Sim.GateLeaves(g, _mendGhost);
+    }
+
+    /// <summary>"камень 3,2 м³ · завал 0,4 м³ · ворота · 5 мин работы одного".</summary>
+    string MendSummary(out bool affordable)
+    {
+        var lay = new double[4]; var cut = new double[4];
+        double sec = Labour.Estimate(_m.World, _mendGhost, false, lay) + Labour.Estimate(_m.World, _mendClear, true, cut);
+        Array.Copy(lay, PlanNeeds, 4);
+        var parts = new List<string>();
+        string shortOf = "";
+        var st = _m.Sim.Stock;
+        foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth })
+        {
+            if (lay[k] > .5) parts.Add($"{Stockpile.Name(k)} {Fmt.M3(lay[k])} м³");
+            if (lay[k] > st[k] + .5) shortOf += (shortOf.Length > 0 ? ", " : "") + $"{Stockpile.Name(k)} {Fmt.M3(st[k])}";
+        }
+        if (_mendClear.Count > 0) parts.Add($"разобрать завал {Fmt.M3(_mendClear.Count)} м³");
+        if (_mendGates.Count > 0) parts.Add(_mendGates.Count == 1 ? "навесить ворота" : $"навесить ворота: {_mendGates.Count}");
+        parts.Add($"{Fmt.Duration(sec)} работы одного");
+        affordable = shortOf.Length == 0;
+        return string.Join(" · ", parts) + (shortOf.Length > 0 ? $" — в запасе {shortOf}" : "");
+    }
+
+    /// <summary>A click: the whole building under the cursor is mended to what it was.</summary>
+    void RepairAt()
+    {
+        var b = HoverBuilding();
+        if (b == null)
+        {
+            // a gateway with its leaves gone has nothing meant in it: a click in it hangs the gate again
+            _mendLay.Clear(); _mendClear.Clear(); _mendGhost.Clear();
+            _mendGates = _hasHover ? _m.Sim.BrokenGatesIn(_hover.X - 24, _hover.Z - 24, _hover.X + 24, _hover.Z + 24) : new List<Gateway>();
+            foreach (var g in _mendGates) _m.Sim.GateLeaves(g, _mendGhost);
+            if (_mendGates.Count == 0) { Refuse("здесь нечего чинить: щёлкните по разрушенной постройке"); return; }
+        }
+        else
+        {
+            var (x0, z0, x1, z1) = _bldBox;
+            PlanMend(b, x0 - 8, z0 - 8, x1 + 8, z1 + 8);
+        }
+        Mend();
+    }
+
+    /// <summary>A frame: only what of the buildings stands in it is mended.</summary>
+    void RepairIn((int x, int y, int z) a, (int x, int y, int z) b)
+    {
+        PlanMend(_m.Sim.MeantIn(a.x, a.z, b.x, b.z), a.x, a.z, b.x, b.z);
+        Mend();
+    }
+
+    void Mend()
+    {
+        if (_mendGhost.Count == 0 && _mendClear.Count == 0) { Refuse("цело: чинить нечего"); return; }
+        string text = MendSummary(out _);
+        int n = _m.Sim.Mend(_mendLay, _mendClear);
+        foreach (var g in _mendGates) n += _m.Sim.MendGate(g);
+        if (n == 0) { Refuse("всё, что нужно, уже размечено"); return; }
+        _m.Hud.Log($"Починка: {text}");
+        _planKey = "~";
     }
 
     void Capture((int x, int y, int z) a, (int x, int y, int z) b)
@@ -432,10 +596,18 @@ public partial class BuildTools : Node3D
         {
             Tool.Line => Shapes.Line(w, site, a.x, a.z, b.x, b.z, st, _level),
             Tool.Box => Shapes.Box(w, site, a.x, a.z, b.x, b.z, st, _level),
-            Tool.Circle => Shapes.Circle(w, site, a.x, a.z, Brushes.Dist(b.x - a.x, b.z - a.z) + .5, st, _level),
+            Tool.Circle => Shapes.Circle(w, site, a.x, a.z, Radius(a, b), st, _level),
             _ => null,
         };
         return dig ? Shapes.WithTrees(_m.World, plan) : plan;
+    }
+
+    /// <summary>A circle's radius from its middle to the cursor; on the grid, in whole half-steps.</summary>
+    double Radius((int x, int y, int z) a, (int x, int y, int z) b)
+    {
+        double d = Brushes.Dist(b.x - a.x, b.z - a.z);
+        if (Snapping) { double half = Opt.Grid / 2.0; d = Math.Max(half, Math.Round(d / half) * half); }
+        return d + .5;
     }
 
     // ---------------------------------------------------------------- freehand strokes
@@ -552,13 +724,18 @@ public partial class BuildTools : Node3D
             _hasTree = true;
         }
         _hasDrag = false;
-        if (_lmb && _hasStart && (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather || ColumnStroke) && Math.Abs(d.Y) > 1e-4f)
+        if (_lmb && _hasStart && (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather or Tool.Repair || ColumnStroke) && Math.Abs(d.Y) > 1e-4f)
         {
             float t = (w.WY(_startPt.y) - o.Y) / d.Y;
             if (t > 0)
             {
                 var p = o + d * t;
                 _dragPt = (Math.Clamp(w.VX(p.X), 0, w.SX - 1), _startPt.y, Math.Clamp(w.VZ(p.Z), 0, w.SZ - 1));
+                if (!ColumnStroke)
+                {
+                    _dragPt = Snap(_dragPt);
+                    if (Tool == Tool.Line && Snapping) _dragPt = Straighten(_startPt, _dragPt);
+                }
                 _hasDrag = true;
             }
         }
@@ -587,7 +764,7 @@ public partial class BuildTools : Node3D
     VoxelList PlanPasteAtHover()
     {
         if (PasteBp == null || !_hasHover) return null;
-        var g = _hover.Ground(_m.World);
+        var g = HoverGround();
         int w = PasteBp.RotW(PasteRot), d = PasteBp.RotD(PasteRot);
         return PasteBp.PlanPaste(_m.World, _m.Site, g.x - (w >> 1), g.z - (d >> 1), PasteRot, g.y);
     }
@@ -598,6 +775,40 @@ public partial class BuildTools : Node3D
         UpdateCursor();
         UpdateShape();
         UpdatePlan();
+        UpdateGrid();
+    }
+
+    /// <summary>Dots on the ground at the grid's nodes round the cursor, brighter on the two lines through the citadel's middle.</summary>
+    void UpdateGrid()
+    {
+        if (!Snapping || !_hasHover) { _gridDots.Visible = false; _gridKey = ""; return; }
+        var w = _m.World;
+        var c = _lmb && _hasDrag ? _dragPt : HoverGround();
+        int g = Opt.Grid, n = g <= 4 ? 9 : g <= 8 ? 6 : 4;
+        string key = $"{c.x},{c.z},{g},{_rev}";
+        _gridDots.Visible = true;
+        if (key == _gridKey) return;
+        _gridKey = key;
+        var mm = _gridDots.Multimesh;
+        mm.InstanceCount = (2 * n + 1) * (2 * n + 1);
+        float v = VoxelWorld.Vox;
+        int i = 0;
+        for (int dk = -n; dk <= n; dk++)
+            for (int di = -n; di <= n; di++, i++)
+            {
+                int x = c.x + di * g, z = c.z + dk * g;
+                float fade = 1 - MathF.Sqrt(di * di + dk * dk) / (n + 1);
+                if (x < 0 || z < 0 || x >= w.SX || z >= w.SZ || fade <= 0)
+                {
+                    mm.SetInstanceTransform(i, new Transform3D(Basis.Identity.Scaled(Vector3.One * 1e-4f), Vector3.Zero));
+                    mm.SetInstanceColor(i, new Color(0, 0, 0, 0));
+                    continue;
+                }
+                bool axis = x == _m.Site.KeepX || z == _m.Site.KeepZ;
+                float size = (axis ? 1.7f : 1.1f) * v;
+                mm.SetInstanceTransform(i, new Transform3D(Basis.Identity.Scaled(new Vector3(size, 1, size)), new Vector3(w.WX(x + .5f), w.WY(w.SurfAt(x, z)) + .3f * v, w.WZ(z + .5f))));
+                mm.SetInstanceColor(i, axis ? new Color(1f, .8f, .5f, .9f * fade) : new Color(.95f, .68f, .38f, .65f * fade));
+            }
     }
 
     void UpdateCursor()
@@ -615,11 +826,12 @@ public partial class BuildTools : Node3D
     {
         var w = _m.World;
         bool show = false;
-        if ((Tool is Tool.Capture or Tool.Unmark or Tool.Gather) && _lmb && _hasStart && _hasDrag)
+        if ((Tool is Tool.Capture or Tool.Unmark or Tool.Gather or Tool.Repair) && _lmb && _hasStart && _hasDrag)
         {
             var a = _startPt; var b = _dragPt;
             int x0 = Math.Min(a.x, b.x), x1 = Math.Max(a.x, b.x) + 1, z0 = Math.Min(a.z, b.z), z1 = Math.Max(a.z, b.z) + 1;
-            var c = Tool == Tool.Unmark ? new Color(.83f, .3f, .22f, .26f) : Tool == Tool.Gather ? ZoneView.Tint(GatherKind, .3f) : new Color(.9f, .62f, .3f, .28f);
+            var c = Tool == Tool.Unmark ? new Color(.83f, .3f, .22f, .26f) : Tool == Tool.Gather ? ZoneView.Tint(GatherKind, .3f)
+                : Tool == Tool.Repair ? new Color(.55f, .72f, .42f, .26f) : new Color(.9f, .62f, .3f, .28f);
             SetShape(new BoxMesh { Size = new Vector3((x1 - x0) * VoxelWorld.Vox, .04f, (z1 - z0) * VoxelWorld.Vox) },
                 new Vector3(w.WX((x0 + x1) / 2f), w.WY(Math.Max(a.y, b.y)) + .05f, w.WZ((z0 + z1) / 2f)), c);
             show = true;
@@ -669,11 +881,33 @@ public partial class BuildTools : Node3D
             PlanAffordable = any;
             return;
         }
+        if (Tool == Tool.Repair)
+        {
+            // a mending shows what is missing, as it will be laid again
+            bool drag = _lmb && _hasStart && _hasDrag;
+            var bld = drag ? null : HoverBuilding();
+            string mk = drag ? $"M|{_startPt}|{_dragPt}|{_rev}|{_m.Sim.DesignRev}|{stock}" : bld != null && bld.Count > 0 ? $"M|{bld[0]}|{_rev}|{_m.Sim.DesignRev}|{stock}" : "";
+            if (mk == _planKey || (mk.Length > 0 && _clock - _planClock < .15)) return;
+            _planKey = mk; _planClock = _clock;
+            if (mk.Length == 0) { _ghost.Visible = false; PlanText = null; return; }
+            if (drag) PlanMend(_m.Sim.MeantIn(_startPt.x, _startPt.z, _dragPt.x, _dragPt.z), _startPt.x, _startPt.z, _dragPt.x, _dragPt.z);
+            else { var (x0, z0, x1, z1) = _bldBox; PlanMend(bld, x0 - 8, z0 - 8, x1 + 8, z1 + 8); }
+            PlanIsDig = false;
+            if (_mendGhost.Count == 0 && _mendClear.Count == 0) { _ghost.Visible = false; PlanText = "Цело: чинить нечего"; PlanAffordable = true; return; }
+            PlanText = "Починка: " + MendSummary(out bool ok);
+            PlanAffordable = ok;
+            _ghost.Mesh = MeshPlan(_mendGhost, false);
+            _ghost.Visible = _ghost.Mesh != null;
+            _ghostMat.SetShaderParameter("tint", ok ? new Vector3(.55f, .78f, .42f) : new Vector3(.85f, .2f, .16f));
+            _ghostMat.SetShaderParameter("tint_mix", ok ? .3f : .6f);
+            _ghostMat.SetShaderParameter("inflate", 0f);
+            return;
+        }
         if (dragging) key = $"D{Tool}|{_startPt}|{_dragPt}|{opts}";
         else if (dig && _hasTree && Tool is Tool.Brush or Tool.Line or Tool.Box or Tool.Circle) key = $"T|{_tree.X},{_tree.Y},{_tree.Z}|{_rev}";
         else if (_hasHover)
         {
-            var g = _hover.Ground(w);
+            var g = Tool == Tool.Brush ? _hover.Ground(w) : HoverGround();
             string h = $"{_hover.X},{_hover.Y},{_hover.Z},{_hover.NX}{_hover.NY}{_hover.NZ}";
             key = Tool switch
             {
@@ -695,7 +929,7 @@ public partial class BuildTools : Node3D
         if (key.Length == 0) { _plan = null; _ghost.Visible = false; PlanText = null; return; }
 
         var site = _m.Site;
-        var gp = _hover.Ground(w);
+        var gp = Tool == Tool.Brush ? _hover.Ground(w) : HoverGround();
         double r = NibR;
         string name = dig ? "Копать" : ToolName(Tool);
         var stroke = StrokeNow();

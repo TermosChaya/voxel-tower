@@ -68,7 +68,8 @@ sw.Restart();
 long quads = 0; int meshed = 0;
 for (int ci = 0; ci < w.ChunkCount; ci++) { var mb = mesher.MeshChunk(w, ci, pad); if (mb != null) { quads += mb.Quads; meshed++; } }
 long oneMs = sw.ElapsedMilliseconds;
-Check("triangles match the prototype", quads * 2 == 232642, $"{quads * 2} triangles in {meshed} chunks, prototype 232642");
+// the prototype had 232642; its citadel of neat brick is rough masonry now
+Check("triangles as counted", quads * 2 == 235350, $"{quads * 2} triangles in {meshed} chunks, 235350 expected (the prototype's 232642 with a brick citadel)");
 Console.WriteLine($"     mesh, 1 thread: {oneMs} ms");
 
 // meshing, all cores
@@ -864,7 +865,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--life")
 
 }
 
-// ---- a new game: the half-built fort round the citadel
+// ---- a new game: the old fort round the citadel, gone half to ruin, and mending what was built
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--fort")
 {
     Console.WriteLine();
@@ -875,24 +876,70 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--fort")
     var sim5 = new Sim(w5, site5);
     sim5.Waves.Countdown = 1e9; sim5.WildTarget = 0;
     void Run5(double seconds) { for (double t = 0; t < seconds; t += .05) sim5.Step(.05f); }
+    int kx = site5.KeepX, kz = site5.KeepZ, kb = site5.KeepBase;
+
+    // what the workers lay is remembered; what is knocked out stays remembered; what the player takes down is forgotten
+    sim5.InstantLabour = true;
+    var wallStroke = new Stroke { Mat = Mat.Stone, Width = 6, Height = 24, Level = true };
+    int wx = kx + 150, wz0 = kz - 160, wz1 = kz - 120;
+    int top5 = Shapes.LevelTop(w5, wx, wz0, 24);
+    sim5.DesignateBuild(Shapes.Line(w5, site5, wx, wz0, wx, wz1, wallStroke, top5));
+    bool remembered = true;
+    for (int y = top5 - 20; y < top5; y++) remembered &= sim5.MeantAt(wx, y, kz - 140) == w5.Get(wx, y, kz - 140) && Mat.IsMasonry(w5.Get(wx, y, kz - 140));
+    int knocked = 0;
+    for (int y = top5 - 12; y < top5 - 4; y++) for (int z = kz - 142; z < kz - 136; z++) for (int x = wx - 3; x <= wx + 3; x++) if (w5.Set(x, y, z, Mat.Air)) knocked++;
+    var lay5 = new VoxelList(); var clear5 = new VoxelList();
+    sim5.MendPlan(sim5.BuildingFrom(sim5.MeantNear(wx, top5 - 2, kz - 150)), lay5, clear5);
+    int planned = lay5.Count;
+    sim5.Mend(lay5, clear5);
+    bool asWas = true;
+    for (int i = 0; i < lay5.Count; i++) asWas &= w5.Get(lay5.X(i), lay5.Y(i), lay5.Z(i)) == lay5.M(i) && Mat.IsMasonry(lay5.M(i));
+    var down = new VoxelList();
+    for (int y = 0; y < top5 + 2; y++) for (int z = wz0 - 4; z <= wz0 + 10; z++) for (int x = wx - 4; x <= wx + 4; x++) if (Mat.IsMasonry(w5.Get(x, y, z))) down.Add(x, y, z, 0);
+    sim5.DesignateRemove(down);
+    int still = 0;
+    for (int y = 0; y < top5 + 2; y++) for (int z = wz0 - 4; z <= wz0 + 10; z++) for (int x = wx - 4; x <= wx + 4; x++) if (sim5.MeantAt(x, y, z) != 0) still++;
+    sim5.InstantLabour = false;
+    Check("what is built is remembered, a hole in it is mended stone for stone, what is taken down is forgotten",
+        remembered && knocked > 200 && planned == knocked && asWas && down.Count > 1000 && still == 0,
+        $"remembered {remembered}, {knocked} knocked out, {planned} planned back, as they were {asWas}, {down.Count} taken down, {still} still remembered there");
+
+    var raise = System.Diagnostics.Stopwatch.StartNew();
     var gate5 = StartingFort.Raise(sim5);
-    Run5(.5);
-    int marked = sim5.Orders.Total;
-    double stone0 = sim5.Stock[Stockpile.Stone], wood0 = sim5.Stock[Stockpile.Wood];
-    var crew5 = new System.Collections.Generic.List<Unit>();
-    for (int i = 0; i < 4; i++) crew5.Add(sim5.Spawn(Kinds.Worker, sim5.Gate));
-    // the west curtain stands, and nothing but its gate leads through it
-    int kx = site5.KeepX, kz = site5.KeepZ;
+    long raiseMs = raise.ElapsedMilliseconds;
+    var (fx0, fz0, fx1, fz1) = sim5.FortArea;
+    var (meant5, standing5) = sim5.Soundness(fx0, fz0, fx1, fz1);
+    double whole0 = standing5 / (double)Math.Max(1, meant5);
+    // the way in from the west is open (a breach, the empty gateway), and nothing is marked yet
     int outside = sim5.NearestStand(kx - 140, kz, 4);
     var probe = sim5.Spawn(Kinds.Worker, outside);
     bool way = sim5.GoTo(probe, sim5.Gate);
-    bool throughGate = way && probe.Path.Exists(c => gate5.Cells.Contains(c));
     probe.Path = null; probe.Dead = true; probe.DiedAt = -999;
-    Check("a new game finds a fort half raised round the citadel", gate5 != null && gate5.Ready && marked > 10000 && throughGate,
-        $"gate ready {gate5?.Ready}, {marked} voxels marked to finish it, the way in from the west through the gate {throughGate}");
-    Run5(120);
-    Check("…and the workers set about finishing it from the stores", sim5.Orders.Total < marked && sim5.Stock[Stockpile.Wood] < wood0 - 2 * VoxelWorld.PerM3,
-        $"{marked - sim5.Orders.Total} voxels laid in 2 min, wood {Fmt.M3(wood0)} → {Fmt.M3(sim5.Stock[Stockpile.Wood])} m³, stone {Fmt.M3(stone0)} → {Fmt.M3(sim5.Stock[Stockpile.Stone])} m³");
+    Check("a new game finds the old fort round the citadel half in ruins", gate5 != null && gate5.Broken && whole0 > .55 && whole0 < .9 && sim5.Orders.Total == 0 && way,
+        $"{Fmt.M3(meant5)} m³ as it was built, {whole0:P0} of it standing, gate off its hinges {gate5?.Broken}, a way in {way}, raised in {raiseMs} ms");
+
+    // a click on the west wall: the whole fort is marked to be mended, rubble on it to be cleared first, the gate to be hung
+    var fort = sim5.BuildingFrom(sim5.MeantNear(kx - 84, kb + 3, kz - 22));
+    var lay6 = new VoxelList(); var clear6 = new VoxelList();
+    sim5.MendPlan(fort, lay6, clear6);
+    int marked6 = sim5.Mend(lay6, clear6) + sim5.MendGate(gate5);
+    Check("a click mends the whole of it: what fell to lay again, the rubble on it to clear, the gate to hang", fort.Count >= meant5 * 95 / 100 && lay6.Count > 5000 && marked6 >= lay6.Count + clear6.Count,
+        $"{fort.Count} of {meant5} voxels in one building, {lay6.Count} to lay, {clear6.Count} to clear, {marked6} marked");
+    double stone6 = sim5.Stock[Stockpile.Stone];
+    for (int i = 0; i < 6; i++) sim5.Spawn(Kinds.Worker, sim5.Gate);
+    Run5(150);
+    var (_, standing6) = sim5.Soundness(fx0, fz0, fx1, fz1);
+    Check("…and the workers set about it from the stores", standing6 > standing5 + 2000 && sim5.Stock[Stockpile.Stone] < stone6 - 2 * VoxelWorld.PerM3,
+        $"{standing6 - standing5} voxels back in 2½ min, stone {Fmt.M3(stone6)} → {Fmt.M3(sim5.Stock[Stockpile.Stone])} m³");
+    sim5.InstantLabour = true;
+    sim5.CompleteAll();
+    sim5.InstantLabour = false;
+    Run5(2);
+    var (meant7, standing7) = sim5.Soundness(fx0, fz0, fx1, fz1);
+    int exact = 0;
+    foreach (int p in fort) { var (x, y, z) = WaterPlanner.Unpack(p); if (w5.Get(x, y, z) == sim5.MeantAt(x, y, z)) exact++; }
+    Check("…to what it was, the gate swinging again", standing7 >= meant7 - meant7 / 200 && exact >= fort.Count * 97 / 100 && gate5.Ready && !gate5.Broken,
+        $"{standing7} of {meant7} standing, {exact} of {fort.Count} exactly as built, gate ready {gate5.Ready}");
 }
 
 // voxels of water in the whole valley

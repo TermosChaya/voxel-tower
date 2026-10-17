@@ -40,6 +40,9 @@ public sealed class Site
     /// <summary>Mines worth holding and ruins of what stood here before: things to find, take and keep.</summary>
     public readonly List<Landmark> Landmarks = new();
 
+    /// <summary>What the ruins were meant to be, voxel by voxel, so they can be raised again; the game keeps adding to it.</summary>
+    public VoxelWorld Design;
+
     /// <summary>Columns nobody may build on: the map's western edge (the horde's entry), the citadel and its gate approach.</summary>
     public bool Forbidden(int x, int z)
     {

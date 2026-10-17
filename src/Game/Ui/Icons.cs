@@ -183,6 +183,31 @@ public static class Icons
         Line(c, Shade(ink, .5f), S(r, .03f), P(r, .06f, .96f), P(r, .94f, .96f));
     }
 
+    /// <summary>A trowel over a wall with a gap broken out of its top: mending.</summary>
+    public static void Mend(CanvasItem c, Rect2 r, Color ink)
+    {
+        // the wall: three courses, the top one broken off on the right
+        var stone = Shade(ink, .62f);
+        void Course(float y, float x0, float x1, float h)
+        {
+            float x = x0;
+            int n = 0;
+            while (x < x1 - .02f)
+            {
+                float w = Math.Min(x1 - x, n % 2 == 0 ? .2f : .16f);
+                Fill(c, stone, P(r, x + .012f, y), P(r, x + w - .012f, y), P(r, x + w - .012f, y + h), P(r, x + .012f, y + h));
+                x += w; n++;
+            }
+        }
+        Course(.8f, .08f, .92f, .12f);
+        Course(.66f, .14f, .92f, .12f);
+        Course(.52f, .08f, .5f, .12f);
+        // the trowel: a diamond blade, its neck and handle
+        Fill(c, ink, P(r, .5f, .48f), P(r, .68f, .24f), P(r, .9f, .16f), P(r, .8f, .36f));
+        Line(c, Shade(ink, .8f), S(r, .05f), P(r, .68f, .24f), P(r, .58f, .14f), P(r, .46f, .1f));
+        Line(c, ink, S(r, .09f), P(r, .46f, .1f), P(r, .26f, .06f));
+    }
+
     /// <summary>An axe across a pick over a pile: the gathering area.</summary>
     public static void Gather(CanvasItem c, Rect2 r, Color ink)
     {

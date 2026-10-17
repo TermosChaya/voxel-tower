@@ -5,7 +5,8 @@ namespace VoxelTower.Core;
 /// <summary>
 /// The valley's named places, laid when it is made: mines in rocky knolls, with a vein of ore and a timbered adit, and the
 /// ruins of what stood here before — a watchtower by the ford, an outpost, the miners' houses, a tower fallen at the cliff —
-/// broken down by the years, with their rubble round them. Laid before the trees, so none grow inside them.
+/// broken down by the years, with their rubble round them. What each ruin was is remembered (<see cref="Site.Design"/>),
+/// so it can be raised again as it stood. Laid before the trees, so none grow inside them.
 /// </summary>
 public static class Landmarks
 {
@@ -19,6 +20,15 @@ public static class Landmarks
     static int Ground(VoxelWorld w, Site s, int x, int z) => s.HTop[Math.Clamp(z, 0, w.SZ - 1) * w.SX + Math.Clamp(x, 0, w.SX - 1)];
 
     static bool In(VoxelWorld w, int x, int z) => x >= 2 && z >= 2 && x < w.SX - 2 && z < w.SZ - 2;
+
+    /// <summary>Remembers a voxel of what a ruin was: masonry, to be laid again if it is mended.</summary>
+    static void Meant(Site s, int x, int y, int z)
+    {
+        if (s.Design != null && s.Design.InBounds(x, y, z)) s.Design.SetRaw(x, y, z, Shapes.Masonry(x, y, z));
+    }
+
+    /// <summary>Battlements every ten voxels along a wall's outer edge, six long: a merlon voxel here?</summary>
+    static bool Merlon(int along) => (along % 10 + 10) % 10 < 6;
 
     /// <summary>
     /// A mine: a knoll of rock (raised if the ground is no knoll already) with a vein of ore in its heart, an adit timbered
@@ -128,6 +138,7 @@ public static class Landmarks
     {
         const int R = 9, T = 3, H = 40;
         double side = Hash.H3((int)seed, 5, 51) * Math.PI * 2;
+        int top = Ground(w, s, cx, cz) + H;
         for (int z = cz - R; z <= cz + R; z++)
             for (int x = cx - R; x <= cx + R; x++)
             {
@@ -140,6 +151,9 @@ public static class Landmarks
                 // a doorway at the foot, away from the standing side
                 bool door = Math.Cos(a - side - Math.PI) > .96;
                 for (int y = g; y < g + keep; y++) if (!door || y >= g + 16) Old(w, x, y, z, g, keep, H, seed);
+                // as it stood: up to a level top, with battlements round it
+                bool merlon = (int)Math.Floor((a + Math.PI) / (Math.PI * 2) * 20) % 2 == 0;
+                for (int y = g; y < top + (merlon ? 5 : 0); y++) if (!door || y >= g + 16) Meant(s, x, y, z);
             }
         Rubble(w, s, cx, cz, R, R + 10, .22);
         var l = new Landmark { Kind = LandmarkKind.Ruin, Name = name, X = cx, Z = cz, R = R + 10 };
@@ -152,16 +166,22 @@ public static class Landmarks
     {
         const int A = 22, T = 4, H = 24;
         var noise = new ValueNoise(seed * 61 + 3);
+        int top = Ground(w, s, cx, cz) + H;
         for (int z = cz - A; z <= cz + A; z++)
             for (int x = cx - A; x <= cx + A; x++)
             {
                 if (!In(w, x, z)) continue;
-                bool wall = x - (cx - A) < T || (cx + A) - x < T || z - (cz - A) < T || (cz + A) - z < T;
-                bool gateway = (cx + A) - x < T && Math.Abs(z - cz) < 6;
+                int west = x - (cx - A), east = (cx + A) - x, north = z - (cz - A), south = (cz + A) - z;
+                bool wall = west < T || east < T || north < T || south < T;
+                bool gateway = east < T && Math.Abs(z - cz) < 6;
                 if (!wall || gateway) continue;
                 int g = Ground(w, s, x, z);
                 int keep = (int)(H * Math.Max(0, noise.Sample(x * .09, z * .09) * 1.4 - .25));
                 for (int y = g; y < g + keep; y++) Old(w, x, y, z, g, keep, H, seed);
+                // as it stood: walls to a level top, battlements along their outer edge
+                bool edge = west < 2 || east < 2 || north < 2 || south < 2;
+                bool merlon = edge && Merlon(west < 2 || east < 2 ? z - cz : x - cx);
+                for (int y = g; y < top + (merlon ? 6 : 0); y++) Meant(s, x, y, z);
             }
         Watchtower(w, s, cx - A + 2, cz - A + 2, name, seed + 1, .9);
         s.Landmarks.RemoveAt(s.Landmarks.Count - 1);
@@ -182,18 +202,28 @@ public static class Landmarks
             bool turned = Hash.H3(hx, hz, 57) < .5;
             int a = turned ? 6 : 8, b = turned ? 8 : 6;
             const int T = 2, H = 14;
+            int g0 = Ground(w, s, hx, hz);
             for (int z = hz - b; z <= hz + b; z++)
                 for (int x = hx - a; x <= hx + a; x++)
                 {
                     if (!In(w, x, z)) continue;
                     bool wall = x - (hx - a) < T || (hx + a) - x < T || z - (hz - b) < T || (hz + b) - z < T;
                     bool door = (hz + b) - z < T && Math.Abs(x - hx) < 2;
-                    if (!wall || door) continue;
+                    if (!wall) continue;
+                    if (door)
+                    {
+                        int gd = Ground(w, s, x, z), eave0 = g0 + (int)(H * .6);
+                        for (int y = gd + 12; y < eave0; y++) Meant(s, x, y, z);
+                        continue;
+                    }
                     int g = Ground(w, s, x, z);
                     // the gable ends stand taller
                     bool gable = turned ? z - (hz - b) < T || (hz + b) - z < T : x - (hx - a) < T || (hx + a) - x < T;
                     int keep = (int)((gable ? H : H * .6) * (.35 + .65 * Hash.H3(x, z, 59 + n)));
                     for (int y = g; y < g + keep; y++) Old(w, x, y, z, g, keep, H, seed);
+                    // as it stood: walls to the eaves, the gables up to a point, a lintel over the door
+                    int eave = g0 + (int)(H * .6), ridge = gable ? eave + (int)((H - H * .6) * (1 - Math.Abs(turned ? x - hx : z - hz) / (double)(turned ? a : b))) : eave;
+                    for (int y = g; y < ridge; y++) if (!door || y >= g + 12) Meant(s, x, y, z);
                 }
             Rubble(w, s, hx, hz, 0, 12, .08);
             n++;

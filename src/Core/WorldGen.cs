@@ -123,13 +123,7 @@ public static class WorldGen
                     int py = y - bse; byte m;
                     if (d > KR - 4)
                     {
-                        if (py >= H - 8) m = ((int)Math.Floor(al / 7.0) & 1) == 0 ? Mat.Keep : Mat.Air;
-                        else
-                        {
-                            int pq = py + 64, course = pq / 5, row = pq % 5, off = (course & 1) * 5;
-                            bool joint = (al + off) % 10 == 0;
-                            m = (row == 4 || joint) ? (d > KR - 1 ? Mat.Air : Mat.KeepDark) : Mat.Keep;
-                        }
+                        m = py >= H - 8 && ((int)Math.Floor(al / 7.0) & 1) != 0 ? Mat.Air : KeepStone(x, y, z, d > KR - 1);
                         double slit = Brushes.JsRound(ang / (Math.PI / 3)) * (Math.PI / 3);
                         if (Math.Abs(AngDiff(ang, slit)) * KR < 1.3 && ((py >= 16 && py < 24) || (py >= 34 && py < 40)) && !door)
                             m = d > KR - 2 ? Mat.Air : (d > KR - 3 ? Mat.Ember : Mat.Keep);
@@ -153,6 +147,14 @@ public static class WorldGen
         for (int y = bse + H + 23; y < Math.Min(w.SY, bse + H + 29); y++) w.SetRaw(KX, y, KZ, Mat.Iron);
         return bse;
     }
+
+    /// <summary>The citadel's rough masonry: big stones of two shades, the mortar between them sunk at the face.</summary>
+    static byte KeepStone(int x, int y, int z, bool face) => Shapes.Masonry(x, y, z) switch
+    {
+        Mat.Mortar => face ? Mat.Air : Mat.KeepDark,
+        Mat.StoneDark => Mat.KeepShade,
+        _ => Mat.Keep,
+    };
 
     /// <summary>A fire bowl, on an iron post this many voxels high (the valley's stand chest-high to a man).</summary>
     internal static void Brazier(VoxelWorld w, Site s, int x, int y, int z, int post = 0)

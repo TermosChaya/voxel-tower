@@ -51,7 +51,7 @@ public sealed class NavGrid
             if (Mat.Def[m].Name == null || Mat.Passable[m]) continue;
             Cls[m] = Mat.Def[m].Group switch { MatGroup.Earth => 1, MatGroup.Wood => 2, MatGroup.Stone => 3, MatGroup.Rock => 4, _ => 5 };
         }
-        foreach (var m in new[] { Mat.Keep, Mat.KeepDark, Mat.Roof }) Cls[m] = 6;
+        foreach (var m in new[] { Mat.Keep, Mat.KeepShade, Mat.KeepDark, Mat.Roof }) Cls[m] = 6;
     }
 
     public NavGrid(VoxelWorld w)

@@ -28,20 +28,9 @@ public sealed partial class Sim
     /// <summary>Takes back every order on the columns of a rectangle.</summary>
     public int CancelArea(int x0, int z0, int x1, int z1) => Orders.CancelArea(x0, z0, x1, z1);
 
-    /// <summary>The fort a new game begins with: its area, and how much was left to do on it then.</summary>
+    /// <summary>The fort a new game begins with: its area (to say how sound it is) and its gate.</summary>
     public (int x0, int z0, int x1, int z1) FortArea;
-    public int FortLeft0;
-
-    /// <summary>Voxels still marked inside the fort's area.</summary>
-    public int FortLeft()
-    {
-        var (x0, z0, x1, z1) = FortArea;
-        int n = 0;
-        for (int k = Math.Max(0, z0 >> NavGrid.Shift); k <= Math.Min(Nav.NZ - 1, z1 >> NavGrid.Shift); k++)
-            for (int i = Math.Max(0, x0 >> NavGrid.Shift); i <= Math.Min(Nav.NX - 1, x1 >> NavGrid.Shift); i++)
-                n += Orders.ColCount[k * Nav.NX + i];
-        return n;
-    }
+    public Gateway FortGate;
 
     /// <summary>Tests: every order done at once, as if by an army of workers with full stores.</summary>
     public void CompleteAll()
@@ -58,9 +47,18 @@ public sealed partial class Sim
                 byte o = d[i];
                 if (o == 0) continue;
                 int x = cx * 32 + (i & 31), z = cz * 32 + (i >> 5 & 31), y = cy * 32 + (i >> 10);
-                if (o == Orders.Remove) World.Set(x, y, z, 0);
+                if (o == Orders.Remove)
+                {
+                    byte was = World.Get(x, y, z);
+                    World.Set(x, y, z, 0);
+                    Orders.Clear(x, y, z);
+                    Dug(x, y, z, was);
+                    // rubble cleared out of a building's way: what was meant goes back at once
+                    o = Orders.At(x, y, z);
+                    if (o == 0 || _bodies[Nav.CellOf(x, y, z)] > 0) continue;
+                }
                 else if (_bodies[Nav.CellOf(x, y, z)] > 0) continue;
-                else if (Brushes.Free(World.Get(x, y, z))) World.Set(x, y, z, o);
+                if (Brushes.Free(World.Get(x, y, z))) { World.Set(x, y, z, o); Remember(x, y, z, o); }
                 Orders.Clear(x, y, z);
             }
         }
@@ -86,7 +84,7 @@ public sealed partial class Sim
             if (u.Dest >= 0 && u.Cell != u.Dest && Time >= u.NextSearch)
             {
                 u.NextSearch = Time + 2;
-                if (CellsApart(u.Cell, u.Dest) > 1 && (GoTo(u, u.Dest) || GoTo(u, u.Dest, adjacent: true))) { Busy(u); return; }
+                if (CellsApart(u.Cell, u.Dest) > 1 && (GoTo(u, u.Dest, budget: 100000) || GoTo(u, u.Dest, adjacent: true, budget: 100000))) { Busy(u); return; }
             }
             Idle(u, dt, stay: true);
             return;
@@ -158,6 +156,7 @@ public sealed partial class Sim
             if (!Labour.Diggable(cur)) { Orders.Clear(j.x, j.y, j.z); return false; }
             World.Set(j.x, j.y, j.z, Mat.Air);
             Orders.Clear(j.x, j.y, j.z);
+            Dug(j.x, j.y, j.z, cur);
             int kind = Labour.YieldKind(cur);
             if (kind != Stockpile.None) Stock[kind] += Labour.YieldShare(cur) * u.T.Yield;
             if (cur == Mat.Ore) Stock.Gold += Labour.OreGold * u.T.Yield;
@@ -169,6 +168,7 @@ public sealed partial class Sim
         int ck = Labour.CostKind(j.m);
         if (ck != Stockpile.None && !Stock.Take(ck, 1)) { u.Why = "нет: " + Stockpile.Name(ck); return false; }
         World.Set(j.x, j.y, j.z, j.m);
+        Remember(j.x, j.y, j.z, j.m);
         Orders.Clear(j.x, j.y, j.z);
         return true;
     }

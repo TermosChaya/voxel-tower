@@ -157,11 +157,11 @@ public sealed partial class Sim
                 u.NextSearch = Time + .4;
             }
             if (t == null) return false;
-            u.State = UnitState.Fight;
-            u.Path = null;
-            u.Facing = MathF.Atan2(t.Z - u.Z, t.X - u.X);
+            // sent somewhere and not there yet: shoot on the way, but keep going
+            bool marching = u.Hold && u.Dest >= 0 && CellsApart(u.Cell, u.Dest) > 1 && u.Path != null && u.PathI < u.Path.Count;
+            if (!marching) { u.State = UnitState.Fight; u.Path = null; u.Facing = MathF.Atan2(t.Z - u.Z, t.X - u.X); }
             if (u.Cooldown <= 0) { Shoot(u, t); u.Cooldown = u.T.AttackTime * (.9f + (float)Rng.NextDouble() * .2f); }
-            return true;
+            return !marching;
         }
         // swordsmen hold the ground round themselves or their post
         float leash = 6 * 16;

@@ -42,6 +42,7 @@ public sealed partial class Sim
         Nav = new NavGrid(w);
         Nav.BuildAll();
         Orders = new Orders(w, s);
+        Design = s.Design ??= new VoxelWorld(w.SX, w.SY, w.SZ);
         Paths = new PathFinder(Nav);
         _bodies = new int[Nav.Count];
         _claims = new int[Nav.NX * Nav.NZ];
@@ -200,6 +201,15 @@ public sealed partial class Sim
             u.PathI++;
             return u.PathI >= u.Path.Count;
         }
+        // in a crowd going the same way bodies push each other off the very spot they aim for: inside the cell will do
+        if (!climbing && dist < NavGrid.CS * .5f && ((int)MathF.Floor(u.X) >> NavGrid.Shift) == Nav.I(next) && ((int)MathF.Floor(u.Z) >> NavGrid.Shift) == Nav.K(next)
+            && MathF.Abs(dyv) < 2)
+        {
+            u.Y = ty;
+            u.Cell = next;
+            u.PathI++;
+            return u.PathI >= u.Path.Count;
+        }
         if (climbing) { u.Y += MathF.Sign(dyv) * step; return false; }
         u.X += dx / dist * step;
         u.Z += dz / dist * step;
@@ -260,8 +270,9 @@ public sealed partial class Sim
             int c = FreeBeside(u);
             if (c < 0) continue;
             u.Path ??= new List<int>();
+            // one that stands where it was sent stands beside it now; one still on its way keeps going there
+            if (u.Dest == u.Cell) u.Dest = c;
             u.Path.Clear(); u.Path.Add(c); u.PathI = 0;
-            if (u.Dest >= 0) u.Dest = c;
             _stood[c] = u;
         }
     }
