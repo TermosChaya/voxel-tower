@@ -562,7 +562,7 @@ public partial class BuildTools : Node3D
                 _hasDrag = true;
             }
         }
-        HoverGate = _hasHover && _hover.M is Mat.Gate or Mat.GateShut ? _m.Sim.GateAt(_hover.X, _hover.Y, _hover.Z) : null;
+        HoverGate = _hasHover && Mat.IsLeaf(_hover.M) ? _m.Sim.GateAt(_hover.X, _hover.Y, _hover.Z) : null;
         HoverPlace = null;
         if (_hasHover)
             foreach (var l in _m.Site.Landmarks)

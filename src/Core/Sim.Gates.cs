@@ -194,13 +194,13 @@ public sealed partial class Sim
     {
         if (g.Broken || !g.Ready) return;
         g.Mode = mode;
-        byte m = mode == GateMode.Shut ? Mat.GateShut : Mat.Gate;
+        byte m = LeafMat(g, g.Step);
         for (int i = 0; i < Gateway.Voxels; i++)
         {
             if (g.At[i] < 0) continue;
             var (x, y, z) = WaterPlanner.Unpack(g.At[i]);
             byte cur = World.Get(x, y, z);
-            if (cur is Mat.Gate or Mat.GateShut && cur != m) World.Set(x, y, z, m);
+            if (Mat.IsLeaf(cur) && cur != m) World.Set(x, y, z, m);
         }
     }
 
@@ -212,7 +212,7 @@ public sealed partial class Sim
         {
             if (g.At[i] < 0) continue;
             var (x, y, z) = WaterPlanner.Unpack(g.At[i]);
-            if (World.Get(x, y, z) is Mat.Gate or Mat.GateShut) World.Set(x, y, z, Mat.Air);
+            if (Mat.IsLeaf(World.Get(x, y, z))) World.Set(x, y, z, Mat.Air);
         }
         Array.Fill(g.At, -1);
         Array.Clear(g.Gone);
@@ -226,17 +226,24 @@ public sealed partial class Sim
         return DesignateBuild(L);
     }
 
-    /// <summary>A pawn whose way goes through this cell asks the gate there to open; true if a gate there will.</summary>
+    /// <summary>
+    /// A pawn whose way goes through this cell asks the gate there to open. True while it should wait: the gate is shut
+    /// or still turning and will open for it. Wide open, whatever stands in the way is a leaf: go round it.
+    /// </summary>
     bool Knock(int cell)
     {
         foreach (var g in Gates)
         {
             if (!g.Ready || g.Broken || g.Mode == GateMode.Shut || !g.Cells.Contains(cell)) continue;
             g.Knocked = Time;
+            if (g.Open >= 1) return false;
             return !g.HordeClose || g.Mode == GateMode.Open;
         }
         return false;
     }
+
+    /// <summary>What the leaves are made of at a step: shut (ours knock and pass) or barred, else swinging or open (in everyone's way).</summary>
+    static byte LeafMat(Gateway g, int step) => step > 0 ? Mat.GateOpen : g.Mode == GateMode.Shut ? Mat.GateShut : Mat.Gate;
 
     /// <summary>All the leaves laid where they hang shut: the gate starts working.</summary>
     void Mount(Gateway g)
@@ -245,7 +252,7 @@ public sealed partial class Sim
         for (int i = 0; i < Gateway.Voxels; i++)
         {
             var (x, y, z) = g.Place(i, 0);
-            if (World.Get(x, y, z) is Mat.Gate or Mat.GateShut) { g.At[i] = WaterPlanner.Pack(x, y, z); laid++; }
+            if (Mat.IsLeaf(World.Get(x, y, z))) { g.At[i] = WaterPlanner.Pack(x, y, z); laid++; }
             else { g.At[i] = -1; g.Gone[i] = true; }
         }
         g.Ready = laid > 0;
@@ -302,7 +309,7 @@ public sealed partial class Sim
         {
             if (g.Gone[i] || g.At[i] < 0) continue;
             var (x, y, z) = WaterPlanner.Unpack(g.At[i]);
-            if (World.Get(x, y, z) is not (Mat.Gate or Mat.GateShut)) { g.Gone[i] = true; g.At[i] = -1; }
+            if (!Mat.IsLeaf(World.Get(x, y, z))) { g.Gone[i] = true; g.At[i] = -1; }
         }
         if (g.Hacked >= Gateway.Breach)
         {
@@ -323,12 +330,12 @@ public sealed partial class Sim
     /// <summary>Turns the leaves to a step: lifts them out where they stand and sets them down turned.</summary>
     void Turn(Gateway g, int s)
     {
-        byte mat = g.Mode == GateMode.Shut ? Mat.GateShut : Mat.Gate;
+        byte mat = LeafMat(g, s);
         for (int i = 0; i < Gateway.Voxels; i++)
         {
             if (g.Gone[i] || g.At[i] < 0) continue;
             var (x, y, z) = WaterPlanner.Unpack(g.At[i]);
-            if (World.Get(x, y, z) is Mat.Gate or Mat.GateShut) World.Set(x, y, z, Mat.Air);
+            if (Mat.IsLeaf(World.Get(x, y, z))) World.Set(x, y, z, Mat.Air);
             else g.Gone[i] = true;
             g.At[i] = -1;
         }

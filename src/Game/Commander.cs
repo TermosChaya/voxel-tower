@@ -52,6 +52,26 @@ public partial class Commander : Node
         _m.Hud.OnSelectionChanged();
     }
 
+    /// <summary>The chosen bring in a resource by themselves when nothing marked needs them.</summary>
+    public void DutySelected(int kind)
+    {
+        if (_m.Selected.Count == 0) { _m.Hud.Float("сначала выберите пешек", Ornament.Aged); return; }
+        _m.Sim.SetDuty(_m.Selected, kind);
+        _m.Hud.Float(kind == Stockpile.None ? "без задания" : $"добывать: {Stockpile.Name(kind)}", Ornament.BronzeLight);
+        _m.Hud.Refresh();
+    }
+
+    /// <summary>Calls the chosen workers up, or stands them down again.</summary>
+    public void MilitiaSelected()
+    {
+        bool any = false, all = true;
+        foreach (var u in _m.Selected) if (u.T.Work >= 1) { any = true; all &= u.Militia; }
+        if (!any) { _m.Hud.Float("в ополчение идут рабочие", Ornament.Aged); return; }
+        _m.Sim.SetMilitia(_m.Selected, !all);
+        _m.Hud.Float(all ? "ополчение распущено: рабочие снова бегут от орды" : "ополчение: рабочие встретят орду", Ornament.BronzeLight);
+        _m.Hud.Refresh();
+    }
+
     /// <summary>A click on a gate: opens for our people → stands open → barred → round again; a holed one is mended.</summary>
     void Toggle(Gateway g)
     {

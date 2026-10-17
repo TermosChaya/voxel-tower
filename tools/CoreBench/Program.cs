@@ -585,14 +585,18 @@ if (args.Length == 0 || args[0] == "--sim")
             $"{guards.Count} guards, the horde's at first {held}; dead {guards.Count(u => u.Dead)}, {silver.Name} now {silver.Holder}; soldiers alive {squad.Count(u => !u.Dead)} of {squad.Count}");
         foreach (var u in squad) { u.Dead = true; u.DiedAt = -999; }
 
-        sim.Command(miners, sim.Gate);
-        Run(20);
+        // everyone off to the citadel, the ore left be: the mine stands alone
+        sim.CancelArea(copper.Place.X - 40, copper.Place.Z - 40, copper.Place.X + 40, copper.Place.Z + 40);
+        var ours = sim.Units.FindAll(u => !u.Dead && u.Team == Team.Player);
+        sim.Command(ours, sim.Gate);
+        Run(30);
         var raider = sim.Spawn(Kinds.Goblin, sim.NearestStand(copper.Place.StandX - 70, copper.Place.StandZ, 2));
         raider.Raid = copper;
         for (int t = 0; t < 90 && copper.Holder != Holder.Horde; t++) Run(1);
         Check("a raider left alone at a mine of ours takes it back", copper.Holder == Holder.Horde,
             $"{copper.Name} now {copper.Holder}, the goblin {(raider.Dead ? "dead" : "alive")}");
         raider.Dead = true; raider.DiedAt = -999;
+        sim.ReleaseHold(ours);
         foreach (var u in miners) { u.Dead = true; u.DiedAt = -999; }
         foreach (var m in sim.Mines) { m.Holder = Holder.None; m.Grip = 0; }
     }
@@ -763,6 +767,75 @@ if (args.Length == 0 || args[0] == "--sim")
             $"pond at ({qx}, {qz}) standing to {plevel}, now to {surface}; trench to the cliff at x {cliff}: {sim.Flooded - ran0} voxels moved in {sim.Time - t0:0} s ({sw2.ElapsedMilliseconds} ms), " +
             $"{over} out over the land, {water0} → {water1} in the valley");
     }
+}
+
+// ---- pawns left to themselves, on a fresh valley: no trudging to work that waits for stone, duties, militia, herds
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--life")
+{
+    Console.WriteLine();
+    var mp6 = new MapParams();
+    var w4 = new VoxelWorld(mp6.SizeX, mp6.SizeY, mp6.SizeZ);
+    var site4 = MapGen.Generate(w4, mp6);
+    w4.Compact();
+    var sim = new Sim(w4, site4);
+    sim.Waves.Countdown = 1e9; sim.WildTarget = 0;
+    void Run(double seconds) { for (double t = 0; t < seconds; t += .05) sim.Step(.05f); }
+    // with no stone in the stores, workers don't trudge to a stone wall marked out; told to bring in stone, timber or
+    // earth they find it for themselves; a herd doesn't stand in one heap; a worker called up meets a goblin
+    {
+        double stoneKept = sim.Stock[Stockpile.Stone];
+        sim.Stock[Stockpile.Stone] = 0;
+        sim.CancelArea(0, 0, w4.SX - 1, w4.SZ - 1);
+        int wx = site4.KeepX - 120, wz = site4.KeepZ + 100;
+        sim.InstantLabour = false;
+        int marked = sim.DesignateBuild(Shapes.Line(w4, site4, wx, wz - 30, wx, wz + 30, new Stroke { Mat = Mat.Stone, Width = 8, Height = 24, Level = true }, Shapes.LevelTop(w4, wx, wz, 24)));
+        var idlers = new System.Collections.Generic.List<Unit>();
+        for (int i = 0; i < 3; i++) idlers.Add(sim.Spawn(Kinds.Worker, sim.Gate));
+        Run(30);
+        float nearest = float.MaxValue;
+        foreach (var u in idlers) nearest = Math.Min(nearest, MathF.Abs(u.X - wx) + MathF.Abs(u.Z - wz) * 0f + Math.Max(0, MathF.Abs(u.Z - wz) - 30));
+        string why = idlers[0].Why;
+        Check("with no stone in the stores, workers don't trudge to a stone wall", marked > 1000 && nearest > 40 && why.Contains("камень"),
+            $"{marked} voxels of stone wall marked, the nearest worker {nearest / VoxelWorld.PerMetre:0.0} m from it, saying «{why}»");
+        sim.CancelArea(wx - 20, wz - 40, wx + 20, wz + 40);
+        sim.Stock[Stockpile.Stone] = stoneKept;
+
+        double s0 = sim.Stock[Stockpile.Stone], wd0 = sim.Stock[Stockpile.Wood], e0 = sim.Stock[Stockpile.Earth];
+        sim.SetDuty(new[] { idlers[0] }, Stockpile.Stone);
+        sim.SetDuty(new[] { idlers[1] }, Stockpile.Wood);
+        sim.SetDuty(new[] { idlers[2] }, Stockpile.Earth);
+        for (int t = 0; t < 150; t++) Run(1);
+        float pitFar = idlers[2].DutyZone == null ? 0 : MathF.Sqrt(MathF.Pow((idlers[2].DutyZone.X0 + idlers[2].DutyZone.X1) / 2f - site4.KeepX, 2) + MathF.Pow((idlers[2].DutyZone.Z0 + idlers[2].DutyZone.Z1) / 2f - site4.KeepZ, 2));
+        Check("told to bring in stone, timber and earth, workers find it for themselves", sim.Stock[Stockpile.Stone] > s0 + 300 && sim.Stock[Stockpile.Wood] > wd0 + 300 && sim.Stock[Stockpile.Earth] > e0 + 300 && pitFar > 140,
+            $"stone +{Fmt.M3(sim.Stock[Stockpile.Stone] - s0)}, wood +{Fmt.M3(sim.Stock[Stockpile.Wood] - wd0)}, earth +{Fmt.M3(sim.Stock[Stockpile.Earth] - e0)} m³; the pit {pitFar / VoxelWorld.PerMetre:0} m from the citadel");
+        sim.SetDuty(idlers, Stockpile.None);
+        foreach (var z in sim.Zones.FindAll(z => z.Auto)) sim.RemoveZones(z.X0, z.Z0, z.X1, z.Z1);
+        sim.CancelArea(0, 0, w4.SX - 1, w4.SZ - 1);
+
+        var guardsman = idlers[0];
+        sim.SetMilitia(new[] { guardsman }, true);
+        var gob = sim.Spawn(Kinds.Goblin, sim.NearestStand((int)guardsman.X + 40, (int)guardsman.Z, 2));
+        gob.Raid = null;
+        bool fought = false;
+        for (int t = 0; t < 20 * 20 && !gob.Dead; t++) { sim.Step(.05f); fought |= guardsman.State == UnitState.Fight; }
+        Check("a worker called up meets a goblin instead of running", fought && guardsman.State != UnitState.Flee,
+            $"fought {fought}, the goblin {(gob.Dead ? "dead" : "alive")}, the worker {Math.Ceiling(guardsman.Hp)} hp");
+        gob.Dead = true; gob.DiedAt = -999;
+        foreach (var u in idlers) { u.Dead = true; u.DiedAt = -999; }
+
+        int herd = sim.SeedWildlife(4);
+        Run(40);
+        var cells = new System.Collections.Generic.Dictionary<int, int>();
+        int stacked = 0;
+        foreach (var u in sim.Units)
+        {
+            if (u.Dead || u.Team != Team.Wild || u.State != UnitState.Idle) continue;
+            if (cells.TryGetValue(u.Cell, out int n)) { stacked++; cells[u.Cell] = n + 1; } else cells[u.Cell] = 1;
+        }
+        Check("a herd doesn't stand in one heap", herd > 6 && stacked == 0, $"{herd} beasts, {stacked} standing in a cell with another");
+        foreach (var u in sim.Units) if (u.Team == Team.Wild) { u.Dead = true; u.DiedAt = -999; }
+    }
+
 }
 
 // ---- a new game: the half-built fort round the citadel

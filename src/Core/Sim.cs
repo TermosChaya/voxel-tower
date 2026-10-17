@@ -121,6 +121,7 @@ public sealed partial class Sim
             else WildTick(u, dt);
         }
         Separate();
+        Unstack();
         TickArrows(dt);
         Units.RemoveAll(u => u.Dead && Time - u.DiedAt > 30);
         if (KeepHp <= 0 && !Over) { Over = true; Say("Цитадель пала.", 3); }
@@ -238,6 +239,51 @@ public sealed partial class Sim
         }
     }
 
+    double _nextUnstack;
+    readonly Dictionary<int, Unit> _stood = new();
+    static readonly int[] DX8 = { 1, -1, 0, 0, 1, 1, -1, -1 }, DK8 = { 0, 0, 1, -1, 1, -1, 1, -1 };
+
+    /// <summary>
+    /// Two standing in one cell can't be eased apart (each is kept inside its own cell): the one met second steps into
+    /// a free cell beside. So a herd, or pawns that idle at one spot, don't stand in one heap.
+    /// </summary>
+    void Unstack()
+    {
+        if (Time < _nextUnstack) return;
+        _nextUnstack = Time + .5;
+        _stood.Clear();
+        foreach (var u in Units)
+        {
+            if (u.Dead || u.State != UnitState.Idle || u.Path != null && u.PathI < u.Path.Count || Nav.Ladder[u.Cell] != 0) continue;
+            if (u.Team == Team.Player && u.Site >= 0) continue;
+            if (_stood.TryAdd(u.Cell, u)) continue;
+            int c = FreeBeside(u);
+            if (c < 0) continue;
+            u.Path ??= new List<int>();
+            u.Path.Clear(); u.Path.Add(c); u.PathI = 0;
+            if (u.Dest >= 0) u.Dest = c;
+            _stood[c] = u;
+        }
+    }
+
+    /// <summary>A free cell to stand in right beside a unit, or −1.</summary>
+    int FreeBeside(Unit u)
+    {
+        int i = Nav.I(u.Cell), y = Nav.Y(u.Cell), k = Nav.K(u.Cell), h = u.T.Move.Height, start = Rng.Next(8);
+        for (int n = 0; n < 8; n++)
+        {
+            int d = (start + n) % 8, ni = i + DX8[d], nk = k + DK8[d];
+            for (int dy = 0; dy >= -1; dy--)
+            {
+                if (!Nav.Stand(ni, y + dy, nk, h, gates: false)) continue;
+                int c = Nav.Id(ni, y + dy, nk);
+                if (_bodies[c] > 0 || _stood.ContainsKey(c) || Nav.Water[c] > 0) break;
+                return c;
+            }
+        }
+        return -1;
+    }
+
     void Nudge(Unit u, float dx, float dz)
     {
         u.X += dx; u.Z += dz;
@@ -264,6 +310,8 @@ public sealed partial class Sim
         var path = Paths.Find(u.Cell, goal, c => H(c, ti, tk), u.T.Move, budget, gates: u.Team == Team.Player);
         if (path == null) return false;
         u.Path = path; u.PathI = 0;
+        // a way somewhere on purpose is no stroll
+        if (u.Pastime == Pastime.Stroll) u.Pastime = Pastime.None;
         return true;
     }
 
@@ -286,6 +334,26 @@ public sealed partial class Sim
             if (GoTo(u, spot) || GoTo(u, spot, adjacent: true)) ok++;
         }
         return ok;
+    }
+
+    /// <summary>Tells pawns to bring in a resource by themselves when nothing marked needs them (or none, to stop).</summary>
+    public void SetDuty(IEnumerable<Unit> units, int kind)
+    {
+        foreach (var u in units)
+        {
+            if (u.Dead || u.Team != Team.Player) continue;
+            u.Duty = kind;
+            u.DutyZone = null;
+            u.Hold = false; u.Dest = -1; u.Prey = null;
+            u.NextSearch = 0;
+            Busy(u);
+        }
+    }
+
+    /// <summary>Calls workers up to fight like swordsmen, or lets them go back to running from the horde.</summary>
+    public void SetMilitia(IEnumerable<Unit> units, bool on)
+    {
+        foreach (var u in units) if (!u.Dead && u.Team == Team.Player && u.T.Work >= 1) u.Militia = on;
     }
 
     /// <summary>Lets pawns go back to work by themselves.</summary>

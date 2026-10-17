@@ -14,6 +14,8 @@ public sealed class Zone
     public int[] Floor;
     /// <summary>Voxels marked out of it so far.</summary>
     public int Marked;
+    /// <summary>Set by a pawn told to bring in a resource, not by the player.</summary>
+    public bool Auto;
 
     public int W => X1 - X0 + 1;
     public int D => Z1 - Z0 + 1;
@@ -152,24 +154,116 @@ public sealed partial class Sim
             Zone best = null; float bd = float.MaxValue;
             foreach (var z in Zones)
             {
+                if (z.Auto && u.Duty != Stockpile.None && z != u.DutyZone) continue;
                 float dx = Math.Max(0, Math.Max(z.X0 - u.X, u.X - z.X1)), dz = Math.Max(0, Math.Max(z.Z0 - u.Z, u.Z - z.Z1));
                 float d = dx * dx + dz * dz;
                 if (d < bd) { bd = d; best = z; }
             }
-            if (Pending(best) >= ZonePending) return false;
-            int n = MarkNext(best, u.X, u.Z, out bool exhausted);
-            if (n > 0) { best.Marked += n; return true; }
-            if (!exhausted) return false;
-            Zones.Remove(best);
-            ZonesVersion++;
-            Say(best.Kind switch
+            if (Feed(best, u, out bool spent)) return true;
+            if (!spent) return false;
+        }
+        return false;
+    }
+
+    /// <summary>Marks a little more of one zone near the pawn; a zone with nothing left goes away (spent).</summary>
+    bool Feed(Zone z, Unit u, out bool spent)
+    {
+        spent = false;
+        if (Pending(z) >= ZonePending) return false;
+        int n = MarkNext(z, u.X, u.Z, out bool exhausted);
+        if (n > 0) { z.Marked += n; return true; }
+        if (!exhausted) return false;
+        spent = true;
+        Zones.Remove(z);
+        ZonesVersion++;
+        if (!z.Auto)
+            Say(z.Kind switch
             {
                 Stockpile.Wood => "Делянка вырублена.",
                 Stockpile.Stone => "Каменоломня выбрана до дна.",
                 _ => "Карьер выкопан.",
             }, 1);
+        return false;
+    }
+
+    /// <summary>
+    /// A pawn told to bring in stone, timber or earth without an area set aside picks for itself: the nearest boulder or
+    /// ruin for stone, the nearest tree for timber, and for earth a pit at a fair distance from the citadel and its
+    /// walls. It sets a small area round it and works it till it is spent, then finds the next.
+    /// </summary>
+    bool DutyWork(Unit u)
+    {
+        if (u.Duty == Stockpile.None) return false;
+        for (int tries = 0; tries < 3; tries++)
+        {
+            if (u.DutyZone == null || !Zones.Contains(u.DutyZone)) u.DutyZone = DutyZone(u);
+            if (u.DutyZone == null) { u.Why = $"рядом нечего добывать: {Stockpile.Name(u.Duty)}"; return false; }
+            if (Feed(u.DutyZone, u, out bool spent)) return true;
+            if (!spent) return false;
         }
         return false;
+    }
+
+    Zone DutyZone(Unit u)
+    {
+        int kind = u.Duty;
+        if (kind == Stockpile.Earth)
+        {
+            // one pit, dug by all who are sent for earth
+            foreach (var z in Zones) if (z.Auto && z.Kind == Stockpile.Earth) return z;
+            var (px, pz) = PitSpot(u);
+            if (px < 0) return null;
+            var pit = AddZone(px - 12, pz - 12, px + 12, pz + 12, Stockpile.Earth, 16);
+            pit.Auto = true;
+            return pit;
+        }
+        int ux = (int)u.X, uz = (int)u.Z;
+        for (int r = 0; r <= 480; r += 4)
+            for (int dz = -r; dz <= r; dz += 4)
+                for (int dx = -r; dx <= r; dx += 4)
+                {
+                    if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != r) continue;
+                    int x = ux + dx, z = uz + dz;
+                    if (x < 8 || z < 8 || x >= World.SX - 8 || z >= World.SZ - 8 || Site.Forbidden(x, z)) continue;
+                    int top = World.SurfAt(x, z);
+                    bool hit = kind == Stockpile.Wood
+                        ? TreeFoot(x, z, out _)
+                        : World.Get(x, top - 1, z) is var m && (m == Mat.Ruin || (m is Mat.Rock or Mat.Moss) && top > Site.HTop[z * World.SX + x] + 2);
+                    if (!hit || (kind == Stockpile.Stone && WaterNear(x, z, top - 4))) continue;
+                    int a = kind == Stockpile.Wood ? 16 : 12;
+                    var zone = AddZone(x - a, z - a, x + a, z + a, kind, 24);
+                    zone.Auto = true;
+                    return zone;
+                }
+        return null;
+    }
+
+    /// <summary>Where the pit for earth goes: flat dry grass at a fair distance from the citadel, clear of walls, water and other areas.</summary>
+    (int x, int z) PitSpot(Unit u)
+    {
+        int best = -1, bx = -1, bz = -1;
+        for (int ring = 150; ring <= 230; ring += 40)
+            for (int a = 0; a < 360; a += 15)
+            {
+                int x = Site.KeepX + (int)(Math.Cos(a * Math.PI / 180) * ring), z = Site.KeepZ + (int)(Math.Sin(a * Math.PI / 180) * ring);
+                if (x < 24 || z < 24 || x >= World.SX - 24 || z >= World.SZ - 24 || ZoneAt(x, z) != null) continue;
+                int lo = int.MaxValue, hi = int.MinValue, grass = 0;
+                bool bad = false;
+                for (int dz = -12; dz <= 12 && !bad; dz += 4)
+                    for (int dx = -12; dx <= 12 && !bad; dx += 4)
+                    {
+                        int cx = x + dx, cz = z + dz, top = World.SurfAt(cx, cz);
+                        byte m = World.Get(cx, top - 1, cz);
+                        if (Site.Forbidden(cx, cz) || Mat.IsPlayer[m] || m == Mat.Ruin || WaterNear(cx, cz, top - 16)) bad = true;
+                        if (m is Mat.Grass or Mat.Soil) grass++;
+                        lo = Math.Min(lo, top); hi = Math.Max(hi, top);
+                    }
+                if (bad || hi - lo > 6) continue;
+                float du = MathF.Sqrt((x - u.X) * (x - u.X) + (z - u.Z) * (z - u.Z));
+                int score = grass * 40 - (hi - lo) * 30 - (int)(du / 8);
+                if (score > best) { best = score; bx = x; bz = z; }
+            }
+        return (bx, bz);
     }
 
     /// <summary>Voxels already marked inside a zone and not yet done.</summary>

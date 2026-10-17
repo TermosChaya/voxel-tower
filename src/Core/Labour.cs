@@ -50,7 +50,7 @@ public static class Labour
         D(Mat.Leaf, .25f, Stockpile.Wood, .15f); D(Mat.Foliage, .25f, Stockpile.Wood, .15f);
         // ladders come apart quickly, and what the horde leaves behind is timber too
         D(Mat.Ladder, 1, Stockpile.Wood, .75f); D(Mat.SiegeLadder, .5f, Stockpile.Wood, .75f); D(Mat.Deck, 1.5f, Stockpile.Wood, .75f);
-        D(Mat.Gate, 2.5f, Stockpile.Wood, .75f); D(Mat.GateShut, 2.5f, Stockpile.Wood, .75f);
+        D(Mat.Gate, 2.5f, Stockpile.Wood, .75f); D(Mat.GateShut, 2.5f, Stockpile.Wood, .75f); D(Mat.GateOpen, 2.5f, Stockpile.Wood, .75f);
         // ore is hard and gives gold (see OreGold), old masonry comes apart like any
         D(Mat.Ore, 5, Stockpile.None, 0); D(Mat.Ruin, 2.5f, Stockpile.Stone, .75f);
         LayCost[Mat.Rammed] = 1; LayCost[Mat.Wood] = 1.5f; LayCost[Mat.Stone] = 2; LayCost[Mat.Mortar] = 2;
@@ -70,7 +70,7 @@ public static class Labour
     public static int CostKind(byte m) => m switch
     {
         Mat.Stone or Mat.Mortar => Stockpile.Stone,
-        Mat.Wood or Mat.Ladder or Mat.Gate or Mat.GateShut => Stockpile.Wood,
+        Mat.Wood or Mat.Ladder or Mat.Gate or Mat.GateShut or Mat.GateOpen => Stockpile.Wood,
         Mat.Rammed => Stockpile.Earth,
         _ => Stockpile.None,
     };
@@ -120,6 +120,9 @@ public sealed class Orders
     readonly int _nx, _nz;
     /// <summary>Orders waiting in each column of cells (index k·NX + i).</summary>
     public readonly int[] ColCount;
+    /// <summary>Of those, voxels to dig out, and voxels to lay from each store (indexed by store; None for what costs nothing).</summary>
+    public readonly int[] ColDig;
+    public readonly int[][] ColLay = new int[4][];
     public readonly HashSet<int> Active = new();
     public int Total { get; private set; }
     public int BuildTotal { get; private set; }
@@ -130,17 +133,20 @@ public sealed class Orders
         Layer = new VoxelWorld(w.SX, w.SY, w.SZ);
         _nx = w.SX >> NavGrid.Shift; _nz = w.SZ >> NavGrid.Shift;
         ColCount = new int[_nx * _nz];
+        ColDig = new int[_nx * _nz];
+        for (int k = 0; k < 4; k++) ColLay[k] = new int[_nx * _nz];
     }
 
     public byte At(int x, int y, int z) => y < 0 ? (byte)0 : Layer.Get(x, y, z);
 
-    void Count(int x, int z, int d, bool build)
+    void Count(int x, int z, int d, byte order)
     {
         int col = (z >> NavGrid.Shift) * _nx + (x >> NavGrid.Shift);
         ColCount[col] += d;
         if (ColCount[col] > 0) Active.Add(col); else Active.Remove(col);
         Total += d;
-        if (build) BuildTotal += d;
+        if (order == Remove) ColDig[col] += d;
+        else { BuildTotal += d; ColLay[Labour.CostKind(order)][col] += d; }
     }
 
     /// <summary>Marks a planned building for the pawns; returns how many voxels were added.</summary>
@@ -155,9 +161,9 @@ public sealed class Orders
             if (m == 0 || !_w.InBounds(x, y, z) || !Brushes.Free(_w.Get(x, y, z)) || _site.Forbidden(x, z)) continue;
             byte cur = Layer.Get(x, y, z);
             if (cur == m) continue;
-            if (cur != 0) Count(x, z, -1, cur != Remove);
+            if (cur != 0) Count(x, z, -1, cur);
             Layer.Set(x, y, z, m);
-            Count(x, z, 1, true);
+            Count(x, z, 1, m);
             n++;
         }
         return n;
@@ -174,9 +180,9 @@ public sealed class Orders
             if (!_w.InBounds(x, y, z) || !Labour.Diggable(_w.Get(x, y, z)) || _site.Forbidden(x, z)) continue;
             byte cur = Layer.Get(x, y, z);
             if (cur == Remove) continue;
-            if (cur != 0) Count(x, z, -1, true);
+            if (cur != 0) Count(x, z, -1, cur);
             Layer.Set(x, y, z, Remove);
-            Count(x, z, 1, false);
+            Count(x, z, 1, Remove);
             n++;
         }
         return n;
@@ -188,7 +194,7 @@ public sealed class Orders
         byte cur = Layer.Get(x, y, z);
         if (cur == 0) return;
         Layer.Set(x, y, z, 0);
-        Count(x, z, -1, cur != Remove);
+        Count(x, z, -1, cur);
     }
 
     /// <summary>Takes back every order inside a ball; returns how many.</summary>

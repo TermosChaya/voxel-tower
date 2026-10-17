@@ -4,8 +4,9 @@ using Godot;
 namespace VoxelTower.Game;
 
 /// <summary>
-/// The orthographic diorama camera. Wheel zooms, middle button (or Alt + left) orbits,
-/// right button drags the map, WASD or arrows pan, Q/E turn, Y looks straight down and back, H returns home.
+/// The orthographic diorama camera. Wheel, a pinch or two fingers up and down on a trackpad, PageUp/PageDown zoom;
+/// middle button (or Alt + left) orbits, right button drags the map, WASD or arrows pan, Q/E turn,
+/// Y looks straight down and back, H returns home.
 /// </summary>
 public partial class CameraRig : Node3D
 {
@@ -69,8 +70,14 @@ public partial class CameraRig : Node3D
         Apply();
     }
 
+    /// <summary>Closer (factor over 1) or further.</summary>
+    public void ZoomBy(float factor) => _zoom = Math.Clamp(_zoom * factor, MinZoom, MaxZoom);
+
     public override void _UnhandledInput(InputEvent e)
     {
+        // a trackpad: pinch, or two fingers up and down
+        if (e is InputEventMagnifyGesture mg) { ZoomBy(mg.Factor); return; }
+        if (e is InputEventPanGesture pg) { ZoomBy(MathF.Pow(1.07f, -pg.Delta.Y)); return; }
         if (e is InputEventMouseButton mb)
         {
             if (mb.ButtonIndex == MouseButton.WheelUp && mb.Pressed) _zoom = Math.Clamp(_zoom * 1.12f, MinZoom, MaxZoom);
@@ -102,6 +109,8 @@ public partial class CameraRig : Node3D
         {
             if (k.PhysicalKeycode is Key.H or Key.Home) Home();
             else if (k.PhysicalKeycode == Key.Y) ToggleTopDown();
+            else if (k.PhysicalKeycode is Key.Pageup or Key.KpAdd) ZoomBy(1.3f);
+            else if (k.PhysicalKeycode is Key.Pagedown or Key.KpSubtract) ZoomBy(1 / 1.3f);
             else return;
             GetViewport().SetInputAsHandled();
         }

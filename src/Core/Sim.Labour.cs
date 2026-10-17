@@ -71,11 +71,11 @@ public sealed partial class Sim
 
     void PawnTick(Unit u, float dt)
     {
-        bool soldier = u.T.Work < 1;
+        bool soldier = u.T.Work < 1, fighter = soldier || u.Militia;
         // a swordsman beside a siege ladder throws it down before anything else, climbers and all
         if (soldier && !u.T.Ranged && PushLadders(u, dt)) { Busy(u); return; }
-        if (soldier && Fight(u, dt)) { Busy(u); return; }
-        if (!soldier && Flee(u, dt)) { Busy(u); return; }
+        if (fighter && Fight(u, dt)) { Busy(u); ReleaseSite(u); return; }
+        if (!fighter && Flee(u, dt)) { Busy(u); return; }
         if (u.Prey != null && HuntTick(u, dt)) { Busy(u); return; }
         if (soldier && PushLadders(u, dt)) { Busy(u); return; }
         if (u.Path != null && u.PathI < u.Path.Count && (u.Hold || u.Site < 0) && u.Pastime != Pastime.Stroll) { Walk(u, dt); return; }
@@ -218,15 +218,20 @@ public sealed partial class Sim
         if (Orders.Active.Count == 0)
         {
             u.Why = "";
-            // nothing marked: take a little more out of an area the player set aside for it
-            if (FeedFromZone(u)) u.NextSearch = Time;
+            // nothing marked: do what it was told to, or take a little more out of an area the player set aside
+            if (DutyWork(u) || FeedFromZone(u)) u.NextSearch = Time;
             return;
         }
         int ui = Nav.I(u.Cell), uk = Nav.K(u.Cell);
         var near = new List<(float d, int col)>();
+        int starved = 0;
         foreach (int col in Orders.Active)
         {
+            // nothing there to dig, and nothing to lay that the stores hold: don't even go
+            if (!Workable(col)) { starved++; continue; }
             if (_claims[col] >= 2) continue;
+            // what another pawn was sent to bring in is its work
+            if (u.Duty != Stockpile.None && ZoneAt((col % Nav.NX << NavGrid.Shift) + 4, (col / Nav.NX << NavGrid.Shift) + 4) is { Auto: true } other && other != u.DutyZone) continue;
             if (u.Unreachable.TryGetValue(col, out double until) && Time < until) continue;
             float d = PathFinder.Octile(col % Nav.NX - ui, col / Nav.NX - uk);
             if (near.Count < 6) { near.Add((d, col)); continue; }
@@ -255,8 +260,27 @@ public sealed partial class Sim
             return;
         }
         if (near.Count > 0) u.Why = "до работы не дойти";
+        else if (starved > 0) u.Why = "ждёт: " + Wanting();
         // nothing marked that this one can get to: take a little more out of an area set aside for it
-        if (FeedFromZone(u)) { u.Why = ""; u.NextSearch = Time; }
+        if (DutyWork(u) || FeedFromZone(u)) { u.Why = ""; u.NextSearch = Time; }
+    }
+
+    /// <summary>A column worth walking to: something to dig there, or something to lay that the stores hold (or that costs nothing).</summary>
+    bool Workable(int col)
+    {
+        if (Orders.ColDig[col] > 0 || Orders.ColLay[Stockpile.None][col] > 0) return true;
+        for (int k = 1; k < 4; k++) if (Orders.ColLay[k][col] > 0 && Stock[k] >= 1) return true;
+        return false;
+    }
+
+    /// <summary>What the marked work waits for most: "камень", "брёвна".</summary>
+    string Wanting()
+    {
+        var need = new long[4];
+        foreach (int col in Orders.Active) for (int k = 1; k < 4; k++) if (Stock[k] < 1) need[k] += Orders.ColLay[k][col];
+        int best = 1;
+        for (int k = 2; k < 4; k++) if (need[k] > need[best]) best = k;
+        return Stockpile.Name(best);
     }
 
     /// <summary>Planned masonry where a pawn would stand: don't let it wall itself in.</summary>
@@ -359,9 +383,9 @@ public sealed partial class Sim
             u.State = UnitState.Idle; u.Path = null;
             return false;
         }
-        if (InReach(u, foe) && (u.Path == null || u.Cell == Gate))
+        if (InReach(u, foe))
         {
-            // cornered: hit back
+            // caught: hit back
             u.State = UnitState.Fight;
             u.Facing = MathF.Atan2(foe.Z - u.Z, foe.X - u.X);
             if (u.Cooldown <= 0) { Strike(u, foe); u.Cooldown = u.T.AttackTime; }

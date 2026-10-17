@@ -182,7 +182,7 @@ public sealed class NavGrid
                         {
                             Tally(cls, 1, ref fill, ref e, ref wd, ref st, ref rk, ref hard, ref keep);
                             // a leaf voxel shuts twice its share of the cell, but takes no longer to hack
-                            if (v is Mat.Gate or Mat.GateShut) fill++;
+                            if (Mat.IsLeaf(v)) fill++;
                             if (v == Mat.Gate) gate += 2;
                         }
                         else if (v == Mat.Water) wat++;

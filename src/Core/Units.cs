@@ -182,6 +182,12 @@ public sealed class Unit
     public float PushEffort;
     public double NextLook;
 
+    /// <summary>A resource the player told it to bring in by itself (a store kind, or none), and the area it works for it.</summary>
+    public int Duty;
+    public Zone DutyZone;
+    /// <summary>A worker called up: it stands and fights like a swordsman instead of running.</summary>
+    public bool Militia;
+
     // beasts, and pawns with nothing to do
     /// <summary>Where it grazes and wanders round; for a pawn, where it idles round.</summary>
     public int Home = -1;

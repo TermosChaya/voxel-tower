@@ -166,6 +166,14 @@ public partial class Hud : CanvasLayer
         };
         _topView.AddThemeFontSizeOverride("font_size", 11);
         _topView.Pressed += () => _m.Rig.ToggleTopDown();
+        foreach (var (text, factor, tip) in new[] { ("−", 1 / 1.3f, "Отдалить\nКолесо, щипок или два пальца на тачпаде, PageDown."), ("+", 1.3f, "Приблизить\nКолесо, щипок или два пальца на тачпаде, PageUp.") })
+        {
+            var zb = new Button { Text = text, FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(24, 22), MouseDefaultCursorShape = Control.CursorShape.PointingHand, TooltipText = tip };
+            zb.AddThemeFontSizeOverride("font_size", 13);
+            float f = factor;
+            zb.Pressed += () => _m.Rig.ZoomBy(f);
+            mapHead.AddChild(zb);
+        }
         mapHead.AddChild(_topView);
         mapBox.AddChild(mapHead);
         _map = new Minimap();

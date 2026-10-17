@@ -31,12 +31,14 @@ public sealed partial class Sim
             int c = NearestStand(x, z, t.Move.Height);
             if (c < 0 || Nav.Water[c] > 0) continue;
             int count = t == Kinds.Deer ? 3 + Rng.Next(3) : t == Kinds.Boar ? 1 + Rng.Next(2) : 2 + Rng.Next(3);
+            var (hx, _, hz) = Nav.Feet(c);
             for (int i = 0; i < count; i++)
             {
-                var u = Spawn(t, c);
-                u.X += (float)(Rng.NextDouble() - .5) * 20; u.Z += (float)(Rng.NextDouble() - .5) * 20;
-                u.X = Math.Clamp(u.X, 0, World.SX - 1); u.Z = Math.Clamp(u.Z, 0, World.SZ - 1);
-                u.Home = c;
+                // each beast of the herd has a spot of its own near the others
+                int own = i == 0 ? c : NearestStand((int)hx + Rng.Next(-28, 29), (int)hz + Rng.Next(-28, 29), t.Move.Height);
+                if (own < 0 || Nav.Water[own] > 0) own = c;
+                var u = Spawn(t, own);
+                u.Home = own;
                 u.NextSearch = Time + Rng.NextDouble() * 6;
             }
             return count;

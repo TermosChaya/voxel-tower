@@ -30,7 +30,7 @@ public static class Mat
 
     public const byte Air = 0, Bed = 1, Soil = 2, Grass = 3, Rock = 4, Stone = 5, Mortar = 6, Wood = 7, Rammed = 8,
         Keep = 9, KeepDark = 10, Roof = 11, Leaf = 12, Trunk = 13, Ember = 14, Path = 15, Moss = 16, Iron = 17, Tuft = 18, Plank = 19, Foliage = 20,
-        Ladder = 21, SiegeLadder = 22, Deck = 23, Water = 24, Gate = 25, GateShut = 26, Ore = 27, Ruin = 28;
+        Ladder = 21, SiegeLadder = 22, Deck = 23, Water = 24, Gate = 25, GateShut = 26, Ore = 27, Ruin = 28, GateOpen = 29;
     public const int Count = 64;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
@@ -75,6 +75,8 @@ public static class Mat
         // oak bound with iron: the horde hacks it no faster than masonry
         D(Gate, "Ворота", 0x4b3322, .26f, MatGroup.Stone, Player);
         D(GateShut, "Ворота на засове", 0x45301f, .26f, MatGroup.Stone, Player);
+        // leaves swinging or standing open: in everyone's way, to be walked round
+        D(GateOpen, "Ворота", 0x4b3322, .26f, MatGroup.Stone, Player);
         // gold-bearing rock in the veins of the mines, and the weathered masonry of old ruins
         D(Ore, "Руда", 0xa98436, .3f, MatGroup.Rock, Natural);
         D(Ruin, "Старая кладка", 0x5f5d57, .24f, MatGroup.Stone, Natural);
@@ -120,4 +122,7 @@ public static class Mat
     }
 
     public static string NameOf(byte m) => m == Air ? "воздух" : Def[m].Name ?? "?";
+
+    /// <summary>A voxel of a gate's leaf: shut (ours walk through it), barred, or swinging and open.</summary>
+    public static bool IsLeaf(byte m) => m is Gate or GateShut or GateOpen;
 }

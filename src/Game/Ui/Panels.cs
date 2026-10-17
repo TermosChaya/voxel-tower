@@ -210,6 +210,13 @@ public partial class Retinue : OrnatePanel
         buttons.AddChild(Btn("Стоять", "Стоять здесь\nВыбранные остаются на месте; для солдат это место становится постом.", () => _m.Command.HoldSelected()));
         buttons.AddChild(Btn("Тревога", "Тревога (T)\nВсе солдаты бегут на свои посты. Рог трубит и сам, когда приходит орда.", () => _m.Command.Alarm()));
         sel.AddChild(buttons);
+        var duties = new HBoxContainer();
+        duties.AddThemeConstantOverride("separation", 4);
+        duties.AddChild(Btn("Камень", "Добывать камень\nКогда размеченной работы нет, выбранные сами ломают ближайший валун или руины, а выломав, ищут следующие.", () => _m.Command.DutySelected(Stockpile.Stone)));
+        duties.AddChild(Btn("Брёвна", "Добывать брёвна\nКогда размеченной работы нет, выбранные сами рубят ближайшие деревья.", () => _m.Command.DutySelected(Stockpile.Wood)));
+        duties.AddChild(Btn("Землю", "Добывать землю\nКогда размеченной работы нет, выбранные роют яму поодаль от крепости — одну на всех.", () => _m.Command.DutySelected(Stockpile.Earth)));
+        duties.AddChild(Btn("Ополчение", "Ополчение\nРабочие не бегут от орды, а встречают её с кирками, как мечники. Ещё раз — снова бегут. Солдатам не нужно.", () => _m.Command.MilitiaSelected()));
+        sel.AddChild(duties);
         _selBox = sel;
         col.AddChild(sel);
         AddChild(col);
@@ -260,6 +267,7 @@ public partial class Retinue : OrnatePanel
         };
         if (u.Hold) return leisure == "" ? "стоит по приказу" : "стоит по приказу, " + leisure;
         if (u.Why != "") return u.Why;
+        if (u.Duty != Stockpile.None) return $"ищет, где добыть: {Stockpile.Name(u.Duty)}";
         return leisure != "" ? leisure : "без дела";
     }
 
@@ -308,7 +316,8 @@ public partial class Retinue : OrnatePanel
             foreach (var u in sel)
             {
                 _selTitle.Text = $"{u.T.Name} · {Math.Ceiling(Math.Max(0, u.Hp))} из {u.T.Hp}";
-                _selNote.Text = Doing(u, _m.Sim) + (u.T.Work < 1 && u.Post >= 0 ? " · пост назначен" : "");
+                _selNote.Text = Doing(u, _m.Sim) + (u.T.Work < 1 && u.Post >= 0 ? " · пост назначен" : "")
+                    + (u.Duty != Stockpile.None ? $" · добывает: {Stockpile.Name(u.Duty)}" : "") + (u.Militia ? " · ополчение" : "");
             }
             return;
         }
