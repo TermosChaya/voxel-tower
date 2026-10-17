@@ -154,8 +154,11 @@ public static class WorldGen
         return bse;
     }
 
-    internal static void Brazier(VoxelWorld w, Site s, int x, int y, int z)
+    /// <summary>A fire bowl, on an iron post this many voxels high (the valley's stand chest-high to a man).</summary>
+    internal static void Brazier(VoxelWorld w, Site s, int x, int y, int z, int post = 0)
     {
+        for (int py = y; py < y + post; py++) Put(w, x, py, z, Mat.Iron);
+        y += post;
         for (int dz = -2; dz <= 2; dz++)
             for (int dx = -2; dx <= 2; dx++)
             {

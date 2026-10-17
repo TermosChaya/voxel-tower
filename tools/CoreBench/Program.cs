@@ -233,7 +233,7 @@ foreach (var (size, label, mp) in variants)
                 byte m = w3.Get(x, y, z);
                 if (m == Mat.Trunk) trunk++; else if (m == Mat.Rock || m == Mat.Moss) rock++;
             }
-    Console.WriteLine($"valley {mp.SizeX * VoxelWorld.Vox:0}×{mp.SizeY * VoxelWorld.Vox:0}×{mp.SizeZ * VoxelWorld.Vox:0} m: generated in {gen3} ms, {w3.AllocatedChunks}/{w3.ChunkCount} chunks hold data ({mem / 1048576} MB), mesh {mesh3} ms on {Environment.ProcessorCount} threads, {q3 * 2 / 1000} k triangles in {meshed3} chunks");
+    Console.WriteLine($"valley {mp.SizeX / VoxelWorld.PerMetre}×{mp.SizeY / VoxelWorld.PerMetre}×{mp.SizeZ / VoxelWorld.PerMetre} m: generated in {gen3} ms, {w3.AllocatedChunks}/{w3.ChunkCount} chunks hold data ({mem / 1048576} MB), mesh {mesh3} ms on {Environment.ProcessorCount} threads, {q3 * 2 / 1000} k triangles in {meshed3} chunks");
     Check($"valley {size}: the citadel stands on the plateau", w3.Get(site3.KeepX, site3.KeepBase + 10, site3.KeepZ) != 0 && site3.KeepBase > 70, $"keep base {site3.KeepBase}");
     Check($"valley {size}: forests and rock to quarry", trunk > 50 && rock > 1000, $"{trunk} trunk and {rock} rock samples");
 }
@@ -372,7 +372,7 @@ if (args.Length == 0 || args[0] == "--sim")
         float dd0 = Sim.Dist(deer, walker);
         Run(4);
         float dd1 = Sim.Dist(deer, walker);
-        Check("a deer bolts from a worker", dd1 > dd0 + 48, $"{dd0 / 16:0.0} → {dd1 / 16:0.0} m, {deer.State}");
+        Check("a deer bolts from a worker", dd1 > dd0 + 48, $"{dd0 / VoxelWorld.PerMetre:0.0} → {dd1 / VoxelWorld.PerMetre:0.0} m, {deer.State}");
         walker.Dead = true; walker.DiedAt = -999;
         var boar = sim.Spawn(Kinds.Boar, sim.NearestStand((int)mx + 120, (int)mz + 160, 2));
         var hunters = new[] { sim.Spawn(Kinds.Archer, sim.NearestStand((int)boar.X - 150, (int)boar.Z, 4)), sim.Spawn(Kinds.Archer, sim.NearestStand((int)boar.X - 150, (int)boar.Z + 20, 4)) };
@@ -405,7 +405,7 @@ if (args.Length == 0 || args[0] == "--sim")
     Check("the first wave comes and fights", sim.Waves.Number == 1 && sim.Kills > 0 && sim.Shots > 0,
         $"{sim.Kills} raiders killed, {alive} alive, {sim.Shots} arrows loosed, {sim.ShotHits} hit, citadel {keep0:0} → {sim.KeepHp:0}; 180 s in {sw.ElapsedMilliseconds} ms, fields {sim.LastFieldMs:0} ms");
     foreach (var u in sim.Units)
-        if (!u.Dead && u.Team != Team.Wild) Console.WriteLine($"     {u.T.Name} #{u.Id}: {u.State}, {u.Hp:0} hp, at {u.X / 16:0.0},{u.Y / 16:0.0},{u.Z / 16:0.0} m{(u.Why != "" ? ", " + u.Why : "")}");
+        if (!u.Dead && u.Team != Team.Wild) Console.WriteLine($"     {u.T.Name} #{u.Id}: {u.State}, {u.Hp:0} hp, at {u.X / VoxelWorld.PerMetre:0.0},{u.Y / VoxelWorld.PerMetre:0.0},{u.Z / VoxelWorld.PerMetre:0.0} m{(u.Why != "" ? ", " + u.Why : "")}");
 
     // calling the horde early pays nothing: it only comes knowing less of the defences
     {
@@ -455,21 +455,21 @@ if (args.Length == 0 || args[0] == "--sim")
     float d0 = DistKeep(orc);
     Run(120);
     float d1 = DistKeep(orc);
-    Check("with nothing to build from, an orc hacks through the stone ring", hacked > 200 && ladder == 0 && d1 < d0 - 40, $"{hacked} voxels hacked, {d0 / 16:0.0} → {d1 / 16:0.0} m from the citadel, {orc.State}");
+    Check("with nothing to build from, an orc hacks through the stone ring", hacked > 200 && ladder == 0 && d1 < d0 - 40, $"{hacked} voxels hacked, {d0 / VoxelWorld.PerMetre:0.0} → {d1 / VoxelWorld.PerMetre:0.0} m from the citadel, {orc.State}");
     orc.Dead = true; orc.DiedAt = -999;
 
     // with timber a sapper raises a ladder against a fresh ring and climbs over it
     sim.InstantLabour = true;
     Ring(site4.KeepR + 76, wallRing);
     sim.InstantLabour = false;
-    sim.HordeStock[Stockpile.Wood] = VoxelWorld.PerM3;
+    sim.HordeStock[Stockpile.Wood] = 4096;
     sim.ComputeFields();
     hacked = 0;
     var sapper = sim.Spawn(Kinds.Sapper, sim.NearestStand(site4.KeepX - site4.KeepR - 120, site4.KeepZ, 3));
     d0 = DistKeep(sapper);
     Run(60);
     d1 = DistKeep(sapper);
-    Check("a sapper raises a ladder against the wall and climbs over", ladder > 30 && d1 < site4.KeepR + 70 && hacked < 100, $"{ladder} voxels of ladder, {hacked} hacked, {d0 / 16:0.0} → {d1 / 16:0.0} m, {sapper.State}");
+    Check("a sapper raises a ladder against the wall and climbs over", ladder > 30 && d1 < site4.KeepR + 70 && hacked < 100, $"{ladder} voxels of ladder, {hacked} hacked, {d0 / VoxelWorld.PerMetre:0.0} → {d1 / VoxelWorld.PerMetre:0.0} m, {sapper.State}");
     sapper.Dead = true; sapper.DiedAt = -999;
 
     // a swordsman on the wall throws that ladder down
@@ -486,22 +486,22 @@ if (args.Length == 0 || args[0] == "--sim")
     sim.InstantLabour = true;
     Ring(site4.KeepR + 130, new Stroke { Width = 24, Height = 24, Dig = true, Hollow = true });
     sim.InstantLabour = false;
-    sim.HordeStock[Stockpile.Wood] = VoxelWorld.PerM3; sim.HordeStock[Stockpile.Earth] = 0;
+    sim.HordeStock[Stockpile.Wood] = 4096; sim.HordeStock[Stockpile.Earth] = 0;
     sim.ComputeFields();
     var bridger = sim.Spawn(Kinds.Sapper, sim.NearestStand(site4.KeepX - site4.KeepR - 160, site4.KeepZ, 3));
     Run(60);
-    Check("a sapper lays a bridge over the moat", decked > 200 && DistKeep(bridger) < site4.KeepR + 104, $"{decked} voxels of deck, now {DistKeep(bridger) / 16:0.0} m from the citadel, {bridger.State}");
+    Check("a sapper lays a bridge over the moat", decked > 200 && DistKeep(bridger) < site4.KeepR + 104, $"{decked} voxels of deck, now {DistKeep(bridger) / VoxelWorld.PerMetre:0.0} m from the citadel, {bridger.State}");
     bridger.Dead = true; bridger.DiedAt = -999;
 
     // a ditch too deep to climb out of and no timber left: earth is heaped in
     sim.InstantLabour = true;
     Ring(site4.KeepR + 200, new Stroke { Width = 16, Height = 16, Dig = true, Hollow = true });
     sim.InstantLabour = false;
-    sim.HordeStock[Stockpile.Wood] = 0; sim.HordeStock[Stockpile.Earth] = 2 * VoxelWorld.PerM3;
+    sim.HordeStock[Stockpile.Wood] = 0; sim.HordeStock[Stockpile.Earth] = 8192;
     sim.ComputeFields();
     var filler = sim.Spawn(Kinds.Sapper, sim.NearestStand(site4.KeepX - site4.KeepR - 230, site4.KeepZ, 3));
     Run(60);
-    Check("without timber a sapper fills the ditch with earth", filled > 400 && DistKeep(filler) < site4.KeepR + 184, $"{filled} voxels of fill, now {DistKeep(filler) / 16:0.0} m from the citadel, {filler.State}");
+    Check("without timber a sapper fills the ditch with earth", filled > 400 && DistKeep(filler) < site4.KeepR + 184, $"{filled} voxels of fill, now {DistKeep(filler) / VoxelWorld.PerMetre:0.0} m from the citadel, {filler.State}");
 }
 
 Console.WriteLine(failures == 0 ? "\nall checks passed" : $"\n{failures} check(s) failed");

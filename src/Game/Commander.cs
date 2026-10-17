@@ -164,8 +164,8 @@ public partial class Commander : Node
         int i = x >> NavGrid.Shift, k = z >> NavGrid.Shift, cy = y >> NavGrid.Shift;
         for (int dy = 0; dy <= 2; dy++)
             foreach (int yy in new[] { cy + dy, cy - dy })
-                if (nav.Stand(i, yy, k, 4)) return nav.Id(i, yy, k);
-        return _m.Sim.NearestStand(x, z, 4);
+                if (nav.Stand(i, yy, k, 2)) return nav.Id(i, yy, k);
+        return _m.Sim.NearestStand(x, z, 2);
     }
 
     public void ReleaseSelected()

@@ -80,7 +80,7 @@ public partial class Main : Node3D
         Rig = new CameraRig { BottomInset = Hud.BottomBand, TopInset = Hud.TopBand };
         Rig.Bounds = new Rect2(World.OriginX, World.OriginZ, World.SX * VoxelWorld.Vox, World.SZ * VoxelWorld.Vox);
         AddChild(Rig);
-        Rig.HomeAt(World.WX(Site.KeepX - Site.KeepR - 120), World.WZ(Site.KeepZ + 20));
+        Rig.HomeAt(World.WX(Site.KeepX - Site.KeepR - 50), World.WZ(Site.KeepZ + 14));
         atmo.Follow = Rig;
         Debris = new Debris();
         AddChild(Debris);
@@ -169,7 +169,7 @@ public partial class Main : Node3D
                     int next = f.Next(Sim.Nav, u.Cell, out float carve, out var works);
                     field = $", field {f.Dist[u.Cell]:0} s, next {next} {works} carve {carve:0.0}, no build until {u.NoBuildUntil:0.0}";
                 }
-                GD.Print($"[voxel-tower]   {u.T.Name} #{u.Id}: {u.State} {u.Building} at {u.X / 16:0.0},{u.Y / 16:0.0},{u.Z / 16:0.0} m{(u.Why != "" ? ", " + u.Why : "")}{field}");
+                GD.Print($"[voxel-tower]   {u.T.Name} #{u.Id}: {u.State} {u.Building} at {u.X / VoxelWorld.PerMetre:0.0},{u.Y / VoxelWorld.PerMetre:0.0},{u.Z / VoxelWorld.PerMetre:0.0} m{(u.Why != "" ? ", " + u.Why : "")}{field}");
             }
         var img = GetViewport().GetTexture().GetImage();
         if (img.GetWidth() > 1600) img.Resize(1600, img.GetHeight() * 1600 / img.GetWidth(), Image.Interpolation.Lanczos);
@@ -457,9 +457,9 @@ public partial class Main : Node3D
         var w = World; var s = Site; var sim = Sim;
         sim.Waves.Countdown = Waves.Prep;
         sim.Stock.Gold = 140;
-        sim.Stock[Stockpile.Stone] = 30 * VoxelWorld.PerM3;
-        sim.Stock[Stockpile.Wood] = 14 * VoxelWorld.PerM3;
-        sim.Stock[Stockpile.Earth] = 6 * VoxelWorld.PerM3;
+        sim.Stock[Stockpile.Stone] = 60 * VoxelWorld.PerM3;
+        sim.Stock[Stockpile.Wood] = 40 * VoxelWorld.PerM3;
+        sim.Stock[Stockpile.Earth] = 30 * VoxelWorld.PerM3;
         Stroke St(byte m, int width, int height, bool hollow = false) => new() { Mat = m, Width = width, Height = height, Level = true, Hollow = hollow };
         const int wx = 676, z0 = 436, z1 = 596, mx = wx - 30;
         bool battle = _pose == "battle";
@@ -513,7 +513,7 @@ public partial class Main : Node3D
             sim.Waves.Countdown = 0;
             sim.Step(.05f);
             sim.Waves.Countdown = 1e9;
-            sim.HordeStock[Stockpile.Wood] = 3 * VoxelWorld.PerM3;
+            sim.HordeStock[Stockpile.Wood] = 24 * VoxelWorld.PerM3;
             foreach (var (t, x, z) in new[] { (Kinds.Sapper, wx - 64, 492), (Kinds.Sapper, wx - 62, 532), (Kinds.Sapper, wx - 66, 566), (Kinds.Goblin, wx - 70, 510),
                 (Kinds.Goblin, wx - 74, 548), (Kinds.Orc, wx - 80, 520), (Kinds.Orc, wx - 84, 500), (Kinds.Troll, wx - 100, 530) })
             {
@@ -570,7 +570,7 @@ public partial class Main : Node3D
         sim.Waves.Countdown = 0;
         sim.Step(.05f);
         sim.Waves.Countdown = 1e9;
-        sim.HordeStock[Stockpile.Wood] = 3 * VoxelWorld.PerM3;
+        sim.HordeStock[Stockpile.Wood] = 24 * VoxelWorld.PerM3;
         foreach (var (t, dx, dz) in new[] { (Kinds.Sapper, -122, -20), (Kinds.Sapper, -120, 12), (Kinds.Sapper, -118, 36), (Kinds.Goblin, -130, 0),
             (Kinds.Goblin, -134, 24), (Kinds.Orc, -138, -8), (Kinds.Orc, -142, 18), (Kinds.Troll, -150, 4), (Kinds.Goblin, -126, -34) })
         {

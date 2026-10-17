@@ -10,10 +10,15 @@ namespace VoxelTower.Core;
 public sealed class VoxelWorld
 {
     public const int CS = 32, Shift = 5, Mask = 31, CS3 = CS * CS * CS;
-    /// <summary>Edge of one voxel in metres: a warrior is about 30 voxels tall.</summary>
+    /// <summary>Edge of one voxel in scene units: what the engine draws it as. Only the camera, light and fog care.</summary>
     public const float Vox = 1f / 16f;
+    /// <summary>
+    /// Voxels in a metre as the valley's people measure it: a voxel is 12.5 cm, a man about 15 voxels tall,
+    /// a tree 40 to 70, the plateau's cliffs 44.
+    /// </summary>
+    public const int PerMetre = 8;
     /// <summary>Voxels in one cubic metre.</summary>
-    public const int PerM3 = 16 * 16 * 16;
+    public const int PerM3 = PerMetre * PerMetre * PerMetre;
 
     public readonly int SX, SY, SZ, CX, CY, CZ, ChunkCount;
     /// <summary>World position (metres) of the corner of voxel (0,0,0); the field is centred on the origin.</summary>

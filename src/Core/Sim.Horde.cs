@@ -399,8 +399,8 @@ public sealed class Waves
         for (int i = list.Count - 1; i > 0; i--) { int j = s.Rng.Next(i + 1); (list[i], list[j]) = (list[j], list[i]); }
         foreach (var t in list) _queue.Enqueue(t);
         // timber for ladders and bridges, earth for fills, brought along
-        s.HordeStock[Stockpile.Wood] += (.3 + .12 * n) * VoxelWorld.PerM3;
-        s.HordeStock[Stockpile.Earth] += (.4 + .25 * n) * VoxelWorld.PerM3;
+        s.HordeStock[Stockpile.Wood] += (2.4 + 1 * n) * VoxelWorld.PerM3;
+        s.HordeStock[Stockpile.Earth] += (3.2 + 2 * n) * VoxelWorld.PerM3;
         _spawnT = 1;
         // the fields are rebuilt in the background for what the horde brought; until then the old ones lead the way
         if (s.Fields.Count == 0) s.ComputeFields();

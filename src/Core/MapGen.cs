@@ -5,11 +5,11 @@ namespace VoxelTower.Core;
 
 public sealed class MapParams
 {
-    /// <summary>Voxels; 16 make a metre. The default valley is 64 × 12 × 64 m.</summary>
+    /// <summary>Voxels; 8 make a metre. The default valley is 128 × 24 × 128 m.</summary>
     public int SizeX = 1024, SizeY = 192, SizeZ = 1024;
     public uint Seed = 7;
     /// <summary>Knobs for the look against the triangle count.</summary>
-    public double TreeDensity = .8, TuftChance = .015, Roughness = 2.5;
+    public double TreeDensity = .7, TuftChance = .015, Roughness = 2.5;
 }
 
 /// <summary>
@@ -191,16 +191,16 @@ public static class MapGen
                 if (plateau) density = NearKeep(x, z, 160) ? 0 : density * .3;
                 if (Hash.H3(gx, gz, 203) > density * p.TreeDensity) continue;
                 double r = Hash.H3(gx, gz, 204), size = Hash.H3(gx, gz, 205);
-                if (plateau ? r < .5 : r >= .42 && r < .66) Flora.Cypress(w, x, z, 22 + (int)(size * 14), grain: 1);
-                else if (r < .42) Flora.Spruce(w, x, z, 30 + (int)(size * 22));
-                else if (r < .86) Flora.Oak(w, x, z, 34 + (int)(size * 14));
+                if (plateau ? r < .5 : r >= .42 && r < .66) Flora.Cypress(w, x, z, 30 + (int)(size * 18), grain: 1, grown: true);
+                else if (r < .42) Flora.Spruce(w, x, z, 40 + (int)(size * 28));
+                else if (r < .86) Flora.Oak(w, x, z, 44 + (int)(size * 18));
                 else if (r < .94) Flora.Bush(w, x, z, 3 + (int)(size * 3));
-                else Flora.DeadTree(w, x, z);
+                else Flora.DeadTree(w, x, z, grown: true);
             }
 
         site.KeepBase = WorldGen.Keep(w, site);
         int gx2 = site.KeepX - site.KeepR - 7;
-        foreach (int dz in new[] { -10, 10 }) WorldGen.Brazier(w, site, gx2, w.SurfAt(gx2, site.KeepZ + dz), site.KeepZ + dz);
+        foreach (int dz in new[] { -10, 10 }) WorldGen.Brazier(w, site, gx2, w.SurfAt(gx2, site.KeepZ + dz), site.KeepZ + dz, post: 4);
         site.Torches.Add((site.KeepX - site.KeepR - 3, site.KeepBase + 22, site.KeepZ));
         return site;
     }

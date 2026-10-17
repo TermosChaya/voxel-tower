@@ -529,7 +529,7 @@ public partial class BuildTools : Node3D
         }
         if (!_hasHover) { HoverText = ""; return; }
         int ground = w.GroundTop(_hover.X, _hover.Z);
-        float above = (_hover.Y + 1 - ground) * VoxelWorld.Vox;
+        float above = (_hover.Y + 1 - ground) / (float)VoxelWorld.PerMetre;
         string text = _hasTree ? (_tree.M == Mat.Trunk ? "дерево: ствол" : "дерево: крона")
             : Mat.IsPlayer[_hover.M] && above > .05f ? $"{Mat.NameOf(_hover.M)} · {Fmt.One(above)} м над землёй" : Mat.NameOf(_hover.M);
         byte order = _m.Sim.Orders.At(_hover.X, _hover.Y, _hover.Z);

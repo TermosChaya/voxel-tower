@@ -304,7 +304,7 @@ public partial class Hud : CanvasLayer
 
     static string Len(int voxels)
     {
-        double m = voxels * VoxelWorld.Vox;
+        double m = voxels / (double)VoxelWorld.PerMetre;
         return m < 1 ? $"{Math.Round(m * 100)} см" : (Fmt.One(m) + " м").Replace(",0 м", " м");
     }
 

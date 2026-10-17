@@ -47,9 +47,9 @@ public sealed partial class Sim
         _claims = new int[Nav.NX * Nav.NZ];
         Goals = FlowField.Goals(Nav);
         Gate = NearestStand(s.KeepX - s.KeepR - 12, s.KeepZ, 4);
-        Stock[Stockpile.Stone] = 2 * VoxelWorld.PerM3;
-        Stock[Stockpile.Wood] = 3 * VoxelWorld.PerM3;
-        Stock[Stockpile.Earth] = 2 * VoxelWorld.PerM3;
+        Stock[Stockpile.Stone] = 16 * VoxelWorld.PerM3;
+        Stock[Stockpile.Wood] = 24 * VoxelWorld.PerM3;
+        Stock[Stockpile.Earth] = 16 * VoxelWorld.PerM3;
         w.Edited += OnEditWater;
     }
 
@@ -225,7 +225,7 @@ public sealed partial class Sim
         {
             if (u.Dead || u.Team != Team.Player) continue;
             ReleaseSite(u);
-            int spot = Spread(target, n++);
+            int spot = Spread(target, n++, u.T.Move.Height);
             u.Hold = true;
             u.Prey = null;
             if (u.T.Work < 1) u.Post = spot;
@@ -253,7 +253,7 @@ public sealed partial class Sim
     }
 
     /// <summary>Spots around a target for a group, so they don't all stand in one cell.</summary>
-    int Spread(int target, int n)
+    int Spread(int target, int n, int h)
     {
         if (n == 0) return target;
         int i = Nav.I(target), y = Nav.Y(target), k = Nav.K(target);
@@ -263,7 +263,7 @@ public sealed partial class Sim
                 {
                     if (Math.Max(Math.Abs(di), Math.Abs(dk)) != r) continue;
                     for (int dy = 1; dy >= -2; dy--)
-                        if (Nav.Stand(i + di, y + dy, k + dk, 4) && --n == 0) return Nav.Id(i + di, y + dy, k + dk);
+                        if (Nav.Stand(i + di, y + dy, k + dk, h) && --n == 0) return Nav.Id(i + di, y + dy, k + dk);
                 }
         return target;
     }

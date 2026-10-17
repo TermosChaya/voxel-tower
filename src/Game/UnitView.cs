@@ -46,7 +46,8 @@ public partial class UnitView : Node3D
         foreach (var t in Kinds.HordeKinds) Add(t);
         foreach (var t in Kinds.WildKinds) Add(t);
 
-        var shaft = new BoxMesh { Size = new Vector3(.035f, .035f, .7f), Material = new StandardMaterial3D { AlbedoColor = new Color("4a3424"), Roughness = .9f } };
+        // an arrow is 70 cm long, a little under five voxels
+        var shaft = new BoxMesh { Size = new Vector3(.022f, .022f, .35f), Material = new StandardMaterial3D { AlbedoColor = new Color("4a3424"), Roughness = .9f } };
         _arrows = Multi(shaft, null, false);
         var ring = new TorusMesh { InnerRadius = .82f, OuterRadius = 1f, Rings = 32, RingSegments = 4 };
         var ringMat = new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, VertexColorUseAsAlbedo = true, AlbedoColor = Colors.White };
@@ -157,7 +158,7 @@ public partial class UnitView : Node3D
             bool run = u.State is UnitState.Flee or UnitState.Fight;
             float sw = MathF.Sin(phase) * (run ? .85f : .45f) * a;
             main = sw; legL = sw; off = -sw; legR = -sw;
-            bob = MathF.Abs(MathF.Sin(phase)) * a * (run ? 1.6f : .4f);
+            bob = MathF.Abs(MathF.Sin(phase)) * a * (run ? .8f : .2f);
             if (a < .05f)
             {
                 // grazing: now and then the head goes down to the grass
@@ -169,7 +170,7 @@ public partial class UnitView : Node3D
         else if (_m.Sim.Climbing(u))
         {
             // hand over hand up the ladder
-            float phase = u.Y / 6f * MathF.Tau;
+            float phase = u.Y / 3f * MathF.Tau;
             main = -2.6f + MathF.Sin(phase) * .35f;
             off = -2.6f - MathF.Sin(phase) * .35f;
             legR = -.5f + MathF.Sin(phase) * .45f;
@@ -183,7 +184,7 @@ public partial class UnitView : Node3D
             legL = -legR;
             main += -legR * .7f;
             off = -legL * .7f;
-            bob = (MathF.Abs(MathF.Cos(phase)) - .64f) * a * 1.1f;
+            bob = (MathF.Abs(MathF.Cos(phase)) - .64f) * a * .55f;
             switch (u.State)
             {
                 case UnitState.Work:
@@ -207,7 +208,7 @@ public partial class UnitView : Node3D
                     if (a < .05f)
                     {
                         float breath = MathF.Sin((float)_t * 1.7f + seed);
-                        bob = breath * .25f;
+                        bob = breath * .12f;
                         main += breath * .04f;
                         off = -breath * .04f;
                     }
@@ -336,7 +337,7 @@ public partial class UnitView : Node3D
         foreach (var u in sel)
         {
             if (u.Dead) continue;
-            float r = (u.T.BodyR + 3.5f) * VoxelWorld.Vox * pulse;
+            float r = (u.T.BodyR + 2f) * VoxelWorld.Vox * pulse;
             int o = i++ * 16;
             _ringBuf[o] = r; _ringBuf[o + 1] = 0; _ringBuf[o + 2] = 0; _ringBuf[o + 3] = _w.WX(u.X);
             _ringBuf[o + 4] = 0; _ringBuf[o + 5] = r * .5f; _ringBuf[o + 6] = 0; _ringBuf[o + 7] = _w.WY(u.Y + .6f);

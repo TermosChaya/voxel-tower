@@ -14,7 +14,8 @@ public partial class CameraRig : Node3D
     public float BottomInset = 0, TopInset = 0;
 
     const float Dist = 80f, ViewH = 15.5f, LookY = 4f;
-    const float HomeYaw = -.66f, HomePitch = .62f, HomeZoom = .74f, MinZoom = .28f, MaxZoom = 5f;
+    // the people of the valley are about two metres tall in a 128-metre valley: start closer, and let the view come closer still
+    const float HomeYaw = -.66f, HomePitch = .62f, HomeZoom = 1f, MinZoom = .28f, MaxZoom = 8f;
     float _homeX = .4f, _homeZ = .3f;
 
     /// <summary>The part of the map the camera may look at, in world metres (x, z).</summary>

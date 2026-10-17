@@ -19,13 +19,16 @@ public static class Flora
                 for (int dx = 0; dx < thick; dx++) Put(w, x0 + dx, y, z0 + dz, Mat.Trunk);
     }
 
-    /// <summary>A tall narrow cypress, the prototype's tree. Grain 1 clumps the needles in 2³ tufts (fewer faces).</summary>
-    public static void Cypress(VoxelWorld w, int x0, int z0, int h, int grain = 0)
+    /// <summary>
+    /// A tall narrow cypress, the prototype's tree. Grain 1 clumps the needles in 2³ tufts (fewer faces);
+    /// grown ones stand on a longer trunk with a broader crown (the valley's; the prototype's map keeps the small ones).
+    /// </summary>
+    public static void Cypress(VoxelWorld w, int x0, int z0, int h, int grain = 0, bool grown = false)
     {
-        int bse = w.SurfAt(x0, z0);
-        Trunk(w, x0, z0, bse, bse + 9, 2);
-        double cy = bse + 7 + h / 2.0, ry = h / 2.0, rx = 4.4 + Hash.H3(x0, z0, 3) * 1.2;
-        for (int y = bse + 5; y < bse + 8 + h; y++)
+        int bse = w.SurfAt(x0, z0), trunk = grown ? 12 : 9, lift = grown ? 2 : 0;
+        Trunk(w, x0, z0, bse, bse + trunk, 2);
+        double cy = bse + 7 + lift + h / 2.0, ry = h / 2.0, rx = (grown ? 5.2 : 4.4) + Hash.H3(x0, z0, 3) * (grown ? 1.6 : 1.2);
+        for (int y = bse + 5 + lift; y < bse + 8 + lift + h; y++)
         {
             double t = (y - cy) / ry;
             if (Math.Abs(t) > 1) continue;
@@ -41,9 +44,9 @@ public static class Flora
     }
 
     /// <summary>A bare dead tree with a few crooked branches.</summary>
-    public static void DeadTree(VoxelWorld w, int x0, int z0)
+    public static void DeadTree(VoxelWorld w, int x0, int z0, bool grown = false)
     {
-        int bse = w.SurfAt(x0, z0), H = 20 + (int)Math.Floor(Hash.H3(x0, z0, 5) * 8);
+        int bse = w.SurfAt(x0, z0), H = grown ? 26 + (int)Math.Floor(Hash.H3(x0, z0, 5) * 10) : 20 + (int)Math.Floor(Hash.H3(x0, z0, 5) * 8);
         Trunk(w, x0, z0, bse, bse + H, 2);
         var R = new Mulberry32((uint)(x0 * 31 + z0));
         for (int b = 0; b < 4; b++)
