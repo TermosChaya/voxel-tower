@@ -36,6 +36,10 @@ public static class Mat
     public const byte GrassDry = 54, GrassLush = 55, Flower = 56, Bloom = 57, Birch = 58, KeepShade = 59;
     /// <summary>What dresses the buildings by itself: banners, torches in their sconces, barrels, crates and sacks in the yards.</summary>
     public const byte Banner = 60, BannerTrim = 61, Sconce = 62, Flame = 63, Cask = 64, Hoop = 65, Crate = 66, CrateEdge = 67, Sack = 68;
+    /// <summary>Two more shades of laid stone: a warm one and a cool one.</summary>
+    public const byte StoneWarm = 69, StoneCool = 70;
+    /// <summary>The trees in more shades: needles and leaves where the sun is on them, leaves turning, a pine's rusty upper bark, a dead tree's grey wood.</summary>
+    public const byte NeedleLight = 71, FoliageLight = 72, FoliageGold = 73, PineBark = 74, Snag = 75;
     /// <summary>Inside the bodies, and more colours for them: never placed in the world.</summary>
     public const byte Flesh = 80, Brain = 81, Heart = 82, Blood = 83, HairBrown = 84, HairGinger = 85, HairGrey = 86, SkinTan = 87,
         SkinPale = 88, SkinGoblinDark = 89, SkinGoblinPale = 90, SkinOrcGrey = 91, ClothGreen = 92, ClothBrown = 93, ClothOchre = 94, Straw = 95;
@@ -46,6 +50,10 @@ public static class Mat
         IsNatural = new bool[Count], IsAnchor = new bool[Count];
     /// <summary>The dressing of the buildings: whatever is built or laid where it stands simply takes its place.</summary>
     public static readonly bool[] IsDecor = new bool[Count];
+    /// <summary>How it moves in the wind: 0 not at all, 1 at its tips (grass, flowers), 2 as a mass (leaves).</summary>
+    public static readonly byte[] SwayKind = new byte[Count];
+    /// <summary>Dressed stone: each stone drawn whole, without the grid of its voxels.</summary>
+    public static readonly bool[] Smooth = new bool[Count];
     /// <summary>A body passes through it: leaves, grass, ladders and water. Nothing is hacked out of the way for these.</summary>
     public static readonly bool[] Passable = new bool[Count];
     /// <summary>Ladders: bodies hang on them and climb.</summary>
@@ -63,8 +71,8 @@ public static class Mat
         D(Soil, "Грунт", 0x584130, .22f, MatGroup.Earth, Natural | Earthy);
         D(Grass, "Дёрн", 0x4a5c33, .30f, MatGroup.Earth, Natural | Earthy);
         D(Rock, "Скала", 0x5a5862, .24f, MatGroup.Rock, Natural);
-        D(Stone, "Камень", 0x5f5b5e, .14f, MatGroup.Stone, Player);
-        D(Mortar, "Раствор", 0x2c282d, .08f, MatGroup.Stone, Player);
+        D(Stone, "Камень", 0x605c5e, .04f, MatGroup.Stone, Player);
+        D(Mortar, "Раствор", 0x2a262b, .05f, MatGroup.Stone, Player);
         D(Wood, "Брёвна", 0x4c3423, .22f, MatGroup.Wood, Player);
         D(Rammed, "Земля", 0x4b3829, .16f, MatGroup.Earth, Player | Earthy);
         // the citadel: rough masonry of big stones in two shades, darker mortar
@@ -94,13 +102,20 @@ public static class Mat
         D(Ore, "Руда", 0xa98436, .3f, MatGroup.Rock, Natural);
         D(Ruin, "Старая кладка", 0x5f5d57, .24f, MatGroup.Stone, Natural);
         // rough masonry: stones of three shades in dark mortar
-        D(StoneDark, "Камень", 0x4b484c, .14f, MatGroup.Stone, Player);
-        D(StoneLight, "Камень", 0x6e6a6b, .14f, MatGroup.Stone, Player);
+        D(StoneDark, "Камень", 0x4a474b, .04f, MatGroup.Stone, Player);
+        D(StoneLight, "Камень", 0x726d6c, .04f, MatGroup.Stone, Player);
+        D(StoneWarm, "Камень", 0x6a6058, .04f, MatGroup.Stone, Player);
+        D(StoneCool, "Камень", 0x56595f, .04f, MatGroup.Stone, Player);
         D(GrassDry, "Дёрн", 0x585d34, .30f, MatGroup.Earth, Natural | Earthy);
         D(GrassLush, "Дёрн", 0x3c5a30, .30f, MatGroup.Earth, Natural | Earthy);
         D(Flower, "Цветы", 0xb09a46, .30f, MatGroup.Earth, Natural | Earthy);
         D(Bloom, "Цветы", 0x7c5a84, .30f, MatGroup.Earth, Natural | Earthy);
         D(Birch, "Берёза", 0xcfc8b8, .22f, MatGroup.Wood, Natural);
+        D(NeedleLight, "Хвоя", 0x37522f, .28f, MatGroup.Wood, Natural);
+        D(FoliageLight, "Листва", 0x5a6c2d, .28f, MatGroup.Wood, Natural);
+        D(FoliageGold, "Листва", 0x8a7a2e, .26f, MatGroup.Wood, Natural);
+        D(PineBark, "Ствол", 0x7a4b30, .2f, MatGroup.Wood, Natural);
+        D(Snag, "Сухостой", 0x6b635b, .18f, MatGroup.Wood, Natural);
         D(Banner, "Стяг", 0x2f4d7a, .1f, MatGroup.Wood, Decor);
         D(BannerTrim, "Стяг", 0xb8913e, .1f, MatGroup.Wood, Decor);
         D(Sconce, "Факел", 0x2a2a30, .08f, MatGroup.Wood, Decor);
@@ -132,9 +147,12 @@ public static class Mat
         D(ClothGreen, "сукно", 0x344a2e, .14f, MatGroup.Hard, 0); D(ClothBrown, "сукно", 0x5c4430, .14f, MatGroup.Hard, 0);
         D(ClothOchre, "сукно", 0x8c6a2a, .14f, MatGroup.Hard, 0); D(Straw, "солома", 0xab9352, .2f, MatGroup.Hard, 0);
 
-        foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage, Flower, Bloom, Birch }) IsVeg[m] = true;
-        foreach (var m in new[] { Leaf, Tuft, Foliage, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame }) Passable[m] = true;
+        foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage, Flower, Bloom, Birch, NeedleLight, FoliageLight, FoliageGold, PineBark, Snag }) IsVeg[m] = true;
+        foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame }) Passable[m] = true;
         IsLadder[Ladder] = IsLadder[SiegeLadder] = true;
+        foreach (var m in new[] { Tuft, Flower, Bloom }) SwayKind[m] = 1;
+        foreach (var m in new[] { Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold }) SwayKind[m] = 2;
+        foreach (var m in new[] { Stone, StoneDark, StoneLight, StoneWarm, StoneCool, Mortar, Keep, KeepShade, KeepDark }) Smooth[m] = true;
         // what holds the world up: loose pieces resting on these never fall
         foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank }) IsAnchor[m] = true;
     }
@@ -163,13 +181,15 @@ public static class Mat
     public static string NameOf(byte m) => m == Air ? "воздух" : Def[m].Name ?? "?";
 
     /// <summary>The trunk of a tree, birch or any other.</summary>
-    public static bool IsTrunk(byte m) => m is Trunk or Birch;
+    public static bool IsTrunk(byte m) => m is Trunk or Birch or PineBark or Snag;
+    /// <summary>Needles and leaves, in any of their shades.</summary>
+    public static bool IsLeafy(byte m) => m is Leaf or Foliage or NeedleLight or FoliageLight or FoliageGold;
 
     /// <summary>Turf of any shade.</summary>
     public static bool IsGrass(byte m) => m is Grass or GrassDry or GrassLush;
 
     /// <summary>Laid stone of any shade, or its mortar.</summary>
-    public static bool IsMasonry(byte m) => m is Stone or Mortar or StoneDark or StoneLight;
+    public static bool IsMasonry(byte m) => m is Stone or Mortar or StoneDark or StoneLight or StoneWarm or StoneCool;
 
     /// <summary>A voxel of a gate's leaf: shut (ours walk through it), barred, or swinging and open.</summary>
     public static bool IsLeaf(byte m) => m is Gate or GateShut or GateOpen;

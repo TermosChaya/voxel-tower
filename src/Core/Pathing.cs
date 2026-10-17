@@ -361,11 +361,19 @@ public sealed class FlowField
     {
         carve = 0; works = Works.None;
         // the cheapest move: the one this cell's distance came through costs exactly as much,
-        // and when the valley has changed since the field was built the best available is still the way to go
-        int i = g.I(c), y = g.Y(c), k = g.K(c), best = -1;
+        // and when the valley has changed since the field was built the best available is still the way to go,
+        // so long as it leads downhill in the field: a step back up it, in a field gone stale where a wall face was
+        // hacked half open, would only be stepped back down again, to and fro
+        int i = g.I(c), y = g.Y(c), k = g.K(c), best = -1, up = -1;
         int tc = Kind(g, i, y, k);
         if (tc == 0) tc = Ground;   // standing in its own tunnel face, or on what it just built
-        float bestD = float.PositiveInfinity;
+        float bestD = float.PositiveInfinity, upD = float.PositiveInfinity, here = Dist[c];
+        Works bestWorks = Works.None, upWorks = Works.None;
+        void Offer(int q, float total, Works w)
+        {
+            if (Dist[q] < here) { if (total < bestD) { bestD = total; best = q; bestWorks = w; } }
+            else if (total < upD) { upD = total; up = q; upWorks = w; }
+        }
         for (int d = 0; d < 4; d++)
         {
             int qi = i + DX[d], qk = k + DK[d];
@@ -377,23 +385,23 @@ public sealed class FlowField
                 int tq = Kind(g, qi, qy, qk);
                 if (tq == 0) continue;
                 float s = Move(g, i, y, k, qi, qy, qk, tq, out var w);
-                if (s + Dist[q] < bestD) { bestD = s + Dist[q]; best = q; works = w; }
+                if (!float.IsPositiveInfinity(s)) Offer(q, s + Dist[q], w);
             }
         }
         if (y + 1 < g.NY && (tc & (Ground | OnLadder | CouldLadder)) != 0)
         {
             int q = c + g.Layer, tq = Kind(g, i, y + 1, k);
-            if ((tq & (OnLadder | CouldLadder)) != 0)
+            if ((tq & (OnLadder | CouldLadder)) != 0 && !float.IsPositiveInfinity(Dist[q]))
             {
                 float s = ClimbUp(tq, out var w);
-                if (s + Dist[q] < bestD) { bestD = s + Dist[q]; best = q; works = w; }
+                Offer(q, s + Dist[q], w);
             }
         }
-        if (y >= 2 && (tc & OnLadder) != 0 && (Kind(g, i, y - 1, k) & OnLadder) != 0)
-        {
-            int q = c - g.Layer;
-            if (1.4f / M.Speed + Dist[q] < bestD) { bestD = 1.4f / M.Speed + Dist[q]; best = q; works = Works.None; }
-        }
+        if (y >= 2 && (tc & OnLadder) != 0 && (Kind(g, i, y - 1, k) & OnLadder) != 0 && !float.IsPositiveInfinity(Dist[c - g.Layer]))
+            Offer(c - g.Layer, 1.4f / M.Speed + Dist[c - g.Layer], Works.None);
+        // nothing downhill at all (a hollow the stale field never knew): the best way there is
+        if (best < 0) { best = up; bestWorks = upWorks; }
+        works = bestWorks;
         if (best >= 0 && works == Works.None && g.Solid(g.I(best), g.Y(best) - 1, g.K(best)))
         {
             int qy = g.Y(best);

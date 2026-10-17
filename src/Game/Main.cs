@@ -12,7 +12,8 @@ namespace VoxelTower.Game;
 /// Builds the valley, the simulation, the view, the camera, the tools and the interface, and wires them together.
 /// Command-line options after "--": --shot=file.png [--frames=N] takes a screenshot and quits (--cam=x,z,yaw,pitch,zoom
 /// points the camera first),
-/// --demo sets up a fort with pawns at work (--pose=battle: the horde bridging the moat and laddering the wall),
+/// --demo sets up a fort with pawns at work (--pose=battle: the horde bridging the moat and laddering the wall;
+/// --pose=trees: the valley's trees in a row, --look=0..2 choosing which),
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
 /// --top looks straight down, --look=N at the Nth named place of the valley, --seed=N makes another valley.
 /// </summary>
@@ -80,6 +81,7 @@ public partial class Main : Node3D
         var mp = new MapParams { Seed = _seed };
         World = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         Site = MapGen.Generate(World, mp);
+        if (_demo && _pose == "trees") Grove();
         World.Compact();
         double genMs = sw.Elapsed.TotalMilliseconds;
         sw.Restart();
@@ -601,6 +603,7 @@ public partial class Main : Node3D
         if (_pose == "battle") { Siege(); return; }
         if (_pose == "wounds") { Wounded(); return; }
         if (_pose == "flood") { Flood(); return; }
+        if (_pose == "trees") { LookAtGrove(); return; }
         var w = World; var s = Site; var sim = Sim;
         sim.Waves.Countdown = Waves.Prep;
         sim.Stock.Gold = 140;
@@ -781,6 +784,73 @@ public partial class Main : Node3D
         const float yaw = -.55f, pitch = .5f;
         float over = (World.WY(armless.Y + 8) - 4) / MathF.Tan(pitch);
         Rig.Set(World.WX(mx) - MathF.Sin(yaw) * over, World.WZ(mz) - MathF.Cos(yaw) * over, yaw, pitch, look != null ? 7.5f : 3.6f, snap: true);
+        Hud.Refresh();
+    }
+
+    /// <summary>Where the grove is planted (--pose=trees): dry level ground on the plateau beside the citadel, cleared first.</summary>
+    (int x, int z) _groveAt = (-1, -1);
+    (int x, int z) GroveAt
+    {
+        get
+        {
+            if (_groveAt.x >= 0) return _groveAt;
+            var w = World;
+            bool Fits(int gx, int gz)
+            {
+                if (gx - 50 < 0 || gz - 50 < 0 || gx + 340 >= w.SX || gz + 300 >= w.SZ) return false;
+                int lo = int.MaxValue, hi = int.MinValue;
+                for (int z = gz + 40; z < gz + 180; z += 6)
+                    for (int x = gx; x < gx + 300; x += 6)
+                    {
+                        int y = w.SurfAt(x, z);
+                        if (Site.WaterTop[z * w.SX + x] > 0) return false;
+                        foreach (var p in Site.Ponds) if (Brushes.Dist(x - p.X, z - p.Z) < p.R + 24) return false;
+                        lo = Math.Min(lo, y); hi = Math.Max(hi, y);
+                    }
+                return hi - lo < 40 && !Site.Landmarks.Exists(l => Brushes.Dist(l.X - gx - 150, l.Z - gz - 110) < 150);
+            }
+            (int x, int z) best = (-1, -1);
+            double near = double.MaxValue;
+            for (int gz = 50; gz < w.SZ - 300; gz += 20)
+                for (int gx = Site.KeepX - 330; gx < Site.KeepX + 40; gx += 20)
+                {
+                    double d = Brushes.Dist(gx + 150 - Site.KeepX, gz + 110 - Site.KeepZ);
+                    if (d > 120 && d < near && Fits(gx, gz)) { near = d; best = (gx, gz); }
+                }
+            return _groveAt = best.x >= 0 ? best : (Site.KeepX - 150, Site.KeepZ - 330);
+        }
+    }
+
+    /// <summary>The valley's trees and bushes in three rows, each kind at two sizes, for a look at them.</summary>
+    void Grove()
+    {
+        var w = World;
+        var plant = new Action<int, int>[]
+        {
+            (x, z) => Flora.Pine(w, x, z, 100), (x, z) => Flora.Pine(w, x, z, 72), (x, z) => Flora.Spruce(w, x, z, 92, 3), (x, z) => Flora.Spruce(w, x, z, 60, 2),
+            (x, z) => Flora.Oak(w, x, z, 86, 4), (x, z) => Flora.Oak(w, x, z, 62, 4), (x, z) => Flora.Birch(w, x, z, 72), (x, z) => Flora.Birch(w, x, z, 50),
+            (x, z) => Flora.Cypress(w, x, z, 64, grain: 1, grown: true), (x, z) => Flora.DeadTree(w, x, z, grown: true, scale: 1.45),
+            (x, z) => Flora.Bush(w, x, z, 6), (x, z) => Flora.Bush(w, x, z, 3),
+        };
+        var (gx, gz) = GroveAt;
+        for (int z = gz - 50; z < gz + 300; z++)
+            for (int x = gx - 50; x < gx + 340; x++)
+                for (int y = w.SurfAt(x, z); y < w.SY; y++)
+                    if (Mat.IsTrunk(w.Get(x, y, z)) || Mat.IsLeafy(w.Get(x, y, z))) w.SetRaw(x, y, z, Mat.Air);
+        // --look=0..2 plants one row of four for a close look; without it, all of them in two rows
+        if (_look is >= 0 and < 3) for (int i = 0; i < 4; i++) plant[_look * 4 + i](gx + 40 + i * 72, gz + 110);
+        else for (int i = 0; i < plant.Length; i++) plant[i](gx + i % 6 * 58, gz + i / 6 * 110);
+    }
+
+    void LookAtGrove()
+    {
+        Sim.Waves.Countdown = 1e9;
+        var (gx, gz) = GroveAt;
+        int cx = gx + 148, cz = gz + 110;
+        float yaw = -.2f, pitch = .36f, zoom = _look is >= 0 and < 3 ? 1.35f : 1f;
+        // the camera looks at a plane 4 m up: the trees' middles are higher, so look past it by as much
+        float over = (World.WY(World.SurfAt(cx, cz) + 40) - 4) / MathF.Tan(pitch);
+        Rig.Set(World.WX(cx) - MathF.Sin(yaw) * over, World.WZ(cz) - MathF.Cos(yaw) * over, yaw, pitch, zoom, snap: true);
         Hud.Refresh();
     }
 

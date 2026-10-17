@@ -739,7 +739,7 @@ public partial class BuildTools : Node3D
         double ox = (o.X - w.OriginX) / VoxelWorld.Vox, oy = o.Y / VoxelWorld.Vox, oz = (o.Z - w.OriginZ) / VoxelWorld.Vox;
         _hasHover = Raycast.Cast(w, ox, oy, oz, d.X, d.Y, d.Z, out _hover, skipVeg: true);
         _hasTree = false;
-        if (DigNow && Raycast.Cast(w, ox, oy, oz, d.X, d.Y, d.Z, out var veg) && (Mat.IsTrunk(veg.M) || veg.M is Mat.Leaf or Mat.Foliage))
+        if (DigNow && Raycast.Cast(w, ox, oy, oz, d.X, d.Y, d.Z, out var veg) && (Mat.IsTrunk(veg.M) || Mat.IsLeafy(veg.M)))
         {
             _tree = veg;
             _hasTree = true;

@@ -16,6 +16,7 @@ public static class GodotMesh
         arrays[(int)Mesh.ArrayType.Normal] = MemoryMarshal.Cast<float, Vector3>(b.Nrm).ToArray();
         arrays[(int)Mesh.ArrayType.Color] = MemoryMarshal.Cast<float, Color>(b.Col).ToArray();
         arrays[(int)Mesh.ArrayType.TexUV] = MemoryMarshal.Cast<float, Vector2>(b.Uv).ToArray();
+        if (b.Uv2 != null) arrays[(int)Mesh.ArrayType.TexUV2] = MemoryMarshal.Cast<float, Vector2>(b.Uv2).ToArray();
         arrays[(int)Mesh.ArrayType.Index] = b.Idx;
         var mesh = new ArrayMesh();
         mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);

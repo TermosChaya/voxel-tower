@@ -143,7 +143,7 @@ public sealed partial class Sim
         int y = ground + TorchHigh, fx = x + nx, fz = z + nz;
         if (y < by || y >= by + VoxelWorld.CS) return;
         if (!inward && !NearGate(x, z, 30)) return;
-        if (!Built(x, y, z) || !Built(x, y + 4, z) || !Built(x, y - 8, z)) return;
+        if (!Built(x, y, z) || !Built(x, y + 4, z) && !Built(x - nx, y + 4, z - nz) || !Built(x, y - 8, z) && !Built(x - nx, y - 8, z - nz)) return;
         for (int dy = -1; dy <= 3; dy++) if (!Clear(fx, y + dy, fz)) return;
         if (!Room(FixtureKind.Torch, fx, y, fz, TorchApart)) return;
         var f = new Fixture { Kind = FixtureKind.Torch, Anchor = WaterPlanner.Pack(x, y, z), LX = fx + .5f + nx * .2f, LY = y + 2.4f, LZ = fz + .5f + nz * .2f };
@@ -166,8 +166,9 @@ public sealed partial class Sim
         for (int t = -2; t < W - 2; t++)
             for (int r = 0; r < H; r++)
             {
-                int y = top - 3 - r;
-                if (!Built(x + tx * t, y, z + tz * t) || !Clear(fx + tx * t, y, fz + tz * t)) return;
+                // the face is rough: a stone set back or a raked joint behind the cloth is wall enough
+                int y = top - 3 - r, ux = x + tx * t, uz = z + tz * t;
+                if (!Built(ux, y, uz) && !Built(ux - nx, y, uz - nz) || !Clear(fx + tx * t, y, fz + tz * t)) return;
             }
         if (!Room(FixtureKind.Banner, fx, top, fz, BannerApart)) return;
         var f = new Fixture { Kind = FixtureKind.Banner, Anchor = WaterPlanner.Pack(x, top - 3, z) };
@@ -187,7 +188,7 @@ public sealed partial class Sim
     void TryProp(int x, int z, int nx, int nz, int ground, int by)
     {
         if (ground < by || ground >= by + VoxelWorld.CS) return;
-        if (!Built(x, ground + 2, z) || !Built(x, ground + 14, z)) return;
+        if (!Built(x, ground + 2, z) && !Built(x - nx, ground + 2, z - nz) || !Built(x, ground + 14, z) && !Built(x - nx, ground + 14, z - nz)) return;
         if (NearGate(x, z, 30) || NearLadder(x + nx * 4, ground, z + nz * 4, 12)) return;
         double pick = Hash.H3(x * 3, ground, z * 5);
         var kind = pick < .5 ? FixtureKind.Barrel : pick < .82 ? FixtureKind.Crate : FixtureKind.Sacks;

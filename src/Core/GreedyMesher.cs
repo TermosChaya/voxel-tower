@@ -12,6 +12,8 @@ public sealed class MeshBuffers
     public float[] Col;
     /// <summary>Corner shade (0..1) and glow strength.</summary>
     public float[] Uv;
+    /// <summary>How much the vertex sways in the wind (grass tips, leaves), and 1 for dressed stone drawn without the voxel grid.</summary>
+    public float[] Uv2;
     public int[] Idx;
     public int Quads;
     public int Vertices => Quads * 4;
@@ -26,7 +28,7 @@ public sealed class GreedyMesher
     static readonly float[] CornerShade = { .38f, .58f, .8f, 1f };
 
     int[] _mask = new int[VoxelWorld.CS * VoxelWorld.CS];
-    float[] _pos = Array.Empty<float>(), _nrm = Array.Empty<float>(), _col = Array.Empty<float>(), _uv = Array.Empty<float>();
+    float[] _pos = Array.Empty<float>(), _nrm = Array.Empty<float>(), _col = Array.Empty<float>(), _uv = Array.Empty<float>(), _uv2 = Array.Empty<float>();
     int[] _idx = Array.Empty<int>();
     int _q, _capQ;
 
@@ -38,6 +40,7 @@ public sealed class GreedyMesher
         Array.Resize(ref _nrm, capQ * 12);
         Array.Resize(ref _col, capQ * 16);
         Array.Resize(ref _uv, capQ * 8);
+        Array.Resize(ref _uv2, capQ * 8);
         Array.Resize(ref _idx, capQ * 6);
         _capQ = capQ;
     }
@@ -152,6 +155,7 @@ public sealed class GreedyMesher
             Nrm = _nrm.AsSpan(0, _q * 12).ToArray(),
             Col = _col.AsSpan(0, _q * 16).ToArray(),
             Uv = _uv.AsSpan(0, _q * 8).ToArray(),
+            Uv2 = _uv2.AsSpan(0, _q * 8).ToArray(),
             Idx = _idx.AsSpan(0, _q * 6).ToArray(),
         };
     }
@@ -174,6 +178,15 @@ public sealed class GreedyMesher
             _col[c] = r; _col[c + 1] = g; _col[c + 2] = bl; _col[c + 3] = va;
             int t = (vb + k) * 2;
             _uv[t] = CornerShade[ao[k]]; _uv[t + 1] = em;
+            // grass sways at its tips, leaves as a mass; stone is dressed smooth
+            float sway = 0;
+            if (Mat.SwayKind[m] == 1)
+            {
+                float y = d == 1 ? pd : d == 0 ? cu[k] : cv[k], top = d == 1 ? pd : d == 0 ? Math.Max(u0, u1) : Math.Max(v0, v1);
+                sway = d == 1 ? (s > 0 ? 1 : 0) : y >= top ? 1 : 0;
+            }
+            else if (Mat.SwayKind[m] == 2) sway = .55f;
+            _uv2[t] = sway; _uv2[t + 1] = Mat.Smooth[m] ? 1 : 0;
         }
         // Godot treats clockwise triangles as front faces; the diagonal follows the darker corners
         bool flip = ao[0] + ao[2] > ao[1] + ao[3];

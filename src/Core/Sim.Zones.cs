@@ -82,11 +82,31 @@ public sealed partial class Sim
         x0 = Math.Max(0, x0); z0 = Math.Max(0, z0); x1 = Math.Min(World.SX - 1, x1); z1 = Math.Min(World.SZ - 1, z1);
         if (kind == Stockpile.Wood)
         {
-            int trees = 0;
+            // a trunk's foot, with its roots, is one patch of columns: count the patches
+            int trees = 0, w = x1 - x0 + 1;
+            var seen = new bool[w * (z1 - z0 + 1)];
+            var stack = new Stack<(int x, int z)>();
             for (int z = z0; z <= z1; z++)
                 for (int x = x0; x <= x1; x++)
-                    if (TreeFoot(x, z, out int y) && !Mat.IsTrunk(World.Get(x - 1, y, z)) && !Mat.IsTrunk(World.Get(x, y, z - 1))) trees++;
-            return (trees, trees * 4900.0);
+                {
+                    if (seen[(z - z0) * w + x - x0] || !TreeFoot(x, z, out _)) continue;
+                    trees++;
+                    seen[(z - z0) * w + x - x0] = true;
+                    stack.Push((x, z));
+                    while (stack.Count > 0)
+                    {
+                        var (cx, cz) = stack.Pop();
+                        for (int dz = -1; dz <= 1; dz++)
+                            for (int dx = -1; dx <= 1; dx++)
+                            {
+                                int nx = cx + dx, nz = cz + dz;
+                                if (nx < x0 || nx > x1 || nz < z0 || nz > z1 || seen[(nz - z0) * w + nx - x0] || !TreeFoot(nx, nz, out _)) continue;
+                                seen[(nz - z0) * w + nx - x0] = true;
+                                stack.Push((nx, nz));
+                            }
+                    }
+                }
+            return (trees, trees * WoodPerTree);
         }
         double vox = 0;
         for (int z = z0; z <= z1; z += 2)
@@ -97,6 +117,9 @@ public sealed partial class Sim
             }
         return (0, vox);
     }
+
+    /// <summary>Voxels of timber a tree of the valley gives, on average, for the survey's estimate.</summary>
+    public const double WoodPerTree = 4900;
 
     /// <summary>A trunk standing on the ground at this column: where a tree can be felled from.</summary>
     bool TreeFoot(int x, int z, out int y)

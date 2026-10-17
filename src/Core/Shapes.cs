@@ -32,31 +32,91 @@ public static class Shapes
     public static byte Family(byte m) => Mat.IsMasonry(m) ? Mat.Stone : m;
 
     /// <summary>
-    /// Rough coursed rubble, not brick: every voxel belongs to the nearest of jittered stone centres on a grid of
-    /// 6 × 4 × 6 voxels (stones half again as long as they are high), three shades of stone, and dark mortar where two
-    /// stones meet.
+    /// Coursed stone, not brick: rows three to five voxels high, and in each row stones of five to nine voxels with their
+    /// joints falling anywhere against the row below; a joint a voxel wide between them, the stones in five near shades of
+    /// grey. Some stones are set back a little in the face (see <see cref="Recess"/>), so the wall stands rough.
     /// </summary>
-    public static byte Masonry(int x, int y, int z)
+    public static byte Masonry(int x, int y, int z) => Masonry(x, y, z, out _);
+
+    /// <summary>The same, and which stone (a number unique to it) the voxel belongs to; −1 for mortar.</summary>
+    public static byte Masonry(int x, int y, int z, out int stone)
     {
-        const int GX = 6, GY = 4, GZ = 6;
-        int cx = FloorDiv(x, GX), cy = FloorDiv(y, GY), cz = FloorDiv(z, GZ);
-        double d1 = 1e9, d2 = 1e9;
-        int bx = 0, by = 0, bz = 0;
-        for (int dy = -1; dy <= 1; dy++)
-            for (int dz = -1; dz <= 1; dz++)
-                for (int dx = -1; dx <= 1; dx++)
-                {
-                    int gx = cx + dx, gy = cy + dy, gz = cz + dz;
-                    double ox = (gx + .15 + Hash.H3(gx, gy, gz * 3 + 1) * .7) * GX, oy = (gy + .3 + Hash.H3(gx * 5, gy, gz) * .4) * GY;
-                    double oz = (gz + .15 + Hash.H3(gx, gy * 7, gz) * .7) * GZ;
-                    double ex = (x + .5 - ox) / GX, ey = (y + .5 - oy) / GY, ez = (z + .5 - oz) / GZ;
-                    double d = ex * ex + ey * ey + ez * ez;
-                    if (d < d1) { d2 = d1; d1 = d; bx = gx; by = gy; bz = gz; }
-                    else if (d < d2) d2 = d;
-                }
-        if (Math.Sqrt(d2) - Math.Sqrt(d1) < .085) return Mat.Mortar;
-        double shade = Hash.H3(bx * 11, by * 13, bz * 17);
-        return shade < .28 ? Mat.StoneDark : shade > .78 ? Mat.StoneLight : Mat.Stone;
+        int course = CourseOf(y, out int y0);
+        int ix = StoneAlong(x, course, 0, out int bx), iz = StoneAlong(z, course, 1, out int bz);
+        stone = -1;
+        // the bed of the course, and the head joints across it
+        if (y == y0 || x == bx || z == bz) return Mat.Mortar;
+        stone = (int)(Hash.H3(ix * 7 + course, iz * 13 - course, course * 3 + 1) * int.MaxValue);
+        double shade = Hash.H3(ix * 11 + course * 5, iz * 3 + 7, course * 17);
+        return shade < .2 ? Mat.StoneDark : shade < .4 ? Mat.StoneCool : shade < .62 ? Mat.Stone : shade < .82 ? Mat.StoneWarm : Mat.StoneLight;
+    }
+
+    /// <summary>Whether a stone is set back a voxel in the face of its wall.</summary>
+    public static bool SetBack(int stone) => stone >= 0 && Hash.H3(stone, 5, 91) < .28;
+
+    static readonly int[] CourseStart = MakeCourses();
+
+    static int[] MakeCourses()
+    {
+        // rows three to five voxels high up to the top of the world (and below it, for anything dug under)
+        var starts = new int[512];
+        int y = -64;
+        for (int c = 0; c < starts.Length; c++) { starts[c] = y; y += 3 + (int)(Hash.H3(c, 77, 3) * 2.99); }
+        return starts;
+    }
+
+    static int CourseOf(int y, out int y0)
+    {
+        int lo = 0, hi = CourseStart.Length - 1;
+        while (lo < hi) { int mid = (lo + hi + 1) / 2; if (CourseStart[mid] <= y) lo = mid; else hi = mid - 1; }
+        y0 = CourseStart[lo];
+        return lo;
+    }
+
+    /// <summary>The stone of a row a coordinate falls in, along x (axis 0) or z (axis 1), and where that stone begins.</summary>
+    static int StoneAlong(int p, int course, int axis, out int start)
+    {
+        // stones seven voxels apart on average, each joint shifted by up to two either way, the rows offset from each other
+        int off = (int)(Hash.H3(course, axis, 61) * 7);
+        int i = FloorDiv(p + off, 7);
+        for (int k = i + 1; k >= i - 1; k--)
+        {
+            int b = k * 7 - off + (int)(Hash.H3(k, course, 63 + axis) * 4.99) - 2;
+            if (b <= p) { start = b; return k; }
+        }
+        start = (i - 1) * 7 - off;
+        return i - 1;
+    }
+
+    /// <summary>
+    /// Rakes out the mortar on the faces of a planned wall: where a joint meets the open air at the side it is left
+    /// empty, a groove between the stones, so the masonry stands in relief. The top is left whole to walk on.
+    /// </summary>
+    public static VoxelList Recess(VoxelWorld w, VoxelList L)
+    {
+        if (L == null || L.Count == 0) return L;
+        var planned = new HashSet<long>();
+        for (int i = 0; i < L.Count; i++) if (L.M(i) != 0) planned.Add(Key(w, L.X(i), L.Y(i), L.Z(i)));
+        bool Open(int x, int y, int z) => !planned.Contains(Key(w, x, y, z)) && Brushes.Free(w.Get(x, y, z));
+        // the wall stands two voxels more behind each open side: a joint is raked into a thick wall, never through a thin one
+        bool Side(int x, int y, int z, int dx, int dz) => !Open(x + dx, y, z + dz) || !Open(x - dx, y, z - dz) && !Open(x - 2 * dx, y, z - 2 * dz);
+        bool Deep(int x, int y, int z) => Side(x, y, z, 1, 0) && Side(x, y, z, -1, 0) && Side(x, y, z, 0, 1) && Side(x, y, z, 0, -1);
+        var o = new VoxelList();
+        for (int i = 0; i < L.Count; i++)
+        {
+            int x = L.X(i), y = L.Y(i), z = L.Z(i);
+            byte m = L.M(i);
+            bool face = Open(x, y + 1, z) == false && (Open(x + 1, y, z) || Open(x - 1, y, z) || Open(x, y, z + 1) || Open(x, y, z - 1));
+            if (face && Mat.IsMasonry(m) && Deep(x, y, z))
+            {
+                Masonry(x, y, z, out int stone);
+                // a raked joint, or a stone set back in the face
+                if (m == Mat.Mortar || SetBack(stone)) continue;
+            }
+            o.Add(x, y, z, m);
+        }
+        o.MetaBase = L.MetaBase; o.MetaPlat = L.MetaPlat;
+        return o;
     }
 
     static int FloorDiv(int a, int b) => a >= 0 ? a / b : -((-a + b - 1) / b);
@@ -111,7 +171,7 @@ public static class Shapes
                 if (ex * ex + ez * ez > r * r) continue;
                 Column(w, site, L, x, z, st, levelTop);
             }
-        return L;
+        return !st.Dig && st.Mat == Mat.Stone ? Recess(w, L) : L;
     }
 
     /// <summary>A rectangle between two corners, solid or as walls Width thick.</summary>
@@ -125,7 +185,7 @@ public static class Shapes
                 if (st.Hollow && x - x0 >= t && x1 - x >= t && z - z0 >= t && z1 - z >= t) continue;
                 Column(w, site, L, x, z, st, levelTop);
             }
-        return L;
+        return !st.Dig && st.Mat == Mat.Stone ? Recess(w, L) : L;
     }
 
     /// <summary>A disc around a centre, solid or as a ring Width thick: round towers, wells, bastions.</summary>
@@ -141,7 +201,7 @@ public static class Shapes
                 if (d > R || d <= inner) continue;
                 Column(w, site, L, x, z, st, levelTop);
             }
-        return L;
+        return !st.Dig && st.Mat == Mat.Stone ? Recess(w, L) : L;
     }
 
     /// <summary>A ball of material, the freehand brush's round nib.</summary>
@@ -175,30 +235,99 @@ public static class Shapes
     }
 
     /// <summary>
-    /// A whole tree from one of its voxels: trunk, boughs and crown, kept within reach of where it was clicked
-    /// so a forest doesn't come down with it.
+    /// A whole tree from one of its voxels: its wood first (the trunk and every bough and twig grown out of it), then the
+    /// leaves hanging on that wood, each leaf going with the tree whose wood is nearer to it through the crown, so where
+    /// crowns grow into each other the next tree keeps its own. Clicked on a crown, the tree is the one it hangs on.
     /// </summary>
-    public static VoxelList Tree(VoxelWorld w, int x0, int y0, int z0, int limit = 40000)
+    public static VoxelList Tree(VoxelWorld w, int x0, int y0, int z0, int limit = 80000)
     {
         var L = new VoxelList();
-        static bool Wood(byte m) => Mat.IsTrunk(m) || m == Mat.Leaf || m == Mat.Foliage;
-        if (!Wood(w.Get(x0, y0, z0))) return L;
-        var seen = new HashSet<long> { Key(w, x0, y0, z0) };
-        var queue = new Queue<(int x, int y, int z)>();
-        queue.Enqueue((x0, y0, z0));
-        while (queue.Count > 0 && L.Count < limit)
+        byte m0 = w.Get(x0, y0, z0);
+        if (!Mat.IsTrunk(m0) && !Mat.IsLeafy(m0)) return L;
+        var seen = new HashSet<long>();
+        var queue = new Queue<(int x, int y, int z, int d)>();
+        void Around(int x, int y, int z, Action<int, int, int> f)
         {
-            var (x, y, z) = queue.Dequeue();
-            L.Add(x, y, z, Mat.Air);
             for (int dy = -1; dy <= 1; dy++)
                 for (int dz = -1; dz <= 1; dz++)
                     for (int dx = -1; dx <= 1; dx++)
-                    {
-                        int nx = x + dx, ny = y + dy, nz = z + dz;
-                        if (!w.InBounds(nx, ny, nz) || Math.Abs(nx - x0) > 22 || Math.Abs(nz - z0) > 22) continue;
-                        if (!Wood(w.Get(nx, ny, nz)) || !seen.Add(Key(w, nx, ny, nz))) continue;
-                        queue.Enqueue((nx, ny, nz));
-                    }
+                        if ((dx | dy | dz) != 0 && w.InBounds(x + dx, y + dy, z + dz)) f(x + dx, y + dy, z + dz);
+        }
+        if (!Mat.IsTrunk(m0))
+        {
+            // the nearest wood through the leaves; a crown with none left comes down by itself
+            var leaves = new List<(int x, int y, int z)>();
+            bool found = false;
+            seen.Add(Key(w, x0, y0, z0));
+            queue.Enqueue((x0, y0, z0, 0));
+            while (queue.Count > 0 && !found)
+            {
+                var (x, y, z, d) = queue.Dequeue();
+                leaves.Add((x, y, z));
+                Around(x, y, z, (nx, ny, nz) =>
+                {
+                    byte m = w.Get(nx, ny, nz);
+                    if (found) return;
+                    if (Mat.IsTrunk(m)) { found = true; x0 = nx; y0 = ny; z0 = nz; }
+                    else if (Mat.IsLeafy(m) && d < 24 && seen.Add(Key(w, nx, ny, nz))) queue.Enqueue((nx, ny, nz, d + 1));
+                });
+            }
+            if (!found)
+            {
+                foreach (var (x, y, z) in leaves) L.Add(x, y, z, Mat.Air);
+                return L;
+            }
+            seen.Clear();
+            queue.Clear();
+        }
+        // the wood
+        seen.Add(Key(w, x0, y0, z0));
+        queue.Enqueue((x0, y0, z0, 0));
+        while (queue.Count > 0 && L.Count < limit)
+        {
+            var (x, y, z, _) = queue.Dequeue();
+            L.Add(x, y, z, Mat.Air);
+            Around(x, y, z, (nx, ny, nz) =>
+            {
+                if (Math.Abs(nx - x0) <= 40 && Math.Abs(nz - z0) <= 40 && Mat.IsTrunk(w.Get(nx, ny, nz)) && seen.Add(Key(w, nx, ny, nz))) queue.Enqueue((nx, ny, nz, 0));
+            });
+        }
+        // the leaves within reach of it, and the wood of other trees met among them
+        const int Reach = 22;
+        var near = new Dictionary<long, int>();
+        var order = new List<(int x, int y, int z, long k)>();
+        var other = new List<(int x, int y, int z)>();
+        var otherSeen = new HashSet<long>();
+        for (int i = 0; i < L.Count; i++) queue.Enqueue((L.X(i), L.Y(i), L.Z(i), 0));
+        while (queue.Count > 0)
+        {
+            var (x, y, z, d) = queue.Dequeue();
+            if (d >= Reach) continue;
+            Around(x, y, z, (nx, ny, nz) =>
+            {
+                byte m = w.Get(nx, ny, nz);
+                long k = Key(w, nx, ny, nz);
+                if (Mat.IsLeafy(m)) { if (near.TryAdd(k, d + 1)) { order.Add((nx, ny, nz, k)); queue.Enqueue((nx, ny, nz, d + 1)); } }
+                else if (Mat.IsTrunk(m) && !seen.Contains(k) && otherSeen.Add(k)) other.Add((nx, ny, nz));
+            });
+        }
+        // how near the other trees' wood is to the same leaves
+        var theirs = new Dictionary<long, int>();
+        foreach (var (x, y, z) in other) queue.Enqueue((x, y, z, 0));
+        while (queue.Count > 0)
+        {
+            var (x, y, z, d) = queue.Dequeue();
+            if (d >= Reach) continue;
+            Around(x, y, z, (nx, ny, nz) =>
+            {
+                long k = Key(w, nx, ny, nz);
+                if (near.ContainsKey(k) && theirs.TryAdd(k, d + 1)) queue.Enqueue((nx, ny, nz, d + 1));
+            });
+        }
+        foreach (var (x, y, z, k) in order)
+        {
+            if (L.Count >= limit) break;
+            if (!theirs.TryGetValue(k, out int dt) || near[k] <= dt) L.Add(x, y, z, Mat.Air);
         }
         return L;
     }
@@ -298,14 +427,24 @@ public static class Shapes
         var L = new VoxelList();
         if (hit.NY != 0 || (hit.NX == 0 && hit.NZ == 0)) return L;
         int fx = hit.X + hit.NX, fz = hit.Z + hit.NZ;
-        // out of the wall's own cell if the wall fills most of it
+        int tx = hit.NZ != 0 ? 1 : 0, tz = hit.NX != 0 ? 1 : 0;
+        // clear of the face where it stands out further (a stone set back was clicked, or a raked joint), and out of
+        // the wall's own cell if the wall fills most of it
+        bool Face(int ax, int az)
+        {
+            for (int y = hit.Y - 4; y <= hit.Y + 8; y++)
+                for (int t = -2; t <= 3; t++)
+                    if (Blocking(w.Get(ax + tx * t, y, az + tz * t)) && Mat.IsPlayer[w.Get(ax + tx * t, y, az + tz * t)]) return true;
+            return false;
+        }
+        for (int s = 0; s < 2 && Face(fx, fz); s++) { fx += hit.NX; fz += hit.NZ; }
         for (int s = 0; s < 8 && CellBlocked(w, fx >> 3, hit.Y >> 3, fz >> 3); s++) { fx += hit.NX; fz += hit.NZ; }
         if (!w.InBounds(fx, hit.Y, fz) || site.Forbidden(fx, fz)) return L;
+        // up the wall to its top: its face is rough, so the stone behind a raked joint counts as the wall going on
         int top = hit.Y;
-        while (top + 1 < w.SY && Blocking(w.Get(hit.X, top + 1, hit.Z))) top++;
+        while (top + 1 < w.SY && (Blocking(w.Get(hit.X, top + 1, hit.Z)) || Blocking(w.Get(hit.X - hit.NX, top + 1, hit.Z - hit.NZ)))) top++;
         int bottom = hit.Y;
         while (bottom > 1 && !Blocking(w.Get(fx, bottom - 1, fz))) bottom--;
-        int tx = hit.NZ != 0 ? 1 : 0, tz = hit.NX != 0 ? 1 : 0;
         for (int y = bottom; y <= top + 2 && y < w.SY; y++)
             for (int t = -2; t <= 3; t++)
             {

@@ -97,13 +97,26 @@ public sealed class GatePlan
         while (thick < 40 && Blocking(Get(hitU, hit.Y, far))) { far -= n; thick++; }
         if (thick < 2 || thick > 32) return null;
         int nearWall = hitA, farWall = far + n;
+        int u0 = (hitU - Gateway.Half + 4) & ~7;
+        // the faces are rough, stones set back and joints raked: each goes out to its outermost stone across the gateway
+        bool Stands(int a)
+        {
+            for (int u = u0; u < u0 + Gateway.Width; u++)
+                for (int y = hit.Y - 4; y <= hit.Y + 4; y++)
+                {
+                    byte m = Get(u, y, a);
+                    if (Mat.IsPlayer[m] && Blocking(m)) return true;
+                }
+            return false;
+        }
+        for (int k = 0; k < 2 && Stands(nearWall + n); k++) nearWall += n;
+        for (int k = 0; k < 2 && Stands(farWall - n); k++) farWall -= n;
         // in is toward the citadel; the inner face is where the wall meets the yard
         int inward = (keepA - hitA) * n > 0 ? n : -n;
         int innerWall = inward == n ? nearWall : farWall, outerWall = inward == n ? farWall : nearWall;
         int face = inward > 0 ? innerWall + 1 : innerWall;
         // the leaves hang flush on the inner face; the gateway is snapped to the cells, so open leaves clear it
         int p = face;
-        int u0 = (hitU - Gateway.Half + 4) & ~7;
         var plan = new GatePlan { AlongX = alongX, In = inward, U0 = u0, P = p };
         // the threshold: the ground of the yard where the leaves will hang
         int y0 = 0;

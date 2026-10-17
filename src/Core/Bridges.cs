@@ -81,6 +81,6 @@ public static class Bridges
                     }
                 }
             }
-        return L;
+        return stone && old == 0 ? Shapes.Recess(w, L) : L;
     }
 }

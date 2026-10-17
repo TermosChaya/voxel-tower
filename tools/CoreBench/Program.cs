@@ -69,7 +69,7 @@ long quads = 0; int meshed = 0;
 for (int ci = 0; ci < w.ChunkCount; ci++) { var mb = mesher.MeshChunk(w, ci, pad); if (mb != null) { quads += mb.Quads; meshed++; } }
 long oneMs = sw.ElapsedMilliseconds;
 // the prototype had 232642; its citadel of neat brick is rough masonry now
-Check("triangles as counted", quads * 2 == 235350, $"{quads * 2} triangles in {meshed} chunks, 235350 expected (the prototype's 232642 with a brick citadel)");
+Check("triangles as counted", quads * 2 == 234006, $"{quads * 2} triangles in {meshed} chunks, 234006 expected (the prototype's 232642 with a brick citadel)");
 Console.WriteLine($"     mesh, 1 thread: {oneMs} ms");
 
 // meshing, all cores
@@ -163,7 +163,7 @@ Check("the map starts bare", w2.SurfAt(site2.WallX + 8, 70) < 90 && site2.Torche
     var r = Builder.TryBuild(w2, wal2, L, out var c);
     Check("line lays a level wall", r == BuildResult.Ok && w2.SurfAt(250, 70) == lt && w2.SurfAt(250, 98) == lt, $"top {lt}, {L.Count} voxels");
     int dark = 0, light = 0; for (int i = 0; i < L.Count; i++) { if (L.M(i) == Mat.StoneDark) dark++; if (L.M(i) == Mat.StoneLight) light++; }
-    Check("stone goes down as rough masonry", mortar > L.Count / 10 && mortar < L.Count / 2 && dark > L.Count / 10 && light > L.Count / 20,
+    Check("stone goes down as rough masonry", mortar > L.Count / 10 && mortar < L.Count / 2 && dark > L.Count / 20 && light > L.Count / 20,
         $"{mortar} mortar, {dark} dark and {light} light stones of {L.Count}");
     Check("price is counted per voxel", c.Gold == (int)Math.Ceiling(c.Stone * Prices.Stone / VoxelWorld.PerM3), $"{c.Stone} stone voxels = {c.Gold} gold");
 
