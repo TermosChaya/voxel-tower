@@ -240,6 +240,20 @@ foreach (var (size, label, mp) in variants)
     Console.WriteLine($"valley {mp.SizeX / VoxelWorld.PerMetre}×{mp.SizeY / VoxelWorld.PerMetre}×{mp.SizeZ / VoxelWorld.PerMetre} m: generated in {gen3} ms, {w3.AllocatedChunks}/{w3.ChunkCount} chunks hold data ({mem / 1048576} MB), mesh {mesh3} ms on {Environment.ProcessorCount} threads, {q3 * 2 / 1000} k triangles in {meshed3} chunks");
     Check($"valley {size}: the citadel stands on the plateau", w3.Get(site3.KeepX, site3.KeepBase + 10, site3.KeepZ) != 0 && site3.KeepBase > 70, $"keep base {site3.KeepBase}");
     Check($"valley {size}: forests and rock to quarry", trunk > 50 && rock > 1000, $"{trunk} trunk and {rock} rock samples");
+    // no walls cut into the lowland: hills come down to the river, the road and the ramps as slopes
+    int walls = 0, wx0 = 0, wz0 = 0;
+    for (int z = 1; z < w3.SZ - 1; z++)
+        for (int x = 1; x < w3.SX - 1; x++)
+        {
+            int h0 = site3.HTop[z * w3.SX + x];
+            foreach (var (dx, dz) in new[] { (1, 0), (0, 1) })
+            {
+                int h1 = site3.HTop[(z + dz) * w3.SX + x + dx];
+                if (Math.Abs(h1 - h0) <= 10 || Math.Max(h0, h1) > 74 || Landmarks.Taken(site3, x, z, 10)) continue;
+                if (walls++ == 0) { wx0 = x; wz0 = z; }
+            }
+        }
+    Check($"valley {size}: no walls cut into the lowland", walls < 10, $"{walls} steps over 1.25 m between neighbouring columns below the plateau{(walls > 0 ? $", the first at {wx0},{wz0}" : "")}");
 }
 
 // ---- other seeds: the valley is made from its seed alone, so any seed gives a whole one

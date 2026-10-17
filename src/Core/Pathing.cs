@@ -93,7 +93,8 @@ public sealed class PathFinder
                 {
                     // no cutting corners: both sides must be walkable at this level, and only on the ground
                     if (!standing || !g.Stand(ni, y, nk, m.Height, gates) || !g.Stand(i + DX[dir], y, k, m.Height, gates) || !g.Stand(i, y, k + DK[dir], m.Height, gates)) continue;
-                    Relax(c, g.Id(ni, y, nk), 1.414f, heuristic);
+                    int dn = g.Id(ni, y, nk);
+                    Relax(c, dn, 1.414f * (g.Water[dn] > 0 ? FlowField.Wade : 1), heuristic);
                     continue;
                 }
                 // level first, then a step up, then the shortest drop; onto ground or onto a ladder,
@@ -106,7 +107,8 @@ public sealed class PathFinder
                     if (!FlowField.StepsOk(m, g.Floor[c], g.Floor[g.Id(ni, ny, nk)])) continue;
                     if (dy > 0 && !OpenColumn(i, k, y + m.Height, y + m.Height + dy - 1)) continue;
                     if (dy < 0 && !OpenColumn(ni, nk, ny + m.Height, y + m.Height - 1)) continue;
-                    Relax(c, g.Id(ni, ny, nk), 1 + (dy > 0 ? .6f * dy : -.3f * dy), heuristic);
+                    int sn = g.Id(ni, ny, nk);
+                    Relax(c, sn, (1 + (dy > 0 ? .6f * dy : -.3f * dy)) * (g.Water[sn] > 0 ? FlowField.Wade : 1), heuristic);
                     break;
                 }
             }
@@ -306,6 +308,9 @@ public sealed class FlowField
         return g.Fill[c] >= NavGrid.SolidT ? y << NavGrid.Shift : g.Floor[c];
     }
 
+    /// <summary>How much longer a step through standing or running water counts for, against one on dry land.</summary>
+    public const float Wade = 3f;
+
     /// <summary>A step the legs manage, in voxels: up a little over a cell per Climb, down as far as Drop allows.</summary>
     public static bool StepsOk(Mover m, int from, int to) =>
         to - from <= m.Climb * NavGrid.CS + 2 && from - to <= m.Drop * NavGrid.CS + 6;
@@ -343,8 +348,9 @@ public sealed class FlowField
         }
         if (dy > 0)
             for (int y = py + m.Height; y < py + m.Height + dy && y < g.NY; y++) t += m.CarveTime(g, g.Id(pi, y, pk));
-        // falling a long way hurts and the horde avoids it a little
+        // falling a long way hurts and the horde avoids it a little; wading is slow and nobody does it if a bridge is near
         float walk = (1 + (dy > 0 ? .6f * dy : -.3f * dy)) / m.Speed + (dy <= -4 ? 2 : 0);
+        if (g.Water[g.Id(qi, qy, qk)] > 0) walk *= Wade;
         return t + walk;
     }
 

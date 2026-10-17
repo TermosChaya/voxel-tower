@@ -64,10 +64,10 @@ public static class MapGen
         // the river runs north to south across the lowland, between the horde's edge and the plateau
         double RiverX(double z) => SX * .3 + Math.Sin(z * .0062 + 1.3) * 64 + (nRiver.Sample(z * .009, 2.2) - .5) * 70;
         double RiverHalf(double z) => 15 + nRiver.Sample(z * .02, 9.4) * 12;
-        // fords: where the road crosses, and one more to the north
+        // a ford to the north; where the road crosses the river is deep, and the old bridge carries it over
         double roadCross = 0;
         for (int x = 0; x < SX; x++) if (Math.Abs(x - RiverX(RoadZ(x))) < 2) { roadCross = RoadZ(x); break; }
-        double[] fords = { roadCross, SZ * .22 };
+        double[] fords = { SZ * .22 };
 
         // the plateau rolls gently away from the citadel and lies flat round it
         double Plat(int x, int z)
@@ -128,17 +128,28 @@ public static class MapGen
                 low = Math.Min(low, baseH + 30);
                 double plat = Plat(x, z);
                 double h = low; byte k = Low;
+                // how far into a ramp's band, and how far from the road: hills and ramps fade out over a slope, never a cut
+                double rampD = Math.Min(Math.Abs(z - rampN), Math.Abs(z - rampS)) - rampHalf;
+                double roadD = x < roadEnd + 20 ? Math.Abs(z - RoadZ(x)) - 6 : 1e9;
                 if (x >= edge) { h = plat; k = x - edge < 5 && !ramp ? Rim : Plateau; }
-                else if (ramp && x >= edge - rampLen)
-                {
-                    double r = low + (plat - low) * Site.Smooth01((x - (edge - rampLen)) / rampLen);
-                    if (r > h) { h = r; k = Ramp; }
-                }
-                else if (x < roadEnd + 20 && Math.Abs(z - RoadZ(x)) < 6) k = Road;
                 else
                 {
                     double kn = nKnoll.Sample(x * .018, z * .018);
-                    if (kn > .7 && x > site.SpawnStrip + 16) { h = low + (kn - .7) * 190; k = Knoll; }
+                    if (kn > .7 && x > site.SpawnStrip + 16)
+                    {
+                        double fade = Site.Smooth01(roadD / 26) * Site.Smooth01(rampD / 30) * Site.Smooth01((x - site.SpawnStrip - 16) / 40.0);
+                        double hill = (kn - .7) * 190 * fade;
+                        if (hill > 1.5) { h = low + hill; k = Knoll; }
+                    }
+                    if (x >= edge - rampLen && rampD < 34)
+                    {
+                        // the ramp up to the plateau, its sides sloping down to the lowland
+                        double r = low + (plat - low) * Site.Smooth01((x - (edge - rampLen)) / rampLen);
+                        double side = rampD <= 0 ? 1 : 1 - Site.Smooth01(rampD / 34);
+                        double hr = h + (r - h) * side;
+                        if (r > h && hr > h) { h = hr; k = rampD <= 0 ? Ramp : k; }
+                    }
+                    if (roadD < 0 && k != Ramp) k = Road;
                 }
                 int i = z * SX + x;
                 short wl = 0;
@@ -149,14 +160,18 @@ public static class MapGen
                     if (d < rh)
                     {
                         double t = d / rh;
-                        double depth = ford < 14 ? 2 : 3 + (1 - t * t) * 13;
+                        // the ford shelves off into the deep on either side, no step in the riverbed
+                        double deep = 3 + (1 - t * t) * 13;
+                        double depth = 2 + (deep - 2) * Site.Smooth01((ford - 8) / 16);
                         h = RiverLevel - depth;
                         k = River;
                         wl = RiverLevel;
                     }
-                    else if (d < rh + 70)
+                    else if (d < rh + 120)
                     {
-                        double bank = RiverLevel + 2 + (d - rh) * .42;
+                        // the banks slope down to the water; further off the slope steepens, so a hill near the river
+                        // comes down to it as a hillside, not cut off by a wall
+                        double bank = RiverLevel + 2 + (d - rh) * .42 + Math.Max(0, d - rh - 30) * .95;
                         if (h > bank) { h = bank; if (k == Low || k == Knoll) k = Bank; }
                         // and never lower than the river near it: a low meadow beside the water would stand under it
                         h = Math.Max(h, RiverLevel + 1 - Math.Max(0, d - rh - 40) * .25);
@@ -263,17 +278,18 @@ public static class MapGen
         var outpost = Free(gold.x + 64, gold.z + 56, 32);
         Landmarks.Outpost(w, site, outpost.x, outpost.z, "Старая застава", seed + 5);
         {
-            double f = fords[1];
+            double f = fords[0];
             var tower = Free((int)(RiverX(f) + RiverHalf(f) + 36), (int)f + 24, 20);
             Landmarks.Watchtower(w, site, tower.x, tower.z, "Руины сторожевой башни", seed + 6);
         }
         var fallen = Free((int)EdgeX(rampN) + 34, rampN + 64, 20);
         Landmarks.Watchtower(w, site, fallen.x, fallen.z, "Обвалившаяся башня", seed + 7, .45);
         // old stone bridges over the river: one carries the road, whole; one between the road and the north ford fell in
-        foreach (var (z0, whole, name) in new[] { ((int)roadCross, true, "Старый мост"), ((int)((roadCross + fords[1]) / 2), false, "Обрушенный мост") })
+        foreach (var (z0, whole, name) in new[] { ((int)roadCross, true, "Старый мост"), ((int)((roadCross + fords[0]) / 2), false, "Обрушенный мост") })
         {
             int bz = z0;
-            for (int tries = 0; tries < 8; tries++)
+            // the road's bridge stands where the road crosses; the fallen one keeps clear of the other places
+            for (int tries = 0; tries < 8 && !whole; tries++)
             {
                 bool clear = true;
                 foreach (var l in site.Landmarks) if (Brushes.Dist(RiverX(bz) - l.X, bz - l.Z) < l.R + 50) clear = false;
