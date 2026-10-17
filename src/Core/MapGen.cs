@@ -53,13 +53,34 @@ public static class MapGen
         for (int x = 0; x < SX; x++) if (Math.Abs(x - RiverX(RoadZ(x))) < 2) { roadCross = RoadZ(x); break; }
         double[] fords = { roadCross, SZ * .22 };
 
-        // two ponds on the plateau, away from the citadel and the cliff
-        var ponds = new (int x, int z, int r)[2];
+        // the plateau rolls gently away from the citadel and lies flat round it
+        double Plat(int x, int z)
+        {
+            double dk = Brushes.Dist(x - site.KeepX, z - site.KeepZ);
+            double roll = Site.Smooth01((dk - 190) / 140) * ((nHill.Sample(x * .013 + 30, z * .013) - .5) * 16);
+            return baseH + rise + (nHill2.Sample(x * .02 + 40, z * .02 + 9) - .5) * 3 + roll;
+        }
+
+        // two ponds on the plateau, away from the citadel and the cliff. Each lies level, its surface flush with the
+        // lowest ground round its shore, so the plateau never stands lower than the water beside it.
+        const int shore = 3;
+        var ponds = new (int x, int z, int r, int level)[2];
         for (int n = 0; n < ponds.Length; n++)
         {
             double a = 2.1 + n * 2.2 + Hash.H3((int)seed, n, 3) * .6;
-            int px = site.KeepX + (int)(Math.Cos(a) * 250), pz = site.KeepZ + (int)(Math.Sin(a) * 260);
-            ponds[n] = (Math.Clamp(px, (int)EdgeX(pz) + 70, SX - 60), Math.Clamp(pz, 60, SZ - 60), 24 + (int)(Hash.H3((int)seed, n, 5) * 10));
+            int px = site.KeepX + (int)(Math.Cos(a) * 250), pz = Math.Clamp(site.KeepZ + (int)(Math.Sin(a) * 260), 60, SZ - 60);
+            int pr = 24 + (int)(Hash.H3((int)seed, n, 5) * 10), level = int.MaxValue;
+            // the whole shore on the plateau, well back from the cliff wherever the cliff wanders
+            double edge = EdgeX(pz) + 70;
+            for (int z = pz - pr - shore; z <= pz + pr + shore; z++) edge = Math.Max(edge, EdgeX(z) + pr + shore + 8);
+            px = Math.Clamp(px, (int)Math.Ceiling(edge), SX - 60);
+            for (int z = pz - pr - shore; z <= pz + pr + shore; z++)
+                for (int x = px - pr - shore; x <= px + pr + shore; x++)
+                {
+                    double d = Brushes.Dist(x - px, z - pz);
+                    if (d >= pr && d < pr + shore) level = Math.Min(level, (int)Math.Round(Plat(x, z)) - 1);
+                }
+            ponds[n] = (px, pz, pr, level);
         }
 
         var kind = new byte[SX * SZ];
@@ -78,10 +99,7 @@ public static class MapGen
                 double low = baseH + (nHill.Sample(x * .010, z * .010) - .5) * 34 + (nHill2.Sample(x * .033, z * .033) - .5) * 11
                     + Math.Pow(ridge, 3) * 24 + (nFine.Sample(x * .11, z * .11) - .5) * p.Roughness;
                 low = Math.Min(low, baseH + 30);
-                // the plateau rolls gently away from the citadel and lies flat round it
-                double dk = Brushes.Dist(x - site.KeepX, z - site.KeepZ);
-                double roll = Site.Smooth01((dk - 190) / 140) * ((nHill.Sample(x * .013 + 30, z * .013) - .5) * 16);
-                double plat = baseH + rise + (nHill2.Sample(x * .02 + 40, z * .02 + 9) - .5) * 3 + roll;
+                double plat = Plat(x, z);
                 double h = low; byte k = Low;
                 if (x >= edge) { h = plat; k = x - edge < 5 && !ramp ? Rim : Plateau; }
                 else if (ramp && x >= edge - rampLen)
@@ -113,16 +131,22 @@ public static class MapGen
                     {
                         double bank = RiverLevel + 2 + (d - rh) * .42;
                         if (h > bank) { h = bank; if (k == Low || k == Knoll) k = Bank; }
+                        // and never lower than the river near it: a low meadow beside the water would stand under it
+                        h = Math.Max(h, RiverLevel + 1 - Math.Max(0, d - rh - 40) * .25);
                     }
                 }
-                foreach (var (px, pz, pr) in ponds)
+                foreach (var (px, pz, pr, level) in ponds)
                 {
                     double d = Brushes.Dist(x - px, z - pz);
-                    if (d >= pr + 3 || k is not (Plateau or Rim)) continue;
-                    int surf = (int)Math.Round(plat) - 1;
-                    double t = Math.Min(1, d / pr);
-                    h = d < pr ? surf - 1 - (1 - t * t) * 11 : surf;
-                    if (d < pr) { k = Pond; wl = (short)surf; }
+                    if (d >= pr + shore || k is not (Plateau or Rim)) continue;
+                    if (d < pr)
+                    {
+                        double t = d / pr;
+                        h = level - 1 - (1 - t * t) * 11;
+                        k = Pond; wl = (short)level;
+                    }
+                    // the shore climbs from the water's edge to the plateau
+                    else h = level + (h - level) * Site.Smooth01((d - pr) / shore);
                 }
                 kind[i] = k;
                 water[i] = wl;
@@ -198,6 +222,7 @@ public static class MapGen
                 else Flora.DeadTree(w, x, z, grown: true);
             }
 
+        site.WaterTop = water;
         site.KeepBase = WorldGen.Keep(w, site);
         int gx2 = site.KeepX - site.KeepR - 7;
         foreach (int dz in new[] { -10, 10 }) WorldGen.Brazier(w, site, gx2, w.SurfAt(gx2, site.KeepZ + dz), site.KeepZ + dz, post: 4);

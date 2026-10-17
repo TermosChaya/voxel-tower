@@ -253,6 +253,18 @@ if (args.Length == 0 || args[0] == "--sim")
     sim.WildTarget = 0;
     void Run(double seconds) { for (double t = 0; t < seconds; t += .05) sim.Step(.05f); }
     Check("a gate before the citadel", sim.Gate >= 0, sim.Gate.ToString());
+    {
+        int open = 0;
+        for (int z = 1; z < w4.SZ - 1; z++)
+            for (int x = 1; x < w4.SX - 1; x++)
+            {
+                int i = z * w4.SX + x;
+                for (int y = site4.HTop[i]; y < site4.WaterTop[i]; y++)
+                    foreach (var (sx, sz) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+                        if (w4.Get(x + sx, y, z + sz) == Mat.Air) open++;
+            }
+        Check("ponds and the river lie level inside their banks", open == 0, $"{open} faces of water open to the air");
+    }
     Check("cells beside the citadel to batter", sim.Goals.Count > 20, sim.Goals.Count.ToString());
 
     sim.Stock.Gold = 2000;
@@ -403,7 +415,7 @@ if (args.Length == 0 || args[0] == "--sim")
         Run(10);
     }
 
-    // water runs into a trench dug from the edge of a pond
+    // crews cutting earth beside a pond leave its shore alone; a trench dug from it fills, and the land beyond stays dry
     {
         (int x, int z) shore = (-1, -1);
         for (int r = 160; r < 420 && shore.x < 0; r += 6)
@@ -414,13 +426,41 @@ if (args.Length == 0 || args[0] == "--sim")
                 int t = w4.ColTop(x, z);
                 if (w4.Get(x, t - 1, z) == Mat.Water && w4.SurfAt(x, z) > 60) shore = (x, z);
             }
+        int level = site4.WaterTop[shore.z * w4.SX + shore.x];
+        int over = 0;
+        Action<int, int, int> spy = (x, y, z) =>
+        {
+            int i = z * w4.SX + x;
+            if (w4.Get(x, y, z) == Mat.Water && y >= site4.HTop[i] && y >= site4.WaterTop[i]) over++;
+        };
+        w4.Edited += spy;
+
         int before = sim.Flooded;
-        int dx = Math.Sign(site4.KeepX - shore.x), dz = Math.Sign(site4.KeepZ - shore.z);
+        double e0 = sim.Stock[Stockpile.Earth];
+        var (_, cutVox) = sim.Survey(shore.x - 16, shore.z - 16, shore.x + 16, shore.z + 16, Stockpile.Earth, 16);
+        sim.AddZone(shore.x - 16, shore.z - 16, shore.x + 16, shore.z + 16, Stockpile.Earth, 16);
+        Run(90);
+        Check("crews cutting earth beside a pond leave its shore alone", sim.Stock[Stockpile.Earth] > e0 + 300 && sim.Flooded == before,
+            $"pond at {shore}, ≈{Fmt.M3(cutVox)} m³ of earth in reach, earth +{Fmt.M3(sim.Stock[Stockpile.Earth] - e0)} m³, {sim.Flooded - before} voxels of water let in");
+        sim.RemoveZones(shore.x - 16, shore.z - 16, shore.x + 16, shore.z + 16);
+        sim.CancelArea(shore.x - 40, shore.z - 40, shore.x + 40, shore.z + 40);
+
+        // the trench runs from the pond to the lowest ground within reach beyond it
+        (int x, int z) low = (shore.x, shore.z); int lowY = int.MaxValue;
+        for (int z = shore.z - 40; z <= shore.z + 40; z += 2)
+            for (int x = shore.x - 40; x <= shore.x + 40; x += 2)
+            {
+                int g = w4.SurfAt(x, z);
+                if (w4.Get(x, g, z) == Mat.Water || site4.Forbidden(x, z) || Math.Abs(x - shore.x) + Math.Abs(z - shore.z) < 24) continue;
+                if (g < lowY) { lowY = g; low = (x, z); }
+            }
         sim.InstantLabour = true;
-        sim.DesignateRemove(Shapes.Line(w4, site4, shore.x, shore.z, shore.x + dx * 30, shore.z + dz * 30, new Stroke { Width = 6, Height = 10, Dig = true }, 0));
+        sim.DesignateRemove(Shapes.Line(w4, site4, shore.x, shore.z, low.x, low.z, new Stroke { Width = 6, Height = 16, Dig = true }, 0));
         sim.InstantLabour = false;
-        Run(4);
-        Check("water runs into a trench dug from a pond", shore.x >= 0 && sim.Flooded > 300, $"pond at {shore}, {sim.Flooded - before} voxels of water ran in");
+        for (int i = 0; i < 40 && (i < 4 || sim.FloodPending > 0); i++) Run(1);
+        w4.Edited -= spy;
+        Check("water runs into a trench dug from a pond, and no further", shore.x >= 0 && sim.Flooded - before > 300 && over == 0,
+            $"pond at {shore} standing to {level}, trench to {low} at {lowY}: {sim.Flooded - before} voxels of water ran in, {over} out over the land");
     }
 
     // the beasts: a deer bolts from a worker, archers hunt a boar for gold
@@ -555,15 +595,16 @@ if (args.Length == 0 || args[0] == "--sim")
     Check("a sapper lays a bridge over the moat", decked > 200 && DistKeep(bridger) < site4.KeepR + 104, $"{decked} voxels of deck, now {DistKeep(bridger) / VoxelWorld.PerMetre:0.0} m from the citadel, {bridger.State}");
     bridger.Dead = true; bridger.DiedAt = -999;
 
-    // a ditch too deep to climb out of and no timber left: earth is heaped in
+    // a ditch too deep to climb out of and no timber left: earth is heaped in (the ring keeps clear of the ponds,
+    // or the ditch would fill from them and be a moat to bridge)
     sim.InstantLabour = true;
-    Ring(site4.KeepR + 200, new Stroke { Width = 16, Height = 16, Dig = true, Hollow = true });
+    Ring(site4.KeepR + 176, new Stroke { Width = 16, Height = 16, Dig = true, Hollow = true });
     sim.InstantLabour = false;
     sim.HordeStock[Stockpile.Wood] = 0; sim.HordeStock[Stockpile.Earth] = 8192;
     sim.ComputeFields();
-    var filler = sim.Spawn(Kinds.Sapper, sim.NearestStand(site4.KeepX - site4.KeepR - 230, site4.KeepZ, 3));
+    var filler = sim.Spawn(Kinds.Sapper, sim.NearestStand(site4.KeepX - site4.KeepR - 206, site4.KeepZ, 3));
     Run(60);
-    Check("without timber a sapper fills the ditch with earth", filled > 400 && DistKeep(filler) < site4.KeepR + 184, $"{filled} voxels of fill, now {DistKeep(filler) / VoxelWorld.PerMetre:0.0} m from the citadel, {filler.State}");
+    Check("without timber a sapper fills the ditch with earth", filled > 400 && DistKeep(filler) < site4.KeepR + 160, $"{filled} voxels of fill, now {DistKeep(filler) / VoxelWorld.PerMetre:0.0} m from the citadel, {filler.State}");
 }
 
 Console.WriteLine(failures == 0 ? "\nall checks passed" : $"\n{failures} check(s) failed");

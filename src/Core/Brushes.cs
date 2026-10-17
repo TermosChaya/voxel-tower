@@ -168,7 +168,7 @@ public static class Brushes
         return L;
     }
 
-    /// <summary>Stairs that reach topY at the start and step down half a metre per half metre toward the end point.</summary>
+    /// <summary>Stairs that reach topY at the start and step down a cell (8 voxels) for every 8 toward the end point.</summary>
     public static VoxelList Stairs(VoxelWorld w, Site site, int sx, int sz, int topY, int ex, int ez, byte mat)
     {
         double dx = ex - sx, dz = ez - sz, len = Math.Sqrt(dx * dx + dz * dz);

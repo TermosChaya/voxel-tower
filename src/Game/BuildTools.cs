@@ -405,35 +405,7 @@ public partial class BuildTools : Node3D
             Tool.Circle => Shapes.Circle(w, site, a.x, a.z, Brushes.Dist(b.x - a.x, b.z - a.z) + .5, st, _level),
             _ => null,
         };
-        return dig ? WithTrees(plan) : plan;
-    }
-
-    /// <summary>Trees a digging stroke cuts into come down whole, not as stumps under floating crowns.</summary>
-    VoxelList WithTrees(VoxelList L)
-    {
-        if (L == null) return null;
-        var w = _m.World;
-        int n0 = L.Count;
-        bool any = false;
-        for (int i = 0; i < n0 && !any; i++) any = w.Get(L.X(i), L.Y(i), L.Z(i)) == Mat.Trunk;
-        if (!any) return L;
-        long Key(int x, int y, int z) => ((long)y * w.SZ + z) * w.SX + x;
-        var seen = new HashSet<long>();
-        for (int i = 0; i < n0; i++) seen.Add(Key(L.X(i), L.Y(i), L.Z(i)));
-        var felled = new HashSet<long>();
-        for (int i = 0; i < n0; i++)
-        {
-            int x = L.X(i), y = L.Y(i), z = L.Z(i);
-            if (w.Get(x, y, z) != Mat.Trunk || felled.Contains(Key(x, y, z))) continue;
-            var tree = Shapes.Tree(w, x, y, z);
-            for (int t = 0; t < tree.Count; t++)
-            {
-                long k = Key(tree.X(t), tree.Y(t), tree.Z(t));
-                felled.Add(k);
-                if (seen.Add(k)) L.Add(tree.X(t), tree.Y(t), tree.Z(t), Mat.Air);
-            }
-        }
-        return L;
+        return dig ? Shapes.WithTrees(_m.World, plan) : plan;
     }
 
     // ---------------------------------------------------------------- freehand strokes
@@ -493,7 +465,7 @@ public partial class BuildTools : Node3D
     {
         if (plan == null || plan.Count == 0) return;
         bool dig = DigNow;
-        if (dig) plan = WithTrees(plan);
+        if (dig) plan = Shapes.WithTrees(_m.World, plan);
         _strokeSec += Labour.Estimate(_m.World, plan, dig, _est);
         for (int k = 0; k < 4; k++) _strokeEst[k] += _est[k];
         _strokeVox += dig ? _m.Sim.DesignateRemove(plan) : _m.Sim.DesignateBuild(plan);

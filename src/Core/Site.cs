@@ -18,6 +18,9 @@ public sealed class Site
     /// <summary>Height of the bare terrain per column (index z·SX + x), before rocks, trees and walls.</summary>
     public int[] HTop;
 
+    /// <summary>How high water stood in each column when the valley was made; 0 where it was dry, null if there was none.</summary>
+    public short[] WaterTop;
+
     /// <summary>Columns nobody may build on: the map's western edge (the horde's entry), the citadel and its gate approach.</summary>
     public bool Forbidden(int x, int z)
     {

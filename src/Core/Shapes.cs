@@ -173,6 +173,32 @@ public static class Shapes
         return L;
     }
 
+    /// <summary>Trees a dig cuts into come down whole, not as stumps under floating crowns: adds the rest of each to the plan.</summary>
+    public static VoxelList WithTrees(VoxelWorld w, VoxelList L)
+    {
+        if (L == null) return null;
+        int n0 = L.Count;
+        bool any = false;
+        for (int i = 0; i < n0 && !any; i++) any = w.Get(L.X(i), L.Y(i), L.Z(i)) == Mat.Trunk;
+        if (!any) return L;
+        var seen = new HashSet<long>();
+        for (int i = 0; i < n0; i++) seen.Add(Key(w, L.X(i), L.Y(i), L.Z(i)));
+        var felled = new HashSet<long>();
+        for (int i = 0; i < n0; i++)
+        {
+            int x = L.X(i), y = L.Y(i), z = L.Z(i);
+            if (w.Get(x, y, z) != Mat.Trunk || felled.Contains(Key(w, x, y, z))) continue;
+            var tree = Tree(w, x, y, z);
+            for (int t = 0; t < tree.Count; t++)
+            {
+                long k = Key(w, tree.X(t), tree.Y(t), tree.Z(t));
+                felled.Add(k);
+                if (seen.Add(k)) L.Add(tree.X(t), tree.Y(t), tree.Z(t), Mat.Air);
+            }
+        }
+        return L;
+    }
+
     /// <summary>Nib radius for a brush of the given width: one voxel at width 1, then half the width.</summary>
     public static double NibRadius(int width) => width <= 1 ? 0 : width / 2.0;
 
@@ -235,7 +261,7 @@ public static class Shapes
 
     /// <summary>
     /// A ladder against the side face that was clicked: two rails and rungs every third voxel, from the ground in front of the
-    /// face to a step above its top. It stands in the first half-metre cell clear of the wall, so a body can hang on it.
+    /// face to a step above its top. It stands in the first cell clear of the wall, so a body can hang on it.
     /// </summary>
     public static VoxelList LadderAt(VoxelWorld w, Site site, VoxelHit hit, byte mat = Mat.Ladder)
     {
@@ -263,7 +289,7 @@ public static class Shapes
 
     static bool Blocking(byte m) => m != 0 && !Mat.Passable[m];
 
-    /// <summary>A half-metre cell a quarter full of what blocks: a body cannot be in it.</summary>
+    /// <summary>A cell a quarter full of what blocks: a body cannot be in it.</summary>
     static bool CellBlocked(VoxelWorld w, int ci, int cy, int ck)
     {
         int n = 0;

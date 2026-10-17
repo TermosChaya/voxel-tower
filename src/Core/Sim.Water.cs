@@ -20,7 +20,7 @@ public sealed partial class Sim
             int nx = x + dx, ny = y + dy, nz = z + dz;
             if (World.Get(nx, ny, nz) != Mat.Water) continue;
             int level = Surface(nx, ny, nz);
-            if (y < level) _flood.Enqueue((x, y, z, level));
+            if (y < level && Dug(x, y, z)) _flood.Enqueue((x, y, z, level));
             return;
         }
     }
@@ -36,19 +36,31 @@ public sealed partial class Sim
         return y + 1;
     }
 
+    /// <summary>
+    /// Whether a voxel lies in something dug out: below the bare ground, or the water over it, as the valley was made.
+    /// Water runs only into such hollows and never out over the land, so a ditch cut from a pond fills, and the
+    /// meadow beyond it stays dry even where it lies lower than the pond.
+    /// </summary>
+    bool Dug(int x, int y, int z)
+    {
+        if (Site.HTop == null) return true;
+        int i = z * World.SX + x;
+        return y < Site.HTop[i] || Site.WaterTop != null && y < Site.WaterTop[i];
+    }
+
     /// <summary>Lets water run into the hollows dug beside it, a few thousand voxels a step, up to the level it came from.</summary>
     void FlowWater(int budget = 3000)
     {
         while (_flood.Count > 0 && budget-- > 0)
         {
             var (x, y, z, level) = _flood.Dequeue();
-            if (y >= level || y < 1 || World.Get(x, y, z) != Mat.Air) continue;
+            if (y >= level || y < 1 || World.Get(x, y, z) != Mat.Air || !Dug(x, y, z)) continue;
             World.Set(x, y, z, Mat.Water);
             Flooded++;
             foreach (var (dx, dy, dz) in Seep)
             {
                 int nx = x + dx, ny = y + dy, nz = z + dz;
-                if (ny < level && World.InBounds(nx, ny, nz) && World.Get(nx, ny, nz) == Mat.Air) _flood.Enqueue((nx, ny, nz, level));
+                if (ny < level && World.InBounds(nx, ny, nz) && World.Get(nx, ny, nz) == Mat.Air && Dug(nx, ny, nz)) _flood.Enqueue((nx, ny, nz, level));
             }
         }
     }

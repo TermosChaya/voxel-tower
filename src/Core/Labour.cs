@@ -102,7 +102,7 @@ public static class Labour
 
 /// <summary>
 /// Work the player has marked out: a layer as big as the world where each voxel is nothing, a material to lay,
-/// or <see cref="Remove"/>. Pawns pick it up by the half-metre column.
+/// or <see cref="Remove"/>. Pawns pick it up by the metre-wide column of cells.
 /// </summary>
 public sealed class Orders
 {

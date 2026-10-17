@@ -90,8 +90,8 @@ public sealed partial class Sim
         for (int z = z0; z <= z1; z += 2)
             for (int x = x0; x <= x1; x += 2)
             {
-                int top = World.SurfAt(x, z), floor = Math.Max(3, top - depth);
-                for (int y = top - 1; y >= floor && Takes(kind, World.Get(x, y, z)); y--) vox += 4;
+                int top = World.SurfAt(x, z);
+                if (CutSpan(kind, x, z, top, Math.Max(3, top - depth), out int bottom)) vox += (top - bottom) * 4;
             }
         return (0, vox);
     }
@@ -101,6 +101,36 @@ public sealed partial class Sim
     {
         y = World.SurfAt(x, z);
         return World.Get(x, y, z) == Mat.Trunk;
+    }
+
+    /// <summary>
+    /// How far down a column of a stone or earth zone can be taken: from the surface (<paramref name="top"/>) down to
+    /// <paramref name="bottom"/>, through what the zone takes and no deeper than its floor. False when there is nothing
+    /// to take, or when water stands beside the column or on it: the crews leave the shore alone, and only the player's
+    /// own pick lets water into a cut.
+    /// </summary>
+    bool CutSpan(int kind, int x, int z, int top, int floor, out int bottom)
+    {
+        int y = top - 1;
+        while (y >= floor && Takes(kind, World.Get(x, y, z))) y--;
+        bottom = y + 1;
+        return bottom < top && !WaterNear(x, z, bottom);
+    }
+
+    static readonly (int dx, int dz)[] Side4 = { (1, 0), (-1, 0), (0, 1), (0, -1) };
+
+    /// <summary>Water on a column, or beside it anywhere above <paramref name="y0"/>, that a cut down to there would let in.</summary>
+    bool WaterNear(int x, int z, int y0)
+    {
+        if (World.Get(x, World.SurfAt(x, z), z) == Mat.Water) return true;
+        foreach (var (dx, dz) in Side4)
+        {
+            int nx = x + dx, nz = z + dz, y = World.SurfAt(nx, nz);
+            if (World.Get(nx, y, nz) != Mat.Water) continue;
+            while (World.Get(nx, y, nz) == Mat.Water) y++;
+            if (y > y0) return true;
+        }
+        return false;
     }
 
     /// <summary>The voxels a zone of this kind takes: rock for stone, natural earth for earth.</summary>
@@ -175,11 +205,7 @@ public sealed partial class Sim
                     {
                         if (TreeFoot(x, zz, out int y)) plan = Shapes.Tree(World, x, y, zz);
                     }
-                    else
-                    {
-                        int top = World.SurfAt(x, zz);
-                        if (top - 1 >= z.FloorAt(x, zz) && Takes(z.Kind, World.Get(x, top - 1, zz))) plan = Patch(z, x, zz);
-                    }
+                    else if (CutSpan(z.Kind, x, zz, World.SurfAt(x, zz), z.FloorAt(x, zz), out _)) plan = Patch(z, x, zz);
                     if (plan == null) continue;
                     found++;
                     int n = Orders.PlanRemove(plan);
@@ -191,7 +217,10 @@ public sealed partial class Sim
         return 0;
     }
 
-    /// <summary>A patch of rock or earth around a column, from the surface down to the zone's floor, and the plants over it.</summary>
+    /// <summary>
+    /// A patch of rock or earth around a column, from the surface down to the zone's floor, and the plants over it;
+    /// a tree standing in it comes down whole.
+    /// </summary>
     VoxelList Patch(Zone z, int x0, int z0)
     {
         var L = new VoxelList();
@@ -200,11 +229,11 @@ public sealed partial class Sim
             for (int x = x0 - r; x <= x0 + r; x++)
             {
                 if (!z.Contains(x, zz) || (x - x0) * (x - x0) + (zz - z0) * (zz - z0) > r * r) continue;
-                int top = World.SurfAt(x, zz), floor = z.FloorAt(x, zz);
-                int y = top - 1;
-                for (; y >= floor && Takes(z.Kind, World.Get(x, y, zz)); y--) L.Add(x, y, zz, Mat.Air);
-                if (y < top - 1) Brushes.ClearVegAbove(World, L, x, zz, top);
+                int top = World.SurfAt(x, zz);
+                if (!CutSpan(z.Kind, x, zz, top, z.FloorAt(x, zz), out int bottom)) continue;
+                for (int y = top - 1; y >= bottom; y--) L.Add(x, y, zz, Mat.Air);
+                Brushes.ClearVegAbove(World, L, x, zz, top);
             }
-        return L;
+        return Shapes.WithTrees(World, L);
     }
 }
