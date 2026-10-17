@@ -330,6 +330,8 @@ public partial class BuildTools : Node3D
     bool Key(InputEventKey k)
     {
         var code = k.PhysicalKeycode;
+        // Shift and a digit calls up a squad, it is no tool
+        if (k.ShiftPressed && code is >= global::Godot.Key.Key0 and <= global::Godot.Key.Key9) return false;
         if (k.Echo && code is not (global::Godot.Key.Bracketleft or global::Godot.Key.Bracketright or global::Godot.Key.Minus or global::Godot.Key.Equal)) return false;
         Tool t = code switch
         {

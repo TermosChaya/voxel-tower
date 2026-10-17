@@ -169,6 +169,53 @@ public partial class Commander : Node
         _m.Hud.OnSelectionChanged();
     }
 
+    /// <summary>Five squads to call up again by a key: Ctrl and a digit remembers the chosen, Shift and the digit picks them.</summary>
+    public readonly List<Unit>[] Squads = { new(), new(), new(), new(), new() };
+    double _squadAt = -9;
+    int _squadLast = -1;
+
+    /// <summary>The chosen become squad n (0–4).</summary>
+    public void RememberSquad(int n)
+    {
+        Squads[n].Clear();
+        foreach (var u in _m.Selected) if (!u.Dead) Squads[n].Add(u);
+        _m.Hud.Float(Squads[n].Count > 0 ? $"отряд {Roman(n)}: {Squads[n].Count}" : $"отряд {Roman(n)} распущен", Ornament.BronzeLight);
+        _m.Hud.OnSelectionChanged();
+    }
+
+    /// <summary>Picks squad n; a second time quickly, the camera goes to it.</summary>
+    public void CallSquad(int n)
+    {
+        Squads[n].RemoveAll(u => u.Dead);
+        if (Squads[n].Count == 0) { _m.Hud.Float($"отряд {Roman(n)} пуст: Ctrl+{n + 1} — запомнить выбранных", Ornament.Aged); return; }
+        _m.Selected.Clear();
+        foreach (var u in Squads[n]) _m.Selected.Add(u);
+        double now = Time.GetTicksMsec() / 1000.0;
+        if (_squadLast == n && now - _squadAt < .6) Show(Squads[n]);
+        _squadLast = n; _squadAt = now;
+        _m.Hud.OnSelectionChanged();
+    }
+
+    public static string Roman(int n) => n switch { 0 => "I", 1 => "II", 2 => "III", 3 => "IV", _ => "V" };
+
+    /// <summary>Picks one pawn alone; a second time, the camera goes to it.</summary>
+    public void SelectOne(Unit u)
+    {
+        if (u.Dead) return;
+        bool again = _m.Selected.Count == 1 && _m.Selected.Contains(u);
+        _m.Selected.Clear();
+        _m.Selected.Add(u);
+        if (again) Show(new List<Unit> { u });
+        _m.Hud.OnSelectionChanged();
+    }
+
+    void Show(List<Unit> units)
+    {
+        float x = 0, z = 0;
+        foreach (var u in units) { x += u.X; z += u.Z; }
+        _m.Rig.Focus(_m.World.WX(x / units.Count), _m.World.WZ(z / units.Count));
+    }
+
     /// <summary>Drops the fallen from the chosen.</summary>
     public void Prune()
     {
@@ -274,7 +321,16 @@ public partial class Commander : Node
 
     public override void _UnhandledInput(InputEvent e)
     {
-        if (e is not InputEventKey k || !k.Pressed || k.Echo || k.CtrlPressed || k.MetaPressed) return;
+        if (e is not InputEventKey k || !k.Pressed || k.Echo) return;
+        // squads: Ctrl and a digit remembers the chosen, Shift and the digit calls them up
+        if (k.PhysicalKeycode is >= Key.Key1 and <= Key.Key5 && (k.CtrlPressed || k.MetaPressed || k.ShiftPressed))
+        {
+            int n = (int)(k.PhysicalKeycode - Key.Key1);
+            if (k.ShiftPressed) CallSquad(n); else RememberSquad(n);
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+        if (k.CtrlPressed || k.MetaPressed) return;
         switch (k.PhysicalKeycode)
         {
             case Key.Space: CallWave(); break;

@@ -178,9 +178,15 @@ public partial class Banner : Control
         (Icons.Coin, "Казна"), (Icons.Material(Mat.Stone), "Камень, м³"), (Icons.Material(Mat.Wood), "Брёвна, м³"), (Icons.Earth, "Земля, м³"),
     };
 
-    public Banner()
+    /// <summary>The narrow banner of the top strip.</summary>
+    readonly bool _compact;
+
+    public Banner() : this(false) { }
+
+    public Banner(bool compact)
     {
-        CustomMinimumSize = new Vector2(620, 60);
+        _compact = compact;
+        CustomMinimumSize = compact ? new Vector2(500, 52) : new Vector2(620, 60);
         MouseFilter = MouseFilterEnum.Stop;
         TooltipText = "Казна и запасы\nЗолото идёт на наём пешек; его дают убитые налётчики и ранний вызов орды. " +
             "Камень, брёвна и землю добывают рабочие — киркой из скал, леса и грунта; стены кладутся из этих запасов.";
@@ -203,7 +209,7 @@ public partial class Banner : Control
         Ornament.Rivet(this, new Vector2(k * .62f, s.Y / 2), 3);
         Ornament.Rivet(this, new Vector2(s.X - k * .62f, s.Y / 2), 3);
 
-        float x0 = 28, cell = (s.X - 2 * x0) / Groups.Length;
+        float x0 = _compact ? 22 : 28, cell = (s.X - 2 * x0) / Groups.Length;
         for (int g = 0; g < Groups.Length; g++)
         {
             if (g > 0) Ornament.Divider(this, new Vector2(x0 + g * cell, 12), new Vector2(x0 + g * cell, s.Y - 12), .9f);
@@ -213,6 +219,13 @@ public partial class Banner : Control
 
     void Group(Rect2 r, Icons.Painter icon, string caption, string value, bool shortOf)
     {
+        if (_compact)
+        {
+            icon(this, new Rect2(r.Position + new Vector2(0, 13), new Vector2(26, 26)), Ornament.BronzeLight);
+            DrawString(Ornament.Caps, r.Position + new Vector2(32, 20), caption.ToUpperInvariant(), HorizontalAlignment.Left, -1, 8, Ornament.Aged);
+            DrawString(Ornament.Display, r.Position + new Vector2(32, 42), value, HorizontalAlignment.Left, -1, 22, shortOf ? Ornament.Blood : Ornament.Parchment);
+            return;
+        }
         icon(this, new Rect2(r.Position + new Vector2(0, 13), new Vector2(34, 34)), Ornament.BronzeLight);
         DrawString(Ornament.Caps, r.Position + new Vector2(42, 24), caption.ToUpperInvariant(), HorizontalAlignment.Left, -1, 9, Ornament.Aged);
         DrawString(Ornament.Display, r.Position + new Vector2(42, 48), value, HorizontalAlignment.Left, -1, 26, shortOf ? Ornament.Blood : Ornament.Parchment);

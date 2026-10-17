@@ -50,6 +50,8 @@ public partial class Main : Node3D
     float[] _cam;
     /// <summary>--wave=seconds: a new game with the horde called at once and this long into its wave (screenshots).</summary>
     double _waveAt = -1;
+    /// <summary>--select: all our pawns chosen at the start (screenshots of the retinue).</summary>
+    bool _selectAll;
     uint _seed = 7;
     string _pose = "";
     /// <summary>How long the staged siege runs before the screenshot (--at=seconds).</summary>
@@ -67,6 +69,7 @@ public partial class Main : Node3D
             else if (a.StartsWith("--seed=") && uint.TryParse(a["--seed=".Length..], out uint sd)) _seed = sd;
             else if (a.StartsWith("--look=") && int.TryParse(a["--look=".Length..], out int lk)) _look = lk;
             else if (a.StartsWith("--wave=") && double.TryParse(a["--wave=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double wa)) _waveAt = wa;
+            else if (a == "--select") _selectAll = true;
             else if (a.StartsWith("--cam=")) _cam = Array.ConvertAll(a["--cam=".Length..].Split(','), v => float.Parse(v, System.Globalization.CultureInfo.InvariantCulture));
             else if (a == "--selftest") _selfTest = true;
             else if (a.StartsWith("--pose=")) _pose = a["--pose=".Length..];
@@ -154,10 +157,9 @@ public partial class Main : Node3D
         if (!_selfTest && !_demo)
         {
             Hud.Log("Рудники платят золотом, пока они ваши: медный — к востоку от крепости, серебряную жилу в низине стерегут гоблины. " +
-                "Пошлите людей к входу. Задачи — над картой.", Hud.Kind.Ok);
-            Hud.Log("Старая крепость вокруг цитадели наполовину разрушена: стены проломлены, ворота сорваны с петель. Возьмите починку (0) " +
-                "и щёлкните по стене — рабочие разберут завал и вернут ей прежний вид. Рамкой — только проломы. " +
-                "Камня на всё не хватит — ломайте его в скалах, валунах и руинах (8 и Z).", Hud.Kind.Warn);
+                "Пошлите людей к входу. Задачи — во вкладке слева.", Hud.Kind.Ok);
+            Hud.Log("Крепость вокруг цитадели наполовину разрушена. Починка (0), щелчок по стене — рабочие вернут ей прежний вид, " +
+                "рамкой — только проломы. Камень ломают в скалах, валунах и руинах (8 и Z).", Hud.Kind.Warn);
         }
         Hud.Log("Орда придёт с запада через десять минут. Ройте, рубите и стройте, пока есть время.", Hud.Kind.Warn);
         GD.Print($"[voxel-tower] world {genMs:0} ms, navigation {navMs:0} ms, mesh {View.LastFullMeshMs:0} ms, {View.Triangles()} triangles");
@@ -169,6 +171,11 @@ public partial class Main : Node3D
             Rig.Set(World.WX(l.X), World.WZ(l.Z), -.7f, .6f, 2.4f, snap: true);
         }
         if (_waveAt >= 0 && !_demo && !_selfTest) { Sim.ComputeFields(); Sim.Waves.StartNow(Sim); Advance(_waveAt); Hud.Refresh(); }
+        if (_selectAll)
+        {
+            foreach (var u in Sim.Units) if (!u.Dead && u.Team == Team.Player) Selected.Add(u);
+            Hud.OnSelectionChanged();
+        }
         if (_cam is { Length: 5 }) Rig.Set(World.WX(_cam[0]), World.WZ(_cam[1]), _cam[2], _cam[3], _cam[4], snap: true);
         if (_top) Rig.ToggleTopDown();
         if (_selfTest) SelfTest();
@@ -313,7 +320,11 @@ public partial class Main : Node3D
         Vector2 ScreenAt(float x, float y, float z) => Rig.Cam.UnprojectPosition(new Vector3(World.WX(x), World.WY(y), World.WZ(z)));
         void Move(Vector2 p) => Tools._UnhandledInput(new InputEventMouseMotion { Position = p });
         void Button(Vector2 p, bool down, bool shift = false) => Tools._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = down, Position = p, ShiftPressed = shift });
-        void KeyPress(Key k) { var e = new InputEventKey { PhysicalKeycode = k, Keycode = k, Pressed = true }; Tools._UnhandledInput(e); Command._UnhandledInput(e); }
+        void KeyPress(Key k, bool ctrl = false, bool shift = false)
+        {
+            var e = new InputEventKey { PhysicalKeycode = k, Keycode = k, Pressed = true, CtrlPressed = ctrl, ShiftPressed = shift };
+            Tools._UnhandledInput(e); Command._UnhandledInput(e);
+        }
         async Task ClickAt(Vector2 p) { Move(p); await Frames(2); Button(p, true); Button(p, false); await Frames(2); }
         async Task Click(int x, int z) => await ClickAt(Screen(x, z));
         async Task Look(float vx, float vz) { Rig.Focus(World.WX(vx), World.WZ(vz)); await Frames(45); }
@@ -520,7 +531,14 @@ public partial class Main : Node3D
         foreach (var u in Sim.Units) if (!u.Dead && u.T == Kinds.Worker) { worker = u; break; }
         await Look(worker.X, worker.Z);
         await ClickAt(Command.Screen(worker, .5f));
-        Check("a click picks a pawn", Selected.Count == 1 && Selected.Contains(worker), $"{Selected.Count} chosen");
+        Check("a click picks a pawn, and the retinue slides out with it", Selected.Count == 1 && Selected.Contains(worker) && Hud.RightOpen == "retinue", $"{Selected.Count} chosen, open on the right: {Hud.RightOpen}");
+        // a squad: Ctrl+2 remembers the chosen, Shift+2 calls them up again
+        KeyPress(Key.Key2, ctrl: true);
+        Selected.Clear();
+        var tool0 = Tools.Tool;
+        KeyPress(Key.Key2, shift: true);
+        Check("Ctrl+2 makes the chosen squad II, Shift+2 picks it again (and takes up no brush)", Selected.Count == 1 && Selected.Contains(worker) && Tools.Tool == tool0,
+            $"{Selected.Count} chosen, tool {Tools.Tool}");
         var dest = Screen(kx - 60, kz + 60);
         Rig._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true, Position = dest });
         Rig._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = false, Position = dest });

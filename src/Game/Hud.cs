@@ -6,18 +6,20 @@ using VoxelTower.Core;
 namespace VoxelTower.Game;
 
 /// <summary>
-/// The interface laid over the game instead of a side panel: the chronicle top left, the treasury and stores top centre,
-/// the wave clock and the retinue top right, the map bottom left, the tool belt bottom centre and the blueprint scrolls
-/// bottom right. Health bars and the selection frame are drawn straight over the field.
+/// The interface laid over the game, kept to the edges: one strip at the top with the treasury and the wave clock, the
+/// map bottom left, the tool belt bottom centre, and everything else in tabs that hang on the side edges and slide out
+/// when clicked — the chronicle, the goals and the blueprint scrolls on the left, the retinue with the chosen in detail
+/// and the horde's warbands on the right. The latest lines of the chronicle show briefly under the strip. Health bars
+/// and the selection frame are drawn straight over the field.
 /// </summary>
 public partial class Hud : CanvasLayer
 {
     public enum Kind { Plain, Ok, Warn, Bad }
 
     /// <summary>How much of the bottom edge the panels cover, for centring the camera above them.</summary>
-    public const float BottomBand = 200;
-    /// <summary>How much of the top edge the treasury banner covers.</summary>
-    public const float TopBand = 80;
+    public const float BottomBand = 130;
+    /// <summary>How much of the top edge the strip covers.</summary>
+    public const float TopBand = 84;
 
     const string HelpText = "Управление\n" +
         "Кисти ничего не строят сами: они размечают работу, а пешки делают её — кладут из запасов, копают, рубят.\n" +
@@ -25,7 +27,9 @@ public partial class Hud : CanvasLayer
         "V — кирка: копать, рубить, ломать камень, разбирать свою кладку. Shift с кистью — тоже кирка.\n" +
         "[ и ] — толщина, − и = — высота (с киркой — глубина). F — форма или заливка, G — ровно или по рельефу.\n" +
         "Без кисти: ЛКМ — выбрать пешку, рамкой — нескольких; ПКМ по земле — послать, по зверю — охотиться, по врагу — атаковать.\n" +
-        "Пробел — позвать орду раньше (она меньше узнает о вас), P — пауза, Tab — скорость, T — тревога.\n" +
+        "Пробел — позвать орду раньше (она меньше узнает о вас), P — пауза, Tab — скорость, T — тревога, J — пути орды.\n" +
+        "Ctrl+1…5 — запомнить выбранных отрядом, Shift+1…5 — выбрать отряд (дважды — показать).\n" +
+        "Вкладки по краям выдвигаются щелчком: слева — задачи, летопись, чертежи; справа — дружина поимённо и орда.\n" +
         "ПКМ тянет карту, колесо — масштаб, СКМ или Q/E — поворот, WASD — сдвиг, Y — вид сверху, H — вернуть вид.";
 
     static readonly (Tool tool, Icons.Painter icon, string key, string tip)[] ToolDefs =
@@ -55,14 +59,18 @@ public partial class Hud : CanvasLayer
 
     Main _m;
     Banner _banner;
-    VBoxContainer _chronicle;
-    readonly List<(Label label, double born)> _lines = new();
+    Toasts _toasts;
+    VBoxContainer _history;
     Minimap _map;
     Button _topView;
     VBoxContainer _goals;
     readonly List<Label> _goalLines = new();
-    Label _toolName, _toolMat, _toolHint;
-    HBoxContainer _opts;
+    SideDrawers _left, _right;
+    TabSpine _goalsTab, _hordeTab;
+    HordeInfo _horde;
+    Label _toolName, _toolMat;
+    HBoxContainer _opts, _beltHead;
+    OrnatePanel _belt;
     readonly Dictionary<Tool, Slot> _toolSlots = new();
     readonly Dictionary<byte, Slot> _matSlots = new();
     Slot _pickSlot;
@@ -108,62 +116,83 @@ public partial class Hud : CanvasLayer
         root.AddChild(_overlay);
         _overlay.Init(m);
 
-        // the chronicle: lettering straight over the map, top left
-        _chronicle = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore, Position = new Vector2(24, 18), CustomMinimumSize = new Vector2(430, 0) };
-        _chronicle.AddThemeConstantOverride("separation", 3);
-        root.AddChild(_chronicle);
-
-        // the treasury and the stores, top centre
-        _banner = new Banner();
-        _banner.SetAnchorsPreset(Control.LayoutPreset.CenterTop);
-        _banner.OffsetLeft = -310; _banner.OffsetRight = 310; _banner.OffsetTop = 12; _banner.OffsetBottom = 72;
-        root.AddChild(_banner);
+        // the strip at the top: the treasury and the stores, and the wave clock beside them
+        var strip = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        strip.AddThemeConstantOverride("separation", 10);
+        strip.SetAnchorsPreset(Control.LayoutPreset.CenterTop);
+        strip.GrowHorizontal = Control.GrowDirection.Both;
+        strip.OffsetTop = 8;
+        _banner = new Banner(compact: true) { SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
+        strip.AddChild(_banner);
+        _clockPanel = new WaveClock();
+        strip.AddChild(_clockPanel);
+        root.AddChild(strip);
+        _clockPanel.Init(m);
 
         var help = new Medallion(Icons.Question, HelpText);
         help.SetAnchorsPreset(Control.LayoutPreset.TopRight);
-        help.OffsetLeft = -66; help.OffsetRight = -20; help.OffsetTop = 16; help.OffsetBottom = 62;
+        help.OffsetLeft = -60; help.OffsetRight = -16; help.OffsetTop = 14; help.OffsetBottom = 58;
         root.AddChild(help);
 
-        // the wave clock and the retinue, down the right edge
-        var right = new VBoxContainer();
-        right.AddThemeConstantOverride("separation", 10);
-        right.SetAnchorsPreset(Control.LayoutPreset.TopRight);
-        right.OffsetLeft = right.OffsetRight = -78;
-        right.OffsetTop = right.OffsetBottom = 14;
-        right.GrowHorizontal = Control.GrowDirection.Begin;
-        _clockPanel = new WaveClock();
-        right.AddChild(_clockPanel);
-        _retinue = new Retinue();
-        right.AddChild(_retinue);
-        root.AddChild(right);
-        _clockPanel.Init(m);
-        _retinue.Init(m);
+        // the latest lines of the chronicle, briefly, over the tool belt (placed every frame, as the belt grows and shrinks)
+        _toasts = new Toasts();
+        root.AddChild(_toasts);
 
-        // what to do, over the map: finish the fort, take the mines, hold out
-        var goalsPanel = new OrnatePanel(12);
-        Pin(goalsPanel, Control.LayoutPreset.BottomLeft, 16, -344);
+        // the tabs on the left: the goals, the chronicle, the blueprint scrolls
+        _left = new SideDrawers(left: true, top: 96, bottom: 312);
+        root.AddChild(_left);
         var goalsBox = new VBoxContainer();
         goalsBox.AddThemeConstantOverride("separation", 5);
         goalsBox.AddChild(CapsLabel("Задачи"));
         _goals = new VBoxContainer();
-        _goals.AddThemeConstantOverride("separation", 2);
+        _goals.AddThemeConstantOverride("separation", 3);
         goalsBox.AddChild(_goals);
-        goalsPanel.AddChild(goalsBox);
-        goalsPanel.TooltipText = "Задачи\nЧем заняться: достроить крепость, занять рудники и держать их — они платят золотом, которое идёт на наём, — и выстоять все волны.";
-        root.AddChild(goalsPanel);
+        _goalsTab = _left.Add("goals", Icons.Scroll, "Задачи", "Задачи\nЧем заняться: починить крепость, занять рудники и держать их — они платят золотом на наём — и выстоять все волны.", goalsBox, 330);
+        var chronicle = new VBoxContainer();
+        chronicle.AddThemeConstantOverride("separation", 4);
+        chronicle.AddChild(CapsLabel("Летопись"));
+        _history = new VBoxContainer();
+        _history.AddThemeConstantOverride("separation", 4);
+        chronicle.AddChild(_history);
+        _left.Add("chronicle", Icons.Horn, "Летопись", "Летопись\nВсё, что было: подсказки начала, вести о волнах, рудниках, павших и сделанном. Последние строки и так видны на минуту под полосой сверху.", chronicle, 400);
+        var bpBox = new VBoxContainer();
+        bpBox.AddThemeConstantOverride("separation", 8);
+        var bpHead = new HBoxContainer();
+        var bpTitle = CapsLabel("Свитки чертежей");
+        bpTitle.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        bpHead.AddChild(bpTitle);
+        _bpCount = CapsLabel("", 10, Ornament.Faded);
+        bpHead.AddChild(_bpCount);
+        bpBox.AddChild(bpHead);
+        _bpList = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        _bpList.AddThemeConstantOverride("separation", 6);
+        bpBox.AddChild(_bpList);
+        _left.Add("blueprints", Icons.Box, "Чертежи", "Свитки чертежей\nСнятые постройки: щелчок по свитку — разметить копию. B — снять новый чертёж рамкой.", bpBox, 330);
+
+        // the tabs on the right: the retinue with the chosen, the horde
+        _right = new SideDrawers(left: false, top: 96, bottom: 16);
+        root.AddChild(_right);
+        _retinue = new Retinue();
+        _right.Add("retinue", Icons.Sword, "Дружина", "Дружина\nСколько у вас людей и чем они заняты, наём, пять отрядов (Ctrl+цифра — запомнить, Shift+цифра — выбрать), выбранные поимённо — со здоровьем, ранами и делом — и приказы им.", _retinue, 350);
+        _retinue.Init(m);
+        _horde = new HordeInfo();
+        _hordeTab = _right.Add("horde", Icons.Horn, "Орда", "Орда\nВатаги грядущей волны (или той, что в долине): из кого, кто ведёт, откуда войдут; их пути — на поле и на карте (J). И брёвна с землёй орды на осадные работы.", _horde, 320);
+        _horde.Init(m);
 
         // the map, bottom left
-        var mapPanel = new OrnatePanel(14);
-        Pin(mapPanel, Control.LayoutPreset.BottomLeft, 16, -16);
+        var mapPanel = new OrnatePanel(10);
+        Pin(mapPanel, Control.LayoutPreset.BottomLeft, 12, -12);
         var mapBox = new VBoxContainer();
-        mapBox.AddThemeConstantOverride("separation", 6);
+        mapBox.AddThemeConstantOverride("separation", 5);
         var mapHead = new HBoxContainer();
-        var mapTitle = CapsLabel("Карта долины");
+        mapHead.AddThemeConstantOverride("separation", 3);
+        var mapTitle = CapsLabel("Карта", 9);
         mapTitle.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        mapTitle.VerticalAlignment = VerticalAlignment.Center;
         mapHead.AddChild(mapTitle);
         _topView = new Button
         {
-            Text = "Сверху", ToggleMode = true, FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 22),
+            Text = "Сверху", ToggleMode = true, FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 20),
             MouseDefaultCursorShape = Control.CursorShape.PointingHand,
             TooltipText = "Вид сверху\nСмотреть на долину ровно сверху, как на карту, и обратно. Y. Поворот (Q/E, СКМ) работает и так.",
         };
@@ -171,8 +200,8 @@ public partial class Hud : CanvasLayer
         _topView.Pressed += () => _m.Rig.ToggleTopDown();
         foreach (var (text, factor, tip) in new[] { ("−", 1 / 1.3f, "Отдалить\nКолесо, щипок или два пальца на тачпаде, PageDown."), ("+", 1.3f, "Приблизить\nКолесо, щипок или два пальца на тачпаде, PageUp.") })
         {
-            var zb = new Button { Text = text, FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(24, 22), MouseDefaultCursorShape = Control.CursorShape.PointingHand, TooltipText = tip };
-            zb.AddThemeFontSizeOverride("font_size", 13);
+            var zb = new Button { Text = text, FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(22, 20), MouseDefaultCursorShape = Control.CursorShape.PointingHand, TooltipText = tip };
+            zb.AddThemeFontSizeOverride("font_size", 12);
             float f = factor;
             zb.Pressed += () => _m.Rig.ZoomBy(f);
             mapHead.AddChild(zb);
@@ -185,71 +214,48 @@ public partial class Hud : CanvasLayer
         root.AddChild(mapPanel);
         _map.Init(m);
 
-        // the tool belt, bottom centre
-        var belt = new OrnatePanel(16);
-        Pin(belt, Control.LayoutPreset.CenterBottom, 0, -16);
+        // the tool belt, bottom centre: the tool and its settings over a row of slots
+        var belt = _belt = new OrnatePanel(10);
+        Pin(belt, Control.LayoutPreset.CenterBottom, 0, -10);
         var col = new VBoxContainer();
-        col.AddThemeConstantOverride("separation", 7);
-        var head = new HBoxContainer();
-        _toolName = Text("", Ornament.Display, 24, Ornament.EmberGlow);
-        _toolName.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        head.AddChild(_toolName);
-        _toolMat = CapsLabel("", 10);
+        col.AddThemeConstantOverride("separation", 5);
+        _beltHead = new HBoxContainer();
+        _beltHead.AddThemeConstantOverride("separation", 14);
+        _toolName = Text("", Ornament.Display, 20, Ornament.EmberGlow);
+        _beltHead.AddChild(_toolName);
+        _toolMat = CapsLabel("", 9);
         _toolMat.VerticalAlignment = VerticalAlignment.Center;
-        head.AddChild(_toolMat);
-        col.AddChild(head);
-        _toolHint = Text("", Ornament.SerifItalic, 13, Ornament.Aged, wrap: true);
-        _toolHint.CustomMinimumSize = new Vector2(0, 34);
-        col.AddChild(_toolHint);
+        _toolMat.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        _beltHead.AddChild(_toolMat);
+        col.AddChild(_beltHead);
         _opts = new HBoxContainer();
-        _opts.AddThemeConstantOverride("separation", 18);
+        _opts.AddThemeConstantOverride("separation", 16);
         col.AddChild(_opts);
-        col.AddChild(new Rule(false));
         var slots = new HBoxContainer();
-        slots.AddThemeConstantOverride("separation", 7);
+        slots.AddThemeConstantOverride("separation", 5);
         foreach (var (tool, icon, key, tip) in ToolDefs)
         {
-            var s = new Slot(icon, key, tip);
+            var sl = new Slot(icon, key, tip, 46);
             var t = tool;
-            s.Clicked += () => _m.Tools.SetTool(t);
-            _toolSlots[tool] = s;
-            slots.AddChild(s);
+            sl.Clicked += () => _m.Tools.SetTool(t);
+            _toolSlots[tool] = sl;
+            slots.AddChild(sl);
         }
         slots.AddChild(new Rule(true));
         foreach (var (mat, key, _, tip) in MatDefs)
         {
-            var s = new Slot(Icons.Material(mat), key, tip) { Caption = "" };
+            var sl = new Slot(Icons.Material(mat), key, tip, 46) { Caption = "" };
             var mm = mat;
-            s.Clicked += () => _m.Tools.SetMaterial(mm);
-            _matSlots[mat] = s;
-            slots.AddChild(s);
+            sl.Clicked += () => _m.Tools.SetMaterial(mm);
+            _matSlots[mat] = sl;
+            slots.AddChild(sl);
         }
-        _pickSlot = new Slot(Icons.Pick, "V", PickTip) { Caption = "копать" };
+        _pickSlot = new Slot(Icons.Pick, "V", PickTip, 46) { Caption = "копать" };
         _pickSlot.Clicked += () => _m.Tools.SetDig(!_m.Tools.Opt.Dig);
         slots.AddChild(_pickSlot);
         col.AddChild(slots);
         belt.AddChild(col);
         root.AddChild(belt);
-
-        // blueprint scrolls, bottom right
-        var bpPanel = new OrnatePanel(14);
-        Pin(bpPanel, Control.LayoutPreset.BottomRight, -16, -16);
-        var bpBox = new VBoxContainer();
-        bpBox.AddThemeConstantOverride("separation", 8);
-        var bpHead = new HBoxContainer();
-        var bpTitle = CapsLabel("Свитки чертежей");
-        bpTitle.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        bpHead.AddChild(bpTitle);
-        _bpCount = CapsLabel("", 10, Ornament.Faded);
-        bpHead.AddChild(_bpCount);
-        bpBox.AddChild(bpHead);
-        var scroll = new ScrollContainer { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, CustomMinimumSize = new Vector2(300, 176) };
-        _bpList = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        _bpList.AddThemeConstantOverride("separation", 6);
-        scroll.AddChild(_bpList);
-        bpBox.AddChild(scroll);
-        bpPanel.AddChild(bpBox);
-        root.AddChild(bpPanel);
 
         _floats = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
         _floats.SetAnchorsPreset(Control.LayoutPreset.FullRect);
@@ -260,6 +266,8 @@ public partial class Hud : CanvasLayer
         RebuildBlueprints();
         OnToolChanged();
         Refresh();
+        // a new game opens on what there is to do
+        _left.Open("goals");
     }
 
     /// <summary>Anchors a panel to a corner or edge; it grows away from that edge as its content needs.</summary>
@@ -308,12 +316,9 @@ public partial class Hud : CanvasLayer
         _clock += delta;
         _refreshAt -= delta;
         if (_topView.ButtonPressed != _m.Rig.TopDown) _topView.SetPressedNoSignal(_m.Rig.TopDown);
+        var vp = GetViewport().GetVisibleRect().Size;
+        _toasts.Position = new Vector2((vp.X - _toasts.Size.X) / 2, _belt.Position.Y - 10 - _toasts.Size.Y);
         if (_refreshAt <= 0) { _refreshAt = .2; Refresh(); }
-        foreach (var (label, born) in _lines)
-        {
-            double age = _clock - born;
-            label.Modulate = new Color(1, 1, 1, age < 12 ? 1 : (float)Math.Max(.35, 1 - (age - 12) / 8));
-        }
         var t = _m.Tools;
         bool overUi = GetViewport().GuiGetHoveredControl() != null;
         if (overUi) _tag.Visible = false;
@@ -375,12 +380,12 @@ public partial class Hud : CanvasLayer
 
     void RefreshGoals()
     {
-        int i = 0;
+        int i = 0, open = 0;
         foreach (var (text, done) in Goals())
         {
             if (i >= _goalLines.Count)
             {
-                var l = Text("", Ornament.Serif, 14, Ornament.Parchment);
+                var l = Text("", Ornament.Serif, 13, Ornament.Parchment, wrap: true);
                 _goals.AddChild(l);
                 _goalLines.Add(l);
             }
@@ -388,8 +393,17 @@ public partial class Hud : CanvasLayer
             line.Text = (done ? "◆ " : "◇ ") + text;
             line.AddThemeColorOverride("font_color", done ? Ornament.Moss : Ornament.Parchment);
             line.Visible = true;
+            if (!done) open++;
         }
         for (; i < _goalLines.Count; i++) _goalLines[i].Visible = false;
+        // what is still to do, on the tab
+        string badge = open > 0 ? open.ToString() : "";
+        if (_goalsTab.Badge != badge) { _goalsTab.Badge = badge; _goalsTab.QueueRedraw(); }
+        int bands = 0;
+        foreach (var b in _m.Sim.Bands) if (b.State != BandState.Coming || !_m.Sim.Waves.Active) bands++;
+        string hb = bands > 0 ? bands.ToString() : "";
+        if (_hordeTab.Badge != hb) { _hordeTab.Badge = hb; _hordeTab.QueueRedraw(); }
+        _horde.Refresh();
     }
 
     /// <summary>What the tag says over a mine or a ruin.</summary>
@@ -418,12 +432,18 @@ public partial class Hud : CanvasLayer
         _toolName.Text = t.Tool == Tool.Paste && t.PasteBp != null ? $"Чертёж «{t.PasteBp.Name}»" : BuildTools.ToolName(t.Tool);
         _toolMat.Text = (t.Tool == Tool.Gather ? "добывать: " + (t.GatherKind switch { Stockpile.Wood => "лес", Stockpile.Earth => "землю", _ => "камень" })
             : t.Opt.Dig ? "кирка: копать и рубить" : "материал: " + Mat.NameOf(t.Opt.Material).ToLowerInvariant()).ToUpperInvariant();
-        _toolHint.Text = BuildTools.Hint(t.Tool, t.Opt.Dig);
+        // with no brush in hand the belt is only its slots
+        _beltHead.Visible = t.Tool != Tool.None;
         RebuildOptions();
         RebuildBlueprints();
     }
 
-    public void OnSelectionChanged() => _retinue?.Refresh();
+    public void OnSelectionChanged()
+    {
+        _retinue?.Refresh();
+        // chosen pawns: the retinue slides out with them, one by one
+        if (_m.Selected.Count > 0 && _right != null && _right.OpenKey != "retinue") _right.Open("retinue");
+    }
 
     static string Len(int voxels)
     {
@@ -526,14 +546,14 @@ public partial class Hud : CanvasLayer
 
     public void Log(string text, Kind kind = Kind.Plain)
     {
-        if (_chronicle == null) return;
+        if (_toasts == null) return;
         var color = kind switch { Kind.Ok => Ornament.Moss, Kind.Warn => Ornament.BronzeLight, Kind.Bad => Ornament.Blood, _ => Ornament.Parchment };
-        var l = Text(text, Ornament.Serif, 15, color, wrap: true, outline: 6);
-        l.CustomMinimumSize = new Vector2(430, 0);
-        _chronicle.AddChild(l);
-        _chronicle.MoveChild(l, 0);
-        _lines.Insert(0, (l, _clock));
-        while (_lines.Count > 6) { _lines[^1].label.QueueFree(); _lines.RemoveAt(_lines.Count - 1); }
+        _toasts.Push(text, color);
+        // and into the chronicle's tab, newest on top
+        var l = Text(text, Ornament.Serif, 13, color, wrap: true);
+        _history.AddChild(l);
+        _history.MoveChild(l, 0);
+        while (_history.GetChildCount() > 80) _history.GetChild(_history.GetChildCount() - 1).QueueFree();
     }
 
     /// <summary>A short message that rises from the cursor and fades.</summary>
@@ -567,6 +587,10 @@ public partial class Hud : CanvasLayer
 
     /// <summary>The map control, for tests.</summary>
     public Minimap Map => _map;
+
+    /// <summary>Which tab is open on either side (null for none), for tests.</summary>
+    public string LeftOpen => _left?.OpenKey;
+    public string RightOpen => _right?.OpenKey;
 }
 
 /// <summary>An ornamental rule: horizontal between the belt's rows, vertical between its groups.</summary>
