@@ -104,6 +104,7 @@ public sealed partial class Sim
         Time += dt;
         TickWater(dt);
         TickGates(dt);
+        TickDecor();
         TickMines(dt);
         if (Nav.PendingEdits > 0) Nav.Flush();
         UpdateFields();

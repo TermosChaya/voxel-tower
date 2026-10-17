@@ -251,8 +251,8 @@ public sealed class VoxelWorld
     static bool Counts(byte m, int skip) => skip switch
     {
         0 => true,
-        1 => !Mat.IsVeg[m] && m != Mat.Water,
-        _ => !Mat.IsVeg[m] && m != Mat.Water && !Mat.IsPlayer[m],
+        1 => !Mat.IsVeg[m] && m != Mat.Water && !Mat.IsDecor[m],
+        _ => !Mat.IsVeg[m] && m != Mat.Water && !Mat.IsPlayer[m] && !Mat.IsDecor[m],
     };
 
     /// <summary>Writes a vertical run of one material straight into the chunk arrays (map generation).</summary>

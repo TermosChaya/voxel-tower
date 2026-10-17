@@ -269,6 +269,26 @@ public static class MapGen
         }
         var fallen = Free((int)EdgeX(rampN) + 34, rampN + 64, 20);
         Landmarks.Watchtower(w, site, fallen.x, fallen.z, "Обвалившаяся башня", seed + 7, .45);
+        // old stone bridges over the river: one carries the road, whole; one between the road and the north ford fell in
+        foreach (var (z0, whole, name) in new[] { ((int)roadCross, true, "Старый мост"), ((int)((roadCross + fords[1]) / 2), false, "Обрушенный мост") })
+        {
+            int bz = z0;
+            for (int tries = 0; tries < 8; tries++)
+            {
+                bool clear = true;
+                foreach (var l in site.Landmarks) if (Brushes.Dist(RiverX(bz) - l.X, bz - l.Z) < l.R + 50) clear = false;
+                if (clear) break;
+                bz += (tries % 2 == 0 ? 1 : -1) * (tries / 2 + 1) * 24;
+            }
+            if (bz < 60 || bz > SZ - 60) continue;
+            // from dry ground to dry ground, along the road where it is the road's
+            int xa = (int)RiverX(bz), xb = xa;
+            while (xa > 2 && water[bz * SX + xa] > 0) xa--;
+            while (xb < SX - 3 && water[bz * SX + xb] > 0) xb++;
+            xa -= 10; xb += 10;
+            int za = whole ? (int)Math.Round(RoadZ(xa)) : bz, zb = whole ? (int)Math.Round(RoadZ(xb)) : bz;
+            Landmarks.OldBridge(w, site, xa, za, xb, zb, name, whole, seed + (whole ? 8u : 9u));
+        }
 
         bool Clear(int x, int z)
         {

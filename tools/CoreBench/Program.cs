@@ -260,7 +260,7 @@ if (args.Length == 0 || args[0] == "--seeds")
                         if (ws.Get(x + sx, y, z + sz) == Mat.Air) open++;
             }
         int mines = ss.Landmarks.Count(l => l.Kind == LandmarkKind.Mine), ruins = ss.Landmarks.Count(l => l.Kind == LandmarkKind.Ruin);
-        Check($"seed {seed}: a whole valley", ss.KeepBase > 70 && open == 0 && mines == 3 && ruins == 4 && ss.Ponds.Count == 2,
+        Check($"seed {seed}: a whole valley", ss.KeepBase > 70 && open == 0 && mines == 3 && ruins == 6 && ss.Ponds.Count == 2,
             $"keep base {ss.KeepBase}, {open} open water faces, {mines} mines, {ruins} ruins, {ss.Ponds.Count} ponds");
     }
 }
@@ -582,7 +582,7 @@ if (args.Length == 0 || args[0] == "--sim")
         double g1 = sim.Stock.Gold;
         Run(60);
         double paid = sim.Stock.Gold - g1;
-        Check("workers sent to a mine take it, and it pays while it is ours", sim.Mines.Count == 3 && ruins == 4 && taken && paid > copper.Income * .9,
+        Check("workers sent to a mine take it, and it pays while it is ours", sim.Mines.Count == 3 && ruins == 6 && taken && paid > copper.Income * .9,
             $"{sim.Mines.Count} mines, {ruins} ruins; {copper.Name} {(taken ? "taken" : "not taken")}, +{paid:0.0} gold in a minute (pays {copper.Income})");
 
         // the vein: the ore showing in the adit, marked for the pick
@@ -918,6 +918,17 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--fort")
     Check("a new game finds the old fort round the citadel half in ruins", gate5 != null && gate5.Broken && whole0 > .55 && whole0 < .9 && sim5.Orders.Total == 0 && way,
         $"{Fmt.M3(meant5)} m³ as it was built, {whole0:P0} of it standing, gate off its hinges {gate5?.Broken}, a way in {way}, raised in {raiseMs} ms");
 
+    // what is left standing is dressed: torches inside, a banner on the tower, barrels and crates along the walls in the yard
+    int torches5 = sim5.Fixtures.Count(f => f.Kind == FixtureKind.Torch), banners5 = sim5.Fixtures.Count(f => f.Kind == FixtureKind.Banner);
+    int props5 = sim5.Fixtures.Count(f => f.Kind >= FixtureKind.Barrel);
+    var torch5 = sim5.Fixtures.Find(f => f.Kind == FixtureKind.Torch);
+    var (tax, tay, taz) = WaterPlanner.Unpack(torch5?.Anchor ?? 0);
+    if (torch5 != null) w5.Set(tax, tay, taz, Mat.Air);
+    Run5(2.5);
+    bool fell5 = torch5 != null && !sim5.Fixtures.Contains(torch5) && torch5.Voxels.TrueForAll(v => w5.Get(v.x, v.y, v.z) == Mat.Air);
+    Check("the fort is dressed by itself, and a torch goes with the stone it hung on", torches5 >= 4 && banners5 >= 1 && props5 >= 2 && fell5,
+        $"{torches5} torches, {banners5} banners, {props5} barrels, crates and sacks; the torch taken down with its stone {fell5}");
+
     // a click on the west wall: the whole fort is marked to be mended, rubble on it to be cleared first, the gate to be hung
     var fort = sim5.BuildingFrom(sim5.MeantNear(kx - 84, kb + 3, kz - 22));
     var lay6 = new VoxelList(); var clear6 = new VoxelList();
@@ -940,6 +951,79 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--fort")
     foreach (int p in fort) { var (x, y, z) = WaterPlanner.Unpack(p); if (w5.Get(x, y, z) == sim5.MeantAt(x, y, z)) exact++; }
     Check("…to what it was, the gate swinging again", standing7 >= meant7 - meant7 / 200 && exact >= fort.Count * 97 / 100 && gate5.Ready && !gate5.Broken,
         $"{standing7} of {meant7} standing, {exact} of {fort.Count} exactly as built, gate ready {gate5.Ready}");
+}
+
+// ---- bridges: the old ones over the river, one whole and one fallen in; mending the fallen one; one of our own
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bridges")
+{
+    Console.WriteLine();
+    var mp8 = new MapParams();
+    var w8 = new VoxelWorld(mp8.SizeX, mp8.SizeY, mp8.SizeZ);
+    var site8 = MapGen.Generate(w8, mp8);
+    w8.Compact();
+    var sim8 = new Sim(w8, site8);
+    sim8.Waves.Countdown = 1e9; sim8.WildTarget = 0;
+    void Run8(double seconds) { for (double t = 0; t < seconds; t += .05) sim8.Step(.05f); }
+    // the way from one end of a bridge to the other: over the deck (how high it goes over the water), or round, or none
+    (bool way, int cells, int highest) Across(Landmark l, int sx, int sz, int ex, int ez)
+    {
+        int a = sim8.NearestStand(sx, sz, 4), b = sim8.NearestStand(ex, ez, 4);
+        var walker = sim8.Spawn(Kinds.Worker, a);
+        bool ok = sim8.GoTo(walker, b, budget: 200000);
+        int n = ok ? walker.Path?.Count ?? 0 : 0, top = 0;
+        if (ok && walker.Path != null) foreach (int c in walker.Path) top = Math.Max(top, sim8.Nav.Floor[c]);
+        walker.Path = null; walker.Dead = true; walker.DiedAt = -999;
+        return (ok, n, top);
+    }
+    (int ax, int az, int bx, int bz) Ends(Landmark l)
+    {
+        // the bridge runs from bank to bank across the river: its ends are where its stone meets dry ground, west and east
+        int x0 = int.MaxValue, x1 = int.MinValue, za = l.Z, zb = l.Z;
+        for (int z = l.Z - l.R; z <= l.Z + l.R; z++)
+            for (int x = l.X - l.R; x <= l.X + l.R; x++)
+            {
+                if (!w8.InBounds(x, 0, z) || sim8.MeantAt(x, w8.SurfAt(x, z) - 1, z) == 0 && sim8.MeantAt(x, w8.SurfAt(x, z), z) == 0) continue;
+                if (x < x0) { x0 = x; za = z; }
+                if (x > x1) { x1 = x; zb = z; }
+            }
+        return (x0 + 4, za, x1 - 4, zb);
+    }
+    var whole = site8.Landmarks.Find(l => l.Name == "Старый мост");
+    var fallen = site8.Landmarks.Find(l => l.Name == "Обрушенный мост");
+    var (wa, wza, wb, wzb) = Ends(whole);
+    var over = Across(whole, wa, wza, wb, wzb);
+    Check("the old bridge carries the road over the river, arched", whole != null && over.way && over.highest > MapGen.RiverLevel + 6 && over.cells < (wb - wa) / 8 + 12,
+        $"from x {wa} to {wb}: way {over.way}, {over.cells} cells, deck up to {over.highest} over the river at {MapGen.RiverLevel}");
+    var (fa, fza, fb, fzb) = Ends(fallen);
+    var broken = Across(fallen, fa, fza, fb, fzb);
+    var span = sim8.BuildingFrom(sim8.MeantNear((fa + fb) / 2, MapGen.RiverLevel + 8, (fza + fzb) / 2));
+    if (span.Count == 0) span = sim8.MeantIn(fa - 8, Math.Min(fza, fzb) - 12, fb + 8, Math.Max(fza, fzb) + 12);
+    var lay8 = new VoxelList(); var clear8 = new VoxelList();
+    sim8.MendPlan(span, lay8, clear8);
+    sim8.InstantLabour = true;
+    sim8.Mend(lay8, clear8);
+    sim8.InstantLabour = false;
+    Run8(1);
+    var mended = Across(fallen, fa, fza, fb, fzb);
+    Check("the fallen bridge cannot be crossed; mended, it carries across again", fallen != null && (!broken.way || broken.cells > mended.cells + 20) && lay8.Count > 500 && mended.way && mended.highest > MapGen.RiverLevel + 6,
+        $"before: way {broken.way} in {broken.cells} cells; {lay8.Count} voxels laid again; after: {mended.cells} cells, deck up to {mended.highest}");
+
+    // a timber bridge of our own over the river, further south, laid by the workers from the banks
+    int bz8 = (int)(site8.KeepZ * 1.6);
+    int rx8 = 0;
+    for (int x = 40; x < 700; x++) if (site8.WaterTop[bz8 * w8.SX + x] > 0) { rx8 = x; break; }
+    int ex8 = rx8;
+    while (ex8 < w8.SX - 2 && site8.WaterTop[bz8 * w8.SX + ex8] > 0) ex8++;
+    int sa = rx8 - 10, sb = ex8 + 10;
+    var plan8 = Bridges.Plan(w8, site8, sa, bz8, sb, bz8, 10, Mat.Wood);
+    var before = Across(null, sa - 6, bz8, sb + 6, bz8);
+    sim8.DesignateBuild(plan8);
+    sim8.Stock[Stockpile.Wood] = 60 * VoxelWorld.PerM3;
+    for (int i = 0; i < 6; i++) sim8.Spawn(Kinds.Worker, sim8.NearestStand(sa - 12, bz8 + 4 * (i % 3), 4));
+    Run8(240);
+    var after = Across(null, sa - 6, bz8, sb + 6, bz8);
+    Check("workers lay a timber bridge of their own from the banks outward, and it carries across", plan8.Count > 1000 && sim8.Orders.BuildTotal < plan8.Count / 10 && after.way && after.highest > MapGen.RiverLevel + 4 && after.cells <= before.cells,
+        $"{plan8.Count} voxels over {sb - sa} of span at z {bz8}, {sim8.Orders.BuildTotal} left after 4 min; way across {before.cells} → {after.cells} cells, deck up to {after.highest}");
 }
 
 // voxels of water in the whole valley

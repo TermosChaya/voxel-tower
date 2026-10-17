@@ -87,6 +87,7 @@ public partial class Main : Node3D
         var atmo = new Atmosphere();
         AddChild(atmo);
         atmo.Build(World, Site, _calm || _shot != null);
+        atmo.Watch(Sim);
 
         View = new WorldView();
         AddChild(View);
@@ -468,8 +469,20 @@ public partial class Main : Node3D
         Check("a line with the pick marks a moat, straight along the grid", moat > 5000 && askew == 0,
             $"{moat} voxels, {askew} off the line x = {gx}, z {minZ}…{maxZ}");
         KeyPress(Key.N);
+        // a bridge thrown across the moat, arched over it, from bank to bank
+        KeyPress(Key.M);
+        Check("M picks up the bridge", Tools.Tool == Tool.Bridge && !Tools.Opt.Dig);
+        int bb0 = Sim.Orders.BuildTotal;
+        await Drag((620, 500), (668, 500));
+        int bridged = Sim.Orders.BuildTotal - bb0, deckMid = 0, deckEnd = 0;
+        for (int y = World.SY - 1; y > 0 && deckMid == 0; y--) if (Sim.Orders.At(643, y, 500) != 0) deckMid = y;
+        for (int y = World.SY - 1; y > 0 && deckEnd == 0; y--) if (Sim.Orders.At(626, y, 500) != 0) deckEnd = y;
+        Check("…a drag marks a bridge over the moat, higher in the middle", bridged > 1500 && deckMid > deckEnd + 2,
+            $"{bridged} voxels, deck at {deckMid} in the middle and {deckEnd} near the end");
         KeyPress(Key.Key6);
         Check("6 picks up the unmarking tool", Tools.Tool == Tool.Unmark);
+        await Drag((608, 486), (680, 514));
+        Check("a frame takes the bridge back", Sim.Orders.BuildTotal <= bb0 + 10, $"{Sim.Orders.BuildTotal - bb0} left of {bridged}");
         await Drag((630, 430), (652, 570));
         Check("a frame takes the marks back", Removals() <= r3 + 10, $"{Removals() - r3} left of {moat}");
 

@@ -183,6 +183,34 @@ public static class Icons
         Line(c, Shade(ink, .5f), S(r, .03f), P(r, .06f, .96f), P(r, .94f, .96f));
     }
 
+    /// <summary>A stone bridge arching over water, its parapet along the top.</summary>
+    public static void BridgeIcon(CanvasItem c, Rect2 r, Color ink)
+    {
+        var deck = new List<Vector2>();
+        var under = new List<Vector2>();
+        for (int i = 0; i <= 16; i++)
+        {
+            float t = i / 16f, a = MathF.Sin(MathF.PI * t);
+            deck.Add(P(r, .06f + .88f * t, .5f - .16f * a));
+            under.Add(P(r, .06f + .88f * t, .5f - .16f * a + .06f + .22f * (1 - a) * (1 - a)));
+        }
+        var body = new List<Vector2>(deck);
+        for (int i = under.Count - 1; i >= 0; i--) body.Add(under[i]);
+        Fill(c, Shade(ink, .62f), body.ToArray());
+        var arch = new List<Vector2>();
+        for (int i = 0; i <= 12; i++)
+        {
+            float a = MathF.PI * i / 12f;
+            arch.Add(P(r, .5f - .3f * MathF.Cos(a), .72f - .2f * MathF.Sin(a)));
+        }
+        Line(c, Shade(ink, .4f), S(r, .05f), arch.ToArray());
+        Line(c, ink, S(r, .06f), deck.ToArray());
+        var rail = new List<Vector2>();
+        foreach (var p in deck) rail.Add(p - new Vector2(0, S(r, .1f)));
+        Line(c, Shade(ink, .85f), S(r, .035f), rail.ToArray());
+        Line(c, Shade(ink, .45f), S(r, .03f), P(r, .06f, .86f), P(r, .3f, .82f), P(r, .5f, .87f), P(r, .72f, .82f), P(r, .94f, .86f));
+    }
+
     /// <summary>A trowel over a wall with a gap broken out of its top: mending.</summary>
     public static void Mend(CanvasItem c, Rect2 r, Color ink)
     {

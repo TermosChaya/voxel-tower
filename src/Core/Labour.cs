@@ -53,6 +53,9 @@ public static class Labour
         D(Mat.Gate, 2.5f, Stockpile.Wood, .75f); D(Mat.GateShut, 2.5f, Stockpile.Wood, .75f); D(Mat.GateOpen, 2.5f, Stockpile.Wood, .75f);
         // ore is hard and gives gold (see OreGold), old masonry comes apart like any
         D(Mat.Ore, 5, Stockpile.None, 0); D(Mat.Ruin, 2.5f, Stockpile.Stone, .75f);
+        // the dressing of the buildings comes away at a touch; casks and crates are a little timber
+        foreach (var m in new[] { Mat.Banner, Mat.BannerTrim, Mat.Sconce, Mat.Flame, Mat.Hoop, Mat.Sack }) D(m, .25f, Stockpile.None, 0);
+        foreach (var m in new[] { Mat.Cask, Mat.Crate, Mat.CrateEdge }) D(m, .5f, Stockpile.Wood, .3f);
         LayCost[Mat.Rammed] = 1; LayCost[Mat.Wood] = 1.5f;
         foreach (var m in new[] { Mat.Stone, Mat.Mortar, Mat.StoneDark, Mat.StoneLight }) LayCost[m] = 2;
         // a ladder is joinery: rails and rungs take longer than the logs they are made of; a gate more so

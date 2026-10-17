@@ -5,7 +5,7 @@ using VoxelTower.Core;
 
 namespace VoxelTower.Game;
 
-public enum Tool { None, Brush, Line, Box, Circle, Extrude, Ladder, Gate, Repair, Gather, Unmark, Capture, Paste }
+public enum Tool { None, Brush, Line, Box, Circle, Extrude, Ladder, Gate, Repair, Bridge, Gather, Unmark, Capture, Paste }
 
 public enum BrushForm { Column, Ball }
 
@@ -51,7 +51,7 @@ public partial class BuildTools : Node3D
     public static string ToolName(Tool t) => t switch
     {
         Tool.Brush => "Кисть", Tool.Line => "Линия", Tool.Box => "Прямоугольник", Tool.Circle => "Круг",
-        Tool.Extrude => "Выдавить", Tool.Ladder => "Лестница", Tool.Gate => "Ворота", Tool.Repair => "Починка", Tool.Gather => "Делянка", Tool.Unmark => "Снять разметку", Tool.Capture => "Снять чертёж",
+        Tool.Extrude => "Выдавить", Tool.Ladder => "Лестница", Tool.Gate => "Ворота", Tool.Repair => "Починка", Tool.Bridge => "Мост", Tool.Gather => "Делянка", Tool.Unmark => "Снять разметку", Tool.Capture => "Снять чертёж",
         Tool.Paste => "Чертёж", _ => "Без кисти",
     };
 
@@ -70,6 +70,7 @@ public partial class BuildTools : Node3D
         (Tool.Ladder, _) => "Щёлкните по боковой грани стены, башни или обрыва — рабочие приставят лестницу от земли до верха. По ней ходят ваши пешки… и орда, если доберётся.",
         (Tool.Gate, _) => "Щёлкните по боковой грани стены — рабочие прорубят в ней проём и навесят ворота: створки внутри, со стороны цитадели. Своим они открываются сами, орде их придётся рубить.",
         (Tool.Repair, _) => "Щёлкните по разрушенной постройке — рабочие вернут ей прежний вид: разберут завал, доложат недостающее, навесят ворота. Рамкой — чинить только то, что в ней.",
+        (Tool.Bridge, _) => "Зажмите на одном берегу и протяните до другого: рабочие перекинут арочный мост — каменный (Z) или деревянный (X). Строят от берегов, стоя на уложенном. [ и ] — ширина прохода.",
         (Tool.Gather, _) => "Протяните рамку — участок для добычи. Z — камень из скал и валунов, X — лес, C — земля. Свободные рабочие сами понемногу берут оттуда работу.",
         (Tool.Unmark, _) => "Протяните рамку — вся разметка и делянки в ней снимаются. Щелчок снимает разметку поблизости и делянку под курсором.",
         (Tool.Capture, _) => "Обведите рамкой свою постройку — она станет чертежом.",
@@ -198,6 +199,8 @@ public partial class BuildTools : Node3D
     public void SetTool(Tool t)
     {
         Tool = Tool == t ? Tool.None : t;
+        // these only build
+        if (Tool is Tool.Bridge or Tool.Repair or Tool.Gate or Tool.Ladder) Opt.Dig = false;
         if (Tool != Tool.Paste) PasteBp = null;
         _lmb = _paint = _hasStart = false;
         _planKey = "~";
@@ -223,7 +226,7 @@ public partial class BuildTools : Node3D
     public void SetDig(bool dig)
     {
         Opt.Dig = dig;
-        if (dig && Tool is Tool.None or Tool.Capture or Tool.Unmark or Tool.Paste or Tool.Ladder or Tool.Gate or Tool.Repair or Tool.Gather) { Tool = Tool.Line; PasteBp = null; }
+        if (dig && Tool is Tool.None or Tool.Capture or Tool.Unmark or Tool.Paste or Tool.Ladder or Tool.Gate or Tool.Repair or Tool.Bridge or Tool.Gather) { Tool = Tool.Line; PasteBp = null; }
         Changed();
     }
 
@@ -261,7 +264,7 @@ public partial class BuildTools : Node3D
     public void SetGrid(int step) { Opt.Grid = step; if (step > 0) Opt.GridLast = step; Changed(); }
 
     /// <summary>Strokes of this tool start and end on the grid while snapping is on.</summary>
-    bool Snapping => Opt.Grid > 0 && Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather or Tool.Repair or Tool.Paste;
+    bool Snapping => Opt.Grid > 0 && Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather or Tool.Repair or Tool.Paste or Tool.Bridge;
 
     /// <summary>
     /// A point moved to the nearest node of the grid, which runs from the citadel's middle: what is drawn on it comes
@@ -352,6 +355,7 @@ public partial class BuildTools : Node3D
             case global::Godot.Key.F: ToggleForm(); return true;
             case global::Godot.Key.G: ToggleLevel(); return true;
             case global::Godot.Key.N: ToggleGrid(); return true;
+            case global::Godot.Key.M: SetTool(Tool.Bridge); return true;
             case global::Godot.Key.R when Tool == Tool.Paste: PasteRot = (PasteRot + 1) & 3; Changed(); return true;
         }
         return false;
@@ -390,10 +394,11 @@ public partial class BuildTools : Node3D
             if (_strokeVox > 0) _m.Hud.Log($"{(dig ? "Копать" : ToolName(Tool))}: {Summary(_strokeEst, dig, _strokeSec)}");
             return;
         }
-        if (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather or Tool.Repair)
+        if (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather or Tool.Repair or Tool.Bridge)
         {
             if (click && Tool == Tool.Unmark) { UnmarkAt(); return; }
             if (click && Tool == Tool.Repair) { RepairAt(); return; }
+            if (click && Tool == Tool.Bridge) { Refuse("протяните мост от берега до берега"); return; }
             if (click && Tool == Tool.Gather) { Refuse("протяните рамку по участку"); return; }
             if (click && dig && _hasTree) { FellTree(); return; }
             if (!_hasStart || !(_hasDrag || _hasHover)) return;
@@ -408,6 +413,7 @@ public partial class BuildTools : Node3D
             }
             if (Tool == Tool.Gather) { SetZone(a, b); return; }
             if (Tool == Tool.Repair) { RepairIn(a, b); return; }
+            if (Tool == Tool.Bridge && BridgeRefusal(a, b) is { } why) { Refuse(why); return; }
             Designate(PlanDrag(a, b, dig), dig, ToolName(Tool));
             return;
         }
@@ -597,9 +603,22 @@ public partial class BuildTools : Node3D
             Tool.Line => Shapes.Line(w, site, a.x, a.z, b.x, b.z, st, _level),
             Tool.Box => Shapes.Box(w, site, a.x, a.z, b.x, b.z, st, _level),
             Tool.Circle => Shapes.Circle(w, site, a.x, a.z, Radius(a, b), st, _level),
+            Tool.Bridge => Bridges.Plan(w, site, a.x, a.z, b.x, b.z, Opt.Width, BridgeMat),
             _ => null,
         };
         return dig ? Shapes.WithTrees(_m.World, plan) : plan;
+    }
+
+    /// <summary>Bridges are of stone or of timber; earth in hand means stone.</summary>
+    byte BridgeMat => Opt.Material == Mat.Wood ? Mat.Wood : Mat.Stone;
+
+    /// <summary>Why a bridge cannot go from A to B, or null.</summary>
+    static string BridgeRefusal((int x, int y, int z) a, (int x, int y, int z) b)
+    {
+        double span = Brushes.Dist(b.x - a.x, b.z - a.z);
+        if (span < Bridges.MinSpan) return "мост короче двух метров не нужен";
+        if (span > Bridges.MaxSpan) return $"пролёт длиннее {Bridges.MaxSpan / VoxelWorld.PerMetre} м не выстоит";
+        return null;
     }
 
     /// <summary>A circle's radius from its middle to the cursor; on the grid, in whole half-steps.</summary>
@@ -739,6 +758,13 @@ public partial class BuildTools : Node3D
                 _hasDrag = true;
             }
         }
+        if (_lmb && _hasStart && Tool == Tool.Bridge && _hasHover)
+        {
+            // a bridge ends on the far bank, whatever its height: the ground under the cursor, not the plane it began on
+            _dragPt = HoverGround();
+            if (Snapping) _dragPt = Straighten(_startPt, _dragPt);
+            _hasDrag = true;
+        }
         HoverGate = _hasHover && Mat.IsLeaf(_hover.M) ? _m.Sim.GateAt(_hover.X, _hover.Y, _hover.Z) : null;
         HoverPlace = null;
         if (_hasHover)
@@ -868,7 +894,7 @@ public partial class BuildTools : Node3D
         bool dig = DigNow;
         string opts = $"{dig}|{Opt.Material}|{Opt.Width}|{Opt.Height}|{Opt.Depth}|{Opt.Step}|{Opt.Level}|{Opt.Hollow}|{Opt.Form}|{_rev}|{stock}";
         string key = "";
-        bool dragging = Tool is Tool.Line or Tool.Box or Tool.Circle && _lmb && _hasStart && _hasDrag;
+        bool dragging = Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Bridge && _lmb && _hasStart && _hasDrag;
         if (Tool == Tool.Gather)
         {
             // a gathering area shows what it holds, no ghost
@@ -912,6 +938,7 @@ public partial class BuildTools : Node3D
             key = Tool switch
             {
                 Tool.Line or Tool.Box or Tool.Circle => $"L|{g}",
+                Tool.Bridge => $"G|{g}",
                 Tool.Brush when Opt.Form == BrushForm.Column => $"C|{g}|{(_paint ? _level : -1)}",
                 Tool.Brush => $"B|{h}",
                 Tool.Extrude => $"E|{h}",
@@ -935,7 +962,14 @@ public partial class BuildTools : Node3D
         var stroke = StrokeNow();
         int lv = Shapes.Level(w, gp.x, gp.z, stroke);
         if (key[0] == 'T') { _plan = Shapes.Tree(w, _tree.X, _tree.Y, _tree.Z); name = "Срубить дерево"; }
+        else if (dragging && Tool == Tool.Bridge)
+        {
+            if (BridgeRefusal(_startPt, _dragPt) is { } why) { _ghost.Visible = false; PlanText = "Мост: " + why; PlanAffordable = false; return; }
+            _plan = PlanDrag(_startPt, _dragPt, false);
+            dig = false;
+        }
         else if (dragging) _plan = PlanDrag(_startPt, _dragPt, dig);
+        else if (Tool == Tool.Bridge) { _ghost.Visible = false; PlanText = null; return; }
         else if (Tool is Tool.Line or Tool.Box or Tool.Circle)
         {
             _plan = Shapes.Line(w, site, gp.x, gp.z, gp.x, gp.z, stroke, lv);

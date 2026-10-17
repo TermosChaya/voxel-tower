@@ -85,7 +85,7 @@ public static class Brushes
     public static readonly WallProfile[] Profiles = { Palisade, StoneWall, Rampart, EarthBank };
 
     /// <summary>Masonry may go here: air, plants, or water it pushes aside.</summary>
-    internal static bool Free(byte cur) => cur == Mat.Air || Mat.IsVeg[cur] || cur == Mat.Water;
+    internal static bool Free(byte cur) => cur == Mat.Air || Mat.IsVeg[cur] || cur == Mat.Water || Mat.IsDecor[cur];
 
     /// <summary>Clears grass and branches sitting on top of a new column.</summary>
     internal static void ClearVegAbove(VoxelWorld w, VoxelList L, int x, int z, int from)

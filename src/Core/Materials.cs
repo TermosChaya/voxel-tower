@@ -34,11 +34,15 @@ public static class Mat
         StoneDark = 30, StoneLight = 31;
     /// <summary>More of the world, past the figures' colours: grass of other shades, flowers, birch bark.</summary>
     public const byte GrassDry = 54, GrassLush = 55, Flower = 56, Bloom = 57, Birch = 58, KeepShade = 59;
-    public const int Count = 64;
+    /// <summary>What dresses the buildings by itself: banners, torches in their sconces, barrels, crates and sacks in the yards.</summary>
+    public const byte Banner = 60, BannerTrim = 61, Sconce = 62, Flame = 63, Cask = 64, Hoop = 65, Crate = 66, CrateEdge = 67, Sack = 68;
+    public const int Count = 80;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
     public static readonly bool[] IsVeg = new bool[Count], IsPlayer = new bool[Count], IsEarthy = new bool[Count],
         IsNatural = new bool[Count], IsAnchor = new bool[Count];
+    /// <summary>The dressing of the buildings: whatever is built or laid where it stands simply takes its place.</summary>
+    public static readonly bool[] IsDecor = new bool[Count];
     /// <summary>A body passes through it: leaves, grass, ladders and water. Nothing is hacked out of the way for these.</summary>
     public static readonly bool[] Passable = new bool[Count];
     /// <summary>Ladders: bodies hang on them and climb.</summary>
@@ -47,7 +51,7 @@ public static class Mat
     public static readonly float[] Lin = new float[Count * 3];
     public static readonly float[] Variance = new float[Count], Emission = new float[Count];
 
-    const int Natural = 1, Player = 2, Earthy = 4, Glows = 8;
+    const int Natural = 1, Player = 2, Earthy = 4, Glows = 8, Decor = 16;
 
     static Mat()
     {
@@ -94,6 +98,15 @@ public static class Mat
         D(Flower, "Цветы", 0xb09a46, .30f, MatGroup.Earth, Natural | Earthy);
         D(Bloom, "Цветы", 0x7c5a84, .30f, MatGroup.Earth, Natural | Earthy);
         D(Birch, "Берёза", 0xcfc8b8, .22f, MatGroup.Wood, Natural);
+        D(Banner, "Стяг", 0x2f4d7a, .1f, MatGroup.Wood, Decor);
+        D(BannerTrim, "Стяг", 0xb8913e, .1f, MatGroup.Wood, Decor);
+        D(Sconce, "Факел", 0x2a2a30, .08f, MatGroup.Wood, Decor);
+        D(Flame, "Факел", 0xff8a3a, .35f, MatGroup.Wood, Decor | Glows);
+        D(Cask, "Бочка", 0x5c3e27, .16f, MatGroup.Wood, Decor);
+        D(Hoop, "Бочка", 0x323238, .1f, MatGroup.Wood, Decor);
+        D(Crate, "Ящик", 0x6e5134, .14f, MatGroup.Wood, Decor);
+        D(CrateEdge, "Ящик", 0x47311f, .12f, MatGroup.Wood, Decor);
+        D(Sack, "Мешки", 0x8c7c5b, .14f, MatGroup.Wood, Decor);
 
         D(SkinHuman, "кожа", 0xc29878, .08f, MatGroup.Hard, 0); D(SkinGoblin, "кожа", 0x6d8a39, .12f, MatGroup.Hard, 0);
         D(SkinOrc, "кожа", 0x56673f, .12f, MatGroup.Hard, 0); D(SkinTroll, "кожа", 0x66705f, .16f, MatGroup.Hard, 0);
@@ -109,7 +122,7 @@ public static class Mat
         D(Belly, "мех", 0xcdbb9c, .1f, MatGroup.Hard, 0);
 
         foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage, Flower, Bloom, Birch }) IsVeg[m] = true;
-        foreach (var m in new[] { Leaf, Tuft, Foliage, Ladder, SiegeLadder, Water, Flower, Bloom }) Passable[m] = true;
+        foreach (var m in new[] { Leaf, Tuft, Foliage, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame }) Passable[m] = true;
         IsLadder[Ladder] = IsLadder[SiegeLadder] = true;
         // what holds the world up: loose pieces resting on these never fall
         foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank }) IsAnchor[m] = true;
@@ -122,6 +135,7 @@ public static class Mat
         IsPlayer[id] = (flags & Player) != 0;
         IsEarthy[id] = (flags & Earthy) != 0;
         IsNatural[id] = (flags & Natural) != 0;
+        IsDecor[id] = (flags & Decor) != 0;
         Lin[id * 3] = ToLinear((srgb >> 16) & 255);
         Lin[id * 3 + 1] = ToLinear((srgb >> 8) & 255);
         Lin[id * 3 + 2] = ToLinear(srgb & 255);

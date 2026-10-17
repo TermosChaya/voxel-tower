@@ -209,6 +209,8 @@ public static class StartingFort
             w.Set(rx, ry, rz, m);
         }
         if (gate != null) sim.UnhangGate(gate);
+        // what is left standing keeps its torches, its banner and what lies about the yard
+        sim.Decorate();
         sim.Nav.Flush();
         sim.FortArea = (x0 - TowerR - 4, z0 - TowerR - 4, x1 + 4, z1 + TowerR + 4);
         sim.FortGate = gate;

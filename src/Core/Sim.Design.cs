@@ -26,7 +26,10 @@ public sealed partial class Sim
     /// <summary>Remembers a voxel of a building. Gate leaves are the gate's own business: it mends them itself.</summary>
     public void Remember(int x, int y, int z, byte m)
     {
-        if (Mat.IsLeaf(m) || m == Mat.SiegeLadder || !World.InBounds(x, y, z) || Design.Get(x, y, z) == m) return;
+        if (Mat.IsLeaf(m) || m == Mat.SiegeLadder || !World.InBounds(x, y, z)) return;
+        // laid, or laid again: worth dressing once it is done
+        DecorDirty(x, y, z);
+        if (Design.Get(x, y, z) == m) return;
         Design.SetRaw(x, y, z, m);
         DesignRev++;
     }

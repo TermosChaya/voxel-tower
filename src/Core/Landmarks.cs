@@ -191,6 +191,45 @@ public static class Landmarks
         return l;
     }
 
+    /// <summary>
+    /// An old stone bridge over the river, weathered and mossy, arched from bank to bank. One whose middle fell in lies
+    /// broken over the water, its stones on the riverbed below; mended, it carries the road across again.
+    /// </summary>
+    public static Landmark OldBridge(VoxelWorld w, Site s, int ax, int az, int bx, int bz, string name, bool whole, uint seed)
+    {
+        var plan = Bridges.Plan(w, s, ax, az, bx, bz, 12, Mat.Stone);
+        double dx = bx - ax, dz = bz - az, span = Math.Sqrt(dx * dx + dz * dz);
+        var noise = new ValueNoise(seed * 67 + 5);
+        for (int i = 0; i < plan.Count; i++)
+        {
+            int x = plan.X(i), y = plan.Y(i), z = plan.Z(i);
+            if (plan.M(i) == 0) continue;
+            Meant(s, x, y, z);
+            double t = ((x + .5 - ax - .5) * dx + (z + .5 - az - .5) * dz) / (span * span);
+            if (!whole && Math.Abs(t - .5) < .16 + .07 * noise.Sample(x * .2, y * .2 + z * .2))
+            {
+                // fallen: a stone or two of it lies on the riverbed below
+                if (Hash.H3(x * 3 + y, z, 87) < .07)
+                {
+                    int yy = y;
+                    while (yy > 1 && Brushes.Free(w.Get(x, yy - 1, z))) yy--;
+                    w.SetRaw(x, yy, z, Mat.Ruin);
+                }
+                continue;
+            }
+            w.SetRaw(x, y, z, Mat.Ruin);
+        }
+        // moss on what the rain falls on
+        for (int i = 0; i < plan.Count; i++)
+        {
+            int x = plan.X(i), y = plan.Y(i), z = plan.Z(i);
+            if (w.Get(x, y, z) == Mat.Ruin && Brushes.Free(w.Get(x, y + 1, z)) && Hash.H3(x, y, z * 7) < .22) w.SetRaw(x, y, z, Mat.Moss);
+        }
+        var l = new Landmark { Kind = LandmarkKind.Ruin, Name = name, X = (ax + bx) / 2, Z = (az + bz) / 2, R = (int)(span / 2) + 10 };
+        s.Landmarks.Add(l);
+        return l;
+    }
+
     /// <summary>A few small houses with their roofs long gone: low walls, doorways, a fallen gable.</summary>
     public static Landmark Houses(VoxelWorld w, Site s, int cx, int cz, string name, uint seed)
     {

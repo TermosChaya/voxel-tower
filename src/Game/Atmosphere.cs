@@ -89,6 +89,40 @@ public partial class Atmosphere : Node3D
         if (!calm) { _embers = Embers(); AddChild(_embers); }
     }
 
+    readonly Dictionary<Fixture, OmniLight3D> _sconces = new();
+    VoxelWorld _w;
+
+    /// <summary>Lights the torches the buildings dress themselves with, as they are set up and taken down.</summary>
+    public void Watch(Sim sim)
+    {
+        _w = sim.World;
+        foreach (var f in sim.Fixtures) Lit(f);
+        sim.FixtureAdded += Lit;
+        sim.FixtureRemoved += f =>
+        {
+            if (!_sconces.Remove(f, out var l)) return;
+            _torches.RemoveAll(t => t.light == l);
+            l.QueueFree();
+        };
+    }
+
+    void Lit(Fixture f)
+    {
+        if (f.Kind != FixtureKind.Torch || _sconces.ContainsKey(f)) return;
+        var l = new OmniLight3D
+        {
+            LightColor = new Color("ff8a3a"),
+            LightEnergy = 1.6f,
+            OmniRange = 3.2f,
+            OmniAttenuation = 1.6f,
+            ShadowEnabled = false,
+            Position = new Vector3(_w.WX(f.LX), _w.WY(f.LY), _w.WZ(f.LZ)),
+        };
+        AddChild(l);
+        _sconces[f] = l;
+        _torches.Add((l, f.LX * .37f + f.LZ * .11f));
+    }
+
     /// <summary>Ash and sparks rising slowly over the field.</summary>
     static GpuParticles3D Embers()
     {
@@ -138,6 +172,9 @@ public partial class Atmosphere : Node3D
         if (_embers != null && Follow != null) { var t0 = Follow.Target; _embers.Position = new Vector3(t0.X, 9, t0.Y); }
         float t = _calm ? 0 : (float)_t;
         foreach (var (l, ph) in _torches)
-            l.LightEnergy = 2.4f * (.8f + .22f * MathF.Sin(t * 9 + ph) + .1f * MathF.Sin(t * 23 + ph * 2));
+        {
+            float base0 = _sconces.Count > 0 && l.OmniRange < 4 ? 1.6f : 2.4f;
+            l.LightEnergy = base0 * (.8f + .22f * MathF.Sin(t * 9 + ph) + .1f * MathF.Sin(t * 23 + ph * 2));
+        }
     }
 }

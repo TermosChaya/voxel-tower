@@ -53,7 +53,7 @@ public static class Raycast
         for (int s = 0; s < limit; s++)
         {
             byte m = w.Get(x, y, z);
-            if (m != 0 && !(skipVeg && Mat.IsVeg[m]))
+            if (m != 0 && !(skipVeg && (Mat.IsVeg[m] || Mat.IsDecor[m])))
             {
                 hit = new VoxelHit { X = x, Y = y, Z = z, NX = nx, NY = ny, NZ = nz, M = m };
                 return true;

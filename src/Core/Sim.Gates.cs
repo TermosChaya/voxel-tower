@@ -135,7 +135,7 @@ public sealed class GatePlan
         {
             var (x, y, z) = g.Place(i, 0);
             byte m = w.Get(x, y, z);
-            if (m == 0 || Mat.IsVeg[m] || Mat.Passable[m]) plan.Leaves.Add(x, y, z, Mat.Gate);
+            if (m == 0 || Mat.IsVeg[m] || Mat.Passable[m] || Mat.IsDecor[m]) plan.Leaves.Add(x, y, z, Mat.Gate);
         }
         if (plan.Leaves.Count < Gateway.Voxels / 2) return null;
         return plan;
