@@ -35,7 +35,7 @@ public partial class Debris : MultiMeshInstance3D
     float R(float a, float b) => a + (float)_rnd.NextDouble() * (b - a);
 
     /// <summary>Throws n bits of material m from a voxel position.</summary>
-    public void Spawn(byte m, int vx, int vy, int vz, int n, float speed)
+    public void Spawn(byte m, int vx, int vy, int vz, int n, float speed, float size = 1)
     {
         var at = new Vector3(_w.WX(vx + .5f), _w.WY(vy + .5f), _w.WZ(vz + .5f));
         float shade = R(.75f, 1.1f);
@@ -48,7 +48,7 @@ public partial class Debris : MultiMeshInstance3D
                 Pos = at,
                 Vel = new Vector3(R(-1, 1) * speed, R(.3f, 1.2f) * speed * 1.3f, R(-1, 1) * speed),
                 Life = R(1.2f, 2.4f),
-                Size = VoxelWorld.Vox * R(.8f, 1.6f),
+                Size = VoxelWorld.Vox * size * R(.8f, 1.6f),
                 Rx = R(0, 6), Ry = R(0, 6),
                 C = c,
             };

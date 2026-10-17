@@ -141,6 +141,7 @@ public partial class Main : Node3D
         Sim.Mined = (x, y, z, m) => { if (Random.Shared.NextDouble() < .045) Debris.Spawn(m, x, y, z, 1, 1.3f); };
         Sim.Hacked = (x, y, z, m) => { if (Random.Shared.NextDouble() < .16) Debris.Spawn(m, x, y, z, 1, 1.8f); };
         Sim.Raised = (x, y, z, m) => { if (Random.Shared.NextDouble() < .05) Debris.Spawn(m, x, y, z, 1, .8f); };
+        Sim.Splashed = (x, y, z, n) => Debris.Spawn(Mat.Blood, (int)x, (int)y, (int)z, Math.Clamp(n / 3, 1, 6), 1.1f, .4f);
 
         // the household the siege finds at the citadel, the beasts of the valley, and the horde's camp at a mine
         foreach (var t in new[] { Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Archer, Kinds.Swordsman }) Sim.Spawn(t, Sim.Gate);
@@ -162,7 +163,7 @@ public partial class Main : Node3D
         GD.Print($"[voxel-tower] world {genMs:0} ms, navigation {navMs:0} ms, mesh {View.LastFullMeshMs:0} ms, {View.Triangles()} triangles");
 
         if (_demo) Demo();
-        if (_look >= 0 && _look < Site.Landmarks.Count)
+        if (_look >= 0 && _look < Site.Landmarks.Count && !_demo)
         {
             var l = Site.Landmarks[_look];
             Rig.Set(World.WX(l.X), World.WZ(l.Z), -.7f, .6f, 2.4f, snap: true);
@@ -580,6 +581,7 @@ public partial class Main : Node3D
     void Demo()
     {
         if (_pose == "battle") { Siege(); return; }
+        if (_pose == "wounds") { Wounded(); return; }
         if (_pose == "flood") { Flood(); return; }
         var w = World; var s = Site; var sim = Sim;
         sim.Waves.Countdown = Waves.Prep;
@@ -721,6 +723,47 @@ public partial class Main : Node3D
         Hud.Refresh();
         Marks.Flush();
         foreach (var u in archers) Selected.Add(u);
+    }
+
+    /// <summary>A row of the hurt for a close look: an arm cut off, arrows stuck in, a head split, a goblin cut down.</summary>
+    void Wounded()
+    {
+        var sim = Sim;
+        sim.Waves.Countdown = 1e9;
+        int kx = Site.KeepX, kz = Site.KeepZ;
+        Unit Put(UnitType t, int dx, int dz)
+        {
+            var u = sim.Spawn(t, sim.NearestStand(kx + dx, kz + dz, 4));
+            u.Facing = MathF.PI * .75f;
+            sim.Command(new[] { u }, u.Cell);
+            return u;
+        }
+        var (sc, sd, sr) = Sim.WeaponOf(Kinds.Swordsman);
+        var (bc, bd, _) = Sim.WeaponOf(Kinds.Archer);
+        var (ac, ad, ar) = Sim.WeaponOf(Kinds.Orc);
+        float sin = MathF.Sin(MathF.PI * .75f), cos = MathF.Cos(MathF.PI * .75f);
+        // a point and a direction in a body's own frame, out into the world
+        (float, float, float) W(Unit u, float lx, float ly, float lz) => (u.X + lx * sin + lz * cos, u.Y + ly, u.Z - lx * cos + lz * sin);
+        (float, float, float) D(float lx, float ly, float lz) => (lx * sin + lz * cos, ly, -lx * cos + lz * sin);
+        void Blow(Unit u, Sim.Cut c, float depth, float reach, (float x, float y, float z) from, (float x, float y, float z) dir) => sim.Wound(u, c, depth, reach, from.x, from.y, from.z, dir.x, dir.y, dir.z);
+        var armless = Put(Kinds.Worker, -70, -20);
+        Blow(armless, sc, sd, sr, W(armless, -14, 7.5f, 0), D(1, 0, 0));
+        var pierced = Put(Kinds.Swordsman, -70, -4);
+        foreach (var (y, x) in new[] { (9f, 1f), (6.5f, -1f), (12.5f, .5f) }) Blow(pierced, bc, bd, 0, W(pierced, x, y, 20), D(0, -.1f, -1));
+        var hewn = Put(Kinds.Orc, -70, 12);
+        Blow(hewn, ac, ad, ar, W(hewn, 0, 14, 16), D(0, 0, -1));
+        Blow(hewn, sc, sd, sr, W(hewn, 16, 9, 0), D(-1, 0, 0));
+        var gob = Put(Kinds.Goblin, -70, 26);
+        Blow(gob, sc, sd, sr, W(gob, -12, 4, 0), D(1, 0, 0));
+        Blow(gob, sc, sd, sr, W(gob, 0, 2, 12), D(0, 0, -1));
+        Advance(_poseSeconds > 0 && _poseSeconds < 14 ? _poseSeconds : 1.5);
+        var look = _look >= 0 && _look < 4 ? new[] { armless, pierced, hewn, gob }[_look] : null;
+        float mx = look?.X ?? (armless.X + pierced.X + hewn.X + gob.X) / 4, mz = look?.Z ?? (armless.Z + pierced.Z + hewn.Z + gob.Z) / 4;
+        // the camera looks at a plane 4 m up: the ground here is higher, so look past it by as much
+        const float yaw = -.55f, pitch = .5f;
+        float over = (World.WY(armless.Y + 8) - 4) / MathF.Tan(pitch);
+        Rig.Set(World.WX(mx) - MathF.Sin(yaw) * over, World.WZ(mz) - MathF.Cos(yaw) * over, yaw, pitch, look != null ? 7.5f : 3.6f, snap: true);
+        Hud.Refresh();
     }
 
     /// <summary>

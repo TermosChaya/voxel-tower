@@ -68,7 +68,16 @@ public sealed partial class Sim
     void Strike(Unit a, Unit b)
     {
         a.Swing = 1;
-        Hurt(b, a, a.T.Damage * (.8f + (float)Rng.NextDouble() * .4f));
+        // the blow comes from the striker's hand at the height it holds its weapon, at a spot on the body near that height
+        var (cut, depth, reach) = WeaponOf(a.T);
+        float sa = a.Leader ? 1.15f : 1, sb = b.Leader ? 1.15f : 1;
+        float hand = a.Y + a.T.BodyH * sa * (a.T.Team == Team.Wild ? .3f : .62f);
+        float aim = Math.Clamp(hand + (float)(Rng.NextDouble() - .45) * b.T.BodyH * sb * .5f, b.Y + 1, b.Y + b.T.BodyH * sb - .5f);
+        float side = (float)(Rng.NextDouble() - .5) * b.T.BodyR * 1.6f;
+        float dx = b.X - a.X, dz = b.Z - a.Z, l = MathF.Max(.01f, MathF.Sqrt(dx * dx + dz * dz));
+        float tx = b.X - dz / l * side, tz = b.Z + dx / l * side;
+        float share = Wound(b, cut, depth, reach, a.X, hand, a.Z, tx - a.X, aim - hand, tz - a.Z);
+        Hurt(b, a, a.T.Damage * (.8f + (float)Rng.NextDouble() * .4f) * share);
     }
 
     public void Hurt(Unit b, Unit by, float dmg, string cause = null)
@@ -122,7 +131,7 @@ public sealed partial class Sim
     bool HuntTick(Unit u, float dt)
     {
         var p = u.Prey;
-        if (p == null || p.Dead || Dist(u, p) > 70 * 16) { u.Prey = null; u.Path = null; return false; }
+        if (p == null || p.Dead || Dist(u, p) > 70 * 16 || !Armed(u)) { u.Prey = null; u.Path = null; return false; }
         u.State = UnitState.Fight;
         if (u.T.Ranged ? Dist(u, p) <= u.T.Range && Sight(u, p) : InReach(u, p))
         {
@@ -248,7 +257,22 @@ public sealed partial class Sim
             a.T += dt;
             if (a.T < a.Dur || a.Done) continue;
             a.Done = true;
-            if (a.Hits && a.Target != null && !a.Target.Dead) { ShotHits++; Hurt(a.Target, a.From, a.Damage, "стрела"); }
+            if (a.Hits && a.Target != null && !a.Target.Dead)
+            {
+                ShotHits++;
+                // the arrow comes in along its flight, at a spot on the body where it was going
+                var t = a.Target;
+                float st = t.Leader ? 1.15f : 1;
+                // coming down at the end of its arc (it rose a tenth of the way it flew)
+                float dx = a.X1 - a.X0, dz = a.Z1 - a.Z0, dy = a.Y1 - a.Y0 - .4f * MathF.Sqrt(dx * dx + dz * dz);
+                float hy = t.Y + t.T.BodyH * st * (.25f + (float)Rng.NextDouble() * .7f);
+                float side = (float)(Rng.NextDouble() - .5) * t.T.BodyR * 1.4f, l = MathF.Max(.01f, MathF.Sqrt(dx * dx + dz * dz));
+                float tx = t.X - dz / l * side, tz = t.Z + dx / l * side;
+                float dl = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
+                var (cut, depth, _) = WeaponOf(a.From?.T ?? Kinds.Archer);
+                float share = Wound(t, cut, depth, 0, tx - dx / dl * 30, hy - dy / dl * 30, tz - dz / dl * 30, dx, dy, dz);
+                Hurt(t, a.From, a.Damage * share, "стрела");
+            }
         }
         Arrows.RemoveAll(a => a.Done && a.T > a.Dur + 1.5f);
     }

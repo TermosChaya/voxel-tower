@@ -116,6 +116,8 @@ public sealed class Unit
 {
     public int Id;
     public UnitType T;
+    /// <summary>Which of its kind's looks it has (<see cref="Bodies"/>).</summary>
+    public int Look;
     public Team Team => T.Team;
     public float X, Y, Z, Facing;
     public int Cell;
@@ -163,6 +165,8 @@ public sealed class Unit
     public Mine Raid;
     public Warband Band;
     public bool Leader;
+    /// <summary>Its body once it has been hurt (what blows carved out of it, what still works); null while it is whole.</summary>
+    public BodyState Wounds;
 
     // the horde hacking its way
     public int CarveCell = -1;

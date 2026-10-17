@@ -1075,6 +1075,91 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bands")
     static int Rank9(UnitType t) => t == Kinds.Troll ? 5 : t == Kinds.Orc ? 4 : t == Kinds.Miner ? 3 : t == Kinds.Goblin ? 2 : 1;
 }
 
+// ---- bodies of voxels: a skeleton inside, blows carving out what they strike, limbs cut off, vital wounds, bleeding
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bodies")
+{
+    Console.WriteLine();
+    // every kind in every look: whole on the outside, the body's insides hidden under the skin
+    int looks = 0, showing = 0;
+    foreach (var t in Kinds.PlayerKinds.Concat(Kinds.HordeKinds).Concat(Kinds.WildKinds))
+        for (int l = 0; l < Bodies.Looks(t); l++)
+        {
+            var plan = Bodies.Plan(t, l);
+            looks++;
+            foreach (var g in plan.Grid)
+            {
+                if (g == null) continue;
+                for (int i = 0; i < g.M.Length; i++)
+                {
+                    if (g.T[i] is not ((byte)Tissue.Flesh or (byte)Tissue.Bone or (byte)Tissue.Brain or (byte)Tissue.Heart)) continue;
+                    int x = i % g.SX + g.X0, z = i / g.SX % g.SZ + g.Z0, y = i / (g.SX * g.SZ) + g.Y0;
+                    if (g.Mat(x + 1, y, z) == 0 || g.Mat(x - 1, y, z) == 0 || g.Mat(x, y + 1, z) == 0 || g.Mat(x, y - 1, z) == 0 || g.Mat(x, y, z + 1) == 0 || g.Mat(x, y, z - 1) == 0) showing++;
+                }
+            }
+        }
+    var man = Bodies.Plan(Kinds.Worker, 0);
+    Check("bodies in every look have a skull with a brain, a heart behind ribs, and none of it shows", looks > 30 && showing == 0 && man.Brain > 20 && man.Heart > 4,
+        $"{looks} looks, {showing} inner voxels on the surface; a man: {man.Brain} of brain, {man.Heart} of heart");
+
+    var mpB = new MapParams();
+    var wB = new VoxelWorld(mpB.SizeX, mpB.SizeY, mpB.SizeZ);
+    var siteB = MapGen.Generate(wB, mpB);
+    wB.Compact();
+    var simB = new Sim(wB, siteB);
+    simB.Waves.Countdown = 1e9; simB.WildTarget = 0;
+    void RunB(double seconds) { for (double t = 0; t < seconds; t += .05) simB.Step(.05f); }
+    Unit Stand(UnitType t, int dx, int dz)
+    {
+        var u = simB.Spawn(t, simB.NearestStand(siteB.KeepX + dx, siteB.KeepZ + dz, 4));
+        u.Facing = 0;
+        simB.Command(new[] { u }, u.Cell);
+        return u;
+    }
+    int Voxels(Unit u) { int n = 0; var parts = u.Wounds?.Grid ?? Bodies.Plan(u.T, u.Look).Grid; foreach (var g in parts) if (g != null) n += g.Count; return n; }
+    // facing +x, its right hand side is +z: a sword comes at the right arm from that side, at the elbow
+    var hewn = Stand(Kinds.Worker, 120, 40);
+    int remnants0 = simB.Remnants.Count, blows = 0;
+    var (sCut, sDepth, sReach) = Sim.WeaponOf(Kinds.Swordsman);
+    while (Sim.HasMainHand(hewn) && blows < 5) { blows++; simB.Wound(hewn, sCut, sDepth, sReach, hewn.X, hewn.Y + 7.5f, hewn.Z + 14, 0, 0, -1); }
+    var piece = simB.Remnants.Count > remnants0 ? simB.Remnants[^1] : null;
+    float hp0 = hewn.Hp;
+    simB.ReleaseHold(new[] { hewn });
+    RunB(6);
+    Check("a sword cuts a man's right arm off: the arm falls, he cannot work or fight with it, and he bleeds", !Sim.HasMainHand(hewn) && piece != null && piece.From == BodyPart.Main
+        && !Sim.Armed(hewn) && hewn.Hp < hp0 - 2 && hewn.Why.StartsWith("без руки"),
+        $"{blows} blows, a piece of {piece?.Grid.Count} half-voxels from the {piece?.From}, hp {hp0:0} → {hewn.Hp:0} in 6 s, \"{hewn.Why}\"; {string.Join(", ", hewn.Wounds?.Wounds ?? new())}");
+
+    // an axe at the face splits the head; an arrow in the chest finds the heart
+    var split = Stand(Kinds.Worker, 120, 60);
+    var (aCut, aDepth, aReach) = Sim.WeaponOf(Kinds.Orc);
+    for (int i = 0; i < 3 && !split.Dead; i++) simB.Wound(split, aCut, aDepth, aReach, split.X + 16, split.Y + 12, split.Z, -1, 0, 0);
+    var shot = Stand(Kinds.Worker, 120, 80);
+    var (bCut, bDepth, _) = Sim.WeaponOf(Kinds.Archer);
+    for (int i = 0; i < 3 && !shot.Dead; i++) simB.Wound(shot, bCut, bDepth, 0, shot.X + 20, shot.Y + 8.75f, shot.Z - .75f, -1, 0, 0);
+    RunB(12);
+    Check("an axe at the face splits the head; an arrow in the chest pierces the heart, and he bleeds out", split.Dead && shot.Dead,
+        $"head: {string.Join(", ", split.Wounds?.Wounds ?? new())}, dead {split.Dead}; chest: {string.Join(", ", shot.Wounds?.Wounds ?? new())}, dead {shot.Dead}");
+
+    // mail turns much of a blade that bites deep into cloth and flesh: the same blow across the back of fresh men
+    int pc = 0, mc = 0;
+    for (int i = 0; i < 4; i++)
+    {
+        var plain = Stand(Kinds.Worker, 140 + i * 12, 40);
+        var mailed = Stand(Kinds.Swordsman, 140 + i * 12, 60);
+        simB.Wound(plain, sCut, sDepth, sReach, plain.X - 14, plain.Y + 8.5f, plain.Z, 1, 0, 0); pc += simB.LastCut;
+        simB.Wound(mailed, sCut, sDepth, sReach, mailed.X - 14, mailed.Y + 8.5f, mailed.Z, 1, 0, 0); mc += simB.LastCut;
+    }
+    Check("mail turns much of a blade that bites deep into a smock", pc > mc * 1.5f, $"{pc} half-voxels cut out of four workers, {mc} out of four swordsmen in mail");
+
+    // a goblin with its knife hand cut off gives up and drags itself back west
+    var gob = simB.Spawn(Kinds.Goblin, simB.NearestStand(siteB.KeepX - 300, siteB.KeepZ, 2));
+    gob.Facing = 0;
+    for (int i = 0; i < 5 && Sim.HasMainHand(gob); i++) simB.Wound(gob, sCut, sDepth, sReach, gob.X, gob.Y + 4, gob.Z + 12, 0, 0, -1);
+    float gx0 = gob.X;
+    RunB(12);
+    Check("a goblin with its knife hand cut off drags itself back west", !Sim.HasMainHand(gob) && (gob.X < gx0 - 16 || gob.Dead), $"hand {Sim.HasMainHand(gob)}, x {gx0:0} → {gob.X:0}, {gob.State}");
+}
+
 // voxels of water in the whole valley
 static long WaterIn(VoxelWorld w)
 {

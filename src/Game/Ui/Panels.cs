@@ -246,6 +246,24 @@ public partial class Retinue : OrnatePanel
     public static string Doing(Unit u, Sim sim)
     {
         if (u.Dead) return u.Team == Team.Wild ? "добыт" : "пал";
+        string hurt = Hurt(u);
+        string what = DoingNow(u, sim);
+        return hurt == "" ? what : what + " · " + hurt;
+    }
+
+    /// <summary>"отрублена правая рука, истекает кровью", or nothing for one unhurt.</summary>
+    public static string Hurt(Unit u)
+    {
+        var w = u.Wounds;
+        if (w == null) return "";
+        var parts = new List<string>(w.Wounds);
+        if (w.Bleed > .8f) parts.Add("истекает кровью");
+        else if (w.Bleed > .15f) parts.Add("кровоточит");
+        return string.Join(", ", parts);
+    }
+
+    static string DoingNow(Unit u, Sim sim)
+    {
         if (u.PushCell >= 0) return "сбрасывает лестницу";
         if (sim.Climbing(u)) return "лезет по лестнице";
         if (u.Team == Team.Wild)
@@ -255,6 +273,7 @@ public partial class Retinue : OrnatePanel
             {
                 UnitState.Carve => "прорубает дорогу", UnitState.Siege => "бьёт в цитадель", UnitState.Fight => "бьётся",
                 UnitState.Work => u.Building switch { Works.Ladder => "ставит лестницу", Works.Bridge => "кладёт мост", Works.Fill => "засыпает ров", _ => "строит" },
+                UnitState.Flee => "уползает прочь",
                 _ => "идёт к цитадели",
             };
         if (u.Prey is { Dead: false } prey) return (prey.Team == Team.Wild ? "охотится: " : "атакует: ") + prey.T.Name.ToLowerInvariant();

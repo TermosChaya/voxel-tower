@@ -159,11 +159,11 @@ public sealed partial class Sim
         {
             var b = Bands[i];
             if (b.State == BandState.Coming) continue;
-            if (b.Leader == null || b.Leader.Dead)
+            if (b.Leader == null || b.Leader.Dead || !Armed(b.Leader))
             {
                 Unit next = null;
                 foreach (var u in b.Members)
-                    if (!u.Dead && (next == null || Rank(u.T) > Rank(next.T) || Rank(u.T) == Rank(next.T) && u.Hp > next.Hp)) next = u;
+                    if (!u.Dead && Armed(u) && (next == null || Rank(u.T) > Rank(next.T) || Rank(u.T) == Rank(next.T) && u.Hp > next.Hp)) next = u;
                 if (next == null)
                 {
                     if (b.Spawned >= b.Roster.Count) Bands.RemoveAt(i);

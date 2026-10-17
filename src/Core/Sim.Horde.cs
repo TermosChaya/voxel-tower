@@ -104,13 +104,15 @@ public sealed partial class Sim
     {
         _goalSet ??= new HashSet<int>(Goals);
         var foe = Nearest(u, Team.Player, u.T.Reach + 8);
-        if (foe != null && InReach(u, foe))
+        if (foe != null && InReach(u, foe) && Armed(u))
         {
             u.State = UnitState.Fight;
             u.Facing = MathF.Atan2(foe.Z - u.Z, foe.X - u.X);
             if (u.Cooldown <= 0) { Strike(u, foe); u.Cooldown = u.T.AttackTime * (.9f + (float)Rng.NextDouble() * .2f); }
             return;
         }
+        // nothing left to fight with: back west and out of the valley
+        if (!Armed(u)) { StopCarve(u); StopBuild(u); Retreat(u, dt); return; }
         if (u.Guard) { GuardTick(u, dt); return; }
         // a band gathers where it came in before it sets out
         if (u.Band is { State: BandState.Forming }) { u.State = UnitState.Idle; return; }
@@ -147,6 +149,23 @@ public sealed partial class Sim
         u.Path ??= new List<int>();
         u.Path.Clear(); u.Path.Add(next); u.PathI = 0;
         Walk(u, dt);
+    }
+
+    /// <summary>A raider that can no longer fight drags itself back west and is gone from the valley.</summary>
+    void Retreat(Unit u, float dt)
+    {
+        u.Raid = null;
+        if (u.X < Site.SpawnStrip) { u.Dead = true; u.DiedAt = -999; u.State = UnitState.Dead; return; }
+        if (u.Path == null || u.PathI >= u.Path.Count)
+        {
+            u.State = UnitState.Idle;
+            if (Time < u.NextSearch) return;
+            u.NextSearch = Time + 2;
+            int c = NearestStand(Site.SpawnStrip / 2, (int)u.Z, u.T.Move.Height);
+            if (c < 0 || !GoTo(u, c, adjacent: true, budget: 40000)) return;
+        }
+        Walk(u, dt);
+        u.State = UnitState.Flee;
     }
 
     /// <summary>Lists the voxels in the way into the next cell (and above its head when climbing), nearest first.</summary>

@@ -69,13 +69,14 @@ public sealed partial class Sim
 
     void PawnTick(Unit u, float dt)
     {
-        bool soldier = u.T.Work < 1, fighter = soldier || u.Militia;
+        // one that has lost the hand it fights with (or, with a bow, either hand) runs like a worker
+        bool soldier = u.T.Work < 1, fighter = (soldier || u.Militia) && Armed(u);
         // a swordsman beside a siege ladder throws it down before anything else, climbers and all
-        if (soldier && !u.T.Ranged && PushLadders(u, dt)) { Busy(u); return; }
+        if (soldier && !u.T.Ranged && HasMainHand(u) && PushLadders(u, dt)) { Busy(u); return; }
         if (fighter && Fight(u, dt)) { Busy(u); ReleaseSite(u); return; }
         if (!fighter && Flee(u, dt)) { Busy(u); return; }
         if (u.Prey != null && HuntTick(u, dt)) { Busy(u); return; }
-        if (soldier && PushLadders(u, dt)) { Busy(u); return; }
+        if (soldier && HasMainHand(u) && PushLadders(u, dt)) { Busy(u); return; }
         if (u.Path != null && u.PathI < u.Path.Count && (u.Hold || u.Site < 0) && u.Pastime != Pastime.Stroll) { Walk(u, dt); return; }
         if (u.Hold)
         {
@@ -102,6 +103,14 @@ public sealed partial class Sim
 
     void WorkTick(Unit u, float dt)
     {
+        // no hand to hold a tool with: no work
+        if (!HasMainHand(u))
+        {
+            ReleaseSite(u);
+            u.Why = "без руки: работать не может";
+            Idle(u, dt, stay: false);
+            return;
+        }
         if (u.Site < 0)
         {
             u.State = UnitState.Idle;
@@ -383,7 +392,7 @@ public sealed partial class Sim
             u.State = UnitState.Idle; u.Path = null;
             return false;
         }
-        if (InReach(u, foe))
+        if (InReach(u, foe) && Armed(u))
         {
             // caught: hit back
             u.State = UnitState.Fight;

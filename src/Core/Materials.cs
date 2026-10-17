@@ -36,7 +36,10 @@ public static class Mat
     public const byte GrassDry = 54, GrassLush = 55, Flower = 56, Bloom = 57, Birch = 58, KeepShade = 59;
     /// <summary>What dresses the buildings by itself: banners, torches in their sconces, barrels, crates and sacks in the yards.</summary>
     public const byte Banner = 60, BannerTrim = 61, Sconce = 62, Flame = 63, Cask = 64, Hoop = 65, Crate = 66, CrateEdge = 67, Sack = 68;
-    public const int Count = 80;
+    /// <summary>Inside the bodies, and more colours for them: never placed in the world.</summary>
+    public const byte Flesh = 80, Brain = 81, Heart = 82, Blood = 83, HairBrown = 84, HairGinger = 85, HairGrey = 86, SkinTan = 87,
+        SkinPale = 88, SkinGoblinDark = 89, SkinGoblinPale = 90, SkinOrcGrey = 91, ClothGreen = 92, ClothBrown = 93, ClothOchre = 94, Straw = 95;
+    public const int Count = 96;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
     public static readonly bool[] IsVeg = new bool[Count], IsPlayer = new bool[Count], IsEarthy = new bool[Count],
@@ -120,6 +123,14 @@ public static class Mat
         D(FurDeer, "шерсть", 0x7a5232, .14f, MatGroup.Hard, 0); D(FurBoar, "щетина", 0x3b2e27, .2f, MatGroup.Hard, 0);
         D(FurHare, "мех", 0x86745f, .14f, MatGroup.Hard, 0); D(Hoof, "копыто", 0x221c1a, .06f, MatGroup.Hard, 0);
         D(Belly, "мех", 0xcdbb9c, .1f, MatGroup.Hard, 0);
+        D(Flesh, "плоть", 0x7a1d1a, .18f, MatGroup.Hard, 0); D(Brain, "мозг", 0xa8676c, .14f, MatGroup.Hard, 0);
+        D(Heart, "сердце", 0x5c0d10, .12f, MatGroup.Hard, 0); D(Blood, "кровь", 0x4c0909, .12f, MatGroup.Hard, 0);
+        D(HairBrown, "волосы", 0x4a2f1e, .12f, MatGroup.Hard, 0); D(HairGinger, "волосы", 0x8e4a20, .12f, MatGroup.Hard, 0);
+        D(HairGrey, "волосы", 0x8d8984, .1f, MatGroup.Hard, 0); D(SkinTan, "кожа", 0xa47758, .08f, MatGroup.Hard, 0);
+        D(SkinPale, "кожа", 0xd6b298, .08f, MatGroup.Hard, 0); D(SkinGoblinDark, "кожа", 0x52702c, .12f, MatGroup.Hard, 0);
+        D(SkinGoblinPale, "кожа", 0x8c9c54, .12f, MatGroup.Hard, 0); D(SkinOrcGrey, "кожа", 0x5c6457, .12f, MatGroup.Hard, 0);
+        D(ClothGreen, "сукно", 0x344a2e, .14f, MatGroup.Hard, 0); D(ClothBrown, "сукно", 0x5c4430, .14f, MatGroup.Hard, 0);
+        D(ClothOchre, "сукно", 0x8c6a2a, .14f, MatGroup.Hard, 0); D(Straw, "солома", 0xab9352, .2f, MatGroup.Hard, 0);
 
         foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage, Flower, Bloom, Birch }) IsVeg[m] = true;
         foreach (var m in new[] { Leaf, Tuft, Foliage, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame }) Passable[m] = true;

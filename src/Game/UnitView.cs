@@ -24,15 +24,25 @@ public partial class UnitView : Node3D
     /// <summary>What the view remembers of a unit between frames: smoothed facing and how fast it is moving.</summary>
     sealed class Look { public float Face, Move, LastX, LastZ; public bool Seen; public Transform3D Body; }
 
+    /// <summary>A hurt body drawn on its own: a mesh of what is left of each part, made again after every wound.</summary>
+    sealed class Own { public readonly MeshInstance3D[] Parts = new MeshInstance3D[Figure.Parts]; public int Rev = -1; }
+
+    /// <summary>A piece cut off a body, falling and then lying where it fell.</summary>
+    sealed class Fallen { public MeshInstance3D Node; public Transform3D From, To; public double At; }
+
     Main _m;
     VoxelWorld _w;
     ShaderMaterial _mat;
-    readonly Dictionary<UnitType, Kind> _kinds = new();
+    readonly Dictionary<BodyPlan, Kind> _kinds = new();
     readonly Dictionary<int, Look> _looks = new();
     readonly HashSet<int> _alive = new();
     readonly List<int> _gone = new();
-    MultiMeshInstance3D _arrows, _rings, _standards;
-    float[] _arrowBuf = Array.Empty<float>(), _ringBuf = Array.Empty<float>(), _standardBuf = Array.Empty<float>();
+    MultiMeshInstance3D _arrows, _rings, _standards, _stuck;
+    float[] _arrowBuf = Array.Empty<float>(), _ringBuf = Array.Empty<float>(), _standardBuf = Array.Empty<float>(), _stuckBuf = Array.Empty<float>();
+    readonly Dictionary<int, Own> _own = new();
+    readonly List<Fallen> _fallen = new();
+    readonly Transform3D[] _xf = new Transform3D[Figure.Parts];
+    readonly Random _rnd = new(5);
     double _t;
 
     static readonly Aabb Everywhere = new(new Vector3(-100, -10, -100), new Vector3(200, 60, 200));
@@ -42,13 +52,12 @@ public partial class UnitView : Node3D
         _m = m;
         _w = m.World;
         _mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/voxel.gdshader") };
-        foreach (var t in Kinds.PlayerKinds) Add(t);
-        foreach (var t in Kinds.HordeKinds) Add(t);
-        foreach (var t in Kinds.WildKinds) Add(t);
 
         // an arrow is 70 cm long, a little under five voxels
         var shaft = new BoxMesh { Size = new Vector3(.022f, .022f, .35f), Material = new StandardMaterial3D { AlbedoColor = new Color("4a3424"), Roughness = .9f } };
         _arrows = Multi(shaft, null, false);
+        _stuck = Multi(shaft, null, false);
+        m.Sim.Severed += Fall;
         var ring = new TorusMesh { InnerRadius = .82f, OuterRadius = 1f, Rings = 32, RingSegments = 4 };
         var ringMat = new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, VertexColorUseAsAlbedo = true, AlbedoColor = Colors.White };
         _rings = Multi(ring, ringMat, true);
@@ -58,12 +67,16 @@ public partial class UnitView : Node3D
         _standards = Multi(cube, new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = .9f, CullMode = BaseMaterial3D.CullModeEnum.Disabled }, true);
     }
 
-    void Add(UnitType t)
+    /// <summary>The figures of one kind in one look, added the first time someone of that look turns up.</summary>
+    Kind KindOf(Unit u)
     {
-        var k = new Kind { Fig = Figure.For(t), Parts = new MultiMeshInstance3D[Figure.Parts] };
+        var plan = Bodies.Plan(u.T, u.Look);
+        if (_kinds.TryGetValue(plan, out var k)) return k;
+        k = new Kind { Fig = Figure.For(plan), Parts = new MultiMeshInstance3D[Figure.Parts] };
         for (int p = 0; p < Figure.Parts; p++)
             if (k.Fig.Mesh[p] != null) k.Parts[p] = Multi(k.Fig.Mesh[p], _mat, true);
-        _kinds[t] = k;
+        _kinds[plan] = k;
+        return k;
     }
 
     MultiMeshInstance3D Multi(Mesh mesh, Material mat, bool colors)
@@ -93,23 +106,36 @@ public partial class UnitView : Node3D
         float dt = (float)Math.Min(delta, .1);
         _t += dt;
         var sim = _m.Sim;
+        look_xf.Clear();
         foreach (var k in _kinds.Values) k.Count = 0;
-        foreach (var u in sim.Units) if (_kinds.TryGetValue(u.T, out var k)) k.Count++;
+        foreach (var u in sim.Units) if (u.Wounds == null) KindOf(u).Count++;
         foreach (var k in _kinds.Values) { if (k.Count > k.Cap) Grow(k, k.Count); k.Count = 0; }
         _alive.Clear();
         foreach (var u in sim.Units)
         {
-            if (!_kinds.TryGetValue(u.T, out var k)) continue;
+            var k = KindOf(u);
             _alive.Add(u.Id);
             if (!_looks.TryGetValue(u.Id, out var look)) _looks[u.Id] = look = new Look();
             Track(u, look, dt);
-            Pose(u, k, look, k.Count++);
+            var tint = Pose(u, k.Fig, look);
+            if (u.Wounds == null)
+            {
+                int o = k.Count++ * 16;
+                for (int p = 0; p < Figure.Parts; p++) Write(k, (Part)p, o, _xf[p], tint);
+            }
+            else DrawOwn(u);
         }
         foreach (var k in _kinds.Values) Upload(k);
         _gone.Clear();
         foreach (int id in _looks.Keys) if (!_alive.Contains(id)) _gone.Add(id);
-        foreach (int id in _gone) _looks.Remove(id);
+        foreach (int id in _gone)
+        {
+            _looks.Remove(id);
+            if (_own.Remove(id, out var own)) foreach (var n in own.Parts) n?.QueueFree();
+        }
         DrawArrows(sim);
+        DrawStuck(sim);
+        DrawFallen(dt);
         DrawRings();
         DrawStandards(sim);
     }
@@ -141,9 +167,9 @@ public partial class UnitView : Node3D
     }
 
     /// <summary>Works out the joints for this frame and writes the part transforms of one figure.</summary>
-    void Pose(Unit u, Kind k, Look look, int slot)
+    /// <summary>Works out the joints for this frame: the part transforms go to _xf, the tint is returned.</summary>
+    Color Pose(Unit u, Figure f, Look look)
     {
-        var f = k.Fig;
         float legR = 0, legL = 0, main = f.Carry, off = 0, lean = 0, bob = 0, fall = 0, sink = 0;
         float seed = u.Id * .618f;
         if (u.Dead)
@@ -232,13 +258,113 @@ public partial class UnitView : Node3D
         var body = root * Swing(f, Part.Body, lean);
         look.Body = body;
         var tint = Tint(u);
-        int o = slot * 16;
-        Write(k, Part.Body, o, body, tint);
         var arms = f.Beast ? root : body;
-        Write(k, Part.Main, o, arms * Swing(f, Part.Main, main), tint);
-        Write(k, Part.Off, o, arms * Swing(f, Part.Off, off), tint);
-        Write(k, Part.LegR, o, root * Swing(f, Part.LegR, legR), tint);
-        Write(k, Part.LegL, o, root * Swing(f, Part.LegL, legL), tint);
+        _xf[(int)Part.Body] = body;
+        _xf[(int)Part.Main] = arms * Swing(f, Part.Main, main);
+        _xf[(int)Part.Off] = arms * Swing(f, Part.Off, off);
+        _xf[(int)Part.LegR] = root * Swing(f, Part.LegR, legR);
+        _xf[(int)Part.LegL] = root * Swing(f, Part.LegL, legL);
+        return tint;
+    }
+
+    /// <summary>A hurt body: what is left of each part, meshed again whenever it is wounded, posed like any other.</summary>
+    void DrawOwn(Unit u)
+    {
+        var w = u.Wounds;
+        if (!_own.TryGetValue(u.Id, out var own)) _own[u.Id] = own = new Own();
+        if (own.Rev != w.Rev)
+        {
+            own.Rev = w.Rev;
+            for (int p = 0; p < Figure.Parts; p++)
+            {
+                var mesh = Figure.MeshOf(w.Grid[p]);
+                if (own.Parts[p] == null && mesh != null)
+                {
+                    own.Parts[p] = new MeshInstance3D { MaterialOverride = _mat, CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
+                    AddChild(own.Parts[p]);
+                }
+                if (own.Parts[p] != null) { own.Parts[p].Mesh = mesh; own.Parts[p].Visible = mesh != null; }
+            }
+        }
+        for (int p = 0; p < Figure.Parts; p++) if (own.Parts[p] != null) own.Parts[p].Transform = _xf[p];
+        // for the arrows stuck in it
+        for (int p = 0; p < Figure.Parts; p++) look_xf[u.Id * Figure.Parts + p] = _xf[p];
+    }
+
+    // where each part of a hurt body was drawn this frame, for the arrows in it: by unit and part
+    readonly Dictionary<int, Transform3D> look_xf = new();
+
+    /// <summary>Arrows stuck where they went in, most of the shaft out.</summary>
+    void DrawStuck(Sim sim)
+    {
+        var mm = _stuck.Multimesh;
+        int n = 0;
+        foreach (var u in sim.Units) if (u.Wounds != null) n += u.Wounds.Arrows.Count;
+        if (n == 0) { mm.VisibleInstanceCount = 0; return; }
+        if (mm.InstanceCount < n) { mm.InstanceCount = Math.Max(16, n * 2); _stuckBuf = new float[mm.InstanceCount * 12]; }
+        int i = 0;
+        foreach (var u in sim.Units)
+        {
+            if (u.Wounds == null) continue;
+            foreach (var (part, x, y, z, dx, dy, dz) in u.Wounds.Arrows)
+            {
+                if (!look_xf.TryGetValue(u.Id * Figure.Parts + (int)part, out var px)) continue;
+                var d = new Vector3(dx, dy, dz).Normalized();
+                var side = Vector3.Up.Cross(d);
+                side = side.LengthSquared() < 1e-6f ? Vector3.Right : side.Normalized();
+                var up = d.Cross(side);
+                // the shaft is drawn in world units: undo the figure's voxel scale
+                float k = 1 / VoxelWorld.Vox;
+                var t = px * new Transform3D(new Basis(side * k, up * k, d * k), new Vector3(x, y, z) - d * 2.2f);
+                int o = i++ * 12;
+                _stuckBuf[o] = t.Basis.X.X; _stuckBuf[o + 1] = t.Basis.Y.X; _stuckBuf[o + 2] = t.Basis.Z.X; _stuckBuf[o + 3] = t.Origin.X;
+                _stuckBuf[o + 4] = t.Basis.X.Y; _stuckBuf[o + 5] = t.Basis.Y.Y; _stuckBuf[o + 6] = t.Basis.Z.Y; _stuckBuf[o + 7] = t.Origin.Y;
+                _stuckBuf[o + 8] = t.Basis.X.Z; _stuckBuf[o + 9] = t.Basis.Y.Z; _stuckBuf[o + 10] = t.Basis.Z.Z; _stuckBuf[o + 11] = t.Origin.Z;
+            }
+        }
+        RenderingServer.MultimeshSetBuffer(mm.GetRid(), _stuckBuf);
+        mm.VisibleInstanceCount = i;
+    }
+
+    /// <summary>A piece comes off a body: it drops from where it was and lies down on the ground beside it.</summary>
+    void Fall(Remnant r)
+    {
+        var mesh = Figure.MeshOf(r.Grid);
+        if (mesh == null) return;
+        var node = new MeshInstance3D { Mesh = mesh, MaterialOverride = _mat, CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
+        AddChild(node);
+        var at = new Vector3(_w.WX(r.X), _w.WY(r.Y), _w.WZ(r.Z));
+        var basis = new Basis(Vector3.Up, MathF.PI / 2 - r.Facing).Scaled(Vector3.One * VoxelWorld.Vox * r.Scale);
+        var from = new Transform3D(basis, at);
+        // where it comes down: tipped over, a little off, its lowest voxels on the ground
+        float y0 = r.Grid.Y0 / (float)BodyPlan.Sub, y1 = (r.Grid.Y0 + r.Grid.SY) / (float)BodyPlan.Sub;
+        float mid = (y0 + y1) / 2, side = (float)(_rnd.NextDouble() - .5) * 8, turn = (float)(_rnd.NextDouble() * Math.PI * 2);
+        var spin = new Basis(Vector3.Up, turn) * new Basis(Vector3.Right, MathF.PI / 2 * (_rnd.NextDouble() < .5 ? 1 : -1));
+        int gx = (int)(r.X + MathF.Cos(turn) * side), gz = (int)(r.Z + MathF.Sin(turn) * side);
+        float ground = _w.SurfAt(Math.Clamp(gx, 0, _w.SX - 1), Math.Clamp(gz, 0, _w.SZ - 1));
+        var to = new Transform3D(spin.Scaled(Vector3.One * VoxelWorld.Vox * r.Scale), new Vector3(_w.WX(gx), _w.WY(ground + 1), _w.WZ(gz)))
+            * new Transform3D(Basis.Identity, new Vector3(0, -mid, 0));
+        _fallen.Add(new Fallen { Node = node, From = from, To = to, At = _m.Sim.Time });
+        node.Transform = from;
+    }
+
+    void DrawFallen(float dt)
+    {
+        double now = _m.Sim.Time;
+        for (int i = _fallen.Count - 1; i >= 0; i--)
+        {
+            var f = _fallen[i];
+            float t = (float)(now - f.At);
+            if (t > 75) { f.Node.QueueFree(); _fallen.RemoveAt(i); continue; }
+            // half a second down, a bounce of a tumble; long after, it sinks into the ground
+            float k = Math.Clamp(t / .5f, 0, 1);
+            var o = f.From.Origin.Lerp(f.To.Origin, k) + Vector3.Up * MathF.Sin(k * MathF.PI) * .12f;
+            float scale = f.From.Basis.X.Length();
+            var q = f.From.Basis.Orthonormalized().GetRotationQuaternion().Slerp(f.To.Basis.Orthonormalized().GetRotationQuaternion(), k);
+            var b = new Basis(q).Scaled(Vector3.One * scale);
+            if (t > 60) o += Vector3.Down * (t - 60) * .02f;
+            f.Node.Transform = new Transform3D(b, o);
+        }
     }
 
     /// <summary>How a pawn holds itself while passing the time: sitting, talking with its hands, stretching, warming its hands, shading its eyes.</summary>
