@@ -40,20 +40,21 @@ public static class Labour
     static Labour()
     {
         void D(byte m, float dig, int kind, float share) { DigCost[m] = dig; Kind[m] = (byte)kind; Share[m] = share; }
-        foreach (var m in new[] { Mat.Soil, Mat.Grass, Mat.Path, Mat.Tuft }) D(m, 1, Stockpile.Earth, 1);
+        foreach (var m in new[] { Mat.Soil, Mat.Grass, Mat.GrassDry, Mat.GrassLush, Mat.Path, Mat.Tuft, Mat.Flower, Mat.Bloom }) D(m, 1, Stockpile.Earth, 1);
         D(Mat.Rammed, 1, Stockpile.Earth, 1);
         D(Mat.Rock, 4, Stockpile.Stone, 1); D(Mat.Moss, 4, Stockpile.Stone, 1);
-        D(Mat.Stone, 2.5f, Stockpile.Stone, .75f); D(Mat.Mortar, 2.5f, Stockpile.Stone, .75f);
+        foreach (var m in new[] { Mat.Stone, Mat.Mortar, Mat.StoneDark, Mat.StoneLight }) D(m, 2.5f, Stockpile.Stone, .75f);
         // the voxel trunks are drawn thinner than real ones: a voxel of trunk stands for six of timber,
         // and needles and leaves give a little brushwood
-        D(Mat.Trunk, 2, Stockpile.Wood, 6); D(Mat.Wood, 2, Stockpile.Wood, .75f);
+        D(Mat.Trunk, 2, Stockpile.Wood, 6); D(Mat.Birch, 2, Stockpile.Wood, 6); D(Mat.Wood, 2, Stockpile.Wood, .75f);
         D(Mat.Leaf, .25f, Stockpile.Wood, .15f); D(Mat.Foliage, .25f, Stockpile.Wood, .15f);
         // ladders come apart quickly, and what the horde leaves behind is timber too
         D(Mat.Ladder, 1, Stockpile.Wood, .75f); D(Mat.SiegeLadder, .5f, Stockpile.Wood, .75f); D(Mat.Deck, 1.5f, Stockpile.Wood, .75f);
         D(Mat.Gate, 2.5f, Stockpile.Wood, .75f); D(Mat.GateShut, 2.5f, Stockpile.Wood, .75f); D(Mat.GateOpen, 2.5f, Stockpile.Wood, .75f);
         // ore is hard and gives gold (see OreGold), old masonry comes apart like any
         D(Mat.Ore, 5, Stockpile.None, 0); D(Mat.Ruin, 2.5f, Stockpile.Stone, .75f);
-        LayCost[Mat.Rammed] = 1; LayCost[Mat.Wood] = 1.5f; LayCost[Mat.Stone] = 2; LayCost[Mat.Mortar] = 2;
+        LayCost[Mat.Rammed] = 1; LayCost[Mat.Wood] = 1.5f;
+        foreach (var m in new[] { Mat.Stone, Mat.Mortar, Mat.StoneDark, Mat.StoneLight }) LayCost[m] = 2;
         // a ladder is joinery: rails and rungs take longer than the logs they are made of; a gate more so
         LayCost[Mat.Ladder] = 6;
         LayCost[Mat.Gate] = 4;
@@ -69,7 +70,7 @@ public static class Labour
     /// <summary>The store a voxel of this material is laid from.</summary>
     public static int CostKind(byte m) => m switch
     {
-        Mat.Stone or Mat.Mortar => Stockpile.Stone,
+        Mat.Stone or Mat.Mortar or Mat.StoneDark or Mat.StoneLight => Stockpile.Stone,
         Mat.Wood or Mat.Ladder or Mat.Gate or Mat.GateShut or Mat.GateOpen => Stockpile.Wood,
         Mat.Rammed => Stockpile.Earth,
         _ => Stockpile.None,

@@ -26,6 +26,20 @@ public static class MapGen
     /// <summary>The river's surface: water stands below this height.</summary>
     public const int RiverLevel = 31;
 
+    /// <summary>How far from a point in a pond its water reaches along a direction, in voxels: the first dry column.</summary>
+    public static int Shore(VoxelWorld w, Site s, int px, int pz, double dx, double dz)
+    {
+        double len = Math.Sqrt(dx * dx + dz * dz);
+        if (len < 1e-9 || s.WaterTop == null) return 0;
+        dx /= len; dz /= len;
+        for (int r = 0; r < 400; r++)
+        {
+            int x = px + (int)Math.Round(dx * r), z = pz + (int)Math.Round(dz * r);
+            if (x < 0 || z < 0 || x >= w.SX || z >= w.SZ || s.WaterTop[z * w.SX + x] == 0) return r;
+        }
+        return 400;
+    }
+
     public static Site Generate(VoxelWorld w, MapParams p)
     {
         int SX = w.SX, SZ = w.SZ;
@@ -34,6 +48,8 @@ public static class MapGen
         var nHill = new ValueNoise(seed * 11 + 1); var nHill2 = new ValueNoise(seed * 13 + 2); var nFine = new ValueNoise(seed * 17 + 3);
         var nEdge = new ValueNoise(seed * 19 + 4); var nKnoll = new ValueNoise(seed * 23 + 5); var nSoil = new ValueNoise(seed * 29 + 6);
         var nForest = new ValueNoise(seed * 31 + 7); var nRidge = new ValueNoise(seed * 37 + 8); var nRiver = new ValueNoise(seed * 41 + 9);
+        var nMoist = new ValueNoise(seed * 43 + 10); var nBiome = new ValueNoise(seed * 47 + 11); var nBloom = new ValueNoise(seed * 53 + 12);
+        var nPond = new ValueNoise(seed * 59 + 13);
 
         const int baseH = 40, rise = 44, rampHalf = 26, rampLen = 150;
         double EdgeX(double z) => SX * .58 + (nEdge.Sample(z * .008, 7.7) - .5) * 140 + (nEdge.Sample(z * .03, 3.1) - .5) * 26;
@@ -62,10 +78,16 @@ public static class MapGen
         }
 
         // two big ponds on the plateau, north and south of the citadel a good way off (40 m), 15–20 m across and up to
-        // 2.5 m deep. Each lies level, its surface flush with the lowest ground round its shore, so it holds still
-        // until someone digs into it.
+        // 2.5 m deep, with a ragged shore. Each lies level, its surface flush with the lowest ground round its shore, so
+        // it holds still until someone digs into it.
         const int shore = 5;
         var ponds = new (int x, int z, int r, int level)[2];
+        // how far the water reaches from a pond's middle, in a direction: the shore goes in and out
+        double Reach(int n, int pr, double dx, double dz)
+        {
+            double a = Math.Atan2(dz, dx);
+            return pr * (.78 + .44 * nPond.Sample(Math.Cos(a) * 1.4 + n * 9 + 4, Math.Sin(a) * 1.4 + n * 5 + 4));
+        }
         for (int n = 0; n < ponds.Length; n++)
         {
             double a = (n == 0 ? 1.62 : 4.66) + (Hash.H3((int)seed, n, 3) - .5) * .4, dist = 300 + Hash.H3((int)seed, n, 4) * 30;
@@ -73,14 +95,16 @@ public static class MapGen
             int px = site.KeepX + (int)(Math.Cos(a) * dist);
             int pz = Math.Clamp(site.KeepZ + (int)(Math.Sin(a) * dist), pr + shore + 16, SZ - pr - shore - 16);
             // the whole shore on the plateau, well back from the cliff wherever the cliff wanders
+            int span = (int)(pr * 1.22) + shore;
             double edge = EdgeX(pz) + 70;
-            for (int z = pz - pr - shore; z <= pz + pr + shore; z++) edge = Math.Max(edge, EdgeX(z) + pr + shore + 8);
-            px = Math.Clamp(px, (int)Math.Ceiling(edge), SX - pr - shore - 16);
-            for (int z = pz - pr - shore; z <= pz + pr + shore; z++)
-                for (int x = px - pr - shore; x <= px + pr + shore; x++)
+            for (int z = pz - span; z <= pz + span; z++) edge = Math.Max(edge, EdgeX(z) + span + 8);
+            px = Math.Clamp(px, (int)Math.Ceiling(edge), SX - span - 16);
+            pz = Math.Clamp(pz, span + 16, SZ - span - 16);
+            for (int z = pz - span; z <= pz + span; z++)
+                for (int x = px - span; x <= px + span; x++)
                 {
-                    double d = Brushes.Dist(x - px, z - pz);
-                    if (d >= pr && d < pr + shore) level = Math.Min(level, (int)Math.Round(Plat(x, z)) - 1);
+                    double d = Brushes.Dist(x - px, z - pz), r = Reach(n, pr, x - px, z - pz);
+                    if (d >= r && d < r + shore) level = Math.Min(level, (int)Math.Round(Plat(x, z)) - 1);
                 }
             ponds[n] = (px, pz, pr, level);
             site.Ponds.Add((px, pz, pr, level));
@@ -138,18 +162,21 @@ public static class MapGen
                         h = Math.Max(h, RiverLevel + 1 - Math.Max(0, d - rh - 40) * .25);
                     }
                 }
-                foreach (var (px, pz, pr, level) in ponds)
+                for (int n = 0; n < ponds.Length; n++)
                 {
+                    var (px, pz, pr, level) = ponds[n];
                     double d = Brushes.Dist(x - px, z - pz);
-                    if (d >= pr + shore || k is not (Plateau or Rim)) continue;
-                    if (d < pr)
+                    if (d >= pr * 1.22 + shore || k is not (Plateau or Rim)) continue;
+                    double r = Reach(n, pr, x - px, z - pz);
+                    if (d >= r + shore) continue;
+                    if (d < r)
                     {
-                        double t = d / pr;
+                        double t = d / r;
                         h = level - 1 - (1 - t * t) * 19;
                         k = Pond; wl = (short)level;
                     }
                     // the shore climbs from the water's edge to the plateau
-                    else h = level + (h - level) * Site.Smooth01((d - pr) / shore);
+                    else h = level + (h - level) * Site.Smooth01((d - r) / shore);
                 }
                 kind[i] = k;
                 water[i] = wl;
@@ -168,20 +195,32 @@ public static class MapGen
                     w.FillColumnRaw(x, z, 0, 3, Mat.Bed);
                     w.FillColumnRaw(x, z, 3, h - s, Mat.Rock);
                     w.FillColumnRaw(x, z, h - s, h - 1, Mat.Soil);
+                    // the turf goes dry on the heights and lush in the hollows and by the water
+                    double moist = nMoist.Sample(x * .011, z * .011) + (k == Bank ? .22 : 0) - (h - baseH) / 110.0;
+                    byte grass = moist < .22 ? Mat.GrassDry : moist > .64 ? Mat.GrassLush : Mat.Grass;
                     byte top = k switch
                     {
                         Rim => Mat.Moss,
                         Ramp or Road => Mat.Path,
                         Knoll => Hash.H3(x, z, 41) < .35 ? Mat.Moss : Mat.Rock,
                         River or Pond => Mat.Soil,
-                        _ => Mat.Grass,
+                        _ => grass,
                     };
                     w.FillColumnRaw(x, z, h - 1, h, top);
                     if (water[i] > h) w.FillColumnRaw(x, z, h, water[i], Mat.Water);
-                    else if (top == Mat.Grass && Hash.H3(x, z, 77) < p.TuftChance)
+                    else if (Mat.IsGrass(top))
                     {
-                        w.FillColumnRaw(x, z, h, h + 1, Mat.Tuft);
-                        if (Hash.H3(x, z, 78) < .35) w.FillColumnRaw(x, z, h + 1, h + 2, Mat.Tuft);
+                        double bloom = nBloom.Sample(x * .03, z * .03);
+                        if (top != Mat.GrassDry && bloom > .74 && Hash.H3(x, z, 79) < .035)
+                            w.FillColumnRaw(x, z, h, h + 1, Hash.H3(x, z, 80) < .6 ? Mat.Flower : Mat.Bloom);
+                        else if (Hash.H3(x, z, 77) < p.TuftChance * (top == Mat.GrassDry ? 2.2 : 1))
+                        {
+                            w.FillColumnRaw(x, z, h, h + 1, Mat.Tuft);
+                            if (Hash.H3(x, z, 78) < .35) w.FillColumnRaw(x, z, h + 1, h + 2, Mat.Tuft);
+                        }
+                        // stones lying about where the rock is near the surface
+                        else if (k is Low or Bank && nKnoll.Sample(x * .018, z * .018) > .6 && Hash.H3(x, z, 81) < .01)
+                            w.FillColumnRaw(x, z, h, h + 1 + (Hash.H3(x, z, 82) < .3 ? 1 : 0), Mat.Rock);
                     }
                 }
         });
@@ -249,24 +288,45 @@ public static class MapGen
                 Flora.Boulder(w, x, z, 5 + (int)(Hash.H3(gx, gz, 104) * 9), site.HTop[z * SX + x]);
             }
 
-        // forests in patches, a few lone trees between them
-        for (int gz = 0; gz < SZ; gz += 18)
-            for (int gx = 0; gx < SX; gx += 18)
+        // forests in patches, a few lone trees between them: firs and pines in some stretches, oaks and birches in
+        // others, cypresses and birches on the plateau; the trees stand tall, 6 to 13 m
+        for (int gz = 0; gz < SZ; gz += 20)
+            for (int gx = 0; gx < SX; gx += 20)
             {
-                int x = gx + (int)(Hash.H3(gx, gz, 201) * 14), z = gz + (int)(Hash.H3(gx, gz, 202) * 14);
-                if (x >= SX || z >= SZ || !Clear(x, z) || w.Get(x, w.SurfAt(x, z) - 1, z) != Mat.Grass) continue;
+                int x = gx + (int)(Hash.H3(gx, gz, 201) * 16), z = gz + (int)(Hash.H3(gx, gz, 202) * 16);
+                if (x >= SX || z >= SZ || !Clear(x, z) || !Mat.IsGrass(w.Get(x, w.SurfAt(x, z) - 1, z))) continue;
                 double f = nForest.Sample(x * .006, z * .006);
-                double density = f > .58 ? .7 : f > .48 ? .26 : .035;
+                double density = f > .58 ? .72 : f > .48 ? .28 : .04;
                 bool plateau = kind[z * SX + x] == Plateau;
                 // the plateau is where the player builds: a clearing round the citadel, thin woods beyond
                 if (plateau) density = NearKeep(x, z, 160) ? 0 : density * .3;
                 if (Hash.H3(gx, gz, 203) > density * p.TreeDensity) continue;
-                double r = Hash.H3(gx, gz, 204), size = Hash.H3(gx, gz, 205);
-                if (plateau ? r < .5 : r >= .42 && r < .66) Flora.Cypress(w, x, z, 30 + (int)(size * 18), grain: 1, grown: true);
-                else if (r < .42) Flora.Spruce(w, x, z, 40 + (int)(size * 28));
-                else if (r < .86) Flora.Oak(w, x, z, 44 + (int)(size * 18));
-                else if (r < .94) Flora.Bush(w, x, z, 3 + (int)(size * 3));
-                else Flora.DeadTree(w, x, z, grown: true);
+                double r = Hash.H3(gx, gz, 204), size = Hash.H3(gx, gz, 205), biome = nBiome.Sample(x * .004, z * .004);
+                if (r > .94) { Flora.DeadTree(w, x, z, grown: true, scale: 1.45); continue; }
+                if (r > .86) { Flora.Bush(w, x, z, 3 + (int)(size * 4)); continue; }
+                if (plateau)
+                {
+                    if (r < .45) Flora.Cypress(w, x, z, 42 + (int)(size * 26), grain: 1, grown: true);
+                    else if (r < .7) Flora.Birch(w, x, z, 48 + (int)(size * 26));
+                    else Flora.Pine(w, x, z, 66 + (int)(size * 34));
+                }
+                else if (biome < .45)
+                {
+                    if (r < .55) Flora.Spruce(w, x, z, 56 + (int)(size * 40), size > .5 ? 3 : 2);
+                    else Flora.Pine(w, x, z, 68 + (int)(size * 36));
+                }
+                else if (biome > .58)
+                {
+                    if (r < .5) Flora.Oak(w, x, z, 60 + (int)(size * 28), 4);
+                    else Flora.Birch(w, x, z, 46 + (int)(size * 26));
+                }
+                else
+                {
+                    if (r < .3) Flora.Spruce(w, x, z, 56 + (int)(size * 40), size > .5 ? 3 : 2);
+                    else if (r < .55) Flora.Oak(w, x, z, 60 + (int)(size * 28), 4);
+                    else if (r < .72) Flora.Cypress(w, x, z, 42 + (int)(size * 26), grain: 1, grown: true);
+                    else Flora.Birch(w, x, z, 46 + (int)(size * 26));
+                }
             }
 
         site.WaterTop = water;

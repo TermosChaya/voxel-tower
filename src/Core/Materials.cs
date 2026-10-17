@@ -30,7 +30,10 @@ public static class Mat
 
     public const byte Air = 0, Bed = 1, Soil = 2, Grass = 3, Rock = 4, Stone = 5, Mortar = 6, Wood = 7, Rammed = 8,
         Keep = 9, KeepDark = 10, Roof = 11, Leaf = 12, Trunk = 13, Ember = 14, Path = 15, Moss = 16, Iron = 17, Tuft = 18, Plank = 19, Foliage = 20,
-        Ladder = 21, SiegeLadder = 22, Deck = 23, Water = 24, Gate = 25, GateShut = 26, Ore = 27, Ruin = 28, GateOpen = 29;
+        Ladder = 21, SiegeLadder = 22, Deck = 23, Water = 24, Gate = 25, GateShut = 26, Ore = 27, Ruin = 28, GateOpen = 29,
+        StoneDark = 30, StoneLight = 31;
+    /// <summary>More of the world, past the figures' colours: grass of other shades, flowers, birch bark.</summary>
+    public const byte GrassDry = 54, GrassLush = 55, Flower = 56, Bloom = 57, Birch = 58;
     public const int Count = 64;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
@@ -48,26 +51,27 @@ public static class Mat
 
     static Mat()
     {
+        // the land a little brighter, what is built of it darker
         D(Bed, "Материк", 0x221f27, .10f, MatGroup.Hard, Natural);
-        D(Soil, "Грунт", 0x4b3727, .22f, MatGroup.Earth, Natural | Earthy);
-        D(Grass, "Дёрн", 0x3a482a, .30f, MatGroup.Earth, Natural | Earthy);
-        D(Rock, "Скала", 0x4c4a53, .24f, MatGroup.Rock, Natural);
-        D(Stone, "Камень", 0x726f73, .15f, MatGroup.Stone, Player);
-        D(Mortar, "Раствор", 0x3d383f, .08f, MatGroup.Stone, Player);
-        D(Wood, "Брёвна", 0x5e412b, .22f, MatGroup.Wood, Player);
-        D(Rammed, "Земля", 0x5a4332, .16f, MatGroup.Earth, Player | Earthy);
+        D(Soil, "Грунт", 0x584130, .22f, MatGroup.Earth, Natural | Earthy);
+        D(Grass, "Дёрн", 0x4a5c33, .30f, MatGroup.Earth, Natural | Earthy);
+        D(Rock, "Скала", 0x5a5862, .24f, MatGroup.Rock, Natural);
+        D(Stone, "Камень", 0x5f5b5e, .14f, MatGroup.Stone, Player);
+        D(Mortar, "Раствор", 0x2c282d, .08f, MatGroup.Stone, Player);
+        D(Wood, "Брёвна", 0x4c3423, .22f, MatGroup.Wood, Player);
+        D(Rammed, "Земля", 0x4b3829, .16f, MatGroup.Earth, Player | Earthy);
         D(Keep, "Камень цитадели", 0x8e867f, .10f, MatGroup.Hard, 0);
         D(KeepDark, "Камень цитадели", 0x48414b, .08f, MatGroup.Hard, 0);
         D(Roof, "Сланец", 0x3b3349, .16f, MatGroup.Hard, 0);
-        D(Leaf, "Хвоя", 0x1e2c21, .30f, MatGroup.Wood, Natural);
-        D(Trunk, "Ствол", 0x3b2a21, .18f, MatGroup.Wood, Natural);
+        D(Leaf, "Хвоя", 0x263828, .30f, MatGroup.Wood, Natural);
+        D(Trunk, "Ствол", 0x45332a, .18f, MatGroup.Wood, Natural);
         D(Ember, "Жар", 0xff7a2a, .35f, MatGroup.Hard, Glows);
-        D(Path, "Тропа", 0x5b4939, .20f, MatGroup.Earth, Natural | Earthy);
-        D(Moss, "Мох", 0x394a2b, .28f, MatGroup.Rock, Natural);
+        D(Path, "Тропа", 0x6a5642, .20f, MatGroup.Earth, Natural | Earthy);
+        D(Moss, "Мох", 0x475a34, .28f, MatGroup.Rock, Natural);
         D(Iron, "Железо", 0x2a2a30, .08f, MatGroup.Hard, 0);
-        D(Tuft, "Трава", 0x46582e, .34f, MatGroup.Earth, Natural | Earthy);
-        D(Plank, "Доски", 0x5a3d26, .18f, MatGroup.Hard, 0);
-        D(Foliage, "Листва", 0x34431f, .32f, MatGroup.Wood, Natural);
+        D(Tuft, "Трава", 0x566c37, .34f, MatGroup.Earth, Natural | Earthy);
+        D(Plank, "Доски", 0x4a3220, .18f, MatGroup.Hard, 0);
+        D(Foliage, "Листва", 0x415426, .32f, MatGroup.Wood, Natural);
         D(Ladder, "Лестница", 0x7a5634, .2f, MatGroup.Wood, Player);
         D(SiegeLadder, "Осадная лестница", 0x4a3726, .22f, MatGroup.Wood, 0);
         D(Deck, "Настил орды", 0x4f3d2c, .26f, MatGroup.Wood, 0);
@@ -80,6 +84,14 @@ public static class Mat
         // gold-bearing rock in the veins of the mines, and the weathered masonry of old ruins
         D(Ore, "Руда", 0xa98436, .3f, MatGroup.Rock, Natural);
         D(Ruin, "Старая кладка", 0x5f5d57, .24f, MatGroup.Stone, Natural);
+        // rough masonry: stones of three shades in dark mortar
+        D(StoneDark, "Камень", 0x4b484c, .14f, MatGroup.Stone, Player);
+        D(StoneLight, "Камень", 0x6e6a6b, .14f, MatGroup.Stone, Player);
+        D(GrassDry, "Дёрн", 0x585d34, .30f, MatGroup.Earth, Natural | Earthy);
+        D(GrassLush, "Дёрн", 0x3c5a30, .30f, MatGroup.Earth, Natural | Earthy);
+        D(Flower, "Цветы", 0xb09a46, .30f, MatGroup.Earth, Natural | Earthy);
+        D(Bloom, "Цветы", 0x7c5a84, .30f, MatGroup.Earth, Natural | Earthy);
+        D(Birch, "Берёза", 0xcfc8b8, .22f, MatGroup.Wood, Natural);
 
         D(SkinHuman, "кожа", 0xc29878, .08f, MatGroup.Hard, 0); D(SkinGoblin, "кожа", 0x6d8a39, .12f, MatGroup.Hard, 0);
         D(SkinOrc, "кожа", 0x56673f, .12f, MatGroup.Hard, 0); D(SkinTroll, "кожа", 0x66705f, .16f, MatGroup.Hard, 0);
@@ -94,11 +106,11 @@ public static class Mat
         D(FurHare, "мех", 0x86745f, .14f, MatGroup.Hard, 0); D(Hoof, "копыто", 0x221c1a, .06f, MatGroup.Hard, 0);
         D(Belly, "мех", 0xcdbb9c, .1f, MatGroup.Hard, 0);
 
-        foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage }) IsVeg[m] = true;
-        foreach (var m in new[] { Leaf, Tuft, Foliage, Ladder, SiegeLadder, Water }) Passable[m] = true;
+        foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage, Flower, Bloom, Birch }) IsVeg[m] = true;
+        foreach (var m in new[] { Leaf, Tuft, Foliage, Ladder, SiegeLadder, Water, Flower, Bloom }) Passable[m] = true;
         IsLadder[Ladder] = IsLadder[SiegeLadder] = true;
         // what holds the world up: loose pieces resting on these never fall
-        foreach (var m in new[] { Bed, Soil, Grass, Rock, Path, Moss, Tuft, Keep, KeepDark, Roof, Ember, Iron, Plank }) IsAnchor[m] = true;
+        foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Rock, Path, Moss, Tuft, Keep, KeepDark, Roof, Ember, Iron, Plank }) IsAnchor[m] = true;
     }
 
     static void D(byte id, string name, uint srgb, float variance, MatGroup group, int flags)
@@ -122,6 +134,15 @@ public static class Mat
     }
 
     public static string NameOf(byte m) => m == Air ? "воздух" : Def[m].Name ?? "?";
+
+    /// <summary>The trunk of a tree, birch or any other.</summary>
+    public static bool IsTrunk(byte m) => m is Trunk or Birch;
+
+    /// <summary>Turf of any shade.</summary>
+    public static bool IsGrass(byte m) => m is Grass or GrassDry or GrassLush;
+
+    /// <summary>Laid stone of any shade, or its mortar.</summary>
+    public static bool IsMasonry(byte m) => m is Stone or Mortar or StoneDark or StoneLight;
 
     /// <summary>A voxel of a gate's leaf: shut (ours walk through it), barred, or swinging and open.</summary>
     public static bool IsLeaf(byte m) => m is Gate or GateShut or GateOpen;

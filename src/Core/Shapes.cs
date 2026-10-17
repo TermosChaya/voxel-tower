@@ -25,11 +25,41 @@ public struct Stroke
 /// </summary>
 public static class Shapes
 {
-    /// <summary>Stone goes down as coursed brick with mortar joints; other materials as they are.</summary>
-    public static byte Lay(byte mat, int x, int y, int z) => mat == Mat.Stone ? Brushes.Brick(x + z, y + 64, false) : mat;
+    /// <summary>Stone goes down as rough masonry in mortar; other materials as they are.</summary>
+    public static byte Lay(byte mat, int x, int y, int z) => mat == Mat.Stone ? Masonry(x, y, z) : mat;
 
-    /// <summary>Stone and mortar count as one material when looking for a flat face.</summary>
-    public static byte Family(byte m) => m == Mat.Mortar ? Mat.Stone : m;
+    /// <summary>Stone of any shade and mortar count as one material when looking for a flat face.</summary>
+    public static byte Family(byte m) => Mat.IsMasonry(m) ? Mat.Stone : m;
+
+    /// <summary>
+    /// Rough coursed rubble, not brick: every voxel belongs to the nearest of jittered stone centres on a grid of
+    /// 6 × 4 × 6 voxels (stones half again as long as they are high), three shades of stone, and dark mortar where two
+    /// stones meet.
+    /// </summary>
+    public static byte Masonry(int x, int y, int z)
+    {
+        const int GX = 6, GY = 4, GZ = 6;
+        int cx = FloorDiv(x, GX), cy = FloorDiv(y, GY), cz = FloorDiv(z, GZ);
+        double d1 = 1e9, d2 = 1e9;
+        int bx = 0, by = 0, bz = 0;
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dz = -1; dz <= 1; dz++)
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    int gx = cx + dx, gy = cy + dy, gz = cz + dz;
+                    double ox = (gx + .15 + Hash.H3(gx, gy, gz * 3 + 1) * .7) * GX, oy = (gy + .3 + Hash.H3(gx * 5, gy, gz) * .4) * GY;
+                    double oz = (gz + .15 + Hash.H3(gx, gy * 7, gz) * .7) * GZ;
+                    double ex = (x + .5 - ox) / GX, ey = (y + .5 - oy) / GY, ez = (z + .5 - oz) / GZ;
+                    double d = ex * ex + ey * ey + ez * ez;
+                    if (d < d1) { d2 = d1; d1 = d; bx = gx; by = gy; bz = gz; }
+                    else if (d < d2) d2 = d;
+                }
+        if (Math.Sqrt(d2) - Math.Sqrt(d1) < .085) return Mat.Mortar;
+        double shade = Hash.H3(bx * 11, by * 13, bz * 17);
+        return shade < .28 ? Mat.StoneDark : shade > .78 ? Mat.StoneLight : Mat.Stone;
+    }
+
+    static int FloorDiv(int a, int b) => a >= 0 ? a / b : -((-a + b - 1) / b);
 
     /// <summary>Fills one column from its surface up to the top (exclusive), clearing plants above.
     /// Digging strokes instead mark everything diggable from the surface down to the floor.</summary>
@@ -151,7 +181,7 @@ public static class Shapes
     public static VoxelList Tree(VoxelWorld w, int x0, int y0, int z0, int limit = 40000)
     {
         var L = new VoxelList();
-        static bool Wood(byte m) => m == Mat.Trunk || m == Mat.Leaf || m == Mat.Foliage;
+        static bool Wood(byte m) => Mat.IsTrunk(m) || m == Mat.Leaf || m == Mat.Foliage;
         if (!Wood(w.Get(x0, y0, z0))) return L;
         var seen = new HashSet<long> { Key(w, x0, y0, z0) };
         var queue = new Queue<(int x, int y, int z)>();
@@ -179,7 +209,7 @@ public static class Shapes
         if (L == null) return null;
         int n0 = L.Count;
         bool any = false;
-        for (int i = 0; i < n0 && !any; i++) any = w.Get(L.X(i), L.Y(i), L.Z(i)) == Mat.Trunk;
+        for (int i = 0; i < n0 && !any; i++) any = Mat.IsTrunk(w.Get(L.X(i), L.Y(i), L.Z(i)));
         if (!any) return L;
         var seen = new HashSet<long>();
         for (int i = 0; i < n0; i++) seen.Add(Key(w, L.X(i), L.Y(i), L.Z(i)));
@@ -187,7 +217,7 @@ public static class Shapes
         for (int i = 0; i < n0; i++)
         {
             int x = L.X(i), y = L.Y(i), z = L.Z(i);
-            if (w.Get(x, y, z) != Mat.Trunk || felled.Contains(Key(w, x, y, z))) continue;
+            if (!Mat.IsTrunk(w.Get(x, y, z)) || felled.Contains(Key(w, x, y, z))) continue;
             var tree = Tree(w, x, y, z);
             for (int t = 0; t < tree.Count; t++)
             {

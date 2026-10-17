@@ -546,7 +546,7 @@ public partial class BuildTools : Node3D
         double ox = (o.X - w.OriginX) / VoxelWorld.Vox, oy = o.Y / VoxelWorld.Vox, oz = (o.Z - w.OriginZ) / VoxelWorld.Vox;
         _hasHover = Raycast.Cast(w, ox, oy, oz, d.X, d.Y, d.Z, out _hover, skipVeg: true);
         _hasTree = false;
-        if (DigNow && Raycast.Cast(w, ox, oy, oz, d.X, d.Y, d.Z, out var veg) && veg.M is Mat.Trunk or Mat.Leaf or Mat.Foliage)
+        if (DigNow && Raycast.Cast(w, ox, oy, oz, d.X, d.Y, d.Z, out var veg) && (Mat.IsTrunk(veg.M) || veg.M is Mat.Leaf or Mat.Foliage))
         {
             _tree = veg;
             _hasTree = true;
@@ -570,7 +570,7 @@ public partial class BuildTools : Node3D
         if (!_hasHover) { HoverText = ""; return; }
         int ground = w.GroundTop(_hover.X, _hover.Z);
         float above = (_hover.Y + 1 - ground) / (float)VoxelWorld.PerMetre;
-        string text = _hasTree ? (_tree.M == Mat.Trunk ? "дерево: ствол" : "дерево: крона")
+        string text = _hasTree ? (Mat.IsTrunk(_tree.M) ? "дерево: ствол" : "дерево: крона")
             : Mat.IsPlayer[_hover.M] && above > .05f ? $"{Mat.NameOf(_hover.M)} · {Fmt.One(above)} м над землёй" : Mat.NameOf(_hover.M);
         byte order = _m.Sim.Orders.At(_hover.X, _hover.Y, _hover.Z);
         if (order == 0) { var f = _hover.Front; order = _m.Sim.Orders.At(f.x, f.y, f.z); }

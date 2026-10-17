@@ -45,7 +45,7 @@ public sealed class Blueprint
                         while (y + len < w.SY && w.Get(x, y + len, z) == m) len++;
                         runs.Add(x - x0); runs.Add(z - z0); runs.Add(y); runs.Add(len); runs.Add(m);
                         ymin = Math.Min(ymin, y); ymax = Math.Max(ymax, y + len);
-                        if (m == Mat.Stone || m == Mat.Mortar) st += len; else if (m == Mat.Wood) wd += len; else ea += len;
+                        if (Mat.IsMasonry(m)) st += len; else if (m == Mat.Wood) wd += len; else ea += len;
                         y += len;
                     }
                     else y++;

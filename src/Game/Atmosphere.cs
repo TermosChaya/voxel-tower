@@ -31,12 +31,12 @@ public partial class Atmosphere : Node3D
             BackgroundMode = Godot.Environment.BGMode.Sky,
             Sky = sky,
             AmbientLightSource = Godot.Environment.AmbientSource.Sky,
-            AmbientLightEnergy = .7f,
+            AmbientLightEnergy = .82f,
             ReflectedLightSource = Godot.Environment.ReflectionSource.Disabled,
             TonemapMode = Godot.Environment.ToneMapper.Aces,
             TonemapExposure = 1.0f,
             AdjustmentEnabled = true,
-            AdjustmentSaturation = .88f,
+            AdjustmentSaturation = .92f,
             GlowEnabled = true,
             GlowIntensity = .45f,
             GlowBloom = 0f,
@@ -55,7 +55,7 @@ public partial class Atmosphere : Node3D
         var sun = new DirectionalLight3D
         {
             LightColor = new Color("eccfb4"),
-            LightEnergy = 1.3f,
+            LightEnergy = 1.42f,
             LightAngularDistance = 1.2f,
             ShadowEnabled = true,
             ShadowBias = .04f,

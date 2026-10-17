@@ -85,7 +85,7 @@ public sealed partial class Sim
             int trees = 0;
             for (int z = z0; z <= z1; z++)
                 for (int x = x0; x <= x1; x++)
-                    if (TreeFoot(x, z, out int y) && World.Get(x - 1, y, z) != Mat.Trunk && World.Get(x, y, z - 1) != Mat.Trunk) trees++;
+                    if (TreeFoot(x, z, out int y) && !Mat.IsTrunk(World.Get(x - 1, y, z)) && !Mat.IsTrunk(World.Get(x, y, z - 1))) trees++;
             return (trees, trees * 4900.0);
         }
         double vox = 0;
@@ -102,7 +102,7 @@ public sealed partial class Sim
     bool TreeFoot(int x, int z, out int y)
     {
         y = World.SurfAt(x, z);
-        return World.Get(x, y, z) == Mat.Trunk;
+        return Mat.IsTrunk(World.Get(x, y, z));
     }
 
     /// <summary>
@@ -139,7 +139,7 @@ public sealed partial class Sim
     static bool Takes(int kind, byte m) => kind switch
     {
         Stockpile.Stone => m is Mat.Rock or Mat.Moss or Mat.Ore or Mat.Ruin,
-        Stockpile.Earth => m is Mat.Soil or Mat.Grass or Mat.Path,
+        Stockpile.Earth => m is Mat.Soil or Mat.Path || Mat.IsGrass(m),
         _ => false,
     };
 
@@ -255,7 +255,7 @@ public sealed partial class Sim
                         int cx = x + dx, cz = z + dz, top = World.SurfAt(cx, cz);
                         byte m = World.Get(cx, top - 1, cz);
                         if (Site.Forbidden(cx, cz) || Mat.IsPlayer[m] || m == Mat.Ruin || WaterNear(cx, cz, top - 16)) bad = true;
-                        if (m is Mat.Grass or Mat.Soil) grass++;
+                        if (Mat.IsGrass(m) || m == Mat.Soil) grass++;
                         lo = Math.Min(lo, top); hi = Math.Max(hi, top);
                     }
                 if (bad || hi - lo > 6) continue;

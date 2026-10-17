@@ -253,7 +253,7 @@ public partial class Retinue : OrnatePanel
                 var job = u.Jobs[u.JobI];
                 if (job.m != Orders.Remove) return "строит";
                 byte at = sim.World.Get(job.x, job.y, job.z);
-                return Mat.IsVeg[at] ? "рубит лес" : at is Mat.Rock or Mat.Moss or Mat.Stone or Mat.Mortar ? "ломает камень" : "копает";
+                return Mat.IsVeg[at] ? "рубит лес" : at is Mat.Rock or Mat.Moss or Mat.Ruin or Mat.Ore || Mat.IsMasonry(at) ? "ломает камень" : "копает";
             case UnitState.Fight: return "бьётся";
             case UnitState.Flee: return "бежит к цитадели";
             case UnitState.Walk:

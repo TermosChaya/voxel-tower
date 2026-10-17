@@ -26,7 +26,7 @@ public sealed partial class Sim
             if (Math.Abs(x - Site.KeepX) < 220 && Math.Abs(z - Site.KeepZ) < 220) continue;
             int top = World.SurfAt(x, z);
             byte m = World.Get(x, top - 1, z);
-            if (m != Mat.Grass && m != Mat.Soil && m != Mat.Moss) continue;
+            if (!Mat.IsGrass(m) && m != Mat.Soil && m != Mat.Moss) continue;
             if (far && NearAny(x, z, Team.Player, 30 * 16)) continue;
             int c = NearestStand(x, z, t.Move.Height);
             if (c < 0 || Nav.Water[c] > 0) continue;

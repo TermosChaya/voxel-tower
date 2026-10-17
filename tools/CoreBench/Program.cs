@@ -161,7 +161,9 @@ Check("the map starts bare", w2.SurfAt(site2.WallX + 8, 70) < 90 && site2.Torche
     int mortar = 0; for (int i = 0; i < L.Count; i++) if (L.M(i) == Mat.Mortar) mortar++;
     var r = Builder.TryBuild(w2, wal2, L, out var c);
     Check("line lays a level wall", r == BuildResult.Ok && w2.SurfAt(250, 70) == lt && w2.SurfAt(250, 98) == lt, $"top {lt}, {L.Count} voxels");
-    Check("stone goes down coursed", mortar > L.Count / 5 && mortar < L.Count / 2, $"{mortar} mortar of {L.Count}");
+    int dark = 0, light = 0; for (int i = 0; i < L.Count; i++) { if (L.M(i) == Mat.StoneDark) dark++; if (L.M(i) == Mat.StoneLight) light++; }
+    Check("stone goes down as rough masonry", mortar > L.Count / 10 && mortar < L.Count / 2 && dark > L.Count / 10 && light > L.Count / 20,
+        $"{mortar} mortar, {dark} dark and {light} light stones of {L.Count}");
     Check("price is counted per voxel", c.Gold == (int)Math.Ceiling(c.Stone * Prices.Stone / VoxelWorld.PerM3), $"{c.Stone} stone voxels = {c.Gold} gold");
 
     var wood = st; wood.Mat = Mat.Wood; wood.Height = 8;
@@ -237,6 +239,29 @@ foreach (var (size, label, mp) in variants)
     Console.WriteLine($"valley {mp.SizeX / VoxelWorld.PerMetre}×{mp.SizeY / VoxelWorld.PerMetre}×{mp.SizeZ / VoxelWorld.PerMetre} m: generated in {gen3} ms, {w3.AllocatedChunks}/{w3.ChunkCount} chunks hold data ({mem / 1048576} MB), mesh {mesh3} ms on {Environment.ProcessorCount} threads, {q3 * 2 / 1000} k triangles in {meshed3} chunks");
     Check($"valley {size}: the citadel stands on the plateau", w3.Get(site3.KeepX, site3.KeepBase + 10, site3.KeepZ) != 0 && site3.KeepBase > 70, $"keep base {site3.KeepBase}");
     Check($"valley {size}: forests and rock to quarry", trunk > 50 && rock > 1000, $"{trunk} trunk and {rock} rock samples");
+}
+
+// ---- other seeds: the valley is made from its seed alone, so any seed gives a whole one
+if (args.Length == 0 || args[0] == "--seeds")
+{
+    foreach (uint seed in new uint[] { 1, 2, 3 })
+    {
+        var mps = new MapParams { Seed = seed };
+        var ws = new VoxelWorld(mps.SizeX, mps.SizeY, mps.SizeZ);
+        var ss = MapGen.Generate(ws, mps);
+        int open = 0;
+        for (int z = 1; z < ws.SZ - 1; z++)
+            for (int x = 1; x < ws.SX - 1; x++)
+            {
+                int i = z * ws.SX + x;
+                for (int y = ss.HTop[i]; y < ss.WaterTop[i]; y++)
+                    foreach (var (sx, sz) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+                        if (ws.Get(x + sx, y, z + sz) == Mat.Air) open++;
+            }
+        int mines = ss.Landmarks.Count(l => l.Kind == LandmarkKind.Mine), ruins = ss.Landmarks.Count(l => l.Kind == LandmarkKind.Ruin);
+        Check($"seed {seed}: a whole valley", ss.KeepBase > 70 && open == 0 && mines == 3 && ruins == 4 && ss.Ponds.Count == 2,
+            $"keep base {ss.KeepBase}, {open} open water faces, {mines} mines, {ruins} ruins, {ss.Ponds.Count} ponds");
+    }
 }
 
 // ---- the living valley: navigation, labour, the horde
@@ -445,7 +470,8 @@ if (args.Length == 0 || args[0] == "--sim")
         var (qx, qz, pr, _) = site4.Ponds[0];
         double kd = Math.Sqrt((double)(site4.KeepX - qx) * (site4.KeepX - qx) + (double)(site4.KeepZ - qz) * (site4.KeepZ - qz));
         (int x, int z) At(double r) => (qx + (int)Math.Round((site4.KeepX - qx) / kd * r), qz + (int)Math.Round((site4.KeepZ - qz) / kd * r));
-        var edge = At(pr);
+        int shoreR = MapGen.Shore(w4, site4, qx, qz, site4.KeepX - qx, site4.KeepZ - qz), farR = MapGen.Shore(w4, site4, qx, qz, qx - site4.KeepX, qz - site4.KeepZ);
+        var edge = At(shoreR);
         int before = sim.Flooded;
         double e0 = sim.Stock[Stockpile.Earth];
         var (_, cutVox) = sim.Survey(edge.x - 16, edge.z - 16, edge.x + 16, edge.z + 16, Stockpile.Earth, 16);
@@ -457,7 +483,7 @@ if (args.Length == 0 || args[0] == "--sim")
         sim.CancelArea(edge.x - 40, edge.z - 40, edge.x + 40, edge.z + 40);
 
         // the trench runs from just inside the water to the highest ground a few metres beyond the shore
-        var shore = At(pr - 3);
+        var shore = At(shoreR - 3);
         (int x, int z) high = shore; int highY = int.MinValue;
         for (int z = shore.z - 40; z <= shore.z + 40; z += 2)
             for (int x = shore.x - 40; x <= shore.x + 40; x += 2)
@@ -477,7 +503,7 @@ if (args.Length == 0 || args[0] == "--sim")
             $"pond at ({qx}, {qz}), trench to {high} at {highY}: {sim.Flooded - ran0} voxels of water moved, {water0} → {water1} in the valley, {OverLand(w4, site4) - over0} over the land");
 
         // the same worked out on a worker thread, as in the game: a pit dug into the pit shore
-        var pit = (x: qx - (int)Math.Round((site4.KeepX - qx) / kd * (pr + 6)), z: qz - (int)Math.Round((site4.KeepZ - qz) / kd * (pr + 6)));
+        var pit = (x: qx - (int)Math.Round((site4.KeepX - qx) / kd * (farR + 6)), z: qz - (int)Math.Round((site4.KeepZ - qz) / kd * (farR + 6)));
         sim.WaterInBackground = true;
         ran0 = sim.Flooded;
         sim.InstantLabour = true;
@@ -754,7 +780,7 @@ if (args.Length == 0 || args[0] == "--sim")
         int ran0 = sim.Flooded, over0 = OverLand(w4, site4);
         var sw2 = Stopwatch.StartNew();
         sim.InstantLabour = true;
-        sim.DesignateRemove(Shapes.Line(w4, site4, qx - pr + 6, qz, cliff, qz, new Stroke { Width = 6, Height = 16, Dig = true }, 0));
+        sim.DesignateRemove(Shapes.Line(w4, site4, qx - MapGen.Shore(w4, site4, qx, qz, -1, 0) + 6, qz, cliff, qz, new Stroke { Width = 6, Height = 16, Dig = true }, 0));
         sim.InstantLabour = false;
         double t0 = sim.Time;
         for (int i = 0; i < 600 && sim.WaterBusy; i++) Run(1);

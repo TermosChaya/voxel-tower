@@ -9,14 +9,14 @@ public static class Flora
     {
         if (!w.InBounds(x, y, z)) return;
         byte cur = w.Get(x, y, z);
-        if (cur == Mat.Air || cur == Mat.Tuft) w.SetRaw(x, y, z, m);
+        if (cur == Mat.Air || cur is Mat.Tuft or Mat.Flower or Mat.Bloom) w.SetRaw(x, y, z, m);
     }
 
-    static void Trunk(VoxelWorld w, int x0, int z0, int y0, int y1, int thick)
+    static void Trunk(VoxelWorld w, int x0, int z0, int y0, int y1, int thick, byte bark = Mat.Trunk)
     {
         for (int y = y0; y < y1; y++)
             for (int dz = 0; dz < thick; dz++)
-                for (int dx = 0; dx < thick; dx++) Put(w, x0 + dx, y, z0 + dz, Mat.Trunk);
+                for (int dx = 0; dx < thick; dx++) Put(w, x0 + dx, y, z0 + dz, bark);
     }
 
     /// <summary>
@@ -44,15 +44,16 @@ public static class Flora
     }
 
     /// <summary>A bare dead tree with a few crooked branches.</summary>
-    public static void DeadTree(VoxelWorld w, int x0, int z0, bool grown = false)
+    public static void DeadTree(VoxelWorld w, int x0, int z0, bool grown = false, double scale = 1)
     {
         int bse = w.SurfAt(x0, z0), H = grown ? 26 + (int)Math.Floor(Hash.H3(x0, z0, 5) * 10) : 20 + (int)Math.Floor(Hash.H3(x0, z0, 5) * 8);
-        Trunk(w, x0, z0, bse, bse + H, 2);
+        H = (int)(H * scale);
+        Trunk(w, x0, z0, bse, bse + H, scale > 1.2 ? 3 : 2);
         var R = new Mulberry32((uint)(x0 * 31 + z0));
         for (int b = 0; b < 4; b++)
         {
             double x = x0 + .5, z = z0 + .5, y = bse + H * (.45 + R.Next() * .45);
-            double a = R.Next() * 6.28, len = 6 + R.Next() * 6;
+            double a = R.Next() * 6.28, len = (6 + R.Next() * 6) * scale;
             for (int s = 0; s < len; s++)
             {
                 x += Math.Cos(a) * .9; z += Math.Sin(a) * .9; y += .45;
@@ -62,10 +63,10 @@ public static class Flora
     }
 
     /// <summary>A spruce: needles in layered skirts narrowing to the tip.</summary>
-    public static void Spruce(VoxelWorld w, int x0, int z0, int h)
+    public static void Spruce(VoxelWorld w, int x0, int z0, int h, int thick = 2)
     {
         int b = w.SurfAt(x0, z0);
-        Trunk(w, x0, z0, b, b + (int)(h * .85), 2);
+        Trunk(w, x0, z0, b, b + (int)(h * .85), thick);
         double maxR = 3.2 + h * .17;
         int start = b + (int)(h * .2), top = b + h;
         for (int y = start; y < top; y++)
@@ -83,10 +84,10 @@ public static class Flora
     }
 
     /// <summary>A broad oak: a thick trunk, crooked boughs and a lumpy crown of leaves.</summary>
-    public static void Oak(VoxelWorld w, int x0, int z0, int h)
+    public static void Oak(VoxelWorld w, int x0, int z0, int h, int thick = 3)
     {
         int b = w.SurfAt(x0, z0), trunkTop = b + (int)(h * .55);
-        Trunk(w, x0 - 1, z0 - 1, b, trunkTop, 3);
+        Trunk(w, x0 - thick / 2, z0 - thick / 2, b, trunkTop, thick);
         var R = new Mulberry32((uint)(x0 * 73 + z0 * 19 + 5));
         for (int k = 0; k < 4; k++)
         {
@@ -121,6 +122,56 @@ public static class Flora
                     }
                     if (best + (Hash.H3(x >> 1, y >> 1, z >> 1) - .5) * .3 < 1) Put(w, x, y, z, Mat.Foliage);
                 }
+    }
+
+    /// <summary>A birch: a slender white trunk marked with black, a light open crown in loose clumps.</summary>
+    public static void Birch(VoxelWorld w, int x0, int z0, int h)
+    {
+        int b = w.SurfAt(x0, z0), top = b + h;
+        var R = new Mulberry32((uint)(x0 * 41 + z0 * 23 + 9));
+        for (int y = b; y < b + (int)(h * .8); y++)
+            for (int dz = 0; dz < 2; dz++)
+                for (int dx = 0; dx < 2; dx++)
+                    Put(w, x0 + dx, y, z0 + dz, Hash.H3(x0 + dx, y, z0 + dz) < .14 ? Mat.Trunk : Mat.Birch);
+        for (int k = 0; k < 7; k++)
+        {
+            double a = R.Next() * 6.28, y = b + h * (.4 + R.Next() * .45), x = x0 + 1, z = z0 + 1;
+            double reach = 4 + R.Next() * 5, rad = 3.4 + R.Next() * 2.4;
+            for (int s = 0; s < reach; s++) { x += Math.Cos(a) * .8; z += Math.Sin(a) * .8; y += .5; Put(w, (int)x, (int)y, (int)z, Mat.Birch); }
+            for (int dy = -(int)rad; dy <= rad; dy++)
+                for (int dz = -(int)rad - 1; dz <= rad + 1; dz++)
+                    for (int dx = -(int)rad - 1; dx <= rad + 1; dx++)
+                    {
+                        double d = Brushes.Dist(dx, dy * 1.3, dz) + (Hash.H3((int)x + dx >> 1, (int)y + dy >> 1, (int)z + dz >> 1) - .5) * 1.8;
+                        if (d < rad) Put(w, (int)x + dx, (int)y + dy, (int)z + dz, Mat.Foliage);
+                    }
+        }
+        for (int y = top - 8; y < top; y++)
+            for (int dz = -3; dz <= 3; dz++)
+                for (int dx = -3; dx <= 3; dx++)
+                    if (Brushes.Dist(dx, (y - top + 4) * 1.4, dz) < 3.3) Put(w, x0 + dx, y, z0 + dz, Mat.Foliage);
+    }
+
+    /// <summary>A pine: a tall straight trunk bare for most of its height, and a flat crown of needles in a few clumps up top.</summary>
+    public static void Pine(VoxelWorld w, int x0, int z0, int h)
+    {
+        int b = w.SurfAt(x0, z0), top = b + h;
+        Trunk(w, x0 - 1, z0 - 1, b, top - 4, 3);
+        var R = new Mulberry32((uint)(x0 * 59 + z0 * 31 + 3));
+        for (int k = 0; k < 6; k++)
+        {
+            double a = R.Next() * 6.28, off = k == 0 ? 0 : 3 + R.Next() * 5;
+            double cx = x0 + .5 + Math.Cos(a) * off, cz = z0 + .5 + Math.Sin(a) * off, cy = top - 6 - R.Next() * (h * .22);
+            double rx = 4.5 + R.Next() * 3, ry = 2.2 + R.Next() * 1.4;
+            if (off > 0) for (double s = 0; s < off; s += .8) Put(w, (int)(x0 + .5 + Math.Cos(a) * s), (int)(cy - 1), (int)(z0 + .5 + Math.Sin(a) * s), Mat.Trunk);
+            for (int y = (int)(cy - ry); y <= cy + ry; y++)
+                for (int z = (int)(cz - rx - 1); z <= cz + rx + 1; z++)
+                    for (int x = (int)(cx - rx - 1); x <= cx + rx + 1; x++)
+                    {
+                        double ex = (x + .5 - cx) / rx, ey = (y + .5 - cy) / ry, ez = (z + .5 - cz) / rx;
+                        if (ex * ex + ey * ey + ez * ez + (Hash.H3(x >> 1, y >> 1, z >> 1) - .5) * .5 < 1) Put(w, x, y, z, Mat.Leaf);
+                    }
+        }
     }
 
     /// <summary>A low lumpy bush.</summary>

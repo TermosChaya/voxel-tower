@@ -13,7 +13,7 @@ namespace VoxelTower.Game;
 /// Command-line options after "--": --shot=file.png [--frames=N] takes a screenshot and quits,
 /// --demo sets up a fort with pawns at work (--pose=battle: the horde bridging the moat and laddering the wall),
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
-/// --top looks straight down, --look=N at the Nth named place of the valley.
+/// --top looks straight down, --look=N at the Nth named place of the valley, --seed=N makes another valley.
 /// </summary>
 public partial class Main : Node3D
 {
@@ -45,6 +45,7 @@ public partial class Main : Node3D
     int _shotFrames = 45, _frames;
     bool _demo, _calm, _selfTest, _finale, _top;
     int _look = -1;
+    uint _seed = 7;
     string _pose = "";
     /// <summary>How long the staged siege runs before the screenshot (--at=seconds).</summary>
     double _poseSeconds = 14;
@@ -58,6 +59,7 @@ public partial class Main : Node3D
             else if (a == "--demo") _demo = true;
             else if (a == "--calm") _calm = true;
             else if (a == "--top") _top = true;
+            else if (a.StartsWith("--seed=") && uint.TryParse(a["--seed=".Length..], out uint sd)) _seed = sd;
             else if (a.StartsWith("--look=") && int.TryParse(a["--look=".Length..], out int lk)) _look = lk;
             else if (a == "--selftest") _selfTest = true;
             else if (a.StartsWith("--pose=")) _pose = a["--pose=".Length..];
@@ -65,7 +67,7 @@ public partial class Main : Node3D
         }
 
         var sw = Stopwatch.StartNew();
-        var mp = new MapParams();
+        var mp = new MapParams { Seed = _seed };
         World = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         Site = MapGen.Generate(World, mp);
         World.Compact();
@@ -353,7 +355,7 @@ public partial class Main : Node3D
         KeyPress(Key.F);
 
         // a tree, felled whole by clicking it
-        var (tx, tz) = Nearest(691, 670, 80, (x, z) => World.Get(x, World.SurfAt(x, z) + 2, z) == Mat.Trunk);
+        var (tx, tz) = Nearest(691, 670, 80, (x, z) => Mat.IsTrunk(World.Get(x, World.SurfAt(x, z) + 2, z)));
         await Look(tx, tz);
         int r2 = Removals();
         await ClickAt(ScreenAt(tx + .5f, World.SurfAt(tx, tz) + 6, tz + .5f));
@@ -540,7 +542,8 @@ public partial class Main : Node3D
         foreach (var p in s.Ponds)
             if (Brushes.Dist(p.X - mx, p.Z - 684) < Brushes.Dist(pond.X - mx, pond.Z - 684)) pond = p;
         double pd = Brushes.Dist(mx - pond.X, 684 - pond.Z);
-        int cutX = pond.X + (int)((mx - pond.X) / pd * (pond.R - 6)), cutZ = pond.Z + (int)((684 - pond.Z) / pd * (pond.R - 6));
+        int reach = MapGen.Shore(w, s, pond.X, pond.Z, mx - pond.X, 684 - pond.Z) - 6;
+        int cutX = pond.X + (int)((mx - pond.X) / pd * reach), cutZ = pond.Z + (int)((684 - pond.Z) / pd * reach);
         sim.DesignateRemove(Shapes.Line(w, s, mx, 684, cutX, cutZ, new Stroke { Width = 8, Height = 20, Dig = true }, 0));
         sim.InstantLabour = false;
 
@@ -548,7 +551,7 @@ public partial class Main : Node3D
         for (int z = z0 + 4; z <= z1 - 8; z += 12) sim.DesignateBuild(Shapes.Box(w, s, wx - 6, z, wx - 3, z + 5, St(Mat.Stone, 4, 10), top + 10));
         sim.DesignateBuild(Shapes.Line(w, s, wx + 2, z0, wx + 2, z1, St(Mat.Wood, 6, 3), top + 3));
         if (!battle) sim.DesignateRemove(Shapes.Line(w, s, mx, z0 - 24, mx, 524, moat, 0));
-        var (treeX, treeZ) = Nearest(691, 670, 80, (x, z) => w.Get(x, w.SurfAt(x, z) + 2, z) == Mat.Trunk);
+        var (treeX, treeZ) = Nearest(691, 670, 80, (x, z) => Mat.IsTrunk(w.Get(x, w.SurfAt(x, z) + 2, z)));
         sim.DesignateRemove(Shapes.Tree(w, treeX, w.SurfAt(treeX, treeZ) + 4, treeZ));
         // a grove and a quarry set aside: the workers turn to them whenever the marked work runs out
         sim.AddZone(treeX + 20, treeZ - 40, treeX + 110, treeZ + 40, Stockpile.Wood, 0);
@@ -664,7 +667,7 @@ public partial class Main : Node3D
         int cliff = px - pr;
         while (cliff > 0 && w.SurfAt(cliff - 1, pz) > w.SurfAt(cliff, pz) - 12) cliff--;
         sim.InstantLabour = true;
-        sim.DesignateRemove(Shapes.Line(w, s, px - pr + 6, pz, cliff, pz, new Stroke { Width = 6, Height = 16, Dig = true }, 0));
+        sim.DesignateRemove(Shapes.Line(w, s, px - MapGen.Shore(w, s, px, pz, -1, 0) + 6, pz, cliff, pz, new Stroke { Width = 6, Height = 16, Dig = true }, 0));
         sim.InstantLabour = false;
         Advance(_poseSeconds);
         Rig.Set(World.WX(cliff + 24), World.WZ(pz + 10), -2.2f, .7f, 2.6f, snap: true);
