@@ -21,7 +21,7 @@ namespace VoxelTower.Game;
 /// --ui-scale=S draws the interface at that size instead of the player's own, --inspect looks at the first raider (or beast),
 /// --day=F starts at that time of the day (0 dawn, 1 sunset), --alarm=S raises the alarm and runs on S seconds,
 /// --weather=rain|fog|wind brings that weather at once, --envoy sends the horde's envoy and waits for its offer,
-/// --load=file.sav reads a saved game back.
+/// --lore=N,key,… puts N knowledge in hand with that lore learnt, --load=file.sav reads a saved game back.
 /// </summary>
 public partial class Main : Node3D
 {
@@ -77,6 +77,8 @@ public partial class Main : Node3D
     /// <summary>--weather=rain|fog|wind: that weather from the start; --envoy: an envoy sent at once and waited for (screenshots).</summary>
     string _weather;
     bool _envoy;
+    /// <summary>--lore=N,key,…: N knowledge in hand and that lore learnt already (screenshots of «Знания»).</summary>
+    string _lore;
     /// <summary>--select or --select=N: all our pawns (or the first N) chosen at the start, for screenshots of the console.</summary>
     int _select;
     /// <summary>--tab=key: a panel let down from the beam at the start; --tool=N: the Nth tool of the grid in hand.</summary>
@@ -105,6 +107,7 @@ public partial class Main : Node3D
             else if (a.StartsWith("--alarm=") && double.TryParse(a["--alarm=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double al)) _alarmAt = al;
             else if (a.StartsWith("--weather=")) _weather = a["--weather=".Length..];
             else if (a == "--envoy") _envoy = true;
+            else if (a.StartsWith("--lore=")) _lore = a["--lore=".Length..];
             else if (a == "--select") _select = int.MaxValue;
             else if (a.StartsWith("--select=") && int.TryParse(a["--select=".Length..], out int sn)) _select = sn;
             else if (a.StartsWith("--tab=")) _tab = a["--tab=".Length..];
@@ -272,6 +275,13 @@ public partial class Main : Node3D
             Sim.SendEnvoy();
             for (int t = 0; t < 600 && Sim.Offer is { Kind: DealKind.None }; t++) Advance(.5);
             if (Sim.Offer?.Envoy is { } e) Rig.Set(World.WX(e.X), World.WZ(e.Z), -.66f, .62f, 2f, snap: true);
+            Hud.Refresh();
+        }
+        if (_lore != null && !_selfTest)
+        {
+            var parts = _lore.Split(',');
+            foreach (string key in parts[1..]) if (Sim.LoreOf(key) is { } l) { Sim.Knowledge += l.Cost; Sim.Learn(key); }
+            Sim.Knowledge = double.TryParse(parts[0], out double k) ? k : 0;
             Hud.Refresh();
         }
         if (_select > 0)
@@ -744,6 +754,17 @@ public partial class Main : Node3D
         int still = fresh.FindAll(u => u.Inside).Count;
         Check("T sounds the alarm and the workers go into the citadel; T again stands it down and they come out", alarmUp && wentIn == 2 && !Sim.Alarm && still == 0,
             $"{wentIn} of 2 went in, {still} still inside");
+
+        // lore: knowledge to spend, and a plaque in «Знания» learns it
+        Hud.OpenPanel("lore");
+        Sim.Knowledge = 2;
+        Hud.Refresh();
+        var yew = Hud.Lore.PlaqueOf("yew");
+        bool could = !yew.Disabled;
+        yew.EmitSignal(BaseButton.SignalName.Pressed);
+        Check("a plaque in «Знания» learns its lore for the knowledge it costs", could && Sim.Knows("yew") && Sim.Knowledge == 0 && Hud.Lore.PlaqueOf("barbs").Disabled,
+            $"yew learnt {Sim.Knows("yew")}, {Sim.Knowledge} knowledge left");
+        Hud.ClosePanel();
 
         // the horde called early: no gold for it, only less known of the defences
         Sim.Waves.Countdown = 200;

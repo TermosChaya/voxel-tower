@@ -368,7 +368,7 @@ public sealed partial class Sim
             var (x, y, z) = WaterPlanner.Unpack(g.At[i]);
             if (!Mat.IsLeaf(World.Get(x, y, z))) { g.Gone[i] = true; g.At[i] = -1; }
         }
-        if (g.Hacked >= Gateway.Breach)
+        if (g.Hacked >= Gateway.Breach * (Knows("ironbound") ? 2 : 1))
         {
             g.Broken = true;
             var (bx, _, bz) = g.Middle;

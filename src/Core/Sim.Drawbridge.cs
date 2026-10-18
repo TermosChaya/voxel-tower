@@ -257,7 +257,7 @@ public sealed partial class Sim
             if (World.Get(x, y, z) != Mat.DrawDeck) { b.Gone[i] = true; b.At[i] = -1; }
         }
         var (mx, my, mz) = b.Middle;
-        if (b.Hacked >= b.Breach)
+        if (b.Hacked >= b.Breach * (Knows("ironbound") ? 2 : 1))
         {
             b.Broken = true;
             Say("Подъёмный мост разбит: он больше не поднимается.", 3, mx, mz);

@@ -75,7 +75,7 @@ public sealed partial class Sim
     /// <summary>Among stakes: torn a little, and now and then one trodden down.</summary>
     void AmongStakes(Unit u, float dt)
     {
-        Hurt(u, null, StakeHurt * dt, "колья");
+        Hurt(u, null, StakeHurt * StakeHarm * dt, "колья");
         if (Rng.NextDouble() >= StakeTrample * dt) return;
         // the stake nearest it goes down, the whole of it
         int bx = -1, bz = -1; float bd = float.MaxValue;

@@ -68,6 +68,8 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   (`Site.Arched`, `Landmarks.OldBridge`).
 - `Sim.Events.cs` — события: погода (`Weather`, `RainFire`, `WeatherAim`, `FogRange`), редкие звери (`RareBeast`,
   `BearTick`), посол орды (`SendEnvoy`, `EnvoyTick`, `MakeOffer`, `Answer`, `Deal`).
+- `Sim.Research.cs` — награды и знания: `Lore`, `Lores`, `Branches`, `Knowledge`, `Learnt`, `Learn`, `Reward(wave)`;
+  в конце — что даёт изученное (`BowRange`, `HireCost`, `StoneHack`, `LayPace` и др.), их читают на местах.
 - `Sim.Engines.cs` — осадные машины: `EngineTick`, `CatapultTick`/`AimFor`/`Throw`/`StoneLands`, `MantletTick`/`Cover`,
   `TowerTick`/`DockFor`/`Dock`/`TowerFell`, `KeepEscort`, `SpawnCatapult`.
 - `Sim.Thieves.cs` — грабители: `ThiefTick`, `LonePrey`, `Steal`, `Bind`/`Led`, `ThiefFell`/`ThiefGone`.
@@ -220,7 +222,7 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `Colonists.cs` — полоса лиц под балкой; `Inspector.cs` — середина консоли (кисть / одна пешка / группа / дружина),
   `HealthBar`, `BodyChart`, `PriorityCell`, `MiniCard`, `KindFace`; `WorkTable.cs` — таблица работ (рисуется
   целиком в `_Draw`, щелчки в `_GuiInput`); `Panels.cs` — `Retinue` (только помощники: что делает, раны, сводка),
-  `HordeInfo`, `UnitOverlay`; `Widgets.cs` — `Slot`, `Stepper`, `Choice`, `Tooltip`, `CursorTag`,
+  `HordeInfo`, `UnitOverlay`; `Lore.cs` — `LorePanel` (вкладка «Знания»); `Envoy.cs` — `EnvoyCard`; `Widgets.cs` — `Slot`, `Stepper`, `Choice`, `Tooltip`, `CursorTag`,
   `Medallion`, `Toasts`; палитра и шрифты — `Ornament.cs`, значки — `Icons.cs`. Корень интерфейса тянет текстуры
   с повтором (`TextureRepeat`). Летопись: `Hud.Log(text, kind, x, z)` — строка с местом получает «◎» и по щелчку
   ведёт камеру туда; ядро говорит через `Sim.Said` (`Say(text, kind, x, z)` / `Say(text, kind, unit)`). Запасы на

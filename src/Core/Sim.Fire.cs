@@ -55,7 +55,7 @@ public sealed partial class Sim
         if (!Mat.Burns(m) || Burning.Count >= MaxBurning) return false;
         int p = WaterPlanner.Pack(x, y, z);
         if (Burning.ContainsKey(p) || Wet(x, y, z)) return false;
-        Burning[p] = Mat.Fuel[m] * (.75f + (float)Rng.NextDouble() * .5f);
+        Burning[p] = Mat.Fuel[m] * (.75f + (float)Rng.NextDouble() * .5f) * (m == Mat.Pitch ? PitchBurn : 1);
         Caught?.Invoke(x, y, z, m);
         return true;
     }
@@ -273,7 +273,7 @@ public sealed partial class Sim
         u.Why = "";
         if (u.Path != null && u.PathI < u.Path.Count) { Walk(u, dt); return true; }
         u.State = UnitState.Work;
-        u.FireBeat += dt;
+        u.FireBeat += dt * BeatPace;
         if (u.FireBeat < .3f) return true;
         u.FireBeat = 0;
         if (!BeatOut(u)) { u.Unreachable[-1 - u.FireCell] = Time + 3; u.FireCell = -1; return false; }
@@ -482,7 +482,7 @@ public sealed partial class Sim
         if (a.At >= 0 && a.Hits)
         {
             var (kx, ky, kz) = WaterPlanner.Unpack(a.At);
-            if (Rng.NextDouble() < .8 * (Weather == Weather.Rain ? .45f : 1)) Ignite(kx, ky, kz);
+            if (Rng.NextDouble() < (Knows("soaked") ? .95 : .8) * (Weather == Weather.Rain ? .45f : 1)) Ignite(kx, ky, kz);
             return;
         }
         if (a.Hits && a.Target is { Dead: false } t)

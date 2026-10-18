@@ -414,7 +414,7 @@ public sealed partial class Sim
             if (u.Team != Team.Player || u.Hp >= u.MaxHp || Time - u.LastHurt < 8 || u.State is UnitState.Fight or UnitState.Flee) continue;
             float dx = u.X - Site.KeepX, dz = u.Z - Site.KeepZ;
             bool home = dx * dx + dz * dz < MendBy * MendBy;
-            u.Hp = Math.Min(u.MaxHp, u.Hp + u.MaxHp * (home ? .0035f : .0012f) * dt);
+            u.Hp = Math.Min(u.MaxHp, u.Hp + u.MaxHp * (home || u.Inside ? .0035f * MendHome : .0012f) * dt);
         }
         if (Remnants.Count > 0) Remnants.RemoveAll(r => Time - r.At > 90);
     }

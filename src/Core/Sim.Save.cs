@@ -15,7 +15,7 @@ namespace VoxelTower.Core;
 /// </summary>
 public sealed partial class Sim
 {
-    public const int SaveVersion = 7;
+    public const int SaveVersion = 8;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -94,6 +94,8 @@ public sealed partial class Sim
         w.Write(Waves.Number); w.Write(Waves.Active); w.Write(Waves.Countdown); w.Write(Waves.Intel); w.Write(Waves._spawnT); w.Write(Waves.DawnLeft); w.Write(Alarm);
         w.Write((byte)Weather); w.Write(WeatherLeft); w.Write(_nextWeather); w.Write(_nextBeast); w.Write(_nextEnvoy); w.Write(Angered);
         w.Write(Offer != null); if (Offer != null) { w.Write((byte)Offer.Kind); w.Write(Offer.Store); w.Write(Offer.Cost); w.Write(Offer.Envoy?.Id ?? -1); w.Write(Offer.Until); }
+        w.Write(Knowledge); w.Write(Learnt.Count);
+        foreach (string k in Learnt) w.Write(k);
         w.Write(Waves._lastBand?.Id ?? -1);
         w.Write(Waves._queue.Count);
         foreach (var (kind, band, back) in Waves._queue) { w.Write(kind.Key); w.Write(band?.Id ?? -1); WriteSurvivor(w, back); }
@@ -296,6 +298,9 @@ public sealed partial class Sim
             d.Envoy = byId.TryGetValue(envoy, out var e) ? e : null;
             if (d.Envoy != null) Offer = d;
         }
+        Knowledge = r.ReadDouble();
+        Learnt.Clear();
+        for (int i = r.ReadInt32(); i > 0; i--) Learnt.Add(r.ReadString());
         int last = r.ReadInt32();
         Waves._lastBand = Bands.Find(b => b.Id == last);
         Waves._queue.Clear();

@@ -69,7 +69,8 @@ public partial class Hud : CanvasLayer
     TopBeam _beam;
     HBoxContainer _tabs;
     DropPanel _drop;
-    TabPlaque _goalsTab, _hordeTab;
+    TabPlaque _goalsTab, _hordeTab, _loreTab;
+    LorePanel _lore;
     Stores _stores;
     WaveClock _clockPanel;
     Medallion _help, _menuButton;
@@ -234,6 +235,9 @@ public partial class Hud : CanvasLayer
         _horde = new HordeInfo();
         _hordeTab = Tab("horde", Icons.Sword, "Орда", "Орда\nВатаги грядущей волны (или той, что в долине): из кого, кто ведёт, откуда войдут; их пути — на поле и на карте (J). И брёвна с землёй орды на осадные работы.", _horde, 360);
         _horde.Init(m);
+        _lore = new LorePanel();
+        _lore.Init(m);
+        _loreTab = Tab("lore", Icons.Tome, "Знания", "Знания\nЧему выучилась крепость. Каждая отбитая волна приносит знания, и на них учатся умениям пяти ветвей: луки, кладка, труд, дружина, ловушки. Цифра на вкладке — сколько знаний ждёт, когда есть чему учиться.", _lore, LorePanel.Width);
 
         _stores = new Stores();
         _beam.AddChild(_stores);
@@ -411,6 +415,9 @@ public partial class Hud : CanvasLayer
         string hb = bands > 0 ? bands.ToString() : "";
         if (_hordeTab.Badge != hb) { _hordeTab.Badge = hb; _hordeTab.QueueRedraw(); }
         _horde.Refresh();
+        string lb = _lore.Badge();
+        if (_loreTab.Badge != lb) { _loreTab.Badge = lb; _loreTab.QueueRedraw(); }
+        _lore.Refresh();
     }
 
     /// <summary>What the tag says over a mine or a ruin.</summary>
@@ -549,6 +556,8 @@ public partial class Hud : CanvasLayer
     public string OpenTab => _drop?.OpenKey;
     public Unit Inspecting => _inspector?.One;
     public void OpenPanel(string key) => _drop.Open(key);
+    public void ClosePanel() => _drop.Close();
+    public LorePanel Lore => _lore;
     public bool MenuOpen => _menu?.IsOpen == true;
     public void OpenMenu() => _menu?.Open();
     public void OpenMenu(string page) => _menu?.Open(page);

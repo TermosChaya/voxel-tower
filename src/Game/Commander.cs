@@ -340,7 +340,7 @@ public partial class Commander : Node
     public Unit Hire(UnitType t)
     {
         var u = _m.Sim.Hire(t);
-        if (u == null) _m.Hud.Float($"нужно {t.Cost} золота", Ornament.Blood);
+        if (u == null) _m.Hud.Float($"нужно {_m.Sim.HireCost(t)} золота", Ornament.Blood);
         _m.Hud.Refresh();
         return u;
     }

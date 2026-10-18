@@ -186,7 +186,7 @@ public sealed partial class Sim
             bool marching = u.Hold && u.Dest >= 0 && CellsApart(u.Cell, u.Dest) > 1 && u.Path != null && u.PathI < u.Path.Count;
             if (!marching) { u.State = UnitState.Fight; u.Path = null; u.Facing = MathF.Atan2(t.Z - u.Z, t.X - u.X); }
             // a fire arrow takes a moment to light
-            if (u.Cooldown <= 0) { Shoot(u, t); u.Cooldown = u.T.AttackTime * (u.FireArrows ? 1.35f : 1) * (.9f + (float)Rng.NextDouble() * .2f); }
+            if (u.Cooldown <= 0) { Shoot(u, t); u.Cooldown = u.T.AttackTime * (u.FireArrows ? Knows("soaked") ? 1.1f : 1.35f : 1) * (.9f + (float)Rng.NextDouble() * .2f); }
             return !marching;
         }
         // swordsmen hold the ground round themselves or their post
@@ -257,7 +257,7 @@ public sealed partial class Sim
                 for (float dx = -r; dx <= r; dx += 16)
                     if (dx * dx + dz * dz <= r * r) _lit.Add(LitKey((int)Math.Clamp(x + dx, 0, World.SX - 1), (int)Math.Clamp(z + dz, 0, World.SZ - 1)));
         }
-        foreach (var f in Fixtures) if (f.Kind == FixtureKind.Torch) Around(f.LX, f.LZ, 6 * VoxelWorld.PerMetre);
+        foreach (var f in Fixtures) if (f.Kind == FixtureKind.Torch) Around(f.LX, f.LZ, TorchLight);
         Around(Site.KeepX, Site.KeepZ, Site.KeepR + 8 * VoxelWorld.PerMetre);
         int n = 0;
         foreach (int p in Burning.Keys)
@@ -274,10 +274,10 @@ public sealed partial class Sim
     public bool Lit(float x, float z) => _lit.Contains(LitKey((int)Math.Clamp(x, 0, World.SX - 1), (int)Math.Clamp(z, 0, World.SZ - 1)));
 
     /// <summary>How far a bow carries into the dark now: all the way by day, little more than half at night.</summary>
-    public float DarkRange(Unit a) => a.T.Range * FogRange * (1 - .45f * Waves.Darkness);
+    public float DarkRange(Unit a) => BowRange(a) * FogRange * (1 - .45f * Waves.Darkness);
 
     /// <summary>How far a bow carries to a spot: all the way by day or where it is light, little more than half in the dark.</summary>
-    public float RangeAt(Unit a, float x, float z) => Waves.Darkness <= 0 || Lit(x, z) ? a.T.Range * FogRange : DarkRange(a);
+    public float RangeAt(Unit a, float x, float z) => Waves.Darkness <= 0 || Lit(x, z) ? BowRange(a) * FogRange : DarkRange(a);
 
     /// <summary>A raider in range and in sight; the ones hacking walls or battering the citadel come first.</summary>
     Unit BestTarget(Unit u)
@@ -323,7 +323,7 @@ public sealed partial class Sim
         // a mantlet before the one aimed at takes the arrow
         t = Cover(u, t) ?? t;
         float d = Dist(u, t);
-        float chance = Math.Clamp(.9f - d / u.T.Range * .45f + (u.Y - t.Y > 16 ? .08f : 0), .35f, .92f);
+        float chance = Math.Clamp(.9f - d / BowRange(u) * .45f + (u.Y - t.Y > 16 ? .08f : 0), .35f, .92f);
         // a shape in the dark is harder to hit than one in the light; rain and wind spoil aim
         if (!Lit(t.X, t.Z)) chance *= 1 - .2f * Waves.Darkness;
         chance *= WeatherAim;
@@ -334,7 +334,7 @@ public sealed partial class Sim
             X0 = u.X, Y0 = u.Y + u.T.BodyH * .85f, Z0 = u.Z,
             X1 = t.X + (float)(Rng.NextDouble() - .5) * 4, Y1 = t.Y + t.T.BodyH * .55f, Z1 = t.Z + (float)(Rng.NextDouble() - .5) * 4,
             Dur = Math.Max(.08f, d / ArrowSpeed), Target = t, From = u, Hits = Rng.NextDouble() < chance,
-            Damage = u.T.Damage * (.8f + (float)Rng.NextDouble() * .5f), Fire = u.FireArrows,
+            Damage = u.T.Damage * (.8f + (float)Rng.NextDouble() * .5f) * (u.Team == Team.Player ? ArrowHarm : 1), Fire = u.FireArrows,
         });
     }
 

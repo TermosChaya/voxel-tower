@@ -106,9 +106,12 @@ public sealed partial class Sim
     /// <summary>Takes on a pawn at the citadel's gate if the treasury allows.</summary>
     public Unit Hire(UnitType t)
     {
-        if (Stock.Gold < t.Cost || Gate < 0) return null;
-        Stock.Gold -= t.Cost;
+        int cost = HireCost(t);
+        if (Stock.Gold < cost || Gate < 0) return null;
+        Stock.Gold -= cost;
         var u = Spawn(t, Gate);
+        // in quilted coats
+        if (t.Work < 1 && Knows("gambesons")) { u.MaxHp *= 1.2f; u.Hp = u.MaxHp; }
         Say($"{t.Name} пришёл к воротам.");
         return u;
     }

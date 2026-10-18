@@ -410,7 +410,7 @@ public partial class Inspector : Control
             var note = Hud.Text("", Ornament.Serif, 12, Ornament.Aged);
             note.CustomMinimumSize = new Vector2(128, 0);
             info.AddChild(note);
-            var hire = Btn($"Нанять · {t.Cost}", $"Нанять: {t.Name.ToLowerInvariant()}\n{t.Cost} золота. Приходит к воротам цитадели. Золото дают рудники, убитые налётчики и охота.", () => _m.Command.Hire(t), 104);
+            var hire = Btn("", "", () => _m.Command.Hire(t), 104);
             hire.SizeFlagsHorizontal = SizeFlags.ShrinkBegin;
             info.AddChild(hire);
             block.AddChild(info);
@@ -420,7 +420,10 @@ public partial class Inspector : Control
                 var (n, text) = Retinue.Summary(_m.Sim, t);
                 name.Text = $"{Retinue.Many(t)} · {n}";
                 note.Text = text;
-                hire.Disabled = _m.Sim.Stock.Gold < t.Cost || _m.Sim.Over;
+                int cost = _m.Sim.HireCost(t);
+                hire.Text = $"Нанять · {cost}";
+                hire.TooltipText = $"Нанять: {t.Name.ToLowerInvariant()}\n{cost} золота. Приходит к воротам цитадели. Золото дают рудники, убитые налётчики, охота и отбитые волны.";
+                hire.Disabled = _m.Sim.Stock.Gold < cost || _m.Sim.Over;
             });
         }
         row.AddChild(new Rule(true));

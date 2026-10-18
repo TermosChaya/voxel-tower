@@ -155,7 +155,7 @@ public sealed partial class Sim
         while (u.JobI < u.Jobs.Count && guard++ < 256)
         {
             var j = u.Jobs[u.JobI];
-            float cost = Orders.IsRemove(j.m) ? Labour.Dig(World.Get(j.x, j.y, j.z)) : Labour.Lay(j.m);
+            float cost = Orders.IsRemove(j.m) ? Labour.Dig(World.Get(j.x, j.y, j.z)) / DigPace : Labour.Lay(j.m) / LayPace;
             if (cost <= 0) cost = .25f;
             if (u.Effort < cost) break;
             u.JobI++;
@@ -181,7 +181,7 @@ public sealed partial class Sim
             Orders.Clear(j.x, j.y, j.z);
             Dug(j.x, j.y, j.z, cur);
             int kind = Labour.YieldKind(cur);
-            if (kind != Stockpile.None) Stock[kind] += Labour.YieldShare(cur) * u.T.Yield;
+            if (kind != Stockpile.None) Stock[kind] += Labour.YieldShare(cur) * u.T.Yield * YieldMore;
             if (cur == Mat.Ore) Stock.Gold += Labour.OreGold * u.T.Yield;
             Mined?.Invoke(j.x, j.y, j.z, cur);
             return true;

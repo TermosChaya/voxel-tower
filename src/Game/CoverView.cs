@@ -58,7 +58,7 @@ public partial class CoverView : Node3D
         const int Cell = VoxelWorld.PerMetre;
         foreach (var a in archers)
         {
-            float range = a.T.Range;
+            float range = sim.BowRange(a);
             int r = (int)(range / Cell), ci = (int)a.X / Cell, ck = (int)a.Z / Cell;
             for (int dk = -r; dk <= r; dk++)
                 for (int di = -r; di <= r; di++)

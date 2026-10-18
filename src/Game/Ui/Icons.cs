@@ -288,6 +288,22 @@ public static class Icons
         }
     }
 
+    /// <summary>An open book, its spine down the middle and a ribbon hanging out of it.</summary>
+    public static void Tome(CanvasItem c, Rect2 r, Color ink)
+    {
+        Fill(c, Shade(ink, .55f), P(r, .04f, .32f), P(r, .5f, .4f), P(r, .96f, .32f), P(r, .96f, .8f), P(r, .5f, .88f), P(r, .04f, .8f));
+        Fill(c, Shade(ink, .95f), P(r, .08f, .26f), P(r, .48f, .34f), P(r, .48f, .82f), P(r, .08f, .74f));
+        Fill(c, Shade(ink, .85f), P(r, .52f, .34f), P(r, .92f, .26f), P(r, .92f, .74f), P(r, .52f, .82f));
+        var dark = new Color(0, 0, 0, .5f * ink.A);
+        for (int i = 0; i < 3; i++)
+        {
+            float y = .41f + .11f * i;
+            c.DrawLine(P(r, .14f, y), P(r, .42f, y + .056f), dark, 1.2f, true);
+            c.DrawLine(P(r, .58f, y + .056f), P(r, .86f, y), dark, 1.2f, true);
+        }
+        Line(c, Shade(ink, .6f), S(r, .05f), P(r, .5f, .84f), P(r, .55f, .97f));
+    }
+
     public static void Coin(CanvasItem c, Rect2 r, Color ink)
     {
         Dot(c, P(r, .5f, .5f), S(r, .4f), Shade(ink, .8f));

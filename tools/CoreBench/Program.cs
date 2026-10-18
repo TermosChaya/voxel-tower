@@ -2411,6 +2411,52 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--events")
         $"the second cut down: angered {simV.Angered}, raiders {rosterA} → {rosterB}");
 }
 
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--lore")
+{
+    Console.WriteLine();
+    var mpK = new MapParams();
+    var wK = new VoxelWorld(mpK.SizeX, mpK.SizeY, mpK.SizeZ);
+    var siteK = MapGen.Generate(wK, mpK);
+    wK.Compact();
+    var simK = new Sim(wK, siteK);
+    simK.WildTarget = 0;
+    void RunK(double seconds) { for (double t = 0; t < seconds; t += .05) simK.Step(.05f); }
+    // a wave beaten back pays in gold and in knowledge
+    simK.Waves.StartNow(simK);
+    RunK(.5);
+    simK.Waves._queue.Clear();
+    foreach (var u in simK.Units) if (u.Team == Team.Horde && !u.Dead) { u.Dead = true; u.DiedAt = -999; }
+    double goldK0 = simK.Stock.Gold;
+    RunK(.5);
+    Check("a wave beaten back brings gold and knowledge", !simK.Waves.Active && simK.Stock.Gold >= goldK0 + 40 && simK.Knowledge == 2,
+        $"gold {goldK0:0} → {simK.Stock.Gold:0}, knowledge {simK.Knowledge}");
+
+    // lore is learnt in the order of its branch, and only for the knowledge it costs
+    bool barbsFirst = simK.Learn("barbs");
+    var bowK = simK.Spawn(Kinds.Archer, simK.Gate);
+    float reachK0 = simK.RangeAt(bowK, bowK.X + 50, bowK.Z);
+    int costK0 = simK.HireCost(Kinds.Swordsman);
+    bool yewK = simK.Learn("yew");
+    float reachK1 = simK.RangeAt(bowK, bowK.X + 50, bowK.Z);
+    bool barbsPoor = simK.Learn("barbs");
+    simK.Knowledge = 6;
+    bool drillFirst = simK.Learn("drill");
+    bool coats = simK.Learn("gambesons"), drillK = simK.Learn("drill");
+    Check("lore is learnt in the order of its branch, for the knowledge it costs",
+        !barbsFirst && yewK && !barbsPoor && !drillFirst && coats && drillK && simK.Knowledge == 1 && simK.Learnt.Count == 3,
+        $"barbs before yew {barbsFirst}, yew {yewK}, barbs with nothing left {barbsPoor}, drill before coats {drillFirst}, coats {coats}, drill {drillK}; {simK.Knowledge} left");
+
+    // and does what it says: yew carries further, the drill yard makes hiring cheaper, quilted coats keep a soldier longer
+    int costK1 = simK.HireCost(Kinds.Swordsman);
+    simK.Stock.Gold = 1000;
+    var swordK = simK.Hire(Kinds.Swordsman);
+    Check("yew bows carry 15 % further, the drill yard takes a fifth off hiring, quilted coats give a fifth more life",
+        MathF.Abs(reachK1 / reachK0 - 1.15f) < .01f && costK1 == (int)Math.Round(costK0 * .8) && swordK != null && 1000 - simK.Stock.Gold == costK1
+        && MathF.Abs(swordK.MaxHp - Kinds.Swordsman.Hp * 1.2f) < .01f && swordK.Hp == swordK.MaxHp,
+        $"reach {reachK0 / VoxelWorld.PerMetre:0.0} → {reachK1 / VoxelWorld.PerMetre:0.0} m; a swordsman {costK0} → {costK1} gold, paid {1000 - simK.Stock.Gold:0}; " +
+        $"his life {swordK?.MaxHp:0} of {Kinds.Swordsman.Hp:0}");
+}
+
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
 {
     Console.WriteLine();
@@ -2442,6 +2488,9 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
     for (int y = pg; y < pg + 12; y++) for (int z = pz; z < pz + 2; z++) for (int x = px; x < px + 2; x++) wS.Set(x, y, z, Mat.Wood);
     simS.Ignite(px, pg + 4, pz);
     RunS(1);
+    // and something learnt
+    simS.Knowledge = 4;
+    simS.Learn("mortar");
     var ms = new System.IO.MemoryStream();
     var watch = System.Diagnostics.Stopwatch.StartNew();
     simS.Save(ms, SeedS, "Волна 1", "the screen's own");
@@ -2487,7 +2536,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
         && simL.Stock.Gold == simS.Stock.Gold && simL.Stock[Stockpile.Stone] == simS.Stock[Stockpile.Stone] && simL.Zones.Count == simS.Zones.Count
         && simL.Gates.Count == simS.Gates.Count && simL.Fixtures.Count == simS.Fixtures.Count && simL.Burning.Count == simS.Burning.Count
         && simL.Bands.Count == simS.Bands.Count && simL.Waves.Number == simS.Waves.Number && simL.Waves.Active == simS.Waves.Active
-        && simL.Waves.Coming == simS.Waves.Coming && simL.Mines.TrueForAll(m => m.Holder == simS.Mines[simL.Mines.IndexOf(m)].Holder) && extra == "the screen's own";
+        && simL.Waves.Coming == simS.Waves.Coming && simL.Mines.TrueForAll(m => m.Holder == simS.Mines[simL.Mines.IndexOf(m)].Holder) && extra == "the screen's own"
+        && simL.Knowledge == 2 && simL.Knows("mortar") && simL.Learnt.Count == 1;
     Check("a game saved and read back is the same: the valley as play changed it, the household and the horde, the siege",
         chunksOff == 0 && designOff == 0 && unitsOff == 0 && livingS.Count == simL.Units.Count && sameSiege && simS.Burning.Count > 0 && simS.Bands.Count > 0,
         $"{bytes / 1024} KB, written in {saveMs} ms, read in {loadMs} ms (the valley made again); {chunksOff} chunks and {designOff} of the design differ; " +
