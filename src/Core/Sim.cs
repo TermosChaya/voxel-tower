@@ -440,6 +440,8 @@ public sealed partial class Sim
         {
             if (u.Dead || u.Team != Team.Player) continue;
             u.Duty = kind;
+            // sent to bring it in, it does that work, whatever else it was set to
+            if (kind != Stockpile.None && !Work.Does(u, Work.For(kind))) u.Priority[(int)Work.For(kind)] = Work.Usual;
             u.DutyZone = null;
             u.Hold = false; u.Dest = -1; u.Prey = null;
             u.NextSearch = 0;

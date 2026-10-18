@@ -47,7 +47,7 @@ public sealed partial class Sim
                 byte o = d[i];
                 if (o == 0) continue;
                 int x = cx * 32 + (i & 31), z = cz * 32 + (i >> 5 & 31), y = cy * 32 + (i >> 10);
-                if (o == Orders.Remove)
+                if (Orders.IsRemove(o))
                 {
                     byte was = World.Get(x, y, z);
                     World.Set(x, y, z, 0);
@@ -141,7 +141,7 @@ public sealed partial class Sim
         while (u.JobI < u.Jobs.Count && guard++ < 256)
         {
             var j = u.Jobs[u.JobI];
-            float cost = j.m == Orders.Remove ? Labour.Dig(World.Get(j.x, j.y, j.z)) : Labour.Lay(j.m);
+            float cost = Orders.IsRemove(j.m) ? Labour.Dig(World.Get(j.x, j.y, j.z)) : Labour.Lay(j.m);
             if (cost <= 0) cost = .25f;
             if (u.Effort < cost) break;
             u.JobI++;
@@ -160,7 +160,7 @@ public sealed partial class Sim
     {
         byte cur = World.Get(j.x, j.y, j.z);
         if (Orders.At(j.x, j.y, j.z) != j.m) return false;
-        if (j.m == Orders.Remove)
+        if (Orders.IsRemove(j.m))
         {
             if (!Labour.Diggable(cur)) { Orders.Clear(j.x, j.y, j.z); return false; }
             World.Set(j.x, j.y, j.z, Mat.Air);
@@ -186,8 +186,8 @@ public sealed partial class Sim
     public Action<int, int, int, byte> Mined;
 
     /// <summary>
-    /// The orders within reach of where the pawn stands: digging top-down first, then laying bottom-up,
-    /// and within each course the voxels nearest to it first, so two at one site work different ends of it.
+    /// The orders within reach of where the pawn stands, of the work it came here for: digging top-down first, then
+    /// laying bottom-up, and within each course the voxels nearest to it first, so two at one site work different ends.
     /// </summary>
     void Gather(Unit u)
     {
@@ -205,8 +205,8 @@ public sealed partial class Sim
                 for (int x = x0; x < x1; x++)
                 {
                     byte o = Orders.At(x, y, z);
-                    if (o == 0) continue;
-                    if (o == Orders.Remove) { digs.Add((x, y, z, o)); continue; }
+                    if (o == 0 || (u.SiteWork >> (int)Work.Of(o) & 1) == 0) continue;
+                    if (Orders.IsRemove(o)) { digs.Add((x, y, z, o)); continue; }
                     int ck = Labour.CostKind(o);
                     if (ck != Stockpile.None && Stock[ck] < 1) { missing = Stockpile.Name(ck); continue; }
                     if (_bodies[Nav.CellOf(x, y, z)] > 0) { crowded = true; continue; }
@@ -224,6 +224,7 @@ public sealed partial class Sim
     void FindWork(Unit u)
     {
         u.NextSearch = Time + .3 + Rng.NextDouble() * .4;
+        if (Work.Allowed(u) == 0) { u.Why = "все работы отключены"; return; }
         if (Orders.Active.Count == 0)
         {
             u.Why = "";
@@ -231,53 +232,86 @@ public sealed partial class Sim
             if (DutyWork(u) || FeedFromZone(u)) u.NextSearch = Time;
             return;
         }
-        int ui = Nav.I(u.Cell), uk = Nav.K(u.Cell);
-        var near = new List<(float d, int col)>();
-        int starved = 0;
-        foreach (int col in Orders.Active)
+        int ui = Nav.I(u.Cell), uk = Nav.K(u.Cell), h = u.T.Move.Height, starved = 0;
+        bool unreached = false;
+        // the work it puts first, then the next: of each, the nearest it can get to
+        for (int priority = 1; priority <= 4; priority++)
         {
-            // nothing there to dig, and nothing to lay that the stores hold: don't even go
-            if (!Workable(col)) { starved++; continue; }
-            if (_claims[col] >= 2) continue;
-            // what another pawn was sent to bring in is its work
-            if (u.Duty != Stockpile.None && ZoneAt((col % Nav.NX << NavGrid.Shift) + 4, (col / Nav.NX << NavGrid.Shift) + 4) is { Auto: true } other && other != u.DutyZone) continue;
-            if (u.Unreachable.TryGetValue(col, out double until) && Time < until) continue;
-            float d = PathFinder.Octile(col % Nav.NX - ui, col / Nav.NX - uk);
-            if (near.Count < 6) { near.Add((d, col)); continue; }
-            int worst = 0;
-            for (int n = 1; n < near.Count; n++) if (near[n].d > near[worst].d) worst = n;
-            if (d < near[worst].d) near[worst] = (d, col);
+            int mask = Work.Mask(u, priority);
+            if (mask == 0) continue;
+            var near = new List<(float d, int col)>();
+            foreach (int col in Orders.Active)
+            {
+                if (!HasWork(col, mask)) continue;
+                // nothing there to dig, and nothing to lay that the stores hold: don't even go
+                if (!Workable(col, mask)) { starved++; continue; }
+                if (_claims[col] >= 2) continue;
+                // what another pawn was sent to bring in is its work
+                if (u.Duty != Stockpile.None && ZoneAt((col % Nav.NX << NavGrid.Shift) + 4, (col / Nav.NX << NavGrid.Shift) + 4) is { Auto: true } other && other != u.DutyZone) continue;
+                if (u.Unreachable.TryGetValue(col, out double until) && Time < until) continue;
+                float d = PathFinder.Octile(col % Nav.NX - ui, col / Nav.NX - uk);
+                if (near.Count < 6) { near.Add((d, col)); continue; }
+                int worst = 0;
+                for (int n = 1; n < near.Count; n++) if (near[n].d > near[worst].d) worst = n;
+                if (d < near[worst].d) near[worst] = (d, col);
+            }
+            near.Sort((a, b) => a.d.CompareTo(b.d));
+            foreach (var (_, col) in near)
+            {
+                if (!Orders.Span(col, out int y0, out int y1)) continue;
+                int ci = col % Nav.NX, ck = col / Nav.NX;
+                // stand beside the work (in its column only if nothing is to be laid where the body would be),
+                // and not where another pawn already stands
+                int self = u.Cell;
+                bool Goal(int c) => Math.Abs(Nav.I(c) - ci) <= 1 && Math.Abs(Nav.K(c) - ck) <= 1
+                    && Nav.Floor[c] - Labour.ReachDown <= y1 && Nav.Floor[c] + Labour.ReachUp > y0
+                    && !(Nav.I(c) == ci && Nav.K(c) == ck && BuildsInBody(c, h))
+                    && _bodies[c] - (c == self ? 1 : 0) <= 0;
+                List<int> path = Goal(u.Cell) ? new List<int>() : Paths.Find(u.Cell, Goal, c => H(c, ci, ck), u.T.Move, 30000, gates: true);
+                if (path == null) { u.Unreachable[col] = Time + 12; continue; }
+                u.Site = col; _claims[col]++;
+                u.SiteWork = mask;
+                u.Path = path.Count > 0 ? path : null; u.PathI = 0;
+                u.Jobs.Clear(); u.JobI = 0; u.Why = "";
+                return;
+            }
+            if (near.Count > 0) unreached = true;
         }
-        near.Sort((a, b) => a.d.CompareTo(b.d));
-        int h = u.T.Move.Height;
-        foreach (var (_, col) in near)
-        {
-            if (!Orders.Span(col, out int y0, out int y1)) continue;
-            int ci = col % Nav.NX, ck = col / Nav.NX;
-            // stand beside the work (in its column only if nothing is to be laid where the body would be),
-            // and not where another pawn already stands
-            int self = u.Cell;
-            bool Goal(int c) => Math.Abs(Nav.I(c) - ci) <= 1 && Math.Abs(Nav.K(c) - ck) <= 1
-                && Nav.Floor[c] - Labour.ReachDown <= y1 && Nav.Floor[c] + Labour.ReachUp > y0
-                && !(Nav.I(c) == ci && Nav.K(c) == ck && BuildsInBody(c, h))
-                && _bodies[c] - (c == self ? 1 : 0) <= 0;
-            List<int> path = Goal(u.Cell) ? new List<int>() : Paths.Find(u.Cell, Goal, c => H(c, ci, ck), u.T.Move, 30000, gates: true);
-            if (path == null) { u.Unreachable[col] = Time + 12; continue; }
-            u.Site = col; _claims[col]++;
-            u.Path = path.Count > 0 ? path : null; u.PathI = 0;
-            u.Jobs.Clear(); u.JobI = 0; u.Why = "";
-            return;
-        }
-        if (near.Count > 0) u.Why = "до работы не дойти";
+        if (unreached) u.Why = "до работы не дойти";
         else if (starved > 0) u.Why = "ждёт: " + Wanting();
+        else if (Barred(u) is { Length: > 0 } barred) u.Why = "не велено: " + barred;
         // nothing marked that this one can get to: take a little more out of an area set aside for it
         if (DutyWork(u) || FeedFromZone(u)) { u.Why = ""; u.NextSearch = Time; }
     }
 
-    /// <summary>A column worth walking to: something to dig there, or something to lay that the stores hold (or that costs nothing).</summary>
-    bool Workable(int col)
+    /// <summary>The marked work there is that this pawn is set never to do: "копать, рубить".</summary>
+    string Barred(Unit u)
     {
-        if (Orders.ColDig[col] > 0 || Orders.ColLay[Stockpile.None][col] > 0) return true;
+        int allowed = Work.Allowed(u), barred = 0;
+        foreach (int col in Orders.Active)
+            for (int k = 0; k < Work.Kinds; k++)
+                if ((allowed >> k & 1) == 0 && Orders.ColWork[k][col] > 0) barred |= 1 << k;
+        var names = new List<string>();
+        for (int k = 0; k < Work.Kinds; k++) if ((barred >> k & 1) != 0) names.Add(Work.Verbs[k]);
+        return string.Join(", ", names);
+    }
+
+    /// <summary>A column holds work of one of these kinds (bits by <see cref="WorkKind"/>).</summary>
+    bool HasWork(int col, int mask)
+    {
+        for (int k = 0; k < Work.Kinds; k++) if ((mask >> k & 1) != 0 && Orders.ColWork[k][col] > 0) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// A column worth walking to for work of these kinds: something there to take out, or something to lay that the
+    /// stores hold (or that costs nothing).
+    /// </summary>
+    bool Workable(int col, int mask)
+    {
+        for (int k = 1; k < Work.Kinds; k++) if ((mask >> k & 1) != 0 && Orders.ColWork[k][col] > 0) return true;
+        if ((mask & 1) == 0) return false;
+        if (Orders.ColLay[Stockpile.None][col] > 0) return true;
         for (int k = 1; k < 4; k++) if (Orders.ColLay[k][col] > 0 && Stock[k] >= 1) return true;
         return false;
     }
@@ -301,7 +335,7 @@ public sealed partial class Sim
                 for (int x = x0; x < x0 + NavGrid.CS; x++)
                 {
                     byte o = Orders.At(x, y, z);
-                    if (o != 0 && o != Orders.Remove) return true;
+                    if (o != 0 && !Orders.IsRemove(o)) return true;
                 }
         return false;
     }

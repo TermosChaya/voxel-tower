@@ -150,7 +150,7 @@ public sealed partial class Sim
             if (want == 0 || Stands(cur, want) || Site.Forbidden(x, z)) continue;
             byte o = Orders.At(x, y, z);
             if (Brushes.Free(cur)) { if (o != want) lay.Add(x, y, z, want); }
-            else if (Labour.Diggable(cur) && !Mat.IsLeaf(cur) && o != Orders.Remove) clear.Add(x, y, z, Mat.Air);
+            else if (Labour.Diggable(cur) && !Mat.IsLeaf(cur) && !Orders.IsRemove(o)) clear.Add(x, y, z, Mat.Air);
         }
     }
 

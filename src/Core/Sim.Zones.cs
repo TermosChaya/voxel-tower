@@ -178,10 +178,13 @@ public sealed partial class Sim
             foreach (var z in Zones)
             {
                 if (z.Auto && u.Duty != Stockpile.None && z != u.DutyZone) continue;
+                // not the work it does
+                if (!Work.Does(u, Work.For(z.Kind))) continue;
                 float dx = Math.Max(0, Math.Max(z.X0 - u.X, u.X - z.X1)), dz = Math.Max(0, Math.Max(z.Z0 - u.Z, u.Z - z.Z1));
                 float d = dx * dx + dz * dz;
                 if (d < bd) { bd = d; best = z; }
             }
+            if (best == null) return false;
             if (Feed(best, u, out bool spent)) return true;
             if (!spent) return false;
         }
@@ -216,7 +219,7 @@ public sealed partial class Sim
     /// </summary>
     bool DutyWork(Unit u)
     {
-        if (u.Duty == Stockpile.None) return false;
+        if (u.Duty == Stockpile.None || !Work.Does(u, Work.For(u.Duty))) return false;
         for (int tries = 0; tries < 3; tries++)
         {
             if (u.DutyZone == null || !Zones.Contains(u.DutyZone)) u.DutyZone = DutyZone(u);

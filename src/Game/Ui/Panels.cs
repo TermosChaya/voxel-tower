@@ -312,7 +312,7 @@ public partial class Retinue : VBoxContainer
             case UnitState.Work:
                 if (u.JobI >= u.Jobs.Count) return "работает";
                 var job = u.Jobs[u.JobI];
-                if (job.m != Orders.Remove) return "строит";
+                if (!Orders.IsRemove(job.m)) return "строит";
                 byte at = sim.World.Get(job.x, job.y, job.z);
                 return Mat.IsVeg[at] ? "рубит лес" : at is Mat.Rock or Mat.Moss or Mat.Ruin or Mat.Ore || Mat.IsMasonry(at) ? "ломает камень" : "копает";
             case UnitState.Fight: return "бьётся";

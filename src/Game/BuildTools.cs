@@ -779,7 +779,7 @@ public partial class BuildTools : Node3D
             : Mat.IsPlayer[_hover.M] && above > .05f ? $"{Mat.NameOf(_hover.M)} · {Fmt.One(above)} м над землёй" : Mat.NameOf(_hover.M);
         byte order = _m.Sim.Orders.At(_hover.X, _hover.Y, _hover.Z);
         if (order == 0) { var f = _hover.Front; order = _m.Sim.Orders.At(f.x, f.y, f.z); }
-        if (order == Orders.Remove) text += " · размечено: копать";
+        if (Orders.IsRemove(order)) text += " · размечено: копать";
         else if (order != 0) text += $" · размечено: {Mat.NameOf(order).ToLowerInvariant()}";
         var zone = _m.Sim.ZoneAt(_hover.X, _hover.Z);
         if (zone != null) text += $" · {zone.Name.ToLowerInvariant()}";

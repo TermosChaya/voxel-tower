@@ -113,11 +113,23 @@ public static class Labour
 
 /// <summary>
 /// Work the player has marked out: a layer as big as the world where each voxel is nothing, a material to lay,
-/// or <see cref="Remove"/>. Pawns pick it up by the metre-wide column of cells.
+/// or something to take out — earth to dig (<see cref="Remove"/>), wood to fell or take apart, stone to break —
+/// told apart when it is marked, for the pawns' priorities. Pawns pick it up by the metre-wide column of cells.
 /// </summary>
 public sealed class Orders
 {
-    public const byte Remove = 255;
+    public const byte Remove = 255, RemoveWood = 254, RemoveStone = 253;
+
+    /// <summary>Whether an order is to take something out (of any kind) rather than to lay a material.</summary>
+    public static bool IsRemove(byte o) => o >= RemoveStone;
+
+    /// <summary>The order that takes a material out: felling for wood, breaking for stone and rock, digging for the rest.</summary>
+    public static byte RemoveFor(byte m) => Labour.YieldKind(m) switch
+    {
+        Stockpile.Wood => RemoveWood,
+        Stockpile.Stone => RemoveStone,
+        _ => m == Mat.Ore ? RemoveStone : Remove,
+    };
 
     public readonly VoxelWorld Layer;
     readonly VoxelWorld _w;
@@ -128,6 +140,8 @@ public sealed class Orders
     /// <summary>Of those, voxels to dig out, and voxels to lay from each store (indexed by store; None for what costs nothing).</summary>
     public readonly int[] ColDig;
     public readonly int[][] ColLay = new int[4][];
+    /// <summary>The voxels to take out by the work they are (indexed by <see cref="WorkKind"/>; Build holds every lay).</summary>
+    public readonly int[][] ColWork = new int[Work.Kinds][];
     public readonly HashSet<int> Active = new();
     public int Total { get; private set; }
     public int BuildTotal { get; private set; }
@@ -140,6 +154,7 @@ public sealed class Orders
         ColCount = new int[_nx * _nz];
         ColDig = new int[_nx * _nz];
         for (int k = 0; k < 4; k++) ColLay[k] = new int[_nx * _nz];
+        for (int k = 0; k < Work.Kinds; k++) ColWork[k] = new int[_nx * _nz];
     }
 
     public byte At(int x, int y, int z) => y < 0 ? (byte)0 : Layer.Get(x, y, z);
@@ -150,7 +165,8 @@ public sealed class Orders
         ColCount[col] += d;
         if (ColCount[col] > 0) Active.Add(col); else Active.Remove(col);
         Total += d;
-        if (order == Remove) ColDig[col] += d;
+        ColWork[(int)Work.Of(order)][col] += d;
+        if (IsRemove(order)) ColDig[col] += d;
         else { BuildTotal += d; ColLay[Labour.CostKind(order)][col] += d; }
     }
 
@@ -184,10 +200,11 @@ public sealed class Orders
             int x = L.X(i), y = L.Y(i), z = L.Z(i);
             if (!_w.InBounds(x, y, z) || !Labour.Diggable(_w.Get(x, y, z)) || _site.Forbidden(x, z)) continue;
             byte cur = Layer.Get(x, y, z);
-            if (cur == Remove) continue;
+            if (IsRemove(cur)) continue;
             if (cur != 0) Count(x, z, -1, cur);
-            Layer.Set(x, y, z, Remove);
-            Count(x, z, 1, Remove);
+            byte o = RemoveFor(_w.Get(x, y, z));
+            Layer.Set(x, y, z, o);
+            Count(x, z, 1, o);
             n++;
         }
         return n;

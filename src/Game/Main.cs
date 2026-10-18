@@ -489,7 +489,7 @@ public partial class Main : Node3D
         for (int z = 420; z < 580; z++)
             for (int x = 600; x < 690; x++)
                 for (int y = World.SurfAt(x, z) - 20; y < World.SurfAt(x, z) + 2; y++)
-                    if (Sim.Orders.At(x, y, z) == Orders.Remove)
+                    if (Orders.IsRemove(Sim.Orders.At(x, y, z)))
                     {
                         if (Math.Abs(x - gx) > 5) askew++;
                         minZ = Math.Min(minZ, z); maxZ = Math.Max(maxZ, z);

@@ -875,6 +875,64 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--life")
         }
         Check("a herd doesn't stand in one heap", herd > 6 && stacked == 0, $"{herd} beasts, {stacked} standing in a cell with another");
         foreach (var u in sim.Units) if (u.Team == Team.Wild) { u.Dead = true; u.DiedAt = -999; }
+
+        // the work table: a worker set never to dig leaves a pit marked at its feet alone, and digs it once allowed;
+        // one set to fell first walks past a pit at its feet to a tree further off
+        // the tree on the plateau nearest the citadel, at least 40 m off it
+        int tx = -1, tz = -1;
+        float treeFar = float.MaxValue;
+        for (int z = 16; z < w4.SZ - 16; z += 2)
+            for (int x = 16; x < w4.SX - 16; x += 2)
+            {
+                float d = MathF.Sqrt((x - site4.KeepX) * (x - site4.KeepX) + (z - site4.KeepZ) * (z - site4.KeepZ));
+                if (d < 320 || d > treeFar || !Mat.IsTrunk(w4.Get(x, w4.SurfAt(x, z) + 2, z))) continue;
+                if (w4.SurfAt(x, z) < site4.KeepBase - 16 || site4.WaterTop[z * w4.SX + x] > 0) continue;
+                tx = x; tz = z; treeFar = d;
+            }
+        // orders of one kind of work left in a rectangle
+        int Left(int x0, int z0, int x1, int z1, WorkKind kind)
+        {
+            int n = 0;
+            for (int z = z0; z <= z1; z++)
+                for (int x = x0; x <= x1; x++)
+                    for (int y = Math.Max(0, w4.SurfAt(x, z) - 10); y < Math.Min(w4.SY, w4.SurfAt(x, z) + 100); y++)
+                        if (sim.Orders.At(x, y, z) is var o && o != 0 && Work.Of(o) == kind) n++;
+            return n;
+        }
+        var digger = sim.Spawn(Kinds.Worker, sim.NearestStand(tx + 100, tz, 4));
+        digger.Priority[(int)WorkKind.Dig] = 0;
+        int dx0 = (int)digger.X + 10, dz0 = (int)digger.Z - 6;
+        sim.DesignateRemove(Shapes.Box(w4, site4, dx0, dz0, dx0 + 12, dz0 + 12, new Stroke { Height = 8, Dig = true }, 0));
+        int pit0 = Left(dx0, dz0, dx0 + 12, dz0 + 12, WorkKind.Dig);
+        Run(25);
+        int pitBarred = Left(dx0, dz0, dx0 + 12, dz0 + 12, WorkKind.Dig);
+        string barredWhy = digger.Why;
+        digger.Priority[(int)WorkKind.Dig] = Work.Usual;
+        Run(25);
+        int pitAllowed = Left(dx0, dz0, dx0 + 12, dz0 + 12, WorkKind.Dig);
+        Check("a worker set never to dig leaves the pit alone, and digs it once allowed", pit0 > 500 && pitBarred == pit0 && pitAllowed < pit0 * 3 / 4 && barredWhy.Contains("копать"),
+            $"{pit0} voxels marked, {pitBarred} left after 25 s set never to dig («{barredWhy}»), {pitAllowed} once allowed");
+        sim.CancelArea(dx0 - 4, dz0 - 4, dx0 + 16, dz0 + 16);
+        digger.Dead = true; digger.DiedAt = -999;
+
+        var feller = sim.Spawn(Kinds.Worker, sim.NearestStand(tx + 90, tz + 70, 4));
+        feller.Priority[(int)WorkKind.Fell] = 1;
+        int fx0 = (int)feller.X + 8, fz0 = (int)feller.Z - 6;
+        sim.DesignateRemove(Shapes.Box(w4, site4, fx0, fz0, fx0 + 12, fz0 + 12, new Stroke { Height = 8, Dig = true }, 0));
+        sim.DesignateRemove(Shapes.Tree(w4, tx, w4.SurfAt(tx, tz) + 2, tz));
+        int pitF0 = Left(fx0, fz0, fx0 + 12, fz0 + 12, WorkKind.Dig), tree0 = Left(tx - 40, tz - 40, tx + 40, tz + 40, WorkKind.Fell);
+        double treeAt = -1, pitAt = -1;
+        float startFar = MathF.Sqrt((feller.X - tx) * (feller.X - tx) + (feller.Z - tz) * (feller.Z - tz));
+        for (int t = 0; t < 40 && (treeAt < 0 || pitAt < 0); t++)
+        {
+            Run(1);
+            if (treeAt < 0 && Left(tx - 40, tz - 40, tx + 40, tz + 40, WorkKind.Fell) < tree0) treeAt = t + 1;
+            if (pitAt < 0 && Left(fx0, fz0, fx0 + 12, fz0 + 12, WorkKind.Dig) < pitF0) pitAt = t + 1;
+        }
+        Check("a worker set to fell first walks past the pit at its feet to a tree further off", tx >= 0 && pitF0 > 300 && treeAt > 0 && (pitAt < 0 || pitAt > treeAt),
+            $"the tree {startFar / VoxelWorld.PerMetre:0} m off ({tree0} voxels to fell), the pit at its feet ({pitF0} to dig): felling from {treeAt} s, digging from {(pitAt < 0 ? "never" : pitAt + " s")}");
+        sim.CancelArea(0, 0, w4.SX - 1, w4.SZ - 1);
+        feller.Dead = true; feller.DiedAt = -999;
     }
 
 }

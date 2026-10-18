@@ -94,7 +94,7 @@ public partial class OrdersView : Node3D
                 byte o = _pad[i];
                 _b[i] = 0; _d[i] = 0;
                 if (o == 0) continue;
-                if (o != Orders.Remove) { _b[i] = o; anyB = true; continue; }
+                if (!Orders.IsRemove(o)) { _b[i] = o; anyB = true; continue; }
                 // the red wash keeps a hint of what is under it
                 int x = i % P - 1, z = i / P % P - 1, y = i / (P * P) - 1;
                 byte m = w.Get(ox + x, oy + y, oz + z);

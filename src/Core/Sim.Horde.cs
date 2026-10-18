@@ -215,7 +215,7 @@ public sealed partial class Sim
             u.CarveEffort -= cost;
             u.CarveI++;
             World.Set(x, y, z, Mat.Air);
-            if (Orders.At(x, y, z) == Orders.Remove) Orders.Clear(x, y, z);
+            if (Orders.IsRemove(Orders.At(x, y, z))) Orders.Clear(x, y, z);
             // half of what is hacked out is fit to build with
             int kind = Labour.YieldKind(m);
             if (kind != Stockpile.None) HordeStock[kind] += Labour.YieldShare(m) * .5;
