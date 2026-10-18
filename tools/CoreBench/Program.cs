@@ -1326,6 +1326,30 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--wits")
     Check("a swordsman comes to the help of a worker set upon beyond his post", apart0 > 120 && nearest <= 40,
         $"the goblin {apart0 / VoxelWorld.PerMetre:0} m from the swordsman at first, {nearest / VoxelWorld.PerMetre:0.0} m at the nearest; the swordsman {keeper.State}");
     Gone(keeper); Gone(victim); Gone(attacker);
+
+    // the chief, knowing the defences, sends the bands at a side none of ours keep, and they gather there to storm
+    var watch = new System.Collections.Generic.List<Unit>();
+    for (int i = 0; i < 6; i++)
+    {
+        int at = simW.NearestStand(kxW - 200 + i % 3 * 16, kzW - 24 + i / 3 * 48, 4);
+        var a = simW.Spawn(Kinds.Archer, at);
+        simW.Command(new[] { a }, at);
+        watch.Add(a);
+    }
+    simW.ComputeFields(coming: true);
+    simW.PlanWave(3);
+    simW.ChooseSides(1);
+    var sent = simW.Bands.FindAll(b => b.State == BandState.Coming && b.Target == null);
+    bool weak = sent.Count > 0 && sent.TrueForAll(b => b.Side >= 0 && simW.SideKeep[b.Side] < .5f);
+    string where = string.Join("; ", sent.ConvertAll(b => b.Side >= 0 ? $"{b.Name} on the {b.Side * 45}° side ({simW.SideKeep[b.Side]:0.0} of ours there): {b.Why}" : $"{b.Name}: none"));
+    simW.Waves.Countdown = 0;
+    Warband gathered = null;
+    for (int t = 0; t < 400 && gathered == null; t++) { RunW(.5); gathered = simW.Bands.Find(b => b.State == BandState.Rally && b.RallyCell >= 0); }
+    int off = gathered?.Leader is { Dead: false } gl ? Math.Max(Math.Abs(simW.Nav.I(gl.Cell) - simW.Nav.I(gathered.RallyCell)), Math.Abs(simW.Nav.K(gl.Cell) - simW.Nav.K(gathered.RallyCell))) : 99;
+    Check("knowing the defences, the chief sends the bands at a side none of ours keep, and they gather there to storm", weak && gathered != null && off <= 4,
+        $"west kept by {watch.Count} archers; {where}; {gathered?.Name ?? "nobody"} gathered {off} cells from its place, {simW.Time:0} s");
+    simW.Waves.CallOff(simW);
+    foreach (var a in watch) Gone(a);
 }
 
 // ---- bodies of voxels: a skeleton inside, blows carving out what they strike, limbs cut off, vital wounds, bleeding

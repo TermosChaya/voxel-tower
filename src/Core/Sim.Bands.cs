@@ -43,6 +43,22 @@ public sealed class Warband
     internal double HeadingAt = -1;
     /// <summary>Its first leader has fallen; and it has broken and runs.</summary>
     public bool LostLeader, Broken;
+    /// <summary>
+    /// The side of the citadel the chief sent it against (0 east, then round by south: 2 south, 4 west, 6 north; −1 for
+    /// none), where it gathers on that side before the storm, and why that side.
+    /// </summary>
+    public int Side = -1, RallyCell = -1;
+    public string Why = "";
+    /// <summary>The chief's guess at each side where he knows nothing, from 0 (weak) to 1.</summary>
+    internal float[] Hunch;
+    /// <summary>The leader's way to the gathering place, cell by cell, and how far along it is; when to look for it again.</summary>
+    internal List<int> RallyPath;
+    internal int RallyStep;
+    internal double RallySearch;
+    /// <summary>The way to the gathering place as last worked out for the trail, from where and when.</summary>
+    internal List<int> WayCache;
+    internal int WayFrom = -1, WayTo = -1;
+    internal double WayAt = -99;
     /// <summary>Every state it has been in, in order.</summary>
     public readonly List<BandState> History = new() { BandState.Coming };
 
@@ -108,12 +124,135 @@ public sealed partial class Sim
         // those who got away from the last wave alive come back with this one, shared among the bands
         for (int i = 0; i < Escaped.Count; i++) planned[i % count].Veterans.Add(Escaped[i]);
         Bands.AddRange(planned);
+        ChooseSides(Waves.IntelNow);
         _nextTrails = 0;
+    }
+
+    /// <summary>The sides of the citadel the chief weighs: eight, round by south from the east.</summary>
+    public const int Sides = 8;
+    public static readonly string[] SideNames = { "восточную", "юго-восточную", "южную", "юго-западную", "западную", "северо-западную", "северную", "северо-восточную" };
+    /// <summary>How many of ours keep each side, as the chief last counted them (archers count more), for the panel and the tests.</summary>
+    public readonly float[] SideKeep = new float[Sides];
+    double _nextChoice;
+
+    /// <summary>
+    /// The chief weighs the sides of the citadel for every band still to come: how many of ours keep each (archers
+    /// count more), how long the way in is from a gathering place outside whatever is built or dug on that side (what
+    /// has to be hacked through or built over counts), and how far round it is from where the band comes in. What the
+    /// horde has scouted he knows; the rest he guesses. Each band goes for the weakest side, a little less keen on one
+    /// that another band takes already.
+    /// </summary>
+    public void ChooseSides(double intel)
+    {
+        var coming = Bands.FindAll(b => b.Target == null && b.State is BandState.Coming or BandState.Forming);
+        if (coming.Count == 0) return;
+        Array.Clear(SideKeep);
+        foreach (var u in Units)
+        {
+            if (u.Dead || u.Team != Team.Player || u.T.Work >= 1 && !u.Militia) continue;
+            var (x, _, z) = u.Post >= 0 ? Nav.Feet(u.Post) : (u.X, u.Y, u.Z);
+            float dx = x - Site.KeepX, dz = z - Site.KeepZ;
+            if (dx * dx + dz * dz > 60 * 60 * VoxelWorld.PerMetre * VoxelWorld.PerMetre) continue;
+            int side = ((int)MathF.Round(MathF.Atan2(dz, dx) / (MathF.PI / 4)) % Sides + Sides) % Sides;
+            float w = (u.T.Ranged ? 1.5f : u.T.Work < 1 ? 1 : .6f) * Math.Clamp(u.Hp / u.MaxHp, .2f, 1);
+            SideKeep[side] += w;
+            // an archer's reach covers the sides beside too
+            SideKeep[(side + 1) % Sides] += w * .4f;
+            SideKeep[(side + Sides - 1) % Sides] += w * .4f;
+        }
+        var rally = new int[Sides];
+        for (int s = 0; s < Sides; s++) rally[s] = RallyPoint(s);
+        var taken = new int[Sides];
+        foreach (var b in coming)
+        {
+            var lead = b.Roster.Count > 0 ? b.Roster[0] : Kinds.Goblin;
+            Fields.TryGetValue(lead, out var f);
+            var (ex, _, ez) = b.Entry >= 0 ? Nav.Feet(b.Entry) : (0f, 0f, Site.KeepZ);
+            var score = new float[Sides];
+            float lo = float.MaxValue, hi = float.MinValue;
+            for (int s = 0; s < Sides; s++)
+            {
+                float way = rally[s] < 0 ? float.PositiveInfinity : f == null ? 0 : f.Dist[rally[s]];
+                if (float.IsPositiveInfinity(way)) { score[s] = float.PositiveInfinity; continue; }
+                var (rx, _, rz) = Nav.Feet(rally[s]);
+                float round = MathF.Sqrt((rx - ex) * (rx - ex) + (rz - ez) * (rz - ez)) / (lead.Move.Speed * NavGrid.CS);
+                score[s] = way + round * .6f + SideKeep[s] * 20;
+                lo = Math.Min(lo, score[s]); hi = Math.Max(hi, score[s]);
+            }
+            if (lo == float.MaxValue) { b.Side = b.RallyCell = -1; b.Why = ""; continue; }
+            if (b.Hunch == null) { b.Hunch = new float[Sides]; for (int s = 0; s < Sides; s++) b.Hunch[s] = (float)Rng.NextDouble(); }
+            float spread = Math.Max(30, hi - lo), bestSeen = float.MaxValue;
+            int best = -1;
+            for (int s = 0; s < Sides; s++)
+            {
+                if (float.IsPositiveInfinity(score[s])) continue;
+                float seen = (float)(intel * score[s] + (1 - intel) * (lo + spread * b.Hunch[s])) + taken[s] * spread * .3f;
+                if (seen < bestSeen) { bestSeen = seen; best = s; }
+            }
+            taken[best]++;
+            if (b.Side != best || b.RallyCell != rally[best]) { b.Side = best; b.RallyCell = rally[best]; b.RallyPath = null; }
+            float fewest = float.MaxValue;
+            for (int s = 0; s < Sides; s++) if (!float.IsPositiveInfinity(score[s])) fewest = Math.Min(fewest, SideKeep[s]);
+            b.Why = intel < .3 ? "наугад, разведать вас не успели"
+                : SideKeep[best] < .3f ? "там никто не стережёт"
+                : SideKeep[best] <= fewest + .3f ? "там стражи меньше всего"
+                : "там короче путь";
+        }
+    }
+
+    /// <summary>
+    /// Where a band gathers to storm one side: outside whatever is built or dug on that side (6 m clear of the last
+    /// of it), never nearer the citadel than 26 m; −1 if there is nowhere to stand there.
+    /// </summary>
+    int RallyPoint(int side)
+    {
+        float a = side * MathF.PI / 4, cx = MathF.Cos(a), cz = MathF.Sin(a), last = 0;
+        for (float r = 10 * VoxelWorld.PerMetre; r < 70 * VoxelWorld.PerMetre; r += 4)
+        {
+            int x = (int)(Site.KeepX + cx * r), z = (int)(Site.KeepZ + cz * r);
+            if (!World.InBounds(x, 1, z)) break;
+            int ground = World.GroundTop(x, z);
+            bool built = World.SurfAt(x, z) < Site.HTop[z * World.SX + x] - 6;
+            for (int y = ground; y < Math.Min(World.SY, ground + 48) && !built; y += 2) built = Mat.IsPlayer[World.Get(x, y, z)];
+            if (built) last = r;
+        }
+        float at = Math.Max(26 * VoxelWorld.PerMetre, last + 6 * VoxelWorld.PerMetre);
+        int px = (int)(Site.KeepX + cx * at), pz = (int)(Site.KeepZ + cz * at);
+        if (!World.InBounds(px, 1, pz)) return -1;
+        int c = NearestStand(px, pz, 3);
+        if (c < 0) return -1;
+        var (fx, _, fz) = Nav.Feet(c);
+        return MathF.Abs(fx - px) + MathF.Abs(fz - pz) < 6 * VoxelWorld.PerMetre ? c : -1;
+    }
+
+    /// <summary>
+    /// The leader on its way to where the band gathers on the side the chief chose: along its own way there on foot, a
+    /// cell at a time; false when there is no such way (then it goes straight for the walls as the field leads).
+    /// </summary>
+    bool MarchToRally(Unit l, Warband b, float dt)
+    {
+        if (b.RallyCell < 0) return false;
+        if (b.RallyPath == null || b.RallyStep >= b.RallyPath.Count || CellsApart(l.Cell, b.RallyPath[b.RallyStep]) > 1
+            || Math.Abs(Nav.Y(l.Cell) - Nav.Y(b.RallyPath[b.RallyStep])) > l.T.Move.Drop)
+        {
+            if (Time < b.RallySearch) return false;
+            b.RallySearch = Time + 3;
+            int ri = Nav.I(b.RallyCell), rk = Nav.K(b.RallyCell);
+            var path = Paths.Find(l.Cell, c => Math.Abs(Nav.I(c) - ri) <= 1 && Math.Abs(Nav.K(c) - rk) <= 1, c => H(c, ri, rk), l.T.Move, 90000);
+            if (path == null || path.Count == 0) { b.RallyCell = -1; b.RallyPath = null; return false; }
+            b.RallyPath = path; b.RallyStep = 0;
+        }
+        l.Path ??= new List<int>();
+        l.Path.Clear(); l.Path.Add(b.RallyPath[b.RallyStep++]); l.PathI = 0;
+        Walk(l, dt);
+        return true;
     }
 
     /// <summary>The wave comes: if a mine is ours, a few goblins split off from the last band to take it.</summary>
     internal List<Warband> Muster()
     {
+        // what the horde scouted is all the chief will know: he chooses the sides once more by it
+        ChooseSides(Waves.Intel);
         var coming = Bands.FindAll(b => b.State == BandState.Coming);
         if (coming.Count == 0) return coming;
         Mine held = null;
@@ -177,6 +316,8 @@ public sealed partial class Sim
     /// <summary>Keeps the bands together: forming up, marching, regrouping before the walls, storming; new leaders for fallen ones.</summary>
     void TickBands()
     {
+        // while bands are still to come the chief keeps weighing the sides as the defences change
+        if (Time >= _nextChoice && Bands.Exists(b => b.State == BandState.Coming)) { _nextChoice = Time + 10; ChooseSides(Waves.Active ? Waves.Intel : Waves.IntelNow); }
         for (int i = Bands.Count - 1; i >= 0; i--)
         {
             var b = Bands[i];
@@ -216,9 +357,10 @@ public sealed partial class Sim
                 }
                 case BandState.March:
                 {
-                    // short of the walls: stop and gather; a band after a mine just goes
+                    // where the chief sent it, or short of the walls: stop and gather; a band after a mine just goes
                     float dx = l.X - Site.KeepX, dz = l.Z - Site.KeepZ;
-                    if (b.Target == null && dx * dx + dz * dz < RallyR * RallyR) Enter(b, BandState.Rally);
+                    bool there = b.RallyCell >= 0 ? CellsApart(l.Cell, b.RallyCell) <= 3 : dx * dx + dz * dz < RallyR * RallyR;
+                    if (b.Target == null && there) Enter(b, BandState.Rally);
                     break;
                 }
                 case BandState.Rally:
@@ -279,12 +421,12 @@ public sealed partial class Sim
                     if (l.State is UnitState.Walk or UnitState.Idle && KeepPlace(u, b, l, dt, still: l.State == UnitState.Idle)) return true;
                     return false;
                 }
-                // the leader waits for stragglers, but not for ever
+                // the leader waits for stragglers, but not for ever; it leads to where the chief sent the band
                 bool lagging = false;
                 foreach (var m in b.Members) if (!m.Dead && m != l && Apart(m, l) > Lag * NavGrid.CS) { lagging = true; break; }
-                if (!lagging) { b.WaitedFrom = -1; return false; }
+                if (!lagging) { b.WaitedFrom = -1; return MarchToRally(u, b, dt); }
                 if (b.WaitedFrom < 0) b.WaitedFrom = Time;
-                if (Time - b.WaitedFrom > 8) { if (Time - b.WaitedFrom > 20) b.WaitedFrom = -1; return false; }
+                if (Time - b.WaitedFrom > 8) { if (Time - b.WaitedFrom > 20) b.WaitedFrom = -1; return MarchToRally(u, b, dt); }
                 u.State = UnitState.Idle;
                 return true;
             }
@@ -419,6 +561,16 @@ public sealed partial class Sim
         foreach (var b in Bands) WorkOutTrail(b);
     }
 
+    /// <summary>The way on foot from a cell to a band's gathering place, for its trail (worked out again at most every six seconds).</summary>
+    List<int> WayToRally(Warband b, int from, UnitType kind)
+    {
+        if (b.WayFrom == from && b.WayTo == b.RallyCell && Time - b.WayAt < 6) return b.WayCache;
+        int ri = Nav.I(b.RallyCell), rk = Nav.K(b.RallyCell);
+        b.WayCache = Paths.Find(from, c => Math.Abs(Nav.I(c) - ri) <= 1 && Math.Abs(Nav.K(c) - rk) <= 1, c => H(c, ri, rk), kind.Move, 60000);
+        b.WayFrom = from; b.WayTo = b.RallyCell; b.WayAt = Time;
+        return b.WayCache;
+    }
+
     public void WorkOutTrail(Warband b)
     {
         b.Trail.Clear(); b.Marks.Clear();
@@ -438,6 +590,13 @@ public sealed partial class Sim
             return;
         }
         if (!Fields.TryGetValue(kind, out var f)) return;
+        // first to where the chief sent it, on foot, then on from there as the field leads
+        if (b.RallyCell >= 0 && b.State is BandState.Coming or BandState.Forming or BandState.March)
+        {
+            var way = b.State == BandState.March && b.RallyPath != null && b.RallyStep < b.RallyPath.Count
+                ? b.RallyPath.GetRange(b.RallyStep, b.RallyPath.Count - b.RallyStep) : WayToRally(b, c, kind);
+            if (way is { Count: > 0 }) { b.Trail.AddRange(way); c = way[^1]; }
+        }
         _goalSet ??= new HashSet<int>(Goals);
         for (int step = 0; step < 1500 && !_goalSet.Contains(c); step++)
         {

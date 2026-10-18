@@ -182,7 +182,7 @@ public partial class HordeInfo : VBoxContainer
         if (_m == null) return;
         var sim = _m.Sim;
         string key = "";
-        foreach (var b in sim.Bands) key += $"{b.Id}:{b.State}:{b.Strength};";
+        foreach (var b in sim.Bands) key += $"{b.Id}:{b.State}:{b.Strength}:{b.Side};";
         if (key != _key)
         {
             _key = key;
@@ -195,6 +195,8 @@ public partial class HordeInfo : VBoxContainer
                 int n = b.State == BandState.Coming ? b.Size : b.Strength;
                 box.AddChild(Hud.Text($"{b.Name} · {n}", Ornament.SerifBold, 13, TrailView.ColorOf(b).Lightened(.3f)));
                 box.AddChild(Hud.Text(Where(_m, b), Ornament.SerifItalic, 12, Ornament.Aged));
+                if (b.Side >= 0 && b.State is BandState.Coming or BandState.Forming or BandState.March)
+                    box.AddChild(Hud.Text($"пойдёт на {Sim.SideNames[b.Side]} сторону: {b.Why}", Ornament.Serif, 12, Ornament.BronzeLight, wrap: true));
                 var what = Hud.Text(Kinds(b), Ornament.Serif, 12, Ornament.Parchment, wrap: true);
                 box.AddChild(what);
                 _bands.AddChild(box);
