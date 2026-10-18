@@ -441,9 +441,9 @@ public sealed class Waves
     public double Countdown = Prep;
     /// <summary>How much the horde learnt of the defences before this wave (0 to 1): the share of the countdown it had.</summary>
     public double Intel;
-    readonly Queue<(UnitType kind, Warband band, Survivor back)> _queue = new();
-    Warband _lastBand;
-    double _spawnT;
+    internal readonly Queue<(UnitType kind, Warband band, Survivor back)> _queue = new();
+    internal Warband _lastBand;
+    internal double _spawnT;
 
     public int Coming => _queue.Count;
 

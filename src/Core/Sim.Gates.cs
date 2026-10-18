@@ -168,12 +168,7 @@ public sealed partial class Sim
         var g = plan.Make();
         g.Id = _nextGate++;
         Array.Fill(g.At, -1);
-        for (int s = 0; s <= Gateway.StepOf(1); s++)
-            for (int i = 0; i < Gateway.Voxels; i++)
-            {
-                var (x, y, z) = g.Place(i, s);
-                g.Cells.Add(Nav.CellOf(x, y, z));
-            }
+        SweepOf(g);
         Gates.Add(g);
         if (built)
         {
@@ -192,6 +187,17 @@ public sealed partial class Sim
             DesignateBuild(plan.Leaves);
         }
         return g;
+    }
+
+    /// <summary>The cells the leaves fill shut or sweep through as they turn.</summary>
+    void SweepOf(Gateway g)
+    {
+        for (int s = 0; s <= Gateway.StepOf(1); s++)
+            for (int i = 0; i < Gateway.Voxels; i++)
+            {
+                var (x, y, z) = g.Place(i, s);
+                g.Cells.Add(Nav.CellOf(x, y, z));
+            }
     }
 
     /// <summary>The gate a voxel of whose leaves this is, or null.</summary>

@@ -27,6 +27,10 @@ public sealed class VoxelWorld
     readonly byte[][] _data;
     readonly byte[] _uniform;
     readonly bool[] _dirty;
+    /// <summary>Chunks written since the valley was made (a save keeps only these: the rest is made again from the seed).</summary>
+    readonly bool[] _edited;
+    /// <summary>Whether writes are being kept count of: off while the valley is being made, on once play begins.</summary>
+    public bool TrackEdits;
     readonly List<int> _dirtyList = new();
     readonly bool[] _colDirty;
     readonly List<int> _colDirtyList = new();
@@ -47,6 +51,7 @@ public sealed class VoxelWorld
         _data = new byte[ChunkCount][];
         _uniform = new byte[ChunkCount];
         _dirty = new bool[ChunkCount];
+        _edited = new bool[ChunkCount];
         _colDirty = new bool[sx * sz];
         OriginX = -sx * Vox / 2;
         OriginZ = -sz * Vox / 2;
@@ -72,6 +77,7 @@ public sealed class VoxelWorld
     public void SetRaw(int x, int y, int z, byte m)
     {
         int ci = ((y >> Shift) * CZ + (z >> Shift)) * CX + (x >> Shift);
+        if (TrackEdits) _edited[ci] = true;
         var d = _data[ci];
         if (d == null)
         {
@@ -181,6 +187,20 @@ public sealed class VoxelWorld
     /// <summary>A chunk's voxels, or null when the whole chunk is one material (see <see cref="ChunkUniform"/>).</summary>
     public byte[] ChunkData(int ci) => _data[ci];
     public byte ChunkUniform(int ci) => _uniform[ci];
+
+    /// <summary>Written since the valley was made (see <see cref="TrackEdits"/>).</summary>
+    public bool Changed(int ci) => _edited[ci];
+
+    /// <summary>Puts a whole chunk back as it was saved: its voxels, or (data null) one material through all of it.</summary>
+    public void SetChunk(int ci, byte[] data, byte uniform)
+    {
+        _data[ci] = data;
+        _uniform[ci] = uniform;
+        _edited[ci] = true;
+        Revision++;
+        ChunkCoords(ci, out int cx, out int cy, out int cz);
+        MarkChunk(cx, cy, cz);
+    }
 
     /// <summary>Copies a chunk plus a one-voxel shell of its neighbours into a 34³ block for the mesher.</summary>
     public void CopyPadded(int ci, byte[] pad)

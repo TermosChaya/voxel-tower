@@ -1749,6 +1749,98 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--collapse")
         $"{lay.Count} to lay, {clear.Count} of rubble to clear; {standing} of {meantN} meant voxels stand");
 }
 
+// ---- a game saved and read back: the valley as play changed it, and the siege, the same; and it plays on
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
+{
+    Console.WriteLine();
+    const uint SeedS = 7;
+    var mpS = new MapParams { Seed = SeedS };
+    var wS = new VoxelWorld(mpS.SizeX, mpS.SizeY, mpS.SizeZ);
+    var siteS = MapGen.Generate(wS, mpS);
+    wS.Compact();
+    var simS = new Sim(wS, siteS);
+    simS.WildTarget = 0;
+    void RunS(double seconds) { for (double t = 0; t < seconds; t += .05) simS.Step(.05f); }
+    StartingFort.Raise(simS);
+    foreach (var t in new[] { Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Archer, Kinds.Swordsman }) simS.Spawn(t, simS.Gate);
+    simS.SeedWildlife(3);
+    simS.SeedMines();
+    int kxS = siteS.KeepX, kzS = siteS.KeepZ;
+    // a wall marked, a plot set aside, something alight, one of ours cut, the horde in the valley
+    simS.DesignateBuild(Shapes.Line(wS, siteS, kxS - 140, kzS - 40, kxS - 140, kzS + 40, new Stroke { Mat = Mat.Stone, Width = 8, Height = 16, Level = true }, Shapes.LevelTop(wS, kxS - 140, kzS, 16)));
+    simS.AddZone(kxS - 260, kzS + 120, kxS - 200, kzS + 180, Stockpile.Wood, 0);
+    var sore = simS.Units.Find(u => u.T == Kinds.Swordsman);
+    var (cut, depth, reach) = Sim.WeaponOf(Kinds.Orc);
+    float share = simS.Wound(sore, cut, depth, reach, sore.X + 10, sore.Y + 10, sore.Z, -1, 0, 0);
+    simS.Hurt(sore, null, 30 * share);
+    RunS(20);
+    simS.Waves.StartNow(simS);
+    RunS(25);
+    // a post of logs set alight
+    int px = kxS - 170, pz = kzS + 60, pg = wS.SurfAt(px, pz);
+    for (int y = pg; y < pg + 12; y++) for (int z = pz; z < pz + 2; z++) for (int x = px; x < px + 2; x++) wS.Set(x, y, z, Mat.Wood);
+    simS.Ignite(px, pg + 4, pz);
+    RunS(1);
+    var ms = new System.IO.MemoryStream();
+    var watch = System.Diagnostics.Stopwatch.StartNew();
+    simS.Save(ms, SeedS, "Волна 1", "the screen's own");
+    long saveMs = watch.ElapsedMilliseconds;
+    long bytes = ms.Length;
+    ms.Position = 0;
+    watch.Restart();
+    var wL = new VoxelWorld(mpS.SizeX, mpS.SizeY, mpS.SizeZ);
+    Sim simL;
+    string extra;
+    using (var reader = new SaveReader(ms))
+    {
+        var siteL = MapGen.Generate(wL, new MapParams { Seed = reader.Seed });
+        wL.Compact();
+        reader.Valley(wL, siteL);
+        simL = new Sim(wL, siteL);
+        extra = simL.Load(reader);
+    }
+    long loadMs = watch.ElapsedMilliseconds;
+    int chunksOff = 0;
+    for (int ci = 0; ci < wS.ChunkCount; ci++)
+    {
+        var a = wS.ChunkData(ci); var b = wL.ChunkData(ci);
+        bool same = a == null ? b == null && wS.ChunkUniform(ci) == wL.ChunkUniform(ci) : b != null && a.AsSpan().SequenceEqual(b);
+        if (!same) chunksOff++;
+    }
+    int designOff = 0;
+    for (int ci = 0; ci < wS.ChunkCount; ci++)
+    {
+        var a = simS.Design.ChunkData(ci); var b = simL.Design.ChunkData(ci);
+        if (!(a == null ? b == null || Array.TrueForAll(b, v => v == 0) : b != null && a.AsSpan().SequenceEqual(b))) designOff++;
+    }
+    var livingS = simS.Units.FindAll(u => !u.Dead);
+    int unitsOff = 0;
+    foreach (var u in livingS)
+    {
+        var v = simL.Units.Find(o => o.Id == u.Id);
+        if (v == null || v.T != u.T || v.Look != u.Look || MathF.Abs(v.X - u.X) > .01f || MathF.Abs(v.Hp - u.Hp) > .01f || (u.Wounds == null) != (v.Wounds == null)
+            || u.Wounds != null && (u.Wounds.Wounds.Count != v.Wounds.Wounds.Count || MathF.Abs(u.Wounds.Bleed - v.Wounds.Bleed) > .001f || u.Wounds.Grid[0]?.Count != v.Wounds.Grid[0]?.Count)
+            || (u.Band == null) != (v.Band == null) || u.Leader != v.Leader) unitsOff++;
+    }
+    bool sameSiege = simL.Time == simS.Time && simL.Orders.Total == simS.Orders.Total && simL.Orders.BuildTotal == simS.Orders.BuildTotal
+        && simL.Stock.Gold == simS.Stock.Gold && simL.Stock[Stockpile.Stone] == simS.Stock[Stockpile.Stone] && simL.Zones.Count == simS.Zones.Count
+        && simL.Gates.Count == simS.Gates.Count && simL.Fixtures.Count == simS.Fixtures.Count && simL.Burning.Count == simS.Burning.Count
+        && simL.Bands.Count == simS.Bands.Count && simL.Waves.Number == simS.Waves.Number && simL.Waves.Active == simS.Waves.Active
+        && simL.Waves.Coming == simS.Waves.Coming && simL.Mines.TrueForAll(m => m.Holder == simS.Mines[simL.Mines.IndexOf(m)].Holder) && extra == "the screen's own";
+    Check("a game saved and read back is the same: the valley as play changed it, the household and the horde, the siege",
+        chunksOff == 0 && designOff == 0 && unitsOff == 0 && livingS.Count == simL.Units.Count && sameSiege && simS.Burning.Count > 0 && simS.Bands.Count > 0,
+        $"{bytes / 1024} KB, written in {saveMs} ms, read in {loadMs} ms (the valley made again); {chunksOff} chunks and {designOff} of the design differ; " +
+        $"{livingS.Count} living, {unitsOff} differ; {simS.Bands.Count} bands, {simS.Burning.Count} burning, wave {simS.Waves.Number} ({simS.Waves.Coming} still to come); same siege {sameSiege}");
+    // and it plays on: the horde still comes on, the fire still burns
+    simL.ComputeFields();
+    int burning0 = simL.Burning.Count;
+    float far0 = simL.Units.FindAll(u => !u.Dead && u.Team == Team.Horde && !u.Guard).ConvertAll(u => MathF.Abs(u.X - kxS) + MathF.Abs(u.Z - kzS)).DefaultIfEmpty(0).Average();
+    for (double t = 0; t < 30; t += .05) simL.Step(.05f);
+    float far1 = simL.Units.FindAll(u => !u.Dead && u.Team == Team.Horde && !u.Guard).ConvertAll(u => MathF.Abs(u.X - kxS) + MathF.Abs(u.Z - kzS)).DefaultIfEmpty(0).Average();
+    Check("…and the game read back plays on: the horde comes on, the fire burns on", burning0 > 0 && simL.Burning.Count != burning0 && (far1 < far0 || simL.Kills > simS.Kills),
+        $"burning {burning0} → {simL.Burning.Count}; the horde on average {far0 / VoxelWorld.PerMetre:0} → {far1 / VoxelWorld.PerMetre:0} m from the citadel, {simL.Kills - simS.Kills} more killed");
+}
+
 // ---- bodies of voxels: a skeleton inside, blows carving out what they strike, limbs cut off, vital wounds, bleeding
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bodies")
 {

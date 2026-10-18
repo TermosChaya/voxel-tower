@@ -132,7 +132,8 @@ public partial class FireView : Node3D
                 w.WZ(u.Z + MathF.Sin(side) * reach * .8f + MathF.Sin(u.Facing) * .8f));
             Put(_flameBuf, n++, at, 1.2f * V, 2.4f * V, Colors.White, (u.Id * .37f) % 1, u.Kindling > 0 ? 1.6f : .8f);
         }
-        RenderingServer.MultimeshSetBuffer(_flames.Multimesh.GetRid(), _flameBuf);
+        // nothing to hand over while nothing burns (an empty buffer is no buffer to the renderer)
+        if (n > 0) RenderingServer.MultimeshSetBuffer(_flames.Multimesh.GetRid(), _flameBuf);
         _flames.Multimesh.VisibleInstanceCount = n;
         Smoke(sim, w, dt);
         Light();
@@ -182,7 +183,7 @@ public partial class FireView : Node3D
             var c = q.Dust ? new Color(.42f, .38f, .32f, a * .9f) : new Color(g, g * .95f, g * .92f, a);
             Put(_smokeBuf, n++, q.P, size, size, c, q.Seed, 0);
         }
-        RenderingServer.MultimeshSetBuffer(_smoke.Multimesh.GetRid(), _smokeBuf);
+        if (n > 0) RenderingServer.MultimeshSetBuffer(_smoke.Multimesh.GetRid(), _smokeBuf);
         _smoke.Multimesh.VisibleInstanceCount = n;
     }
 

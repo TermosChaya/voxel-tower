@@ -18,7 +18,8 @@ namespace VoxelTower.Game;
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
 /// --top looks straight down, --look=N at the Nth named place of the valley, --seed=N makes another valley; --select[=N]
 /// chooses our pawns (or the first N), --tab=key lets a panel down from the beam, --tool=N takes up the Nth tool,
-/// --ui-scale=S draws the interface at that size instead of the player's own, --inspect looks at the first raider (or beast).
+/// --ui-scale=S draws the interface at that size instead of the player's own, --inspect looks at the first raider (or beast),
+/// --load=file.sav reads a saved game back.
 /// </summary>
 public partial class Main : Node3D
 {
@@ -47,6 +48,15 @@ public partial class Main : Node3D
     public bool Paused;
 
     const string BlueprintFile = "user://blueprints.json";
+
+    /// <summary>A saved game to read back when the scene starts (set, then the scene started again: <see cref="Saves.Read"/>).</summary>
+    public static string PendingLoad;
+    /// <summary>The seed the valley was made from: what a save keeps of it.</summary>
+    public uint Seed => _seed;
+    bool _loaded, _waveWasActive;
+    string _loadedFrom;
+    /// <summary>--menu or --menu=save|load|settings: the menu open at the start (screenshots).</summary>
+    string _menu;
 
     string _shot;
     int _shotFrames = 45, _frames;
@@ -87,6 +97,8 @@ public partial class Main : Node3D
             else if (a.StartsWith("--cam=")) _cam = Array.ConvertAll(a["--cam=".Length..].Split(','), v => float.Parse(v, System.Globalization.CultureInfo.InvariantCulture));
             else if (a == "--selftest") _selfTest = true;
             else if (a == "--inspect") _inspect = true;
+            else if (a.StartsWith("--load=")) PendingLoad = a["--load=".Length..];
+            else if (a == "--menu" || a.StartsWith("--menu=")) _menu = a.Length > 7 ? a[7..] : "";
             else if (a.StartsWith("--pose=")) _pose = a["--pose=".Length..];
             else if (a.StartsWith("--at=") && double.TryParse(a["--at=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double at)) _poseSeconds = at;
             else if (a.StartsWith("--ui-scale=") && float.TryParse(a["--ui-scale=".Length..], System.Globalization.CultureInfo.InvariantCulture, out float us)) _uiScale = us;
@@ -96,6 +108,16 @@ public partial class Main : Node3D
         else Settings.Load();
         Settings.Apply(GetTree().Root);
 
+        // a saved game: its valley is made again from its seed, and what play changed of it laid over
+        SaveReader save = null;
+        if (PendingLoad != null)
+        {
+            _loadedFrom = PendingLoad;
+            try { save = new SaveReader(System.IO.File.OpenRead(PendingLoad)); _seed = save.Seed; }
+            catch (Exception e) { GD.PrintErr($"[voxel-tower] could not read {PendingLoad}: {e.Message}"); save?.Dispose(); save = null; }
+            PendingLoad = null;
+            _demo = _selfTest = false;
+        }
         var sw = Stopwatch.StartNew();
         var mp = new MapParams { Seed = _seed };
         World = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
@@ -103,13 +125,21 @@ public partial class Main : Node3D
         if (_demo && _pose == "trees") Grove();
         if (_demo && _pose == "people") ClearGrove();
         World.Compact();
+        save?.Valley(World, Site);
         double genMs = sw.Elapsed.TotalMilliseconds;
         sw.Restart();
         Sim = new Sim(World, Site);
         // in play, where water goes is worked out off the main thread; scripted runs want it at once
         Sim.WaterInBackground = !_selfTest && !_demo && _shot == null;
         // a new game finds a fort half raised round the citadel; scripted runs set up their own scenes
-        if (!_selfTest && !_demo) StartingFort.Raise(Sim);
+        string extra = null;
+        if (save != null)
+        {
+            try { extra = Sim.Load(save); _loaded = true; }
+            catch (Exception e) { GD.PrintErr($"[voxel-tower] the save is broken: {e}"); }
+            save.Dispose();
+        }
+        else if (!_selfTest && !_demo) StartingFort.Raise(Sim);
         double navMs = sw.Elapsed.TotalMilliseconds;
 
         var atmo = new Atmosphere();
@@ -175,6 +205,15 @@ public partial class Main : Node3D
         Sim.Raised = (x, y, z, m) => { if (Random.Shared.NextDouble() < .05) Debris.Spawn(m, x, y, z, 1, .8f); };
         Sim.Splashed = (x, y, z, n) => Debris.Spawn(Mat.Blood, (int)x, (int)y, (int)z, Math.Clamp(n / 3, 1, 6), 1.1f, .4f);
 
+        if (_loaded)
+        {
+            // a game read back: the screen as it was, and the chronicle up to where it was saved
+            Saves.Apply(this, extra);
+            Hud.Log($"Игра загружена: {Saves.NameOf(System.IO.Path.GetFileNameWithoutExtension(_loadedFrom ?? ""))}.", Hud.Kind.Ok);
+            _waveWasActive = Sim.Waves.Active;
+            GD.Print($"[voxel-tower] world {genMs:0} ms, navigation {navMs:0} ms, mesh {View.LastFullMeshMs:0} ms, {View.Triangles()} triangles; loaded");
+            return;
+        }
         // the household the siege finds at the citadel, the beasts of the valley, and the horde's camp at a mine
         foreach (var t in new[] { Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Archer, Kinds.Swordsman }) Sim.Spawn(t, Sim.Gate);
         Sim.SeedWildlife();
@@ -208,6 +247,7 @@ public partial class Main : Node3D
             Hud.OnSelectionChanged();
         }
         if (_tab != null) Hud.OpenPanel(_tab);
+        if (_menu != null) Hud.OpenMenu(_menu);
         if (_inspect && (Sim.Units.Find(u => !u.Dead && u.Team == Team.Horde) ?? Sim.Units.Find(u => !u.Dead && u.Team == Team.Wild)) is { } seen)
         {
             Inspected = seen;
@@ -235,6 +275,12 @@ public partial class Main : Node3D
                 Sim.Step(step);
                 dt -= step;
             }
+        }
+        // a wave beaten back is written down by itself
+        if (_shot == null && !_selfTest && !_demo)
+        {
+            if (_waveWasActive && !Sim.Waves.Active && !Sim.Over && Saves.Write(this, Saves.Auto)) Hud.Log("Автосохранение: волна отбита.", Hud.Kind.Ok, toast: false);
+            _waveWasActive = Sim.Waves.Active;
         }
         Command.Prune();
         View.RemeshDirty();
@@ -677,6 +723,11 @@ public partial class Main : Node3D
         Check("map click moves the view", Rig.Target.DistanceTo(before) > 1, $"{before} → {Rig.Target}");
         await Frames(10);
         Check("chunks re-meshed", World.DirtyCount == 0, $"{View.Triangles()} triangles");
+        // the game written down, and its head read back for the list of saves
+        bool saved = Saves.Write(this, "selftest");
+        var peek = Saves.Peek("selftest");
+        Check("the game is saved, and the list of saves can read what it is", saved && peek is { } pk && pk.label.Length > 0 && Math.Abs(pk.time - Sim.Time) < .01,
+            $"{Saves.PathOf("selftest")}: {(peek is { } pv ? $"«{pv.label}», {pv.time:0} s" : "unreadable")}, {new System.IO.FileInfo(Saves.PathOf("selftest")).Length / 1024} KB");
         GD.Print($"[selftest] {(fails == 0 ? "all passed" : fails + " failed")}");
         if (_shot == null) GetTree().Quit(fails == 0 ? 0 : 1);
     }

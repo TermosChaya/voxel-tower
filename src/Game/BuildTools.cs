@@ -334,6 +334,8 @@ public partial class BuildTools : Node3D
     bool Key(InputEventKey k)
     {
         var code = k.PhysicalKeycode;
+        // with the menu open only Esc means anything
+        if (_m.Hud.MenuOpen && code != global::Godot.Key.Escape) return false;
         // Shift and a digit calls up a squad, it is no tool
         if (k.ShiftPressed && code is >= global::Godot.Key.Key0 and <= global::Godot.Key.Key9) return false;
         if (k.Echo && code is not (global::Godot.Key.Bracketleft or global::Godot.Key.Bracketright or global::Godot.Key.Minus or global::Godot.Key.Equal)) return false;
@@ -348,7 +350,11 @@ public partial class BuildTools : Node3D
         switch (code)
         {
             case global::Godot.Key.Escape:
-                if (Tool != Tool.None) SetTool(Tool.None); else _m.Command.ClearSelection();
+                // a brush in hand is put down, the chosen let go; with nothing of that, the menu
+                if (_m.Hud.MenuOpen) _m.Hud.MenuBack();
+                else if (Tool != Tool.None) SetTool(Tool.None);
+                else if (_m.Selected.Count > 0 || _m.Inspected != null) { _m.Command.ClearSelection(); _m.Inspected = null; }
+                else _m.Hud.OpenMenu();
                 return true;
             case global::Godot.Key.Z: SetMaterial(Mat.Stone); return true;
             case global::Godot.Key.X: SetMaterial(Mat.Wood); return true;

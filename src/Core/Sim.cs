@@ -57,6 +57,8 @@ public sealed partial class Sim
         Stock[Stockpile.Earth] = 16 * VoxelWorld.PerM3;
         w.Replaced += OnWaterEdit;
         w.Replaced += OnSupportEdit;
+        // from here on, what is written to the valley is what a save has to keep
+        w.TrackEdits = true;
     }
 
     public void Say(string text, int kind = 0) => Said?.Invoke(text, kind, float.NaN, float.NaN);

@@ -254,6 +254,28 @@ public sealed class Orders
     /// <summary>Takes back the orders to take something out on the columns of a rectangle; returns how many.</summary>
     internal int CancelRemovals(int x0, int z0, int x1, int z1) => CancelArea(x0, z0, x1, z1, true);
 
+    /// <summary>The orders read back from a save, every one counted as if it had just been marked.</summary>
+    internal void Restore(System.IO.BinaryReader r)
+    {
+        var saved = new VoxelWorld(_w.SX, _w.SY, _w.SZ);
+        Sim.ReadChunks(r, saved);
+        for (int ci = 0; ci < saved.ChunkCount; ci++)
+        {
+            var d = saved.ChunkData(ci);
+            if (d == null) continue;
+            saved.ChunkCoords(ci, out int cx, out int cy, out int cz);
+            for (int i = 0; i < d.Length; i++)
+            {
+                byte o = d[i];
+                if (o == 0) continue;
+                int x = cx * VoxelWorld.CS + (i & 31), z = cz * VoxelWorld.CS + (i >> 5 & 31), y = cy * VoxelWorld.CS + (i >> 10);
+                if (Layer.Get(x, y, z) != 0) continue;
+                Layer.Set(x, y, z, o);
+                Count(x, z, 1, o);
+            }
+        }
+    }
+
     /// <summary>Drops one order (done or no longer possible).</summary>
     public void Clear(int x, int y, int z)
     {

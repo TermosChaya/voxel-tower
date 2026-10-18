@@ -209,6 +209,8 @@ public partial class Medallion : Control
 {
     readonly Icons.Painter _icon;
     bool _hover;
+    /// <summary>A click on it (the help medallion only shows its tip).</summary>
+    public event Action Clicked;
 
     public Medallion() { }
 
@@ -236,6 +238,13 @@ public partial class Medallion : Control
             DrawCircle(c + new Vector2(MathF.Cos(a), MathF.Sin(a)) * (r - 3), 1.1f, Ornament.BronzeDark, true, -1, true);
         }
         _icon?.Invoke(this, new Rect2(c - new Vector2(r * .62f, r * .62f), new Vector2(r * 1.24f, r * 1.24f)), _hover ? Ornament.BronzeLight : Ornament.Bronze);
+    }
+
+    public override void _GuiInput(InputEvent e)
+    {
+        if (Clicked == null || e is not InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true }) return;
+        Clicked();
+        AcceptEvent();
     }
 
     public override GodotObject _MakeCustomTooltip(string forText) => Tooltip.Make(forText);

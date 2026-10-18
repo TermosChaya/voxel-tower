@@ -72,7 +72,8 @@ public partial class Hud : CanvasLayer
     TabPlaque _goalsTab, _hordeTab;
     Stores _stores;
     WaveClock _clockPanel;
-    Medallion _help;
+    Medallion _help, _menuButton;
+    GameMenu _menu;
     ColonistBar _colonists;
     BottomConsole _console;
     MapRing _ring;
@@ -240,6 +241,9 @@ public partial class Hud : CanvasLayer
         _clockPanel.Init(m);
         _help = new Medallion(Icons.Question, HelpText) { Size = new Vector2(38, 38) };
         root.AddChild(_help);
+        _menuButton = new Medallion(Icons.Menu, "Меню (Esc)\nСохранить и загрузить игру, настройки, выйти. Быстрое сохранение — F5, загрузить его — F9.") { Size = new Vector2(38, 38) };
+        _menuButton.Clicked += OpenMenu;
+        root.AddChild(_menuButton);
         _colonists = new ColonistBar();
         root.AddChild(_colonists);
         _colonists.Init(m);
@@ -249,6 +253,10 @@ public partial class Hud : CanvasLayer
         root.AddChild(_floats);
         _tag = new CursorTag { Visible = false };
         root.AddChild(_tag);
+        // the menu over everything
+        _menu = new GameMenu();
+        root.AddChild(_menu);
+        _menu.Init(m);
 
         RebuildBlueprints();
         OnToolChanged();
@@ -289,8 +297,9 @@ public partial class Hud : CanvasLayer
         _refreshAt -= delta;
         var vp = GetViewport().GetVisibleRect().Size;
         // the beam's furniture: the tabs at the left, the clock hanging at the right, the stores between
-        _clockPanel.Position = new Vector2(vp.X - WaveClock.W - 58, 0);
+        _clockPanel.Position = new Vector2(vp.X - WaveClock.W - 98, 0);
         _help.Position = new Vector2(vp.X - 50, 1);
+        _menuButton.Position = new Vector2(vp.X - 92, 1);
         float tabsEnd = _tabs.Position.X + _tabs.Size.X;
         // on a narrow screen (or a large interface) the stores close up rather than go under the clock
         float storesW = Math.Clamp(_clockPanel.Position.X - tabsEnd - 28, Stores.MinW, Stores.W);
@@ -458,11 +467,16 @@ public partial class Hud : CanvasLayer
     // ---------------------------------------------------------------- messages
 
     /// <summary>A line for the chronicle; one that happened at a place (voxels of the valley) takes the camera there when clicked.</summary>
-    public void Log(string text, Kind kind = Kind.Plain, float x = float.NaN, float z = float.NaN)
+    /// <summary>The chronicle, oldest first, as it was logged: what a save keeps of it.</summary>
+    public readonly List<(string text, Kind kind, float x, float z)> Lines = new();
+
+    public void Log(string text, Kind kind = Kind.Plain, float x = float.NaN, float z = float.NaN, bool toast = true)
     {
         if (_toasts == null) return;
         var color = kind switch { Kind.Ok => Ornament.Moss, Kind.Warn => Ornament.BronzeLight, Kind.Bad => Ornament.Blood, _ => Ornament.Parchment };
-        _toasts.Push(text, color);
+        if (toast) _toasts.Push(text, color);
+        Lines.Add((text, kind, x, z));
+        if (Lines.Count > 80) Lines.RemoveAt(0);
         // and into the chronicle's tab, newest on top
         var l = Text(float.IsNaN(x) ? text : "◎ " + text, Ornament.Serif, 13, color, wrap: true);
         if (!float.IsNaN(x))
@@ -523,6 +537,12 @@ public partial class Hud : CanvasLayer
     public string OpenTab => _drop?.OpenKey;
     public Unit Inspecting => _inspector?.One;
     public void OpenPanel(string key) => _drop.Open(key);
+    public bool MenuOpen => _menu?.IsOpen == true;
+    public void OpenMenu() => _menu?.Open();
+    public void OpenMenu(string page) => _menu?.Open(page);
+    public void CloseMenu() => _menu?.Close();
+    /// <summary>Esc with the menu open: back a page, or out of it.</summary>
+    public void MenuBack() => _menu?.Back();
     public ColonistBar Colonists => _colonists;
     public WorkTable Works => _works;
 }

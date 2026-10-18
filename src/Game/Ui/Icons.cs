@@ -116,6 +116,16 @@ public static class Icons
         Fill(c, Shade(ink, .5f), P(r, .53f, .43f), P(r, .63f, .6f), P(r, .62f, .76f), P(r, .5f, .86f), P(r, .38f, .76f), P(r, .4f, .62f), P(r, .47f, .66f));
     }
 
+    /// <summary>Three bars, one over another: the game's menu.</summary>
+    public static void Menu(CanvasItem c, Rect2 r, Color ink)
+    {
+        foreach (float y in new[] { .28f, .5f, .72f })
+        {
+            Line(c, ink, S(r, .11f), P(r, .2f, y), P(r, .8f, y));
+            Dot(c, P(r, .2f, y), S(r, .07f), Shade(ink, 1.1f));
+        }
+    }
+
     public static void Shovel(CanvasItem c, Rect2 r, Color ink)
     {
         Line(c, Shade(ink, .8f), S(r, .065f), P(r, .8f, .14f), P(r, .45f, .56f));

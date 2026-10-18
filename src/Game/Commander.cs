@@ -344,7 +344,10 @@ public partial class Commander : Node
 
     public override void _UnhandledInput(InputEvent e)
     {
-        if (e is not InputEventKey k || !k.Pressed || k.Echo) return;
+        if (e is not InputEventKey k || !k.Pressed || k.Echo || _m.Hud.MenuOpen) return;
+        // the quick save, and reading it back
+        if (k.PhysicalKeycode == Key.F5) { if (Saves.Write(_m, Saves.Quick)) _m.Hud.Float("быстрое сохранение", Ornament.Moss); GetViewport().SetInputAsHandled(); return; }
+        if (k.PhysicalKeycode == Key.F9) { Saves.Read(_m, Saves.Quick); GetViewport().SetInputAsHandled(); return; }
         // squads: Ctrl and a digit remembers the chosen, Shift and the digit calls them up
         if (k.PhysicalKeycode is >= Key.Key1 and <= Key.Key5 && (k.CtrlPressed || k.MetaPressed || k.ShiftPressed))
         {

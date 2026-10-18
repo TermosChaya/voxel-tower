@@ -61,6 +61,9 @@ public partial class CameraRig : Node3D
 
     public void Home(bool snap = false) => Set(_homeX, _homeZ, HomeYaw, HomePitch, HomeZoom, snap);
 
+    /// <summary>Where the camera is heading: its target, turn, tilt and zoom, as <see cref="Set"/> takes them.</summary>
+    public (float x, float z, float yaw, float pitch, float zoom) Aim => (_tx, _tz, _yaw, _pitch, _zoom);
+
     public void Set(float tx, float tz, float yaw, float pitch, float zoom, bool snap)
     {
         (_tx, _tz, _yaw, _pitch, _zoom) = (ClampX(tx), ClampZ(tz), yaw, Math.Clamp(pitch, .35f, Overhead), Math.Clamp(zoom, MinZoom, MaxZoom));
