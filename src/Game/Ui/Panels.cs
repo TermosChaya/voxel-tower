@@ -20,8 +20,6 @@ public static class Retinue
 
     public static string Tip(UnitType t) => Array.Find(Defs, d => d.t == t).tip ?? t.Name;
 
-    public static Icons.Painter IconOf(UnitType t) => t == Kinds.Archer ? Icons.Bow : t == Kinds.Swordsman ? Icons.Sword : Icons.Pick;
-
     /// <summary>What a pawn (or anyone) is doing, in a few words.</summary>
     public static string Doing(Unit u, Sim sim)
     {

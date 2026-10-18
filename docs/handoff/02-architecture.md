@@ -133,7 +133,7 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `Colonists.cs` — полоса лиц под балкой; `Inspector.cs` — середина консоли (кисть / одна пешка / группа / дружина),
   `HealthBar`, `BodyChart`, `PriorityCell`, `MiniCard`, `KindFace`; `WorkTable.cs` — таблица работ (рисуется
   целиком в `_Draw`, щелчки в `_GuiInput`); `Panels.cs` — `Retinue` (только помощники: что делает, раны, сводка),
-  `HordeInfo`, `UnitOverlay`; `Widgets.cs` — `Slot`, `Stepper`, `Choice`, `Tooltip`, `Banner`, `CursorTag`,
+  `HordeInfo`, `UnitOverlay`; `Widgets.cs` — `Slot`, `Stepper`, `Choice`, `Tooltip`, `CursorTag`,
   `Medallion`, `Toasts`; палитра и шрифты — `Ornament.cs`, значки — `Icons.cs`. Корень интерфейса тянет текстуры
   с повтором (`TextureRepeat`).
 
