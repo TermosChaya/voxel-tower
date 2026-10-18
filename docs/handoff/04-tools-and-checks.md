@@ -11,8 +11,8 @@ cd tools/CoreBench && dotnet run -c Release           # стенд: «all checks
 cd tools/CoreBench && dotnet run -c Release -- --seeds   # ещё три долины (после правок генерации)
 ```
 
-Режимы стенда: `--sim`, `--fort`, `--bridges`, `--bands`, `--bodies`, `--seeds`, `--nothing` (частичные
-прогоны; без флага — всё основное).
+Режимы стенда: `--sim`, `--fort`, `--bridges`, `--bands`, `--bodies`, `--wits` (сознательность пешек и орды),
+`--life`, `--seeds`, `--nothing` (частичные прогоны; без флага — всё основное).
 
 ## Флаги игры (после `--`)
 

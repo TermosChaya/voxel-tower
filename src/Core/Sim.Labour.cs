@@ -69,6 +69,8 @@ public sealed partial class Sim
 
     void PawnTick(Unit u, float dt)
     {
+        // badly hurt: out of the fight to mend by the citadel
+        if (FallBack(u, dt)) { Busy(u); return; }
         // one that has lost the hand it fights with (or, with a bow, either hand) runs like a worker
         bool soldier = u.T.Work < 1, fighter = (soldier || u.Militia) && Armed(u);
         // a swordsman beside a siege ladder throws it down before anything else, climbers and all
@@ -76,6 +78,8 @@ public sealed partial class Sim
         if (fighter && Fight(u, dt)) { Busy(u); ReleaseSite(u); return; }
         if (!fighter && Flee(u, dt)) { Busy(u); return; }
         if (u.Prey != null && HuntTick(u, dt)) { Busy(u); return; }
+        // a comrade bleeding close by comes before any work (soldiers keep to their posts while the horde is here)
+        if ((!soldier || !Waves.Active) && Bandage(u, dt)) { Busy(u); return; }
         if (soldier && HasMainHand(u) && PushLadders(u, dt)) { Busy(u); return; }
         if (u.Path != null && u.PathI < u.Path.Count && (u.Hold || u.Site < 0) && u.Pastime != Pastime.Stroll) { Walk(u, dt); return; }
         if (u.Hold)
@@ -414,6 +418,105 @@ public sealed partial class Sim
     }
 
     static readonly (int, int, int)[] Around = { (1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1) };
+
+    /// <summary>
+    /// One of ours badly hurt — a third of itself left, or bleeding hard — leaves the fight and goes to mend by the
+    /// citadel, fighting only what has caught it; one held at a spot by an order stays till it is worse. Mended to three
+    /// quarters it goes back to its post. True while at that.
+    /// </summary>
+    bool FallBack(Unit u, float dt)
+    {
+        float bleed = u.Wounds?.Bleed ?? 0;
+        if (!u.Mending)
+        {
+            if (u.Hp >= u.MaxHp * (u.Hold ? .2f : .35f) && bleed <= 1.2f) return false;
+            u.Mending = true;
+            ReleaseSite(u);
+            u.Prey = null; u.Path = null; u.NextSearch = 0; u.Patient = null;
+            Say($"{u.T.Name} тяжело ранен и отходит к цитадели.", 3);
+        }
+        else if (u.Hp >= u.MaxHp * .75f && bleed < .1f)
+        {
+            u.Mending = false;
+            u.Why = "";
+            if (u.Post >= 0) GoTo(u, u.Post);
+            return false;
+        }
+        u.Why = HasMainHand(u) ? "ранен: отлёживается" : "без руки: работать не может";
+        var foe = Nearest(u, Team.Horde, u.T.Reach + 8);
+        if (foe != null && InReach(u, foe) && Armed(u) && Time - u.LastHurt < 1.5)
+        {
+            u.State = UnitState.Fight;
+            u.Facing = MathF.Atan2(foe.Z - u.Z, foe.X - u.X);
+            if (u.Cooldown <= 0) { Strike(u, foe); u.Cooldown = u.T.AttackTime; }
+            return true;
+        }
+        if (CellsApart(u.Cell, Gate) > 2)
+        {
+            if (u.Path == null || u.PathI >= u.Path.Count || Time >= u.NextSearch)
+            {
+                u.NextSearch = Time + 2;
+                if (!GoTo(u, Gate, adjacent: true, budget: 20000)) u.Path = null;
+            }
+            if (u.Path != null && u.PathI < u.Path.Count) { Walk(u, dt, .8f); return true; }
+        }
+        // there: step aside if another sits in its place, then sit and get better
+        if (u.Path != null && u.PathI < u.Path.Count) { Walk(u, dt, .5f); return true; }
+        u.State = UnitState.Idle;
+        u.Pastime = Pastime.Sit; u.PastimeUntil = Time + 4;
+        return true;
+    }
+
+    /// <summary>
+    /// One of ours with nobody on it sees a comrade bleeding close by, with no raider over it, and goes to bind the
+    /// wound: a few seconds beside it and the bleeding all but stops. True while at that.
+    /// </summary>
+    bool Bandage(Unit u, float dt)
+    {
+        var p = u.Patient;
+        if (p == null || p.Dead || p.Wounds is not { Bleed: > .15f } || p.Bandager != u)
+        {
+            if (p != null && p.Bandager == u) p.Bandager = null;
+            u.Patient = p = null;
+            if (Time < u.NextLookForWounded || Nearest(u, Team.Horde, 12 * VoxelWorld.PerMetre) != null) return false;
+            u.NextLookForWounded = Time + 1 + Rng.NextDouble() * .5;
+            float best = 30 * VoxelWorld.PerMetre;
+            foreach (var o in Units)
+            {
+                if (o == u || o.Dead || o.Team != Team.Player || o.Wounds is not { Bleed: > .15f } || o.Bandager is { Dead: false } && o.Bandager != u) continue;
+                float d = Dist(u, o);
+                if (d < best && Nearest(o, Team.Horde, 12 * VoxelWorld.PerMetre) == null) { best = d; p = o; }
+            }
+            if (p == null) return false;
+            u.Patient = p; p.Bandager = u; u.BandageEffort = 0;
+            ReleaseSite(u);
+            u.Path = null;
+        }
+        if (Dist(u, p) > u.T.BodyR + p.T.BodyR + 9)
+        {
+            if (u.Path == null || u.PathI >= u.Path.Count || Time >= u.NextSearch)
+            {
+                u.NextSearch = Time + .7;
+                if (!GoTo(u, p.Cell, adjacent: true, budget: 6000)) { p.Bandager = null; u.Patient = null; u.NextLookForWounded = Time + 4; return false; }
+            }
+            if (u.Path != null && u.PathI < u.Path.Count) Walk(u, dt);
+            return true;
+        }
+        u.Path = null;
+        u.State = UnitState.Work;
+        u.Facing = MathF.Atan2(p.Z - u.Z, p.X - u.X);
+        u.BandageEffort += dt;
+        if (u.BandageEffort >= 2.5f)
+        {
+            p.Wounds.Bleed *= .1f;
+            Say($"{u.T.Name} перевязал {Whom(p.T)}.", 1);
+            p.Bandager = null; u.Patient = null;
+        }
+        return true;
+    }
+
+    /// <summary>"рабочего", "лучника", "мечника".</summary>
+    static string Whom(UnitType t) => t.Key switch { "worker" => "рабочего", "archer" => "лучника", "sword" => "мечника", _ => t.Name.ToLowerInvariant() };
 
     /// <summary>Workers run for the citadel when a raider comes close; true while running.</summary>
     bool Flee(Unit u, float dt)

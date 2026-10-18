@@ -1199,6 +1199,135 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bands")
     static int Rank9(UnitType t) => t == Kinds.Troll ? 5 : t == Kinds.Orc ? 4 : t == Kinds.Miner ? 3 : t == Kinds.Goblin ? 2 : 1;
 }
 
+// ---- wits: the horde looks after its own skin and its own kind, our people after each other
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--wits")
+{
+    Console.WriteLine();
+    var mpW = new MapParams();
+    var wW = new VoxelWorld(mpW.SizeX, mpW.SizeY, mpW.SizeZ);
+    var siteW = MapGen.Generate(wW, mpW);
+    wW.Compact();
+    var simW = new Sim(wW, siteW);
+    simW.Waves.Countdown = 1e9; simW.WildTarget = 0;
+    simW.ComputeFields();
+    void RunW(double seconds) { for (double t = 0; t < seconds; t += .05) simW.Step(.05f); }
+    void Gone(Unit u) { u.Dead = true; u.DiedAt = -999; }
+    int kxW = siteW.KeepX, kzW = siteW.KeepZ;
+
+    // a raider hurt to a fifth of itself turns back west
+    var sore = simW.Spawn(Kinds.Orc, simW.NearestStand(kxW - 250, kzW, 2));
+    simW.Hurt(sore, null, sore.MaxHp * .8f);
+    float sx0 = sore.X;
+    RunW(8);
+    Check("a raider hurt to a fifth of itself turns back west", sore.Routed && sore.X < sx0 - 40, $"routed {sore.Routed}, x {sx0:0} → {sore.X:0}, {sore.State}");
+    Gone(sore);
+
+    // raiders see one of their own fighting and come to help it
+    var guard = simW.Spawn(Kinds.Swordsman, simW.NearestStand(kxW - 230, kzW - 140, 4));
+    simW.Command(new[] { guard }, guard.Cell);
+    RunW(1);
+    var biter = simW.Spawn(Kinds.Goblin, simW.NearestStand((int)guard.X + 9, (int)guard.Z, 2));
+    var helper = simW.Spawn(Kinds.Goblin, simW.NearestStand((int)guard.X, (int)guard.Z + 120, 2));
+    float hx0 = helper.X, hz0 = helper.Z, toGuardX = guard.X - hx0, toGuardZ = guard.Z - hz0, toGuard = MathF.Sqrt(toGuardX * toGuardX + toGuardZ * toGuardZ);
+    RunW(2.5);
+    float came = ((helper.X - hx0) * toGuardX + (helper.Z - hz0) * toGuardZ) / toGuard;
+    Check("raiders see one of their own fighting and come to help it", biter.State == UnitState.Fight || biter.Dead ? came > 32 : false,
+        $"{toGuard / VoxelWorld.PerMetre:0.0} m off, came {came / VoxelWorld.PerMetre:0.0} m toward the fight, {helper.State}; the first {biter.State}");
+    Gone(biter); Gone(helper); Gone(guard);
+
+    // a band that has lost its leader and two in three of its own breaks and runs
+    var band = new Warband { Id = 900, State = BandState.Coming, Name = "Ватага Проверки", Entry = simW.NearestStand(kxW - 320, kzW + 90, 2) };
+    for (int i = 0; i < 6; i++) band.Roster.Add(Kinds.Goblin);
+    simW.Bands.Add(band);
+    for (int i = 0; i < 6; i++) simW.SpawnRaider(Kinds.Goblin, band);
+    RunW(1);
+    band.Leader.Dead = true; band.Leader.DiedAt = simW.Time;
+    RunW(.3);
+    int felled = 0;
+    foreach (var m in band.Members) if (!m.Dead && !m.Leader && felled < 3) { m.Dead = true; m.DiedAt = simW.Time; felled++; }
+    var left = band.Members.FindAll(m => !m.Dead);
+    float lx0 = 0; foreach (var m in left) lx0 += m.X / left.Count;
+    RunW(6);
+    float lx1 = 0; foreach (var m in left) lx1 += m.X / left.Count;
+    Check("a band that has lost its leader and two in three of its own breaks and runs", band.Broken && left.TrueForAll(m => m.Routed) && lx1 < lx0 - 40,
+        $"broken {band.Broken}, {left.Count} left, all running {left.TrueForAll(m => m.Routed)}, x {lx0:0} → {lx1:0}");
+    foreach (var m in band.Members) Gone(m);
+    simW.Bands.Remove(band);
+
+    // one that gets away alive comes back with the next wave, as hurt as it went, mended halfway
+    var runner = simW.Spawn(Kinds.Orc, simW.NearestStand(siteW.SpawnStrip + 40, kzW, 2));
+    simW.Hurt(runner, null, runner.MaxHp * .8f);
+    for (int t = 0; t < 30 && !runner.Dead; t++) RunW(.5);
+    bool away = simW.Escaped.Count == 1 && simW.Escaped[0].Kind == Kinds.Orc;
+    simW.PlanWave(2);
+    var withIt = simW.Bands.Find(b => b.State == BandState.Coming && b.Veterans.Count > 0);
+    simW.Waves.Countdown = 0;
+    Unit back = null;
+    for (int t = 0; t < 80 && back == null; t++) { RunW(.5); back = simW.Units.Find(u => u.Returned && !u.Dead); }
+    Check("a raider that gets away alive comes back with the next wave, as hurt as it went, mended halfway", away && withIt != null && back is { T: var bt } && bt == Kinds.Orc && back.Hp < back.MaxHp * .7f && back.Band == withIt,
+        $"got away {away}, the next wave's {withIt?.Name} brings {withIt?.Veterans.Count} back; back: {back?.T.Name} with {back?.Hp:0} of {back?.MaxHp:0}");
+    simW.Waves.CallOff(simW);
+    RunW(.1);
+
+    // out of the fight our people mend, faster by the citadel
+    var athome = simW.Spawn(Kinds.Worker, simW.Gate);
+    var afield = simW.Spawn(Kinds.Worker, simW.NearestStand(kxW - 420, kzW + 200, 4));
+    foreach (var u in new[] { athome, afield }) { simW.Command(new[] { u }, u.Cell); u.Hp = u.MaxHp * .5f; u.LastHurt = simW.Time; }
+    RunW(40);
+    float homeGain = athome.Hp / athome.MaxHp - .5f, fieldGain = afield.Hp / afield.MaxHp - .5f;
+    Check("out of the fight our people mend, faster resting by the citadel", homeGain > .07f && fieldGain > .02f && homeGain > fieldGain * 2,
+        $"in 40 s: by the citadel +{homeGain * 100:0} %, out in the valley +{fieldGain * 100:0} %");
+    Gone(athome); Gone(afield);
+
+    // a swordsman cut down to a third of himself leaves his post to mend by the citadel, and goes back to it mended
+    int post = simW.NearestStand(kxW - 300, kzW - 60, 4);
+    var cut = simW.Spawn(Kinds.Swordsman, post);
+    simW.Command(new[] { cut }, post);
+    simW.ReleaseHold(new[] { cut });
+    cut.Post = post;
+    RunW(1);
+    cut.Hp = cut.MaxHp * .3f; cut.LastHurt = simW.Time;
+    var (gxW, _, gzW) = simW.Nav.Feet(simW.Gate);
+    float far0 = MathF.Sqrt((cut.X - gxW) * (cut.X - gxW) + (cut.Z - gzW) * (cut.Z - gzW));
+    for (int t = 0; t < 60 && MathF.Sqrt((cut.X - gxW) * (cut.X - gxW) + (cut.Z - gzW) * (cut.Z - gzW)) > 24; t++) RunW(.5);
+    float far1 = MathF.Sqrt((cut.X - gxW) * (cut.X - gxW) + (cut.Z - gzW) * (cut.Z - gzW));
+    bool fell = cut.Mending;
+    cut.Hp = cut.MaxHp * .8f;
+    for (int t = 0; t < 80 && simW.Nav.I(cut.Cell) != simW.Nav.I(post) | simW.Nav.K(cut.Cell) != simW.Nav.K(post); t++) RunW(.5);
+    var (pxW, _, pzW) = simW.Nav.Feet(post);
+    float atPost = MathF.Sqrt((cut.X - pxW) * (cut.X - pxW) + (cut.Z - pzW) * (cut.Z - pzW));
+    Check("a swordsman cut down to a third of himself falls back to mend by the citadel, and mended goes back to his post", fell && far1 < 32 && !cut.Mending && atPost < 16,
+        $"{far0 / VoxelWorld.PerMetre:0} m from the citadel → {far1 / VoxelWorld.PerMetre:0.0} m, mending {fell}; mended, {atPost / VoxelWorld.PerMetre:0.0} m from his post");
+    Gone(cut);
+
+    // one bleeding is seen by a worker near, who binds the wound
+    var bleeder = simW.Spawn(Kinds.Archer, simW.NearestStand(kxW - 120, kzW + 40, 4));
+    simW.Command(new[] { bleeder }, bleeder.Cell);
+    var binder = simW.Spawn(Kinds.Worker, simW.NearestStand(kxW - 120, kzW + 120, 4));
+    bleeder.Wounds = new BodyState(Bodies.Plan(bleeder.T, bleeder.Look)) { Bleed = 1 };
+    bleeder.LastHurt = simW.Time;
+    bool bound = false;
+    double bindFrom = simW.Time;
+    for (int t = 0; t < 40 && !bound; t++) { RunW(.5); bound = bleeder.Wounds.Bleed < .2f; }
+    Check("a worker sees one of ours bleeding and binds the wound", bound && binder.Patient == null,
+        $"bleeding 1 → {bleeder.Wounds.Bleed:0.00} in {simW.Time - bindFrom:0} s, the worker {binder.State}");
+    Gone(bleeder); Gone(binder);
+
+    // a swordsman comes to the help of a worker set upon beyond his post
+    int post2 = simW.NearestStand(kxW - 200, kzW + 160, 4);
+    var keeper = simW.Spawn(Kinds.Swordsman, post2);
+    keeper.Post = post2;
+    var victim = simW.Spawn(Kinds.Worker, simW.NearestStand(kxW - 200, kzW + 300, 4));
+    simW.Command(new[] { victim }, victim.Cell);
+    var attacker = simW.Spawn(Kinds.Goblin, simW.NearestStand((int)victim.X + 9, (int)victim.Z, 2));
+    attacker.Hp = attacker.MaxHp * 3; attacker.MaxHp *= 3;
+    float apart0 = Sim.Dist(keeper, attacker), nearest = apart0;
+    for (int t = 0; t < 32 && nearest > 40; t++) { RunW(.5); nearest = Math.Min(nearest, Sim.Dist(keeper, attacker)); }
+    Check("a swordsman comes to the help of a worker set upon beyond his post", apart0 > 120 && nearest <= 40,
+        $"the goblin {apart0 / VoxelWorld.PerMetre:0} m from the swordsman at first, {nearest / VoxelWorld.PerMetre:0.0} m at the nearest; the swordsman {keeper.State}");
+    Gone(keeper); Gone(victim); Gone(attacker);
+}
+
 // ---- bodies of voxels: a skeleton inside, blows carving out what they strike, limbs cut off, vital wounds, bleeding
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bodies")
 {

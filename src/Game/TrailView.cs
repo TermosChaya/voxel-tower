@@ -110,7 +110,7 @@ public partial class TrailView : Node3D
             BandState.Storm => "на штурме",
             _ => b.Target != null ? "на " + b.Target.Name.ToLowerInvariant() : "в походе",
         };
-        int n = b.State == BandState.Coming ? b.Roster.Count : b.Strength;
+        int n = b.State == BandState.Coming ? b.Size : b.Strength;
         d.Tag.Text = $"{b.Name} · {n} · {what}";
     }
 

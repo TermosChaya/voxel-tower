@@ -395,16 +395,30 @@ public sealed partial class Sim
         return had == 0 ? 0 : has / (float)had;
     }
 
-    /// <summary>Open wounds bleed; the bleeding slows as the blood clots. Pieces cut off lie a minute, then are gone.</summary>
+    /// <summary>
+    /// Open wounds bleed; the bleeding slows as the blood clots. Our people out of the fight mend slowly, three times as
+    /// fast resting by the citadel; what was cut off stays off. Pieces cut off lie a minute and a half, then are gone.
+    /// </summary>
     void TickBleeding(float dt)
     {
         foreach (var u in Units)
         {
-            if (u.Dead || u.Wounds == null || u.Wounds.Bleed <= 0) continue;
-            u.Hp -= u.Wounds.Bleed * dt;
-            u.Wounds.Bleed = Math.Max(0, u.Wounds.Bleed * (1 - .03f * dt) - .01f * dt);
-            if (u.Hp <= 0) Hurt(u, null, 1, "потеря крови");
+            if (u.Dead) continue;
+            if (u.Wounds is { Bleed: > 0 } w)
+            {
+                u.Hp -= w.Bleed * dt;
+                w.Bleed = Math.Max(0, w.Bleed * (1 - .03f * dt) - .01f * dt);
+                if (u.Hp <= 0) Hurt(u, null, 1, "потеря крови");
+                if (w.Bleed > .05f) continue;
+            }
+            if (u.Team != Team.Player || u.Hp >= u.MaxHp || Time - u.LastHurt < 8 || u.State is UnitState.Fight or UnitState.Flee) continue;
+            float dx = u.X - Site.KeepX, dz = u.Z - Site.KeepZ;
+            bool home = dx * dx + dz * dz < MendBy * MendBy;
+            u.Hp = Math.Min(u.MaxHp, u.Hp + u.MaxHp * (home ? .0035f : .0012f) * dt);
         }
         if (Remnants.Count > 0) Remnants.RemoveAll(r => Time - r.At > 90);
     }
+
+    /// <summary>How near the citadel, in voxels, the hurt mend at their best.</summary>
+    const float MendBy = 40 * VoxelWorld.PerMetre;
 }

@@ -23,6 +23,8 @@ public sealed class Warband
     public int Entry = -1;
     /// <summary>What it is made of, the leader first.</summary>
     public readonly List<UnitType> Roster = new();
+    /// <summary>Those who got away from the last wave alive and come back with this band, after its roster.</summary>
+    public readonly List<Survivor> Veterans = new();
     public readonly List<Unit> Members = new();
     public Unit Leader;
     public int Spawned;
@@ -39,12 +41,16 @@ public sealed class Warband
     /// places its members keep beside and behind the leader.</summary>
     public float HX = 1, HZ;
     internal double HeadingAt = -1;
+    /// <summary>Its first leader has fallen; and it has broken and runs.</summary>
+    public bool LostLeader, Broken;
     /// <summary>Every state it has been in, in order.</summary>
     public readonly List<BandState> History = new() { BandState.Coming };
 
     public int Alive { get { int n = 0; foreach (var u in Members) if (!u.Dead) n++; return n; } }
+    /// <summary>How many it comes with, the returning among them.</summary>
+    public int Size => Roster.Count + Veterans.Count;
     /// <summary>Raiders still to come into the valley, and living in it.</summary>
-    public int Strength => Roster.Count - Spawned + Alive;
+    public int Strength => Size - Spawned + Alive;
 }
 
 public sealed partial class Sim
@@ -99,6 +105,8 @@ public sealed partial class Sim
             // the tail of the shuffle beyond the leader: kinds come mixed
             for (int k = b.Roster.Count - 1; k > 1; k--) { int j = 1 + Rng.Next(k); (b.Roster[k], b.Roster[j]) = (b.Roster[j], b.Roster[k]); }
         }
+        // those who got away from the last wave alive come back with this one, shared among the bands
+        for (int i = 0; i < Escaped.Count; i++) planned[i % count].Veterans.Add(Escaped[i]);
         Bands.AddRange(planned);
         _nextTrails = 0;
     }
@@ -128,12 +136,22 @@ public sealed partial class Sim
         return coming;
     }
 
-    /// <summary>One raider of a band comes into the valley where the band comes in; the first of it leads.</summary>
-    public Unit SpawnRaider(UnitType t, Warband b)
+    /// <summary>
+    /// One raider of a band comes into the valley where the band comes in; the first of it leads. One that got away
+    /// last time comes back as it went — its look, its wounds — mended halfway in the camp.
+    /// </summary>
+    public Unit SpawnRaider(UnitType t, Warband b, Survivor back = null)
     {
         int h = t.Move.Height, at = b.Entry >= 0 ? Spread(b.Entry, b.Spawned, h) : -1;
         if (at < 0) return SpawnRaider(t);
         var u = Spawn(t, at);
+        if (back != null)
+        {
+            u.Look = back.Look;
+            u.Wounds = back.Wounds;
+            u.Hp = Math.Min(u.MaxHp, back.Hp + (u.MaxHp - back.Hp) * .5f);
+            u.Returned = true;
+        }
         u.Band = b;
         u.Raid = b.Target;
         b.Members.Add(u);
@@ -170,12 +188,20 @@ public sealed partial class Sim
                     if (!u.Dead && Armed(u) && (next == null || Rank(u.T) > Rank(next.T) || Rank(u.T) == Rank(next.T) && u.Hp > next.Hp)) next = u;
                 if (next == null)
                 {
-                    if (b.Spawned >= b.Roster.Count) Bands.RemoveAt(i);
+                    if (b.Spawned >= b.Size) Bands.RemoveAt(i);
                     continue;
                 }
                 bool fell = b.Leader != null;
+                b.LostLeader |= fell;
                 MakeLeader(b, next);
                 if (fell && b.Alive > 1) Say($"{b.Name}: вожак пал, ватагу ведёт {next.T.Name.ToLowerInvariant()}.", 1);
+            }
+            // its leader fallen and two in three of it gone: the rest have had enough
+            if (!b.Broken && b.LostLeader && b.Spawned >= b.Size && b.Alive * 3 <= b.Size && b.Target == null)
+            {
+                b.Broken = true;
+                foreach (var m in b.Members) if (!m.Dead) m.Routed = true;
+                Say($"{b.Name} дрогнула и бежит: {(b.Alive == 1 ? "уцелел один" : $"уцелело {b.Alive}")}.", 1);
             }
             var l = b.Leader;
             if (b.State is BandState.March or BandState.Rally && Time >= b.HeadingAt) { b.HeadingAt = Time + .5; Heading(b); }
@@ -183,7 +209,7 @@ public sealed partial class Sim
             {
                 case BandState.Forming:
                 {
-                    bool all = b.Spawned >= b.Roster.Count, near = true;
+                    bool all = b.Spawned >= b.Size, near = true;
                     foreach (var u in b.Members) if (!u.Dead && CellsApart(u.Cell, l.Cell) > 5) near = false;
                     if (all && (near || Time - b.Since > 8) || Time - b.Since > 20) Enter(b, BandState.March);
                     break;

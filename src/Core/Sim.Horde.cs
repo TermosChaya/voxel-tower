@@ -103,17 +103,24 @@ public sealed partial class Sim
     void RaiderTick(Unit u, float dt)
     {
         _goalSet ??= new HashSet<int>(Goals);
+        // hurt to a quarter of itself, a raider has had enough (a leader leads to the end, a guard keeps its camp)
+        if (!u.Routed && !u.Leader && !u.Guard && u.Hp < u.MaxHp * .25f) u.Routed = true;
         var foe = Nearest(u, Team.Player, u.T.Reach + 8);
-        if (foe != null && InReach(u, foe) && Armed(u))
+        // one running away bites only what has caught it
+        if (foe != null && InReach(u, foe) && Armed(u) && (!u.Routed || Time - u.LastHurt < 1.5))
         {
             u.State = UnitState.Fight;
+            u.Target = foe;
             u.Facing = MathF.Atan2(foe.Z - u.Z, foe.X - u.X);
             if (u.Cooldown <= 0) { Strike(u, foe); u.Cooldown = u.T.AttackTime * (.9f + (float)Rng.NextDouble() * .2f); }
             return;
         }
-        // nothing left to fight with: back west and out of the valley
-        if (!Armed(u)) { StopCarve(u); StopBuild(u); Retreat(u, dt); return; }
+        u.Target = null;
+        // nothing left to fight with, or no heart left for it: back west and out of the valley
+        if (!Armed(u) || u.Routed) { StopCarve(u); StopBuild(u); Retreat(u, dt); return; }
         if (u.Guard) { GuardTick(u, dt); return; }
+        // one of its own fighting close by: it goes to help
+        if (u.CarveCell < 0 && u.BuildCell < 0 && u.Band is not { State: BandState.Forming } && Help(u, dt)) return;
         // a band gathers where it came in before it sets out
         if (u.Band is { State: BandState.Forming }) { u.State = UnitState.Idle; return; }
         if (u.Raid != null && RaidTick(u, dt)) return;
@@ -151,11 +158,56 @@ public sealed partial class Sim
         Walk(u, dt);
     }
 
-    /// <summary>A raider that can no longer fight drags itself back west and is gone from the valley.</summary>
+    /// <summary>
+    /// A raider goes to the help of one of its own fighting ours close by, if it can walk there; true while it is on
+    /// its way (once it is beside the fight, the fight itself takes it).
+    /// </summary>
+    bool Help(Unit u, float dt)
+    {
+        if (Climbing(u)) return false;
+        Unit foe = null;
+        float best = HelpRange;
+        foreach (var o in Units)
+        {
+            if (o == u || o.Dead || o.Team != Team.Horde || o.State != UnitState.Fight || o.Target is not { Dead: false, Team: Team.Player } t) continue;
+            float d = Dist(u, o);
+            if (d < best) { best = d; foe = t; }
+        }
+        if (foe == null) return false;
+        if (u.Path == null || u.PathI >= u.Path.Count || Time >= u.NextSearch)
+        {
+            u.NextSearch = Time + .8;
+            if (!GoTo(u, foe.Cell, adjacent: true, budget: 2500)) u.Path = null;
+        }
+        if (u.Path == null || u.PathI >= u.Path.Count) return false;
+        Walk(u, dt);
+        return true;
+    }
+
+    /// <summary>How far off, in voxels, a raider sees one of its own in a fight and comes.</summary>
+    const float HelpRange = 16 * VoxelWorld.PerMetre;
+
+    /// <summary>Raiders that got away from this wave alive and able to fight, to come back with the next.</summary>
+    public readonly List<Survivor> Escaped = new();
+
+    /// <summary>
+    /// A raider that can no longer fight (or will not) goes back west and is gone from the valley; one that can still
+    /// fight comes back with the next wave, so it is worth running down.
+    /// </summary>
     void Retreat(Unit u, float dt)
     {
         u.Raid = null;
-        if (u.X < Site.SpawnStrip) { u.Dead = true; u.DiedAt = -999; u.State = UnitState.Dead; return; }
+        if (u.X < Site.SpawnStrip)
+        {
+            if (Armed(u) && !u.Guard)
+            {
+                if (u.Wounds != null) { u.Wounds.Bleed = 0; u.Wounds.Arrows.Clear(); }
+                Escaped.Add(new Survivor { Kind = u.T, Look = u.Look, Hp = u.Hp, Wounds = u.Wounds });
+                Say($"{u.T.Name} ушёл живым — вернётся со следующей волной.", 2);
+            }
+            u.Dead = true; u.DiedAt = -999; u.State = UnitState.Dead;
+            return;
+        }
         if (u.Path == null || u.PathI >= u.Path.Count)
         {
             u.State = UnitState.Idle;
@@ -360,6 +412,15 @@ public sealed partial class Sim
     }
 }
 
+/// <summary>A raider that got away from a wave alive and able to fight: it comes back with the next one, its wounds on it.</summary>
+public sealed class Survivor
+{
+    public UnitType Kind;
+    public int Look;
+    public float Hp;
+    public BodyState Wounds;
+}
+
 /// <summary>
 /// Preparation and assault: ten minutes between waves, the horn, and an early call. Calling the horde early pays nothing,
 /// but it comes knowing less about the defences: the share of the countdown it had for scouting is its intel.
@@ -374,7 +435,7 @@ public sealed class Waves
     public double Countdown = Prep;
     /// <summary>How much the horde learnt of the defences before this wave (0 to 1): the share of the countdown it had.</summary>
     public double Intel;
-    readonly Queue<(UnitType kind, Warband band)> _queue = new();
+    readonly Queue<(UnitType kind, Warband band, Survivor back)> _queue = new();
     Warband _lastBand;
     double _spawnT;
 
@@ -395,8 +456,8 @@ public sealed class Waves
         _spawnT -= dt;
         if (_queue.Count > 0 && _spawnT <= 0)
         {
-            var (kind, band) = _queue.Dequeue();
-            if (band != null) s.SpawnRaider(kind, band); else s.SpawnRaider(kind);
+            var (kind, band, back) = _queue.Dequeue();
+            if (band != null) s.SpawnRaider(kind, band, back); else s.SpawnRaider(kind);
             _lastBand = band;
             // a band comes in at a run, one after another; the next band some seconds later, somewhere else
             bool sameBand = _queue.Count > 0 && _queue.Peek().band == band;
@@ -444,8 +505,14 @@ public sealed class Waves
         // the bands planned for this wave (and shown on the map while it was coming) march in one after another
         if (!s.Bands.Exists(b => b.State == BandState.Coming)) s.PlanWave(n);
         var bands = s.Muster();
-        int total = 0;
-        foreach (var b in bands) { foreach (var t in b.Roster) _queue.Enqueue((t, b)); total += b.Roster.Count; }
+        int total = 0, back = 0;
+        foreach (var b in bands)
+        {
+            foreach (var t in b.Roster) _queue.Enqueue((t, b, null));
+            foreach (var v in b.Veterans) _queue.Enqueue((v.Kind, b, v));
+            total += b.Size; back += b.Veterans.Count;
+        }
+        s.Escaped.Clear();
         // timber for ladders and bridges, earth for fills, brought along
         s.HordeStock[Stockpile.Wood] += (2.4 + 1 * n) * VoxelWorld.PerM3;
         s.HordeStock[Stockpile.Earth] += (3.2 + 2 * n) * VoxelWorld.PerM3;
@@ -455,6 +522,7 @@ public sealed class Waves
         s.InvalidateFields();
         s.Recall();
         string intel = Intel >= .995 ? "" : $" Разведать вас она успела на {Intel * 100:0} %.";
-        s.Say($"Рог! Волна {Number}: {total} налётчиков, {Bands(bands.Count)}, идут с запада.{intel}", 2);
+        string again = back == 0 ? "" : back == 1 ? " С ними и один из бежавших в прошлый раз." : $" С ними и бежавшие в прошлый раз: {back}.";
+        s.Say($"Рог! Волна {Number}: {total} налётчиков, {Bands(bands.Count)}, идут с запада.{again}{intel}", 2);
     }
 }

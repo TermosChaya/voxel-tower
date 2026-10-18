@@ -169,8 +169,18 @@ public sealed class Unit
     public bool Leader;
     /// <summary>Until when a raider that found no straight way to its place in the band goes by its own way instead.</summary>
     public double OwnWayUntil;
+    /// <summary>A raider that has had enough — badly hurt, or its band broken — going back west, fighting only what catches it.</summary>
+    public bool Routed;
+    /// <summary>A raider back from a wave it got away from.</summary>
+    public bool Returned;
     /// <summary>Its body once it has been hurt (what blows carved out of it, what still works); null while it is whole.</summary>
     public BodyState Wounds;
+    /// <summary>One of ours badly hurt that has left the fight to mend by the citadel; back to its post once it has.</summary>
+    public bool Mending;
+    /// <summary>Whose wound it is binding, and who is binding its own; how far along it is.</summary>
+    public Unit Patient, Bandager;
+    public float BandageEffort;
+    public double NextLookForWounded;
 
     // the horde hacking its way
     public int CarveCell = -1;

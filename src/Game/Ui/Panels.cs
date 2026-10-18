@@ -52,9 +52,11 @@ public static class Retinue
             {
                 UnitState.Carve => "прорубает дорогу", UnitState.Siege => "бьёт в цитадель", UnitState.Fight => "бьётся",
                 UnitState.Work => u.Building switch { Works.Ladder => "ставит лестницу", Works.Bridge => "кладёт мост", Works.Fill => "засыпает ров", _ => "строит" },
-                UnitState.Flee => "уползает прочь",
-                _ => "идёт к цитадели",
+                UnitState.Flee => u.Routed && Sim.Armed(u) ? "бежит прочь" : "уползает прочь",
+                _ => u.Returned ? "идёт к цитадели · бежал в прошлый раз" : "идёт к цитадели",
             };
+        if (u.Mending) return u.State == UnitState.Fight ? "ранен, отбивается" : u.State == UnitState.Idle ? "отлёживается у цитадели" : "ранен, отходит к цитадели";
+        if (u.Patient is { Dead: false } patient) return "перевязывает: " + patient.T.Name.ToLowerInvariant();
         if (u.Prey is { Dead: false } prey) return (prey.Team == Team.Wild ? "охотится: " : "атакует: ") + prey.T.Name.ToLowerInvariant();
         switch (u.State)
         {
@@ -154,6 +156,8 @@ public partial class HordeInfo : VBoxContainer
         foreach (var t in list) counts[t.Name.ToLowerInvariant()] = counts.TryGetValue(t.Name.ToLowerInvariant(), out int c) ? c + 1 : 1;
         var parts = new List<string>();
         foreach (var (name, n) in counts) parts.Add(n > 1 ? $"{name} ×{n}" : name);
+        if (b.State == BandState.Coming && b.Veterans.Count > 0)
+            parts.Add($"и бежавшие в прошлый раз: {string.Join(", ", b.Veterans.ConvertAll(v => v.Kind.Name.ToLowerInvariant()))}");
         return string.Join(", ", parts);
     }
 
@@ -188,7 +192,7 @@ public partial class HordeInfo : VBoxContainer
             {
                 var box = new VBoxContainer();
                 box.AddThemeConstantOverride("separation", -2);
-                int n = b.State == BandState.Coming ? b.Roster.Count : b.Strength;
+                int n = b.State == BandState.Coming ? b.Size : b.Strength;
                 box.AddChild(Hud.Text($"{b.Name} · {n}", Ornament.SerifBold, 13, TrailView.ColorOf(b).Lightened(.3f)));
                 box.AddChild(Hud.Text(Where(_m, b), Ornament.SerifItalic, 12, Ornament.Aged));
                 var what = Hud.Text(Kinds(b), Ornament.Serif, 12, Ornament.Parchment, wrap: true);

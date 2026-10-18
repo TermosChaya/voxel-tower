@@ -190,6 +190,17 @@ public sealed partial class Sim
                 if (dx * dx + dz * dz < leash * leash) { foe = o; break; }
             }
         }
+        // one of ours set upon close by: to its help, past the post if need be
+        if (foe == null)
+        {
+            float best = 22 * VoxelWorld.PerMetre;
+            foreach (var o in Units)
+            {
+                if (o.Dead || o.Team != Team.Horde || o.State != UnitState.Fight || o.Target is not { Dead: false, Team: Team.Player }) continue;
+                float d = Dist(u, o);
+                if (d < best) { best = d; foe = o; }
+            }
+        }
         if (foe == null) return false;
         u.State = UnitState.Fight;
         ReleaseSite(u);
@@ -218,9 +229,11 @@ public sealed partial class Sim
             if (o.Dead || o.Team != Team.Horde) continue;
             float d = Dist(u, o);
             if (d > u.T.Range) continue;
-            // those hacking the walls, battering the citadel, raising ladders or climbing them come first
+            // those cutting down one of ours come first, then those hacking the walls, battering the citadel, raising
+            // ladders or climbing them
+            bool hurting = o.State == UnitState.Fight && o.Target is { Dead: false, Team: Team.Player };
             bool busy = o.State is UnitState.Carve or UnitState.Siege or UnitState.Work || Climbing(o);
-            float pri = d - (busy ? 48 : 0);
+            float pri = d - (hurting ? 64 : busy ? 48 : 0);
             if (pri >= bd || !Sight(u, o)) continue;
             bd = pri; best = o;
         }
