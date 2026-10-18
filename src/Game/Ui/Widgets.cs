@@ -309,3 +309,40 @@ public partial class Medallion : Control
 
     public override GodotObject _MakeCustomTooltip(string forText) => Tooltip.Make(forText);
 }
+
+/// <summary>The latest lines of the chronicle, briefly, above the console; the whole of it is in its tab.</summary>
+public partial class Toasts : VBoxContainer
+{
+    readonly List<(Label label, double born)> _lines = new();
+    double _clock;
+    public const int Most = 3;
+    const double Life = 9;
+
+    public Toasts()
+    {
+        MouseFilter = MouseFilterEnum.Ignore;
+        AddThemeConstantOverride("separation", 2);
+    }
+
+    public void Push(string text, Color color)
+    {
+        var l = Hud.Text(text, Ornament.Serif, 14, color, wrap: true, outline: 6);
+        l.CustomMinimumSize = new Vector2(620, 0);
+        l.HorizontalAlignment = HorizontalAlignment.Center;
+        AddChild(l);
+        _lines.Add((l, _clock));
+        while (_lines.Count > Most) { _lines[0].label.QueueFree(); _lines.RemoveAt(0); }
+    }
+
+    public override void _Process(double delta)
+    {
+        _clock += delta;
+        for (int i = _lines.Count - 1; i >= 0; i--)
+        {
+            var (l, born) = _lines[i];
+            double age = _clock - born;
+            if (age > Life) { l.QueueFree(); _lines.RemoveAt(i); continue; }
+            l.Modulate = new Color(1, 1, 1, age < Life - 2 ? 1 : (float)((Life - age) / 2));
+        }
+    }
+}

@@ -6,33 +6,35 @@ using VoxelTower.Core;
 namespace VoxelTower.Game;
 
 /// <summary>
-/// The interface laid over the game, kept to the edges: one strip at the top with the treasury and the wave clock, the
-/// map bottom left, the tool belt bottom centre, and everything else in tabs that hang on the side edges and slide out
-/// when clicked — the chronicle, the goals and the blueprint scrolls on the left, the retinue with the chosen in detail
-/// and the horde's warbands on the right. The latest lines of the chronicle show briefly under the strip. Health bars
-/// and the selection frame are drawn straight over the field.
+/// The interface, made as the frame of the game rather than laid over it, and kept to the edges: an oak beam along
+/// the top with the tabs and the stores, the wave clock hanging from it, the faces of the household under it; along
+/// the bottom a console of boards between two stone plinths — the map of the valley in its ring on the left, the face
+/// of the chosen, what is in hand or who is chosen in the middle, the tools on the right. The tabs let their panels
+/// down from the beam: the goals, the chronicle, the blueprint scrolls, the work table, the horde. The latest lines
+/// of the chronicle show briefly above the console; health bars and the selection frame are drawn on the field.
 /// </summary>
 public partial class Hud : CanvasLayer
 {
     public enum Kind { Plain, Ok, Warn, Bad }
 
-    /// <summary>How much of the bottom edge the panels cover, for centring the camera above them.</summary>
-    public const float BottomBand = 130;
-    /// <summary>How much of the top edge the strip covers.</summary>
-    public const float TopBand = 84;
+    /// <summary>How much of the bottom edge the console covers across the whole width, for centring the camera above it.</summary>
+    public const float BottomBand = BottomConsole.Band;
+    /// <summary>How much of the top edge the beam covers.</summary>
+    public const float TopBand = TopBeam.Height;
 
     const string HelpText = "Управление\n" +
         "Кисти ничего не строят сами: они размечают работу, а пешки делают её — кладут из запасов, копают, рубят.\n" +
         "1–5 — кисти, 6 — снять разметку, 7 — лестница, 8 — делянка (добыча с участка), 9 — ворота, 0 — починка, M — мост, B — снять чертёж, N — сетка, Esc — убрать кисть. Z, X, C — камень, брёвна, земля; " +
-        "V — кирка: копать, рубить, ломать камень, разбирать свою кладку. Shift с кистью — тоже кирка.\n" +
+        "V — кирка: копать, рубить, ломать камень, разбирать свою кладку. Shift с кистью — тоже кирка. Те же кисти — в сетке справа внизу.\n" +
         "[ и ] — толщина, − и = — высота (с киркой — глубина). F — форма или заливка, G — ровно или по рельефу.\n" +
-        "Без кисти: ЛКМ — выбрать пешку, рамкой — нескольких; ПКМ по земле — послать, по зверю — охотиться, по врагу — атаковать.\n" +
+        "Без кисти: ЛКМ — выбрать пешку, рамкой — нескольких; ПКМ по земле — послать (посланные вместе идут строем), по зверю — охотиться, по врагу — атаковать.\n" +
+        "Лица дружины под верхней балкой: щелчок — выбрать, ещё раз — показать, Shift — добавить. Что с выбранным и какие работы ему велены — посередине внизу.\n" +
+        "Вкладки на балке: задачи, летопись, чертежи, работы (кто что делает и в каком порядке, 1 — первым делом), орда.\n" +
         "Пробел — позвать орду раньше (она меньше узнает о вас), P — пауза, Tab — скорость, T — тревога, J — пути орды.\n" +
         "Ctrl+1…5 — запомнить выбранных отрядом, Shift+1…5 — выбрать отряд (дважды — показать).\n" +
-        "Вкладки по краям выдвигаются щелчком: слева — задачи, летопись, чертежи; справа — дружина поимённо и орда.\n" +
         "ПКМ тянет карту, колесо — масштаб, СКМ или Q/E — поворот, WASD — сдвиг, Y — вид сверху, H — вернуть вид.";
 
-    static readonly (Tool tool, Icons.Painter icon, string key, string tip)[] ToolDefs =
+    public static readonly (Tool tool, Icons.Painter icon, string key, string tip)[] ToolDefs =
     {
         (Tool.Brush, Icons.Brush, "1", "Кисть\nВедите по земле — рабочие выложат столб материала до заданной высоты: так рисуют стены от руки. Шар налипает на поверхность. С киркой кисть размечает, что копать, а шар пробивает ходы. F — форма, Shift — кирка на один мазок."),
         (Tool.Line, Icons.StraightLine, "2", "Линия\nЗажмите и протяните: прямая стена заданной толщины и высоты. С киркой — ров или траншея."),
@@ -45,32 +47,36 @@ public partial class Hud : CanvasLayer
         (Tool.Gate, Icons.GateIcon, "9", "Ворота\nЩелчок по боковой грани стены: рабочие прорубят проём в два метра шириной и три высотой и навесят дубовые створки на железе. Свои открывают их на ходу, перед ордой они закрыты, и рубить их ей не легче камня. Щелчок по воротам без кисти — держать открытыми, на засов или снова сами."),
         (Tool.Repair, Icons.Mend, "0", "Починка\nЩелчок по разрушенной постройке: рабочие вернут ей прежний вид — разберут завал, где он лёг на кладку, доложат недостающее тем же камнем, навесят ворота. Помнится всё, что вы построили, и старая крепость тоже. Рамка чинит только то, что в ней."),
         (Tool.Bridge, Icons.BridgeIcon, "M", "Мост\nЗажмите на одном берегу и протяните до другого: рабочие перекинут мост, который идёт аркой, а не плоско. Каменный (Z) — на арке, с парапетами; деревянный (X) — настил на гнутых рёбрах, с перилами. Строят от берегов, стоя на уже уложенном. Пролёт — от 2 до 25 м."),
-        (Tool.Capture, Icons.Scroll, "B", "Снять чертёж\nОбведите рамкой свою постройку — она станет чертежом. Копии ставятся из свитков справа, R поворачивает."),
+        (Tool.Capture, Icons.Scroll, "B", "Снять чертёж\nОбведите рамкой свою постройку — она станет чертежом. Копии ставятся из свитков во вкладке «Чертежи», R поворачивает."),
     };
 
-    static readonly (byte mat, string key, int store, string tip)[] MatDefs =
+    public static readonly (byte mat, string key, int store, string tip)[] MatDefs =
     {
         (Mat.Stone, "Z", Stockpile.Stone, "Камень\nКладётся бутом — неровными камнями на растворе, дольше всего и крепче всего. Его ломают киркой в скалах и валунах; разобранная кладка возвращает три четверти."),
         (Mat.Wood, "X", Stockpile.Wood, "Брёвна\nРубят в лесу: кирка, щелчок по дереву. Ложатся быстрее камня, но топор орка берёт их легко."),
         (Mat.Rammed, "C", Stockpile.Earth, "Земля\nЕё даёт любой ров и котлован. Насыпь кладётся быстрее всего, а гоблину без кирки сквозь неё не пройти."),
     };
 
-    const string PickTip = "Кирка\nКисти размечают не кладку, а работу кирки: выкопать ров, срубить лес, наломать камня, разобрать свою стену. Всё добытое идёт в запасы.";
+    public const string PickTip = "Кирка\nКисти размечают не кладку, а работу кирки: выкопать ров, срубить лес, наломать камня, разобрать свою стену. Всё добытое идёт в запасы.";
 
     Main _m;
-    Banner _banner;
     Toasts _toasts;
-    VBoxContainer _history;
-    Minimap _map;
-    Button _topView;
-    VBoxContainer _goals;
+    VBoxContainer _history, _goals;
     readonly List<Label> _goalLines = new();
-    SideDrawers _left, _right;
-    TabSpine _goalsTab, _hordeTab;
+    TopBeam _beam;
+    HBoxContainer _tabs;
+    DropPanel _drop;
+    TabPlaque _goalsTab, _hordeTab;
+    Stores _stores;
+    WaveClock _clockPanel;
+    Medallion _help;
+    ColonistBar _colonists;
+    BottomConsole _console;
+    MapRing _ring;
+    PortraitFrame _portrait;
+    Inspector _inspector;
     HordeInfo _horde;
-    Label _toolName, _toolMat;
-    HBoxContainer _opts, _beltHead;
-    OrnatePanel _belt;
+    WorkTable _works;
     readonly Dictionary<Tool, Slot> _toolSlots = new();
     readonly Dictionary<byte, Slot> _matSlots = new();
     Slot _pickSlot;
@@ -78,8 +84,6 @@ public partial class Hud : CanvasLayer
     Label _bpCount;
     CursorTag _tag;
     Control _floats;
-    WaveClock _clockPanel;
-    Retinue _retinue;
     UnitOverlay _overlay;
     Control _finale;
     double _clock, _refreshAt, _soundAt;
@@ -105,10 +109,24 @@ public partial class Hud : CanvasLayer
         return l;
     }
 
+    /// <summary>What a tool does, in its first sentence, for the console while it is in hand.</summary>
+    public static string ToolHint(Tool t)
+    {
+        foreach (var d in ToolDefs)
+        {
+            if (d.tool != t) continue;
+            var text = d.tip.Split('\n', 2);
+            if (text.Length < 2) return "";
+            int dot = text[1].IndexOf(". ", StringComparison.Ordinal);
+            return dot > 0 ? text[1][..(dot + 1)] : text[1];
+        }
+        return t == Tool.Paste ? "Щелчок по земле — разметить копию; R — повернуть." : "";
+    }
+
     public void Init(Main m)
     {
         _m = m;
-        var root = new Control { MouseFilter = Control.MouseFilterEnum.Ignore, Theme = Ornament.MakeTheme() };
+        var root = new Control { MouseFilter = Control.MouseFilterEnum.Ignore, Theme = Ornament.MakeTheme(), TextureRepeat = CanvasItem.TextureRepeatEnum.Enabled };
         root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         AddChild(root);
 
@@ -116,45 +134,82 @@ public partial class Hud : CanvasLayer
         root.AddChild(_overlay);
         _overlay.Init(m);
 
-        // the strip at the top: the treasury and the stores, and the wave clock beside them
-        var strip = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        strip.AddThemeConstantOverride("separation", 10);
-        strip.SetAnchorsPreset(Control.LayoutPreset.CenterTop);
-        strip.GrowHorizontal = Control.GrowDirection.Both;
-        strip.OffsetTop = 8;
-        _banner = new Banner(compact: true) { SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
-        strip.AddChild(_banner);
-        _clockPanel = new WaveClock();
-        strip.AddChild(_clockPanel);
-        root.AddChild(strip);
-        _clockPanel.Init(m);
+        // the bottom console: the map in its ring, the face of the chosen, what is in hand or chosen, the tools
+        _console = new BottomConsole();
+        root.AddChild(_console);
+        _ring = new MapRing();
+        _console.Left.AddChild(_ring);
+        _ring.Init(m);
+        _ring.Position = new Vector2(BottomConsole.LeftW / 2 - MapRing.Outer - 2, BottomConsole.Wing / 2 - MapRing.Outer + 4);
+        _portrait = new PortraitFrame();
+        _console.Base.AddChild(_portrait);
+        _portrait.Init(m);
+        _portrait.Position = new Vector2(BottomConsole.LeftW + 10, 15);
+        _portrait.Size = new Vector2(PortraitFrame.S, PortraitFrame.S);
+        _inspector = new Inspector();
+        _console.Base.AddChild(_inspector);
+        _inspector.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        _inspector.OffsetLeft = BottomConsole.LeftW + PortraitFrame.S + 24;
+        _inspector.OffsetRight = -BottomConsole.RightW - 12;
+        _inspector.OffsetTop = 17; _inspector.OffsetBottom = -9;
+        _inspector.Init(m);
+        var grid = new GridContainer { Columns = 4, Position = new Vector2(18, 21) };
+        grid.AddThemeConstantOverride("h_separation", 6);
+        grid.AddThemeConstantOverride("v_separation", 6);
+        foreach (var (tool, icon, key, tip) in ToolDefs)
+        {
+            var sl = new Slot(icon, key, tip, 52);
+            var t = tool;
+            sl.Clicked += () => _m.Tools.SetTool(t);
+            _toolSlots[tool] = sl;
+            grid.AddChild(sl);
+        }
+        foreach (var (mat, key, _, tip) in MatDefs)
+        {
+            var sl = new Slot(Icons.Material(mat), key, tip, 52) { Caption = "" };
+            var mm = mat;
+            sl.Clicked += () => _m.Tools.SetMaterial(mm);
+            _matSlots[mat] = sl;
+            grid.AddChild(sl);
+        }
+        _pickSlot = new Slot(Icons.Pick, "V", PickTip, 52) { Caption = "копать" };
+        _pickSlot.Clicked += () => _m.Tools.SetDig(!_m.Tools.Opt.Dig);
+        grid.AddChild(_pickSlot);
+        _console.Right.AddChild(grid);
 
-        var help = new Medallion(Icons.Question, HelpText);
-        help.SetAnchorsPreset(Control.LayoutPreset.TopRight);
-        help.OffsetLeft = -60; help.OffsetRight = -16; help.OffsetTop = 14; help.OffsetBottom = 58;
-        root.AddChild(help);
-
-        // the latest lines of the chronicle, briefly, over the tool belt (placed every frame, as the belt grows and shrinks)
+        // the latest lines of the chronicle, briefly, above the console
         _toasts = new Toasts();
         root.AddChild(_toasts);
 
-        // the tabs on the left: the goals, the chronicle, the blueprint scrolls
-        _left = new SideDrawers(left: true, top: 96, bottom: 312);
-        root.AddChild(_left);
+        // what hangs from the beam goes behind it
+        _drop = new DropPanel { Position = new Vector2(10, TopBeam.Height - 3) };
+        root.AddChild(_drop);
+        _beam = new TopBeam();
+        root.AddChild(_beam);
+        _tabs = new HBoxContainer { Position = new Vector2(16, 5) };
+        _tabs.AddThemeConstantOverride("separation", 6);
+        _beam.AddChild(_tabs);
+        TabPlaque Tab(string key, Icons.Painter icon, string caption, string tip, Control page, float width)
+        {
+            var tab = new TabPlaque(icon, caption, tip);
+            _tabs.AddChild(tab);
+            _drop.Add(key, tab, page, width);
+            return tab;
+        }
         var goalsBox = new VBoxContainer();
         goalsBox.AddThemeConstantOverride("separation", 5);
         goalsBox.AddChild(CapsLabel("Задачи"));
         _goals = new VBoxContainer();
         _goals.AddThemeConstantOverride("separation", 3);
         goalsBox.AddChild(_goals);
-        _goalsTab = _left.Add("goals", Icons.Scroll, "Задачи", "Задачи\nЧем заняться: починить крепость, занять рудники и держать их — они платят золотом на наём — и выстоять все волны.", goalsBox, 330);
+        _goalsTab = Tab("goals", Icons.Scroll, "Задачи", "Задачи\nЧем заняться: починить крепость, занять рудники и держать их — они платят золотом на наём — и выстоять все волны.", goalsBox, 380);
         var chronicle = new VBoxContainer();
         chronicle.AddThemeConstantOverride("separation", 4);
         chronicle.AddChild(CapsLabel("Летопись"));
         _history = new VBoxContainer();
         _history.AddThemeConstantOverride("separation", 4);
         chronicle.AddChild(_history);
-        _left.Add("chronicle", Icons.Horn, "Летопись", "Летопись\nВсё, что было: подсказки начала, вести о волнах, рудниках, павших и сделанном. Последние строки и так видны на минуту под полосой сверху.", chronicle, 400);
+        Tab("chronicle", Icons.Horn, "Летопись", "Летопись\nВсё, что было: подсказки начала, вести о волнах, рудниках, павших и сделанном. Последние строки и так видны на минуту над консолью.", chronicle, 440);
         var bpBox = new VBoxContainer();
         bpBox.AddThemeConstantOverride("separation", 8);
         var bpHead = new HBoxContainer();
@@ -167,95 +222,24 @@ public partial class Hud : CanvasLayer
         _bpList = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         _bpList.AddThemeConstantOverride("separation", 6);
         bpBox.AddChild(_bpList);
-        _left.Add("blueprints", Icons.Box, "Чертежи", "Свитки чертежей\nСнятые постройки: щелчок по свитку — разметить копию. B — снять новый чертёж рамкой.", bpBox, 330);
-
-        // the tabs on the right: the retinue with the chosen, the horde
-        _right = new SideDrawers(left: false, top: 96, bottom: 16);
-        root.AddChild(_right);
-        _retinue = new Retinue();
-        _right.Add("retinue", Icons.Sword, "Дружина", "Дружина\nСколько у вас людей и чем они заняты, наём, пять отрядов (Ctrl+цифра — запомнить, Shift+цифра — выбрать), выбранные поимённо — со здоровьем, ранами и делом — и приказы им.", _retinue, 350);
-        _retinue.Init(m);
+        Tab("blueprints", Icons.Box, "Чертежи", "Свитки чертежей\nСнятые постройки: щелчок по свитку — разметить копию. B — снять новый чертёж рамкой.", bpBox, 380);
+        _works = new WorkTable();
+        _works.Init(m);
+        Tab("works", Icons.Pick, "Работы", "Работы\nКто из дружины какую работу делает и в каком порядке, как в RimWorld: 1 — первым делом, 4 — в последнюю очередь, пусто — никогда. И кто что добывает сам, кто в ополчении.", _works, WorkTable.Width);
         _horde = new HordeInfo();
-        _hordeTab = _right.Add("horde", Icons.Horn, "Орда", "Орда\nВатаги грядущей волны (или той, что в долине): из кого, кто ведёт, откуда войдут; их пути — на поле и на карте (J). И брёвна с землёй орды на осадные работы.", _horde, 320);
+        _hordeTab = Tab("horde", Icons.Sword, "Орда", "Орда\nВатаги грядущей волны (или той, что в долине): из кого, кто ведёт, откуда войдут; их пути — на поле и на карте (J). И брёвна с землёй орды на осадные работы.", _horde, 360);
         _horde.Init(m);
 
-        // the map, bottom left
-        var mapPanel = new OrnatePanel(10);
-        Pin(mapPanel, Control.LayoutPreset.BottomLeft, 12, -12);
-        var mapBox = new VBoxContainer();
-        mapBox.AddThemeConstantOverride("separation", 5);
-        var mapHead = new HBoxContainer();
-        mapHead.AddThemeConstantOverride("separation", 3);
-        var mapTitle = CapsLabel("Карта", 9);
-        mapTitle.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        mapTitle.VerticalAlignment = VerticalAlignment.Center;
-        mapHead.AddChild(mapTitle);
-        _topView = new Button
-        {
-            Text = "Сверху", ToggleMode = true, FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 20),
-            MouseDefaultCursorShape = Control.CursorShape.PointingHand,
-            TooltipText = "Вид сверху\nСмотреть на долину ровно сверху, как на карту, и обратно. Y. Поворот (Q/E, СКМ) работает и так.",
-        };
-        _topView.AddThemeFontSizeOverride("font_size", 11);
-        _topView.Pressed += () => _m.Rig.ToggleTopDown();
-        foreach (var (text, factor, tip) in new[] { ("−", 1 / 1.3f, "Отдалить\nКолесо, щипок или два пальца на тачпаде, PageDown."), ("+", 1.3f, "Приблизить\nКолесо, щипок или два пальца на тачпаде, PageUp.") })
-        {
-            var zb = new Button { Text = text, FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(22, 20), MouseDefaultCursorShape = Control.CursorShape.PointingHand, TooltipText = tip };
-            zb.AddThemeFontSizeOverride("font_size", 12);
-            float f = factor;
-            zb.Pressed += () => _m.Rig.ZoomBy(f);
-            mapHead.AddChild(zb);
-        }
-        mapHead.AddChild(_topView);
-        mapBox.AddChild(mapHead);
-        _map = new Minimap();
-        mapBox.AddChild(_map);
-        mapPanel.AddChild(mapBox);
-        root.AddChild(mapPanel);
-        _map.Init(m);
-
-        // the tool belt, bottom centre: the tool and its settings over a row of slots
-        var belt = _belt = new OrnatePanel(10);
-        Pin(belt, Control.LayoutPreset.CenterBottom, 0, -10);
-        var col = new VBoxContainer();
-        col.AddThemeConstantOverride("separation", 5);
-        _beltHead = new HBoxContainer();
-        _beltHead.AddThemeConstantOverride("separation", 14);
-        _toolName = Text("", Ornament.Display, 20, Ornament.EmberGlow);
-        _beltHead.AddChild(_toolName);
-        _toolMat = CapsLabel("", 9);
-        _toolMat.VerticalAlignment = VerticalAlignment.Center;
-        _toolMat.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        _beltHead.AddChild(_toolMat);
-        col.AddChild(_beltHead);
-        _opts = new HBoxContainer();
-        _opts.AddThemeConstantOverride("separation", 16);
-        col.AddChild(_opts);
-        var slots = new HBoxContainer();
-        slots.AddThemeConstantOverride("separation", 5);
-        foreach (var (tool, icon, key, tip) in ToolDefs)
-        {
-            var sl = new Slot(icon, key, tip, 46);
-            var t = tool;
-            sl.Clicked += () => _m.Tools.SetTool(t);
-            _toolSlots[tool] = sl;
-            slots.AddChild(sl);
-        }
-        slots.AddChild(new Rule(true));
-        foreach (var (mat, key, _, tip) in MatDefs)
-        {
-            var sl = new Slot(Icons.Material(mat), key, tip, 46) { Caption = "" };
-            var mm = mat;
-            sl.Clicked += () => _m.Tools.SetMaterial(mm);
-            _matSlots[mat] = sl;
-            slots.AddChild(sl);
-        }
-        _pickSlot = new Slot(Icons.Pick, "V", PickTip, 46) { Caption = "копать" };
-        _pickSlot.Clicked += () => _m.Tools.SetDig(!_m.Tools.Opt.Dig);
-        slots.AddChild(_pickSlot);
-        col.AddChild(slots);
-        belt.AddChild(col);
-        root.AddChild(belt);
+        _stores = new Stores();
+        _beam.AddChild(_stores);
+        _clockPanel = new WaveClock();
+        root.AddChild(_clockPanel);
+        _clockPanel.Init(m);
+        _help = new Medallion(Icons.Question, HelpText) { Size = new Vector2(38, 38) };
+        root.AddChild(_help);
+        _colonists = new ColonistBar();
+        root.AddChild(_colonists);
+        _colonists.Init(m);
 
         _floats = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
         _floats.SetAnchorsPreset(Control.LayoutPreset.FullRect);
@@ -267,37 +251,22 @@ public partial class Hud : CanvasLayer
         OnToolChanged();
         Refresh();
         // a new game opens on what there is to do
-        _left.Open("goals");
-    }
-
-    /// <summary>Anchors a panel to a corner or edge; it grows away from that edge as its content needs.</summary>
-    static void Pin(Control c, Control.LayoutPreset preset, float x, float y)
-    {
-        c.SetAnchorsPreset(preset);
-        c.OffsetLeft = c.OffsetRight = x;
-        c.OffsetTop = c.OffsetBottom = y;
-        c.GrowVertical = Control.GrowDirection.Begin;
-        c.GrowHorizontal = preset switch
-        {
-            Control.LayoutPreset.CenterBottom => Control.GrowDirection.Both,
-            Control.LayoutPreset.BottomRight => Control.GrowDirection.Begin,
-            _ => Control.GrowDirection.End,
-        };
+        _drop.Open("goals");
     }
 
     // ---------------------------------------------------------------- state
 
     public void Refresh()
     {
-        if (_banner == null) return;
+        if (_stores == null) return;
         RefreshGoals();
         var st = _m.Sim.Stock;
-        _banner.Values[0] = Fmt.Int(Math.Floor(st.Gold));
+        _stores.Values[0] = Fmt.Int(Math.Floor(st.Gold));
         var t = _m.Tools;
         for (int k = 1; k <= 3; k++)
         {
-            _banner.Values[k] = Fmt.M3(st[k]);
-            _banner.Short[k] = t.Tool != Tool.None && t.PlanText != null && !t.PlanIsDig && t.PlanNeeds[k] > st[k] + .5;
+            _stores.Values[k] = Fmt.M3(st[k]);
+            _stores.Short[k] = t.Tool != Tool.None && t.PlanText != null && !t.PlanIsDig && t.PlanNeeds[k] > st[k] + .5;
         }
         foreach (var (mat, _, store, _) in MatDefs)
         {
@@ -305,19 +274,31 @@ public partial class Hud : CanvasLayer
             string cap = Fmt.M3(st[store]);
             if (s.Caption != cap) { s.Caption = cap; s.QueueRedraw(); }
         }
-        _banner.QueueRedraw();
+        _stores.QueueRedraw();
         _clockPanel.Refresh();
-        _retinue.Refresh();
+        _inspector.Refresh();
     }
 
     public override void _Process(double delta)
     {
-        if (_banner == null) return;
+        if (_stores == null) return;
         _clock += delta;
         _refreshAt -= delta;
-        if (_topView.ButtonPressed != _m.Rig.TopDown) _topView.SetPressedNoSignal(_m.Rig.TopDown);
         var vp = GetViewport().GetVisibleRect().Size;
-        _toasts.Position = new Vector2((vp.X - _toasts.Size.X) / 2, _belt.Position.Y - 10 - _toasts.Size.Y);
+        // the beam's furniture: the tabs at the left, the clock hanging at the right, the stores between
+        _clockPanel.Position = new Vector2(vp.X - WaveClock.W - 58, 0);
+        _help.Position = new Vector2(vp.X - 50, 1);
+        float tabsEnd = _tabs.Position.X + _tabs.Size.X;
+        _stores.Size = new Vector2(Stores.W, 30);
+        _stores.Position = new Vector2(Math.Max(tabsEnd + 14, tabsEnd + (_clockPanel.Position.X - tabsEnd - Stores.W) / 2), 4);
+        _drop.Bottom = vp.Y - BottomConsole.Wing - 6;
+        _colonists.From = Math.Max(14, _drop.RightEdge + 12);
+        _colonists.To = _clockPanel.Position.X - 12;
+        _colonists.Top = TopBeam.Height + 5;
+        _toasts.Position = new Vector2((vp.X - _toasts.Size.X) / 2, vp.Y - BottomConsole.Band - 14 - _toasts.Size.Y);
+        Unit first = null;
+        foreach (var u in _m.Selected) if (!u.Dead && (first == null || u.Id < first.Id)) first = u;
+        _portrait.Unit = _inspector.One ?? first;
         if (_refreshAt <= 0) { _refreshAt = .2; Refresh(); }
         var t = _m.Tools;
         bool overUi = GetViewport().GuiGetHoveredControl() != null;
@@ -424,89 +405,16 @@ public partial class Hud : CanvasLayer
 
     public void OnToolChanged()
     {
-        if (_toolName == null) return;
+        if (_inspector == null) return;
         var t = _m.Tools;
         foreach (var (tool, s) in _toolSlots) s.Selected = tool == t.Tool;
         foreach (var (mat, s) in _matSlots) s.Selected = !t.Opt.Dig && mat == t.Opt.Material;
         _pickSlot.Selected = t.Opt.Dig;
-        _toolName.Text = t.Tool == Tool.Paste && t.PasteBp != null ? $"Чертёж «{t.PasteBp.Name}»" : BuildTools.ToolName(t.Tool);
-        _toolMat.Text = (t.Tool == Tool.Gather ? "добывать: " + (t.GatherKind switch { Stockpile.Wood => "лес", Stockpile.Earth => "землю", _ => "камень" })
-            : t.Opt.Dig ? "кирка: копать и рубить" : "материал: " + Mat.NameOf(t.Opt.Material).ToLowerInvariant()).ToUpperInvariant();
-        // with no brush in hand the belt is only its slots
-        _beltHead.Visible = t.Tool != Tool.None;
-        RebuildOptions();
+        _inspector.Refresh(rebuild: true);
         RebuildBlueprints();
     }
 
-    public void OnSelectionChanged()
-    {
-        _retinue?.Refresh();
-        // chosen pawns: the retinue slides out with them, one by one
-        if (_m.Selected.Count > 0 && _right != null && _right.OpenKey != "retinue") _right.Open("retinue");
-    }
-
-    static string Len(int voxels)
-    {
-        double m = voxels / (double)VoxelWorld.PerMetre;
-        return m < 1 ? $"{Math.Round(m * 100)} см" : (Fmt.One(m) + " м").Replace(",0 м", " м");
-    }
-
-    void RebuildOptions()
-    {
-        foreach (var c in _opts.GetChildren()) c.QueueFree();
-        var t = _m.Tools; var o = t.Opt;
-        bool dig = o.Dig;
-        const string widthTip = "Толщина\nТолщина линии и стен, ширина рва, размер кисти. Клавиши [ и ].";
-        const string heightTip = "Высота\nНасколько поднимется кладка. Клавиши − и =.";
-        const string depthTip = "Глубина\nНасколько глубоко копать от поверхности. Клавиши − и =.";
-        const string levelTip = "Верх\nРовный: верх на одной высоте от точки, где начали. По рельефу: каждый столбец поднимается над своей землёй. Клавиша G.";
-        const string floorTip = "Дно\nРовное: дно на одной глубине от точки, где начали. По рельефу: каждый столбец углубляется от своей поверхности. Клавиша G.";
-        Control Width(string caption = "Толщина") => new Stepper(caption, widthTip, () => Len(o.Width), d => t.StepWidth(d));
-        Control Height() => dig ? new Stepper("Глубина", depthTip, () => Len(o.Depth), d => t.StepHeight(d)) : new Stepper("Высота", heightTip, () => Len(o.Height), d => t.StepHeight(d));
-        Control Level() => dig
-            ? new Choice("Дно", floorTip, new[] { "ровное", "по рельефу" }, o.Level ? 0 : 1, i => { if ((i == 0) != o.Level) t.ToggleLevel(); })
-            : new Choice("Верх", levelTip, new[] { "ровный", "по рельефу" }, o.Level ? 0 : 1, i => { if ((i == 0) != o.Level) t.ToggleLevel(); });
-        switch (t.Tool)
-        {
-            case Tool.Brush:
-                _opts.AddChild(new Choice("Форма", "Форма кисти\nСтолб — стена от руки до заданной высоты (с киркой — полоса на глубину). Шар — налипает на поверхность (с киркой — вынимает ком). Клавиша F.",
-                    new[] { "столб", "шар" }, (int)o.Form, i => { o.Form = (BrushForm)i; t.Changed(); }));
-                _opts.AddChild(Width("Размер"));
-                if (o.Form == BrushForm.Column) { _opts.AddChild(Height()); _opts.AddChild(Level()); }
-                break;
-            case Tool.Line:
-                _opts.AddChild(Width(dig ? "Ширина" : "Толщина")); _opts.AddChild(Height()); _opts.AddChild(Level());
-                break;
-            case Tool.Box:
-            case Tool.Circle:
-                _opts.AddChild(new Choice("Заливка", "Заливка\nСплошная фигура или только стенки заданной толщины. Клавиша F.",
-                    new[] { "сплошной", t.Tool == Tool.Box ? "стенки" : "кольцо" }, o.Hollow ? 1 : 0, i => { if ((i == 1) != o.Hollow) t.ToggleForm(); }));
-                if (o.Hollow) _opts.AddChild(Width());
-                _opts.AddChild(Height()); _opts.AddChild(Level());
-                break;
-            case Tool.Bridge:
-                _opts.AddChild(new Stepper("Проход", "Ширина прохода\nПо мосту ходят строем: уже 1,25 м его не сделать, к ширине добавляются парапеты или перила. Клавиши [ и ].",
-                    () => Len(Math.Max(Bridges.MinWidth, o.Width)), d => t.StepWidth(d)));
-                _opts.AddChild(CapsLabel(o.Material == Mat.Wood ? "деревянный" : "каменный", 11, Ornament.BronzeLight));
-                break;
-            case Tool.Extrude:
-                _opts.AddChild(new Stepper("Шаг", "Шаг\nНа сколько нарастает или уходит вглубь грань за щелчок. Клавиши − и =.", () => Len(o.Step), d => t.StepHeight(d)));
-                break;
-            case Tool.Gather:
-                _opts.AddChild(CapsLabel(t.GatherKind switch { Stockpile.Wood => "лес", Stockpile.Earth => "земля", _ => "камень" }, 11, Ornament.BronzeLight));
-                if (t.GatherKind != Stockpile.Wood)
-                    _opts.AddChild(new Stepper("Глубина", "Глубина\nДо какой глубины от нынешней поверхности брать камень или землю. Клавиши − и =.", () => Len(o.Depth), d => t.StepHeight(d)));
-                break;
-            case Tool.Paste when t.PasteBp != null:
-                _opts.AddChild(CapsLabel($"поворот {t.PasteRot * 90}° · R — повернуть · {t.PasteBp.Describe()}", 10, Ornament.Aged));
-                break;
-        }
-        if (t.Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Paste or Tool.Gather or Tool.Repair or Tool.Capture or Tool.Unmark or Tool.Bridge)
-            _opts.AddChild(new Choice("Сетка", "Сетка\nПривязка к сетке от центра цитадели: начало и конец штриха встают в её узлы, линии идут вдоль осей или под 45°, " +
-                "круги — целыми шагами. Стены выходят ровными, а одинаковое по обе стороны цитадели — симметричным. Клавиша N.",
-                new[] { "нет", "50 см", "1 м", "2 м" }, Array.IndexOf(ToolOptions.Grids, o.Grid), i => t.SetGrid(ToolOptions.Grids[i])));
-        _opts.Visible = _opts.GetChildCount() > 0;
-    }
+    public void OnSelectionChanged() => _inspector?.Refresh();
 
     public void RebuildBlueprints()
     {
@@ -532,7 +440,7 @@ public partial class Hud : CanvasLayer
             var info = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
             info.AddThemeConstantOverride("separation", 0);
             info.AddChild(Text(bp.Name, Ornament.SerifBold, 14, Ornament.Parchment));
-            info.AddChild(Text($"{Len(bp.W)} × {Len(bp.D)} × {Len(bp.H)}", Ornament.Serif, 12, Ornament.Aged));
+            info.AddChild(Text($"{Inspector.Len(bp.W)} × {Inspector.Len(bp.D)} × {Inspector.Len(bp.H)}", Ornament.Serif, 12, Ornament.Aged));
             info.AddChild(Text(bp.Describe(), Ornament.Serif, 12, Ornament.BronzeLight));
             row.AddChild(info);
             var del = new Button { Text = "×", FocusMode = Control.FocusModeEnum.None, TooltipText = "Сжечь свиток", CustomMinimumSize = new Vector2(26, 26), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
@@ -586,11 +494,14 @@ public partial class Hud : CanvasLayer
     }
 
     /// <summary>The map control, for tests.</summary>
-    public Minimap Map => _map;
+    public Minimap Map => _ring.Map;
 
-    /// <summary>Which tab is open on either side (null for none), for tests.</summary>
-    public string LeftOpen => _left?.OpenKey;
-    public string RightOpen => _right?.OpenKey;
+    /// <summary>Which panel hangs from the beam (null for none), and who the console shows in full, for tests.</summary>
+    public string OpenTab => _drop?.OpenKey;
+    public Unit Inspecting => _inspector?.One;
+    public void OpenPanel(string key) => _drop.Open(key);
+    public ColonistBar Colonists => _colonists;
+    public WorkTable Works => _works;
 }
 
 /// <summary>An ornamental rule: horizontal between the belt's rows, vertical between its groups.</summary>

@@ -195,7 +195,7 @@ public sealed class Unit
     /// <summary>Its priority for every kind of work (<see cref="WorkKind"/>): 1 first, 4 last, 0 never.</summary>
     public readonly byte[] Priority = { Work.Usual, Work.Usual, Work.Usual, Work.Usual };
     /// <summary>The kinds of work (bits by <see cref="WorkKind"/>) it went to its site for; it does only those there.</summary>
-    public int SiteWork = ~0;
+    public int SiteWork = (1 << Work.Kinds) - 1;
     /// <summary>A resource the player told it to bring in by itself (a store kind, or none), and the area it works for it.</summary>
     public int Duty;
     public Zone DutyZone;

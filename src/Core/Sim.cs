@@ -433,6 +433,14 @@ public sealed partial class Sim
         return -1;
     }
 
+    /// <summary>Sets a pawn's priority for a kind of work; if it was at that work and now may not, it leaves it.</summary>
+    public void SetPriority(Unit u, WorkKind k, byte priority)
+    {
+        u.Priority[(int)k] = Math.Clamp(priority, (byte)0, (byte)4);
+        if (u.Site >= 0 && (u.SiteWork & Work.Allowed(u)) != u.SiteWork) ReleaseSite(u);
+        u.NextSearch = 0;
+    }
+
     /// <summary>Tells pawns to bring in a resource by themselves when nothing marked needs them (or none, to stop).</summary>
     public void SetDuty(IEnumerable<Unit> units, int kind)
     {

@@ -16,7 +16,8 @@ namespace VoxelTower.Game;
 /// --pose=trees: the valley's trees in a row, --look=0..2 choosing which; --pose=people: every figure in every look,
 /// --look=0..4 choosing a row),
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
-/// --top looks straight down, --look=N at the Nth named place of the valley, --seed=N makes another valley.
+/// --top looks straight down, --look=N at the Nth named place of the valley, --seed=N makes another valley; --select[=N]
+/// chooses our pawns (or the first N), --tab=key lets a panel down from the beam, --tool=N takes up the Nth tool.
 /// </summary>
 public partial class Main : Node3D
 {
@@ -52,8 +53,11 @@ public partial class Main : Node3D
     float[] _cam;
     /// <summary>--wave=seconds: a new game with the horde called at once and this long into its wave (screenshots).</summary>
     double _waveAt = -1;
-    /// <summary>--select: all our pawns chosen at the start (screenshots of the retinue).</summary>
-    bool _selectAll;
+    /// <summary>--select or --select=N: all our pawns (or the first N) chosen at the start, for screenshots of the console.</summary>
+    int _select;
+    /// <summary>--tab=key: a panel let down from the beam at the start; --tool=N: the Nth tool of the grid in hand.</summary>
+    string _tab;
+    int _tool = -1;
     uint _seed = 7;
     string _pose = "";
     /// <summary>How long the staged siege runs before the screenshot (--at=seconds).</summary>
@@ -71,7 +75,10 @@ public partial class Main : Node3D
             else if (a.StartsWith("--seed=") && uint.TryParse(a["--seed=".Length..], out uint sd)) _seed = sd;
             else if (a.StartsWith("--look=") && int.TryParse(a["--look=".Length..], out int lk)) _look = lk;
             else if (a.StartsWith("--wave=") && double.TryParse(a["--wave=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double wa)) _waveAt = wa;
-            else if (a == "--select") _selectAll = true;
+            else if (a == "--select") _select = int.MaxValue;
+            else if (a.StartsWith("--select=") && int.TryParse(a["--select=".Length..], out int sn)) _select = sn;
+            else if (a.StartsWith("--tab=")) _tab = a["--tab=".Length..];
+            else if (a.StartsWith("--tool=") && int.TryParse(a["--tool=".Length..], out int tn)) _tool = tn;
             else if (a.StartsWith("--cam=")) _cam = Array.ConvertAll(a["--cam=".Length..].Split(','), v => float.Parse(v, System.Globalization.CultureInfo.InvariantCulture));
             else if (a == "--selftest") _selfTest = true;
             else if (a.StartsWith("--pose=")) _pose = a["--pose=".Length..];
@@ -162,7 +169,7 @@ public partial class Main : Node3D
         if (!_selfTest && !_demo)
         {
             Hud.Log("Рудники платят золотом, пока они ваши: медный — к востоку от крепости, серебряную жилу в низине стерегут гоблины. " +
-                "Пошлите людей к входу. Задачи — во вкладке слева.", Hud.Kind.Ok);
+                "Пошлите людей к входу. Задачи — во вкладке на верхней балке.", Hud.Kind.Ok);
             Hud.Log("Крепость вокруг цитадели наполовину разрушена. Починка (0), щелчок по стене — рабочие вернут ей прежний вид, " +
                 "рамкой — только проломы. Камень ломают в скалах, валунах и руинах (8 и Z).", Hud.Kind.Warn);
         }
@@ -176,11 +183,13 @@ public partial class Main : Node3D
             Rig.Set(World.WX(l.X), World.WZ(l.Z), -.7f, .6f, 2.4f, snap: true);
         }
         if (_waveAt >= 0 && !_demo && !_selfTest) { Sim.ComputeFields(); Sim.Waves.StartNow(Sim); Advance(_waveAt); Hud.Refresh(); }
-        if (_selectAll)
+        if (_select > 0)
         {
-            foreach (var u in Sim.Units) if (!u.Dead && u.Team == Team.Player) Selected.Add(u);
+            foreach (var u in Sim.Units) if (!u.Dead && u.Team == Team.Player && Selected.Count < _select) Selected.Add(u);
             Hud.OnSelectionChanged();
         }
+        if (_tab != null) Hud.OpenPanel(_tab);
+        if (_tool >= 0 && _tool < Hud.ToolDefs.Length) Tools.SetTool(Hud.ToolDefs[_tool].tool);
         if (_cam is { Length: 5 }) Rig.Set(World.WX(_cam[0]), World.WZ(_cam[1]), _cam[2], _cam[3], _cam[4], snap: true);
         if (_top) Rig.ToggleTopDown();
         if (_selfTest) SelfTest();
@@ -537,7 +546,7 @@ public partial class Main : Node3D
         foreach (var u in Sim.Units) if (!u.Dead && u.T == Kinds.Worker) { worker = u; break; }
         await Look(worker.X, worker.Z);
         await ClickAt(Command.Screen(worker, .5f));
-        Check("a click picks a pawn, and the retinue slides out with it", Selected.Count == 1 && Selected.Contains(worker) && Hud.RightOpen == "retinue", $"{Selected.Count} chosen, open on the right: {Hud.RightOpen}");
+        Check("a click picks a pawn, and the console shows it in full", Selected.Count == 1 && Selected.Contains(worker) && Hud.Inspecting == worker, $"{Selected.Count} chosen, the console on {Hud.Inspecting?.Name}");
         // a squad: Ctrl+2 remembers the chosen, Shift+2 calls them up again
         KeyPress(Key.Key2, ctrl: true);
         Selected.Clear();
@@ -554,6 +563,26 @@ public partial class Main : Node3D
         Check("…and it gets there", MathF.Abs(fx - (kx - 60)) < 24 && MathF.Abs(fz - (kz + 60)) < 24, $"at {fx:0},{fz:0}");
         Command.ReleaseSelected();
         Check("«За работу» lets it go", !worker.Hold);
+        Command.ClearSelection();
+
+        // the faces of the household along the top pick a pawn; the work table sets what it does first
+        await Frames(2);
+        Unit firstFace = null;
+        foreach (var u in Sim.Units)
+            if (!u.Dead && u.Team == Team.Player && (firstFace == null || Array.IndexOf(Kinds.PlayerKinds, u.T) < Array.IndexOf(Kinds.PlayerKinds, firstFace.T)
+                || u.T == firstFace.T && u.Id < firstFace.Id)) firstFace = u;
+        Hud.Colonists._GuiInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = new Vector2(8, 12) });
+        await Frames(2);
+        Check("a click on a face along the top picks that pawn, and the console shows it", Selected.Count == 1 && Selected.Contains(firstFace) && Hud.Inspecting == firstFace,
+            $"{Selected.Count} chosen, the console on {Hud.Inspecting?.Name} №{Hud.Inspecting?.Id}");
+        Hud.OpenPanel("works");
+        await Frames(3);
+        byte dig0 = firstFace.Priority[(int)WorkKind.Dig];
+        Hud.Works._GuiInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = new Vector2(WorkTable.WorkX((int)WorkKind.Dig) + 30, WorkTable.Head + 12) });
+        Check("the work table opens from the beam, and a click on a cell changes the priority", Hud.OpenTab == "works" && firstFace.Priority[(int)WorkKind.Dig] == Work.Cycle(dig0, false),
+            $"open: {Hud.OpenTab}, digging {dig0} → {firstFace.Priority[(int)WorkKind.Dig]}");
+        Sim.SetPriority(firstFace, WorkKind.Dig, dig0);
+        Hud.OpenPanel("goals");
         Command.ClearSelection();
 
         // a hunt: the archer after a boar, for gold
@@ -783,6 +812,9 @@ public partial class Main : Node3D
         Blow(gob, sc, sd, sr, W(gob, -12, 4, 0), D(1, 0, 0));
         Blow(gob, sc, sd, sr, W(gob, 0, 2, 12), D(0, 0, -1));
         Advance(_poseSeconds > 0 && _poseSeconds < 14 ? _poseSeconds : 1.5);
+        // the armless one is chosen: the console shows what he lost
+        Selected.Add(armless);
+        Hud.OnSelectionChanged();
         var look = _look >= 0 && _look < 4 ? new[] { armless, pierced, hewn, gob }[_look] : null;
         float mx = look?.X ?? (armless.X + pierced.X + hewn.X + gob.X) / 4, mz = look?.Z ?? (armless.Z + pierced.Z + hewn.Z + gob.Z) / 4;
         // the camera looks at a plane 4 m up: the ground here is higher, so look past it by as much
