@@ -42,7 +42,8 @@ public static class Mat
     public const byte NeedleLight = 71, FoliageLight = 72, FoliageGold = 73, PineBark = 74, Snag = 75;
     /// <summary>The boards of a shield, in two shades: lighter than the timber of the walls.</summary>
     public const byte Board = 76, BoardDark = 77;
-    /// <summary>What a fire leaves of timber, and pitch laid to be set alight: a ditch of it burns long and hot.</summary>
+    /// <summary>What a fire leaves of timber, and pitch poured to be set alight: a liquid, thick and slow, that runs into the
+    /// lowest place it can reach, and a ditch of it burns long and hot.</summary>
     public const byte Char = 78, Pitch = 79;
     /// <summary>Inside the bodies, and more colours for them: never placed in the world.</summary>
     public const byte Flesh = 80, Brain = 81, Heart = 82, Blood = 83, HairBrown = 84, HairGinger = 85, HairGrey = 86, SkinTan = 87,
@@ -58,7 +59,9 @@ public static class Mat
     /// heaped on the battlements, to be tipped onto whoever comes to the foot of the wall.
     /// </summary>
     public const byte Stakes = 99, TrapDeck = 100, DropStone = 101;
-    public const int Count = 102;
+    /// <summary>The oak planks of a drawbridge: they turn with it, so they are the bridge's own business, like a gate's leaves.</summary>
+    public const byte DrawDeck = 102;
+    public const int Count = 103;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
     public static readonly bool[] IsVeg = new bool[Count], IsPlayer = new bool[Count], IsEarthy = new bool[Count],
@@ -155,6 +158,7 @@ public static class Mat
         D(Stakes, "Колья", 0x9c7b4c, .22f, MatGroup.Wood, Player);
         D(TrapDeck, "Ловчий настил", 0x56632f, .3f, MatGroup.Wood, Player);
         D(DropStone, "Камни на сброс", 0x8e8881, .32f, MatGroup.Stone, Player);
+        D(DrawDeck, "Подъёмный мост", 0x6e4b2b, .16f, MatGroup.Wood, Player);
 
         D(SkinHuman, "кожа", 0xc29878, .08f, MatGroup.Hard, 0); D(SkinGoblin, "кожа", 0x6d8a39, .12f, MatGroup.Hard, 0);
         D(SkinOrc, "кожа", 0x56673f, .12f, MatGroup.Hard, 0); D(SkinTroll, "кожа", 0x66705f, .16f, MatGroup.Hard, 0);
@@ -179,7 +183,7 @@ public static class Mat
         D(Board, "доски", 0x80603d, .16f, MatGroup.Hard, 0); D(BoardDark, "доски", 0x6a4c30, .16f, MatGroup.Hard, 0);
 
         foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage, Flower, Bloom, Birch, NeedleLight, FoliageLight, FoliageGold, PineBark, Snag }) IsVeg[m] = true;
-        foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame, Stakes }) Passable[m] = true;
+        foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame, Stakes, Pitch }) Passable[m] = true;
         IsLadder[Ladder] = IsLadder[SiegeLadder] = true;
         foreach (var m in new[] { Tuft, Flower, Bloom }) SwayKind[m] = 1;
         foreach (var m in new[] { Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold }) SwayKind[m] = 2;
@@ -206,6 +210,7 @@ public static class Mat
         F(.06f, 25, .3f, Lumber);
         F(.05f, 25, .35f, Stakes);
         F(.06f, 18, .3f, TrapDeck);
+        F(.03f, 40, .35f, DrawDeck);
         F(3, 50, 0, Pitch);
         Heat[Pitch] = 2;
     }
@@ -249,4 +254,7 @@ public static class Mat
 
     /// <summary>A voxel of a gate's leaf: shut (ours walk through it), barred, or swinging and open.</summary>
     public static bool IsLeaf(byte m) => m is Gate or GateShut or GateOpen;
+
+    /// <summary>What turns on hinges, a gate's leaves or a drawbridge's planks: it holds itself up, and is not remembered as building.</summary>
+    public static bool Swings(byte m) => IsLeaf(m) || m == DrawDeck;
 }

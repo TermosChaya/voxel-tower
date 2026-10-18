@@ -78,6 +78,11 @@ public sealed class GatePlan
     public int In, U0, P, Y;
     /// <summary>The wall to cut out of the gateway, and the leaves to lay in their shut place.</summary>
     public readonly VoxelList Cut = new(), Leaves = new();
+    /// <summary>
+    /// The raked joints of the face round the gateway, where the leaves shut against it, pointed up with mortar: so
+    /// that a gate in a dam holds the water, which would otherwise run out along them round the leaves' edges.
+    /// </summary>
+    public readonly VoxelList Seal = new();
 
     static bool Blocking(byte m) => m != 0 && !Mat.Passable[m];
 
@@ -151,6 +156,13 @@ public sealed class GatePlan
             if (m == 0 || Mat.IsVeg[m] || Mat.Passable[m] || Mat.IsDecor[m]) plan.Leaves.Add(x, y, z, Mat.Gate);
         }
         if (plan.Leaves.Count < Gateway.Voxels / 2) return null;
+        for (int u = u0 - 3; u < u0 + Gateway.Width + 3; u++)
+            for (int y = y0; y < y0 + Gateway.Height + 3; y++)
+            {
+                if (u >= u0 && u < u0 + Gateway.Width && y < y0 + Gateway.Height) continue;
+                int x = alongX ? u : innerWall, z = alongX ? innerWall : u;
+                if (w.InBounds(x, y, z) && w.Get(x, y, z) == Mat.Air) plan.Seal.Add(x, y, z, Mat.Mortar);
+            }
         return plan;
     }
 
@@ -178,6 +190,7 @@ public sealed partial class Sim
                 Forget(plan.Cut.X(i), plan.Cut.Y(i), plan.Cut.Z(i));
             }
             for (int i = 0; i < plan.Leaves.Count; i++) World.Set(plan.Leaves.X(i), plan.Leaves.Y(i), plan.Leaves.Z(i), Mat.Gate);
+            for (int i = 0; i < plan.Seal.Count; i++) { World.Set(plan.Seal.X(i), plan.Seal.Y(i), plan.Seal.Z(i), Mat.Mortar); Remember(plan.Seal.X(i), plan.Seal.Y(i), plan.Seal.Z(i), Mat.Mortar); }
             Mount(g);
         }
         else
@@ -185,6 +198,7 @@ public sealed partial class Sim
             Orders.Writing?.Hung.Add(g);
             DesignateRemove(plan.Cut);
             DesignateBuild(plan.Leaves);
+            if (plan.Seal.Count > 0) DesignateBuild(plan.Seal);
         }
         return g;
     }
@@ -387,7 +401,8 @@ public sealed partial class Sim
         {
             if (g.Gone[i]) continue;
             var (x, y, z) = g.Place(i, s);
-            if (!World.InBounds(x, y, z) || World.Get(x, y, z) != Mat.Air) continue;
+            // a gate in a dam turns its leaves through the water standing at it, pushing it aside
+            if (!World.InBounds(x, y, z) || World.Get(x, y, z) is not (Mat.Air or Mat.Water)) continue;
             World.Set(x, y, z, mat);
             g.At[i] = WaterPlanner.Pack(x, y, z);
         }

@@ -15,7 +15,7 @@ namespace VoxelTower.Core;
 /// </summary>
 public sealed partial class Sim
 {
-    public const int SaveVersion = 3;
+    public const int SaveVersion = 4;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -64,6 +64,13 @@ public sealed partial class Sim
             w.Write(g.Id); w.Write(g.AlongX); w.Write(g.In); w.Write(g.U0); w.Write(g.P); w.Write(g.Y); w.Write((byte)g.Mode);
             w.Write(g.Open); w.Write(g.Want); w.Write(g.Ready); w.Write(g.Broken); w.Write(g.Missing); w.Write(g.Step);
             for (int i = 0; i < Gateway.Voxels; i++) { w.Write(g.At[i]); w.Write(g.Gone[i]); }
+        }
+        w.Write(_nextDrawbridge); w.Write(Drawbridges.Count);
+        foreach (var b in Drawbridges)
+        {
+            w.Write(b.Id); w.Write(b.AlongX); w.Write(b.Dir); w.Write(b.Hinge); w.Write(b.U0); w.Write(b.Length); w.Write(b.Width); w.Write(b.Y);
+            w.Write((byte)b.Mode); w.Write(b.Raise); w.Write(b.Want); w.Write(b.Ready); w.Write(b.Broken); w.Write(b.Missing); w.Write(b.Step);
+            for (int i = 0; i < b.Voxels; i++) { w.Write(b.At[i]); w.Write(b.Gone[i]); }
         }
         w.Write(Mines.Count);
         foreach (var m in Mines) { w.Write((byte)m.Holder); w.Write(m.Grip); }
@@ -212,6 +219,19 @@ public sealed partial class Sim
             Gates.Add(g);
         }
         FortGate = Gates.Find(g => g.Id == fortGate);
+        Drawbridges.Clear();
+        _nextDrawbridge = r.ReadInt32();
+        int nd = r.ReadInt32();
+        for (int i = 0; i < nd; i++)
+        {
+            var b = new Drawbridge { Id = r.ReadInt32(), AlongX = r.ReadBoolean(), Dir = r.ReadInt32(), Hinge = r.ReadInt32(), U0 = r.ReadInt32(),
+                Length = r.ReadInt32(), Width = r.ReadInt32(), Y = r.ReadInt32() };
+            b.Mode = (DrawMode)r.ReadByte(); b.Raise = r.ReadSingle(); b.Want = r.ReadSingle(); b.Ready = r.ReadBoolean(); b.Broken = r.ReadBoolean();
+            b.Missing = r.ReadInt32(); b.Step = r.ReadInt32();
+            b.Alloc();
+            for (int k = 0; k < b.Voxels; k++) { b.At[k] = r.ReadInt32(); b.Gone[k] = r.ReadBoolean(); }
+            Drawbridges.Add(b);
+        }
         int nm = r.ReadInt32();
         for (int i = 0; i < nm; i++)
         {

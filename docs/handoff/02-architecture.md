@@ -66,6 +66,8 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   2 поперёк, 3 вокселя вглубь, от середины), `Sapping` копит работу (`Unit.SapCost`) и вынимает всё разом.
   `Arched` — слой арок: мосты игрока (`DesignateBuild(…, arched: true)` из инструмента «Мост») и старые мосты
   (`Site.Arched`, `Landmarks.OldBridge`).
+- `Sim.Drawbridge.cs` — подъёмные мосты (`Drawbridge`, `DrawMode`, `TickDrawbridges`, `ThrowOff`, `TurnBridge`).
+- `Sim.Water.cs` — вода и смола: `Flow` на каждую жидкость (события, план, разлив), общий `WaterPlanner(world, liquid)`.
 - `Sim.Traps.cs` — ловушки: колья (`NavGrid.Spikes`), ловчий настил (`Spring`), камни на сброс (`ThrowStones`/`Tip`,
   `_dropStones` по столбцам).
 - `Sim.Shelter.cs` — тревога и убежища: `Alarm`, `RaiseAlarm`/`StandDown`, `TakeShelter`, `RefugeFor`, `ShelterCells`,

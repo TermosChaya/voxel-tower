@@ -44,6 +44,7 @@ public partial class Commander : Node
         }
         var hit = UnitAt(mb.Position);
         if (hit == null && _m.Tools.HoverGate is { } gate) { Toggle(gate); return; }
+        if (hit == null && _m.Tools.HoverBridge is { } draw) { Toggle(draw); return; }
         if (!add) _m.Selected.Clear();
         // one of ours is picked; a raider or a beast is only looked at
         _m.Inspected = hit != null && hit.Team != Team.Player && _m.Selected.Count == 0 ? hit : null;
@@ -100,6 +101,26 @@ public partial class Commander : Node
         sim.SetGateMode(g, next);
         _m.Hud.Float(GateWord(g), Ornament.BronzeLight);
     }
+
+    /// <summary>A click on a drawbridge: up before the horde by itself → held down → held up → round again.</summary>
+    void Toggle(Drawbridge b)
+    {
+        if (b.Broken) { _m.Hud.Float("мост разбит: постройте новый", Ornament.Blood); return; }
+        if (!b.Ready) { _m.Hud.Float("мост ещё сколачивают", Ornament.Aged); return; }
+        var next = b.Mode switch { DrawMode.Auto => DrawMode.Down, DrawMode.Down => DrawMode.Up, _ => DrawMode.Auto };
+        _m.Sim.SetDrawMode(b, next);
+        _m.Hud.Float(BridgeWord(b), Ornament.BronzeLight);
+    }
+
+    /// <summary>What a drawbridge does now, for the tag and the float.</summary>
+    public static string BridgeWord(Drawbridge b) =>
+        b.Broken ? "разбит" : !b.Ready ? "сколачивают"
+        : b.Mode switch
+        {
+            DrawMode.Down => "опущен и не поднимается",
+            DrawMode.Up => "поднят: пути нет",
+            _ => b.Raise > .5f ? "поднят перед ордой" : "опущен, перед ордой поднимется сам",
+        };
 
     /// <summary>What a gate does now, for the tag and the float.</summary>
     public static string GateWord(Gateway g) =>

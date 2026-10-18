@@ -38,7 +38,7 @@ public sealed partial class Sim
     /// </summary>
     public static int SpanOf(byte m)
     {
-        if (m == Mat.Air || Mat.Passable[m] || Mat.IsAnchor[m] || m == Mat.Water || Mat.IsDecor[m] || Mat.IsLeaf(m) || m == Mat.Ore) return 0;
+        if (m == Mat.Air || Mat.Passable[m] || Mat.IsAnchor[m] || m == Mat.Water || Mat.IsDecor[m] || Mat.Swings(m) || m == Mat.Ore) return 0;
         if (Mat.IsMasonry(m) || m == Mat.Keep) return 10;
         if (Mat.IsTrunk(m)) return 30;
         return m switch { Mat.Wood or Mat.Deck or Mat.TrapDeck => 16, Mat.Rammed => 4, Mat.Char or Mat.Rubble or Mat.DropStone => 2, Mat.Lumber => 4, Mat.Pitch => 1, Mat.Ruin => Free, _ => 8 };
@@ -82,7 +82,7 @@ public sealed partial class Sim
         if (_settling) return;
         byte now = World.Get(x, y, z);
         // the leaves of a gate turning, water running, grass and the dressing come and go without shaking anything
-        if (Mat.IsLeaf(old) || Mat.IsLeaf(now)) return;
+        if (Mat.Swings(old) || Mat.Swings(now)) return;
         if (!Bound(old) && !Ground(old) && !Holds(now)) return;
         _shaken.Add(WaterPlanner.Pack(x, y, z));
     }
@@ -473,7 +473,7 @@ public sealed partial class Sim
     /// trees lie as logs, and the rest as it was.</summary>
     static byte Broken(byte m) =>
         Mat.IsMasonry(m) || m is Mat.Ruin or Mat.Keep or Mat.DropStone ? Mat.Rubble
-        : m is Mat.Wood or Mat.Deck or Mat.Plank or Mat.TrapDeck or Mat.Stakes || Mat.IsLeaf(m) ? Mat.Lumber
+        : m is Mat.Wood or Mat.Deck or Mat.Plank or Mat.TrapDeck or Mat.Stakes || Mat.Swings(m) ? Mat.Lumber
         : m == Mat.Rammed ? Mat.Soil : m;
 
     /// <summary>Where a falling voxel comes to rest: down its column onto whatever is solid, then off its heap down to a

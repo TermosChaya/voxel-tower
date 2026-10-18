@@ -23,6 +23,8 @@ public sealed class ToolOptions
     public BrushForm Form = BrushForm.Column;
     public bool Hollow;
     public bool Level = true;
+    /// <summary>The bridge tool hangs a drawbridge instead of throwing an arch across.</summary>
+    public bool DrawBridge;
     /// <summary>Snapping to a grid round the citadel's middle, its step in voxels (0: off); the step it had when it was last on.</summary>
     public int Grid, GridLast = 8;
 
@@ -70,7 +72,7 @@ public partial class BuildTools : Node3D
         (Tool.Ladder, _) => "Щёлкните по боковой грани стены, башни или обрыва — рабочие приставят лестницу от земли до верха. По ней ходят ваши пешки… и орда, если доберётся.",
         (Tool.Gate, _) => "Щёлкните по боковой грани стены — рабочие прорубят в ней проём и навесят ворота: створки внутри, со стороны цитадели. Своим они открываются сами, орде их придётся рубить.",
         (Tool.Repair, _) => "Щёлкните по разрушенной постройке — рабочие вернут ей прежний вид: разберут завал, доложат недостающее, навесят ворота. Рамкой — чинить только то, что в ней.",
-        (Tool.Bridge, _) => "Зажмите на одном берегу и протяните до другого: рабочие перекинут арочный мост — каменный (Z) или деревянный (X). Строят от берегов, стоя на уложенном. [ и ] — ширина прохода.",
+        (Tool.Bridge, _) => "Зажмите на одном берегу и протяните до другого: рабочие перекинут арочный мост — каменный (Z) или деревянный (X) — или подъёмный («Вид» в консоли). [ и ] — ширина прохода.",
         (Tool.Gather, _) => "Протяните рамку — участок для добычи. Z — камень из скал и валунов, X — лес, C — земля. Свободные рабочие сами понемногу берут оттуда работу.",
         (Tool.Unmark, _) => "Протяните рамку — вся разметка и делянки в ней снимаются. Щелчок снимает разметку поблизости и делянку под курсором.",
         (Tool.Capture, _) => "Обведите рамкой свою постройку — она станет чертежом.",
@@ -132,6 +134,8 @@ public partial class BuildTools : Node3D
     public string HoverText { get; private set; } = "";
     /// <summary>The gate under the cursor, if the cursor is on one of its leaves.</summary>
     public Gateway HoverGate { get; private set; }
+    /// <summary>The drawbridge under the cursor with no brush in hand, or null.</summary>
+    public Drawbridge HoverBridge { get; private set; }
     /// <summary>The named place (a mine, a ruin) the cursor is over.</summary>
     public Landmark HoverPlace { get; private set; }
     GatePlan _gatePlan;
@@ -463,6 +467,7 @@ public partial class BuildTools : Node3D
             }
             if (Tool == Tool.Gather) { SetZone(a, b); return; }
             if (Tool == Tool.Repair) { RepairIn(a, b); return; }
+            if (Tool == Tool.Bridge && Opt.DrawBridge) { HangDrawbridge(a, b); return; }
             if (Tool == Tool.Bridge && BridgeRefusal(a, b) is { } why) { Refuse(why); return; }
             Designate(PlanDrag(a, b, dig), dig, ToolName(Tool), arched: Tool == Tool.Bridge);
             return;
@@ -673,6 +678,17 @@ public partial class BuildTools : Node3D
         return dig ? Shapes.WithTrees(_m.World, plan) : plan;
     }
 
+    /// <summary>A drawbridge from the bank at A over the gap to B, hinged on the bank nearer the citadel.</summary>
+    void HangDrawbridge((int x, int y, int z) a, (int x, int y, int z) b)
+    {
+        var plan = Drawbridge.Plan(_m.World, _m.Site, a.x, a.z, b.x, b.z, Opt.Width, out string why);
+        if (plan == null) { Refuse(why); return; }
+        _markName = "Подъёмный мост";
+        _m.Sim.AddDrawbridge(plan);
+        _m.Hud.Log($"Подъёмный мост: {Fmt.One(plan.Length / (double)VoxelWorld.PerMetre)} м. Рабочие сколотят настил; он опущен, пока не подойдёт орда, " +
+            "тогда поднимается сам и сбрасывает в ров тех, кто на нём. Щелчок по мосту без кисти — сменить: сам / опущен / поднят.");
+    }
+
     /// <summary>Bridges are of stone or of timber; earth in hand means stone.</summary>
     byte BridgeMat => Opt.Material == Mat.Wood ? Mat.Wood : Mat.Stone;
 
@@ -831,6 +847,7 @@ public partial class BuildTools : Node3D
             _hasDrag = true;
         }
         HoverGate = _hasHover && Mat.IsLeaf(_hover.M) ? _m.Sim.GateAt(_hover.X, _hover.Y, _hover.Z) : null;
+        HoverBridge = _hasHover && _hover.M == Mat.DrawDeck ? _m.Sim.DrawbridgeAt(_hover.X, _hover.Y, _hover.Z) : null;
         HoverPlace = null;
         if (_hasHover)
             foreach (var l in _m.Site.Landmarks)
@@ -1027,6 +1044,14 @@ public partial class BuildTools : Node3D
         var stroke = StrokeNow();
         int lv = Shapes.Level(w, gp.x, gp.z, stroke);
         if (key[0] == 'T') { _plan = Shapes.Tree(w, _tree.X, _tree.Y, _tree.Z); name = "Срубить дерево"; }
+        else if (dragging && Tool == Tool.Bridge && Opt.DrawBridge)
+        {
+            var db = Drawbridge.Plan(w, site, _startPt.x, _startPt.z, _dragPt.x, _dragPt.z, Opt.Width, out string why);
+            if (db == null) { _ghost.Visible = false; PlanText = "Подъёмный мост: " + why; PlanAffordable = false; return; }
+            _plan = db.Deck(w);
+            name = "Подъёмный мост";
+            dig = false;
+        }
         else if (dragging && Tool == Tool.Bridge)
         {
             if (BridgeRefusal(_startPt, _dragPt) is { } why) { _ghost.Visible = false; PlanText = "Мост: " + why; PlanAffordable = false; return; }

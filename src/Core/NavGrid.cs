@@ -187,7 +187,8 @@ public sealed class NavGrid
                             if (Mat.IsLeaf(v)) fill++;
                             if (v == Mat.Gate) gate += 2;
                         }
-                        else if (v == Mat.Water) wat++;
+                        // pitch is waded and drowned in like water
+                        else if (v == Mat.Water || v == Mat.Pitch) wat++;
                         else if (Mat.IsLadder[v]) lad++;
                         else if (v == Mat.Stakes) spk++;
                     }

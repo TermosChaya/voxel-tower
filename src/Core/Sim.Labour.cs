@@ -184,8 +184,9 @@ public sealed partial class Sim
             Mined?.Invoke(j.x, j.y, j.z, cur);
             return true;
         }
-        if (!Brushes.Free(cur)) { Orders.Clear(j.x, j.y, j.z); return false; }
-        if (_bodies[Nav.CellOf(j.x, j.y, j.z)] > 0 || !Footed(j.x, j.y, j.z)) return false;
+        if (!Brushes.Free(cur) || cur == j.m) { Orders.Clear(j.x, j.y, j.z); return false; }
+        // pitch is poured, not laid: it needs nothing under it, it runs down
+        if (_bodies[Nav.CellOf(j.x, j.y, j.z)] > 0 || j.m != Mat.Pitch && !Footed(j.x, j.y, j.z)) return false;
         int ck = Labour.CostKind(j.m);
         if (ck != Stockpile.None && !Stock.Take(ck, 1)) { u.Why = "нет: " + Stockpile.Name(ck); return false; }
         World.Set(j.x, j.y, j.z, j.m);
@@ -223,7 +224,7 @@ public sealed partial class Sim
                     if (ck != Stockpile.None && Stock[ck] < 1) { missing = Stockpile.Name(ck); continue; }
                     if (_bodies[Nav.CellOf(x, y, z)] > 0) { crowded = true; continue; }
                     // nothing yet to lay it on: what is under it first (it is gathered again once that is laid)
-                    if (!Footed(x, y, z) && !builds.Exists(b => Math.Abs(b.x - x) + Math.Abs(b.y - y) + Math.Abs(b.z - z) == 1)) { unfooted = true; continue; }
+                    if (o != Mat.Pitch && !Footed(x, y, z) && !builds.Exists(b => Math.Abs(b.x - x) + Math.Abs(b.y - y) + Math.Abs(b.z - z) == 1)) { unfooted = true; continue; }
                     builds.Add((x, y, z, o));
                 }
         float ux = u.X, uz = u.Z;

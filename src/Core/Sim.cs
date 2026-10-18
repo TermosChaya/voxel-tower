@@ -131,6 +131,7 @@ public sealed partial class Sim
         TickLight();
         TickCollapse(dt);
         TickGates(dt);
+        TickDrawbridges(dt);
         TickDecor();
         TickMines(dt);
         if (Nav.PendingEdits > 0) Nav.Flush();

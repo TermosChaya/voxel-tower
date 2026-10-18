@@ -23,10 +23,11 @@ public sealed partial class Sim
     /// <summary>The meant material at a voxel, or nothing (outside the world too).</summary>
     public byte MeantAt(int x, int y, int z) => World.InBounds(x, y, z) ? Design.Get(x, y, z) : (byte)0;
 
-    /// <summary>Remembers a voxel of a building. Gate leaves are the gate's own business: it mends them itself.</summary>
+    /// <summary>Remembers a voxel of a building. Gate leaves and a drawbridge's planks are their own business: they turn.</summary>
     public void Remember(int x, int y, int z, byte m)
     {
-        if (Mat.IsLeaf(m) || m == Mat.SiegeLadder || !World.InBounds(x, y, z)) return;
+        // what turns on hinges and what runs off as a liquid are not building
+        if (Mat.Swings(m) || m == Mat.SiegeLadder || m == Mat.Pitch || !World.InBounds(x, y, z)) return;
         // laid, or laid again: worth dressing once it is done
         DecorDirty(x, y, z);
         if (Design.Get(x, y, z) == m) return;

@@ -134,6 +134,7 @@ public partial class Main : Node3D
         if (_demo && _pose == "trees") Grove();
         if (_demo && _pose == "people") ClearGrove();
         // the field of the traps cleared of trees, so they are to be seen
+        if (_demo && _pose == "drawbridge") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 120);
         if (_demo && _pose == "traps") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
         World.Compact();
         save?.Valley(World, Site);
@@ -770,6 +771,7 @@ public partial class Main : Node3D
         if (_pose == "sap") { Sapping(); return; }
         if (_pose == "shelter") { Sheltering(); return; }
         if (_pose == "traps") { Trapped(); return; }
+        if (_pose == "drawbridge") { Drawn(); return; }
         if (_pose == "wounds") { Wounded(); return; }
         if (_pose == "flood") { Flood(); return; }
         if (_pose == "trees") { LookAtGrove(); return; }
@@ -1114,6 +1116,58 @@ public partial class Main : Node3D
         sim.ComputeFields();
         Advance(_poseSeconds);
         Rig.Set(World.WX(wx - 48), World.WZ(kz - 4), -.5f, .8f, 1.35f, snap: true);
+        Hud.Refresh();
+        Marks.Flush();
+    }
+
+    /// <summary>
+    /// A ditch west of the citadel with water at its bottom and pitch on the water, a drawbridge over it with a stone
+    /// wall either side, our people on the near side and a band of the horde coming on (--at: how long they come; the
+    /// bridge goes up before them, and who is on it goes into the ditch); the pitch set alight further along.
+    /// </summary>
+    void Drawn()
+    {
+        var w = World; var s = Site; var sim = Sim;
+        sim.Waves.Countdown = 1e9;
+        int kx = s.KeepX, kz = s.KeepZ;
+        int cx = kx - s.KeepR - 110, z0 = kz - 90, z1 = kz + 90, g = Shapes.LevelTop(w, cx, kz, 0);
+        // flat ground either side, the ditch between: four metres wide, two and a half deep, a metre of water in it
+        for (int z = z0; z < z1; z++)
+            for (int x = cx - 80; x < cx + 60; x++)
+            {
+                for (int y = g; y < g + 40; y++) if (w.Get(x, y, z) != Mat.Air) w.Set(x, y, z, Mat.Air);
+                for (int y = g - 24; y < g; y++) if (w.Get(x, y, z) == Mat.Air) w.Set(x, y, z, Mat.Soil);
+                w.Set(x, g - 1, z, Math.Abs(x - cx) <= 16 ? Mat.Soil : Mat.Grass);
+                if (Math.Abs(x - cx) > 16) continue;
+                for (int y = g - 20; y < g; y++) w.Set(x, y, z, Mat.Air);
+                for (int y = g - 20; y < g - 12; y++) w.Set(x, y, z, Mat.Water);
+            }
+        sim.InstantLabour = true;
+        // a stone wall on the near bank either side of the bridge
+        foreach (var (a, b) in new[] { (z0 + 10, kz - 14), (kz + 14, z1 - 10) })
+            sim.DesignateBuild(Shapes.Line(w, s, cx + 26, a, cx + 26, b, new Stroke { Mat = Mat.Stone, Width = 6, Height = 24, Level = true }, g + 24));
+        sim.InstantLabour = false;
+        var bridge = Drawbridge.Plan(w, s, cx + 22, kz, cx - 22, kz, 12, out _);
+        if (bridge != null) sim.AddDrawbridge(bridge, built: true);
+        // pitch on the water to the north, alight
+        for (int z = z0 + 20; z < z0 + 60; z++) for (int x = cx - 16; x <= cx + 16; x++) w.Set(x, g - 12, z, Mat.Pitch);
+        Advance(1);
+        sim.Ignite(cx, g - 12, z0 + 40);
+        foreach (var (dx, dz) in new[] { (60, -20), (64, 10), (58, 26) })
+        {
+            int c = sim.NearestStand(cx + dx, kz + dz, 4);
+            var a = sim.Spawn(Kinds.Archer, c);
+            sim.Command(new[] { a }, c);
+        }
+        sim.HordeStock[Stockpile.Wood] = sim.HordeStock[Stockpile.Earth] = 0;
+        foreach (var (t, dx, dz) in new[] { (Kinds.Goblin, -50, -8), (Kinds.Goblin, -56, 10), (Kinds.Orc, -62, 0), (Kinds.Goblin, -70, -20), (Kinds.Goblin, -66, 24) })
+        {
+            int c = sim.NearestStand(cx + dx, kz + dz, t.Move.Height);
+            if (c >= 0) sim.Spawn(t, c);
+        }
+        sim.ComputeFields();
+        Advance(_poseSeconds);
+        Rig.Set(World.WX(cx + 4), World.WZ(kz + 4), -.62f, .7f, 1.6f, snap: true);
         Hud.Refresh();
         Marks.Flush();
     }

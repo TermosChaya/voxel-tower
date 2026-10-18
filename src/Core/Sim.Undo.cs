@@ -18,9 +18,10 @@ public sealed class Marking
     internal readonly List<byte> Was = new(), Now = new();
     internal readonly List<Zone> Added = new(), Removed = new();
     internal readonly List<Gateway> Hung = new(), Mended = new();
+    internal readonly List<Drawbridge> Drawn = new();
     internal readonly List<int> Relaid = new();
 
-    public bool Empty => At.Count == 0 && Added.Count == 0 && Removed.Count == 0 && Hung.Count == 0 && Mended.Count == 0;
+    public bool Empty => At.Count == 0 && Added.Count == 0 && Removed.Count == 0 && Hung.Count == 0 && Mended.Count == 0 && Drawn.Count == 0;
     /// <summary>How many voxels' orders it changed.</summary>
     public int Voxels => At.Count;
 
@@ -92,7 +93,21 @@ public sealed partial class Sim
             if (!g.Ready && !Begun(g)) Gates.Remove(g);
         foreach (var g in mk.Mended)
             if (!g.Ready && !Begun(g)) { g.Broken = true; g.Ready = true; }
+        // so a drawbridge none of whose planks is laid yet
+        foreach (var b in mk.Drawn)
+            if (!b.Ready && !Begun(b)) Drawbridges.Remove(b);
         return mk;
+    }
+
+    /// <summary>Whether any of a drawbridge's planks is laid where it lies down.</summary>
+    bool Begun(Drawbridge b)
+    {
+        for (int i = 0; i < b.Voxels; i++)
+        {
+            var (x, y, z) = b.Place(i, 0);
+            if (World.Get(x, y, z) == Mat.DrawDeck) return true;
+        }
+        return false;
     }
 
     /// <summary>Whether any of a gate's leaves stands laid in its shut place.</summary>

@@ -63,6 +63,7 @@ public static class Labour
         D(Mat.Rubble, 1.5f, Stockpile.Stone, .75f); D(Mat.Lumber, 1, Stockpile.Wood, .5f);
         // the traps come apart as what they are made of
         D(Mat.Stakes, 1, Stockpile.Wood, .5f); D(Mat.TrapDeck, 1, Stockpile.Wood, .5f); D(Mat.DropStone, 1.2f, Stockpile.Stone, 1);
+        D(Mat.DrawDeck, 2.5f, Stockpile.Wood, .75f);
         LayCost[Mat.Rammed] = 1; LayCost[Mat.Wood] = 1.5f;
         foreach (var m in new[] { Mat.Stone, Mat.Mortar, Mat.StoneDark, Mat.StoneLight, Mat.StoneWarm, Mat.StoneCool }) LayCost[m] = 2;
         // a ladder is joinery: rails and rungs take longer than the logs they are made of; a gate more so
@@ -72,6 +73,8 @@ public static class Labour
         LayCost[Mat.Pitch] = 2.5f;
         // stakes are cut and sharpened one by one, a trap floor is poles and turf over them; stones are only heaped up
         LayCost[Mat.Stakes] = 2.5f; LayCost[Mat.TrapDeck] = 2.5f; LayCost[Mat.DropStone] = 1.2f;
+        // a drawbridge is joinery like a gate
+        LayCost[Mat.DrawDeck] = 4;
     }
 
     /// <summary>Pawns can take this out of the world (bedrock and the citadel they cannot).</summary>
@@ -85,7 +88,7 @@ public static class Labour
     public static int CostKind(byte m) => m switch
     {
         Mat.Stone or Mat.Mortar or Mat.StoneDark or Mat.StoneLight or Mat.StoneWarm or Mat.StoneCool or Mat.DropStone => Stockpile.Stone,
-        Mat.Wood or Mat.Ladder or Mat.Gate or Mat.GateShut or Mat.GateOpen or Mat.Pitch or Mat.Stakes or Mat.TrapDeck => Stockpile.Wood,
+        Mat.Wood or Mat.Ladder or Mat.Gate or Mat.GateShut or Mat.GateOpen or Mat.Pitch or Mat.Stakes or Mat.TrapDeck or Mat.DrawDeck => Stockpile.Wood,
         Mat.Rammed => Stockpile.Earth,
         _ => Stockpile.None,
     };

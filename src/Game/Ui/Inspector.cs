@@ -182,9 +182,13 @@ public partial class Inspector : Control
                 opts.AddChild(Height()); opts.AddChild(Level());
                 break;
             case Tool.Bridge:
+                opts.AddChild(new Choice("Вид", "Вид моста\nАрочный — каменный или деревянный мост дугой от берега до берега, до 25 м. Подъёмный — дубовый настил на петлях " +
+                    "над рвом от 2 до 6 м, у берега, что ближе к цитадели: опущен, пока не подойдёт орда, тогда поднимается сам — кто на нём, летит в ров; " +
+                    "поднятый — стена из брёвен. Щелчок по подъёмному мосту без кисти — сам / опущен / поднят.",
+                    new[] { "арочный", "подъёмный" }, o.DrawBridge ? 1 : 0, i => { o.DrawBridge = i == 1; t.Changed(); }));
                 opts.AddChild(new Stepper("Проход", "Ширина прохода\nПо мосту ходят строем: уже 1,25 м его не сделать, к ширине добавляются парапеты или перила. Клавиши [ и ].",
                     () => Len(Math.Max(Bridges.MinWidth, o.Width)), d => t.StepWidth(d)));
-                opts.AddChild(Hud.CapsLabel(o.Material == Mat.Wood ? "деревянный" : "каменный", 11, Ornament.BronzeLight));
+                opts.AddChild(Hud.CapsLabel(o.DrawBridge || o.Material == Mat.Wood ? "деревянный" : "каменный", 11, Ornament.BronzeLight));
                 break;
             case Tool.Extrude:
                 opts.AddChild(new Stepper("Шаг", "Шаг\nНа сколько нарастает или уходит вглубь грань за щелчок. Клавиши − и =.", () => Len(o.Step), d => t.StepHeight(d)));

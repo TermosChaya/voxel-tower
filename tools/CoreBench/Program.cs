@@ -1994,6 +1994,137 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--traps")
         $"{dropped0} stones on the wall, the archer {onWall:0} voxels from its top; {dropped1} left; the goblin {fhp0:0} → {(footGob.Dead ? "dead" : $"{footGob.Hp:0} hp")}");
 }
 
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--mechanisms")
+{
+    Console.WriteLine();
+    var mpM = new MapParams();
+    var wM = new VoxelWorld(mpM.SizeX, mpM.SizeY, mpM.SizeZ);
+    var siteM = MapGen.Generate(wM, mpM);
+    wM.Compact();
+    var simM = new Sim(wM, siteM);
+    simM.Waves.Countdown = 1e9; simM.WildTarget = 0;
+    simM.HordeStock[Stockpile.Wood] = simM.HordeStock[Stockpile.Earth] = 0;
+    void RunM(double seconds) { for (double t = 0; t < seconds; t += .05) simM.Step(.05f); }
+    int kxM = siteM.KeepX, kzM = siteM.KeepZ;
+    // flat ground, and a ditch two and a half metres deep and four wide across it, north to south
+    int cx = kxM - 260, cz = kzM + 60, gM = 0;
+    for (int z = cz - 40; z < cz + 40; z++) for (int x = cx - 60; x < cx + 60; x++) gM = Math.Max(gM, wM.SurfAt(x, z));
+    for (int z = cz - 40; z < cz + 40; z++)
+        for (int x = cx - 60; x < cx + 60; x++)
+        {
+            for (int y = gM; y < gM + 40; y++) wM.Set(x, y, z, Mat.Air);
+            for (int y = gM - 30; y < gM; y++) wM.Set(x, y, z, Mat.Soil);
+            wM.Set(x, gM - 1, z, Mat.Grass);
+            if (Math.Abs(x - cx) <= 16) for (int y = gM - 20; y < gM; y++) wM.Set(x, y, z, Mat.Air);
+        }
+    simM.Nav.Flush();
+    var drawM = Drawbridge.Plan(wM, siteM, cx + 24, cz, cx - 24, cz, 12, out string whyM);
+    if (drawM != null) simM.AddDrawbridge(drawM, built: true);
+    RunM(1);
+    // down, it carries a worker of ours across
+    var crosser = simM.Spawn(Kinds.Worker, simM.NearestStand(cx - 40, cz, 4));
+    int eastBank = simM.NearestStand(cx + 40, cz, 4), westBank = crosser.Cell;
+    simM.Command(new[] { crosser }, eastBank);
+    float lowM = crosser.Y;
+    for (int t = 0; t < 60 && crosser.Cell != eastBank; t++) { RunM(.5); lowM = Math.Min(lowM, crosser.Y); }
+    bool across1 = crosser.Cell == eastBank;
+    // a goblin on it: it goes up, and the goblin goes down into the ditch
+    var rider = simM.Spawn(Kinds.Goblin, simM.NearestStand(cx, cz, 2));
+    rider.Raid = null; rider.Guard = true; rider.Home = rider.Cell;
+    float ry0 = rider.Y, rhp0 = rider.Hp;
+    RunM(4);
+    float raised = drawM?.Raise ?? 0;
+    int mi = cx >> 3, mk = cz >> 3, my = gM >> 3;
+    bool cut = !simM.Nav.Stand(mi, my, mk, 2);
+    Check("a drawbridge down carries a worker of ours across a ditch; a goblin on it goes up with it and down into the ditch",
+        drawM != null && drawM.Ready && across1 && lowM > gM - 4 && raised >= 1 && rider.Y < gM - 12 && rider.Hp < rhp0 && cut,
+        drawM == null ? whyM : $"{drawM.Length / 8.0:0.0} m over the ditch, {drawM.Voxels - drawM.Missing} planks; the worker across {across1} (lowest {lowM - gM:0}); " +
+        $"up to {raised:0.00}, the goblin {ry0 - gM:0} → {rider.Y - gM:0} voxels, {rhp0:0} → {rider.Hp:0} hp; the way over cut {cut}");
+    rider.Dead = true; rider.DiedAt = -999;
+
+    // held down, it comes down again and the worker goes back over it
+    if (drawM != null) simM.SetDrawMode(drawM, DrawMode.Down);
+    RunM(4);
+    simM.Command(new[] { crosser }, westBank);
+    for (int t = 0; t < 60 && crosser.Cell != westBank; t++) RunM(.5);
+    Check("held down, it comes down again and the worker goes back over it", drawM != null && drawM.Raise == 0 && crosser.Cell == westBank,
+        $"down to {drawM?.Raise:0.00}; the worker back {crosser.Cell == westBank}");
+
+    // a pond behind a stone dam with a gate in it: shut, the water stays; opened, it runs out through the gateway
+    int rx = kxM - 330, rz = kzM - 120, rg = 0;
+    for (int z = rz - 40; z < rz + 40; z++) for (int x = rx - 40; x < rx + 120; x++) rg = Math.Max(rg, wM.SurfAt(x, z));
+    for (int z = rz - 40; z < rz + 40; z++)
+        for (int x = rx - 40; x < rx + 120; x++)
+        {
+            for (int y = rg; y < rg + 50; y++) wM.Set(x, y, z, Mat.Air);
+            for (int y = rg - 30; y < rg; y++) wM.Set(x, y, z, Mat.Soil);
+        }
+    simM.InstantLabour = true;
+    int rtop = Shapes.LevelTop(wM, rx, rz, 32);
+    simM.DesignateBuild(Shapes.Box(wM, siteM, rx - 24, rz - 24, rx + 24, rz + 24, new Stroke { Mat = Mat.Stone, Width = 8, Height = 32, Level = true, Hollow = true }, rtop));
+    simM.InstantLabour = false;
+    for (int z = rz - 16; z < rz + 17; z++) for (int x = rx - 16; x < rx + 17; x++) for (int y = rg; y < rg + 24; y++) if (wM.Get(x, y, z) == Mat.Air) wM.Set(x, y, z, Mat.Water);
+    RunM(2);
+    int ex = rx + 16;
+    while (wM.Get(ex + 1, rg + 6, rz) != Mat.Air) ex++;
+    var faceM = new VoxelHit { X = ex, Y = rg + 6, Z = rz, NX = 1, M = wM.Get(ex, rg + 6, rz) };
+    var planM = GatePlan.At(wM, siteM, faceM);
+    var sluice = planM == null ? null : simM.AddGate(planM, built: true);
+    long Wet(int x0, int x1)
+    {
+        long n = 0;
+        for (int z = rz - 40; z < rz + 40; z++) for (int x = x0; x < x1; x++) for (int y = rg - 5; y < rg + 30; y++) if (wM.Get(x, y, z) == Mat.Water) n++;
+        return n;
+    }
+    if (sluice != null) simM.SetGateMode(sluice, GateMode.Shut);
+    RunM(6);
+    long out0 = Wet(ex + 4, rx + 120), in0 = Wet(rx - 16, rx + 17);
+    int ran0 = simM.Flooded;
+    if (sluice != null) simM.SetGateMode(sluice, GateMode.Open);
+    RunM(20);
+    long in1 = Wet(rx - 16, rx + 17);
+    Check("a gate in a dam holds the water shut, and opened lets it out",
+        sluice != null && in0 > 20000 && out0 == 0 && in1 < in0 / 2 && simM.Flooded - ran0 > 10000,
+        sluice == null ? "no gate fits the dam" : $"shut: {in0} voxels of water behind it, {out0} outside; opened ({sluice.Open:0.00}): {in1} behind, {simM.Flooded - ran0} voxels ran out");
+
+    // pitch is a liquid too, a slow one: poured on the bank it runs down into a ditch, and comes to rest on the water
+    // in it, not mixing with it
+    int qx = kxM - 120, qz = kzM - 260, qg = 0;
+    for (int z = qz - 30; z < qz + 30; z++) for (int x = qx - 30; x < qx + 30; x++) qg = Math.Max(qg, wM.SurfAt(x, z));
+    for (int z = qz - 30; z < qz + 30; z++)
+        for (int x = qx - 30; x < qx + 30; x++)
+        {
+            for (int y = qg; y < qg + 40; y++) wM.Set(x, y, z, Mat.Air);
+            for (int y = qg - 30; y < qg; y++) wM.Set(x, y, z, Mat.Soil);
+            if (Math.Abs(x - qx) <= 8 && Math.Abs(z - qz) <= 24)
+            {
+                for (int y = qg - 16; y < qg; y++) wM.Set(x, y, z, Mat.Air);
+                for (int y = qg - 16; y < qg - 12; y++) wM.Set(x, y, z, Mat.Water);
+            }
+        }
+    RunM(2);
+    long WaterQ() { long n = 0; for (int z = qz - 30; z < qz + 30; z++) for (int x = qx - 30; x < qx + 30; x++) for (int y = qg - 20; y < qg + 30; y++) if (wM.Get(x, y, z) == Mat.Water) n++; return n; }
+    long water0Q = WaterQ();
+    // a heap of pitch on the bank beside the ditch
+    int heap = 0;
+    for (int z = qz - 4; z < qz + 4; z++) for (int x = qx + 12; x < qx + 18; x++) for (int y = qg; y < qg + 12; y++) { wM.Set(x, y, z, Mat.Pitch); heap++; }
+    for (int t = 0; t < 120 && simM.PitchBusy; t++) RunM(.5);
+    int inDitch = 0, onBank = 0, onWater = 0, pitchAll = 0;
+    for (int z = qz - 30; z < qz + 30; z++)
+        for (int x = qx - 30; x < qx + 30; x++)
+            for (int y = qg - 20; y < qg + 30; y++)
+            {
+                if (wM.Get(x, y, z) != Mat.Pitch) continue;
+                pitchAll++;
+                if (Math.Abs(x - qx) <= 8 && y < qg) inDitch++; else onBank++;
+                if (wM.Get(x, y - 1, z) == Mat.Water) onWater++;
+            }
+    long water1Q = WaterQ();
+    Check("pitch poured on a bank runs down into the ditch and comes to rest on the water in it, not mixing with it",
+        pitchAll == heap && inDitch > heap * .7 && onWater > 50 && water1Q == water0Q && !simM.PitchBusy,
+        $"{heap} voxels poured: {inDitch} in the ditch ({onWater} lying on the water), {onBank} left on the bank; water {water0Q} → {water1Q}");
+}
+
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
 {
     Console.WriteLine();

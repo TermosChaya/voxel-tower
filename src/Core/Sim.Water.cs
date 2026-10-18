@@ -41,127 +41,161 @@ public sealed partial class Sim
     }
 
     /// <summary>Water still finding its level: something to work out, being worked out, or running.</summary>
-    public bool WaterBusy => _waterEvents.Count > 0 || _pourTask != null || _pour != null;
+    public bool WaterBusy => _water.Busy;
+    /// <summary>Pitch still running.</summary>
+    public bool PitchBusy => _pitch.Busy;
 
-    // where water may have to move: something opened beside or under it, or was built into it (extra: voxels pushed aside)
-    readonly List<(int x, int y, int z, int extra)> _waterEvents = new();
-    WaterPlanner _planner;
-    Task<WaterPlanner.Result> _pourTask;
-    WaterPlanner.Result _pour;
-    int _pourAt;
-    float _pourDue;
-    bool _pouring;
+    /// <summary>
+    /// A liquid's own running: what it is and how fast it goes, where it may have to move (something opened beside or
+    /// under it, or was built into it — extra: voxels pushed aside), and the pour worked out and playing back.
+    /// </summary>
+    sealed class Flow
+    {
+        public readonly byte Mat;
+        public readonly float Rate;
+        public readonly List<(int x, int y, int z, int extra)> Events = new();
+        public WaterPlanner Planner;
+        public Task<WaterPlanner.Result> Task;
+        public WaterPlanner.Result Pour;
+        public int At;
+        public float Due;
+        public bool Pouring;
+        public Flow(byte mat, float rate) { Mat = mat; Rate = rate; }
+        public bool Busy => Events.Count > 0 || Task != null || Pour != null;
+    }
 
-    // water comes in from the sides and from above, never up from below
+    /// <summary>Voxels of pitch moved a second while it runs: it is thick and goes slowly.</summary>
+    public const float PitchRate = 2400;
+
+    readonly Flow _water = new(Mat.Water, PourRate), _pitch = new(Mat.Pitch, PitchRate);
+
+    // a liquid comes in from the sides and from above, never up from below
     static readonly (int, int, int)[] Inflow = { (1, 0, 0), (-1, 0, 0), (0, 0, 1), (0, 0, -1), (0, 1, 0) };
 
-    /// <summary>Every voxel written: one emptied beside water below its level, or under it, lets the water move; one built into it pushes the water aside.</summary>
+    /// <summary>
+    /// Every voxel written: one emptied beside water or pitch below its level, or under it, lets it move; one built into
+    /// it pushes it aside; pitch poured somewhere runs off as far as it can.
+    /// </summary>
     void OnWaterEdit(int x, int y, int z, byte old)
     {
-        if (_pouring) return;
+        OnLiquidEdit(_water, x, y, z, old);
+        OnLiquidEdit(_pitch, x, y, z, old);
+    }
+
+    void OnLiquidEdit(Flow f, int x, int y, int z, byte old)
+    {
+        if (f.Pouring) return;
         byte now = World.Get(x, y, z);
-        if (old == Mat.Water)
+        if (old == f.Mat)
         {
-            if (now != Mat.Air) _waterEvents.Add((x, y, z, 1));
+            if (now != Mat.Air) f.Events.Add((x, y, z, 1));
             return;
         }
+        // pitch newly poured finds its way down (water put down by hand stays as it was put)
+        if (now == f.Mat && f.Mat == Mat.Pitch) { f.Events.Add((x, y, z, 0)); return; }
         if (now != Mat.Air) return;
         foreach (var (dx, dy, dz) in Inflow)
         {
             int nx = x + dx, ny = y + dy, nz = z + dz;
-            if (World.Get(nx, ny, nz) != Mat.Water || y >= Surface(nx, ny, nz)) continue;
-            _waterEvents.Add((x, y, z, 0));
+            if (World.Get(nx, ny, nz) != f.Mat || y >= Surface(f.Mat, nx, ny, nz)) continue;
+            f.Events.Add((x, y, z, 0));
             return;
         }
     }
 
-    /// <summary>The height a body of water stands to (exclusive): up its column from a voxel of it.</summary>
-    int Surface(int x, int y, int z)
+    /// <summary>The height a body of a liquid stands to (exclusive): up its column from a voxel of it.</summary>
+    int Surface(byte liquid, int x, int y, int z)
     {
-        while (y + 1 < World.SY && World.Get(x, y + 1, z) == Mat.Water) y++;
+        while (y + 1 < World.SY && World.Get(x, y + 1, z) == liquid) y++;
         return y + 1;
     }
 
-    /// <summary>Works out where water has to go when something happened at its edge, and lets it run there.</summary>
+    /// <summary>Works out where water and pitch have to go when something happened at their edge, and lets them run there.</summary>
     void TickWater(float dt)
     {
-        if (_pour == null && _pourTask != null)
+        TickFlow(_water, dt);
+        TickFlow(_pitch, dt);
+    }
+
+    void TickFlow(Flow f, float dt)
+    {
+        if (f.Pour == null && f.Task != null)
         {
-            if (!_pourTask.IsCompleted) return;
-            if (_pourTask.Status == TaskStatus.RanToCompletion) { _pour = _pourTask.Result; _pourAt = 0; }
-            _pourTask = null;
+            if (!f.Task.IsCompleted) return;
+            if (f.Task.Status == TaskStatus.RanToCompletion) { f.Pour = f.Task.Result; f.At = 0; }
+            f.Task = null;
         }
-        if (_pour == null)
+        if (f.Pour == null)
         {
-            if (_waterEvents.Count == 0) return;
-            var events = _waterEvents.ToArray();
-            _waterEvents.Clear();
-            _planner ??= new WaterPlanner(World);
+            if (f.Events.Count == 0) return;
+            var events = f.Events.ToArray();
+            f.Events.Clear();
+            f.Planner ??= new WaterPlanner(World, f.Mat);
             if (WaterInBackground)
             {
-                var planner = _planner;
-                _pourTask = Task.Run(() => planner.Plan(events));
+                var planner = f.Planner;
+                f.Task = Task.Run(() => planner.Plan(events));
                 return;
             }
-            _pour = _planner.Plan(events);
-            _pourAt = 0;
+            f.Pour = f.Planner.Plan(events);
+            f.At = 0;
         }
-        Pour(dt);
+        Pour(f, dt);
     }
 
     /// <summary>Plays a worked-out pour back, so many voxels a second; starts over if the ground changed under it.</summary>
-    void Pour(float dt)
+    void Pour(Flow f, float dt)
     {
-        var moves = _pour.Moves;
-        _pourDue += PourRate * dt;
-        _pouring = true;
+        var moves = f.Pour.Moves;
+        f.Due += f.Rate * dt;
+        f.Pouring = true;
         try
         {
-            while (_pourDue >= 1 && _pourAt < moves.Count)
+            while (f.Due >= 1 && f.At < moves.Count)
             {
-                int from = moves[_pourAt], to = moves[_pourAt + 1];
+                int from = moves[f.At], to = moves[f.At + 1];
                 var (tx, ty, tz) = WaterPlanner.Unpack(to);
                 bool ok = World.Get(tx, ty, tz) == Mat.Air;
                 int fx = 0, fy = 0, fz = 0;
                 if (from >= 0)
                 {
                     (fx, fy, fz) = WaterPlanner.Unpack(from);
-                    ok &= World.Get(fx, fy, fz) == Mat.Water;
+                    ok &= World.Get(fx, fy, fz) == f.Mat;
                 }
-                if (!ok) { Replan(); return; }
+                if (!ok) { Replan(f); return; }
                 if (from >= 0) World.Set(fx, fy, fz, Mat.Air);
-                World.Set(tx, ty, tz, Mat.Water);
-                MarkArrival(tx, tz);
-                Flooded++;
-                _pourAt += 2;
-                _pourDue--;
+                World.Set(tx, ty, tz, f.Mat);
+                if (f == _water) { MarkArrival(tx, tz); Flooded++; }
+                f.At += 2;
+                f.Due--;
             }
         }
-        finally { _pouring = false; }
-        if (_pourAt < moves.Count) return;
-        foreach (int p in _pour.Again) { var (x, y, z) = WaterPlanner.Unpack(p); _waterEvents.Add((x, y, z, 0)); }
-        _pour = null;
-        _pourDue = 0;
+        finally { f.Pouring = false; }
+        if (f.At < moves.Count) return;
+        foreach (int p in f.Pour.Again) { var (x, y, z) = WaterPlanner.Unpack(p); f.Events.Add((x, y, z, 0)); }
+        f.Pour = null;
+        f.Due = 0;
     }
 
-    /// <summary>The ground changed under a pour (something built or dug where the water was going): drop the rest and work it out again.</summary>
-    void Replan()
+    /// <summary>The ground changed under a pour (something built or dug where the liquid was going): drop the rest and work it out again.</summary>
+    void Replan(Flow f)
     {
-        var moves = _pour.Moves;
+        var moves = f.Pour.Moves;
         int pushed = 0;
-        for (int i = _pourAt; i < moves.Count; i += 2) if (moves[i] < 0) pushed++;
-        var (x, y, z) = WaterPlanner.Unpack(moves[_pourAt + 1]);
-        _waterEvents.Add((x, y, z, pushed));
-        if (moves[_pourAt] >= 0) { (x, y, z) = WaterPlanner.Unpack(moves[_pourAt]); _waterEvents.Add((x, y, z, 0)); }
-        foreach (int p in _pour.Again) { (x, y, z) = WaterPlanner.Unpack(p); _waterEvents.Add((x, y, z, 0)); }
-        _pour = null;
-        _pourDue = 0;
+        for (int i = f.At; i < moves.Count; i += 2) if (moves[i] < 0) pushed++;
+        var (x, y, z) = WaterPlanner.Unpack(moves[f.At + 1]);
+        f.Events.Add((x, y, z, pushed));
+        if (moves[f.At] >= 0) { (x, y, z) = WaterPlanner.Unpack(moves[f.At]); f.Events.Add((x, y, z, 0)); }
+        foreach (int p in f.Pour.Again) { (x, y, z) = WaterPlanner.Unpack(p); f.Events.Add((x, y, z, 0)); }
+        f.Pour = null;
+        f.Due = 0;
     }
 }
 
 /// <summary>
-/// Works out where bodies of water end up. Keeps its own scratch copy of what has turned to water or to air, reads the
-/// world and writes nothing to it, so it can run on a worker thread; one plan at a time.
+/// Works out where bodies of a liquid end up — water, or pitch, each blind to the other as to any solid. Keeps its own
+/// scratch copy of what has turned to liquid or to air, reads the world and writes nothing to it, so it can run on a
+/// worker thread; one plan at a time.
 /// </summary>
 sealed class WaterPlanner
 {
@@ -180,6 +214,7 @@ sealed class WaterPlanner
     const byte Solid = 0, Wet = 1, Dry = 2;
 
     readonly VoxelWorld _w;
+    readonly byte _liquid;
     // per voxel, what the plan has made of it so far (0: as in the world), and the pass that last reached it
     readonly byte[][] _state;
     readonly int[][] _mark;
@@ -190,8 +225,9 @@ sealed class WaterPlanner
     readonly Queue<int> _bfs = new();
     readonly List<int> _body = new();
 
-    public WaterPlanner(VoxelWorld w)
+    public WaterPlanner(VoxelWorld w, byte liquid = Mat.Water)
     {
+        _liquid = liquid;
         if (w.SX > 1024 || w.SZ > 1024 || w.SY > 2048) throw new ArgumentException("the water planner packs voxels into 10 + 10 + 11 bits");
         _w = w;
         _state = new byte[w.ChunkCount][];
@@ -217,7 +253,7 @@ sealed class WaterPlanner
             if (v != 0) return v;
         }
         byte m = _w.Get(x, y, z);
-        return m == Mat.Water ? Wet : m == Mat.Air ? Dry : Solid;
+        return m == _liquid ? Wet : m == Mat.Air ? Dry : Solid;
     }
 
     byte Kind(int p) { var (x, y, z) = Unpack(p); return Kind(x, y, z); }
