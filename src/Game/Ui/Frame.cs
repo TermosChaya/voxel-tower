@@ -297,7 +297,8 @@ public partial class WaveClock : Control
         }
         else if (w.Active)
         {
-            _title.Text = $"ВОЛНА {w.Number} ИЗ {Waves.Total} · РАЗВЕДКА {w.Intel * 100:0} %";
+            _title.Text = $"ВОЛНА {w.Number} ИЗ {Waves.Total} · РАЗВЕДКА {w.Intel * 100:0} %" +
+                (sim.Weather != Weather.Clear ? " · " + Sim.WeatherName(sim.Weather).ToUpperInvariant() : "");
             _time.Text = (sim.RaidersAlive() + w.Coming).ToString();
             _unit.Text = "В ДОЛИНЕ";
             _call.Text = "Орда в долине"; _call.Disabled = true;
@@ -308,7 +309,8 @@ public partial class WaveClock : Control
         {
             int bands = sim.Bands.FindAll(b => b.State == BandState.Coming).Count;
             _title.Text = $"ВОЛНА {w.Number + 1} ИЗ {Waves.Total}" + (bands > 0 ? $" · ВАТАГ {bands}" : "") +
-                (w.DawnLeft > 0 ? " · РАССВЕТ" : w.Countdown < Waves.Dusk ? " · ЗАКАТ" : "");
+                (w.DawnLeft > 0 ? " · РАССВЕТ" : w.Countdown < Waves.Dusk ? " · ЗАКАТ" : "") +
+                (sim.Weather != Weather.Clear ? " · " + Sim.WeatherName(sim.Weather).ToUpperInvariant() : "");
             _time.Text = w.Countdown < 100 * 60 ? Fmt.Clock(w.Countdown) : "—";
             _unit.Text = "ДО ОРДЫ";
             _call.Text = $"На штурм · {w.IntelNow * 100:0} %";

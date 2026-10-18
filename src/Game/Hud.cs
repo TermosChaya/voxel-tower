@@ -74,6 +74,7 @@ public partial class Hud : CanvasLayer
     WaveClock _clockPanel;
     Medallion _help, _menuButton;
     GameMenu _menu;
+    EnvoyCard _envoy;
     ColonistBar _colonists;
     BottomConsole _console;
     MapRing _ring;
@@ -253,6 +254,9 @@ public partial class Hud : CanvasLayer
         root.AddChild(_floats);
         _tag = new CursorTag { Visible = false };
         root.AddChild(_tag);
+        _envoy = new EnvoyCard();
+        root.AddChild(_envoy);
+        _envoy.Init(m);
         // the menu over everything
         _menu = new GameMenu();
         root.AddChild(_menu);
@@ -288,6 +292,7 @@ public partial class Hud : CanvasLayer
         _stores.QueueRedraw();
         _clockPanel.Refresh();
         _inspector.Refresh();
+        _envoy.Refresh();
     }
 
     public override void _Process(double delta)
@@ -300,6 +305,7 @@ public partial class Hud : CanvasLayer
         _clockPanel.Position = new Vector2(vp.X - WaveClock.W - 98, 0);
         _help.Position = new Vector2(vp.X - 50, 1);
         _menuButton.Position = new Vector2(vp.X - 92, 1);
+        _envoy.Position = new Vector2(vp.X - EnvoyCard.W - 14, WaveClock.H + 10);
         float tabsEnd = _tabs.Position.X + _tabs.Size.X;
         // on a narrow screen (or a large interface) the stores close up rather than go under the clock
         float storesW = Math.Clamp(_clockPanel.Position.X - tabsEnd - 28, Stores.MinW, Stores.W);

@@ -122,7 +122,8 @@ public sealed partial class Sim
                 byte m = World.Get(x, y, z);
                 // dug out, hacked away, swung off on a gate's leaf, or drowned: nothing burns here any more
                 if (!Mat.Burns(m) || Wet(x, y, z)) { Burning.Remove(p); continue; }
-                float fuel = Burning[p] - step;
+                // rain eats a fire as much as it eats its fuel
+                float fuel = Burning[p] - step * (Weather == Weather.Rain ? 2.5f : 1);
                 if (fuel <= 0) { BurnOut(p, x, y, z, m); continue; }
                 Burning[p] = fuel;
                 int cell = Nav.CellOf(x, y, z), block = Block(x, y, z);
@@ -135,7 +136,7 @@ public sealed partial class Sim
                     int nx = x + dx, ny = y + dy, nz = z + dz;
                     byte n = World.Get(nx, ny, nz);
                     // fire runs over what the air gets at; into the heart of a beam it eats only slowly
-                    if (Mat.Burns(n) && Rng.NextDouble() < Mat.Catch[n] * k * step * (Open(nx, ny, nz) ? 1 : .12f)) Ignite(nx, ny, nz);
+                    if (Mat.Burns(n) && Rng.NextDouble() < Mat.Catch[n] * k * step * RainFire * (Open(nx, ny, nz) ? 1 : .12f)) Ignite(nx, ny, nz);
                 }
                 // a spark lands a little way off, mostly upward
                 if (Rng.NextDouble() < .01 * step)
@@ -200,7 +201,7 @@ public sealed partial class Sim
                 if (heat > 0) { u.Burn = Math.Max(u.Burn, heat > 1 ? 3 : 1.5f); u.BurnHeat = Math.Max(u.BurnHeat, heat); }
             }
             if (u.Burn <= 0) continue;
-            u.Burn -= step;
+            u.Burn -= step * (Weather == Weather.Rain ? 2 : 1);
             Hurt(u, null, BurnDamage * u.BurnHeat * step * (Kinds.IsEngine(u.T) ? 3 : 1), "огонь");
             if (u.Burn <= 0) { u.Burn = 0; u.BurnHeat = 1; }
         }
@@ -481,7 +482,7 @@ public sealed partial class Sim
         if (a.At >= 0 && a.Hits)
         {
             var (kx, ky, kz) = WaterPlanner.Unpack(a.At);
-            if (Rng.NextDouble() < .8) Ignite(kx, ky, kz);
+            if (Rng.NextDouble() < .8 * (Weather == Weather.Rain ? .45f : 1)) Ignite(kx, ky, kz);
             return;
         }
         if (a.Hits && a.Target is { Dead: false } t)

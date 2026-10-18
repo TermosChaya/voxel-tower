@@ -154,7 +154,23 @@ public static class Kinds
     public static readonly UnitType[] PlayerKinds = { Worker, Archer, Swordsman };
     /// <summary>The horde's kinds that find their way by the field (the catapult goes its own way to where it throws from).</summary>
     public static readonly UnitType[] HordeKinds = { Goblin, Orc, Miner, Troll, Sapper, Thief, Ram };
-    public static readonly UnitType[] WildKinds = { Deer, Boar, Hare };
+    /// <summary>A white stag, seen in the valley once in a long while: the swiftest thing in it, and worth a deal of gold to whoever runs it down.</summary>
+    public static readonly UnitType WhiteStag = new()
+    {
+        Key = "stag", Name = "Белый олень", Team = Team.Wild,
+        Move = new Mover { Height = 2, Climb = 1, Drop = 3, Speed = 5.2f },
+        Hp = 70, Damage = 0, AttackTime = 1, Bounty = 60, BodyH = 15, BodyR = 3, FleeDist = 26 * VoxelWorld.PerMetre,
+    };
+    /// <summary>A cave bear out of the hills: it runs from nobody and goes for whoever comes near it, ours or the horde's.</summary>
+    public static readonly UnitType Bear = new()
+    {
+        Key = "bear", Name = "Пещерный медведь", Team = Team.Wild,
+        Move = new Mover { Height = 2, Climb = 2, Drop = 3, Speed = 3.4f },
+        // a long reach: a bear is a big beast, and it strikes from its bulk, not from a man's arm
+        Hp = 380, Damage = 24, AttackTime = 1.4f, Bounty = 80, BodyH = 15, BodyR = 4.5f, Reach = 17, FleeDist = 0,
+    };
+
+    public static readonly UnitType[] WildKinds = { Deer, Boar, Hare, WhiteStag, Bear };
 }
 
 /// <summary>One pawn or attacker on the field. Positions are in voxels, feet on the ground.</summary>
@@ -277,6 +293,8 @@ public sealed class Unit
     public int AimAt = -1;
     /// <summary>A siege tower at a wall: the voxels of the ladder it dropped against it (packed).</summary>
     public readonly List<int> Docked = new();
+    /// <summary>An envoy of the horde, under a white rag, come to bargain: no one of the horde strikes with it.</summary>
+    public bool Envoy;
 
     // beasts, and pawns with nothing to do
     /// <summary>Where it grazes and wanders round; for a pawn, where it idles round.</summary>

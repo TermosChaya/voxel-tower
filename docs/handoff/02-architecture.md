@@ -66,6 +66,8 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   2 поперёк, 3 вокселя вглубь, от середины), `Sapping` копит работу (`Unit.SapCost`) и вынимает всё разом.
   `Arched` — слой арок: мосты игрока (`DesignateBuild(…, arched: true)` из инструмента «Мост») и старые мосты
   (`Site.Arched`, `Landmarks.OldBridge`).
+- `Sim.Events.cs` — события: погода (`Weather`, `RainFire`, `WeatherAim`, `FogRange`), редкие звери (`RareBeast`,
+  `BearTick`), посол орды (`SendEnvoy`, `EnvoyTick`, `MakeOffer`, `Answer`, `Deal`).
 - `Sim.Engines.cs` — осадные машины: `EngineTick`, `CatapultTick`/`AimFor`/`Throw`/`StoneLands`, `MantletTick`/`Cover`,
   `TowerTick`/`DockFor`/`Dock`/`TowerFell`, `KeepEscort`, `SpawnCatapult`.
 - `Sim.Thieves.cs` — грабители: `ThiefTick`, `LonePrey`, `Steal`, `Bind`/`Led`, `ThiefFell`/`ThiefGone`.

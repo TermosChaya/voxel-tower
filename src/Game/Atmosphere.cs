@@ -30,7 +30,9 @@ public partial class Atmosphere : Node3D
     public Godot.Environment Env { get; private set; }
     /// <summary>The embers hang around whatever this camera looks at.</summary>
     public CameraRig Follow;
-    GpuParticles3D _embers;
+    GpuParticles3D _embers, _rain;
+    /// <summary>How far the weather has come on, as shown: rain and fog, easing in and out.</summary>
+    float _wet, _fog;
 
     public void Build(VoxelWorld w, Site site, bool calm)
     {
@@ -105,6 +107,8 @@ public partial class Atmosphere : Node3D
         }
 
         if (!calm) { _embers = Embers(); AddChild(_embers); }
+        _rain = Rain();
+        AddChild(_rain);
     }
 
     readonly Dictionary<Fixture, OmniLight3D> _sconces = new();
@@ -140,6 +144,39 @@ public partial class Atmosphere : Node3D
         AddChild(l);
         _sconces[f] = l;
         _torches.Add((l, f.LX * .37f + f.LZ * .11f));
+    }
+
+    /// <summary>Rain: streaks falling all round whatever the camera looks at.</summary>
+    static GpuParticles3D Rain()
+    {
+        var process = new ParticleProcessMaterial
+        {
+            EmissionShape = ParticleProcessMaterial.EmissionShapeEnum.Box,
+            EmissionBoxExtents = new Vector3(26, 1, 20),
+            Direction = new Vector3(.12f, -1, .06f),
+            Spread = 3f,
+            InitialVelocityMin = 13f,
+            InitialVelocityMax = 16f,
+            Gravity = new Vector3(0, -6, 0),
+        };
+        var mat = new StandardMaterial3D
+        {
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+            BillboardMode = BaseMaterial3D.BillboardModeEnum.FixedY,
+            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+            AlbedoColor = new Color(.72f, .78f, .86f, .28f),
+        };
+        return new GpuParticles3D
+        {
+            Amount = 2400,
+            Lifetime = 1.6f,
+            Emitting = false,
+            ProcessMaterial = process,
+            DrawPass1 = new QuadMesh { Size = new Vector2(.014f, .42f), Material = mat },
+            LocalCoords = false,
+            VisibilityAabb = new Aabb(new Vector3(-30, -30, -24), new Vector3(60, 34, 48)),
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        };
     }
 
     /// <summary>Ash and sparks rising slowly over the field.</summary>
@@ -189,6 +226,15 @@ public partial class Atmosphere : Node3D
     {
         _t += delta;
         if (_embers != null && Follow != null) { var t0 = Follow.Target; _embers.Position = new Vector3(t0.X, 9, t0.Y); }
+        if (Follow != null) { var t1 = Follow.Target; _rain.Position = new Vector3(t1.X, 20, t1.Y); }
+        if (_sim != null)
+        {
+            float k = _calm ? 1 : (float)delta / 5;
+            _wet = Mathf.MoveToward(_wet, _sim.Weather == Weather.Rain ? 1 : 0, k);
+            _fog = Mathf.MoveToward(_fog, _sim.Weather == Weather.Fog ? 1 : 0, k);
+            _rain.Emitting = _wet > .3f;
+            _rain.AmountRatio = Math.Clamp(_wet, .05f, 1);
+        }
         if (_sim != null)
         {
             var wv = _sim.Waves;
@@ -227,8 +273,14 @@ public partial class Atmosphere : Node3D
         _sun.LightEnergy = Mathf.Lerp(energy, .3f, dark);
         _sun.LookAtFromPosition(dir * 20, Vector3.Zero, Mathf.Abs(dir.Y) > .98f ? Vector3.Forward : Vector3.Up);
         _rim.LightEnergy = Mathf.Lerp(.55f, .22f, dark);
-        Env.AmbientLightEnergy = Mathf.Lerp(.82f, .27f, dark);
-        Env.FogLightColor = new Color(0.114f, 0.086f, 0.149f).Lerp(new Color(.03f, .035f, .07f), dark);
+        // rain greys the light and dims it; fog comes in close, pale by day and dark at night
+        Env.AmbientLightEnergy = Mathf.Lerp(.82f, .27f, dark) * (1 - .18f * _wet);
+        _sun.LightEnergy *= 1 - .45f * _wet - .3f * _fog;
+        var fogDay = new Color(0.114f, 0.086f, 0.149f).Lerp(new Color(.34f, .35f, .38f), _fog * .8f + _wet * .3f);
+        Env.FogLightColor = fogDay.Lerp(new Color(.03f, .035f, .07f), dark);
+        Env.FogDepthBegin = Mathf.Lerp(84, 22, _fog) - 20 * _wet;
+        Env.FogDepthEnd = Mathf.Lerp(170, 80, _fog) - 30 * _wet;
+        Env.FogDensity = Mathf.Lerp(.55f, .82f, Math.Max(_fog, _wet * .5f));
         _skyMat.SetShaderParameter("amb_sky", new Vector3(0.254f, 0.246f, 0.578f).Lerp(new Vector3(.09f, .11f, .3f), dark));
         _skyMat.SetShaderParameter("bg_top", new Vector3(0.027f, 0.017f, 0.040f).Lerp(new Vector3(.006f, .008f, .02f), dark));
         LampBoost = 1 + .7f * dark;

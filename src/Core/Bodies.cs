@@ -84,7 +84,7 @@ public static class Bodies
     /// <summary>How many looks a kind comes in.</summary>
     public static int Looks(UnitType t) => t.Key switch
     {
-        "worker" => 8, "archer" => 6, "sword" => 6, "goblin" => 8, "sapper" => 4, "orc" => 6, "miner" => 4, "troll" => 3, "thief" => 3, "deer" => 2, "ram" => 2, "catapult" => 2, "mantlet" => 2, "tower" => 1, _ => 1,
+        "worker" => 8, "archer" => 6, "sword" => 6, "goblin" => 8, "sapper" => 4, "orc" => 6, "miner" => 4, "troll" => 3, "thief" => 3, "deer" => 2, "ram" => 2, "catapult" => 2, "mantlet" => 2, "tower" => 1, "stag" => 1, "bear" => 1, _ => 1,
     };
 
     /// <summary>A look for a unit, from its number, so it keeps it.</summary>
@@ -110,6 +110,8 @@ public static class Bodies
             "mantlet" => MantletPlan(look),
             "tower" => TowerPlan(),
             "deer" => Deer(look),
+            "stag" => Deer(0, white: true),
+            "bear" => BearPlan(),
             "boar" => Boar(),
             "hare" => Hare(),
             _ => Worker(0),
@@ -1023,10 +1025,11 @@ public static class Bodies
         return s;
     }
 
-    static BodyPlan Deer(int look)
+    static BodyPlan Deer(int look, bool white = false)
     {
         var f = new BodyPlan { Stride = 12 };
-        var s = Quadruped(f, 12, 2, 3, 6, -9, Mat.FurDeer, Mat.Hoof);
+        byte fur = white ? Mat.Bone : Mat.FurDeer;
+        var s = Quadruped(f, 12, 2, 3, 6, -9, fur, Mat.Hoof);
         // a long barrel of a body with a pale belly and a white rump with a short tail, a neck held high
         s.Box(Body, -3, 12, -10, 3, 20, 9, Mat.FurDeer);
         s.Cut(Body, -3, 12, -10, -2, 13, 9, both: true);
@@ -1058,6 +1061,27 @@ public static class Bodies
         Joint(f, Body, 0, 12 / H, 6 / H);
         f.HeadY0 = 23; f.HeadY1 = 27;
         return s.Into(f, 12, 20, 4);
+    }
+
+    /// <summary>A cave bear: a great hump of dark fur over the shoulders, heavy legs, a broad head low on a short neck, small ears, eyes red in the dark.</summary>
+    static BodyPlan BearPlan()
+    {
+        var f = new BodyPlan { Stride = 10 };
+        var s = Quadruped(f, 10, 4, 6, 6, -11, Mat.FurBoar, Mat.Hoof);
+        s.Box(Body, -6, 10, -13, 6, 24, 8, Mat.FurBoar);
+        s.Box(Body, -5, 24, -4, 5, 28, 6, Mat.FurBoar);
+        s.Cut(Body, -6, 10, -13, -5, 11, 8, both: true);
+        s.Paint(Body, -4, 10, -12, 4, 11, 7, Mat.HairBrown);
+        // the head, low and broad, a paler muzzle, the nose, small round ears, eyes that catch the light
+        s.Box(Body, -4, 14, 8, 4, 22, 15, Mat.FurBoar);
+        s.Box(Body, -2, 14, 15, 2, 18, 19, Mat.HairBrown);
+        s.Box(Body, -1, 16, 19, 1, 18, 20, Mat.Hoof);
+        s.Pair(Body, Body, -4, 22, 9, -2, 24, 11, Mat.FurBoar);
+        s.Pair(Body, Body, -3, 19, 14, -2, 20, 15, Mat.Ember);
+        s.Box(Body, -1, 22, -14, 1, 24, -12, Mat.FurBoar);
+        Joint(f, Body, 0, 10 / H, 4 / H);
+        f.HeadY0 = 14; f.HeadY1 = 24;
+        return s.Into(f, 6, 24, 6);
     }
 
     static BodyPlan Boar()

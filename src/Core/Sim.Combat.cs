@@ -60,8 +60,8 @@ public sealed partial class Sim
         Unit best = null; float bd = maxDist;
         foreach (var o in Units)
         {
-            // one of ours bound and led off is in no fight
-            if (o.Dead || o.Inside || o.Captor != null || o.Team != team) continue;
+            // one of ours bound and led off is in no fight, nor an envoy under a white rag
+            if (o.Dead || o.Inside || o.Captor != null || o.Envoy || o.Team != team) continue;
             float d = Dist(u, o);
             if (d < bd) { bd = d; best = o; }
         }
@@ -274,10 +274,10 @@ public sealed partial class Sim
     public bool Lit(float x, float z) => _lit.Contains(LitKey((int)Math.Clamp(x, 0, World.SX - 1), (int)Math.Clamp(z, 0, World.SZ - 1)));
 
     /// <summary>How far a bow carries into the dark now: all the way by day, little more than half at night.</summary>
-    public float DarkRange(Unit a) => a.T.Range * (1 - .45f * Waves.Darkness);
+    public float DarkRange(Unit a) => a.T.Range * FogRange * (1 - .45f * Waves.Darkness);
 
     /// <summary>How far a bow carries to a spot: all the way by day or where it is light, little more than half in the dark.</summary>
-    public float RangeAt(Unit a, float x, float z) => Waves.Darkness <= 0 || Lit(x, z) ? a.T.Range : DarkRange(a);
+    public float RangeAt(Unit a, float x, float z) => Waves.Darkness <= 0 || Lit(x, z) ? a.T.Range * FogRange : DarkRange(a);
 
     /// <summary>A raider in range and in sight; the ones hacking walls or battering the citadel come first.</summary>
     Unit BestTarget(Unit u)
@@ -285,7 +285,7 @@ public sealed partial class Sim
         Unit best = null; float bd = float.MaxValue;
         foreach (var o in Units)
         {
-            if (o.Dead || o.Team != Team.Horde) continue;
+            if (o.Dead || o.Team != Team.Horde || o.Envoy) continue;
             float d = Dist(u, o);
             if (d > RangeAt(u, o.X, o.Z)) continue;
             // those cutting down one of ours come first, then those hacking the walls, battering the citadel, raising
@@ -324,8 +324,9 @@ public sealed partial class Sim
         t = Cover(u, t) ?? t;
         float d = Dist(u, t);
         float chance = Math.Clamp(.9f - d / u.T.Range * .45f + (u.Y - t.Y > 16 ? .08f : 0), .35f, .92f);
-        // a shape in the dark is harder to hit than one in the light
+        // a shape in the dark is harder to hit than one in the light; rain and wind spoil aim
         if (!Lit(t.X, t.Z)) chance *= 1 - .2f * Waves.Darkness;
+        chance *= WeatherAim;
         u.Swing = 1;
         Shots++;
         Arrows.Add(new Arrow

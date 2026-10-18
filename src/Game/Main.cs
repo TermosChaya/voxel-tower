@@ -20,6 +20,7 @@ namespace VoxelTower.Game;
 /// chooses our pawns (or the first N), --tab=key lets a panel down from the beam, --tool=N takes up the Nth tool,
 /// --ui-scale=S draws the interface at that size instead of the player's own, --inspect looks at the first raider (or beast),
 /// --day=F starts at that time of the day (0 dawn, 1 sunset), --alarm=S raises the alarm and runs on S seconds,
+/// --weather=rain|fog|wind brings that weather at once, --envoy sends the horde's envoy and waits for its offer,
 /// --load=file.sav reads a saved game back.
 /// </summary>
 public partial class Main : Node3D
@@ -73,6 +74,9 @@ public partial class Main : Node3D
     double _dayAt = -1;
     /// <summary>--alarm=S: the alarm raised at the start and the game run on this many seconds (screenshots).</summary>
     double _alarmAt = -1;
+    /// <summary>--weather=rain|fog|wind: that weather from the start; --envoy: an envoy sent at once and waited for (screenshots).</summary>
+    string _weather;
+    bool _envoy;
     /// <summary>--select or --select=N: all our pawns (or the first N) chosen at the start, for screenshots of the console.</summary>
     int _select;
     /// <summary>--tab=key: a panel let down from the beam at the start; --tool=N: the Nth tool of the grid in hand.</summary>
@@ -99,6 +103,8 @@ public partial class Main : Node3D
             else if (a.StartsWith("--wave=") && double.TryParse(a["--wave=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double wa)) _waveAt = wa;
             else if (a.StartsWith("--day=") && double.TryParse(a["--day=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double da)) _dayAt = da;
             else if (a.StartsWith("--alarm=") && double.TryParse(a["--alarm=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double al)) _alarmAt = al;
+            else if (a.StartsWith("--weather=")) _weather = a["--weather=".Length..];
+            else if (a == "--envoy") _envoy = true;
             else if (a == "--select") _select = int.MaxValue;
             else if (a.StartsWith("--select=") && int.TryParse(a["--select=".Length..], out int sn)) _select = sn;
             else if (a.StartsWith("--tab=")) _tab = a["--tab=".Length..];
@@ -213,6 +219,8 @@ public partial class Main : Node3D
         Hud.Init(this);
 
         Sim.Said += (text, kind, x, z) => Hud.Log(text, (Hud.Kind)Math.Clamp(kind, 0, 3), x, z);
+        // the chronicle in the self-test's log, for when something goes wrong
+        if (_selfTest) Sim.Said += (text, kind, x, z) => GD.Print($"[chronicle] {Sim.Time:0} s: {text}");
         Sim.Mined = (x, y, z, m) => { if (Random.Shared.NextDouble() < .045) Debris.Spawn(m, x, y, z, 1, 1.3f); };
         Sim.Hacked = (x, y, z, m) => { if (Random.Shared.NextDouble() < .16) Debris.Spawn(m, x, y, z, 1, 1.8f); };
         Sim.Raised = (x, y, z, m) => { if (Random.Shared.NextDouble() < .05) Debris.Spawn(m, x, y, z, 1, .8f); };
@@ -256,6 +264,16 @@ public partial class Main : Node3D
         if (_waveAt >= 0 && !_demo && !_selfTest) { Sim.ComputeFields(); Sim.Waves.StartNow(Sim); Advance(_waveAt); Hud.Refresh(); }
         if (_dayAt >= 0 && _waveAt < 0 && !_demo && !_selfTest) { Sim.Waves.Countdown = Waves.Prep * (1 - Math.Clamp(_dayAt, 0, .998)); Hud.Refresh(); }
         if (_alarmAt >= 0 && !_selfTest) { Sim.RaiseAlarm(); Advance(_alarmAt); Hud.Refresh(); }
+        if (_weather != null && !_selfTest)
+            Sim.StartWeather(_weather switch { "rain" => Weather.Rain, "fog" => Weather.Fog, _ => Weather.Wind }, 900);
+        if (_envoy && !_selfTest)
+        {
+            Sim.Waves.Number = Math.Max(1, Sim.Waves.Number);
+            Sim.SendEnvoy();
+            for (int t = 0; t < 600 && Sim.Offer is { Kind: DealKind.None }; t++) Advance(.5);
+            if (Sim.Offer?.Envoy is { } e) Rig.Set(World.WX(e.X), World.WZ(e.Z), -.66f, .62f, 2f, snap: true);
+            Hud.Refresh();
+        }
         if (_select > 0)
         {
             foreach (var u in Sim.Units) if (!u.Dead && u.Team == Team.Player && Selected.Count < _select) Selected.Add(u);
@@ -713,16 +731,19 @@ public partial class Main : Node3D
         Command.FireArrowsSelected();
         Command.ClearSelection();
 
-        // the alarm: the workers to shelter in the citadel; the all-clear lets them out (the badly hurt mend in there till they are fit)
-        int Sheltering() => Sim.Units.FindAll(u => !u.Dead && u.Inside && !u.Mending).Count;
+        // the alarm: two fresh workers out in the field go into the citadel; the all-clear lets them out
+        var (gfx, _, gfz) = Sim.Nav.Feet(Sim.Gate);
+        var fresh = new List<Unit>();
+        foreach (int dz in new[] { -40, 40 }) fresh.Add(Sim.Spawn(Kinds.Worker, Sim.NearestStand((int)gfx - 160, (int)gfz + dz, 4)));
         KeyPress(Key.T);
         bool alarmUp = Sim.Alarm;
-        for (int t = 0; t < 80 && Sheltering() == 0; t++) Advance(.5);
-        int wentIn = Sheltering();
+        for (int t = 0; t < 80 && !fresh.TrueForAll(u => u.Inside); t++) Advance(.5);
+        int wentIn = fresh.FindAll(u => u.Inside).Count;
         KeyPress(Key.T);
         Advance(8);
-        Check("T sounds the alarm and the workers go into the citadel; T again stands it down and they come out", alarmUp && wentIn > 0 && !Sim.Alarm && Sheltering() == 0,
-            $"{wentIn} went in, {Sheltering()} still inside, {Sim.InCitadel() - Sheltering()} mending there");
+        int still = fresh.FindAll(u => u.Inside).Count;
+        Check("T sounds the alarm and the workers go into the citadel; T again stands it down and they come out", alarmUp && wentIn == 2 && !Sim.Alarm && still == 0,
+            $"{wentIn} of 2 went in, {still} still inside");
 
         // the horde called early: no gold for it, only less known of the defences
         Sim.Waves.Countdown = 200;
@@ -1384,7 +1405,7 @@ public partial class Main : Node3D
         var rows = new[]
         {
             new[] { Kinds.Worker }, new[] { Kinds.Archer, Kinds.Swordsman }, new[] { Kinds.Goblin, Kinds.Sapper, Kinds.Thief },
-            new[] { Kinds.Orc, Kinds.Miner }, new[] { Kinds.Troll, Kinds.Deer, Kinds.Boar, Kinds.Hare }, new[] { Kinds.Ram, Kinds.Catapult },
+            new[] { Kinds.Orc, Kinds.Miner }, new[] { Kinds.Troll, Kinds.Deer, Kinds.Boar, Kinds.Hare, Kinds.Bear, Kinds.WhiteStag }, new[] { Kinds.Ram, Kinds.Catapult, Kinds.Mantlet, Kinds.SiegeTower },
         };
         const float yaw = -.3f, pitch = .42f, gap = 34;
         float sin = MathF.Sin(yaw), cos = MathF.Cos(yaw);
@@ -1414,7 +1435,7 @@ public partial class Main : Node3D
                     along += Spacing(t) / 2;
                 }
         }
-        static float Spacing(UnitType t) => Kinds.IsEngine(t) ? 34 : t == Kinds.Troll ? 20 : t == Kinds.Deer ? 14 : t == Kinds.Hare ? 6 : t.BodyH <= 10 ? 9 : 11;
+        static float Spacing(UnitType t) => Kinds.IsEngine(t) ? 34 : t == Kinds.Troll ? 20 : t == Kinds.Deer || t == Kinds.WhiteStag ? 14 : t == Kinds.Bear ? 18 : t == Kinds.Hare ? 6 : t.BodyH <= 10 ? 9 : 11;
         // the camera looks at a plane 4 m up: the figures' middles are higher, so look past it by as much
         float over = (World.WY(World.SurfAt((int)cx, (int)cz) + 8) - 4) / MathF.Tan(pitch);
         float zoom = Math.Clamp(248 / (width / 1.6f + 12), 1.2f, 9);

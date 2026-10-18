@@ -15,7 +15,7 @@ namespace VoxelTower.Core;
 /// </summary>
 public sealed partial class Sim
 {
-    public const int SaveVersion = 6;
+    public const int SaveVersion = 7;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -92,6 +92,8 @@ public sealed partial class Sim
         w.Write(Bands.Count);
         foreach (var b in Bands) WriteBand(w, b);
         w.Write(Waves.Number); w.Write(Waves.Active); w.Write(Waves.Countdown); w.Write(Waves.Intel); w.Write(Waves._spawnT); w.Write(Waves.DawnLeft); w.Write(Alarm);
+        w.Write((byte)Weather); w.Write(WeatherLeft); w.Write(_nextWeather); w.Write(_nextBeast); w.Write(_nextEnvoy); w.Write(Angered);
+        w.Write(Offer != null); if (Offer != null) { w.Write((byte)Offer.Kind); w.Write(Offer.Store); w.Write(Offer.Cost); w.Write(Offer.Envoy?.Id ?? -1); w.Write(Offer.Until); }
         w.Write(Waves._lastBand?.Id ?? -1);
         w.Write(Waves._queue.Count);
         foreach (var (kind, band, back) in Waves._queue) { w.Write(kind.Key); w.Write(band?.Id ?? -1); WriteSurvivor(w, back); }
@@ -139,6 +141,7 @@ public sealed partial class Sim
         w.Write(u.LootKind); w.Write(u.Loot); w.Write(u.Captor?.Id ?? -1);
         w.Write(u.Escort?.Id ?? -1); w.Write(u.AimAt);
         w.Write(u.Docked.Count); foreach (int p in u.Docked) w.Write(p);
+        w.Write(u.Envoy);
         WriteBody(w, u.Wounds);
     }
 
@@ -284,6 +287,15 @@ public sealed partial class Sim
         Waves.Number = r.ReadInt32(); Waves.Active = r.ReadBoolean(); Waves.Countdown = r.ReadDouble(); Waves.Intel = r.ReadDouble(); Waves._spawnT = r.ReadDouble();
         Waves.DawnLeft = r.ReadDouble();
         Alarm = r.ReadBoolean();
+        Weather = (Weather)r.ReadByte(); WeatherLeft = r.ReadDouble(); _nextWeather = r.ReadDouble(); _nextBeast = r.ReadDouble(); _nextEnvoy = r.ReadDouble(); Angered = r.ReadBoolean();
+        Offer = null;
+        if (r.ReadBoolean())
+        {
+            var d = new Deal { Kind = (DealKind)r.ReadByte(), Store = r.ReadInt32(), Cost = r.ReadDouble() };
+            int envoy = r.ReadInt32(); d.Until = r.ReadDouble();
+            d.Envoy = byId.TryGetValue(envoy, out var e) ? e : null;
+            if (d.Envoy != null) Offer = d;
+        }
         int last = r.ReadInt32();
         Waves._lastBand = Bands.Find(b => b.Id == last);
         Waves._queue.Clear();
@@ -323,6 +335,7 @@ public sealed partial class Sim
         u.LootKind = r.ReadInt32(); u.Loot = r.ReadDouble(); _captorOf[u] = r.ReadInt32();
         _escortOf[u] = r.ReadInt32(); u.AimAt = r.ReadInt32();
         int nd = r.ReadInt32(); for (int k = 0; k < nd; k++) u.Docked.Add(r.ReadInt32());
+        u.Envoy = r.ReadBoolean();
         var body = ReadBody(r, t, u.Look);
         if (t == null) return null;
         u.Wounds = body;

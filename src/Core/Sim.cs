@@ -142,6 +142,7 @@ public sealed partial class Sim
         TendWildlife();
         TickShelter();
         TickTraps();
+        TickEventsHalf(Time);
         CountBodies();
         for (int n = 0; n < Units.Count; n++)
         {

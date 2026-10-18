@@ -708,7 +708,8 @@ if (args.Length == 0 || args[0] == "--sim")
         sim.Step(.05f);
         int walled = 0, there = 0;
         foreach (var u in sim.Units)
-            if (!u.Dead && u.Team == Team.Player) { there++; if (sim.Nav.Fill[u.Cell] >= NavGrid.SolidT) walled++; }
+            // those in the citadel are out of the world: nothing is built into them
+            if (!u.Dead && !u.Inside && u.Team == Team.Player) { there++; if (sim.Nav.Fill[u.Cell] >= NavGrid.SolidT) walled++; }
         Check("instant building leaves room for the garrison", there > 0 && walled == 0, $"{there} pawns at the gate, {walled} walled in");
     }
     // the horde alone against a stone ring: the garrison leaves the field
@@ -2305,6 +2306,109 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--engines")
     Check("a siege tower rolls up to a wall and drops its ladder against it; broken, the ladder comes down with it",
         dockedAt > 0 && ladder > 20 && left == 0,
         $"docked after {dockedAt} s with {ladder} voxels of ladder; broken: {left} left");
+}
+
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--events")
+{
+    Console.WriteLine();
+    var mpV = new MapParams();
+    var wV = new VoxelWorld(mpV.SizeX, mpV.SizeY, mpV.SizeZ);
+    var siteV = MapGen.Generate(wV, mpV);
+    wV.Compact();
+    var simV = new Sim(wV, siteV);
+    simV.Waves.Countdown = 1e9; simV.WildTarget = 0;
+    foreach (var u in simV.Units) if (u.Team == Team.Player) { u.Dead = true; u.DiedAt = -999; }
+    void RunV(double seconds) { for (double t = 0; t < seconds; t += .05) simV.Step(.05f); }
+    int kxV = siteV.KeepX, kzV = siteV.KeepZ;
+    int LogsLeft(int x0, int z0)
+    {
+        int n = 0;
+        for (int z = z0; z < z0 + 40; z++) for (int x = x0; x < x0 + 4; x++) for (int y = 0; y < wV.SY; y++) if (wV.Get(x, y, z) == Mat.Wood) n++;
+        return n;
+    }
+    void LogWall(int x0, int z0)
+    {
+        for (int z = z0; z < z0 + 40; z++) for (int x = x0; x < x0 + 4; x++) { int g = wV.SurfAt(x, z); for (int y = g; y < g + 14; y++) wV.Set(x, y, z, Mat.Wood); }
+    }
+    // a wall of logs set alight burns far less in the rain
+    int ax = kxV - 140, az = kzV + 100, bx = kxV - 140, bz = kzV - 160;
+    int ag = wV.SurfAt(ax, az + 20), bg = wV.SurfAt(bx, bz + 20);
+    LogWall(ax, az); LogWall(bx, bz);
+    int a0 = LogsLeft(ax, az), b0 = LogsLeft(bx, bz);
+    // on its face, where the air gets at it
+    simV.Ignite(ax, ag + 1, az + 20);
+    RunV(150);
+    int aBurnt = a0 - LogsLeft(ax, az);
+    simV.Burning.Clear();
+    simV.StartWeather(Weather.Rain, 600);
+    simV.Ignite(bx, bg + 1, bz + 20);
+    RunV(150);
+    int bBurnt = b0 - LogsLeft(bx, bz);
+    Check("a wall of logs set alight burns far less in the rain", aBurnt > 40 && bBurnt * 3 < aBurnt,
+        $"in 150 s: {aBurnt} voxels of logs gone in clear weather, {bBurnt} in the rain");
+    simV.Burning.Clear();
+
+    // fog: an archer's reach falls to three fifths
+    var bowV = simV.Spawn(Kinds.Archer, simV.NearestStand(kxV - 200, kzV, 4));
+    simV.StartWeather(Weather.Clear, 0); simV.Weather = Weather.Clear;
+    float clearReach = simV.RangeAt(bowV, bowV.X + 100, bowV.Z);
+    simV.StartWeather(Weather.Fog, 600);
+    float fogReach = simV.RangeAt(bowV, bowV.X + 100, bowV.Z);
+    simV.Weather = Weather.Clear; simV.WeatherLeft = 0;
+    Check("in fog an archer reaches three fifths as far", Math.Abs(fogReach - clearReach * .6f) < 1, $"{clearReach / VoxelWorld.PerMetre:0.0} m clear, {fogReach / VoxelWorld.PerMetre:0.0} m in fog");
+    bowV.Dead = true; bowV.DiedAt = -999;
+
+    // a cave bear goes for a goblin that comes near it
+    var bear = simV.Spawn(Kinds.Bear, simV.NearestStand(kxV - 300, kzV + 200, 2));
+    bear.Home = bear.Cell;
+    // a goblin on the same ground, five metres off
+    Unit gobV = null;
+    foreach (var (gx, gz) in new[] { (40, 0), (-40, 0), (0, 40), (0, -40), (28, 28), (-28, -28), (28, -28), (-28, 28) })
+    {
+        gobV = simV.Spawn(Kinds.Goblin, simV.NearestStand((int)bear.X + gx, (int)bear.Z + gz, 2));
+        if (MathF.Abs(gobV.Y - bear.Y) < 4) break;
+        gobV.Dead = true; gobV.DiedAt = -999;
+    }
+    gobV.Dead = false; gobV.DiedAt = 0;
+    gobV.Raid = null; gobV.Guard = true; gobV.Home = gobV.Cell;
+    float ghV = gobV.Hp;
+    RunV(10);
+    Check("a cave bear goes for a goblin that comes near it", gobV.Dead || gobV.Hp < ghV - 15,
+        $"the goblin {ghV:0} → {(gobV.Dead ? "dead" : $"{gobV.Hp:0} hp")}; the bear {bear.State}, {bear.Hp:0} hp");
+    bear.Dead = true; bear.DiedAt = -999; gobV.Dead = true; gobV.DiedAt = -999;
+
+    // an envoy of the horde comes to the walls and makes an offer; a bargain struck holds; an envoy cut down angers the horde
+    simV.Waves.Number = 2; simV.Waves.Countdown = 500;
+    simV.PlanWave(3);
+    simV.Stock.Gold = 500;
+    simV.SendEnvoy();
+    var envoy = simV.Offer?.Envoy;
+    double offerAt = -1;
+    for (int t = 0; t < 240 && offerAt < 0 && envoy != null; t++) { RunV(.5); if (simV.Offer is { Kind: not DealKind.None }) offerAt = (t + 1) * .5; }
+    var kind = simV.Offer?.Kind ?? DealKind.None;
+    double cd0 = simV.Waves.Countdown, gold0V = simV.Stock.Gold;
+    int roster0 = 0; foreach (var b in simV.Bands) if (b.State == BandState.Coming) roster0 += b.Roster.Count;
+    bool struck = simV.Answer(true);
+    int roster1 = 0; foreach (var b in simV.Bands) if (b.State == BandState.Coming) roster1 += b.Roster.Count;
+    bool held = kind switch
+    {
+        DealKind.Delay => simV.Waves.Countdown > cd0 + 170,
+        DealKind.Tribute => roster1 < roster0,
+        DealKind.NoEngines => roster1 < roster0,
+        _ => false,
+    };
+    RunV(2);
+    simV.SendEnvoy();
+    var envoy2 = simV.Offer?.Envoy;
+    RunV(3);
+    int rosterA = 0; foreach (var b in simV.Bands) if (b.State == BandState.Coming) rosterA += b.Roster.Count;
+    if (envoy2 != null) simV.Hurt(envoy2, null, 1000, "test");
+    RunV(1);
+    int rosterB = 0; foreach (var b in simV.Bands) if (b.State == BandState.Coming) rosterB += b.Roster.Count;
+    Check("an envoy comes to the walls and makes an offer; the bargain struck holds; an envoy cut down angers the horde",
+        envoy != null && offerAt > 0 && struck && held && simV.Angered && rosterB > rosterA,
+        $"offer after {offerAt} s: {kind}; struck {struck}, held {held} (countdown {cd0:0} → {simV.Waves.Countdown:0}, raiders {roster0} → {roster1}, gold {gold0V:0} → {simV.Stock.Gold:0}); " +
+        $"the second cut down: angered {simV.Angered}, raiders {rosterA} → {rosterB}");
 }
 
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")

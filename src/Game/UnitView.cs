@@ -572,28 +572,30 @@ public partial class UnitView : Node3D
         mm.VisibleInstanceCount = n;
     }
 
-    static readonly Color Pole = new(.24f, .16f, .1f), Rag = new(.55f, .07f, .06f), RagDark = new(.3f, .04f, .04f);
+    static readonly Color Pole = new(.24f, .16f, .1f), Rag = new(.55f, .07f, .06f), RagDark = new(.3f, .04f, .04f),
+        WhiteRag = new(.82f, .8f, .74f), WhiteRagDark = new(.55f, .53f, .48f);
 
     /// <summary>The standards of the warbands' leaders: a pole up the back, a red rag stirring from its top.</summary>
     void DrawStandards(Sim sim)
     {
         var mm = _standards.Multimesh;
         int n = 0;
-        foreach (var u in sim.Units) if (u.Leader && !u.Dead) n += 3;
+        foreach (var u in sim.Units) if ((u.Leader || u.Envoy) && !u.Dead) n += 3;
         if (n == 0) { mm.VisibleInstanceCount = 0; return; }
         if (mm.InstanceCount < n) { mm.InstanceCount = Math.Max(24, n * 2); _standardBuf = new float[mm.InstanceCount * 16]; }
         int i = 0;
         foreach (var u in sim.Units)
         {
-            if (!u.Leader || u.Dead || !_looks.TryGetValue(u.Id, out var look)) continue;
+            if (!(u.Leader || u.Envoy) || u.Dead || !_looks.TryGetValue(u.Id, out var look)) continue;
             float h = u.T.BodyH, back = -(u.T.BodyR + .6f), sway = MathF.Sin((float)_t * 2.1f + u.Id) * .25f;
             var b = look.Body;
             Box(ref i, b, new Vector3(0, h * .78f, back), new Vector3(.9f, h * 1.05f, .9f), 0, Pole);
             // the rag: hangs back from the top of the pole and stirs
             var top = new Vector3(0, h * 1.18f, back);
             var cloth = b * new Transform3D(new Basis(Vector3.Up, sway), top);
-            Box(ref i, cloth, new Vector3(0, -2.4f, -2.8f), new Vector3(.35f, 5f, 5.4f), 0, Rag);
-            Box(ref i, cloth, new Vector3(0, -5.4f, -1.6f), new Vector3(.35f, 1.2f, 3f), 0, RagDark);
+            // an envoy's rag is white: it comes to talk
+            Box(ref i, cloth, new Vector3(0, -2.4f, -2.8f), new Vector3(.35f, 5f, 5.4f), 0, u.Envoy ? WhiteRag : Rag);
+            Box(ref i, cloth, new Vector3(0, -5.4f, -1.6f), new Vector3(.35f, 1.2f, 3f), 0, u.Envoy ? WhiteRagDark : RagDark);
         }
         RenderingServer.MultimeshSetBuffer(mm.GetRid(), _standardBuf);
         mm.VisibleInstanceCount = i;

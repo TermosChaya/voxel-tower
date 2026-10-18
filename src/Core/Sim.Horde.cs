@@ -105,6 +105,8 @@ public sealed partial class Sim
         _goalSet ??= new HashSet<int>(Goals);
         // hurt to a quarter of itself, a raider has had enough (a leader leads to the end, a guard keeps its camp)
         if (!u.Routed && !u.Leader && !u.Guard && u.Hp < u.MaxHp * .25f) u.Routed = true;
+        // the horde's envoy comes to bargain, and fights nobody
+        if (u.Envoy && EnvoyTick(u, dt)) return;
         // the horde's engines go about their own work, and never run
         if (Kinds.IsEngine(u.T)) { EngineTick(u, dt); return; }
         // a thief goes about its own business near the citadel
@@ -214,6 +216,7 @@ public sealed partial class Sim
         if (u.X < Site.SpawnStrip)
         {
             if (u.T == Kinds.Thief) ThiefGone(u);
+            if (u.Envoy) { u.Dead = true; u.DiedAt = -999; u.State = UnitState.Dead; return; }
             if (Armed(u) && !u.Guard)
             {
                 if (u.Wounds != null) { u.Wounds.Bleed = 0; u.Wounds.Arrows.Clear(); }
