@@ -105,6 +105,8 @@ public sealed partial class Sim
         _goalSet ??= new HashSet<int>(Goals);
         // hurt to a quarter of itself, a raider has had enough (a leader leads to the end, a guard keeps its camp)
         if (!u.Routed && !u.Leader && !u.Guard && u.Hp < u.MaxHp * .25f) u.Routed = true;
+        // a thief goes about its own business near the citadel
+        if (u.T == Kinds.Thief && !u.Routed && ThiefTick(u, dt)) return;
         var foe = Nearest(u, Team.Player, u.T.Reach + 8);
         // one running away bites only what has caught it
         if (foe != null && InReach(u, foe) && Armed(u) && (!u.Routed || Time - u.LastHurt < 1.5))
@@ -199,6 +201,7 @@ public sealed partial class Sim
         u.Raid = null;
         if (u.X < Site.SpawnStrip)
         {
+            if (u.T == Kinds.Thief) ThiefGone(u);
             if (Armed(u) && !u.Guard)
             {
                 if (u.Wounds != null) { u.Wounds.Bleed = 0; u.Wounds.Arrows.Clear(); }

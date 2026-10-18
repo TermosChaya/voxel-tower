@@ -772,6 +772,7 @@ public partial class Main : Node3D
         if (_pose == "shelter") { Sheltering(); return; }
         if (_pose == "traps") { Trapped(); return; }
         if (_pose == "drawbridge") { Drawn(); return; }
+        if (_pose == "thieves") { Robbed(); return; }
         if (_pose == "wounds") { Wounded(); return; }
         if (_pose == "flood") { Flood(); return; }
         if (_pose == "trees") { LookAtGrove(); return; }
@@ -1172,6 +1173,28 @@ public partial class Main : Node3D
         Marks.Flush();
     }
 
+    /// <summary>
+    /// Thieves at work by the citadel: workers felling west of it with nobody to guard them, and three thieves come
+    /// on (--at: how long after): one beats a worker down and leads him off bound, others make off with the stores.
+    /// </summary>
+    void Robbed()
+    {
+        var sim = Sim; var s = Site;
+        sim.Waves.Countdown = 1e9;
+        int kx = s.KeepX, kz = s.KeepZ;
+        sim.Stock[Stockpile.Wood] = 30 * VoxelWorld.PerM3;
+        foreach (var u in sim.Units) if (u.Team == Team.Player && u.T.Work < 1) { u.Dead = true; u.DiedAt = -999; }
+        foreach (var (dx, dz) in new[] { (-120, -30), (-128, 10), (-110, 34) })
+            sim.Command(new[] { sim.Spawn(Kinds.Worker, sim.NearestStand(kx - s.KeepR + dx, kz + dz, 4)) }, sim.NearestStand(kx - s.KeepR + dx, kz + dz, 4));
+        foreach (var (dx, dz) in new[] { (-170, -24), (-176, 4), (-168, 30) })
+            sim.Spawn(Kinds.Thief, sim.NearestStand(kx - s.KeepR + dx, kz + dz, 2));
+        sim.ComputeFields();
+        Advance(_poseSeconds);
+        Rig.Set(World.WX(kx - s.KeepR - 70), World.WZ(kz + 6), -.66f, .62f, 1.9f, snap: true);
+        Hud.Refresh();
+        Marks.Flush();
+    }
+
     /// <summary>A row of the hurt for a close look: an arm cut off, arrows stuck in, a head split, a goblin cut down.</summary>
     void Wounded()
     {
@@ -1309,7 +1332,7 @@ public partial class Main : Node3D
         Paused = true;
         var rows = new[]
         {
-            new[] { Kinds.Worker }, new[] { Kinds.Archer, Kinds.Swordsman }, new[] { Kinds.Goblin, Kinds.Sapper },
+            new[] { Kinds.Worker }, new[] { Kinds.Archer, Kinds.Swordsman }, new[] { Kinds.Goblin, Kinds.Sapper, Kinds.Thief },
             new[] { Kinds.Orc, Kinds.Miner }, new[] { Kinds.Troll, Kinds.Deer, Kinds.Boar, Kinds.Hare },
         };
         const float yaw = -.3f, pitch = .42f, gap = 34;

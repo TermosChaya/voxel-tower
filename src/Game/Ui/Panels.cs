@@ -50,6 +50,13 @@ public static class Retinue
         if (u.Burn > 0 && u.State == UnitState.Flee && u.Team != Team.Horde) return "выбегает из огня";
         if (u.Team == Team.Wild)
             return u.State switch { UnitState.Flee => "убегает", UnitState.Fight => "бросается в атаку", UnitState.Walk => "бродит", _ => "пасётся" };
+        if (u.Team == Team.Horde && u.T == Kinds.Thief && (u.Loot > 0 || u.Captive != null))
+            return u.Captive != null ? $"уводит в плен: {u.Captive.T.Name.ToLowerInvariant()}" : "уносит: " + Sim.LootText(u);
+        if (u.Team == Team.Horde && u.T == Kinds.Thief && u.State == UnitState.Fight && u.Target is { Team: Team.Player, T.Work: >= 1 })
+            return "бьёт рабочего, чтобы связать";
+        if (u.Team == Team.Horde && u.T == Kinds.Thief && u.State == UnitState.Walk)
+            return "крадётся к цитадели";
+        if (u.Captor != null) return "в плену: его уводят на запад";
         if (u.Team == Team.Horde)
             return u.State switch
             {

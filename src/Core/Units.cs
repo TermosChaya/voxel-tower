@@ -88,6 +88,17 @@ public static class Kinds
         Hp = 45, Damage = 4, AttackTime = 1.1f, KeepDamage = 1, Bounty = 4, BodyH = 10, BodyR = 1.5f, Reach = 9, Tool = "mallet",
     };
 
+    /// <summary>
+    /// A thief of the horde: quick and weak, it builds nothing and keeps out of a fight. It makes for the stores in the
+    /// citadel, or for a worker of ours caught alone, and runs off west with what it took.
+    /// </summary>
+    public static readonly UnitType Thief = new()
+    {
+        Key = "thief", Name = "Грабитель", Team = Team.Horde,
+        Move = new Mover { Height = 2, Climb = 1, Drop = 5, Speed = 3.6f, Carve = new float[] { 10, 22, 3, 1 }, Build = .35f },
+        Hp = 35, Damage = 7, AttackTime = .8f, KeepDamage = 0, Bounty = 6, BodyH = 10, BodyR = 1.5f, Reach = 9, Tool = "knife",
+    };
+
     // the valley's beasts: they graze and wander, bolt from anyone who comes near, and pay for the hunt
     public static readonly UnitType Deer = new()
     {
@@ -109,7 +120,7 @@ public static class Kinds
     };
 
     public static readonly UnitType[] PlayerKinds = { Worker, Archer, Swordsman };
-    public static readonly UnitType[] HordeKinds = { Goblin, Orc, Miner, Troll, Sapper };
+    public static readonly UnitType[] HordeKinds = { Goblin, Orc, Miner, Troll, Sapper, Thief };
     public static readonly UnitType[] WildKinds = { Deer, Boar, Hare };
 }
 
@@ -221,6 +232,13 @@ public sealed class Unit
     public bool Inside;
     /// <summary>The shelter it makes for: the citadel's door, or a place in a shelter area; −1 for none.</summary>
     public int Refuge = -1;
+
+    // a thief, and those it takes
+    /// <summary>What a thief carries off from the stores: the store (0 for gold, −1 for nothing), and how much of it.</summary>
+    public int LootKind = -1;
+    public double Loot;
+    /// <summary>One of ours a thief leads off bound; for one of ours, the thief leading it off.</summary>
+    public Unit Captive, Captor;
 
     // beasts, and pawns with nothing to do
     /// <summary>Where it grazes and wanders round; for a pawn, where it idles round.</summary>

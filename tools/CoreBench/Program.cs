@@ -1403,6 +1403,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--wits")
     simW.Command(new[] { victim }, victim.Cell);
     var attacker = simW.Spawn(Kinds.Goblin, simW.NearestStand((int)victim.X + 9, (int)victim.Z, 2));
     attacker.Hp = attacker.MaxHp * 3; attacker.MaxHp *= 3;
+    // tough enough to last till help comes, whatever the knife finds
+    victim.Hp = victim.MaxHp = 600;
     float apart0 = Sim.Dist(keeper, attacker), nearest = apart0;
     for (int t = 0; t < 32 && nearest > 40; t++) { RunW(.5); nearest = Math.Min(nearest, Sim.Dist(keeper, attacker)); }
     Check("a swordsman comes to the help of a worker set upon beyond his post", apart0 > 120 && nearest <= 40,
@@ -2123,6 +2125,63 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--mechanisms")
     Check("pitch poured on a bank runs down into the ditch and comes to rest on the water in it, not mixing with it",
         pitchAll == heap && inDitch > heap * .7 && onWater > 50 && water1Q == water0Q && !simM.PitchBusy,
         $"{heap} voxels poured: {inDitch} in the ditch ({onWater} lying on the water), {onBank} left on the bank; water {water0Q} → {water1Q}");
+}
+
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--thieves")
+{
+    Console.WriteLine();
+    var mpH = new MapParams();
+    var wH = new VoxelWorld(mpH.SizeX, mpH.SizeY, mpH.SizeZ);
+    var siteH = MapGen.Generate(wH, mpH);
+    wH.Compact();
+    var simH = new Sim(wH, siteH);
+    simH.Waves.Countdown = 1e9; simH.WildTarget = 0;
+    foreach (var u in simH.Units) if (u.Team == Team.Player) { u.Dead = true; u.DiedAt = -999; }
+    void RunH(double seconds) { for (double t = 0; t < seconds; t += .05) simH.Step(.05f); }
+    simH.ComputeFields();
+    var (gxH, _, gzH) = simH.Nav.Feet(simH.Gate);
+    simH.Stock[Stockpile.Wood] = 20 * VoxelWorld.PerM3;
+    double wood0 = simH.Stock[Stockpile.Wood];
+
+    // a thief comes to the citadel's door and takes what it can carry of the timber there; cut down, it drops it
+    var thief = simH.Spawn(Kinds.Thief, simH.NearestStand((int)gxH - 160, (int)gzH, 2));
+    double tookAt = -1;
+    for (int t = 0; t < 80 && tookAt < 0; t++) { RunH(.5); if (thief.Loot > 0) tookAt = (t + 1) * .5; }
+    double woodTaken = wood0 - simH.Stock[Stockpile.Wood], carried = thief.Loot;
+    var doing = thief.State;
+    simH.Hurt(thief, null, 1000, "test");
+    double woodBack = simH.Stock[Stockpile.Wood];
+    Check("a thief takes three cubic metres of timber at the citadel's door, and cut down on its way drops it",
+        tookAt > 0 && Math.Abs(woodTaken - 3 * VoxelWorld.PerM3) < 1 && carried == woodTaken && Math.Abs(woodBack - wood0) < 1,
+        $"took {Fmt.M3(woodTaken)} m³ after {tookAt} s ({doing}); killed: timber {Fmt.M3(wood0)} → {Fmt.M3(woodBack)} m³");
+
+    // another gets away west with it: it is gone, and the thief comes back with the next wave
+    var thief2 = simH.Spawn(Kinds.Thief, simH.NearestStand((int)gxH - 160, (int)gzH + 30, 2));
+    for (int t = 0; t < 80 && thief2.Loot <= 0; t++) RunH(.5);
+    bool took2 = thief2.Loot > 0;
+    int west = simH.NearestStand(60, (int)thief2.Z, 2);
+    if (west >= 0) { thief2.Cell = west; (thief2.X, thief2.Y, thief2.Z) = simH.Nav.Feet(west); thief2.Path = null; }
+    int escaped0 = simH.Escaped.Count;
+    for (int t = 0; t < 60 && !thief2.Dead; t++) RunH(.5);
+    Check("a thief that gets out of the valley takes it with it, and comes back with the next wave",
+        took2 && thief2.Dead && thief2.DiedAt < 0 && simH.Escaped.Count == escaped0 + 1 && simH.Stock[Stockpile.Wood] < wood0 - 1,
+        $"took {took2}, gone {thief2.Dead}; timber {Fmt.M3(wood0)} → {Fmt.M3(simH.Stock[Stockpile.Wood])} m³; {simH.Escaped.Count - escaped0} to come back");
+
+    // a worker of ours alone in the field: a thief beats it down, binds it and leads it off; cut down, it lets it go
+    var lone = simH.Spawn(Kinds.Worker, simH.NearestStand((int)gxH - 420, (int)gzH - 120, 4));
+    var snatcher = simH.Spawn(Kinds.Thief, simH.NearestStand((int)lone.X - 40, (int)lone.Z, 2));
+    snatcher.Band = null;
+    double boundAt = -1;
+    for (int t = 0; t < 60 && boundAt < 0; t++) { RunH(.5); if (lone.Captor == snatcher) boundAt = (t + 1) * .5; }
+    float led0 = lone.X;
+    RunH(4);
+    float ledTo = lone.X;
+    float toThief = Sim.Dist(lone, snatcher);
+    simH.Hurt(snatcher, null, 1000, "test");
+    RunH(2);
+    Check("a thief beats down a worker caught alone, binds him and leads him off; cut down, it lets him go",
+        boundAt > 0 && ledTo < led0 && toThief < 4 * VoxelWorld.PerMetre && lone.Captor == null && !lone.Dead,
+        $"bound after {boundAt} s ({lone.Hp:0} hp), led {(led0 - ledTo) / VoxelWorld.PerMetre:0.0} m west at {toThief / VoxelWorld.PerMetre:0.0} m behind; freed {lone.Captor == null}, {lone.State}");
 }
 
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")

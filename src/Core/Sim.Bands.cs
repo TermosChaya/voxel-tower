@@ -106,6 +106,8 @@ public sealed partial class Sim
         for (int i = 0; i < (n + 1) / 3; i++) list.Add(Kinds.Miner);
         for (int i = 0; i < 1 + n / 3; i++) list.Add(Kinds.Sapper);
         for (int i = 0; i < (n >= 5 ? (n - 3) / 3 : 0); i++) list.Add(Kinds.Troll);
+        // thieves from the second wave, one more every third
+        for (int i = 0; i < (n >= 2 ? 1 + (n - 2) / 3 : 0); i++) list.Add(Kinds.Thief);
         int count = Math.Clamp((list.Count + 5) / 7, 1, 5);
         // the strongest are dealt out first, one to a band, and lead it
         for (int i = list.Count - 1; i > 0; i--) { int j = Rng.Next(i + 1); (list[i], list[j]) = (list[j], list[i]); }

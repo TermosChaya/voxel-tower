@@ -15,7 +15,7 @@ namespace VoxelTower.Core;
 /// </summary>
 public sealed partial class Sim
 {
-    public const int SaveVersion = 4;
+    public const int SaveVersion = 5;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -136,6 +136,7 @@ public sealed partial class Sim
         w.Write(u.FireArrows); w.Write(u.KindleAt); w.Write(u.Torch); w.Write(u.Burn); w.Write(u.BurnHeat);
         w.Write(u.Guard); w.Write(u.Raid == null ? -1 : Mines.IndexOf(u.Raid)); w.Write(u.Band?.Id ?? -1); w.Write(u.Leader);
         w.Write(u.Routed); w.Write(u.Returned); w.Write(u.Mending); w.Write(u.Sapped);
+        w.Write(u.LootKind); w.Write(u.Loot); w.Write(u.Captor?.Id ?? -1);
         WriteBody(w, u.Wounds);
     }
 
@@ -184,6 +185,8 @@ public sealed partial class Sim
 
     /// <summary>Reads the siege back, after the valley (<see cref="SaveReader.Valley"/>) and a new sim on it; returns what
     /// the screen kept.</summary>
+    readonly Dictionary<Unit, int> _captorOf = new();
+
     public string Load(SaveReader save)
     {
         var r = save.R;
@@ -270,6 +273,10 @@ public sealed partial class Sim
         int nbands = r.ReadInt32();
         for (int i = 0; i < nbands; i++) Bands.Add(ReadBand(r, byId));
         foreach (var (u, id) in bandOf) u.Band = Bands.Find(b => b.Id == id);
+        // who is led off bound by whom
+        foreach (var (u, id) in _captorOf)
+            if (id >= 0 && byId.TryGetValue(id, out var thief)) { u.Captor = thief; thief.Captive = u; }
+        _captorOf.Clear();
         Waves.Number = r.ReadInt32(); Waves.Active = r.ReadBoolean(); Waves.Countdown = r.ReadDouble(); Waves.Intel = r.ReadDouble(); Waves._spawnT = r.ReadDouble();
         Waves.DawnLeft = r.ReadDouble();
         Alarm = r.ReadBoolean();
@@ -309,6 +316,7 @@ public sealed partial class Sim
         u.FireArrows = r.ReadBoolean(); u.KindleAt = r.ReadInt32(); u.Torch = r.ReadBoolean(); u.Burn = r.ReadSingle(); u.BurnHeat = r.ReadSingle();
         u.Guard = r.ReadBoolean(); int raid = r.ReadInt32(); band = r.ReadInt32(); u.Leader = r.ReadBoolean();
         u.Routed = r.ReadBoolean(); u.Returned = r.ReadBoolean(); u.Mending = r.ReadBoolean(); u.Sapped = r.ReadInt32();
+        u.LootKind = r.ReadInt32(); u.Loot = r.ReadDouble(); _captorOf[u] = r.ReadInt32();
         var body = ReadBody(r, t, u.Look);
         if (t == null) return null;
         u.Wounds = body;

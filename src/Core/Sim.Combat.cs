@@ -58,7 +58,8 @@ public sealed partial class Sim
         Unit best = null; float bd = maxDist;
         foreach (var o in Units)
         {
-            if (o.Dead || o.Inside || o.Team != team) continue;
+            // one of ours bound and led off is in no fight
+            if (o.Dead || o.Inside || o.Captor != null || o.Team != team) continue;
             float d = Dist(u, o);
             if (d < bd) { bd = d; best = o; }
         }
@@ -102,6 +103,8 @@ public sealed partial class Sim
         u.Dead = true; u.DiedAt = Time; u.State = UnitState.Dead; u.Hp = 0;
         u.KilledBy = cause ?? by?.T.Name ?? "";
         if (u.Team == Team.Horde) Kills++;
+        if (u.T == Kinds.Thief) ThiefFell(u);
+        if (u.Captor != null) { u.Captor.Captive = null; u.Captor = null; }
         ReleaseSite(u);
         StopCarve(u); StopBuild(u);
         u.Path = null; u.Target = null; u.Prey = null;
@@ -286,8 +289,10 @@ public sealed partial class Sim
             // ladders or climbing them
             bool hurting = o.State == UnitState.Fight && o.Target is { Dead: false, Team: Team.Player };
             bool busy = o.State is UnitState.Carve or UnitState.Siege or UnitState.Work || Climbing(o);
+            // a thief making off with what it took, or with one of ours, before anything
+            bool making = o.Loot > 0 || o.Captive != null;
             // with fire arrows, those standing on a deck, a ladder or pitch: one arrow sets it all alight under them
-            float pri = d - (hurting ? 64 : busy ? 48 : 0) - (u.FireArrows && OnTinder(o) ? 40 : 0);
+            float pri = d - (making ? 96 : hurting ? 64 : busy ? 48 : 0) - (u.FireArrows && OnTinder(o) ? 40 : 0);
             if (pri >= bd || !Sight(u, o)) continue;
             bd = pri; best = o;
         }

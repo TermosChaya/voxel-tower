@@ -84,7 +84,7 @@ public static class Bodies
     /// <summary>How many looks a kind comes in.</summary>
     public static int Looks(UnitType t) => t.Key switch
     {
-        "worker" => 8, "archer" => 6, "sword" => 6, "goblin" => 8, "sapper" => 4, "orc" => 6, "miner" => 4, "troll" => 3, "deer" => 2, _ => 1,
+        "worker" => 8, "archer" => 6, "sword" => 6, "goblin" => 8, "sapper" => 4, "orc" => 6, "miner" => 4, "troll" => 3, "thief" => 3, "deer" => 2, _ => 1,
     };
 
     /// <summary>A look for a unit, from its number, so it keeps it.</summary>
@@ -104,6 +104,7 @@ public static class Bodies
             "miner" => Miner(look),
             "troll" => Troll(look),
             "sapper" => Sapper(look),
+            "thief" => Thief(look),
             "deer" => Deer(look),
             "boar" => Boar(),
             "hare" => Hare(),
@@ -747,6 +748,28 @@ public static class Bodies
         s.Box(Body, 2, b.Waist, b.Z0 - 1, 3, b.Neck + 1, b.Z0, Mat.Handle, Tissue.Gear);
         for (int y = b.Waist + 1; y < b.Neck + 1; y += 4) s.Box(Body, -2, y, b.Z0 - 1, 2, y + 1, b.Z0, Mat.Handle, Tissue.Gear);
         Mallet(s, b);
+        return Done(s, f, b);
+    }
+
+    /// <summary>A goblin in a dark hood and a cloak to the knees, an empty sack slung on its back, a knife in the fist.</summary>
+    static BodyPlan Thief(int look)
+    {
+        var f = new BodyPlan { Chop = .45f, Carry = -.3f, Stride = 6 };
+        byte cloak = new[] { Mat.ClothDark, Mat.ClothBrown, Mat.ClothGreen }[look % 3];
+        var b = GoblinBuild(cloak, Mat.Leather, GoblinSkins[(look + 1) % 3]);
+        var s = Humanoid(b, f);
+        GoblinFace(s, b, look == 2);
+        // the hood over the crown and down the back of the head, its peak behind
+        s.Paint(Body, -b.HeadW, b.Crown - 3, b.HeadZ, b.HeadW, b.Crown, b.HZ1 - 1, cloak);
+        s.Box(Body, -b.HeadW + 1, b.Crown, b.HeadZ, b.HeadW - 1, b.Crown + 1, b.HZ1 - 2, cloak);
+        s.Box(Body, -1, b.Crown - 1, b.HeadZ - 1, 1, b.Crown + 1, b.HeadZ, cloak);
+        // the cloak's skirt down over the legs, a little apart at the front
+        s.Box(Body, -3, b.Waist - 3, b.Z0, 3, b.Waist, b.Z1, cloak);
+        s.Cut(Body, -1, b.Waist - 3, b.Z1 - 1, 1, b.Waist - 1, b.Z1, both: true);
+        // the sack on the back
+        s.Box(Body, -3, b.Waist, b.Z0 - 3, 3, b.Neck, b.Z0, Mat.Sack, Tissue.Gear);
+        s.Box(Body, -2, b.Neck, b.Z0 - 2, 2, b.Neck + 2, b.Z0, Mat.Sack, Tissue.Gear);
+        Knife(s, b);
         return Done(s, f, b);
     }
 
