@@ -220,7 +220,11 @@ public partial class BuildTools : Node3D
     public void Cancel() { if (Tool != Tool.None) SetTool(Tool.None); }
 
     /// <summary>A material to lay; puts the pick away.</summary>
-    public void SetMaterial(byte m) { Opt.Material = m; Opt.Dig = false; Changed(); }
+    public void SetMaterial(byte m) { Opt.Material = m; Opt.Dig = false; Shelter = false; Changed(); }
+
+    /// <summary>The area tool sets aside a shelter, not a resource to take.</summary>
+    public bool Shelter;
+    public void SetShelter(bool on) { Shelter = on; Changed(); }
 
     /// <summary>Takes up the pick (or puts it away): the brushes then mark digging instead of laying.</summary>
     public void SetDig(bool dig)
@@ -293,8 +297,8 @@ public partial class BuildTools : Node3D
     /// <summary>The ground under the cursor, on the grid when snapping.</summary>
     (int x, int y, int z) HoverGround() => Snap(_hover.Ground(_m.World));
 
-    /// <summary>What a gathering area takes: the material in hand says which.</summary>
-    public int GatherKind => Opt.Material switch { Mat.Wood => Stockpile.Wood, Mat.Rammed => Stockpile.Earth, _ => Stockpile.Stone };
+    /// <summary>What a gathering area takes: the material in hand says which; or a shelter.</summary>
+    public int GatherKind => Shelter ? Zone.Shelter : Opt.Material switch { Mat.Wood => Stockpile.Wood, Mat.Rammed => Stockpile.Earth, _ => Stockpile.Stone };
 
     /// <summary>The pick is in hand, or Shift turns the brush into one for this stroke.</summary>
     bool DigNow => Opt.Dig || (Tool == Tool.Brush && (_lmb ? _shift : Input.IsKeyPressed(global::Godot.Key.Shift)));
@@ -454,7 +458,7 @@ public partial class BuildTools : Node3D
                 _markName = "Снятие разметки";
                 int n = _m.Sim.CancelArea(a.x, a.z, b.x, b.z), zones = _m.Sim.RemoveZones(a.x, a.z, b.x, b.z);
                 if (n == 0 && zones == 0) Refuse("в рамке нет разметки");
-                else _m.Hud.Float((n > 0 ? $"разметка снята: {Fmt.M3(n)} м³" : "") + (zones > 0 ? (n > 0 ? ", " : "") + $"делянок снято: {zones}" : ""), Ornament.BronzeLight);
+                else _m.Hud.Float((n > 0 ? $"разметка снята: {Fmt.M3(n)} м³" : "") + (zones > 0 ? (n > 0 ? ", " : "") + $"участков снято: {zones}" : ""), Ornament.BronzeLight);
                 return;
             }
             if (Tool == Tool.Gather) { SetZone(a, b); return; }
@@ -605,15 +609,25 @@ public partial class BuildTools : Node3D
         if (!_hasHover) return;
         _markName = "Снятие разметки";
         int n = _m.Sim.CancelOrders(_hover.X, _hover.Y, _hover.Z, UnmarkR);
+        var zone = _m.Sim.ZoneAt(_hover.X, _hover.Z);
         int zones = _m.Sim.RemoveZones(_hover.X, _hover.Z, _hover.X, _hover.Z);
         if (n == 0 && zones == 0) Refuse("здесь нет разметки");
-        else _m.Hud.Float(zones > 0 ? "делянка снята" : $"разметка снята: {Fmt.M3(n)} м³", Ornament.BronzeLight);
+        else _m.Hud.Float(zones > 0 ? (zone?.Kind == Zone.Shelter ? "убежище снято" : "делянка снята") : $"разметка снята: {Fmt.M3(n)} м³", Ornament.BronzeLight);
     }
 
     /// <summary>"Делянка: деревьев 12, ≈ 115 м³ брёвен" or "Каменоломня: ≈ 9,5 м³ камня до 2 м вглубь".</summary>
     string SurveyText(int x0, int z0, int x1, int z1, out bool any)
     {
         int kind = GatherKind;
+        if (kind == Zone.Shelter)
+        {
+            // how many it holds: a place to a cell of standing room
+            int places = _m.Sim.ShelterRoom(x0, z0, x1, z1);
+            any = places > 0;
+            int m10 = places % 10, m100 = places % 100;
+            string word = m10 == 1 && m100 != 11 ? "место" : m10 is >= 2 and <= 4 && m100 is < 12 or > 14 ? "места" : "мест";
+            return places == 0 ? "Убежище: здесь негде встать" : $"Убежище: {places} {word} — сюда по тревоге уходят мирные";
+        }
         var (trees, vox) = _m.Sim.Survey(x0, z0, x1, z1, kind, Opt.Depth);
         any = vox > 0;
         string name = Zone.Name0(kind);
@@ -634,7 +648,7 @@ public partial class BuildTools : Node3D
         if (!any) { Refuse(text); return; }
         _markName = Zone.Name0(GatherKind);
         _m.Sim.AddZone(a.x, a.z, b.x, b.z, GatherKind, Opt.Depth);
-        _m.Hud.Log(text + ". Свободные рабочие возьмутся за неё сами.");
+        _m.Hud.Log(text + (GatherKind == Zone.Shelter ? ". Тревога — T." : ". Свободные рабочие возьмутся за неё сами."));
     }
 
     void FellTree()

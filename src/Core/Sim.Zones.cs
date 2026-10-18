@@ -6,6 +6,7 @@ namespace VoxelTower.Core;
 /// <summary>
 /// A standing order to get one resource out of an area: trees to fell, rock to break, or earth to dig down to a depth.
 /// Nothing is marked up front; whenever a pawn has nothing else to do, a little more of the area is marked near it.
+/// Or an area set aside as a shelter: nothing is taken out of it, and when the alarm is up those who don't fight wait in it.
 /// </summary>
 public sealed class Zone
 {
@@ -17,13 +18,16 @@ public sealed class Zone
     /// <summary>Set by a pawn told to bring in a resource, not by the player.</summary>
     public bool Auto;
 
+    /// <summary>The kind of an area that is a shelter, past the kinds of the stores.</summary>
+    public const int Shelter = 9;
+
     public int W => X1 - X0 + 1;
     public int D => Z1 - Z0 + 1;
     public bool Contains(int x, int z) => x >= X0 && x <= X1 && z >= Z0 && z <= Z1;
     public int FloorAt(int x, int z) => Floor == null ? 0 : Floor[(z - Z0) * W + (x - X0)];
 
     public string Name => Name0(Kind);
-    public static string Name0(int kind) => kind switch { Stockpile.Wood => "Делянка", Stockpile.Stone => "Каменоломня", _ => "Карьер" };
+    public static string Name0(int kind) => kind switch { Stockpile.Wood => "Делянка", Stockpile.Stone => "Каменоломня", Shelter => "Убежище", _ => "Карьер" };
 }
 
 public sealed partial class Sim
@@ -43,7 +47,7 @@ public sealed partial class Sim
         if (z1 < z0) (z0, z1) = (z1, z0);
         x0 = Math.Max(0, x0); z0 = Math.Max(0, z0); x1 = Math.Min(World.SX - 1, x1); z1 = Math.Min(World.SZ - 1, z1);
         var zone = new Zone { Id = _nextZone++, X0 = x0, Z0 = z0, X1 = x1, Z1 = z1, Kind = kind, Depth = Math.Max(1, depth) };
-        if (kind != Stockpile.Wood)
+        if (kind is Stockpile.Stone or Stockpile.Earth)
         {
             zone.Floor = new int[zone.W * zone.D];
             for (int z = z0; z <= z1; z++)
@@ -186,7 +190,7 @@ public sealed partial class Sim
             Zone best = null; float bd = float.MaxValue;
             foreach (var z in Zones)
             {
-                if (z.Auto && u.Duty != Stockpile.None && z != u.DutyZone) continue;
+                if (z.Kind == Zone.Shelter || z.Auto && u.Duty != Stockpile.None && z != u.DutyZone) continue;
                 // not the work it does
                 if (!Work.Does(u, Work.For(z.Kind))) continue;
                 float dx = Math.Max(0, Math.Max(z.X0 - u.X, u.X - z.X1)), dz = Math.Max(0, Math.Max(z.Z0 - u.Z, u.Z - z.Z1));

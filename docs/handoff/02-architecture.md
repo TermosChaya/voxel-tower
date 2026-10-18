@@ -66,6 +66,8 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   2 поперёк, 3 вокселя вглубь, от середины), `Sapping` копит работу (`Unit.SapCost`) и вынимает всё разом.
   `Arched` — слой арок: мосты игрока (`DesignateBuild(…, arched: true)` из инструмента «Мост») и старые мосты
   (`Site.Arched`, `Landmarks.OldBridge`).
+- `Sim.Shelter.cs` — тревога и убежища: `Alarm`, `RaiseAlarm`/`StandDown`, `TakeShelter`, `RefugeFor`, `ShelterCells`,
+  `Enter`/`Leave`/`Indoors` (`Unit.Inside` — в цитадели, вне мира), `TickShelter` (налётчик у двери).
 - `Sim.Save.cs` — сохранение: `Sim.Save(stream, seed, label, extra)` пишет через gzip заголовок («SVAL», версия
   `SaveVersion`, зерно, подпись, время), чанки мира, изменённые с начала игры (`VoxelWorld.TrackEdits` включается
   в конструкторе `Sim`, `Changed(ci)`), слои `Design`, `Arched`, `Orders.Layer` целиком, затем состояние: стены

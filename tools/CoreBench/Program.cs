@@ -1813,6 +1813,71 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--night")
     else Check("at night an archer can only make out a raider far off by its light", false, "no spot for the goblin in the archer's sight");
 }
 
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--shelter")
+{
+    Console.WriteLine();
+    var mpS = new MapParams();
+    var wS = new VoxelWorld(mpS.SizeX, mpS.SizeY, mpS.SizeZ);
+    var siteS = MapGen.Generate(wS, mpS);
+    wS.Compact();
+    var simS = new Sim(wS, siteS);
+    simS.Waves.Countdown = 1e9; simS.WildTarget = 0;
+    void RunS(double seconds) { for (double t = 0; t < seconds; t += .05) simS.Step(.05f); }
+    void GoneS(Unit u) { u.Dead = true; u.DiedAt = -999; }
+    var (gxS, _, gzS) = simS.Nav.Feet(simS.Gate);
+
+    // three workers 20 m out from the citadel's door, three more 60 m out with a shelter set aside round them, an archer on a post
+    var nearCrew = new System.Collections.Generic.List<Unit>();
+    var farCrew = new System.Collections.Generic.List<Unit>();
+    for (int i = 0; i < 3; i++) nearCrew.Add(simS.Spawn(Kinds.Worker, simS.NearestStand((int)gxS - 160, (int)gzS - 30 + i * 30, 4)));
+    for (int i = 0; i < 3; i++) farCrew.Add(simS.Spawn(Kinds.Worker, simS.NearestStand((int)gxS - 480, (int)gzS - 30 + i * 30, 4)));
+    var hut = simS.AddZone((int)gxS - 520, (int)gzS - 40, (int)gxS - 440, (int)gzS + 40, Zone.Shelter, 0);
+    var bowS = simS.Spawn(Kinds.Archer, simS.NearestStand((int)gxS - 60, (int)gzS + 260, 4));
+    simS.Command(new[] { bowS }, bowS.Cell);
+    simS.ReleaseHold(new[] { bowS });
+    RunS(2);
+    int room = simS.ShelterRoom(hut.X0, hut.Z0, hut.X1, hut.Z1);
+    simS.RaiseAlarm();
+    double inAt = -1;
+    bool InHut(Unit u) => !u.Inside && hut.Contains((int)u.X, (int)u.Z) && (u.Path == null || u.PathI >= u.Path.Count);
+    for (int t = 0; t < 120 && inAt < 0; t++) { RunS(.5); if (nearCrew.TrueForAll(u => u.Inside) && farCrew.TrueForAll(InHut)) inAt = (t + 1) * .5; }
+    var cells = new System.Collections.Generic.HashSet<int>();
+    foreach (var u in farCrew) cells.Add(u.Cell);
+    Check("with the alarm up the workers go to the nearest shelter: those near the citadel into it, those out by a shelter area to a place each in it",
+        inAt > 0 && cells.Count == farCrew.Count && !bowS.Inside && room > 50,
+        $"all sheltered after {inAt} s; {nearCrew.FindAll(u => u.Inside).Count} of 3 in the citadel, {farCrew.FindAll(InHut).Count} of 3 in the shelter " +
+        $"({cells.Count} places, {room} in all); the archer {(bowS.Inside ? "inside" : "on his post")}");
+
+    // a goblin at the citadel's door finds nobody to strike; stood down with it still there, they wait inside, and come out once it is gone
+    var gobS = simS.Spawn(Kinds.Goblin, simS.NearestStand((int)gxS - 8, (int)gzS, 2));
+    gobS.Raid = null; gobS.Guard = true; gobS.Home = gobS.Cell; gobS.Hp = gobS.MaxHp = 1e6f;
+    RunS(3);
+    float hurtS = 0; foreach (var u in nearCrew) hurtS += u.MaxHp - u.Hp;
+    var seenS = simS.Nearest(gobS, Team.Player, 30 * VoxelWorld.PerMetre);
+    simS.StandDown();
+    RunS(3);
+    bool waited = nearCrew.TrueForAll(u => u.Inside), hutOut = farCrew.TrueForAll(u => !u.Inside);
+    GoneS(gobS);
+    double outAt = -1;
+    for (int t = 0; t < 40 && outAt < 0; t++) { RunS(.5); if (nearCrew.TrueForAll(u => !u.Inside)) outAt = (t + 1) * .5; }
+    Check("in the citadel nobody can get at them; stood down with a raider at the door they wait, and come out once it is gone",
+        hurtS == 0 && (seenS == null || !nearCrew.Contains(seenS)) && waited && hutOut && outAt > 0 && !simS.Alarm,
+        $"hurt {hurtS:0}, the goblin sees {seenS?.T.Name ?? "nobody"}; stood down: still inside {waited}; out {outAt} s after the goblin went");
+
+    // a worker run down by a goblin on its way to the citadel gets in, and the goblin besieging the citadel can't get at it
+    foreach (var u in farCrew) GoneS(u);
+    var runner = simS.Spawn(Kinds.Worker, simS.NearestStand((int)gxS - 110, (int)gzS + 20, 4));
+    var chaser = simS.Spawn(Kinds.Goblin, simS.NearestStand((int)gxS - 190, (int)gzS + 20, 2));
+    chaser.Hp = chaser.MaxHp = 1e6f;
+    simS.ComputeFields();
+    bool fled = false; double gotIn = -1;
+    for (int t = 0; t < 80 && gotIn < 0; t++) { RunS(.5); fled |= runner.State == UnitState.Flee; if (runner.Inside) gotIn = (t + 1) * .5; }
+    RunS(10);
+    Check("a worker running from a goblin gets into the citadel, and the goblin that comes after it can't get at it there",
+        fled && gotIn > 0 && runner.Inside && runner.Hp >= runner.MaxHp - .5f,
+        $"fled {fled}, in after {gotIn} s; 10 s on: inside {runner.Inside}, {runner.Hp:0} of {runner.MaxHp:0} hp; the goblin {chaser.State} {Sim.Dist(chaser, runner) / VoxelWorld.PerMetre:0.0} m off");
+}
+
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
 {
     Console.WriteLine();

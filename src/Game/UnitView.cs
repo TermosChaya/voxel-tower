@@ -142,11 +142,13 @@ public partial class UnitView : Node3D
         Distance();
         look_xf.Clear();
         foreach (var k in _kinds.Values) k.Count = 0;
-        foreach (var u in sim.Units) if (u.Wounds == null) KindOf(u).Count++;
+        // those in the citadel are not to be seen
+        foreach (var u in sim.Units) if (u.Wounds == null && !u.Inside) KindOf(u).Count++;
         foreach (var k in _kinds.Values) { if (k.Count > k.Cap) Grow(k, k.Count); k.Count = 0; }
         _alive.Clear();
         foreach (var u in sim.Units)
         {
+            if (u.Inside) continue;
             var k = KindOf(u);
             _alive.Add(u.Id);
             if (!_looks.TryGetValue(u.Id, out var look)) _looks[u.Id] = look = new Look();
@@ -576,7 +578,7 @@ public partial class UnitView : Node3D
         // ours chosen, and the raider or beast looked at, ringed in blood
         var seen = _m.Inspected is { Dead: false } l ? l : null;
         int n = seen != null ? 1 : 0;
-        foreach (var u in sel) if (!u.Dead) n++;
+        foreach (var u in sel) if (!u.Dead && !u.Inside) n++;
         if (n == 0) { mm.VisibleInstanceCount = 0; return; }
         if (mm.InstanceCount < n) { mm.InstanceCount = Math.Max(16, n * 2); _ringBuf = new float[mm.InstanceCount * 16]; }
         int i = 0;
@@ -591,7 +593,7 @@ public partial class UnitView : Node3D
             _ringBuf[o + 8] = 0; _ringBuf[o + 9] = 0; _ringBuf[o + 10] = r; _ringBuf[o + 11] = _w.WZ(u.Z);
             _ringBuf[o + 12] = c.R * glow; _ringBuf[o + 13] = c.G * glow; _ringBuf[o + 14] = c.B * glow; _ringBuf[o + 15] = 1;
         }
-        foreach (var u in sel) if (!u.Dead) Ring(u, u.Hold ? Ornament.BronzeLight : Ornament.EmberGlow, 1.6f);
+        foreach (var u in sel) if (!u.Dead && !u.Inside) Ring(u, u.Hold ? Ornament.BronzeLight : Ornament.EmberGlow, 1.6f);
         if (seen != null) Ring(seen, new Color("c8281c"), .9f);
         RenderingServer.MultimeshSetBuffer(mm.GetRid(), _ringBuf);
         mm.VisibleInstanceCount = n;

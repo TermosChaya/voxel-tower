@@ -192,7 +192,7 @@ public partial class Minimap : Control
         foreach (var team in new[] { Team.Wild, Team.Player, Team.Horde })
             foreach (var u in units)
             {
-                if (u.Dead || u.Team != team) continue;
+                if (u.Dead || u.Inside || u.Team != team) continue;
                 float r = team switch { Team.Horde => 2.4f, Team.Player => 2.1f, _ => 1.5f };
                 var p = ToMap(u.X, u.Z);
                 DrawCircle(p, r + 1, Rim);

@@ -217,6 +217,10 @@ public sealed class Unit
     public Zone DutyZone;
     /// <summary>A worker called up: it stands and fights like a swordsman instead of running.</summary>
     public bool Militia;
+    /// <summary>In the citadel, out of everyone's reach: sheltering from the horde, or mending.</summary>
+    public bool Inside;
+    /// <summary>The shelter it makes for: the citadel's door, or a place in a shelter area; −1 for none.</summary>
+    public int Refuge = -1;
 
     // beasts, and pawns with nothing to do
     /// <summary>Where it grazes and wanders round; for a pawn, where it idles round.</summary>

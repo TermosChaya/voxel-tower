@@ -15,7 +15,7 @@ namespace VoxelTower.Core;
 /// </summary>
 public sealed partial class Sim
 {
-    public const int SaveVersion = 2;
+    public const int SaveVersion = 3;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -84,7 +84,7 @@ public sealed partial class Sim
         foreach (var u in living) WriteUnit(w, u);
         w.Write(Bands.Count);
         foreach (var b in Bands) WriteBand(w, b);
-        w.Write(Waves.Number); w.Write(Waves.Active); w.Write(Waves.Countdown); w.Write(Waves.Intel); w.Write(Waves._spawnT); w.Write(Waves.DawnLeft);
+        w.Write(Waves.Number); w.Write(Waves.Active); w.Write(Waves.Countdown); w.Write(Waves.Intel); w.Write(Waves._spawnT); w.Write(Waves.DawnLeft); w.Write(Alarm);
         w.Write(Waves._lastBand?.Id ?? -1);
         w.Write(Waves._queue.Count);
         foreach (var (kind, band, back) in Waves._queue) { w.Write(kind.Key); w.Write(band?.Id ?? -1); WriteSurvivor(w, back); }
@@ -124,7 +124,7 @@ public sealed partial class Sim
         w.Write(u.X); w.Write(u.Y); w.Write(u.Z); w.Write(u.Facing); w.Write(u.Cell); w.Write(u.OffX); w.Write(u.OffZ); w.Write(u.Pace);
         w.Write(u.Hp); w.Write(u.MaxHp);
         w.Write(u.Hold); w.Write(u.Dest); w.Write(u.Post); w.Write(u.Home);
-        w.Write(u.Duty); w.Write(u.DutyZone?.Id ?? -1); w.Write(u.Militia);
+        w.Write(u.Duty); w.Write(u.DutyZone?.Id ?? -1); w.Write(u.Militia); w.Write(u.Inside);
         w.Write((byte)u.Priority.Length); foreach (byte p in u.Priority) w.Write(p);
         w.Write(u.FireArrows); w.Write(u.KindleAt); w.Write(u.Torch); w.Write(u.Burn); w.Write(u.BurnHeat);
         w.Write(u.Guard); w.Write(u.Raid == null ? -1 : Mines.IndexOf(u.Raid)); w.Write(u.Band?.Id ?? -1); w.Write(u.Leader);
@@ -252,6 +252,7 @@ public sealed partial class Sim
         foreach (var (u, id) in bandOf) u.Band = Bands.Find(b => b.Id == id);
         Waves.Number = r.ReadInt32(); Waves.Active = r.ReadBoolean(); Waves.Countdown = r.ReadDouble(); Waves.Intel = r.ReadDouble(); Waves._spawnT = r.ReadDouble();
         Waves.DawnLeft = r.ReadDouble();
+        Alarm = r.ReadBoolean();
         int last = r.ReadInt32();
         Waves._lastBand = Bands.Find(b => b.Id == last);
         Waves._queue.Clear();
@@ -280,7 +281,8 @@ public sealed partial class Sim
         u.OffX = r.ReadSingle(); u.OffZ = r.ReadSingle(); u.Pace = r.ReadSingle();
         u.Hp = r.ReadSingle(); u.MaxHp = r.ReadSingle();
         u.Hold = r.ReadBoolean(); u.Dest = r.ReadInt32(); u.Post = r.ReadInt32(); u.Home = r.ReadInt32();
-        u.Duty = r.ReadInt32(); int zone = r.ReadInt32(); u.Militia = r.ReadBoolean();
+        u.Duty = r.ReadInt32(); int zone = r.ReadInt32(); u.Militia = r.ReadBoolean(); u.Inside = r.ReadBoolean();
+        if (u.Inside) u.Refuge = Gate;
         int np = r.ReadByte();
         for (int k = 0; k < np; k++) { byte p = r.ReadByte(); if (k < u.Priority.Length) u.Priority[k] = p; }
         u.FireArrows = r.ReadBoolean(); u.KindleAt = r.ReadInt32(); u.Torch = r.ReadBoolean(); u.Burn = r.ReadSingle(); u.BurnHeat = r.ReadSingle();

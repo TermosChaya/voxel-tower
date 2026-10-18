@@ -38,7 +38,7 @@ public partial class Commander : Node
             var r = Box(_from, mb.Position);
             if (!add) _m.Selected.Clear();
             foreach (var u in _m.Sim.Units)
-                if (!u.Dead && u.Team == Team.Player && r.HasPoint(Screen(u, .5f))) _m.Selected.Add(u);
+                if (!u.Dead && !u.Inside && u.Team == Team.Player && r.HasPoint(Screen(u, .5f))) _m.Selected.Add(u);
             _m.Hud.OnSelectionChanged();
             return;
         }
@@ -133,7 +133,7 @@ public partial class Commander : Node
         float pxPerVox = PixelsPerVoxel();
         foreach (var u in _m.Sim.Units)
         {
-            if (u.Dead) continue;
+            if (u.Dead || u.Inside) continue;
             var a = Screen(u, 0); var b = Screen(u, 1);
             float rad = Math.Max(10, (u.T.BodyR + 3) * pxPerVox);
             float d = DistToSegment(p, a, b) - rad;
@@ -304,12 +304,17 @@ public partial class Commander : Node
         _m.Hud.OnSelectionChanged();
     }
 
-    /// <summary>The horn: every soldier hurries to his post.</summary>
+    /// <summary>The alarm, or the all-clear: soldiers to their posts and everyone else to shelter, or all back to work.</summary>
     public void Alarm()
     {
-        _m.Sim.Recall();
-        _m.Hud.Log("Тревога! Солдаты спешат на посты.", Hud.Kind.Warn);
+        if (_m.Sim.Alarm) _m.Sim.StandDown(); else _m.Sim.RaiseAlarm();
+        _m.Hud.Refresh();
     }
+
+    public const string AlarmTip = "Тревога (T)\nМирные бросают работу и уходят в ближайшее убежище: в цитадель — там их не достать — или на участок, " +
+        "отмеченный убежищем (8, «убежище»). Солдаты бегут на посты и держат их. Посланные по приказу идут, куда посланы. Ещё раз — отбой; " +
+        "после отбитой волны отбой трубят сами. Рабочие и без тревоги бегут в убежище, когда враг подходит ближе 9 м.";
+    public const string StandDownTip = "Отбой (T)\nМирные выходят из убежищ и возвращаются к работе, солдаты — к своим делам.";
 
     public Unit Hire(UnitType t)
     {

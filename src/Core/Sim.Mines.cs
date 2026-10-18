@@ -68,7 +68,7 @@ public sealed partial class Sim
             float sx = m.Place.StandX, sz = m.Place.StandZ;
             foreach (var u in Units)
             {
-                if (u.Dead || u.Team == Team.Wild) continue;
+                if (u.Dead || u.Inside || u.Team == Team.Wild) continue;
                 float dx = u.X - sx, dz = u.Z - sz;
                 if (dx * dx + dz * dz > MineReach * MineReach) continue;
                 if (u.Team == Team.Player) m.Ours++; else m.Theirs++;

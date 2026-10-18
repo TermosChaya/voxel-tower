@@ -491,6 +491,7 @@ public sealed class Waves
             DawnLeft = Dawn;
             s.Bands.RemoveAll(b => b.State != BandState.Coming);
             s.Say($"Волна {Number} отбита. Светает: до следующей десять минут.", 1);
+            s.StandDown(beaten: true);
             if (Number >= Total) { s.Won = true; s.Over = true; s.Say("Осада снята: долина устояла.", 1); }
             else s.PlanWave(Number + 1);
         }

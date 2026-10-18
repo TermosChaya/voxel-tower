@@ -58,7 +58,7 @@ public sealed partial class Sim
         Unit best = null; float bd = maxDist;
         foreach (var o in Units)
         {
-            if (o.Dead || o.Team != team) continue;
+            if (o.Dead || o.Inside || o.Team != team) continue;
             float d = Dist(u, o);
             if (d < bd) { bd = d; best = o; }
         }

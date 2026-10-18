@@ -384,7 +384,7 @@ public sealed partial class Sim
             tx /= trunks; tz /= trunks;
             Unit near = null;
             float nd = 12 * VoxelWorld.PerMetre;
-            foreach (var u in Units) { if (u.Dead) continue; float d = MathF.Abs(u.X - tx) + MathF.Abs(u.Z - tz); if (d < nd) { nd = d; near = u; } }
+            foreach (var u in Units) { if (u.Dead || u.Inside) continue; float d = MathF.Abs(u.X - tx) + MathF.Abs(u.Z - tz); if (d < nd) { nd = d; near = u; } }
             int dir = near == null ? Rng.Next(4) : MathF.Abs(near.X - tx) > MathF.Abs(near.Z - tz) ? (near.X > tx ? 1 : 0) : (near.Z > tz ? 3 : 2);
             (fx, fz) = dir switch { 0 => (1, 0), 1 => (-1, 0), 2 => (0, 1), _ => (0, -1) };
         }
@@ -426,7 +426,7 @@ public sealed partial class Sim
         int ax0 = int.MaxValue, az0 = int.MaxValue, ax1 = int.MinValue, az1 = int.MinValue;
         foreach (var (x, _, z, _, _) in pieces) { ax0 = Math.Min(ax0, x); az0 = Math.Min(az0, z); ax1 = Math.Max(ax1, x); az1 = Math.Max(az1, z); }
         var marked = new VoxelList();
-        var under = quiet ? new List<Unit>() : Units.FindAll(u => !u.Dead && u.X > ax0 - 16 && u.X < ax1 + 16 && u.Z > az0 - 16 && u.Z < az1 + 16);
+        var under = quiet ? new List<Unit>() : Units.FindAll(u => !u.Dead && !u.Inside && u.X > ax0 - 16 && u.X < ax1 + 16 && u.Z > az0 - 16 && u.Z < az1 + 16);
         foreach (var (x, y, z, m, order) in pieces)
         {
             // a trunk falls over and lies along the ground; a gate's leaf is only so much timber once it has fallen

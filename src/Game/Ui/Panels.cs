@@ -58,7 +58,10 @@ public static class Retinue
                 UnitState.Flee => u.Routed && Sim.Armed(u) ? "бежит прочь" : "уползает прочь",
                 _ => (u.Returned ? "идёт к цитадели · бежал в прошлый раз" : "идёт к цитадели") + (u.Torch ? " · с факелом" : ""),
             };
-        if (u.Mending) return u.State == UnitState.Fight ? "ранен, отбивается" : u.State == UnitState.Idle ? "отлёживается у цитадели" : "ранен, отходит к цитадели";
+        if (u.Inside) return u.Mending ? "отлёживается в цитадели" : sim.Alarm ? "в цитадели: тревога" : "в цитадели: пережидает орду";
+        if (u.Mending) return u.State == UnitState.Fight ? "ранен, отбивается" : "ранен, отходит к цитадели";
+        if (sim.Alarm && u.Refuge >= 0 && !u.Hold && u.State != UnitState.Flee)
+            return u.Refuge == sim.Gate ? "по тревоге идёт в цитадель" : u.Cell == u.Refuge ? "в убежище: тревога" : "по тревоге идёт в убежище";
         if (u.Patient is { Dead: false } patient) return "перевязывает: " + patient.T.Name.ToLowerInvariant();
         if (u.FireCell >= 0) return u.State == UnitState.Work ? "тушит пожар" : "бежит тушить пожар";
         if (u.KindleAt >= 0) return "поджигает огненной стрелой";
@@ -72,7 +75,7 @@ public static class Retinue
                 byte at = sim.World.Get(job.x, job.y, job.z);
                 return Mat.IsVeg[at] ? "рубит лес" : at is Mat.Rock or Mat.Moss or Mat.Ruin or Mat.Ore || Mat.IsMasonry(at) ? "ломает камень" : "копает";
             case UnitState.Fight: return u.FireArrows ? "стреляет огнём" : "бьётся";
-            case UnitState.Flee: return "бежит к цитадели";
+            case UnitState.Flee: return u.Refuge >= 0 && u.Refuge != sim.Gate ? "бежит в убежище" : "бежит в цитадель";
             case UnitState.Walk:
                 return u.Site >= 0 ? "идёт к работе" : u.Hold ? "идёт по приказу"
                     : u.Pastime == Pastime.Stroll ? (u.After == Pastime.Warm ? "идёт погреться к огню" : "прогуливается") : "идёт";
@@ -91,12 +94,13 @@ public static class Retinue
     /// <summary>How many of a kind there are and what they are busy with: "за работой 3 · без дела 1".</summary>
     public static (int count, string text) Summary(Sim sim, UnitType t)
     {
-        int n = 0, busy = 0, idle = 0, fight = 0, hunt = 0;
+        int n = 0, busy = 0, idle = 0, fight = 0, hunt = 0, inside = 0;
         foreach (var u in sim.Units)
         {
             if (u.Dead || u.T != t) continue;
             n++;
-            if (u.State is UnitState.Work) busy++;
+            if (u.Inside) inside++;
+            else if (u.State is UnitState.Work) busy++;
             else if (u.Prey != null) hunt++;
             else if (u.State is UnitState.Fight) fight++;
             else if (u.State == UnitState.Idle && !u.Hold) idle++;
@@ -106,6 +110,7 @@ public static class Retinue
         if (fight > 0) parts.Add($"в бою {fight}");
         if (hunt > 0) parts.Add($"на охоте {hunt}");
         if (idle > 0) parts.Add($"без дела {idle}");
+        if (inside > 0) parts.Add($"в цитадели {inside}");
         return (n, n == 0 ? "никого" : parts.Count > 0 ? string.Join(" · ", parts) : "в пути");
     }
 
@@ -236,7 +241,7 @@ public partial class UnitOverlay : Control
         float ppv = vp.Y / Math.Max(.01f, _m.Rig.Cam.Size) * VoxelWorld.Vox;
         foreach (var u in _m.Sim.Units)
         {
-            if (u.Dead) continue;
+            if (u.Dead || u.Inside) continue;
             bool sel = _m.Selected.Contains(u);
             bool hurt = u.Hp < u.MaxHp - .5f;
             bool why = u.Team == Team.Player && !u.Hold && u.State == UnitState.Idle && u.Why != "";

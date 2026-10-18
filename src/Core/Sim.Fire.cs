@@ -192,7 +192,7 @@ public sealed partial class Sim
     {
         foreach (var u in Units)
         {
-            if (u.Dead) continue;
+            if (u.Dead || u.Inside) continue;
             if (_hotBlocks.Count > 0)
             {
                 float heat = FireOn(u);

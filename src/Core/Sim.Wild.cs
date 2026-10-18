@@ -50,7 +50,7 @@ public sealed partial class Sim
     {
         foreach (var u in Units)
         {
-            if (u.Dead || u.Team != team) continue;
+            if (u.Dead || u.Inside || u.Team != team) continue;
             float dx = u.X - x, dz = u.Z - z;
             if (dx * dx + dz * dz < dist * dist) return true;
         }
@@ -104,7 +104,7 @@ public sealed partial class Sim
         Unit threat = null; float td = u.T.FleeDist;
         foreach (var o in Units)
         {
-            if (o.Dead || o.Team == Team.Wild) continue;
+            if (o.Dead || o.Inside || o.Team == Team.Wild) continue;
             float d = Dist(u, o);
             if (d < td) { td = d; threat = o; }
         }

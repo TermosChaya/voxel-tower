@@ -81,6 +81,8 @@ public sealed partial class Sim
         if (soldier && !u.T.Ranged && HasMainHand(u) && PushLadders(u, dt)) { Busy(u); return; }
         if (fighter && Fight(u, dt)) { Busy(u); ReleaseSite(u); return; }
         if (!fighter && Flee(u, dt)) { Busy(u); return; }
+        // the alarm is up: to shelter (one the player sent somewhere goes where it was sent)
+        if (!fighter && Alarm && !u.Hold && TakeShelter(u, dt)) { Busy(u); return; }
         if (u.Prey != null && HuntTick(u, dt)) { Busy(u); return; }
         // a comrade bleeding close by comes before any work (soldiers keep to their posts while the horde is here)
         if ((!soldier || !Waves.Active) && Bandage(u, dt)) { Busy(u); return; }
@@ -100,9 +102,9 @@ public sealed partial class Sim
             Idle(u, dt, stay: true);
             return;
         }
-        if (soldier && Waves.Active)
+        if (soldier && (Waves.Active || Alarm))
         {
-            // while the horde is in the valley soldiers keep to their posts and look out
+            // while the horde is in the valley, or the alarm is up, soldiers keep to their posts and look out
             ReleaseSite(u);
             if (u.Post >= 0 && u.Cell != u.Post && Time >= u.NextSearch) { u.NextSearch = Time + 2; Busy(u); GoTo(u, u.Post); }
             if (u.Path != null && u.Pastime != Pastime.Stroll) Walk(u, dt); else Idle(u, dt, stay: true);
@@ -468,10 +470,8 @@ public sealed partial class Sim
             }
             if (u.Path != null && u.PathI < u.Path.Count) { Walk(u, dt, .8f); return true; }
         }
-        // there: step aside if another sits in its place, then sit and get better
-        if (u.Path != null && u.PathI < u.Path.Count) { Walk(u, dt, .5f); return true; }
-        u.State = UnitState.Idle;
-        u.Pastime = Pastime.Sit; u.PastimeUntil = Time + 4;
+        // there: into the citadel, to mend out of harm's way
+        Enter(u);
         return true;
     }
 
@@ -491,7 +491,7 @@ public sealed partial class Sim
             float best = 30 * VoxelWorld.PerMetre;
             foreach (var o in Units)
             {
-                if (o == u || o.Dead || o.Team != Team.Player || o.Wounds is not { Bleed: > .15f } || o.Bandager is { Dead: false } && o.Bandager != u) continue;
+                if (o == u || o.Dead || o.Inside || o.Team != Team.Player || o.Wounds is not { Bleed: > .15f } || o.Bandager is { Dead: false } && o.Bandager != u) continue;
                 float d = Dist(u, o);
                 if (d < best && Nearest(o, Team.Horde, 12 * VoxelWorld.PerMetre) == null) { best = d; p = o; }
             }
@@ -526,15 +526,24 @@ public sealed partial class Sim
     /// <summary>"рабочего", "лучника", "мечника".</summary>
     static string Whom(UnitType t) => t.Key switch { "worker" => "рабочего", "archer" => "лучника", "sword" => "мечника", _ => t.Name.ToLowerInvariant() };
 
-    /// <summary>Workers run for the citadel when a raider comes close; true while running.</summary>
+    /// <summary>
+    /// Workers run for the nearest shelter when a raider comes close — not one the raider is nearer to — and into the
+    /// citadel if that is it; true while running.
+    /// </summary>
     bool Flee(Unit u, float dt)
     {
         var foe = Nearest(u, Team.Horde, 72);
         if (foe == null)
         {
             if (u.State != UnitState.Flee) return false;
-            if (Nearest(u, Team.Horde, 140) != null && u.Path != null) { Walk(u, dt); return true; }
+            if (Nearest(u, Team.Horde, 140) != null && u.Path != null)
+            {
+                Walk(u, dt);
+                if (u.Refuge == Gate && CellsApart(u.Cell, Gate) <= 2) Enter(u);
+                return true;
+            }
             u.State = UnitState.Idle; u.Path = null;
+            if (!Alarm) u.Refuge = -1;
             return false;
         }
         if (InReach(u, foe) && Armed(u))
@@ -549,9 +558,12 @@ public sealed partial class Sim
         {
             ReleaseSite(u);
             u.State = UnitState.Flee;
-            if (!GoTo(u, Gate, adjacent: true, budget: 20000)) u.Path = null;
+            u.Refuge = RefugeFor(u, foe);
+            if (u.Refuge < 0 || !GoTo(u, u.Refuge, adjacent: u.Refuge == Gate, budget: 20000)) u.Path = null;
         }
         if (u.Path != null) Walk(u, dt);
+        // at the citadel's door: in
+        if (u.Refuge == Gate && CellsApart(u.Cell, Gate) <= 2) Enter(u);
         return true;
     }
 }

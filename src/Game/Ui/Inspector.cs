@@ -78,6 +78,22 @@ public partial class Inspector : Control
         return b;
     }
 
+    /// <summary>The alarm's button: "Тревога", or "Отбой" while it is up, glowing then.</summary>
+    Button AlarmButton(float w)
+    {
+        var b = Btn("", "", () => _m.Command.Alarm(), w);
+        void Show()
+        {
+            bool up = _m.Sim.Alarm;
+            b.Text = up ? "Отбой" : "Тревога";
+            b.TooltipText = up ? Commander.StandDownTip : Commander.AlarmTip;
+            b.Modulate = up ? new Color(1.25f, .95f, .8f) : Colors.White;
+        }
+        Show();
+        _refresh.Add(Show);
+        return b;
+    }
+
     // ---------------------------------------------------------------- a brush in hand
 
     Control ToolPane()
@@ -88,7 +104,7 @@ public partial class Inspector : Control
         var head = new HBoxContainer();
         head.AddThemeConstantOverride("separation", 14);
         head.AddChild(Hud.Text(t.Tool == Tool.Paste && t.PasteBp != null ? $"Чертёж «{t.PasteBp.Name}»" : BuildTools.ToolName(t.Tool), Ornament.Display, 22, Ornament.EmberGlow));
-        var mat = Hud.CapsLabel((t.Tool == Tool.Gather ? "добывать: " + (t.GatherKind switch { Stockpile.Wood => "лес", Stockpile.Earth => "землю", _ => "камень" })
+        var mat = Hud.CapsLabel((t.Tool == Tool.Gather ? (t.Shelter ? "убежище от орды" : "добывать: " + (t.GatherKind switch { Stockpile.Wood => "лес", Stockpile.Earth => "землю", _ => "камень" }))
             : o.Dig ? "кирка: копать и рубить" : "материал: " + Mat.NameOf(o.Material).ToLowerInvariant()), 9);
         mat.VerticalAlignment = VerticalAlignment.Center;
         head.AddChild(mat);
@@ -160,8 +176,11 @@ public partial class Inspector : Control
                 opts.AddChild(new Stepper("Шаг", "Шаг\nНа сколько нарастает или уходит вглубь грань за щелчок. Клавиши − и =.", () => Len(o.Step), d => t.StepHeight(d)));
                 break;
             case Tool.Gather:
-                opts.AddChild(Hud.CapsLabel(t.GatherKind switch { Stockpile.Wood => "лес", Stockpile.Earth => "земля", _ => "камень" }, 11, Ornament.BronzeLight));
-                if (t.GatherKind != Stockpile.Wood)
+                opts.AddChild(new Choice("Участок", "Участок\nКамень (Z), лес (X), земля (C) — откуда брать этот запас. Убежище — куда по тревоге (T) уходят мирные " +
+                    "и где пережидают её: под крышей, за стенами; ближайшее из убежищ и цитадели.",
+                    new[] { "камень", "лес", "земля", "убежище" }, t.GatherKind switch { Stockpile.Wood => 1, Stockpile.Earth => 2, Zone.Shelter => 3, _ => 0 },
+                    i => { if (i == 3) t.SetShelter(true); else t.SetMaterial(new[] { Mat.Stone, Mat.Wood, Mat.Rammed }[i]); }));
+                if (t.GatherKind is Stockpile.Stone or Stockpile.Earth)
                     opts.AddChild(new Stepper("Глубина", "Глубина\nДо какой глубины от нынешней поверхности брать камень или землю. Клавиши − и =.", () => Len(o.Depth), d => t.StepHeight(d)));
                 break;
             case Tool.Paste when t.PasteBp != null:
@@ -237,7 +256,7 @@ public partial class Inspector : Control
         row.AddThemeConstantOverride("separation", 4);
         row.AddChild(Btn("За работу", "За работу\nВыбранные снова сами ищут работу по разметке.", () => _m.Command.ReleaseSelected(), 92));
         row.AddChild(Btn("Стоять", "Стоять здесь\nВыбранные остаются на месте; для солдат это место становится постом.", () => _m.Command.HoldSelected(), 70));
-        row.AddChild(Btn("Тревога", "Тревога (T)\nВсе солдаты бегут на свои посты. Рог трубит и сам, когда приходит орда.", () => _m.Command.Alarm(), 70));
+        row.AddChild(AlarmButton(70));
         row.AddChild(new Rule(true));
         var cap = Hud.CapsLabel("Добывать", 8);
         cap.VerticalAlignment = VerticalAlignment.Center;
@@ -416,7 +435,7 @@ public partial class Inspector : Control
             line.AddChild(b);
         }
         squads.AddChild(line);
-        squads.AddChild(Btn("Тревога", "Тревога (T)\nВсе солдаты бегут на свои посты. Рог трубит и сам, когда приходит орда.", () => _m.Command.Alarm(), 90));
+        squads.AddChild(AlarmButton(90));
         row.AddChild(squads);
         _refresh.Add(() =>
         {

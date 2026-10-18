@@ -19,7 +19,7 @@ namespace VoxelTower.Game;
 /// --top looks straight down, --look=N at the Nth named place of the valley, --seed=N makes another valley; --select[=N]
 /// chooses our pawns (or the first N), --tab=key lets a panel down from the beam, --tool=N takes up the Nth tool,
 /// --ui-scale=S draws the interface at that size instead of the player's own, --inspect looks at the first raider (or beast),
-/// --day=F starts at that time of the day (0 dawn, 1 sunset),
+/// --day=F starts at that time of the day (0 dawn, 1 sunset), --alarm=S raises the alarm and runs on S seconds,
 /// --load=file.sav reads a saved game back.
 /// </summary>
 public partial class Main : Node3D
@@ -71,6 +71,8 @@ public partial class Main : Node3D
     double _waveAt = -1;
     /// <summary>--day=F: a new game at that time of the day before the first wave (0 dawn, 1 sunset), the countdown set to match.</summary>
     double _dayAt = -1;
+    /// <summary>--alarm=S: the alarm raised at the start and the game run on this many seconds (screenshots).</summary>
+    double _alarmAt = -1;
     /// <summary>--select or --select=N: all our pawns (or the first N) chosen at the start, for screenshots of the console.</summary>
     int _select;
     /// <summary>--tab=key: a panel let down from the beam at the start; --tool=N: the Nth tool of the grid in hand.</summary>
@@ -96,6 +98,7 @@ public partial class Main : Node3D
             else if (a.StartsWith("--look=") && int.TryParse(a["--look=".Length..], out int lk)) _look = lk;
             else if (a.StartsWith("--wave=") && double.TryParse(a["--wave=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double wa)) _waveAt = wa;
             else if (a.StartsWith("--day=") && double.TryParse(a["--day=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double da)) _dayAt = da;
+            else if (a.StartsWith("--alarm=") && double.TryParse(a["--alarm=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double al)) _alarmAt = al;
             else if (a == "--select") _select = int.MaxValue;
             else if (a.StartsWith("--select=") && int.TryParse(a["--select=".Length..], out int sn)) _select = sn;
             else if (a.StartsWith("--tab=")) _tab = a["--tab=".Length..];
@@ -248,6 +251,7 @@ public partial class Main : Node3D
         }
         if (_waveAt >= 0 && !_demo && !_selfTest) { Sim.ComputeFields(); Sim.Waves.StartNow(Sim); Advance(_waveAt); Hud.Refresh(); }
         if (_dayAt >= 0 && _waveAt < 0 && !_demo && !_selfTest) { Sim.Waves.Countdown = Waves.Prep * (1 - Math.Clamp(_dayAt, 0, .998)); Hud.Refresh(); }
+        if (_alarmAt >= 0 && !_selfTest) { Sim.RaiseAlarm(); Advance(_alarmAt); Hud.Refresh(); }
         if (_select > 0)
         {
             foreach (var u in Sim.Units) if (!u.Dead && u.Team == Team.Player && Selected.Count < _select) Selected.Add(u);
@@ -705,6 +709,17 @@ public partial class Main : Node3D
         Command.FireArrowsSelected();
         Command.ClearSelection();
 
+        // the alarm: the workers to shelter in the citadel; the all-clear lets them out (the badly hurt mend in there till they are fit)
+        int Sheltering() => Sim.Units.FindAll(u => !u.Dead && u.Inside && !u.Mending).Count;
+        KeyPress(Key.T);
+        bool alarmUp = Sim.Alarm;
+        for (int t = 0; t < 80 && Sheltering() == 0; t++) Advance(.5);
+        int wentIn = Sheltering();
+        KeyPress(Key.T);
+        Advance(8);
+        Check("T sounds the alarm and the workers go into the citadel; T again stands it down and they come out", alarmUp && wentIn > 0 && !Sim.Alarm && Sheltering() == 0,
+            $"{wentIn} went in, {Sheltering()} still inside, {Sim.InCitadel() - Sheltering()} mending there");
+
         // the horde called early: no gold for it, only less known of the defences
         Sim.Waves.Countdown = 200;
         double gold0 = Sim.Stock.Gold;
@@ -751,6 +766,7 @@ public partial class Main : Node3D
         if (_pose == "battle") { Siege(); return; }
         if (_pose == "fire") { Blaze(); return; }
         if (_pose == "sap") { Sapping(); return; }
+        if (_pose == "shelter") { Sheltering(); return; }
         if (_pose == "wounds") { Wounded(); return; }
         if (_pose == "flood") { Flood(); return; }
         if (_pose == "trees") { LookAtGrove(); return; }
@@ -1008,6 +1024,37 @@ public partial class Main : Node3D
         sim.ComputeFields();
         Advance(_poseSeconds);
         Rig.Set(World.WX(kx - 80), World.WZ(kz + 6), -1.1f, .62f, 1.3f, snap: true);
+        Hud.Refresh();
+        Marks.Flush();
+    }
+
+    /// <summary>
+    /// The alarm out in the valley: a palisade yard south-east of the citadel set aside as a shelter, the workers who were
+    /// about it standing in it, a place each; the rest of ours gone into the citadel.
+    /// </summary>
+    void Sheltering()
+    {
+        var w = World; var s = Site; var sim = Sim;
+        sim.Waves.Countdown = 1e9;
+        int kx = s.KeepX, kz = s.KeepZ;
+        int x0 = kx + 120, z0 = kz + 150, x1 = x0 + 48, z1 = z0 + 40;
+        int top = Shapes.LevelTop(w, (x0 + x1) / 2, (z0 + z1) / 2, 30);
+        var st = new Stroke { Mat = Mat.Wood, Width = 2, Height = 16 };
+        sim.InstantLabour = true;
+        // a palisade a man and a half high, its way in on the east, toward the citadel
+        sim.DesignateBuild(Shapes.Line(w, s, x0, z0, x1, z0, st, top));
+        sim.DesignateBuild(Shapes.Line(w, s, x0, z1, x1, z1, st, top));
+        sim.DesignateBuild(Shapes.Line(w, s, x0, z0, x0, z1, st, top));
+        sim.DesignateBuild(Shapes.Line(w, s, x1, z0, x1, z0 + 14, st, top));
+        sim.DesignateBuild(Shapes.Line(w, s, x1, z1 - 14, x1, z1, st, top));
+        sim.InstantLabour = false;
+        sim.AddZone(x0 + 3, z0 + 3, x1 - 3, z1 - 3, Zone.Shelter, 0);
+        foreach (var (dx, dz) in new[] { (80, 0), (90, 30), (-30, 60), (20, 80), (100, 60) })
+            sim.Spawn(Kinds.Worker, sim.NearestStand(x0 + dx, z0 + dz, 4));
+        Advance(2);
+        sim.RaiseAlarm();
+        Advance(_poseSeconds);
+        Rig.Set(World.WX((x0 + x1) / 2f + 10), World.WZ((z0 + z1) / 2f), -.66f, .7f, 1.6f, snap: true);
         Hud.Refresh();
         Marks.Flush();
     }

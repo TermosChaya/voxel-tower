@@ -138,11 +138,14 @@ public sealed partial class Sim
         TickBands();
         TickTrails();
         TendWildlife();
+        TickShelter();
         CountBodies();
         for (int n = 0; n < Units.Count; n++)
         {
             var u = Units[n];
             if (u.Dead) continue;
+            // in the citadel: out of the world till it comes out
+            if (u.Inside) { Indoors(u, dt); continue; }
             u.Swing = Math.Max(0, u.Swing - dt * 3);
             u.Cooldown -= dt;
             Settle(u);
@@ -163,7 +166,7 @@ public sealed partial class Sim
     {
         Array.Clear(_bodies);
         foreach (var u in Units)
-            if (!u.Dead)
+            if (!u.Dead && !u.Inside)
                 for (int d = 0; d < u.T.Move.Height && Nav.Y(u.Cell) + d < Nav.NY; d++) _bodies[u.Cell + d * Nav.Layer]++;
     }
 
@@ -263,11 +266,11 @@ public sealed partial class Sim
         for (int a = 0; a < Units.Count; a++)
         {
             var u = Units[a];
-            if (u.Dead || Nav.Ladder[u.Cell] != 0) continue;
+            if (u.Dead || u.Inside || Nav.Ladder[u.Cell] != 0) continue;
             for (int b = a + 1; b < Units.Count; b++)
             {
                 var v = Units[b];
-                if (v.Dead || Nav.Ladder[v.Cell] != 0) continue;
+                if (v.Dead || v.Inside || Nav.Ladder[v.Cell] != 0) continue;
                 float dx = v.X - u.X, dz = v.Z - u.Z, min = u.T.BodyR + v.T.BodyR + .5f;
                 if (dx * dx + dz * dz >= min * min || MathF.Abs(v.Y - u.Y) > Math.Min(u.T.BodyH, v.T.BodyH) * .8f) continue;
                 float d = MathF.Sqrt(dx * dx + dz * dz);
@@ -294,7 +297,7 @@ public sealed partial class Sim
         _stood.Clear();
         foreach (var u in Units)
         {
-            if (u.Dead || u.State != UnitState.Idle || u.Path != null && u.PathI < u.Path.Count || Nav.Ladder[u.Cell] != 0) continue;
+            if (u.Dead || u.Inside || u.State != UnitState.Idle || u.Path != null && u.PathI < u.Path.Count || Nav.Ladder[u.Cell] != 0) continue;
             if (u.Team == Team.Player && u.Site >= 0) continue;
             if (_stood.TryAdd(u.Cell, u)) continue;
             int c = FreeBeside(u);
@@ -371,6 +374,9 @@ public sealed partial class Sim
         for (int n = 0; n < group.Count; n++)
         {
             var u = group[n];
+            // sent out of the citadel: out of its door first
+            if (u.Inside) { u.Mending = false; Leave(u); }
+            u.Refuge = -1;
             ReleaseSite(u);
             Busy(u);
             int spot = spots[n];
