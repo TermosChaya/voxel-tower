@@ -697,7 +697,7 @@ public static class Bodies
     {
         Leg = 6, LegW = 2, LegD = 3, Gap = 1, Boot = 0, Torso = 6, Chest = 3, ChestD = 4, Head = 8, HeadW = 4, HeadD = 7, HeadZ = -3,
         Arm = 6, ArmW = 2, ArmD = 2, Hand = 2, Skin = skin, Shirt = shirt, Trousers = trousers, Boots = skin, Hair = skin, Brow = skin,
-        Eye = Mat.Brass, Sleeve = skin, HairStyle = 3,
+        Eye = Mat.EyeGlint, Sleeve = skin, HairStyle = 3,
     };
 
     /// <summary>Long ears sweeping out and up (or one torn short), a hooked nose, yellow eyes with black pupils, a wide mouth with teeth.</summary>
@@ -757,7 +757,7 @@ public static class Bodies
         var b = new Build
         {
             Leg = 6, LegW = 3, LegD = 4, Gap = 1, Boot = 2, Torso = 8, Chest = 4, ChestD = 4, Head = 8, HeadW = 4, HeadD = 8, HeadZ = -4,
-            Arm = 8, ArmW = 2, ArmD = 3, Hand = 3, Skin = skin, Shirt = Mat.Leather, Trousers = Mat.Rag, Boots = Mat.Iron, Eye = Mat.Brass, Brow = skin,
+            Arm = 8, ArmW = 2, ArmD = 3, Hand = 3, Skin = skin, Shirt = Mat.Leather, Trousers = Mat.Rag, Boots = Mat.Iron, Eye = Mat.EyeGlint, Brow = skin,
             Sleeve = Mat.Rag, HairStyle = 3,
         };
         var s = Humanoid(b, f);
@@ -782,7 +782,7 @@ public static class Bodies
         {
             Leg = 12, LegW = 4, LegD = 5, Gap = 1, Boot = 3, Torso = 12, Chest = 6, ChestD = 7, Head = 8, HeadW = 4, HeadD = 8, HeadZ = -2,
             Arm = 12, ArmW = 4, ArmD = 4, Hand = 4, Skin = skin, Shirt = Mat.Leather, Trousers = Mat.ClothDark, Boots = Mat.Leather,
-            Eye = Mat.ClothRed, Brow = skin, Mouth = Mat.Hair, Sleeve = skin, HairStyle = 3,
+            Eye = Mat.Ember, Brow = skin, Mouth = Mat.Hair, Sleeve = skin, HairStyle = 3,
         };
         var s = Humanoid(b, f);
         int hx = b.HeadW, hz0 = b.HeadZ, hz1 = b.HZ1, hy0 = b.Neck, hy1 = b.Crown;

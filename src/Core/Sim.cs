@@ -127,6 +127,7 @@ public sealed partial class Sim
         Time += dt;
         TickWater(dt);
         TickFire(dt);
+        TickLight();
         TickCollapse(dt);
         TickGates(dt);
         TickDecor();

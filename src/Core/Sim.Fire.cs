@@ -440,7 +440,7 @@ public sealed partial class Sim
         var (x, y, z) = WaterPlanner.Unpack(target);
         float tx = x + .5f, ty = y + .5f, tz = z + .5f, ddx = tx - u.X, ddz = tz - u.Z;
         float dist = MathF.Sqrt(ddx * ddx + ddz * ddz);
-        if (dist > u.T.Range || !Sees(u, tx, ty, tz))
+        if (dist > RangeAt(u, tx, tz) || !Sees(u, tx, ty, tz))
         {
             // the player's mark out of reach: closer, then shoot
             if (target != u.KindleAt) return false;

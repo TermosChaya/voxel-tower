@@ -5,12 +5,27 @@ using VoxelTower.Core;
 
 namespace VoxelTower.Game;
 
-/// <summary>Dusk: violet sky light, a low warm sun with soft shadows, a cold rim light, flickering braziers and drifting embers.</summary>
+/// <summary>
+/// The light of the valley through the day the siege keeps: a sun that comes up in the east while the walls go up,
+/// stands high, goes golden and low over the west as the horde draws near, and sets red at the horn; the night of the
+/// assault under a cold moon, the torches and the fires brighter in it; a grey dawn once the wave is beaten back. Over
+/// it all a violet sky light, a cold rim light, flickering braziers and drifting embers.
+/// </summary>
 public partial class Atmosphere : Node3D
 {
     readonly List<(OmniLight3D light, float phase)> _torches = new();
     double _t;
     bool _calm;
+    DirectionalLight3D _sun, _rim;
+    ShaderMaterial _skyMat;
+    Sim _sim;
+    /// <summary>The time of day and the darkness as they are shown: they follow the sim's, easing, so that a horde called early brings the night on over a few seconds.</summary>
+    float _day = -1, _dark;
+    /// <summary>The time of day and the darkness as they are shown now, for the day on the wave clock.</summary>
+    public float ShownDay => Math.Max(0, _day);
+    public float ShownDark => _dark;
+    /// <summary>How bright torches and fires burn now (the dark makes more of them), for the fire's own lights too.</summary>
+    public float LampBoost { get; private set; } = 1;
 
     public Godot.Environment Env { get; private set; }
     /// <summary>The embers hang around whatever this camera looks at.</summary>
@@ -20,9 +35,10 @@ public partial class Atmosphere : Node3D
     public void Build(VoxelWorld w, Site site, bool calm)
     {
         _calm = calm;
+        _skyMat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/dusk_sky.gdshader") };
         var sky = new Sky
         {
-            SkyMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/dusk_sky.gdshader") },
+            SkyMaterial = _skyMat,
             ProcessMode = Sky.ProcessModeEnum.Quality,
             RadianceSize = Sky.RadianceSizeEnum.Size128,
         };
@@ -65,10 +81,12 @@ public partial class Atmosphere : Node3D
         };
         AddChild(sun);
         sun.LookAtFromPosition(new Vector3(-14, 16, 9), new Vector3(0, 3, 0), Vector3.Up);
+        _sun = sun;
 
         var rim = new DirectionalLight3D { LightColor = new Color("7a88d8"), LightEnergy = .55f, ShadowEnabled = false };
         AddChild(rim);
         rim.LookAtFromPosition(new Vector3(12, 10, -10), new Vector3(0, 3, 0), Vector3.Up);
+        _rim = rim;
 
         var rnd = new Random(7);
         foreach (var (x, y, z) in site.Torches)
@@ -95,6 +113,7 @@ public partial class Atmosphere : Node3D
     /// <summary>Lights the torches the buildings dress themselves with, as they are set up and taken down.</summary>
     public void Watch(Sim sim)
     {
+        _sim = sim;
         _w = sim.World;
         foreach (var f in sim.Fixtures) Lit(f);
         sim.FixtureAdded += Lit;
@@ -170,11 +189,48 @@ public partial class Atmosphere : Node3D
     {
         _t += delta;
         if (_embers != null && Follow != null) { var t0 = Follow.Target; _embers.Position = new Vector3(t0.X, 9, t0.Y); }
+        if (_sim != null)
+        {
+            var wv = _sim.Waves;
+            // a staged scene stops the clock far out: it keeps the afternoon light it always had
+            float day = wv.Countdown > Waves.Prep * 2 ? .7f : wv.Day, k = (float)delta / 4;
+            if (_day < 0 || _calm) { _day = day; _dark = wv.Darkness; }
+            else { _day = Mathf.MoveToward(_day, day, Math.Max(k, Math.Abs(day - _day) * k * 2)); _dark = Mathf.MoveToward(_dark, wv.Darkness, k); }
+            Light(_day, _dark);
+        }
         float t = _calm ? 0 : (float)_t;
         foreach (var (l, ph) in _torches)
         {
             float base0 = _sconces.Count > 0 && l.OmniRange < 4 ? 1.6f : 2.4f;
-            l.LightEnergy = base0 * (.8f + .22f * MathF.Sin(t * 9 + ph) + .1f * MathF.Sin(t * 23 + ph * 2));
+            l.LightEnergy = base0 * LampBoost * (.8f + .22f * MathF.Sin(t * 9 + ph) + .1f * MathF.Sin(t * 23 + ph * 2));
         }
+    }
+
+    // the day's sun at morning, noon and sunset, and the night's moon
+    static readonly Color Morning = new("f0cfae"), Noon = new("eee0cc"), Evening = new("ffb066"), Sunset = new("ff6c3c"), Moon = new("7d92d8");
+
+    /// <summary>
+    /// The light for a time of day (0 dawn, ½ noon, 1 sunset) and a darkness (0 day, 1 night): where the sun stands and
+    /// what colour it is, how much the sky lights, the fog, how bright the lamps.
+    /// </summary>
+    void Light(float day, float dark)
+    {
+        // up in the east at dawn, high in the south at noon, down in the west at sunset: the horde comes out of the sunset
+        float az = MathF.PI * day * .92f + .12f, el = Mathf.DegToRad(10 + 48 * MathF.Sin(MathF.PI * Math.Clamp(day, .04f, .96f)));
+        var dir = new Vector3(MathF.Cos(az) * MathF.Cos(el), MathF.Sin(el), MathF.Sin(az) * MathF.Cos(el) * .7f + .35f);
+        var col = day < .2f ? Morning.Lerp(Noon, day / .2f) : day < .72f ? Noon : day < .93f ? Noon.Lerp(Evening, (day - .72f) / .21f) : Evening.Lerp(Sunset, (day - .93f) / .07f);
+        float energy = day < .12f ? Mathf.Lerp(.9f, 1.42f, day / .12f) : day > .9f ? Mathf.Lerp(1.42f, 1.0f, (day - .9f) / .1f) : 1.42f;
+        // the moon stands high in the south-west all night
+        var moonDir = new Vector3(-.4f, .72f, .48f).Normalized();
+        dir = dir.Normalized().Lerp(moonDir, dark).Normalized();
+        _sun.LightColor = col.Lerp(Moon, dark);
+        _sun.LightEnergy = Mathf.Lerp(energy, .3f, dark);
+        _sun.LookAtFromPosition(dir * 20, Vector3.Zero, Mathf.Abs(dir.Y) > .98f ? Vector3.Forward : Vector3.Up);
+        _rim.LightEnergy = Mathf.Lerp(.55f, .22f, dark);
+        Env.AmbientLightEnergy = Mathf.Lerp(.82f, .27f, dark);
+        Env.FogLightColor = new Color(0.114f, 0.086f, 0.149f).Lerp(new Color(.03f, .035f, .07f), dark);
+        _skyMat.SetShaderParameter("amb_sky", new Vector3(0.254f, 0.246f, 0.578f).Lerp(new Vector3(.09f, .11f, .3f), dark));
+        _skyMat.SetShaderParameter("bg_top", new Vector3(0.027f, 0.017f, 0.040f).Lerp(new Vector3(.006f, .008f, .02f), dark));
+        LampBoost = 1 + .7f * dark;
     }
 }

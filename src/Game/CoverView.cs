@@ -7,8 +7,9 @@ namespace VoxelTower.Game;
 
 /// <summary>
 /// What the chosen archers can shoot at: the ground within their reach that they can see from where they stand,
-/// washed in ember a metre at a time, and the edge of their reach as a thin ring. Worked out again when one of them
-/// moves, or every few seconds while the walls change round them.
+/// washed in ember a metre at a time, and the edge of their reach as a thin ring. At night the dark ground is theirs
+/// only as far as they can make a man out in it; what is lit they reach all the way. Worked out again when one of them
+/// moves, or every few seconds while the walls and the light change round them.
 /// </summary>
 public partial class CoverView : Node3D
 {
@@ -52,7 +53,8 @@ public partial class CoverView : Node3D
         var seen = new HashSet<(int, int)>();
         var st = new SurfaceTool();
         st.Begin(Mesh.PrimitiveType.Triangles);
-        var lit = new Color(Ornament.EmberGlow, .11f);
+        // fainter at night, when there is little else on the ground to wash over
+        var lit = new Color(Ornament.EmberGlow, .11f - .045f * sim.Waves.Darkness);
         const int Cell = VoxelWorld.PerMetre;
         foreach (var a in archers)
         {
@@ -65,6 +67,9 @@ public partial class CoverView : Node3D
                     int i = ci + di, k = ck + dk;
                     if (i < 0 || k < 0 || i * Cell >= w.SX || k * Cell >= w.SZ || seen.Contains((i, k))) continue;
                     int x = i * Cell + Cell / 2, z = k * Cell + Cell / 2, y = w.SurfAt(x, z);
+                    // in the dark only as far as a man can be made out, unless it is lit
+                    float far = sim.RangeAt(a, x, z);
+                    if ((x - a.X) * (x - a.X) + (z - a.Z) * (z - a.Z) > far * far) continue;
                     // a man's chest over that ground, as an arrow would find him
                     if (!sim.Sees(a, x, y + 8, z)) continue;
                     seen.Add((i, k));

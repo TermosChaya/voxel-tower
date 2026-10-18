@@ -1750,6 +1750,69 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--collapse")
 }
 
 // ---- a game saved and read back: the valley as play changed it, and the siege, the same; and it plays on
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--night")
+{
+    Console.WriteLine();
+    var mpN = new MapParams();
+    var wN = new VoxelWorld(mpN.SizeX, mpN.SizeY, mpN.SizeZ);
+    var siteN = MapGen.Generate(wN, mpN);
+    wN.Compact();
+    var simN = new Sim(wN, siteN);
+    simN.WildTarget = 0;
+    var wvN = simN.Waves;
+
+    // the day the siege keeps: light while the walls go up, dusk the last minute, night while the wave is in, a dawn after it
+    float dark0 = wvN.Darkness, day0 = wvN.Day;
+    wvN.Countdown = 30; float duskN = wvN.Darkness, dayDusk = wvN.Day;
+    wvN.Active = true; float nightN = wvN.Darkness; wvN.Active = false;
+    wvN.Countdown = Waves.Prep; wvN.DawnLeft = Waves.Dawn; float dawnN = wvN.Darkness;
+    wvN.Tick(simN, 15); float dawnHalf = wvN.Darkness;
+    wvN.Tick(simN, 20); float dayAgain = wvN.Darkness;
+    Check("the day: light while the walls go up, dusk the last minute before the horn, night through the wave, a dawn after it",
+        dark0 == 0 && day0 == 0 && Math.Abs(duskN - .5f) < .01f && dayDusk > .9f && nightN == 1 && dawnN == 1 && Math.Abs(dawnHalf - .5f) < .01f && dayAgain == 0,
+        $"start dark {dark0}, day {day0}; 30 s before the horn {duskN:0.00}, {dayDusk:0.00}; the wave {nightN}; dawn {dawnN} → {dawnHalf:0.00} → {dayAgain}");
+
+    // an archer out in the open, far from the citadel's light, and a goblin keeping its post 18 m off
+    wvN.Countdown = 1e9; wvN.DawnLeft = 0;
+    void RunN(double seconds, bool night) { for (double t = 0; t < seconds; t += .05) { if (night) wvN.DawnLeft = Waves.Dawn; simN.Step(.05f); } }
+    // on the old road through the lowland, where nothing grows to stand in the way
+    Unit bowN = null, gobN = null;
+    for (int rx = 200; rx < 600 && gobN == null; rx += 24)
+    {
+        bowN = simN.Spawn(Kinds.Archer, simN.NearestStand(rx, (int)Site.PathZ(rx), 4));
+        simN.Command(new[] { bowN }, bowN.Cell);
+        int gx = (int)bowN.X - 144;
+        var g = simN.Spawn(Kinds.Goblin, simN.NearestStand(gx, (int)Site.PathZ(gx), 2));
+        g.Raid = null; g.Guard = true; g.Home = g.Cell;
+        float d = Sim.Dist(bowN, g) / VoxelWorld.PerMetre;
+        if (simN.Sight(bowN, g) && d > 16 && d < 20 && !simN.Lit(g.X, g.Z)) { gobN = g; break; }
+        g.Dead = true; g.DiedAt = -999; bowN.Dead = true; bowN.DiedAt = -999;
+    }
+    int ShotsIn(double seconds, bool night)
+    {
+        int s0 = simN.Shots;
+        RunN(seconds, night);
+        return simN.Shots - s0;
+    }
+    if (gobN != null)
+    {
+        float gm = Sim.Dist(bowN, gobN) / VoxelWorld.PerMetre;
+        gobN.Hp = gobN.MaxHp = 1e6f;
+        int byDay = ShotsIn(6, false);
+        RunN(1.5, true);
+        int byNight = ShotsIn(6, true);
+        bool darkThere = !simN.Lit(gobN.X, gobN.Z);
+        gobN.Torch = true;
+        RunN(1.5, true);
+        int byTorch = ShotsIn(6, true);
+        Check("at night an archer can only make out a raider far off by its light: none in the dark at 18 m, one with a torch",
+            byDay > 0 && byNight == 0 && darkThere && byTorch > 0,
+            $"{gm:0.0} m: {byDay} arrows in 6 s by day, {byNight} at night in the dark (lit {!darkThere}), {byTorch} at the goblin with a torch; " +
+            $"reach in the dark {simN.RangeAt(bowN, gobN.X + 400, gobN.Z) / VoxelWorld.PerMetre:0.0} m");
+    }
+    else Check("at night an archer can only make out a raider far off by its light", false, "no spot for the goblin in the archer's sight");
+}
+
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
 {
     Console.WriteLine();

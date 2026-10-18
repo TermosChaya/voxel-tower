@@ -19,6 +19,7 @@ namespace VoxelTower.Game;
 /// --top looks straight down, --look=N at the Nth named place of the valley, --seed=N makes another valley; --select[=N]
 /// chooses our pawns (or the first N), --tab=key lets a panel down from the beam, --tool=N takes up the Nth tool,
 /// --ui-scale=S draws the interface at that size instead of the player's own, --inspect looks at the first raider (or beast),
+/// --day=F starts at that time of the day (0 dawn, 1 sunset),
 /// --load=file.sav reads a saved game back.
 /// </summary>
 public partial class Main : Node3D
@@ -38,6 +39,8 @@ public partial class Main : Node3D
     public OrdersView Marks { get; private set; }
     public ZoneView Areas { get; private set; }
     public Commander Command { get; private set; }
+    /// <summary>The light of the valley: the sun through the day, the moon at night, the lamps.</summary>
+    public Atmosphere Atmos { get; private set; }
 
     /// <summary>The pawns the player has picked out.</summary>
     public readonly HashSet<Unit> Selected = new();
@@ -66,6 +69,8 @@ public partial class Main : Node3D
     float[] _cam;
     /// <summary>--wave=seconds: a new game with the horde called at once and this long into its wave (screenshots).</summary>
     double _waveAt = -1;
+    /// <summary>--day=F: a new game at that time of the day before the first wave (0 dawn, 1 sunset), the countdown set to match.</summary>
+    double _dayAt = -1;
     /// <summary>--select or --select=N: all our pawns (or the first N) chosen at the start, for screenshots of the console.</summary>
     int _select;
     /// <summary>--tab=key: a panel let down from the beam at the start; --tool=N: the Nth tool of the grid in hand.</summary>
@@ -90,6 +95,7 @@ public partial class Main : Node3D
             else if (a.StartsWith("--seed=") && uint.TryParse(a["--seed=".Length..], out uint sd)) _seed = sd;
             else if (a.StartsWith("--look=") && int.TryParse(a["--look=".Length..], out int lk)) _look = lk;
             else if (a.StartsWith("--wave=") && double.TryParse(a["--wave=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double wa)) _waveAt = wa;
+            else if (a.StartsWith("--day=") && double.TryParse(a["--day=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double da)) _dayAt = da;
             else if (a == "--select") _select = int.MaxValue;
             else if (a.StartsWith("--select=") && int.TryParse(a["--select=".Length..], out int sn)) _select = sn;
             else if (a.StartsWith("--tab=")) _tab = a["--tab=".Length..];
@@ -142,7 +148,7 @@ public partial class Main : Node3D
         else if (!_selfTest && !_demo) StartingFort.Raise(Sim);
         double navMs = sw.Elapsed.TotalMilliseconds;
 
-        var atmo = new Atmosphere();
+        var atmo = Atmos = new Atmosphere();
         AddChild(atmo);
         atmo.Build(World, Site, _calm || _shot != null);
         atmo.Watch(Sim);
@@ -231,7 +237,7 @@ public partial class Main : Node3D
         }
         Hud.Log("Вождь орды высматривает, где ваши стены слабее, и шлёт ватаги туда. Кольцо вокруг цитадели показывает, как он видит " +
             "каждую сторону: красная — слабая, зелёная — крепкая, ярче — куда пойдёт ватага. J — показать или скрыть пути орды.");
-        Hud.Log("Орда придёт с запада через десять минут. Ройте, рубите и стройте, пока есть время.", Hud.Kind.Warn);
+        Hud.Log("Орда придёт с запада на закате, через десять минут. Ройте, рубите и стройте, пока светло.", Hud.Kind.Warn);
         GD.Print($"[voxel-tower] world {genMs:0} ms, navigation {navMs:0} ms, mesh {View.LastFullMeshMs:0} ms, {View.Triangles()} triangles");
 
         if (_demo) Demo();
@@ -241,6 +247,7 @@ public partial class Main : Node3D
             Rig.Set(World.WX(l.X), World.WZ(l.Z), -.7f, .6f, 2.4f, snap: true);
         }
         if (_waveAt >= 0 && !_demo && !_selfTest) { Sim.ComputeFields(); Sim.Waves.StartNow(Sim); Advance(_waveAt); Hud.Refresh(); }
+        if (_dayAt >= 0 && _waveAt < 0 && !_demo && !_selfTest) { Sim.Waves.Countdown = Waves.Prep * (1 - Math.Clamp(_dayAt, 0, .998)); Hud.Refresh(); }
         if (_select > 0)
         {
             foreach (var u in Sim.Units) if (!u.Dead && u.Team == Team.Player && Selected.Count < _select) Selected.Add(u);

@@ -203,7 +203,7 @@ public partial class FireView : Node3D
             l.Visible = true;
             l.Position = new Vector3(w.WX(c.x / c.n), w.WY(c.y / c.n + 8), w.WZ(c.z / c.n));
             float flick = 1 + .18f * MathF.Sin((float)_t * 11 + i * 2.1f) + .1f * MathF.Sin((float)_t * 23 + i);
-            l.LightEnergy = Math.Clamp(.5f + sz * .12f, .5f, 3.2f) * flick;
+            l.LightEnergy = Math.Clamp(.5f + sz * .12f, .5f, 3.2f) * flick * (_m.Atmos?.LampBoost ?? 1);
             l.OmniRange = Math.Clamp(3 + sz * .35f, 3, 11);
         }
     }

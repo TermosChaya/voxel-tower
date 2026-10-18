@@ -179,8 +179,8 @@ public partial class DropPanel : Control
 
 /// <summary>
 /// The wave clock, hanging from the beam on two chains: which wave is next and how long until it comes (or how many
-/// raiders are in the valley), the early call, the speed of the game, the horde's ways, and how much of the citadel
-/// still stands.
+/// raiders are in the valley), the time of day, the early call, the speed of the game, the horde's ways, and how much
+/// of the citadel still stands.
 /// </summary>
 public partial class WaveClock : Control
 {
@@ -189,6 +189,9 @@ public partial class WaveClock : Control
     Button _call, _trails;
     readonly List<Button> _speeds = new();
     KeepBar _keep;
+    DayDial _dial;
+    const string CallTip = "Позвать орду сейчас\nЗолота за это не дают. Зато орда придёт, зная о вашей обороне меньше: сколько времени до волны прошло, столько она и разведала. " +
+        "Солнце сядет тотчас: орда ходит только ночью. Пробел.";
     public const float W = 470, H = 70;
 
     public void Init(Main m)
@@ -203,6 +206,8 @@ public partial class WaveClock : Control
         _title = Hud.CapsLabel("", 8);
         _title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         head.AddChild(_title);
+        _dial = new DayDial();
+        head.AddChild(_dial);
         _note = Hud.CapsLabel("", 8, Ornament.EmberGlow);
         head.AddChild(_note);
         col.AddChild(head);
@@ -221,7 +226,7 @@ public partial class WaveClock : Control
         {
             FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(124, 26), MouseDefaultCursorShape = CursorShape.PointingHand,
             SizeFlagsVertical = SizeFlags.ShrinkCenter,
-            TooltipText = "Позвать орду сейчас\nЗолота за это не дают. Зато орда придёт, зная о вашей обороне меньше: сколько времени до волны прошло, столько она и разведала. Пробел.",
+            TooltipText = CallTip,
         };
         _call.AddThemeFontSizeOverride("font_size", 12);
         _call.Pressed += () => _m.Command.CallWave();
@@ -302,12 +307,16 @@ public partial class WaveClock : Control
         else
         {
             int bands = sim.Bands.FindAll(b => b.State == BandState.Coming).Count;
-            _title.Text = $"ВОЛНА {w.Number + 1} ИЗ {Waves.Total}" + (bands > 0 ? $" · ВАТАГ {bands}" : "");
+            _title.Text = $"ВОЛНА {w.Number + 1} ИЗ {Waves.Total}" + (bands > 0 ? $" · ВАТАГ {bands}" : "") +
+                (w.DawnLeft > 0 ? " · РАССВЕТ" : w.Countdown < Waves.Dusk ? " · ЗАКАТ" : "");
             _time.Text = w.Countdown < 100 * 60 ? Fmt.Clock(w.Countdown) : "—";
             _unit.Text = "ДО ОРДЫ";
             _call.Text = $"На штурм · {w.IntelNow * 100:0} %";
             _call.Disabled = false;
+            _call.TooltipText = CallTip;
         }
+        if (_m.Atmos != null) { _dial.Day = _m.Atmos.ShownDay; _dial.Dark = _m.Atmos.ShownDark; }
+        _dial.QueueRedraw();
         _note.Text = _m.Paused ? "ПАУЗА" : _m.Speed > 1 ? $"×{_m.Speed}" : "";
         for (int i = 0; i < _speeds.Count; i++) _speeds[i].SetPressedNoSignal(i == 0 ? _m.Paused : !_m.Paused && _m.Speed == i);
         _trails.SetPressedNoSignal(sim.WantTrails);
@@ -381,6 +390,51 @@ public partial class KeepBar : Control
         var fill = Value > .6f ? Ornament.Moss : Value > .3f ? Ornament.Ember : Ornament.Blood;
         DrawRect(new Rect2(r.Position, new Vector2(r.Size.X * Value, h)), fill);
         DrawRect(r, Ornament.BronzeDark, false, 1);
+    }
+
+    public override GodotObject _MakeCustomTooltip(string forText) => Tooltip.Make(forText);
+}
+
+/// <summary>
+/// The day on the wave clock: a sun going over a little arc from dawn to sunset, reddening low and sinking as the dusk
+/// comes on; a crescent moon and a few stars while the horde is in the valley; the sun up out of the dark at dawn.
+/// </summary>
+public partial class DayDial : Control
+{
+    public float Day, Dark;
+
+    public DayDial()
+    {
+        CustomMinimumSize = new Vector2(38, 12);
+        MouseFilter = MouseFilterEnum.Stop;
+        TooltipText = "Сутки\nДесять минут до орды — день: стройте, пока светло. За минуту до волны садится солнце, и орда приходит ночью. " +
+            "В темноте лучник бьёт в полную силу только то, что освещено, — у факелов на стенах, у огня, у цитадели, врага с факелом в руке; " +
+            "неосвещённого он видит лишь вблизи и чаще мажет. Отбили волну — светает.";
+    }
+
+    public override void _Draw()
+    {
+        float w = Size.X, cx = w / 2, by = Size.Y - 1.5f, r = Math.Min(cx - 3, Size.Y - 3);
+        // the ground and the sun's way over it
+        DrawLine(new Vector2(1, by), new Vector2(w - 1, by), Ornament.Aged, 1);
+        DrawArc(new Vector2(cx, by), r, MathF.PI, MathF.Tau, 18, new Color(Ornament.Aged, .5f), 1, true);
+        // the sun, along its way by the time of day, gold going red low in the west; it fades as the dark comes on
+        float a = MathF.PI * (1 + Math.Clamp(Day, 0, 1)), low = 1 - MathF.Abs(MathF.Sin(a));
+        var sun = new Vector2(cx + MathF.Cos(a) * r, by + MathF.Sin(a) * r);
+        var gold = Ornament.EmberGlow.Lerp(Ornament.Blood, Day > .5f ? low : 0);
+        if (Dark < 1)
+        {
+            DrawCircle(sun, 3.4f, new Color(gold, .25f * (1 - Dark)));
+            DrawCircle(sun, 2.2f, new Color(gold, 1 - Dark));
+        }
+        // the moon and the stars of the night
+        if (Dark > 0)
+        {
+            var moon = new Color("c9d3ee") { A = Dark };
+            DrawArc(new Vector2(cx, by - r + 1.5f), 2.3f, MathF.PI * .55f, MathF.PI * 1.45f, 10, moon, 1.7f, true);
+            foreach (var (sx, sy) in new[] { (-9f, 4f), (8f, 2.5f), (11f, 6f) })
+                DrawRect(new Rect2(cx + sx, by - r + sy, 1, 1), new Color(moon, Dark * .75f));
+        }
     }
 
     public override GodotObject _MakeCustomTooltip(string forText) => Tooltip.Make(forText);

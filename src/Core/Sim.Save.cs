@@ -15,7 +15,7 @@ namespace VoxelTower.Core;
 /// </summary>
 public sealed partial class Sim
 {
-    public const int SaveVersion = 1;
+    public const int SaveVersion = 2;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -84,7 +84,7 @@ public sealed partial class Sim
         foreach (var u in living) WriteUnit(w, u);
         w.Write(Bands.Count);
         foreach (var b in Bands) WriteBand(w, b);
-        w.Write(Waves.Number); w.Write(Waves.Active); w.Write(Waves.Countdown); w.Write(Waves.Intel); w.Write(Waves._spawnT);
+        w.Write(Waves.Number); w.Write(Waves.Active); w.Write(Waves.Countdown); w.Write(Waves.Intel); w.Write(Waves._spawnT); w.Write(Waves.DawnLeft);
         w.Write(Waves._lastBand?.Id ?? -1);
         w.Write(Waves._queue.Count);
         foreach (var (kind, band, back) in Waves._queue) { w.Write(kind.Key); w.Write(band?.Id ?? -1); WriteSurvivor(w, back); }
@@ -251,6 +251,7 @@ public sealed partial class Sim
         for (int i = 0; i < nbands; i++) Bands.Add(ReadBand(r, byId));
         foreach (var (u, id) in bandOf) u.Band = Bands.Find(b => b.Id == id);
         Waves.Number = r.ReadInt32(); Waves.Active = r.ReadBoolean(); Waves.Countdown = r.ReadDouble(); Waves.Intel = r.ReadDouble(); Waves._spawnT = r.ReadDouble();
+        Waves.DawnLeft = r.ReadDouble();
         int last = r.ReadInt32();
         Waves._lastBand = Bands.Find(b => b.Id == last);
         Waves._queue.Clear();

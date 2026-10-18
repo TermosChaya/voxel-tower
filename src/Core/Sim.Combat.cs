@@ -140,7 +140,7 @@ public sealed partial class Sim
         var p = u.Prey;
         if (p == null || p.Dead || Dist(u, p) > 70 * 16 || !Armed(u)) { u.Prey = null; u.Path = null; return false; }
         u.State = UnitState.Fight;
-        if (u.T.Ranged ? Dist(u, p) <= u.T.Range && Sight(u, p) : InReach(u, p))
+        if (u.T.Ranged ? Dist(u, p) <= RangeAt(u, p.X, p.Z) && Sight(u, p) : InReach(u, p))
         {
             u.Path = null;
             u.Facing = MathF.Atan2(p.Z - u.Z, p.X - u.X);
@@ -169,7 +169,7 @@ public sealed partial class Sim
             // what the player pointed at to set alight comes first
             if (u.KindleAt >= 0 && KindleShot(u, dt)) return true;
             var t = u.Target;
-            if (t == null || t.Dead || Dist(u, t) > u.T.Range || Time >= u.NextSearch)
+            if (t == null || t.Dead || Dist(u, t) > RangeAt(u, t.X, t.Z) || Time >= u.NextSearch)
             {
                 t = BestTarget(u);
                 u.Target = t;
@@ -226,6 +226,53 @@ public sealed partial class Sim
         return true;
     }
 
+    // ------------------------------------------------------------ the dark
+
+    /// <summary>
+    /// Patches of four metres where it is light at night: by the torches on the walls, by fires, round the citadel, round
+    /// a raider carrying a torch and round anyone who burns.
+    /// </summary>
+    readonly HashSet<int> _lit = new();
+    double _litAt = -99;
+
+    static int LitKey(int x, int z) => (x >> 5) | (z >> 5) << 10;
+
+    /// <summary>Lays out once a second where it is light.</summary>
+    void TickLight()
+    {
+        if (Time - _litAt < 1) return;
+        _litAt = Time;
+        _lit.Clear();
+        // by day the whole valley is light
+        if (Waves.Darkness <= 0) return;
+        void Around(float x, float z, float r)
+        {
+            for (float dz = -r; dz <= r; dz += 16)
+                for (float dx = -r; dx <= r; dx += 16)
+                    if (dx * dx + dz * dz <= r * r) _lit.Add(LitKey((int)Math.Clamp(x + dx, 0, World.SX - 1), (int)Math.Clamp(z + dz, 0, World.SZ - 1)));
+        }
+        foreach (var f in Fixtures) if (f.Kind == FixtureKind.Torch) Around(f.LX, f.LZ, 6 * VoxelWorld.PerMetre);
+        Around(Site.KeepX, Site.KeepZ, Site.KeepR + 8 * VoxelWorld.PerMetre);
+        int n = 0;
+        foreach (int p in Burning.Keys)
+        {
+            if (n++ % 7 != 0) continue;
+            var (x, _, z) = WaterPlanner.Unpack(p);
+            Around(x, z, 5 * VoxelWorld.PerMetre);
+        }
+        foreach (var u in Units)
+            if (!u.Dead && (u.Torch || u.Burn > 0)) Around(u.X, u.Z, 3 * VoxelWorld.PerMetre);
+    }
+
+    /// <summary>Whether a spot is lit at night.</summary>
+    public bool Lit(float x, float z) => _lit.Contains(LitKey((int)Math.Clamp(x, 0, World.SX - 1), (int)Math.Clamp(z, 0, World.SZ - 1)));
+
+    /// <summary>How far a bow carries into the dark now: all the way by day, little more than half at night.</summary>
+    public float DarkRange(Unit a) => a.T.Range * (1 - .45f * Waves.Darkness);
+
+    /// <summary>How far a bow carries to a spot: all the way by day or where it is light, little more than half in the dark.</summary>
+    public float RangeAt(Unit a, float x, float z) => Waves.Darkness <= 0 || Lit(x, z) ? a.T.Range : DarkRange(a);
+
     /// <summary>A raider in range and in sight; the ones hacking walls or battering the citadel come first.</summary>
     Unit BestTarget(Unit u)
     {
@@ -234,7 +281,7 @@ public sealed partial class Sim
         {
             if (o.Dead || o.Team != Team.Horde) continue;
             float d = Dist(u, o);
-            if (d > u.T.Range) continue;
+            if (d > RangeAt(u, o.X, o.Z)) continue;
             // those cutting down one of ours come first, then those hacking the walls, battering the citadel, raising
             // ladders or climbing them
             bool hurting = o.State == UnitState.Fight && o.Target is { Dead: false, Team: Team.Player };
@@ -265,6 +312,8 @@ public sealed partial class Sim
     {
         float d = Dist(u, t);
         float chance = Math.Clamp(.9f - d / u.T.Range * .45f + (u.Y - t.Y > 16 ? .08f : 0), .35f, .92f);
+        // a shape in the dark is harder to hit than one in the light
+        if (!Lit(t.X, t.Z)) chance *= 1 - .2f * Waves.Darkness;
         u.Swing = 1;
         Shots++;
         Arrows.Add(new Arrow

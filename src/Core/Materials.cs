@@ -50,7 +50,9 @@ public static class Mat
     /// <summary>What a fall leaves: broken masonry and broken timber lying in a heap. Neither stands for the building it
     /// was; mending clears it away and lays the building anew.</summary>
     public const byte Rubble = 96, Lumber = 97;
-    public const int Count = 98;
+    /// <summary>The eyes of goblins, catching what light there is: two sparks out of the dark at night.</summary>
+    public const byte EyeGlint = 98;
+    public const int Count = 99;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
     public static readonly bool[] IsVeg = new bool[Count], IsPlayer = new bool[Count], IsEarthy = new bool[Count],
@@ -143,6 +145,7 @@ public static class Mat
         D(Pitch, "Смола", 0x17120f, .08f, MatGroup.Earth, Player);
         D(Rubble, "Обломки", 0x5b5755, .34f, MatGroup.Stone, 0);
         D(Lumber, "Обломки дерева", 0x45311f, .3f, MatGroup.Wood, 0);
+        D(EyeGlint, "глаз", 0xffc24a, .05f, MatGroup.Hard, Glows);
 
         D(SkinHuman, "кожа", 0xc29878, .08f, MatGroup.Hard, 0); D(SkinGoblin, "кожа", 0x6d8a39, .12f, MatGroup.Hard, 0);
         D(SkinOrc, "кожа", 0x56673f, .12f, MatGroup.Hard, 0); D(SkinTroll, "кожа", 0x66705f, .16f, MatGroup.Hard, 0);

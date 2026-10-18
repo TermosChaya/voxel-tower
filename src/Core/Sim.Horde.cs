@@ -439,6 +439,15 @@ public sealed class Waves
     public int Number;
     public bool Active;
     public double Countdown = Prep;
+    /// <summary>The dusk before the horn and the dawn after a wave beaten back, in seconds; how much of the dawn is left.</summary>
+    public const double Dusk = 60, Dawn = 30;
+    public double DawnLeft;
+
+    /// <summary>How dark it is: 0 by day, 1 at night — while a wave is in the valley — and between at dusk and at dawn.</summary>
+    public float Darkness => Active ? 1 : DawnLeft > 0 ? (float)(DawnLeft / Dawn) : Countdown < Dusk ? (float)(1 - Countdown / Dusk) : 0;
+
+    /// <summary>How far through the day it is, for the sun: 0 at dawn, ½ at noon, 1 at sunset (and through the night).</summary>
+    public float Day => Active ? 1 : (float)Math.Clamp(1 - Countdown / Prep, 0, 1);
     /// <summary>How much the horde learnt of the defences before this wave (0 to 1): the share of the countdown it had.</summary>
     public double Intel;
     internal readonly Queue<(UnitType kind, Warband band, Survivor back)> _queue = new();
@@ -455,7 +464,13 @@ public sealed class Waves
         if (s.Over) return;
         if (!Active)
         {
+            double was = Countdown;
             Countdown -= dt;
+            DawnLeft = Math.Max(0, DawnLeft - dt);
+            if (was >= Dusk && Countdown < Dusk)
+                s.Say(Number == 0
+                    ? "Солнце садится: через минуту из темноты выйдет орда. Ночью лучник бьёт в полную силу только освещённое — у факелов на стенах, у огня, у цитадели."
+                    : "Солнце садится: через минуту орда.", 2);
             if (Countdown <= 0) Start(s);
             return;
         }
@@ -473,8 +488,9 @@ public sealed class Waves
         {
             Active = false;
             Countdown = Prep;
+            DawnLeft = Dawn;
             s.Bands.RemoveAll(b => b.State != BandState.Coming);
-            s.Say($"Волна {Number} отбита. До следующей десять минут.", 1);
+            s.Say($"Волна {Number} отбита. Светает: до следующей десять минут.", 1);
             if (Number >= Total) { s.Won = true; s.Over = true; s.Say("Осада снята: долина устояла.", 1); }
             else s.PlanWave(Number + 1);
         }
