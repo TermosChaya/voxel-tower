@@ -189,6 +189,10 @@ public sealed class Unit
     public readonly List<(int x, int y, int z)> CarveList = new();
     public int CarveI;
     public float CarveEffort;
+    /// <summary>A miner: the cell of our wall it last dug out the ground under (it does that once a wall, then hacks);
+    /// while it is at it, the work the whole chamber takes, for the ground goes from under the wall all at once.</summary>
+    public int Sapped = -1;
+    public float SapCost;
 
     // the horde raising siege works
     public int BuildCell = -1;

@@ -13,7 +13,7 @@ namespace VoxelTower.Game;
 /// </summary>
 public partial class FireView : Node3D
 {
-    struct Puff { public Vector3 P, V; public float Age, Life, Size, Seed; }
+    struct Puff { public Vector3 P, V; public float Age, Life, Size, Seed; public bool Dust; }
 
     Main _m;
     MultiMeshInstance3D _flames, _smoke;
@@ -41,6 +41,27 @@ public partial class FireView : Node3D
         }
         // what burns away falls in cinders
         m.Sim.Burnt += (x, y, z, mat) => { if (_rnd.NextDouble() < .1) m.Debris.Spawn(Mat.Char, x, y, z, 1, .5f, .7f); };
+        // what falls throws up chips, and a fall throws up dust
+        m.Sim.Fell += (x, y, z, mat) => { if (_rnd.NextDouble() < .03) m.Debris.Spawn(mat, x, y, z, 1, 1.6f); };
+        m.Sim.Collapsed += (n, x, y, z) => Dust(x, y, z, n);
+    }
+
+    /// <summary>A cloud of dust where something came down: more of it, and wider, the more that fell.</summary>
+    public void Dust(float x, float y, float z, int voxels)
+    {
+        var w = _m.World;
+        int puffs = Math.Clamp(voxels / 60, 6, 120);
+        float r = Math.Clamp(MathF.Sqrt(voxels) * .25f, 4, 40);
+        for (int i = 0; i < puffs && _puffs.Count < MaxPuffs; i++)
+        {
+            float a = (float)_rnd.NextDouble() * MathF.Tau, d = (float)_rnd.NextDouble() * r;
+            _puffs.Add(new Puff
+            {
+                P = new Vector3(w.WX(x + MathF.Cos(a) * d), w.WY(y + (float)_rnd.NextDouble() * 8), w.WZ(z + MathF.Sin(a) * d)),
+                V = new Vector3(MathF.Cos(a) * .5f, .25f + (float)_rnd.NextDouble() * .3f, MathF.Sin(a) * .5f),
+                Life = 3 + (float)_rnd.NextDouble() * 3, Size = .5f + (float)_rnd.NextDouble() * .6f, Seed = (float)_rnd.NextDouble(), Dust = true,
+            });
+        }
     }
 
     MultiMeshInstance3D Multi(Mesh mesh, Material mat)
@@ -157,7 +178,9 @@ public partial class FireView : Node3D
             float f = q.Age / q.Life, size = q.Size * (1 + f * 3.2f);
             float a = Math.Min(1, q.Age * 2) * (1 - f) * .5f;
             float g = .07f + f * .1f;
-            Put(_smokeBuf, n++, q.P, size, size, new Color(g, g * .95f, g * .92f, a), q.Seed, 0);
+            // smoke is dark and goes up; the dust of a fall is pale earth and hangs
+            var c = q.Dust ? new Color(.42f, .38f, .32f, a * .9f) : new Color(g, g * .95f, g * .92f, a);
+            Put(_smokeBuf, n++, q.P, size, size, c, q.Seed, 0);
         }
         RenderingServer.MultimeshSetBuffer(_smoke.Multimesh.GetRid(), _smokeBuf);
         _smoke.Multimesh.VisibleInstanceCount = n;

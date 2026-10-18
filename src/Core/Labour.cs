@@ -59,6 +59,8 @@ public static class Labour
         foreach (var m in new[] { Mat.Cask, Mat.Crate, Mat.CrateEdge }) D(m, .5f, Stockpile.Wood, .3f);
         // charred timber crumbles at a touch and is good for nothing; set pitch comes up like earth, and is lost
         D(Mat.Char, .5f, Stockpile.None, 0); D(Mat.Pitch, 1, Stockpile.None, 0);
+        // what a fall left: broken stone comes away more easily than masonry, broken timber too, each giving back some
+        D(Mat.Rubble, 1.5f, Stockpile.Stone, .75f); D(Mat.Lumber, 1, Stockpile.Wood, .5f);
         LayCost[Mat.Rammed] = 1; LayCost[Mat.Wood] = 1.5f;
         foreach (var m in new[] { Mat.Stone, Mat.Mortar, Mat.StoneDark, Mat.StoneLight, Mat.StoneWarm, Mat.StoneCool }) LayCost[m] = 2;
         // a ladder is joinery: rails and rungs take longer than the logs they are made of; a gate more so

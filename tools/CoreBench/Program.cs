@@ -1173,7 +1173,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bridges")
     int sa = rx8 - 10, sb = ex8 + 10;
     var plan8 = Bridges.Plan(w8, site8, sa, bz8, sb, bz8, 10, Mat.Wood);
     var before = Across(null, sa - 6, bz8, sb + 6, bz8);
-    sim8.DesignateBuild(plan8);
+    sim8.DesignateBuild(plan8, arched: true);
     sim8.Stock[Stockpile.Wood] = 60 * VoxelWorld.PerM3;
     for (int i = 0; i < 6; i++) sim8.Spawn(Kinds.Worker, sim8.NearestStand(sa - 12, bz8 + 4 * (i % 3), 4));
     Run8(240);
@@ -1475,7 +1475,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--fire")
     int fx0 = kxF - 130, fz0 = kzF + 90, baseF = wF.SurfAt(fx0, fz0 + 20);
     WallF(fx0, fz0, fx0 + 3, fz0 + 79, 16, (x, z) => z < fz0 + 40 ? Mat.Wood : Mat.Stone);
     int wood0F = CountF(Mat.Wood, fx0, fz0, fx0 + 3, fz0 + 79), stone0F = CountF(Mat.Stone, fx0, fz0, fx0 + 3, fz0 + 79);
-    bool litF = simF.Ignite(fx0 + 1, baseF + 1, fz0 + 20);
+    // on its face, where the air gets at it
+    bool litF = simF.Ignite(fx0, baseF + 1, fz0 + 20);
     int mostF = 0;
     for (int t = 0; t < 420; t++) { RunF(1); mostF = Math.Max(mostF, BurningIn(fx0, fz0, fx0 + 3, fz0 + 79)); }
     int wood1F = CountF(Mat.Wood, fx0, fz0, fx0 + 3, fz0 + 79), stone1F = CountF(Mat.Stone, fx0, fz0, fx0 + 3, fz0 + 79), charF = CountF(Mat.Char, fx0, fz0, fx0 + 3, fz0 + 79);
@@ -1616,6 +1617,136 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--fire")
     Check("a worker pours pitch from the timber in the stores", poured > 100 && simF.Stock[Stockpile.Wood] <= woodF0 - poured + 1,
         $"{poured} voxels poured, timber {Fmt.M3(woodF0)} → {Fmt.M3(simF.Stock[Stockpile.Wood])} m³");
     GoneF(pourer);
+}
+
+// ---- what holds up what is built: a tower cut at its foot falls in a heap, a wall over too wide a hole comes down over
+// it, a bridge stands while it touches the banks, a miner brings a wall down by digging under it, mending raises it again
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--collapse")
+{
+    Console.WriteLine();
+    var mpC = new MapParams();
+    var wC = new VoxelWorld(mpC.SizeX, mpC.SizeY, mpC.SizeZ);
+    var siteC = MapGen.Generate(wC, mpC);
+    wC.Compact();
+    var simC = new Sim(wC, siteC);
+    simC.Waves.Countdown = 1e9; simC.WildTarget = 0;
+    void RunC(double seconds) { for (double t = 0; t < seconds; t += .05) simC.Step(.05f); }
+    void GoneC(Unit u) { u.Dead = true; u.DiedAt = -999; }
+    int kxC = siteC.KeepX, kzC = siteC.KeepZ;
+    int CountC(Func<byte, bool> what, int x0, int z0, int x1, int z1, int y0 = 0, int y1 = 191)
+    {
+        int n = 0;
+        for (int z = z0; z <= z1; z++) for (int x = x0; x <= x1; x++) for (int y = y0; y <= y1; y++) if (what(wC.Get(x, y, z))) n++;
+        return n;
+    }
+    // a level patch of ground: the highest of it, with everything over it cleared
+    int Flatten(int x0, int z0, int x1, int z1)
+    {
+        int g = 0;
+        for (int z = z0; z <= z1; z++) for (int x = x0; x <= x1; x++) g = Math.Max(g, wC.SurfAt(x, z));
+        for (int z = z0; z <= z1; z++)
+            for (int x = x0; x <= x1; x++)
+            {
+                for (int y = g; y < g + 80; y++) wC.Set(x, y, z, Mat.Air);
+                for (int y = g - 1; y >= 0 && !Mat.IsAnchor[wC.Get(x, y, z)]; y--) wC.Set(x, y, z, Mat.Soil);
+                wC.Set(x, g - 1, z, Mat.Soil);
+            }
+        return g;
+    }
+    int collapses = 0;
+    simC.Collapsed = (n, x, y, z) => collapses++;
+
+    // a stone tower two metres square and six high, cut through at its foot: it all comes down in a heap, and the goblin
+    // standing by it is crushed
+    int tx0 = kxC - 150, tz0 = kzC + 100, tg = Flatten(tx0 - 40, tz0 - 40, tx0 + 56, tz0 + 56);
+    for (int z = tz0; z < tz0 + 16; z++) for (int x = tx0; x < tx0 + 16; x++) for (int y = tg; y < tg + 48; y++) wC.Set(x, y, z, Mat.Stone);
+    RunC(.5);
+    int tower0 = CountC(m => m == Mat.Stone, tx0 - 40, tz0 - 40, tx0 + 56, tz0 + 56);
+    var under = simC.Spawn(Kinds.Goblin, simC.NearestStand(tx0 + 8, tz0 + 20, 2));
+    under.Raid = null;
+    for (int z = tz0; z < tz0 + 16; z++) for (int x = tx0; x < tx0 + 16; x++) for (int y = tg; y < tg + 2; y++) wC.Set(x, y, z, Mat.Air);
+    RunC(1);
+    static bool Stony(byte m) => m is Mat.Stone or Mat.Rubble;
+    int high = CountC(Stony, tx0, tz0, tx0 + 15, tz0 + 15, tg + 40, tg + 50), heap = CountC(m => m == Mat.Rubble, tx0 - 40, tz0 - 40, tx0 + 56, tz0 + 56);
+    int spread = heap - CountC(m => m == Mat.Rubble, tx0, tz0, tx0 + 15, tz0 + 15);
+    Check("a tower cut through at its foot comes down whole in a heap, and crushes the goblin by it",
+        high == 0 && heap > tower0 * 8 / 10 && spread > heap / 3 && collapses > 0 && (under.Dead || under.Hp < under.MaxHp),
+        $"{tower0 - 512} voxels of tower over the cut, {high} still at its top, {heap} lying in the heap ({spread} run out past its foot); the goblin {(under.Dead ? "dead, " + under.KilledBy : $"{under.Hp:0} hp")}");
+    GoneC(under);
+
+    // a stone wall a metre thick and three high: a hole a metre and a half wide under it holds, one of four metres
+    // brings the wall down over its middle, to the top
+    int wx0 = kxC - 200, wz0 = kzC - 160, wg = Flatten(wx0 - 8, wz0 - 4, wx0 + 72, wz0 + 12);
+    for (int z = wz0; z < wz0 + 8; z++) for (int x = wx0; x < wx0 + 64; x++) for (int y = wg; y < wg + 24; y++) wC.Set(x, y, z, Mat.Stone);
+    RunC(.5);
+    void Undercut(int x0, int x1) { for (int z = wz0 - 2; z < wz0 + 10; z++) for (int x = x0; x <= x1; x++) for (int y = wg - 6; y < wg; y++) wC.Set(x, y, z, Mat.Air); }
+    int wall0 = CountC(m => m == Mat.Stone, wx0, wz0, wx0 + 63, wz0 + 7, wg, wg + 30);
+    Undercut(wx0 + 4, wx0 + 15);
+    RunC(1);
+    int wall1 = CountC(m => m == Mat.Stone, wx0, wz0, wx0 + 63, wz0 + 7, wg, wg + 30);
+    Undercut(wx0 + 26, wx0 + 57);
+    RunC(1);
+    int middle = CountC(m => m == Mat.Stone, wx0 + 40, wz0, wx0 + 43, wz0 + 7, wg + 16, wg + 30), sides = CountC(m => m == Mat.Stone, wx0 + 26, wz0, wx0 + 30, wz0 + 7, wg + 16, wg + 30);
+    Check("a wall stands over a hole a metre and a half wide, and over one of four metres comes down to the top in the middle",
+        wall1 == wall0 && middle == 0 && sides >= 4 * 8 * 8,
+        $"{wall0} voxels of wall; over the narrow hole {wall1}; over the wide one, {middle} left of its middle and {sides} by its edges");
+
+    // a bridge of ours over a trench stands, an arch; cut away at both banks it falls
+    int bx0 = kxC - 110, bz0 = kzC - 260, bg = Flatten(bx0 - 30, bz0 - 12, bx0 + 90, bz0 + 12);
+    simC.InstantLabour = true;
+    simC.DesignateRemove(Shapes.Box(wC, siteC, bx0 + 16, bz0 - 12, bx0 + 44, bz0 + 12, new Stroke { Width = 1, Height = 16, Dig = true }, 0));
+    var span = Bridges.Plan(wC, siteC, bx0 + 10, bz0, bx0 + 50, bz0, 10, Mat.Stone);
+    simC.DesignateBuild(span, arched: true);
+    simC.InstantLabour = false;
+    RunC(1);
+    int Over() => CountC(m => Mat.IsMasonry(m), bx0 + 22, bz0 - 8, bx0 + 38, bz0 + 8, bg, bg + 40);
+    int deck0 = Over();
+    for (int z = bz0 - 12; z <= bz0 + 12; z++)
+        foreach (int x0 in new[] { bx0 - 4, bx0 + 40 })
+            for (int x = x0; x < x0 + 24; x++) for (int y = bg - 20; y < bg + 30; y++) if (Mat.IsMasonry(wC.Get(x, y, z))) wC.Set(x, y, z, Mat.Air);
+    RunC(1);
+    int deck1 = Over();
+    Check("a bridge of ours stands over a trench as an arch, and falls once it is cut away at both banks", span.Count > 500 && deck0 > 300 && deck1 < deck0 / 10,
+        $"{span.Count} voxels planned, {deck0} over the trench; {deck1} once both ends were cut away");
+
+    // a miner comes up against a ring of stone round the citadel: it digs out the ground under the wall, and the
+    // wall comes down; mending puts it back as it was
+    simC.InstantLabour = true;
+    simC.DesignateBuild(Shapes.Circle(wC, siteC, kxC, kzC, siteC.KeepR + 44, new Stroke { Mat = Mat.Stone, Width = 10, Height = 40, Hollow = true }, 0));
+    simC.InstantLabour = false;
+    RunC(1);
+    simC.HordeStock[Stockpile.Wood] = simC.HordeStock[Stockpile.Earth] = 0;
+    simC.ComputeFields();
+    collapses = 0;
+    var miner = simC.Spawn(Kinds.Miner, simC.NearestStand(kxC - siteC.KeepR - 100, kzC, 2));
+    int fallen = 0;
+    simC.Fell = (x, y, z, m) => { if (Mat.IsMasonry(m)) fallen++; };
+    bool sapped = false;
+    for (int t = 0; t < 120 && fallen < 2000; t++)
+    {
+        RunC(1);
+        sapped |= miner.Sapped >= 0;
+        if (Environment.GetEnvironmentVariable("COLLAPSE_DEBUG") != null && (miner.State == UnitState.Carve || t % 10 == 0))
+        {
+            int ci = simC.Nav.I(Math.Max(0, miner.CarveCell)), ck = simC.Nav.K(Math.Max(0, miner.CarveCell));
+            string list = miner.CarveList.Count > 0 ? $"first {miner.CarveList[0]}, last {miner.CarveList[^1]}" : "";
+            Console.WriteLine($"  t {t}: miner at {miner.X:0},{miner.Y:0},{miner.Z:0} {miner.State}, carve cell {ci},{ck} ({miner.CarveI}/{miner.CarveList.Count}; {list}), sapped {miner.Sapped}, fallen {fallen}, collapses {collapses}");
+        }
+    }
+    Check("a miner digs out the ground under a wall of ours, and the wall comes down", sapped && collapses > 0 && fallen > 2000,
+        $"sapped {sapped}, {collapses} falls, {fallen} voxels of masonry came down, the miner {(miner.Dead ? "dead, " + miner.KilledBy : miner.State.ToString())}");
+    GoneC(miner);
+    simC.Fell = null;
+    var meant = simC.MeantIn(kxC - 120, kzC - 120, kxC + 120, kzC + 120);
+    var lay = new VoxelList(); var clear = new VoxelList();
+    simC.MendPlan(meant, lay, clear);
+    simC.InstantLabour = true;
+    simC.Mend(lay, clear);
+    simC.InstantLabour = false;
+    RunC(1);
+    var (meantN, standing) = simC.Soundness(kxC - 120, kzC - 120, kxC + 120, kzC + 120);
+    Check("mending raises the fallen wall again as it was", lay.Count > 1000 && standing >= meantN * 98 / 100,
+        $"{lay.Count} to lay, {clear.Count} of rubble to clear; {standing} of {meantN} meant voxels stand");
 }
 
 // ---- bodies of voxels: a skeleton inside, blows carving out what they strike, limbs cut off, vital wounds, bleeding

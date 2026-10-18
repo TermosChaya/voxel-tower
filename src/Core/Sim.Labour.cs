@@ -8,8 +8,10 @@ public sealed partial class Sim
     // ------------------------------------------------------------ what the player marks out
 
     /// <summary>Marks a planned building; pawns lay it voxel by voxel from the stores.</summary>
-    public int DesignateBuild(VoxelList L)
+    public int DesignateBuild(VoxelList L, bool arched = false)
     {
+        // an arch stands as long as it touches the ground: what is laid of it is marked so
+        if (arched && L != null) for (int i = 0; i < L.Count; i++) Arched.SetRaw(L.X(i), L.Y(i), L.Z(i), 1);
         int n = Orders.PlanBuild(L);
         if (InstantLabour) CompleteAll();
         return n;
@@ -181,7 +183,7 @@ public sealed partial class Sim
             return true;
         }
         if (!Brushes.Free(cur)) { Orders.Clear(j.x, j.y, j.z); return false; }
-        if (_bodies[Nav.CellOf(j.x, j.y, j.z)] > 0) return false;
+        if (_bodies[Nav.CellOf(j.x, j.y, j.z)] > 0 || !Footed(j.x, j.y, j.z)) return false;
         int ck = Labour.CostKind(j.m);
         if (ck != Stockpile.None && !Stock.Take(ck, 1)) { u.Why = "нет: " + Stockpile.Name(ck); return false; }
         World.Set(j.x, j.y, j.z, j.m);
@@ -207,7 +209,7 @@ public sealed partial class Sim
         var digs = new List<(int x, int y, int z, byte m)>();
         var builds = new List<(int x, int y, int z, byte m)>();
         string missing = "";
-        bool crowded = false;
+        bool crowded = false, unfooted = false;
         for (int y = y1 - 1; y >= y0 && digs.Count < 2048; y--)
             for (int z = z0; z < z1; z++)
                 for (int x = x0; x < x1; x++)
@@ -218,6 +220,8 @@ public sealed partial class Sim
                     int ck = Labour.CostKind(o);
                     if (ck != Stockpile.None && Stock[ck] < 1) { missing = Stockpile.Name(ck); continue; }
                     if (_bodies[Nav.CellOf(x, y, z)] > 0) { crowded = true; continue; }
+                    // nothing yet to lay it on: what is under it first (it is gathered again once that is laid)
+                    if (!Footed(x, y, z) && !builds.Exists(b => Math.Abs(b.x - x) + Math.Abs(b.y - y) + Math.Abs(b.z - z) == 1)) { unfooted = true; continue; }
                     builds.Add((x, y, z, o));
                 }
         float ux = u.X, uz = u.Z;
@@ -226,7 +230,7 @@ public sealed partial class Sim
         builds.Sort((a, b) => a.y != b.y ? a.y.CompareTo(b.y) : Near(a).CompareTo(Near(b)));
         u.Jobs.AddRange(digs);
         u.Jobs.AddRange(builds);
-        if (u.Jobs.Count == 0) u.Why = missing != "" ? "нет: " + missing : crowded ? "на месте кладки стоят" : "";
+        if (u.Jobs.Count == 0) u.Why = missing != "" ? "нет: " + missing : crowded ? "на месте кладки стоят" : unfooted ? "ждёт опоры: класть не на что" : "";
     }
 
     void FindWork(Unit u)

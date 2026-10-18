@@ -45,6 +45,8 @@ public sealed class Site
 
     /// <summary>What the ruins were meant to be, voxel by voxel, so they can be raised again; the game keeps adding to it.</summary>
     public VoxelWorld Design;
+    /// <summary>Where the old bridges arch over the river: they stand as long as they touch the ground (<see cref="Sim.Arched"/>).</summary>
+    public VoxelWorld Arched;
 
     /// <summary>Columns nobody may build on: the map's western edge (the horde's entry), the citadel and its gate approach.</summary>
     public bool Forbidden(int x, int z)

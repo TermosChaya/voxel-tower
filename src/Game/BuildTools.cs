@@ -454,7 +454,7 @@ public partial class BuildTools : Node3D
             if (Tool == Tool.Gather) { SetZone(a, b); return; }
             if (Tool == Tool.Repair) { RepairIn(a, b); return; }
             if (Tool == Tool.Bridge && BridgeRefusal(a, b) is { } why) { Refuse(why); return; }
-            Designate(PlanDrag(a, b, dig), dig, ToolName(Tool));
+            Designate(PlanDrag(a, b, dig), dig, ToolName(Tool), arched: Tool == Tool.Bridge);
             return;
         }
         if (!click || !_hasHover) return;
@@ -738,11 +738,11 @@ public partial class BuildTools : Node3D
     }
 
     /// <summary>Marks a whole shape for the pawns and writes in the chronicle what it will take.</summary>
-    bool Designate(VoxelList plan, bool dig, string what)
+    bool Designate(VoxelList plan, bool dig, string what, bool arched = false)
     {
         if (plan == null || plan.Count == 0) { Refuse(dig ? "здесь нечего копать" : "здесь нечего класть: всё уже занято"); return false; }
         double sec = Labour.Estimate(_m.World, plan, dig, _est);
-        int n = dig ? _m.Sim.DesignateRemove(plan) : _m.Sim.DesignateBuild(plan);
+        int n = dig ? _m.Sim.DesignateRemove(plan) : _m.Sim.DesignateBuild(plan, arched);
         if (n == 0) { Refuse(dig ? "здесь нечего копать" : "здесь нечего класть: всё уже занято"); return false; }
         _markName = what;
         _m.Hud.Log($"{what}: {Summary(_est, dig, sec)}");

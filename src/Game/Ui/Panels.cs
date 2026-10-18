@@ -52,7 +52,7 @@ public static class Retinue
         if (u.Team == Team.Horde)
             return u.State switch
             {
-                UnitState.Carve => "прорубает дорогу", UnitState.Siege => u.Kindling > 0 ? "поджигает факелом" : "бьёт в цитадель", UnitState.Fight => "бьётся",
+                UnitState.Carve => u.SapCost > 0 ? "подкапывает стену" : "прорубает дорогу", UnitState.Siege => u.Kindling > 0 ? "поджигает факелом" : "бьёт в цитадель", UnitState.Fight => "бьётся",
                 UnitState.Work => u.Building switch { Works.Ladder => "ставит лестницу", Works.Bridge => "кладёт мост", Works.Fill => "засыпает ров", _ => "строит" },
                 UnitState.Flee => u.Routed && Sim.Armed(u) ? "бежит прочь" : "уползает прочь",
                 _ => (u.Returned ? "идёт к цитадели · бежал в прошлый раз" : "идёт к цитадели") + (u.Torch ? " · с факелом" : ""),

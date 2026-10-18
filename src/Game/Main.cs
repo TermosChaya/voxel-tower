@@ -692,6 +692,7 @@ public partial class Main : Node3D
     {
         if (_pose == "battle") { Siege(); return; }
         if (_pose == "fire") { Blaze(); return; }
+        if (_pose == "sap") { Sapping(); return; }
         if (_pose == "wounds") { Wounded(); return; }
         if (_pose == "flood") { Flood(); return; }
         if (_pose == "trees") { LookAtGrove(); return; }
@@ -915,6 +916,42 @@ public partial class Main : Node3D
         Hud.Refresh();
         Marks.Flush();
         foreach (var u in archers) Selected.Add(u);
+    }
+
+    /// <summary>A ring of stone round the citadel with archers on it, and miners coming at it to dig the ground out from under it.</summary>
+    void Sapping()
+    {
+        var w = World; var s = Site; var sim = Sim;
+        sim.Waves.Countdown = 1e9;
+        sim.Stock.Gold = 90;
+        int kx = s.KeepX, kz = s.KeepZ;
+        sim.InstantLabour = true;
+        int top = Shapes.LevelTop(w, kx - 64, kz, 40);
+        sim.DesignateBuild(Shapes.Circle(w, s, kx, kz, s.KeepR + 44, new Stroke { Mat = Mat.Stone, Width = 10, Height = 40, Level = true, Hollow = true }, top));
+        sim.InstantLabour = false;
+        var archers = new List<Unit>();
+        foreach (var (dx, dz) in new[] { (-62, -30), (-52, 40) })
+        {
+            int c = sim.NearestStand(kx + dx, kz + dz, 4);
+            var a = sim.Spawn(Kinds.Archer, c);
+            sim.Command(new[] { a }, c);
+            archers.Add(a);
+        }
+        Advance(2);
+        sim.Waves.Countdown = 0;
+        sim.Step(.05f);
+        sim.Waves.Countdown = 1e9;
+        sim.HordeStock[Stockpile.Wood] = sim.HordeStock[Stockpile.Earth] = 0;
+        foreach (var (t, dx, dz) in new[] { (Kinds.Miner, -110, -6), (Kinds.Miner, -116, 22), (Kinds.Goblin, -124, 6), (Kinds.Orc, -130, -14) })
+        {
+            int c = sim.NearestStand(kx + dx, kz + dz, t.Move.Height);
+            if (c >= 0) sim.Spawn(t, c);
+        }
+        sim.ComputeFields();
+        Advance(_poseSeconds);
+        Rig.Set(World.WX(kx - 80), World.WZ(kz + 6), -1.1f, .62f, 1.3f, snap: true);
+        Hud.Refresh();
+        Marks.Flush();
     }
 
     /// <summary>A row of the hurt for a close look: an arm cut off, arrows stuck in, a head split, a goblin cut down.</summary>

@@ -44,6 +44,7 @@ public sealed partial class Sim
         Nav.BuildAll();
         Orders = new Orders(w, s);
         Design = s.Design ??= new VoxelWorld(w.SX, w.SY, w.SZ);
+        Arched = s.Arched ??= new VoxelWorld(w.SX, w.SY, w.SZ);
         Paths = new PathFinder(Nav);
         _bodies = new int[Nav.Count];
         _claims = new int[Nav.NX * Nav.NZ];
@@ -55,6 +56,7 @@ public sealed partial class Sim
         Stock[Stockpile.Wood] = 24 * VoxelWorld.PerM3;
         Stock[Stockpile.Earth] = 16 * VoxelWorld.PerM3;
         w.Replaced += OnWaterEdit;
+        w.Replaced += OnSupportEdit;
     }
 
     public void Say(string text, int kind = 0) => Said?.Invoke(text, kind, float.NaN, float.NaN);
@@ -123,6 +125,7 @@ public sealed partial class Sim
         Time += dt;
         TickWater(dt);
         TickFire(dt);
+        TickCollapse(dt);
         TickGates(dt);
         TickDecor();
         TickMines(dt);

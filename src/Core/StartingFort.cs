@@ -209,6 +209,8 @@ public static class StartingFort
             w.Set(rx, ry, rz, m);
         }
         if (gate != null) sim.UnhangGate(gate);
+        // what of the ruin would not stand has come down long ago
+        sim.Subside(x0 - TowerR - 8, z0 - TowerR - 8, x1 + TowerR + 8, z1 + TowerR + 8);
         // what is left standing keeps its torches, its banner and what lies about the yard
         sim.Decorate();
         sim.Nav.Flush();

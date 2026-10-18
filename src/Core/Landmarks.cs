@@ -198,6 +198,8 @@ public static class Landmarks
     public static Landmark OldBridge(VoxelWorld w, Site s, int ax, int az, int bx, int bz, string name, bool whole, uint seed)
     {
         var plan = Bridges.Plan(w, s, ax, az, bx, bz, 12, Mat.Stone);
+        s.Arched ??= new VoxelWorld(w.SX, w.SY, w.SZ);
+        for (int i = 0; i < plan.Count; i++) s.Arched.SetRaw(plan.X(i), plan.Y(i), plan.Z(i), 1);
         double dx = bx - ax, dz = bz - az, span = Math.Sqrt(dx * dx + dz * dz);
         var noise = new ValueNoise(seed * 67 + 5);
         for (int i = 0; i < plan.Count; i++)

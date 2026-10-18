@@ -241,6 +241,8 @@ public sealed partial class Sim
         u.CarveList.Sort((a, b) =>
             ((a.x - hx) * (a.x - hx) + (a.y - hy) * (a.y - hy) + (a.z - hz) * (a.z - hz)).CompareTo((b.x - hx) * (b.x - hx) + (b.y - hy) * (b.y - hy) + (b.z - hz) * (b.z - hz)));
         u.State = UnitState.Carve;
+        // a miner up against a wall of ours digs the ground out from under it instead
+        if (u.T == Kinds.Miner) Sap(u);
     }
 
     static bool Blocks(byte m) => m != 0 && !Mat.Passable[m];
@@ -249,8 +251,9 @@ public sealed partial class Sim
 
     void Carve(Unit u, float dt)
     {
-        // with a torch, what burns is set alight first
+        // with a torch, what burns is set alight first; a miner under a wall keeps at it till all the ground is out
         if (u.Torch && Kindle(u, dt)) return;
+        if (Sapping(u, dt)) return;
         u.State = UnitState.Carve;
         u.CarveEffort += dt;
         var rate = u.T.Move.Carve;

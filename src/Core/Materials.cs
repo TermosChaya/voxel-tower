@@ -47,7 +47,10 @@ public static class Mat
     /// <summary>Inside the bodies, and more colours for them: never placed in the world.</summary>
     public const byte Flesh = 80, Brain = 81, Heart = 82, Blood = 83, HairBrown = 84, HairGinger = 85, HairGrey = 86, SkinTan = 87,
         SkinPale = 88, SkinGoblinDark = 89, SkinGoblinPale = 90, SkinOrcGrey = 91, ClothGreen = 92, ClothBrown = 93, ClothOchre = 94, Straw = 95;
-    public const int Count = 96;
+    /// <summary>What a fall leaves: broken masonry and broken timber lying in a heap. Neither stands for the building it
+    /// was; mending clears it away and lays the building anew.</summary>
+    public const byte Rubble = 96, Lumber = 97;
+    public const int Count = 98;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
     public static readonly bool[] IsVeg = new bool[Count], IsPlayer = new bool[Count], IsEarthy = new bool[Count],
@@ -138,6 +141,8 @@ public static class Mat
         D(Sack, "Мешки", 0x8c7c5b, .14f, MatGroup.Wood, Decor);
         D(Char, "Головни", 0x1d1714, .34f, MatGroup.Earth, 0);
         D(Pitch, "Смола", 0x17120f, .08f, MatGroup.Earth, Player);
+        D(Rubble, "Обломки", 0x5b5755, .34f, MatGroup.Stone, 0);
+        D(Lumber, "Обломки дерева", 0x45311f, .3f, MatGroup.Wood, 0);
 
         D(SkinHuman, "кожа", 0xc29878, .08f, MatGroup.Hard, 0); D(SkinGoblin, "кожа", 0x6d8a39, .12f, MatGroup.Hard, 0);
         D(SkinOrc, "кожа", 0x56673f, .12f, MatGroup.Hard, 0); D(SkinTroll, "кожа", 0x66705f, .16f, MatGroup.Hard, 0);
@@ -186,6 +191,7 @@ public static class Mat
         F(.03f, 45, .2f, Gate, GateShut, GateOpen);
         F(.3f, 6, 0, Banner, BannerTrim, Sack);
         F(.08f, 20, .3f, Cask, Crate, CrateEdge);
+        F(.06f, 25, .3f, Lumber);
         F(3, 50, 0, Pitch);
         Heat[Pitch] = 2;
     }
