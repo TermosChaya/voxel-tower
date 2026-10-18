@@ -205,7 +205,8 @@ public partial class Minimap : Control
                 float r = team switch { Team.Horde => 2.4f, Team.Player => 2.1f, _ => 1.5f };
                 var p = ToMap(u.X, u.Z);
                 DrawCircle(p, r + 1, Rim);
-                DrawCircle(p, r, team switch { Team.Horde => Horde, Team.Player => Ours, _ => Beast });
+                // a raider lying bound is drawn small and dim: it fights nobody
+                DrawCircle(p, u.Bound ? r * .7f : r, u.Bound ? Horde.Darkened(.45f) : team switch { Team.Horde => Horde, Team.Player => Ours, _ => Beast });
             }
         foreach (var u in _m.Selected)
             if (!u.Dead) DrawArc(ToMap(u.X, u.Z), 4.4f, 0, Mathf.Tau, 14, Ornament.BronzeLight, 1.3f, true);

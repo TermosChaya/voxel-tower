@@ -8,7 +8,7 @@ public enum Team : byte { Player, Horde, Wild }
 public enum UnitState : byte { Idle, Walk, Work, Fight, Carve, Siege, Flee, Dead }
 
 /// <summary>What a pawn with nothing to do passes the time with: for its pose and for the panel.</summary>
-public enum Pastime : byte { None, Stroll, Look, Sit, Talk, Stretch, Warm, Watch, Pray }
+public enum Pastime : byte { None, Stroll, Look, Sit, Talk, Stretch, Warm, Watch, Pray, Bound }
 
 /// <summary>A kind of pawn or attacker: how it moves, works, fights, and what it looks like.</summary>
 public sealed class UnitType
@@ -306,6 +306,22 @@ public sealed class Unit
     public readonly List<int> Docked = new();
     /// <summary>An envoy of the horde, under a white rag, come to bargain: no one of the horde strikes with it.</summary>
     public bool Envoy;
+
+    // captives of ours, and what is given to the old powers
+    /// <summary>One of ours told to take raiders alive: the blow that would bring one down to a quarter of itself fells and binds it instead.</summary>
+    public bool TakeAlive;
+    /// <summary>A raider struck down and bound — lying where it fell, led in, or a prisoner in the citadel — and since when.</summary>
+    public bool Bound;
+    public double BoundAt;
+    /// <summary>A prisoner: seconds of the night it has been left unguarded.</summary>
+    public double Unguarded;
+    /// <summary>A worker going out for a bound raider; when it next looks for one.</summary>
+    public Unit Fetching;
+    public double NextFetchLook;
+    /// <summary>A priest's sacrifice under way, or null.</summary>
+    public Rite Rite;
+    /// <summary>Till when it is held fast in the chains of a spell.</summary>
+    public double ChainedUntil = -1;
 
     // beasts, and pawns with nothing to do
     /// <summary>Where it grazes and wanders round; for a pawn, where it idles round.</summary>

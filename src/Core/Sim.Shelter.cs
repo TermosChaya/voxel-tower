@@ -59,7 +59,8 @@ public sealed partial class Sim
         var (gx, _, gz) = Nav.Feet(Gate);
         foreach (var o in Units)
         {
-            if (o.Dead || o.Team != Team.Horde) continue;
+            // a prisoner led in is no raider at the door
+            if (o.Dead || o.Team != Team.Horde || o.Bound || o.Inside) continue;
             float dx = o.X - gx, dz = o.Z - gz;
             if (dx * dx + dz * dz < KeepInR * KeepInR) { _raiderByDoor = Time; break; }
         }
@@ -183,6 +184,8 @@ public sealed partial class Sim
     /// <summary>Into the citadel: out of the world till it comes out again.</summary>
     void Enter(Unit u)
     {
+        // a prisoner it was leading goes in with it
+        if (u.Captive is { Team: Team.Horde, Dead: false } c && c.Captor == u) { Imprison(c); u.Captive = null; }
         ReleaseSite(u);
         u.Inside = true;
         u.Refuge = Gate;

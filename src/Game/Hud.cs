@@ -69,8 +69,9 @@ public partial class Hud : CanvasLayer
     TopBeam _beam;
     HBoxContainer _tabs;
     DropPanel _drop;
-    TabPlaque _goalsTab, _hordeTab, _loreTab;
+    TabPlaque _goalsTab, _hordeTab, _loreTab, _magicTab;
     LorePanel _lore;
+    MysteryPanel _mysteries;
     Stores _stores;
     WaveClock _clockPanel;
     Medallion _help, _menuButton;
@@ -238,7 +239,11 @@ public partial class Hud : CanvasLayer
         _lore = new LorePanel();
         _lore.Init(m);
         _loreTab = Tab("lore", Icons.Tome, "Знания", "Знания\nЧему выучилась крепость. Каждая отбитая волна приносит знания, и на них учатся умениям пяти ветвей: луки, кладка, труд, дружина, ловушки. Цифра на вкладке — сколько знаний ждёт, когда есть чему учиться.", _lore, LorePanel.Width);
-        _squeeze.AddRange(new[] { blueprintsTab, chronicleTab, worksTab, _goalsTab, _hordeTab, _loreTab });
+        _mysteries = new MysteryPanel();
+        _mysteries.Init(m);
+        _magicTab = Tab("magic", Icons.Skull, "Таинства", "Таинства\nВмешательство старых сил и откровения; где молятся жрецы и как их слышат; жертвы — пленного, тушу с охоты или своего. " +
+            "Цифра на вкладке — сколько пленных ждёт в цитадели.", _mysteries, MysteryPanel.Width);
+        _squeeze.AddRange(new[] { blueprintsTab, chronicleTab, worksTab, _goalsTab, _hordeTab, _loreTab, _magicTab });
 
         _stores = new Stores();
         _beam.AddChild(_stores);
@@ -426,6 +431,9 @@ public partial class Hud : CanvasLayer
         string lb = _lore.Badge();
         if (_loreTab.Badge != lb) { _loreTab.Badge = lb; _loreTab.QueueRedraw(); }
         _lore.Refresh();
+        string mb = _mysteries.Badge();
+        if (_magicTab.Badge != mb) { _magicTab.Badge = mb; _magicTab.QueueRedraw(); }
+        _mysteries.Refresh();
     }
 
     /// <summary>
@@ -600,6 +608,7 @@ public partial class Hud : CanvasLayer
     public void OpenPanel(string key) => _drop.Open(key);
     public void ClosePanel() => _drop.Close();
     public LorePanel Lore => _lore;
+    public MysteryPanel Mysteries => _mysteries;
     public bool MenuOpen => _menu?.IsOpen == true;
     public void OpenMenu() => _menu?.Open();
     public void OpenMenu(string page) => _menu?.Open(page);

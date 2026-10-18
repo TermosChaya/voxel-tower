@@ -15,7 +15,7 @@ namespace VoxelTower.Core;
 /// </summary>
 public sealed partial class Sim
 {
-    public const int SaveVersion = 9;
+    public const int SaveVersion = 10;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -94,7 +94,8 @@ public sealed partial class Sim
         w.Write(Waves.Number); w.Write(Waves.Active); w.Write(Waves.Countdown); w.Write(Waves.Intel); w.Write(Waves._spawnT); w.Write(Waves.DawnLeft); w.Write(Alarm);
         w.Write((byte)Weather); w.Write(WeatherLeft); w.Write(_nextWeather); w.Write(_nextBeast); w.Write(_nextEnvoy); w.Write(Angered);
         w.Write(Offer != null); if (Offer != null) { w.Write((byte)Offer.Kind); w.Write(Offer.Store); w.Write(Offer.Cost); w.Write(Offer.Envoy?.Id ?? -1); w.Write(Offer.Until); }
-        w.Write(Favour);
+        w.Write(Favour); w.Write(Revelations); w.Write(MournUntil);
+        w.Write(Carcasses.Count); foreach (var t in Carcasses) w.Write(t.Key);
         w.Write(Knowledge); w.Write(Learnt.Count);
         foreach (string k in Learnt) w.Write(k);
         w.Write(Waves._lastBand?.Id ?? -1);
@@ -145,6 +146,13 @@ public sealed partial class Sim
         w.Write(u.Escort?.Id ?? -1); w.Write(u.AimAt);
         w.Write(u.Docked.Count); foreach (int p in u.Docked) w.Write(p);
         w.Write(u.Envoy);
+        w.Write(u.TakeAlive); w.Write(u.Bound); w.Write(u.BoundAt); w.Write(u.Unguarded); w.Write(u.ChainedUntil);
+        // a sacrifice under way
+        w.Write(u.Rite != null);
+        if (u.Rite is { } rite)
+        {
+            w.Write((byte)rite.Kind); w.Write(rite.Victim?.Id ?? -1); w.Write(rite.Beast?.Key ?? ""); w.Write(rite.Spot); w.Write(rite.Stage); w.Write(rite.Done);
+        }
         WriteBody(w, u.Wounds);
     }
 
@@ -193,7 +201,7 @@ public sealed partial class Sim
 
     /// <summary>Reads the siege back, after the valley (<see cref="SaveReader.Valley"/>) and a new sim on it; returns what
     /// the screen kept.</summary>
-    readonly Dictionary<Unit, int> _captorOf = new(), _escortOf = new();
+    readonly Dictionary<Unit, int> _captorOf = new(), _escortOf = new(), _victimOf = new();
 
     public string Load(SaveReader save)
     {
@@ -287,6 +295,8 @@ public sealed partial class Sim
         _captorOf.Clear();
         foreach (var (u, id) in _escortOf) if (id >= 0 && byId.TryGetValue(id, out var engine)) u.Escort = engine;
         _escortOf.Clear();
+        foreach (var (u, id) in _victimOf) if (id >= 0 && byId.TryGetValue(id, out var victim)) u.Rite.Victim = victim;
+        _victimOf.Clear();
         Waves.Number = r.ReadInt32(); Waves.Active = r.ReadBoolean(); Waves.Countdown = r.ReadDouble(); Waves.Intel = r.ReadDouble(); Waves._spawnT = r.ReadDouble();
         Waves.DawnLeft = r.ReadDouble();
         Alarm = r.ReadBoolean();
@@ -299,7 +309,9 @@ public sealed partial class Sim
             d.Envoy = byId.TryGetValue(envoy, out var e) ? e : null;
             if (d.Envoy != null) Offer = d;
         }
-        Favour = r.ReadDouble();
+        Favour = r.ReadDouble(); Revelations = r.ReadInt32(); MournUntil = r.ReadDouble();
+        Carcasses.Clear();
+        for (int i = r.ReadInt32(); i > 0; i--) if (KindOf(r.ReadString()) is { } beast) Carcasses.Add(beast);
         Knowledge = r.ReadDouble();
         Learnt.Clear();
         for (int i = r.ReadInt32(); i > 0; i--) Learnt.Add(r.ReadString());
@@ -343,6 +355,16 @@ public sealed partial class Sim
         _escortOf[u] = r.ReadInt32(); u.AimAt = r.ReadInt32();
         int nd = r.ReadInt32(); for (int k = 0; k < nd; k++) u.Docked.Add(r.ReadInt32());
         u.Envoy = r.ReadBoolean();
+        u.TakeAlive = r.ReadBoolean(); u.Bound = r.ReadBoolean(); u.BoundAt = r.ReadDouble(); u.Unguarded = r.ReadDouble(); u.ChainedUntil = r.ReadDouble();
+        if (r.ReadBoolean())
+        {
+            var rite = new Rite { Kind = (RiteKind)r.ReadByte() };
+            _victimOf[u] = r.ReadInt32();
+            string beast = r.ReadString();
+            rite.Beast = beast.Length > 0 ? KindOf(beast) : null;
+            rite.Spot = r.ReadInt32(); rite.Stage = r.ReadInt32(); rite.Done = r.ReadSingle();
+            u.Rite = rite;
+        }
         var body = ReadBody(r, t, u.Look);
         if (t == null) return null;
         u.Wounds = body;

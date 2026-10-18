@@ -169,6 +169,16 @@ public partial class CameraRig : Node3D
     /// <summary>The point of the map the camera is heading for, in world metres (x, z).</summary>
     public Vector2 Target => new(_tx, _tz);
 
+    /// <summary>
+    /// Puts a point at its own height (world metres) in the middle of the view: the camera looks at a plane near the
+    /// ground, so a point high on a hill is aimed at where the line of sight through it meets that plane.
+    /// </summary>
+    public void SetAt(float wx, float wy, float wz, float yaw, float pitch, float zoom)
+    {
+        float s = (wy - LookY) / MathF.Max(.05f, MathF.Sin(pitch)), cp = MathF.Cos(pitch);
+        Set(wx - s * MathF.Sin(yaw) * cp, wz - s * MathF.Cos(yaw) * cp, yaw, pitch, zoom, snap: true);
+    }
+
     /// <summary>Looks at a point of the map, in world metres.</summary>
     public void Focus(float wx, float wz)
     {

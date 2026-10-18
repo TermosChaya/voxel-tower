@@ -13,7 +13,7 @@ namespace VoxelTower.Game;
 /// Command-line options after "--": --shot=file.png [--frames=N] takes a screenshot and quits (--cam=x,z,yaw,pitch,zoom
 /// points the camera first),
 /// --demo sets up a fort with pawns at work (--pose=battle: the horde bridging the moat and laddering the wall;
-/// --pose=faith: priests at prayer on the barrow, --pose=trees: the valley's trees in a row, --look=0..2 choosing which; --pose=people: every figure in every look,
+/// --pose=faith: priests at prayer on the barrow, --pose=captives: a rite at the altar there, prisoners bound and led, --pose=trees: the valley's trees in a row, --look=0..2 choosing which; --pose=people: every figure in every look,
 /// --look=0..4 choosing a row),
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
 /// --top looks straight down, --look=N at the Nth named place of the valley, --seed=N makes another valley; --select[=N]
@@ -204,6 +204,9 @@ public partial class Main : Node3D
         var fire = new FireView();
         AddChild(fire);
         fire.Init(this);
+        var magic = new MagicView();
+        AddChild(magic);
+        magic.Init(this);
         // where the warbands will go is shown in play; scripted runs keep the horde's ways to the waves
         Sim.WantTrails = !_selfTest;
         if (Sim.WantTrails && !_demo) Sim.ComputeFields(coming: true);
@@ -613,6 +616,30 @@ public partial class Main : Node3D
             $"sanctuary {(sanctum != null ? $"{sanctum.W}×{sanctum.D}" : "none")}; the priest: {(priest == null ? "not hired" : Retinue.DoingNow(priest, Sim))}; intervention +{Sim.Favour - favour0:0.00}");
         Tools.SetMaterial(Mat.Stone);
 
+        // taken alive: «Живьём» for the swordsman, a goblin beaten down and bound, a worker leading it into the citadel,
+        // and the plaque in «Таинства» that has the priest give it to the old powers
+        Unit swordsman = null;
+        foreach (var u in Sim.Units) if (!u.Dead && u.T == Kinds.Swordsman) { swordsman = u; break; }
+        Selected.Clear(); Selected.Add(swordsman);
+        Hud.OnSelectionChanged();
+        Command.TakeAliveSelected();
+        var captive = Sim.Spawn(Kinds.Goblin, Sim.NearestStand((int)swordsman.X + 10, (int)swordsman.Z, 2));
+        captive.Guard = true; captive.Home = captive.Cell;
+        for (int t = 0; t < 120 && !captive.Bound && !captive.Dead; t++) Advance(.25);
+        bool felled = captive.Bound && !captive.Dead;
+        for (int t = 0; t < 240 && !captive.Inside && !captive.Dead; t++) Advance(.5);
+        Check("«Живьём»: the swordsman fells a goblin and binds it, and a worker leads it into the citadel", swordsman.TakeAlive && felled && captive.Inside,
+            $"take alive {swordsman.TakeAlive}, felled and bound {felled}, inside {captive.Inside}{(captive.Dead ? ", dead: " + captive.KilledBy : "")}");
+        Command.ClearSelection();
+        Hud.OpenPanel("magic");
+        Hud.Refresh();
+        int revelations0 = Sim.Revelations;
+        Hud.Mysteries.PlaqueOf(RiteKind.Prisoner).EmitSignal(BaseButton.SignalName.Pressed);
+        for (int t = 0; t < 240 && !captive.Dead; t++) Advance(.5);
+        Check("…and the plaque in «Таинства» has the priest give the prisoner to the old powers", captive.Dead && captive.KilledBy == Sim.GivenToPowers && Sim.Revelations == revelations0 + 1,
+            $"the goblin {(captive.Dead ? captive.KilledBy : "alive")}, revelations {revelations0} → {Sim.Revelations}");
+        Hud.ClosePanel();
+
         // marking and unmarking; on the grid, a line drawn askew comes out straight along it
         KeyPress(Key.Key2);
         if (!Tools.Opt.Dig) KeyPress(Key.V);
@@ -837,6 +864,7 @@ public partial class Main : Node3D
         if (_pose == "trees") { LookAtGrove(); return; }
         if (_pose == "people") { People(); return; }
         if (_pose == "faith") { Faith(); return; }
+        if (_pose == "captives") { Captives(); return; }
         var w = World; var s = Site; var sim = Sim;
         sim.Waves.Countdown = Waves.Prep;
         sim.Stock.Gold = 140;
@@ -1111,7 +1139,41 @@ public partial class Main : Node3D
             sim.Spawn(Kinds.Priest, sim.NearestStand(p.X + dx, p.Z + dz, 2));
         sim.Favour = 23;
         Advance(_poseSeconds + 6);
-        Rig.Set(World.WX(p.X + 6), World.WZ(p.Z + 10), -.62f, .56f, _look == 1 ? 3.2f : 1.6f, snap: true);
+        Rig.SetAt(World.WX(p.X + 6), World.WY(World.SurfAt(p.X, p.Z) - 6), World.WZ(p.Z + 10), -.62f, .56f, _look == 1 ? 3.2f : 1.6f);
+        Hud.Refresh();
+        Marks.Flush();
+    }
+
+    /// <summary>
+    /// The captives: on the barrow a priest at the altar with a goblin on its knees before it, a worker leading a bound
+    /// orc toward the citadel, another orc lying bound in the grass; the place is ours, and two more priests pray.
+    /// </summary>
+    void Captives()
+    {
+        var sim = Sim;
+        sim.Waves.Countdown = 100;
+        var barrow = sim.Mines.Find(m => m.Power && m.Name == "Курган");
+        var p = barrow.Place;
+        sim.AddZone(p.X - 40, p.Z - 40, p.X + 40, p.Z + 40, Zone.Sanctum, 1);
+        barrow.Holder = Holder.Ours; barrow.Grip = 1;
+        foreach (var (dx, dz) in new[] { (30, 10), (-20, 34), (10, -36) })
+            sim.Spawn(Kinds.Priest, sim.NearestStand(p.X + dx, p.Z + dz, 2));
+        var prisoner = sim.Spawn(Kinds.Goblin, sim.Gate);
+        prisoner.Bound = true; prisoner.Inside = true;
+        Advance(4);
+        sim.Sacrifice(RiteKind.Prisoner);
+        for (int t = 0; t < 400 && sim.RiteNow is not { Stage: 2, Done: > 2.5f }; t++) Advance(.25);
+        var r = sim.RiteNow;
+        var at = r?.Victim ?? prisoner;
+        // bound in the grass below, and one being led in past it
+        var lying = sim.Spawn(Kinds.Orc, sim.NearestStand((int)at.X + 20, (int)at.Z + 18, 2));
+        lying.Bound = true; lying.BoundAt = sim.Time; lying.Pastime = Pastime.Bound;
+        var led = sim.Spawn(Kinds.Orc, sim.NearestStand((int)at.X + 30, (int)at.Z - 4, 2));
+        led.Bound = true; led.BoundAt = sim.Time;
+        var porter = sim.Spawn(Kinds.Worker, sim.NearestStand((int)at.X + 34, (int)at.Z, 2));
+        porter.Captive = led; led.Captor = porter;
+        Advance(1.5);
+        Rig.SetAt(World.WX(at.X + 12), World.WY(at.Y + 4), World.WZ(at.Z + 6), -.62f, .52f, _look == 1 ? 3.4f : 2.2f);
         Hud.Refresh();
         Marks.Flush();
     }

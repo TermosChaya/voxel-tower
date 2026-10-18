@@ -74,6 +74,18 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   вида `LandmarkKind.Power` (`Landmarks.Barrow`, `BlackStone`, `DeadSpring` в `MapGen` после мостов) и `Mine` с
   `Power = true` в общем списке `Mines`: держатся тем же `TickMines`, золота не платят (`Income` 0), орда ходит к ним
   `SendRaid` и `Muster`. Жрец — `Kinds.Priest` (`UnitType.Prays`, работы все 0, нет в таблице работ).
+- `Sim.Captives.cs` — пленные: `Unit.TakeAlive` (приказ «Живьём»; `TakesAlive`), в `Strike` — `Takeable`/`TakeAt`
+  (¼ сил, ⅗ в цепях `ChainedUntil`) → `Subdue` (связан, раны перевязаны, вышел из ватаги); `BoundTick` (лежит или
+  идёт за `Captor`; через `WrigglesFree` 150 с — распутался); `FetchCaptive` (свободный рабочий, `Unit.Fetching`, если
+  орды нет ближе `FetchSafe` 16 м) → `Imprison` (`Inside` + `Bound`, в цитадели); `Imprisoned` (ночью без
+  `GuardedKeep` копит `Unguarded`, через `SlipsOut` 120 с — бежит); `Ransom`/`RansomFor` для сделки посла
+  `DealKind.Ransom`. Связанные и пленные исключены из `AnyRaider`, `Nearest`, `BestTarget`, рудников, ворот, мостов,
+  ловушек, двери цитадели. `Led` (в `Sim.Thieves.cs`) общий: за грабителем, за рабочим, к алтарю (на коленях, когда
+  обряд идёт).
+- `Sim.Rites.cs` — жертвы: `Rite` (вид, жертва, туша, `Spot` — алтарь, `Stage` 0 за пленным / 1 к алтарю / 2 обряд,
+  `Done`), `Sacrifice(kind, victim)` (днём, святилище и жрец; возвращает причину отказа), `RiteTick` (из `PriestTick`),
+  `Fulfil` (`Worth`, `CarcassWorth`, `OwnFavour`; ×1,5 на удержанном месте силы; `RiteDone` — вспышка),
+  `CancelRite`, `AltarFor`; `Revelations`, `Carcasses` (из `Kill` зверя нашими), `MournUntil` (`WorkTick` ×0,75).
 - `Sim.Research.cs` — награды и знания: `Lore`, `Lores`, `Branches`, `Knowledge`, `Learnt`, `Learn`, `Reward(wave)`;
   в конце — что даёт изученное (`BowRange`, `HireCost`, `StoneHack`, `LayPace` и др.), их читают на местах.
 - `Sim.Engines.cs` — осадные машины: `EngineTick`, `CatapultTick`/`AimFor`/`Throw`/`StoneLands`, `MantletTick`/`Cover`,
@@ -228,7 +240,8 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `Colonists.cs` — полоса лиц под балкой; `Inspector.cs` — середина консоли (кисть / одна пешка / группа / дружина),
   `HealthBar`, `BodyChart`, `PriorityCell`, `MiniCard`, `KindFace`; `WorkTable.cs` — таблица работ (рисуется
   целиком в `_Draw`, щелчки в `_GuiInput`); `Panels.cs` — `Retinue` (только помощники: что делает, раны, сводка),
-  `HordeInfo`, `UnitOverlay`; `Lore.cs` — `LorePanel` (вкладка «Знания»); `Envoy.cs` — `EnvoyCard`; `Widgets.cs` — `Slot`, `Stepper`, `Choice`, `Tooltip`, `CursorTag`,
+  `HordeInfo`, `UnitOverlay`; `Lore.cs` — `LorePanel` (вкладка «Знания»); `Mysteries.cs` — `MysteryPanel` (вкладка
+  «Таинства»: вмешательство, святилища, жертвы); `MagicView.cs` (мир) — вспышка над алтарём; `Envoy.cs` — `EnvoyCard`; `Widgets.cs` — `Slot`, `Stepper`, `Choice`, `Tooltip`, `CursorTag`,
   `Medallion`, `Toasts`; палитра и шрифты — `Ornament.cs`, значки — `Icons.cs`. Корень интерфейса тянет текстуры
   с повтором (`TextureRepeat`). Летопись: `Hud.Log(text, kind, x, z)` — строка с местом получает «◎» и по щелчку
   ведёт камеру туда; ядро говорит через `Sim.Said` (`Say(text, kind, x, z)` / `Say(text, kind, unit)`). Запасы на

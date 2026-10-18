@@ -312,8 +312,8 @@ public partial class Inspector : Control
             row.AddChild(b);
         }
         }
-        bool workers = chosen.Exists(u => u.T.Work >= 1 && !u.T.Prays), archers = chosen.Exists(u => u.T.Ranged);
-        Button militia = null, fire = null;
+        bool workers = chosen.Exists(u => u.T.Work >= 1 && !u.T.Prays), archers = chosen.Exists(u => u.T.Ranged), melee = chosen.Exists(Sim.TakesAlive);
+        Button militia = null, fire = null, alive = null;
         if (archers)
         {
             row.AddChild(new Rule(true));
@@ -322,6 +322,15 @@ public partial class Inspector : Control
                 () => _m.Command.FireArrowsSelected(), 60);
             fire.ToggleMode = true;
             row.AddChild(fire);
+        }
+        if (melee)
+        {
+            row.AddChild(new Rule(true));
+            alive = Btn("Живьём", "Брать живым\nМечники и ополчение не добивают израненного налётчика, а валят и связывают его, когда в нём остаётся четверть сил " +
+                "(скованного Цепями — три пятых). Свободный рабочий отведёт пленного в цитадель, если рядом нет орды. Пленных приносят в жертву (вкладка «Таинства») " +
+                "или отдают послу орды за выкуп. Ещё раз — снова бить насмерть.", () => _m.Command.TakeAliveSelected(), 70);
+            alive.ToggleMode = true;
+            row.AddChild(alive);
         }
         if (workers)
         {
@@ -336,6 +345,7 @@ public partial class Inspector : Control
             for (int i = 0; i < duty.Count; i++) duty[i].SetPressedNoSignal(chosen.TrueForAll(u => u.T.Prays || u.Duty == kinds[i]));
             militia?.SetPressedNoSignal(chosen.TrueForAll(u => u.T.Work < 1 || u.T.Prays || u.Militia));
             fire?.SetPressedNoSignal(chosen.TrueForAll(u => !u.T.Ranged || u.FireArrows));
+            alive?.SetPressedNoSignal(chosen.TrueForAll(u => !Sim.TakesAlive(u) || u.TakeAlive));
         });
         return row;
     }
@@ -373,6 +383,9 @@ public partial class Inspector : Control
             ? $"{u.T.Bounty} зол. за добычу; убегает от тех, кто подходит. Выберите своих и ПКМ по нему — охота."
             : (u.Leader ? $"Вожак: втрое дороже за голову ({u.T.Bounty * 3} зол.). " : $"{u.T.Bounty} зол. за голову. ")
               + (u.Returned ? "Бежал в прошлый раз и вернулся. " : "") + "Выберите своих и ПКМ по нему — в атаку.";
+        if (u.Bound)
+            note = u.Inside ? "Пленный в цитадели: его можно принести в жертву (вкладка «Таинства») или отдать послу орды за выкуп. Ночью без стражи у двери он выберется."
+                : "Связан: свободный рабочий отведёт его в цитадель, если рядом нет орды. Оставленный надолго — распутается и убежит.";
         var noteLabel = Hud.Text(note, Ornament.Serif, 12, Ornament.Aged, wrap: true);
         noteLabel.CustomMinimumSize = new Vector2(330, 0);
         about.AddChild(noteLabel);

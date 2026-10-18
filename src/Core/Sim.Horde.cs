@@ -103,6 +103,8 @@ public sealed partial class Sim
     void RaiderTick(Unit u, float dt)
     {
         _goalSet ??= new HashSet<int>(Goals);
+        // bound: it lies where it fell, or goes where it is led
+        if (u.Bound) { BoundTick(u, dt); return; }
         // hurt to a quarter of itself, a raider has had enough (a leader leads to the end, a guard keeps its camp)
         if (!u.Routed && !u.Leader && !u.Guard && u.Hp < u.MaxHp * .25f) u.Routed = true;
         // the horde's envoy comes to bargain, and fights nobody

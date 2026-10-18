@@ -75,6 +75,17 @@ public partial class Commander : Node
         _m.Hud.Refresh();
     }
 
+    /// <summary>The chosen who fight hand to hand take raiders alive, or kill them again if all of them were taking them.</summary>
+    public void TakeAliveSelected()
+    {
+        bool any = false, all = true;
+        foreach (var u in _m.Selected) if (Sim.TakesAlive(u)) { any = true; all &= u.TakeAlive; }
+        if (!any) { _m.Hud.Float("живьём берут мечники и ополчение", Ornament.Aged); return; }
+        foreach (var u in _m.Selected) if (Sim.TakesAlive(u)) u.TakeAlive = !all;
+        _m.Hud.Float(all ? "снова бьют насмерть" : "живьём: израненных налётчиков валят и вяжут", Ornament.BronzeLight);
+        _m.Hud.Refresh();
+    }
+
     /// <summary>Fire arrows for the chosen archers, or plain ones again if all of them had them.</summary>
     public void FireArrowsSelected()
     {

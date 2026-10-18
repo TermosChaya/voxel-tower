@@ -67,7 +67,7 @@ public sealed partial class Sim
         {
             if (u.Dead || u.Inside) continue;
             if (Nav.Spikes[u.Cell] > 0) AmongStakes(u, Look);
-            if (u.Team == Team.Horde && !Climbing(u)) OnTrapFloor(u);
+            if (u.Team == Team.Horde && !u.Bound && !Climbing(u)) OnTrapFloor(u);
         }
         if (_dropStones.Count > 0) ThrowStones();
     }
@@ -143,7 +143,7 @@ public sealed partial class Sim
         float drop = (y - bottom) / (float)VoxelWorld.PerMetre;
         foreach (var o in Units)
         {
-            if (o.Dead || o.Inside || o.Team != Team.Horde || Math.Abs(o.X - x) > Reach || Math.Abs(o.Z - z) > Reach || Math.Abs(o.Y - (y + 1)) > 3) continue;
+            if (o.Dead || o.Inside || o.Bound || o.Team != Team.Horde || Math.Abs(o.X - x) > Reach || Math.Abs(o.Z - z) > Reach || Math.Abs(o.Y - (y + 1)) > 3) continue;
             // a long fall is the fall's to hurt (see Settle); into a pit it is the trap's
             if (drop >= 1 && drop < 4) Hurt(o, null, 9 * drop, "волчья яма");
             o.Path = null;
@@ -163,7 +163,7 @@ public sealed partial class Sim
         List<int> stones = null;
         foreach (var u in Units)
         {
-            if (u.Dead || u.Team != Team.Horde) continue;
+            if (u.Dead || u.Team != Team.Horde || u.Bound || u.Inside) continue;
             int ci = (int)u.X >> NavGrid.Shift, ck = (int)u.Z >> NavGrid.Shift;
             float head = u.Y + u.T.BodyH;
             stones?.Clear();

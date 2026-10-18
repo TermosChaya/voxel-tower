@@ -28,7 +28,7 @@ public sealed partial class Sim
 
     public bool AnyRaider()
     {
-        foreach (var u in Units) if (!u.Dead && u.Team == Team.Horde && !u.Guard) return true;
+        foreach (var u in Units) if (!u.Dead && u.Team == Team.Horde && !u.Guard && !u.Bound) return true;
         return false;
     }
 
@@ -36,7 +36,7 @@ public sealed partial class Sim
     public int RaidersAlive()
     {
         int n = 0;
-        foreach (var u in Units) if (!u.Dead && u.Team == Team.Horde && !u.Guard) n++;
+        foreach (var u in Units) if (!u.Dead && u.Team == Team.Horde && !u.Guard && !u.Bound) n++;
         return n;
     }
 
@@ -60,8 +60,8 @@ public sealed partial class Sim
         Unit best = null; float bd = maxDist;
         foreach (var o in Units)
         {
-            // one of ours bound and led off is in no fight, nor an envoy under a white rag
-            if (o.Dead || o.Inside || o.Captor != null || o.Envoy || o.Team != team) continue;
+            // one bound and led off is in no fight, nor one lying bound, nor an envoy under a white rag
+            if (o.Dead || o.Inside || o.Captor != null || o.Bound || o.Envoy || o.Team != team) continue;
             float d = Dist(u, o);
             if (d < bd) { bd = d; best = o; }
         }
@@ -84,7 +84,17 @@ public sealed partial class Sim
         float tx = b.X - dz / l * side, tz = b.Z + dx / l * side;
         b.HurtBy = a;
         float share = Kinds.IsEngine(b.T) ? EngineShare(false) : Wound(b, cut, depth, reach, a.X, hand, a.Z, tx - a.X, aim - hand, tz - a.Z);
-        Hurt(b, a, a.T.Damage * (.8f + (float)Rng.NextDouble() * .4f) * share);
+        float dmg = a.T.Damage * (.8f + (float)Rng.NextDouble() * .4f) * share;
+        // told to take them alive: the blow that would bring a raider down to a quarter of itself (three fifths in
+        // chains), or kill it, fells it instead, to be bound where it lies
+        if (a.TakeAlive && !b.Dead && Takeable(b) && b.Hp - dmg <= TakeAt(b))
+        {
+            b.Hp = Math.Max(1, Math.Min(b.Hp, b.Hp - dmg));
+            b.LastHurt = Time;
+            Subdue(b, a);
+            return;
+        }
+        Hurt(b, a, dmg);
     }
 
     public void Hurt(Unit b, Unit by, float dmg, string cause = null)
@@ -108,6 +118,9 @@ public sealed partial class Sim
         if (u.T == Kinds.Thief) ThiefFell(u);
         if (u.T == Kinds.SiegeTower) TowerFell(u);
         if (u.Captor != null) { u.Captor.Captive = null; u.Captor = null; }
+        // whoever it was leading goes free (a prisoner it led lies bound where it is)
+        if (u.Captive != null) { u.Captive.Captor = null; u.Captive = null; }
+        if (u.Rite != null) CancelRite(u, "жрец погиб");
         ReleaseSite(u);
         StopCarve(u); StopBuild(u);
         u.Path = null; u.Target = null; u.Prey = null;
@@ -115,9 +128,15 @@ public sealed partial class Sim
         if (u.Team == Team.Horde) Stock.Gold += u.T.Bounty * (u.Leader ? 3 : 1);
         else if (u.Team == Team.Wild)
         {
-            if (by?.Team == Team.Player) { Stock.Gold += u.T.Bounty; Hunted++; Say($"Добыт {u.T.Name.ToLowerInvariant()}: +{u.T.Bounty} золота.", 1, u); }
+            if (by?.Team == Team.Player)
+            {
+                Stock.Gold += u.T.Bounty; Hunted++;
+                // and its carcass, for the old powers if the priests ask
+                Carcasses.Add(u.T);
+                Say($"Добыт {u.T.Name.ToLowerInvariant()}: +{u.T.Bounty} золота.", 1, u);
+            }
         }
-        else Say($"{u.T.Name} пал.", 3, u);
+        else if (cause != GivenToPowers) Say($"{u.T.Name} пал.", 3, u);
     }
 
     /// <summary>Beasts taken by the pawns since the start.</summary>
@@ -144,7 +163,7 @@ public sealed partial class Sim
     bool HuntTick(Unit u, float dt)
     {
         var p = u.Prey;
-        if (p == null || p.Dead || Dist(u, p) > 70 * 16 || !Armed(u)) { u.Prey = null; u.Path = null; return false; }
+        if (p == null || p.Dead || p.Bound || Dist(u, p) > 70 * 16 || !Armed(u)) { u.Prey = null; u.Path = null; return false; }
         u.State = UnitState.Fight;
         if (u.T.Ranged ? Dist(u, p) <= RangeAt(u, p.X, p.Z) && Sight(u, p) : InReach(u, p))
         {
@@ -197,7 +216,7 @@ public sealed partial class Sim
             var (px, py, pz) = Nav.Feet(u.Post);
             foreach (var o in Units)
             {
-                if (o.Dead || o.Team != Team.Horde) continue;
+                if (o.Dead || o.Team != Team.Horde || o.Bound || o.Inside || o.Envoy) continue;
                 float dx = o.X - px, dz = o.Z - pz;
                 if (dx * dx + dz * dz < leash * leash) { foe = o; break; }
             }
@@ -285,7 +304,7 @@ public sealed partial class Sim
         Unit best = null; float bd = float.MaxValue;
         foreach (var o in Units)
         {
-            if (o.Dead || o.Team != Team.Horde || o.Envoy) continue;
+            if (o.Dead || o.Team != Team.Horde || o.Envoy || o.Bound || o.Inside) continue;
             float d = Dist(u, o);
             if (d > RangeAt(u, o.X, o.Z)) continue;
             // those cutting down one of ours come first, then those hacking the walls, battering the citadel, raising

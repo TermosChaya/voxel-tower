@@ -268,7 +268,7 @@ public sealed partial class Sim
         foreach (var u in Units)
         {
             if (u.Dead || u.Inside) continue;
-            if (u.Team == Team.Horde && MathF.Abs(u.Y - my) < 32 && (u.X - mx) * (u.X - mx) + (u.Z - mz) * (u.Z - mz) < Near * Near) b.HordeNear = true;
+            if (u.Team == Team.Horde && !u.Bound && MathF.Abs(u.Y - my) < 32 && (u.X - mx) * (u.X - mx) + (u.Z - mz) * (u.Z - mz) < Near * Near) b.HordeNear = true;
             if (u.Team == Team.Player && b.Over(u.X, u.Z) && MathF.Abs(u.Y - b.Y) < 6) b.OursOn = true;
         }
     }

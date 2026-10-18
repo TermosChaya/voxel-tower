@@ -62,6 +62,8 @@ public sealed partial class Sim
     /// </summary>
     void PriestTick(Unit u, float dt)
     {
+        // a sacrifice asked for comes before prayer
+        if (u.Rite != null) { RiteTick(u, dt); return; }
         // while the horde is in the valley, into the citadel (or a shelter) and stay there till the morning
         if (Waves.Active)
         {

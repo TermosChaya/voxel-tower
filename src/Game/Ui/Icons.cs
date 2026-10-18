@@ -288,6 +288,18 @@ public static class Icons
         }
     }
 
+    /// <summary>A skull: the dome, the hollow eyes, the gap of the nose and a row of teeth.</summary>
+    public static void Skull(CanvasItem c, Rect2 r, Color ink)
+    {
+        Dot(c, P(r, .5f, .42f), S(r, .33f), Shade(ink, .92f));
+        Fill(c, Shade(ink, .92f), P(r, .3f, .55f), P(r, .7f, .55f), P(r, .66f, .82f), P(r, .34f, .82f));
+        var hole = new Color(0, 0, 0, .8f * ink.A);
+        c.DrawCircle(P(r, .37f, .5f), S(r, .095f), hole, true, -1, true);
+        c.DrawCircle(P(r, .63f, .5f), S(r, .095f), hole, true, -1, true);
+        c.DrawColoredPolygon(new[] { P(r, .5f, .58f), P(r, .55f, .68f), P(r, .45f, .68f) }, hole);
+        for (int i = 0; i < 4; i++) c.DrawLine(P(r, .39f + i * .075f, .74f), P(r, .39f + i * .075f, .82f), hole, 1.1f, true);
+    }
+
     /// <summary>An eye wide open under three rays, its pupil a slit: what the old powers see of the valley.</summary>
     public static void Eye(CanvasItem c, Rect2 r, Color ink)
     {

@@ -139,15 +139,32 @@ public sealed partial class Sim
         Say($"Грабитель схватил: {prey.T.Name.ToLowerInvariant()} №{prey.Id}. Отбейте, пока его не увели!", 3, prey);
     }
 
-    /// <summary>One of ours bound and led off: it goes where it is led, at the thief's back, till it is freed.</summary>
+    /// <summary>
+    /// One led off bound — one of ours by a thief, a raider by our worker or a priest, one of ours by a priest to the
+    /// altar: it goes where it is led, at its leader's back, till it is freed; at the altar it kneels before the priest.
+    /// </summary>
     void Led(Unit u, float dt)
     {
         var t = u.Captor;
         if (t == null || t.Dead || t.Captive != u)
         {
+            bool fromThief = u.Team == Team.Player && u.Why == "в плену у грабителя";
             u.Captor = null;
             u.State = UnitState.Idle; u.Path = null; u.NextSearch = 0;
-            Say($"{u.T.Name} №{u.Id} отбит у грабителя.", 1, u);
+            u.Why = "";
+            // a raider dropped on the way lies bound where it is, a while more
+            if (u.Bound) u.BoundAt = Time;
+            if (fromThief) Say($"{u.T.Name} №{u.Id} отбит у грабителя.", 1, u);
+            return;
+        }
+        // at the altar: on its knees before the priest, facing it
+        if (t.Rite is { Stage: 2 })
+        {
+            float k = t.T.BodyR + u.T.BodyR + 3;
+            u.X = t.X + MathF.Cos(t.Facing) * k; u.Z = t.Z + MathF.Sin(t.Facing) * k; u.Y = t.Y;
+            u.Facing = t.Facing + MathF.PI; u.Cell = t.Cell;
+            u.State = UnitState.Idle; u.Pastime = Pastime.Bound;
+            u.Why = "на алтаре";
             return;
         }
         // a step behind it, on its heels
@@ -161,7 +178,7 @@ public sealed partial class Sim
         u.Facing = t.Facing;
         u.Stride += step;
         u.State = d > .5f ? UnitState.Walk : UnitState.Idle;
-        u.Why = "в плену у грабителя";
+        u.Why = t.Team == Team.Horde ? "в плену у грабителя" : t.T.Prays ? "его ведут к алтарю" : "его ведут в цитадель";
     }
 
     /// <summary>A thief cut down drops what it carried: the stores have it back, the worker is free.</summary>

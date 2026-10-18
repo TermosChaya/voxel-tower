@@ -265,8 +265,19 @@ public partial class UnitView : Node3D
             // the shield is carried before the body, not swung into it
             off = f.Shield ? -.3f - legL * .2f : -legL * .7f;
             bob = (MathF.Abs(MathF.Cos(phase)) - .64f) * a * .55f;
+            // bound, it walks where it is led with its hands tied behind it
+            if (u.Bound && a >= .05f) { main = .55f; off = .55f; lean = .08f; }
             switch (u.State)
             {
+                case UnitState.Work when u.T.Prays:
+                {
+                    // the rite: the staff planted, the other hand raised over the one given, and brought down at the end
+                    float k = u.Rite != null ? Math.Clamp(u.Rite.Done / Sim.RiteTime, 0, 1) : 0, t = (float)_t;
+                    main = -.15f;
+                    off = k < .85f ? -2.9f + MathF.Sin(t * 2.3f + seed) * .12f : Mathf.Lerp(-2.9f, -.5f, (k - .85f) / .15f);
+                    lean = k < .85f ? -.1f : Mathf.Lerp(-.1f, .22f, (k - .85f) / .15f);
+                    break;
+                }
                 case UnitState.Work:
                 case UnitState.Carve:
                 case UnitState.Siege:
@@ -452,6 +463,13 @@ public partial class UnitView : Node3D
             case Pastime.Watch:
                 off = -2.45f;
                 lean = .05f;
+                break;
+            case Pastime.Bound:
+                // on its knees, sitting back on its heels, the hands tied behind, the head bowed
+                bob = -f.Joint[(int)Part.LegR].Y * .78f;
+                legR = 1.32f; legL = 1.38f;
+                main = .62f; off = .62f;
+                lean = .28f;
                 break;
             case Pastime.Pray:
                 // the staff planted, the other hand raised to the sky, swaying a little as it chants

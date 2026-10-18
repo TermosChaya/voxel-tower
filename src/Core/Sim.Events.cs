@@ -7,13 +7,13 @@ namespace VoxelTower.Core;
 public enum Weather : byte { Clear, Rain, Fog, Wind }
 
 /// <summary>What the horde's envoy offers: time for gold, a smaller wave for stores, the next wave without its engines.</summary>
-public enum DealKind : byte { None, Delay, Tribute, NoEngines }
+public enum DealKind : byte { None, Delay, Tribute, NoEngines, Ransom }
 
 /// <summary>The horde's offer while its envoy waits for an answer.</summary>
 public sealed class Deal
 {
     public DealKind Kind;
-    /// <summary>What it asks: gold (store 0) or so many voxels of a store.</summary>
+    /// <summary>What it asks: gold (store 0) or so many voxels of a store; for a ransom, what it pays for the prisoners.</summary>
     public int Store;
     public double Cost;
     public Unit Envoy;
@@ -186,6 +186,8 @@ public sealed partial class Sim
     {
         var kinds = new List<DealKind> { DealKind.Delay, DealKind.Tribute };
         if (Bands.Exists(b => b.State == BandState.Coming && b.Roster.Exists(Kinds.IsEngine))) kinds.Add(DealKind.NoEngines);
+        // its own people in our hands: it would buy them back, and asks about that first and most often
+        if (Prisoners() > 0) { kinds.Add(DealKind.Ransom); kinds.Add(DealKind.Ransom); }
         var kind = kinds[_fate.Next(kinds.Count)];
         int n = Waves.Number + 1;
         var d = Offer ?? new Deal { Envoy = u };
@@ -197,6 +199,7 @@ public sealed partial class Sim
                 d.Store = Stock[Stockpile.Wood] >= Stock[Stockpile.Stone] ? Stockpile.Wood : Stockpile.Stone;
                 d.Cost = (4 + n / 2) * VoxelWorld.PerM3;
                 break;
+            case DealKind.Ransom: d.Store = 0; d.Cost = RansomFor(); break;
             default: d.Store = 0; d.Cost = 90 + 12 * n; break;
         }
         Offer = d;
@@ -210,11 +213,12 @@ public sealed partial class Sim
         DealKind.Delay => $"«Дайте {d.Cost:0} золота — следующая волна придёт на три минуты позже».",
         DealKind.Tribute => $"«Отдайте {Fmt.M3(d.Cost)} м³ {(d.Store == Stockpile.Wood ? "брёвен" : d.Store == Stockpile.Stone ? "камня" : "земли")} — следующая волна будет на четверть меньше».",
         DealKind.NoEngines => $"«Дайте {d.Cost:0} золота — следующая волна придёт без осадных машин».",
+        DealKind.Ransom => $"«Отпустите наших, что у вас в плену, — дадим за них {d.Cost:0} золота».",
         _ => "",
     };
 
     /// <summary>Whether the stores can pay what the envoy asks.</summary>
-    public bool CanPay(Deal d) => d.Store == 0 ? Stock.Gold >= d.Cost : Stock[d.Store] >= d.Cost;
+    public bool CanPay(Deal d) => d.Kind == DealKind.Ransom ? Prisoners() > 0 : d.Store == 0 ? Stock.Gold >= d.Cost : Stock[d.Store] >= d.Cost;
 
     /// <summary>The player's answer to the envoy: yes (if the stores can pay), or no. The envoy goes either way.</summary>
     public bool Answer(bool yes)
@@ -223,7 +227,17 @@ public sealed partial class Sim
         if (d == null || d.Kind == DealKind.None) return false;
         Offer = null;
         if (!yes) { Say("Послу отказали. Он уходит.", 0, d.Envoy); return true; }
-        if (!CanPay(d)) { Say("Заплатить нечем — посол уходит ни с чем.", 3, d.Envoy); return false; }
+        if (!CanPay(d)) { Say(d.Kind == DealKind.Ransom ? "Пленных уже нет — посол уходит ни с чем." : "Заплатить нечем — посол уходит ни с чем.", 3, d.Envoy); return false; }
+        if (d.Kind == DealKind.Ransom)
+        {
+            // what it pays now, for those still held
+            double gold = RansomFor();
+            int n = Prisoners();
+            Ransom();
+            Stock.Gold += gold;
+            Say($"Сделка: пленные ({n}) отпущены к орде, за них {gold:0} золота.", 1, d.Envoy);
+            return true;
+        }
         if (d.Store == 0) Stock.Gold -= d.Cost; else Stock[d.Store] -= d.Cost;
         switch (d.Kind)
         {

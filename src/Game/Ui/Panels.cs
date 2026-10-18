@@ -52,13 +52,18 @@ public static class Retinue
         if (u.Burn > 0 && u.State == UnitState.Flee && u.Team != Team.Horde) return "выбегает из огня";
         if (u.Team == Team.Wild)
             return u.State switch { UnitState.Flee => "убегает", UnitState.Fight => "бросается в атаку", UnitState.Walk => "бродит", _ => "пасётся" };
+        if (u.Team == Team.Horde && u.Bound)
+            return u.Inside ? "в плену в цитадели" : u.Captor != null ? (u.Captor.T.Prays ? "его ведут к алтарю" : "его ведут в цитадель") : "связан: ждёт, когда его отведут в цитадель";
         if (u.Team == Team.Horde && u.T == Kinds.Thief && (u.Loot > 0 || u.Captive != null))
             return u.Captive != null ? $"уводит в плен: {u.Captive.T.Name.ToLowerInvariant()}" : "уносит: " + Sim.LootText(u);
         if (u.Team == Team.Horde && u.T == Kinds.Thief && u.State == UnitState.Fight && u.Target is { Team: Team.Player, T.Work: >= 1 })
             return "бьёт рабочего, чтобы связать";
         if (u.Team == Team.Horde && u.T == Kinds.Thief && u.State == UnitState.Walk)
             return "крадётся к цитадели";
-        if (u.Captor != null) return "в плену: его уводят на запад";
+        if (u.Captor != null) return u.Captor.Team == Team.Horde ? "в плену: его уводят на запад" : u.Why != "" ? u.Why : "его ведут к алтарю";
+        if (u.Rite != null && u.Why != "") return u.Why;
+        if (u.Captive is { Team: Team.Horde }) return "ведёт пленного в цитадель";
+        if (u.Fetching != null) return "идёт за пленным";
         if (u.Envoy) return sim.Offer?.Envoy == u && sim.Offer.Kind != DealKind.None ? "посол: ждёт ответа" : u.State == UnitState.Flee ? "посол: уходит" : "посол: идёт к цитадели";
         if (u.T == Kinds.Catapult) return u.State == UnitState.Siege ? "мечет камни по стенам" : "его катят туда, откуда бросать";
         if (u.T == Kinds.Ram) return u.State switch { UnitState.Carve => "проламывает стену", UnitState.Siege => "бьёт в цитадель", _ => "катится к стенам" };

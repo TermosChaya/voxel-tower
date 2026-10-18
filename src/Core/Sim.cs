@@ -154,7 +154,7 @@ public sealed partial class Sim
             var u = Units[n];
             if (u.Dead) continue;
             // in the citadel: out of the world till it comes out
-            if (u.Inside) { Indoors(u, dt); continue; }
+            if (u.Inside) { if (u.Team == Team.Horde) Imprisoned(u, dt); else Indoors(u, dt); continue; }
             u.Swing = Math.Max(0, u.Swing - dt * 3);
             u.Cooldown -= dt;
             Settle(u);

@@ -16,7 +16,8 @@ string GoneLeaves(Sim sim, Gateway g)
         if (!g.Gone[i]) continue;
         var (x, y, z) = g.Place(i, g.Step < 0 ? 0 : g.Step);
         var who = sim.Units.Find(u => !u.Dead && u.Cell == sim.Nav.CellOf(x, y, z));
-        parts.Add($"{x},{y},{z}: {Mat.NameOf(sim.World.Get(x, y, z))}{(who != null ? " under " + who.T.Key : "")}");
+        int fires = 0; foreach (int b in sim.Burning.Keys) { var (bx, _, bz) = WaterPlanner.Unpack(b); if (Math.Abs(bx - x) < 30 && Math.Abs(bz - z) < 30) fires++; }
+        parts.Add($"{x},{y},{z}: {Mat.NameOf(sim.World.Get(x, y, z))}{(who != null ? " under " + who.T.Key : "")}, {fires} burning near");
     }
     return parts.Count == 0 ? "" : "; gone: " + string.Join("; ", parts);
 }
@@ -580,6 +581,8 @@ if (args.Length == 0 || args[0] == "--sim")
         porter.Dead = true; porter.DiedAt = -999;
 
         var brute = sim.Spawn(Kinds.Orc, sim.NearestStand(yx, yz + 10, 2));
+        // it hacks its way out: no torch, or the gate burns and that is another test
+        brute.Torch = false;
         sim.ComputeFields();
         float opened = 0;
         bool Out(Unit u) => Math.Abs(u.X - yx) > 36 || Math.Abs(u.Z - yz) > 36;
@@ -2495,6 +2498,88 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--faith")
     simF.Waves.CallOff(simF);
 }
 
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--captives")
+{
+    Console.WriteLine();
+    var mpC = new MapParams();
+    var wC = new VoxelWorld(mpC.SizeX, mpC.SizeY, mpC.SizeZ);
+    var siteC = MapGen.Generate(wC, mpC);
+    wC.Compact();
+    var simC = new Sim(wC, siteC);
+    simC.Waves.Countdown = 1e9; simC.WildTarget = 0;
+    void RunC(double seconds) { for (double t = 0; t < seconds; t += .05) simC.Step(.05f); }
+    int kxC = siteC.KeepX, kzC = siteC.KeepZ;
+
+    // a swordsman told to take them alive fells a goblin and binds it instead of killing it
+    var swordC = simC.Spawn(Kinds.Swordsman, simC.NearestStand(kxC - 200, kzC + 40, 2));
+    swordC.TakeAlive = true;
+    var gobC = simC.Spawn(Kinds.Goblin, simC.NearestStand(kxC - 188, kzC + 40, 2));
+    gobC.Guard = true; gobC.Home = gobC.Cell;
+    for (int t = 0; t < 240 && !gobC.Bound && !gobC.Dead; t++) RunC(.25);
+    bool boundC = gobC.Bound && !gobC.Dead;
+    RunC(3);
+    Check("a swordsman told to take them alive fells a goblin and binds it instead of killing it", boundC && !gobC.Dead && gobC.Bound,
+        $"the goblin {(gobC.Dead ? "dead: " + gobC.KilledBy : gobC.Bound ? $"bound, {gobC.Hp:0} hp left" : $"free, {gobC.Hp:0} hp")}; the swordsman {swordC.State}");
+
+    // a free worker goes out for it and leads it into the citadel
+    var porterC = simC.Spawn(Kinds.Worker, simC.Gate);
+    for (int t = 0; t < 240 && !gobC.Inside && !gobC.Dead; t++) RunC(.5);
+    Check("a free worker goes out for the bound goblin and leads it into the citadel, a prisoner", gobC.Inside && gobC.Bound && simC.Prisoners() == 1,
+        $"inside {gobC.Inside}, {simC.Prisoners()} prisoners; the worker {Retinue0(porterC)}");
+
+    // a priest leads the prisoner to the altar and gives it to the old powers
+    var priestC = simC.Spawn(Kinds.Priest, simC.Gate);
+    simC.AddZone(kxC - 200, kzC + 60, kxC - 160, kzC + 100, Zone.Sanctum, 1);
+    RunC(5);
+    double favC = simC.Favour;
+    string askC = simC.Sacrifice(RiteKind.Prisoner);
+    for (int t = 0; t < 240 && !gobC.Dead; t++) RunC(.5);
+    Check("a priest leads the prisoner bound to the altar and gives it to the old powers: intervention and a revelation",
+        askC == null && gobC.Dead && gobC.KilledBy == Sim.GivenToPowers && simC.Revelations == 1 && simC.Favour - favC >= 15 && simC.RiteNow == null,
+        $"asked: {askC ?? "taken in hand"}; the goblin {(gobC.Dead ? gobC.KilledBy : "alive")}; revelations {simC.Revelations}, intervention +{simC.Favour - favC:0.0}");
+
+    // a carcass from the hunt: a little intervention, no revelation
+    simC.Carcasses.Add(Kinds.Deer);
+    favC = simC.Favour;
+    askC = simC.Sacrifice(RiteKind.Carcass);
+    for (int t = 0; t < 120 && simC.RiteNow != null; t++) RunC(.5);
+    Check("a carcass from the hunt is offered up: a little intervention, no revelation",
+        askC == null && simC.RiteNow == null && simC.Carcasses.Count == 0 && simC.Favour - favC >= 4 && simC.Revelations == 1,
+        $"asked: {askC ?? "taken in hand"}; intervention +{simC.Favour - favC:0.0}, revelations {simC.Revelations}");
+
+    // one of ours: much intervention, two revelations, and the household mourns and works slower
+    var lambC = simC.Spawn(Kinds.Worker, simC.Gate);
+    favC = simC.Favour;
+    askC = simC.Sacrifice(RiteKind.Own, lambC);
+    for (int t = 0; t < 240 && !lambC.Dead; t++) RunC(.5);
+    Check("one of ours given up: much intervention, two revelations, and the household mourns",
+        askC == null && lambC.Dead && simC.Revelations == 3 && simC.Favour - favC >= 50 && simC.MournUntil > simC.Time,
+        $"asked: {askC ?? "taken in hand"}; the worker {(lambC.Dead ? lambC.KilledBy : "alive")}; revelations {simC.Revelations}, intervention +{simC.Favour - favC:0.0}, mourning {simC.MournUntil - simC.Time:0} s");
+
+    // by night there are no rites, and a prisoner left unguarded slips out of the citadel and runs
+    var gob2C = simC.Spawn(Kinds.Goblin, simC.Gate);
+    gob2C.Bound = true; gob2C.Inside = true;
+    simC.Waves.StartNow(simC);
+    RunC(1);
+    simC.Carcasses.Add(Kinds.Boar);
+    string nightC = simC.Sacrifice(RiteKind.Carcass);
+    for (int t = 0; t < 300 && gob2C.Inside; t++) RunC(.5);
+    Check("by night there are no rites; a prisoner left unguarded slips out of the citadel and runs", nightC != null && !gob2C.Inside && !gob2C.Bound && gob2C.Routed,
+        $"a rite by night: {nightC ?? "asked"}; the prisoner {(gob2C.Inside ? "still inside" : gob2C.Routed ? "out and running" : "out")}");
+    simC.Waves.CallOff(simC);
+
+    // the horde's envoy buys its people back
+    var orcC = simC.Spawn(Kinds.Orc, simC.Gate);
+    orcC.Bound = true; orcC.Inside = true;
+    var envC = simC.Spawn(Kinds.Goblin, simC.NearestStand(kxC - 300, kzC, 2));
+    envC.Envoy = true;
+    simC.Offer = new Deal { Kind = DealKind.Ransom, Cost = 1, Envoy = envC, Until = simC.Time + 90 };
+    double goldC = simC.Stock.Gold;
+    bool tookC = simC.Answer(true);
+    Check("the horde's envoy buys its people back: the prisoners go home, and gold comes in", tookC && orcC.Dead && simC.Prisoners() == 0 && simC.Stock.Gold - goldC >= 30,
+        $"struck {tookC}, the orc {(orcC.Dead ? orcC.KilledBy : "still held")}, gold +{simC.Stock.Gold - goldC:0}");
+}
+
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--lore")
 {
     Console.WriteLine();
@@ -2572,9 +2657,10 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
     for (int y = pg; y < pg + 12; y++) for (int z = pz; z < pz + 2; z++) for (int x = px; x < px + 2; x++) wS.Set(x, y, z, Mat.Wood);
     simS.Ignite(px, pg + 4, pz);
     RunS(1);
-    // and something learnt
+    // and something learnt, and given
     simS.Knowledge = 4;
     simS.Learn("mortar");
+    simS.Revelations = 2; simS.Carcasses.Add(Kinds.Boar); simS.Favour = 17;
     var ms = new System.IO.MemoryStream();
     var watch = System.Diagnostics.Stopwatch.StartNew();
     simS.Save(ms, SeedS, "Волна 1", "the screen's own");
@@ -2621,7 +2707,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
         && simL.Gates.Count == simS.Gates.Count && simL.Fixtures.Count == simS.Fixtures.Count && simL.Burning.Count == simS.Burning.Count
         && simL.Bands.Count == simS.Bands.Count && simL.Waves.Number == simS.Waves.Number && simL.Waves.Active == simS.Waves.Active
         && simL.Waves.Coming == simS.Waves.Coming && simL.Mines.TrueForAll(m => m.Holder == simS.Mines[simL.Mines.IndexOf(m)].Holder) && extra == "the screen's own"
-        && simL.Knowledge == 2 && simL.Knows("mortar") && simL.Learnt.Count == 1;
+        && simL.Knowledge == 2 && simL.Knows("mortar") && simL.Learnt.Count == 1
+        && simL.Revelations == 2 && simL.Carcasses.Count == 1 && simL.Carcasses[0] == Kinds.Boar && Math.Abs(simL.Favour - simS.Favour) < 1e-9;
     Check("a game saved and read back is the same: the valley as play changed it, the household and the horde, the siege",
         chunksOff == 0 && designOff == 0 && unitsOff == 0 && livingS.Count == simL.Units.Count && sameSiege && simS.Burning.Count > 0 && simS.Bands.Count > 0,
         $"{bytes / 1024} KB, written in {saveMs} ms, read in {loadMs} ms (the valley made again); {chunksOff} chunks and {designOff} of the design differ; " +

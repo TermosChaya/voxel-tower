@@ -92,6 +92,8 @@ public sealed partial class Sim
         if (!u.T.Prays && (!soldier || !Waves.Active) && Bandage(u, dt)) { Busy(u); return; }
         // a fire in what we built or round the citadel, if putting it out comes before the work at hand
         if (!u.T.Prays && (!soldier || !Waves.Active) && FightFire(u, dt)) { Busy(u); return; }
+        // a raider bound out in the field: a free worker goes for it and leads it into the citadel
+        if (!soldier && !u.T.Prays && FetchCaptive(u, dt)) { Busy(u); return; }
         if (soldier && HasMainHand(u) && PushLadders(u, dt)) { Busy(u); return; }
         if (u.Path != null && u.PathI < u.Path.Count && (u.Hold || u.Site < 0) && u.Pastime != Pastime.Stroll) { Walk(u, dt); return; }
         if (u.Hold)
@@ -152,7 +154,8 @@ public sealed partial class Sim
             }
         }
         u.State = UnitState.Work;
-        u.Effort += (float)(Labour.WorkPerSecond * u.T.Work * u.Pace * dt);
+        // mourning one of their own given to the old powers, they work a quarter slower
+        u.Effort += (float)(Labour.WorkPerSecond * u.T.Work * u.Pace * dt) * (Time < MournUntil ? .75f : 1);
         int guard = 0;
         while (u.JobI < u.Jobs.Count && guard++ < 256)
         {

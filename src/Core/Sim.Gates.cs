@@ -379,7 +379,7 @@ public sealed partial class Sim
         g.HordeClose = false;
         foreach (var u in Units)
         {
-            if (u.Dead || u.Team != Team.Horde) continue;
+            if (u.Dead || u.Team != Team.Horde || u.Bound || u.Inside) continue;
             float dx = u.X - mx, dz = u.Z - mz;
             if (dx * dx + dz * dz < 44 * 44 && MathF.Abs(u.Y - my) < 32) { g.HordeClose = true; break; }
         }
