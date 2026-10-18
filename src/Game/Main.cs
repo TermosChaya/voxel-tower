@@ -13,7 +13,8 @@ namespace VoxelTower.Game;
 /// Command-line options after "--": --shot=file.png [--frames=N] takes a screenshot and quits (--cam=x,z,yaw,pitch,zoom
 /// points the camera first),
 /// --demo sets up a fort with pawns at work (--pose=battle: the horde bridging the moat and laddering the wall;
-/// --pose=trees: the valley's trees in a row, --look=0..2 choosing which),
+/// --pose=trees: the valley's trees in a row, --look=0..2 choosing which; --pose=people: every figure in every look,
+/// --look=0..4 choosing a row),
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
 /// --top looks straight down, --look=N at the Nth named place of the valley, --seed=N makes another valley.
 /// </summary>
@@ -82,6 +83,7 @@ public partial class Main : Node3D
         World = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         Site = MapGen.Generate(World, mp);
         if (_demo && _pose == "trees") Grove();
+        if (_demo && _pose == "people") ClearGrove();
         World.Compact();
         double genMs = sw.Elapsed.TotalMilliseconds;
         sw.Restart();
@@ -606,6 +608,7 @@ public partial class Main : Node3D
         if (_pose == "wounds") { Wounded(); return; }
         if (_pose == "flood") { Flood(); return; }
         if (_pose == "trees") { LookAtGrove(); return; }
+        if (_pose == "people") { People(); return; }
         var w = World; var s = Site; var sim = Sim;
         sim.Waves.Countdown = Waves.Prep;
         sim.Stock.Gold = 140;
@@ -835,13 +838,78 @@ public partial class Main : Node3D
             (x, z) => Flora.Bush(w, x, z, 6), (x, z) => Flora.Bush(w, x, z, 3),
         };
         var (gx, gz) = GroveAt;
-        for (int z = gz - 50; z < gz + 300; z++)
-            for (int x = gx - 50; x < gx + 340; x++)
-                for (int y = w.SurfAt(x, z); y < w.SY; y++)
-                    if (Mat.IsTrunk(w.Get(x, y, z)) || Mat.IsLeafy(w.Get(x, y, z))) w.SetRaw(x, y, z, Mat.Air);
+        ClearGrove();
         // --look=0..2 plants one row of four for a close look; without it, all of them in two rows
         if (_look is >= 0 and < 3) for (int i = 0; i < 4; i++) plant[_look * 4 + i](gx + 40 + i * 72, gz + 110);
         else for (int i = 0; i < plant.Length; i++) plant[i](gx + i % 6 * 58, gz + i / 6 * 110);
+    }
+
+    /// <summary>Takes the trees off the grove's ground (and, for the figures, the grass that would hide their feet).</summary>
+    void ClearGrove()
+    {
+        var w = World;
+        var (gx, gz) = GroveAt;
+        bool bare = _pose == "people";
+        for (int z = gz - 50; z < gz + 300; z++)
+            for (int x = gx - 50; x < gx + 340; x++)
+                for (int y = w.SurfAt(x, z); y < w.SY; y++)
+                {
+                    byte m = w.Get(x, y, z);
+                    if (Mat.IsTrunk(m) || Mat.IsLeafy(m) || bare && m is Mat.Tuft or Mat.Flower or Mat.Bloom) w.SetRaw(x, y, z, Mat.Air);
+                }
+    }
+
+    /// <summary>
+    /// Everyone in every look in rows on cleared ground, facing the camera, for a close look at the figures (--pose=people):
+    /// the workers, one swinging his pick; archers and swordsmen, every other swordsman with his shield up; goblins and
+    /// sappers; orcs and miners; trolls and the beasts. --look=0..4 frames one row.
+    /// </summary>
+    void People()
+    {
+        var sim = Sim;
+        sim.Waves.Countdown = 1e9;
+        // the figures stand as they are put: nothing moves but their breathing
+        Paused = true;
+        var rows = new[]
+        {
+            new[] { Kinds.Worker }, new[] { Kinds.Archer, Kinds.Swordsman }, new[] { Kinds.Goblin, Kinds.Sapper },
+            new[] { Kinds.Orc, Kinds.Miner }, new[] { Kinds.Troll, Kinds.Deer, Kinds.Boar, Kinds.Hare },
+        };
+        const float yaw = -.3f, pitch = .42f, gap = 34;
+        float sin = MathF.Sin(yaw), cos = MathF.Cos(yaw);
+        var (gx, gz) = GroveAt;
+        float cx = gx + 150, cz = gz + 110;
+        bool one = _look is >= 0 and < 5;
+        float width = 0;
+        for (int r = 0; r < rows.Length; r++)
+        {
+            float span = 0;
+            foreach (var t in rows[r]) span += Bodies.Looks(t) * Spacing(t);
+            if (!one || r == _look) width = Math.Max(width, span);
+            // the rows run across the view, one behind the other going away from the camera
+            float along = -span / 2, back = (r - (one ? _look : 2)) * gap;
+            foreach (var t in rows[r])
+                for (int l = 0; l < Bodies.Looks(t); l++)
+                {
+                    along += Spacing(t) / 2;
+                    float x = cx + along * cos - back * sin, z = cz - along * sin - back * cos;
+                    var u = sim.Spawn(t, sim.NearestStand((int)x, (int)z, t.Move.Height));
+                    u.Look = l;
+                    u.X = x; u.Z = z; u.Y = World.SurfAt((int)x, (int)z);
+                    u.Facing = MathF.Atan2(cos, sin);
+                    u.Hold = true;
+                    if (t == Kinds.Swordsman && l % 2 == 1) { u.State = UnitState.Fight; u.Cooldown = 1; }
+                    if (t == Kinds.Worker && l == 3) u.State = UnitState.Work;
+                    along += Spacing(t) / 2;
+                }
+        }
+        static float Spacing(UnitType t) => t == Kinds.Troll ? 20 : t == Kinds.Deer ? 14 : t == Kinds.Hare ? 6 : t.BodyH <= 10 ? 9 : 11;
+        // the camera looks at a plane 4 m up: the figures' middles are higher, so look past it by as much
+        float over = (World.WY(World.SurfAt((int)cx, (int)cz) + 8) - 4) / MathF.Tan(pitch);
+        float zoom = Math.Clamp(248 / (width / 1.6f + 12), 1.2f, 9);
+        Rig.Set(World.WX(cx) - sin * over, World.WZ(cz) - cos * over, yaw, pitch, one ? zoom : 1.6f, snap: true);
+        GD.Print($"[voxel-tower] the figures stand round {cx:0},{cz:0}, {gap:0} voxels a row");
+        Hud.Refresh();
     }
 
     void LookAtGrove()

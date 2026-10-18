@@ -76,6 +76,7 @@ public sealed partial class Sim
         float side = (float)(Rng.NextDouble() - .5) * b.T.BodyR * 1.6f;
         float dx = b.X - a.X, dz = b.Z - a.Z, l = MathF.Max(.01f, MathF.Sqrt(dx * dx + dz * dz));
         float tx = b.X - dz / l * side, tz = b.Z + dx / l * side;
+        b.HurtBy = a;
         float share = Wound(b, cut, depth, reach, a.X, hand, a.Z, tx - a.X, aim - hand, tz - a.Z);
         Hurt(b, a, a.T.Damage * (.8f + (float)Rng.NextDouble() * .4f) * share);
     }
@@ -85,6 +86,7 @@ public sealed partial class Sim
         if (b.Dead) return;
         b.Hp -= dmg;
         b.LastHurt = Time;
+        if (by != null) b.HurtBy = by;
         // a wounded boar turns on whoever wounded it
         if (b.Team == Team.Wild && b.T.Damage > 0 && by != null && !by.Dead) b.Target = by;
         if (b.Hp <= 0) Kill(b, by, cause);
@@ -92,6 +94,8 @@ public sealed partial class Sim
 
     void Kill(Unit u, Unit by, string cause)
     {
+        // what dies of its wounds dies by the hand that dealt them
+        by ??= u.HurtBy;
         u.Dead = true; u.DiedAt = Time; u.State = UnitState.Dead; u.Hp = 0;
         u.KilledBy = cause ?? by?.T.Name ?? "";
         if (u.Team == Team.Horde) Kills++;
@@ -270,6 +274,7 @@ public sealed partial class Sim
                 float tx = t.X - dz / l * side, tz = t.Z + dx / l * side;
                 float dl = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
                 var (cut, depth, _) = WeaponOf(a.From?.T ?? Kinds.Archer);
+                if (a.From != null) t.HurtBy = a.From;
                 float share = Wound(t, cut, depth, 0, tx - dx / dl * 30, hy - dy / dl * 30, tz - dz / dl * 30, dx, dy, dz);
                 Hurt(t, a.From, a.Damage * share, "стрела");
             }

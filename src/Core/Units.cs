@@ -158,6 +158,8 @@ public sealed class Unit
     public Unit Target;
     public float Cooldown;
     public double LastHurt = -99;
+    /// <summary>Who last drew its blood: a mortal wound or bleeding out is put down to them (the hunter is paid).</summary>
+    public Unit HurtBy;
     public float Swing;
 
     // the horde: camped at a mine it keeps, or sent to take one of ours; the warband it marches with, and whether it leads it

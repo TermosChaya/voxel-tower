@@ -178,7 +178,7 @@ public sealed class GreedyMesher
             _col[c] = r; _col[c + 1] = g; _col[c + 2] = bl; _col[c + 3] = va;
             int t = (vb + k) * 2;
             _uv[t] = CornerShade[ao[k]]; _uv[t + 1] = em;
-            // grass sways at its tips, leaves as a mass; stone is dressed smooth
+            // grass sways at its tips, leaves as a mass; stone is dressed smooth, and metal shines
             float sway = 0;
             if (Mat.SwayKind[m] == 1)
             {
@@ -186,7 +186,7 @@ public sealed class GreedyMesher
                 sway = d == 1 ? (s > 0 ? 1 : 0) : y >= top ? 1 : 0;
             }
             else if (Mat.SwayKind[m] == 2) sway = .55f;
-            _uv2[t] = sway; _uv2[t + 1] = Mat.Smooth[m] ? 1 : 0;
+            _uv2[t] = sway; _uv2[t + 1] = Mat.Smooth[m] ? 1 : Mat.Metal[m] ? 2 : 0;
         }
         // Godot treats clockwise triangles as front faces; the diagonal follows the darker corners
         bool flip = ao[0] + ao[2] > ao[1] + ao[3];

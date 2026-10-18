@@ -52,6 +52,8 @@ public partial class UnitView : Node3D
         _m = m;
         _w = m.World;
         _mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/voxel.gdshader") };
+        // the figures are sculpted in half-voxels: their grain and bevels follow those
+        _mat.SetShaderParameter("grid", (float)BodyPlan.Sub);
 
         // an arrow is 70 cm long, a little under five voxels
         var shaft = new BoxMesh { Size = new Vector3(.022f, .022f, .35f), Material = new StandardMaterial3D { AlbedoColor = new Color("4a3424"), Roughness = .9f } };
@@ -178,7 +180,7 @@ public partial class UnitView : Node3D
             fall = Math.Clamp(since / .45f, 0, 1);
             fall = 1 - (1 - fall) * (1 - fall);
             sink = Math.Max(0, since - 18) * 1.4f;
-            main = f.Beast ? .5f : -.4f; off = f.Beast ? .4f : .3f;
+            main = f.Beast ? .5f : -.4f; off = f.Beast ? .4f : f.Shield ? -.2f : .3f;
             if (f.Beast) { legR = -.4f; legL = -.3f; }
         }
         else if (f.Beast)
@@ -213,7 +215,8 @@ public partial class UnitView : Node3D
             legR = -MathF.Sin(phase) * .6f * a;
             legL = -legR;
             main += -legR * .7f;
-            off = -legL * .7f;
+            // the shield is carried before the body, not swung into it
+            off = f.Shield ? -.3f - legL * .2f : -legL * .7f;
             bob = (MathF.Abs(MathF.Cos(phase)) - .64f) * a * .55f;
             switch (u.State)
             {

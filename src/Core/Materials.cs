@@ -40,6 +40,8 @@ public static class Mat
     public const byte StoneWarm = 69, StoneCool = 70;
     /// <summary>The trees in more shades: needles and leaves where the sun is on them, leaves turning, a pine's rusty upper bark, a dead tree's grey wood.</summary>
     public const byte NeedleLight = 71, FoliageLight = 72, FoliageGold = 73, PineBark = 74, Snag = 75;
+    /// <summary>The boards of a shield, in two shades: lighter than the timber of the walls.</summary>
+    public const byte Board = 76, BoardDark = 77;
     /// <summary>Inside the bodies, and more colours for them: never placed in the world.</summary>
     public const byte Flesh = 80, Brain = 81, Heart = 82, Blood = 83, HairBrown = 84, HairGinger = 85, HairGrey = 86, SkinTan = 87,
         SkinPale = 88, SkinGoblinDark = 89, SkinGoblinPale = 90, SkinOrcGrey = 91, ClothGreen = 92, ClothBrown = 93, ClothOchre = 94, Straw = 95;
@@ -54,6 +56,8 @@ public static class Mat
     public static readonly byte[] SwayKind = new byte[Count];
     /// <summary>Dressed stone: each stone drawn whole, without the grid of its voxels.</summary>
     public static readonly bool[] Smooth = new bool[Count];
+    /// <summary>Bright metal on the figures — steel, mail, brass: it catches the light instead of drinking it.</summary>
+    public static readonly bool[] Metal = new bool[Count];
     /// <summary>A body passes through it: leaves, grass, ladders and water. Nothing is hacked out of the way for these.</summary>
     public static readonly bool[] Passable = new bool[Count];
     /// <summary>Ladders: bodies hang on them and climb.</summary>
@@ -146,6 +150,7 @@ public static class Mat
         D(SkinGoblinPale, "кожа", 0x8c9c54, .12f, MatGroup.Hard, 0); D(SkinOrcGrey, "кожа", 0x5c6457, .12f, MatGroup.Hard, 0);
         D(ClothGreen, "сукно", 0x344a2e, .14f, MatGroup.Hard, 0); D(ClothBrown, "сукно", 0x5c4430, .14f, MatGroup.Hard, 0);
         D(ClothOchre, "сукно", 0x8c6a2a, .14f, MatGroup.Hard, 0); D(Straw, "солома", 0xab9352, .2f, MatGroup.Hard, 0);
+        D(Board, "доски", 0x80603d, .16f, MatGroup.Hard, 0); D(BoardDark, "доски", 0x6a4c30, .16f, MatGroup.Hard, 0);
 
         foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage, Flower, Bloom, Birch, NeedleLight, FoliageLight, FoliageGold, PineBark, Snag }) IsVeg[m] = true;
         foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame }) Passable[m] = true;
@@ -153,6 +158,7 @@ public static class Mat
         foreach (var m in new[] { Tuft, Flower, Bloom }) SwayKind[m] = 1;
         foreach (var m in new[] { Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold }) SwayKind[m] = 2;
         foreach (var m in new[] { Stone, StoneDark, StoneLight, StoneWarm, StoneCool, Mortar, Keep, KeepShade, KeepDark }) Smooth[m] = true;
+        foreach (var m in new[] { Steel, Mail, Brass }) Metal[m] = true;
         // what holds the world up: loose pieces resting on these never fall
         foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank }) IsAnchor[m] = true;
     }

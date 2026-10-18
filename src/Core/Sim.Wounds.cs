@@ -314,7 +314,7 @@ public sealed partial class Sim
             {
                 if (g.M[i] == 0) continue;
                 int y = i / (g.SX * g.SZ) + g.Y0;
-                bool inHead = p == 0 && y >= plan.HeadY0 * BodyPlan.Sub && y < plan.HeadY1 * BodyPlan.Sub;
+                bool inHead = p == 0 && y >= plan.HeadY0 && y < plan.HeadY1;
                 if (inHead) head++;
                 if (kept[i]) continue;
                 off++;

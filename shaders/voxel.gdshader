@@ -5,7 +5,13 @@ render_mode cull_back, diffuse_burley, specular_schlick_ggx;
 // big enough on screen to read, corner shading baked by the mesher, and glow for embers.
 // Dressed stone is drawn smooth instead: each stone whole, a faint mottling across it, its joints
 // cut into the wall. Grass sways at its tips and leaves as a mass, in a wind that comes in gusts.
-// Vertex data: COLOR = linear rgb + colour variance, UV = (corner shade, glow), UV2 = (sway, smooth).
+// The steel, mail and brass of the figures shine: smoother, and coloured by what they reflect.
+// Vertex data: COLOR = linear rgb + colour variance, UV = (corner shade, glow),
+// UV2 = (sway, surface: 0 rough, 1 dressed stone, 2 metal).
+// The figures are meshed in their own voxels but sculpted in halves of them: grid says how many cells
+// a unit of the mesh holds, so the jitter and the bevel follow the cells they are made of.
+
+uniform float grid = 1.0;
 
 varying vec3 v_vox;
 varying vec3 v_nrm;
@@ -19,7 +25,7 @@ float vhash(vec3 p) {
 }
 
 void vertex() {
-	v_vox = VERTEX;
+	v_vox = VERTEX * grid;
 	v_nrm = NORMAL;
 	v_ext = UV;
 	v_smooth = UV2.y;
@@ -39,7 +45,8 @@ void fragment() {
 	vec3 cell = floor(v_vox - v_nrm * 0.5 + 0.001);
 	vec3 col;
 	float line = 0.0;
-	if (v_smooth > 0.5) {
+	float metal = step(1.5, v_smooth);
+	if (v_smooth > 0.5 && metal < 0.5) {
 		// one stone, one tone, with a faint mottling and a darker skin toward its edges
 		vec3 p = v_vox * 0.55;
 		float mott = sin(p.x * 1.7 + p.y * 0.9) * sin(p.z * 1.3 - p.y * 1.1) + sin(p.x * 3.1 - p.z * 2.3) * 0.35;
@@ -56,7 +63,8 @@ void fragment() {
 	}
 	col *= mix(1.0, 0.8, line);
 	ALBEDO = col * v_ext.x;
-	ROUGHNESS = v_smooth > 0.5 ? 0.86 : 0.93;
-	SPECULAR = 0.3;
+	ROUGHNESS = metal > 0.5 ? 0.42 : v_smooth > 0.5 ? 0.86 : 0.93;
+	METALLIC = metal * 0.6;
+	SPECULAR = 0.3 + metal * 0.3;
 	EMISSION = col * v_ext.y;
 }
