@@ -1065,8 +1065,43 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bands")
     Check("the next wave is drawn up in warbands, each with its strongest at its head, and their ways are shown", planned9.Count >= 2 && led && trails,
         string.Join("; ", planned9.ConvertAll(b => $"{b.Name}: {string.Join(", ", b.Roster.ConvertAll(t => t.Key))}, way {b.Trail.Count} cells, {b.Marks.Count} to break or build")));
 
+    // five sent together from the gate walk side by side, each to a cell of its own
+    {
+        var five = new System.Collections.Generic.List<Unit>();
+        for (int i = 0; i < 5; i++) five.Add(sim9.Spawn(Kinds.Worker, sim9.Gate));
+        int to = sim9.NearestStand(site9.KeepX - 180, site9.KeepZ + 40, 4);
+        var (gx9, _, gz9) = sim9.Nav.Feet(sim9.Gate);
+        var (tx9, _, tz9) = sim9.Nav.Feet(to);
+        float fx9 = tx9 - gx9, fz9 = tz9 - gz9, fl9 = MathF.Sqrt(fx9 * fx9 + fz9 * fz9);
+        fx9 /= fl9; fz9 /= fl9;
+        sim9.Command(five, to);
+        double across = 0, cells = 0; int samples = 0;
+        for (double t = 0; t < 30; t += .25)
+        {
+            Run9(.25);
+            var walking = five.FindAll(u => u.Path != null && u.PathI < u.Path.Count);
+            if (t < 4 || walking.Count < 4) continue;
+            float lo = float.MaxValue, hi = float.MinValue;
+            var occupied = new System.Collections.Generic.HashSet<int>();
+            foreach (var u in walking) { float lat = (u.X - gx9) * -fz9 + (u.Z - gz9) * fx9; lo = Math.Min(lo, lat); hi = Math.Max(hi, lat); occupied.Add(u.Cell); }
+            across += hi - lo; cells += occupied.Count / (double)walking.Count; samples++;
+        }
+        var stood = new System.Collections.Generic.HashSet<int>();
+        int there = 0;
+        foreach (var u in five)
+        {
+            stood.Add(u.Cell);
+            if (Math.Max(Math.Abs(sim9.Nav.I(u.Cell) - sim9.Nav.I(u.Dest)), Math.Abs(sim9.Nav.K(u.Cell) - sim9.Nav.K(u.Dest))) <= 1) there++;
+        }
+        Check("five sent together walk side by side, not in one file, and stand each in a cell of its own", samples > 10 && across / samples > 2.5 * VoxelWorld.PerMetre
+            && cells / samples > .8 && stood.Count == 5 && there == 5,
+            $"{samples} looks on the way: {across / samples / VoxelWorld.PerMetre:0.0} m abreast, {cells / samples * 100:0} % in cells of their own; at the end {stood.Count} cells, {there} of 5 where sent");
+        foreach (var u in five) { u.Dead = true; u.DiedAt = -999; }
+    }
+
     sim9.Waves.Countdown = 0;
     float spread = 0;
+    double abreast = 0, ownCells = 0; int marchLooks = 0;
     var seen = new System.Collections.Generic.HashSet<BandState>();
     Warband watched = null; Unit fallen = null; Unit successor = null;
     for (int t = 0; t < 360 && (successor == null || sim9.Bands.Exists(b => b.State == BandState.Rally)); t++)
@@ -1076,13 +1111,30 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bands")
         {
             foreach (var st in b.History) seen.Add(st);
             if (b.State == BandState.March && sim9.Time - b.Since > 6 && b.Leader != null)
+            {
                 foreach (var u in b.Members)
                     if (!u.Dead) spread = Math.Max(spread, MathF.Sqrt((u.X - b.Leader.X) * (u.X - b.Leader.X) + (u.Z - b.Leader.Z) * (u.Z - b.Leader.Z)));
+                // how wide it goes across its way, and how many walk in a cell of their own
+                if (b.Leader.State == UnitState.Walk && b.Alive >= 4)
+                {
+                    float lo = float.MaxValue, hi = float.MinValue;
+                    var occupied = new System.Collections.Generic.HashSet<int>();
+                    foreach (var u in b.Members)
+                    {
+                        if (u.Dead) continue;
+                        float lat = (u.X - b.Leader.X) * -b.HZ + (u.Z - b.Leader.Z) * b.HX;
+                        lo = Math.Min(lo, lat); hi = Math.Max(hi, lat); occupied.Add(u.Cell);
+                    }
+                    abreast += hi - lo; ownCells += occupied.Count / (double)b.Alive; marchLooks++;
+                }
+            }
             // the leader of the first band to storm is struck down
             if (b.State == BandState.Storm && watched == null && b.Alive > 2) { watched = b; fallen = b.Leader; fallen.Dead = true; fallen.DiedAt = sim9.Time; }
         }
         if (watched != null && successor == null && watched.Leader != fallen && watched.Leader is { Dead: false } nl) successor = nl;
     }
+    Check("a warband marches abreast, each in a cell of its own, not in one file", marchLooks > 10 && abreast / marchLooks > 2 * VoxelWorld.PerMetre && ownCells / marchLooks > .85,
+        $"{marchLooks} looks on the march: {abreast / Math.Max(1, marchLooks) / VoxelWorld.PerMetre:0.0} m abreast, {ownCells / Math.Max(1, marchLooks) * 100:0} % in cells of their own");
     Check("warbands gather, march together, regroup before the walls and storm; a fallen leader is replaced", spread < 22 * VoxelWorld.PerMetre
         && seen.Contains(BandState.Forming) && seen.Contains(BandState.March) && seen.Contains(BandState.Rally) && seen.Contains(BandState.Storm) && successor is { Leader: true },
         $"widest spread on the march {spread / VoxelWorld.PerMetre:0.0} m; states {string.Join(" → ", seen)}; leader {fallen?.T.Key} replaced by {successor?.T.Key}");

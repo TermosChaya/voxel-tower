@@ -167,6 +167,8 @@ public sealed class Unit
     public Mine Raid;
     public Warband Band;
     public bool Leader;
+    /// <summary>Until when a raider that found no straight way to its place in the band goes by its own way instead.</summary>
+    public double OwnWayUntil;
     /// <summary>Its body once it has been hurt (what blows carved out of it, what still works); null while it is whole.</summary>
     public BodyState Wounds;
 

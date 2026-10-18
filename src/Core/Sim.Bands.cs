@@ -35,6 +35,10 @@ public sealed class Warband
     /// <summary>Goes up whenever the trail is worked out anew.</summary>
     public int TrailRev;
     internal double WaitedFrom = -1;
+    /// <summary>Which way it is going (a unit vector in the valley), from its leader's way a few steps ahead: for the
+    /// places its members keep beside and behind the leader.</summary>
+    public float HX = 1, HZ;
+    internal double HeadingAt = -1;
     /// <summary>Every state it has been in, in order.</summary>
     public readonly List<BandState> History = new() { BandState.Coming };
 
@@ -174,6 +178,7 @@ public sealed partial class Sim
                 if (fell && b.Alive > 1) Say($"{b.Name}: вожак пал, ватагу ведёт {next.T.Name.ToLowerInvariant()}.", 1);
             }
             var l = b.Leader;
+            if (b.State is BandState.March or BandState.Rally && Time >= b.HeadingAt) { b.HeadingAt = Time + .5; Heading(b); }
             switch (b.State)
             {
                 case BandState.Forming:
@@ -243,6 +248,9 @@ public sealed partial class Sim
                     float apart = Apart(u, l);
                     if (apart > Stray * NavGrid.CS) return CatchUp(u, l, dt);
                     if (ToKeep(u) < ToKeep(l) - Ahead * NavGrid.CS) { u.State = UnitState.Idle; return true; }
+                    // while the leader walks (or waits) each keeps its own place beside or behind it; while it hacks or
+                    // builds the rest go on by their own ways and set to as well
+                    if (l.State is UnitState.Walk or UnitState.Idle && KeepPlace(u, b, l, dt, still: l.State == UnitState.Idle)) return true;
                     return false;
                 }
                 // the leader waits for stragglers, but not for ever
@@ -256,14 +264,112 @@ public sealed partial class Sim
             }
             case BandState.Rally:
             {
-                // all close round the leader, then all at once
+                // all close round the leader, each in its place, then all at once
                 if (u != l && Apart(u, l) > CaughtUp * NavGrid.CS) return CatchUp(u, l, dt);
+                if (u != l && KeepPlace(u, b, l, dt, still: true)) return true;
                 u.State = UnitState.Idle;
                 return true;
             }
             default:
                 return false;
         }
+    }
+
+    /// <summary>
+    /// Where a band's members keep round its leader, in cells across (minus to the left) and back: two at its shoulders,
+    /// the rest in ranks behind, so they go side by side rather than in each other's steps.
+    /// </summary>
+    static readonly (float side, float back)[] Slots =
+    {
+        (-1.6f, .5f), (1.6f, .5f), (-.8f, 2.1f), (.8f, 2.1f), (-2.4f, 2.1f), (2.4f, 2.1f),
+        (0, 3.7f), (-1.6f, 3.7f), (1.6f, 3.7f), (-3.2f, 3.7f), (3.2f, 3.7f),
+    };
+
+    /// <summary>The place a member keeps in its band, in valley voxels, each a little out of line.</summary>
+    bool SlotOf(Warband b, Unit u, out float x, out float z)
+    {
+        x = z = 0;
+        var l = b.Leader;
+        int k = 0;
+        foreach (var m in b.Members)
+        {
+            if (m == u) break;
+            if (!m.Dead && m != l) k++;
+        }
+        if (u == l || k >= b.Members.Count) return false;
+        var (side, back) = k < Slots.Length ? Slots[k] : (((k - Slots.Length) % 5 - 2) * 1.6f, 5.3f + (k - Slots.Length) / 5 * 1.6f);
+        side += (float)(Hash.H3(u.Id, 3, 1) - .5) * .5f;
+        back += (float)(Hash.H3(u.Id, 5, 2) - .5) * .5f;
+        // the band's right hand is (−HZ, HX) turned the other way: across is minus to the left of the way it goes
+        x = l.X + (-b.HZ * side - b.HX * back) * NavGrid.CS;
+        z = l.Z + (b.HX * side - b.HZ * back) * NavGrid.CS;
+        return true;
+    }
+
+    /// <summary>Which way a band goes: from its leader toward where its way leads six steps on, turning gently.</summary>
+    void Heading(Warband b)
+    {
+        var l = b.Leader;
+        if (l == null || l.Dead || !Fields.TryGetValue(l.T, out var f)) return;
+        int c = l.Cell;
+        for (int n = 0; n < 6; n++)
+        {
+            int next = f.Next(Nav, c, out _, out _);
+            if (next < 0 || next == c) break;
+            c = next;
+        }
+        var (x, _, z) = Nav.Feet(c);
+        float dx = x - l.X, dz = z - l.Z, d = MathF.Sqrt(dx * dx + dz * dz);
+        if (d < NavGrid.CS * .5f) return;
+        float hx = b.HX + dx / d, hz = b.HZ + dz / d, h = MathF.Sqrt(hx * hx + hz * hz);
+        if (h > 1e-3f) { b.HX = hx / h; b.HZ = hz / h; }
+    }
+
+    /// <summary>
+    /// A member steps toward its place in the band (a little ahead of it while the leader walks, so it keeps pace),
+    /// by a cell beside it it can walk straight into; true when it does so or stands in its place. False when no such
+    /// cell brings it nearer: then for a while it goes on by its own way, which leads round whatever is in between.
+    /// </summary>
+    bool KeepPlace(Unit u, Warband b, Unit l, float dt, bool still)
+    {
+        if (Time < u.OwnWayUntil || !SlotOf(b, u, out float px, out float pz)) return false;
+        if (!still) { px += b.HX * 1.5f * NavGrid.CS; pz += b.HZ * 1.5f * NavGrid.CS; }
+        float Off(float x, float z) => (x - px) * (x - px) + (z - pz) * (z - pz);
+        float here = Off(u.X, u.Z);
+        if (still && here < NavGrid.CS * NavGrid.CS * .4f) { u.State = UnitState.Idle; return true; }
+        int i = Nav.I(u.Cell), y = Nav.Y(u.Cell), k = Nav.K(u.Cell), h = u.T.Move.Height, best = -1;
+        float bestOff = here - NavGrid.CS * 2;
+        for (int d = 0; d < 8; d++)
+        {
+            int ni = i + DX8[d], nk = k + DK8[d];
+            // no cutting corners round a wall
+            if (d >= 4 && (!Nav.Stand(ni, y, k, h) || !Nav.Stand(i, y, nk, h))) continue;
+            for (int dy = 0; dy >= -1; dy = dy == 0 ? 1 : dy > 0 ? -1 : -2)
+            {
+                if (d >= 4 && dy != 0) break;
+                if (!Nav.Stand(ni, y + dy, nk, h)) continue;
+                if (dy > 0 && !Nav.Open(i, y + h, k)) continue;
+                if (dy < 0 && !Nav.Open(ni, y + h - 1, nk)) continue;
+                int c = Nav.Id(ni, y + dy, nk);
+                if (!FlowField.StepsOk(u.T.Move, Nav.Floor[u.Cell], Nav.Floor[c])) continue;
+                var (fx, _, fz) = Nav.Feet(c);
+                // wading only where the leader wades
+                float off = Off(fx + u.OffX, fz + u.OffZ) + (Nav.Water[c] > 0 && Nav.Water[l.Cell] == 0 ? 400 : 0);
+                if (off < bestOff) { bestOff = off; best = c; }
+                break;
+            }
+        }
+        if (best < 0)
+        {
+            // in its place, or there ahead of the leader: it waits for the place to move on
+            if (still || here < NavGrid.CS * NavGrid.CS * 1.5f) { u.State = UnitState.Idle; return true; }
+            u.OwnWayUntil = Time + 2;
+            return false;
+        }
+        u.Path ??= new List<int>();
+        u.Path.Clear(); u.Path.Add(best); u.PathI = 0;
+        Walk(u, dt);
+        return true;
     }
 
     /// <summary>Walks back to the leader by its own way; false if there is none (it goes on by itself then).</summary>

@@ -67,10 +67,14 @@ public sealed class PathFinder
     /// <summary>
     /// Cells from start (exclusive) to the first cell that satisfies goal, or null.
     /// The heuristic should not overestimate; cost is in cells walked. Ladders are climbed, slowly.
+    /// A lane adds a little to every cell entered (off the line one keeps to in a group), so of ways that cost
+    /// the same each walker takes its own.
     /// </summary>
-    public List<int> Find(int start, Func<int, bool> goal, Func<int, float> heuristic, Mover m, int maxExpand = 40000, bool gates = false)
+    public List<int> Find(int start, Func<int, bool> goal, Func<int, float> heuristic, Mover m, int maxExpand = 40000, bool gates = false,
+        Func<int, float> lane = null)
     {
         _gates = gates;
+        _lane = lane;
         var g = _g;
         _gen++;
         _open.Clear();
@@ -122,6 +126,7 @@ public sealed class PathFinder
     }
 
     bool _gates;
+    Func<int, float> _lane;
 
     bool OpenColumn(int i, int k, int y0, int y1)
     {
@@ -132,7 +137,7 @@ public sealed class PathFinder
     void Relax(int from, int to, float step, Func<int, float> heuristic)
     {
         if (_closed[to] == _gen) return;
-        float c = _cost[from] + step;
+        float c = _cost[from] + step + (_lane != null ? _lane(to) : 0);
         if (_seen[to] == _gen && c >= _cost[to]) return;
         _seen[to] = _gen; _cost[to] = c; _from[to] = from;
         _open.Enqueue(to, c + heuristic(to));

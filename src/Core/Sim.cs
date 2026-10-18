@@ -316,15 +316,15 @@ public sealed partial class Sim
 
     float H(int c, int ti, int tk) => PathFinder.Octile(Nav.I(c) - ti, Nav.K(c) - tk) * .95f;
 
-    /// <summary>Plans a walk to a cell (or next to it); false if there is no way.</summary>
-    public bool GoTo(Unit u, int target, bool adjacent = false, int budget = 40000)
+    /// <summary>Plans a walk to a cell (or next to it), keeping to a lane if given; false if there is no way.</summary>
+    public bool GoTo(Unit u, int target, bool adjacent = false, int budget = 40000, Func<int, float> lane = null)
     {
         int ti = Nav.I(target), tk = Nav.K(target), ty = Nav.Y(target);
         Func<int, bool> goal = adjacent
             ? c => Math.Abs(Nav.I(c) - ti) <= 1 && Math.Abs(Nav.K(c) - tk) <= 1 && Math.Abs(Nav.Y(c) - ty) <= 2
             : c => c == target;
         if (goal(u.Cell)) { u.Path = null; return true; }
-        var path = Paths.Find(u.Cell, goal, c => H(c, ti, tk), u.T.Move, budget, gates: u.Team == Team.Player);
+        var path = Paths.Find(u.Cell, goal, c => H(c, ti, tk), u.T.Move, budget, gates: u.Team == Team.Player, lane: lane);
         if (path == null) return false;
         u.Path = path; u.PathI = 0;
         // a way somewhere on purpose is no stroll
@@ -334,23 +334,103 @@ public sealed partial class Sim
 
     // ------------------------------------------------------------ the player's commands
 
-    /// <summary>Sends pawns to a spot and keeps them there; soldiers make it their post.</summary>
+    /// <summary>
+    /// Sends pawns to a spot and keeps them there; soldiers make it their post. A group goes as one: each to a place
+    /// of its own in ranks across the way they go, keeping to its own line on the way, so they walk side by side.
+    /// </summary>
     public int Command(IEnumerable<Unit> units, int target)
     {
-        int ok = 0, n = 0;
-        foreach (var u in units)
+        var group = new List<Unit>();
+        foreach (var u in units) if (!u.Dead && u.Team == Team.Player) group.Add(u);
+        var (spots, lanes) = Formation(group, target);
+        int ok = 0;
+        for (int n = 0; n < group.Count; n++)
         {
-            if (u.Dead || u.Team != Team.Player) continue;
+            var u = group[n];
             ReleaseSite(u);
             Busy(u);
-            int spot = Spread(target, n++, u.T.Move.Height);
+            int spot = spots[n];
             u.Hold = true;
             u.Dest = spot;
             u.Prey = null;
             if (u.T.Work < 1) u.Post = spot;
-            if (GoTo(u, spot) || GoTo(u, spot, adjacent: true)) ok++;
+            if (GoTo(u, spot, lane: lanes[n]) || GoTo(u, spot, adjacent: true, lane: lanes[n])) ok++;
         }
         return ok;
+    }
+
+    /// <summary>How far apart a group sent somewhere stands, across and front to back, in voxels.</summary>
+    const float FileGap = NavGrid.CS;
+
+    /// <summary>
+    /// Where each of a group goes when sent somewhere together: places a metre apart in a few ranks across the way they
+    /// go, the nearest to the spot in front and in every rank the ones on the left to the left, so nobody crosses
+    /// another's way; and for each the line it keeps to on the way there.
+    /// </summary>
+    (int[] spots, Func<int, float>[] lanes) Formation(List<Unit> group, int target)
+    {
+        int n = group.Count;
+        var spots = new int[n];
+        var lanes = new Func<int, float>[n];
+        if (n <= 1) { Array.Fill(spots, target); return (spots, lanes); }
+        var (tx, _, tz) = Nav.Feet(target);
+        float cx = 0, cz = 0;
+        foreach (var u in group) { cx += u.X; cz += u.Z; }
+        cx /= n; cz /= n;
+        // the way they go, and across it
+        float fx = tx - cx, fz = tz - cz, fl = MathF.Sqrt(fx * fx + fz * fz);
+        if (fl < FileGap) { fx = 1; fz = 0; } else { fx /= fl; fz /= fl; }
+        float rx = -fz, rz = fx;
+        int cols = n <= 5 ? n : Math.Max(4, (int)MathF.Ceiling(MathF.Sqrt(n * 2f)));
+        var order = new List<int>();
+        for (int i = 0; i < n; i++) order.Add(i);
+        order.Sort((a, b) => ((group[b].X - cx) * fx + (group[b].Z - cz) * fz).CompareTo((group[a].X - cx) * fx + (group[a].Z - cz) * fz));
+        var taken = new HashSet<int>();
+        int level = Nav.Y(target);
+        for (int from = 0; from < n; from += cols)
+        {
+            var rank = order.GetRange(from, Math.Min(cols, n - from));
+            rank.Sort((a, b) => ((group[a].X - cx) * rx + (group[a].Z - cz) * rz).CompareTo((group[b].X - cx) * rx + (group[b].Z - cz) * rz));
+            float back = from / cols * FileGap;
+            for (int k = 0; k < rank.Count; k++)
+            {
+                var u = group[rank[k]];
+                float side = (k - (rank.Count - 1) / 2f) * FileGap;
+                int spot = PlaceNear(tx + rx * side - fx * back, tz + rz * side - fz * back, level, u.T.Move.Height, taken);
+                if (spot < 0) spot = Spread(target, taken.Count, u.T.Move.Height);
+                spots[rank[k]] = spot;
+                taken.Add(spot);
+                // a little dearer every step off its line: of ways alike it takes the one along its own
+                float line = side;
+                lanes[rank[k]] = c =>
+                {
+                    float x = (Nav.I(c) + .5f) * NavGrid.CS - tx, z = (Nav.K(c) + .5f) * NavGrid.CS - tz;
+                    return MathF.Min(MathF.Abs(x * rx + z * rz - line) / NavGrid.CS, 2) * .1f;
+                };
+            }
+        }
+        return (spots, lanes);
+    }
+
+    /// <summary>A free cell to stand in nearest a point, at about the level given; −1 if there is none close by.</summary>
+    int PlaceNear(float x, float z, int level, int h, HashSet<int> taken)
+    {
+        int ci = (int)MathF.Floor(x) >> NavGrid.Shift, ck = (int)MathF.Floor(z) >> NavGrid.Shift;
+        for (int r = 0; r < 4; r++)
+            for (int dk = -r; dk <= r; dk++)
+                for (int di = -r; di <= r; di++)
+                {
+                    if (Math.Max(Math.Abs(di), Math.Abs(dk)) != r) continue;
+                    for (int dy = 1; dy >= -2; dy--)
+                    {
+                        int i = ci + di, y = level + dy, k = ck + dk;
+                        if (!Nav.Stand(i, y, k, h)) continue;
+                        int c = Nav.Id(i, y, k);
+                        if (taken.Contains(c) || Nav.Deep(c)) continue;
+                        return c;
+                    }
+                }
+        return -1;
     }
 
     /// <summary>Tells pawns to bring in a resource by themselves when nothing marked needs them (or none, to stop).</summary>
