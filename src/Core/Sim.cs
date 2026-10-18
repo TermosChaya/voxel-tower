@@ -34,7 +34,8 @@ public sealed partial class Sim
     readonly int[] _claims;
 
     /// <summary>Lines for the chronicle: text and kind (0 plain, 1 good, 2 warning, 3 bad).</summary>
-    public event Action<string, int> Said;
+    /// <summary>A line for the chronicle: what, how it is (0 plain, 1 good, 2 a warning, 3 bad), and where, if anywhere (NaN when not).</summary>
+    public event Action<string, int, float, float> Said;
 
     public Sim(VoxelWorld w, Site s)
     {
@@ -56,7 +57,12 @@ public sealed partial class Sim
         w.Replaced += OnWaterEdit;
     }
 
-    public void Say(string text, int kind = 0) => Said?.Invoke(text, kind);
+    public void Say(string text, int kind = 0) => Said?.Invoke(text, kind, float.NaN, float.NaN);
+
+    /// <summary>A line for the chronicle about something that happened at a place: a click on it there takes the camera to it.</summary>
+    public void Say(string text, int kind, float x, float z) => Said?.Invoke(text, kind, x, z);
+
+    public void Say(string text, int kind, Unit at) => Say(text, kind, at.X, at.Z);
 
     /// <summary>The standable cell nearest to a voxel column (searching outward ring by ring).</summary>
     public int NearestStand(int x, int z, int h)
@@ -101,6 +107,15 @@ public sealed partial class Sim
     }
 
     public void Step(float dt)
+    {
+        // the pawns' work and the horde's are not the player's hand: none of it goes into a marking being drawn
+        var hand = Orders.Writing;
+        Orders.Writing = null;
+        try { StepWorld(dt); }
+        finally { Orders.Writing = hand; }
+    }
+
+    void StepWorld(float dt)
     {
         if (Over) return;
         Time += dt;

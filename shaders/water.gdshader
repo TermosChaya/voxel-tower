@@ -92,7 +92,9 @@ void fragment() {
 		alpha = max(alpha, 0.85);
 	}
 	ALBEDO = col;
-	ROUGHNESS = 0.16;
-	SPECULAR = 0.55;
+	// the camera looks along one direction everywhere: a sharp sun glint would light a whole pond at once at some turn
+	// of the view, so the glint is broad and soft
+	ROUGHNESS = 0.32;
+	SPECULAR = 0.4;
 	ALPHA = alpha;
 }

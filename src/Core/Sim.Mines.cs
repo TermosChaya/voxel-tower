@@ -79,15 +79,15 @@ public sealed partial class Sim
             if (m.Grip >= 1 && m.Holder != Holder.Ours)
             {
                 m.Holder = Holder.Ours;
-                Say($"{m.Name} ваш: +{m.Income} золота в минуту, пока его держите.", 1);
+                Say($"{m.Name} ваш: +{m.Income} золота в минуту, пока его держите.", 1, m.Place.StandX, m.Place.StandZ);
             }
             else if (m.Grip <= -1 && m.Holder != Holder.Horde)
             {
                 m.Holder = Holder.Horde;
-                Say($"Орда захватила: {m.Name}.", 3);
+                Say($"Орда захватила: {m.Name}.", 3, m.Place.StandX, m.Place.StandZ);
             }
-            else if (m.Holder == Holder.Ours && m.Grip <= 0) { m.Holder = Holder.None; Say($"{m.Name} потерян.", 2); }
-            else if (m.Holder == Holder.Horde && m.Grip >= 0) { m.Holder = Holder.None; Say($"{m.Name} отбит у орды: держитесь у входа, чтобы занять его.", 1); }
+            else if (m.Holder == Holder.Ours && m.Grip <= 0) { m.Holder = Holder.None; Say($"{m.Name} потерян.", 2, m.Place.StandX, m.Place.StandZ); }
+            else if (m.Holder == Holder.Horde && m.Grip >= 0) { m.Holder = Holder.None; Say($"{m.Name} отбит у орды: держитесь у входа, чтобы занять его.", 1, m.Place.StandX, m.Place.StandZ); }
         }
     }
 

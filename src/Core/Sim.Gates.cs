@@ -187,6 +187,7 @@ public sealed partial class Sim
         }
         else
         {
+            Orders.Writing?.Hung.Add(g);
             DesignateRemove(plan.Cut);
             DesignateBuild(plan.Leaves);
         }
@@ -252,6 +253,7 @@ public sealed partial class Sim
         Array.Fill(g.At, -1);
         Array.Clear(g.Gone);
         g.Broken = false; g.Ready = false; g.Open = g.Want = 0; g.Step = -1; g.Mode = GateMode.Auto;
+        Orders.Writing?.Mended.Add(g);
         var L = new VoxelList();
         for (int i = 0; i < Gateway.Voxels; i++)
         {
@@ -349,7 +351,8 @@ public sealed partial class Sim
         if (g.Hacked >= Gateway.Breach)
         {
             g.Broken = true;
-            Say("Ворота прорублены: створки больше не закрываются, пока их не починят.", 3);
+            var (bx, _, bz) = g.Middle;
+            Say("Ворота прорублены: створки больше не закрываются, пока их не починят.", 3, bx, bz);
             return;
         }
         var (mx, my, mz) = g.Middle;

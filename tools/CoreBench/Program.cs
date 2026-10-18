@@ -933,6 +933,88 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--life")
             $"the tree {startFar / VoxelWorld.PerMetre:0} m off ({tree0} voxels to fell), the pit at its feet ({pitF0} to dig): felling from {treeAt} s, digging from {(pitAt < 0 ? "never" : pitAt + " s")}");
         sim.CancelArea(0, 0, w4.SX - 1, w4.SZ - 1);
         feller.Dead = true; feller.DiedAt = -999;
+
+        // Ctrl+Z: the player's markings come off one by one, the last first, each as it was before it
+        int ux = site4.KeepX - 120, uz = site4.KeepZ + 100;
+        var earthWall = new Stroke { Mat = Mat.Rammed, Width = 8, Height = 12, Level = true };
+        int t0 = sim.Orders.Total;
+        sim.BeginMarking();
+        sim.DesignateBuild(Shapes.Line(w4, site4, ux, uz - 30, ux, uz + 30, earthWall, Shapes.LevelTop(w4, ux, uz, 12)));
+        sim.EndMarking("Стена");
+        int tWall = sim.Orders.Total;
+        sim.BeginMarking();
+        sim.DesignateRemove(Shapes.Box(w4, site4, ux + 20, uz - 10, ux + 36, uz + 6, new Stroke { Width = 1, Height = 6, Dig = true }, 0));
+        sim.EndMarking("Копать");
+        int tPit = sim.Orders.Total;
+        sim.BeginMarking();
+        int cancelled = sim.CancelArea(ux - 8, uz - 30, ux + 8, uz);
+        sim.EndMarking("Снятие разметки");
+        int tCut = sim.Orders.Total;
+        var un1 = sim.UndoMarking(out int back1);
+        int tBack1 = sim.Orders.Total;
+        var un2 = sim.UndoMarking(out _);
+        int tBack2 = sim.Orders.Total;
+        var un3 = sim.UndoMarking(out _);
+        int tBack3 = sim.Orders.Total;
+        var un4 = sim.UndoMarking(out _);
+        Check("Ctrl+Z takes the markings back one by one, the last first, each as it was",
+            tWall > t0 + 1000 && tPit > tWall + 300 && cancelled > 300 && tCut == tPit - cancelled && back1 == cancelled && tBack1 == tPit && tBack2 == tWall && tBack3 == t0
+            && un4 == null && un1?.What == "Снятие разметки" && un2?.What == "Копать" && un3?.What == "Стена",
+            $"wall +{tWall - t0}, pit +{tPit - tWall}, {cancelled} taken off; back: {un1?.What} {tBack1 - tCut:+0;-0}, {un2?.What} {tBack2 - tBack1:+0;-0}, {un3?.What} {tBack3 - tBack2:+0;-0}, then {un4?.What ?? "nothing"}");
+
+        // what the workers have laid of a marking stays when it is taken back: only what is left comes off
+        sim.Stock[Stockpile.Earth] = Math.Max(sim.Stock[Stockpile.Earth], 40 * VoxelWorld.PerM3);
+        var mason = sim.Spawn(Kinds.Worker, sim.NearestStand(ux - 24, uz, 4));
+        int Rammed()
+        {
+            int n = 0;
+            for (int z = uz - 34; z <= uz + 34; z++)
+                for (int x = ux - 6; x <= ux + 6; x++)
+                    for (int y = 0; y < w4.SY; y++) if (w4.Get(x, y, z) == Mat.Rammed) n++;
+            return n;
+        }
+        int r0 = Rammed(), b0 = sim.Orders.BuildTotal;
+        sim.BeginMarking();
+        int laid = sim.DesignateBuild(Shapes.Line(w4, site4, ux, uz - 30, ux, uz + 30, earthWall, Shapes.LevelTop(w4, ux, uz, 12)));
+        Run(30);
+        sim.EndMarking("Насыпь");
+        int r1 = Rammed(), leftOf = sim.Orders.BuildTotal - b0;
+        var un5 = sim.UndoMarking(out int back5);
+        int r2 = Rammed();
+        Check("what the workers have laid stays when its marking is taken back; only what is left comes off",
+            r1 > r0 + 100 && r2 == r1 && back5 == leftOf && sim.Orders.BuildTotal == b0 && un5?.What == "Насыпь",
+            $"{laid} voxels marked, {r1 - r0} laid in 30 s, {back5} of the {leftOf} left taken back, {r2 - r0} still standing");
+        mason.Dead = true; mason.DiedAt = -999;
+
+        // a plot taken back goes with the felling it had begun to mark; what it marks while the hand is on
+        // something else is not the hand's
+        (int x, int z) tree = (-1, -1);
+        for (int r = 60; r < 500 && tree.x < 0; r += 8)
+            for (int a = 0; a < 360 && tree.x < 0; a += 4)
+            {
+                int x = site4.KeepX + (int)(Math.Cos(a * Math.PI / 180) * r), z = site4.KeepZ + (int)(Math.Sin(a * Math.PI / 180) * r);
+                if (x < 40 || z < 40 || x >= w4.SX - 40 || z >= w4.SZ - 40) continue;
+                if (Mat.IsTrunk(w4.Get(x, w4.SurfAt(x, z) + 2, z))) tree = (x, z);
+            }
+        var woodman = sim.Spawn(Kinds.Worker, sim.NearestStand(tree.x + 30, tree.z, 4));
+        sim.BeginMarking();
+        var plot = sim.AddZone(tree.x - 20, tree.z - 20, tree.x + 20, tree.z + 20, Stockpile.Wood, 0);
+        sim.EndMarking("Делянка");
+        Run(10);
+        sim.BeginMarking();
+        int heap = sim.DesignateBuild(Shapes.Line(w4, site4, ux, uz - 6, ux, uz + 6, earthWall, Shapes.LevelTop(w4, ux, uz, 12)));
+        Run(10);
+        sim.EndMarking("Насыпь");
+        int fed = plot.Marked;
+        var un6 = sim.UndoMarking(out _);
+        int felling = Left(tree.x - 20, tree.z - 20, tree.x + 20, tree.z + 20, WorkKind.Fell) + Left(tree.x - 20, tree.z - 20, tree.x + 20, tree.z + 20, WorkKind.Dig);
+        var un7 = sim.UndoMarking(out _);
+        int fellingAfter = Left(tree.x - 20, tree.z - 20, tree.x + 20, tree.z + 20, WorkKind.Fell) + Left(tree.x - 20, tree.z - 20, tree.x + 20, tree.z + 20, WorkKind.Dig);
+        Check("a plot taken back goes with the felling it had marked; what it marks meanwhile is not the hand's",
+            tree.x >= 0 && fed > 0 && un6 != null && un6.Voxels == heap && felling > 0 && un7?.What == "Делянка" && !sim.Zones.Contains(plot) && fellingAfter == 0,
+            $"the plot round the tree at {tree} marked {fed} voxels; the heap marked meanwhile took back {un6?.Voxels} of its {heap}; {felling} orders of felling left, {fellingAfter} once the plot was taken back");
+        woodman.Dead = true; woodman.DiedAt = -999;
+        sim.CancelArea(0, 0, w4.SX - 1, w4.SZ - 1);
     }
 
 }

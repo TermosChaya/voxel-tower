@@ -106,9 +106,9 @@ public sealed partial class Sim
         if (u.Team == Team.Horde) Stock.Gold += u.T.Bounty * (u.Leader ? 3 : 1);
         else if (u.Team == Team.Wild)
         {
-            if (by?.Team == Team.Player) { Stock.Gold += u.T.Bounty; Hunted++; Say($"Добыт {u.T.Name.ToLowerInvariant()}: +{u.T.Bounty} золота.", 1); }
+            if (by?.Team == Team.Player) { Stock.Gold += u.T.Bounty; Hunted++; Say($"Добыт {u.T.Name.ToLowerInvariant()}: +{u.T.Bounty} золота.", 1, u); }
         }
-        else Say($"{u.T.Name} пал.", 3);
+        else Say($"{u.T.Name} пал.", 3, u);
     }
 
     /// <summary>Beasts taken by the pawns since the start.</summary>
@@ -241,10 +241,12 @@ public sealed partial class Sim
     }
 
     /// <summary>A clear line from the archer's eyes to the target's chest; leaves don't stop arrows.</summary>
-    public bool Sight(Unit a, Unit b)
+    public bool Sight(Unit a, Unit b) => Sees(a, b.X, b.Y + b.T.BodyH * .55f, b.Z);
+
+    /// <summary>A clear line from a unit's eyes to a point (voxels); leaves don't stop arrows.</summary>
+    public bool Sees(Unit a, float bx, float by, float bz)
     {
         float ax = a.X, ay = a.Y + a.T.BodyH * .85f, az = a.Z;
-        float bx = b.X, by = b.Y + b.T.BodyH * .55f, bz = b.Z;
         float dx = bx - ax, dy = by - ay, dz = bz - az, len = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
         if (len < 1) return true;
         if (!Raycast.Cast(World, ax, ay, az, dx / len, dy / len, dz / len, out var h, skipVeg: true)) return true;

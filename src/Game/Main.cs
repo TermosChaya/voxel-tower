@@ -17,7 +17,8 @@ namespace VoxelTower.Game;
 /// --look=0..4 choosing a row),
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
 /// --top looks straight down, --look=N at the Nth named place of the valley, --seed=N makes another valley; --select[=N]
-/// chooses our pawns (or the first N), --tab=key lets a panel down from the beam, --tool=N takes up the Nth tool.
+/// chooses our pawns (or the first N), --tab=key lets a panel down from the beam, --tool=N takes up the Nth tool,
+/// --ui-scale=S draws the interface at that size instead of the player's own, --inspect looks at the first raider (or beast).
 /// </summary>
 public partial class Main : Node3D
 {
@@ -39,6 +40,8 @@ public partial class Main : Node3D
 
     /// <summary>The pawns the player has picked out.</summary>
     public readonly HashSet<Unit> Selected = new();
+    /// <summary>A raider or a beast the player clicked on to look at (with none of ours chosen), or null.</summary>
+    public Unit Inspected;
     /// <summary>Game seconds per real second: 1, 2 or 3.</summary>
     public int Speed = 1;
     public bool Paused;
@@ -47,7 +50,7 @@ public partial class Main : Node3D
 
     string _shot;
     int _shotFrames = 45, _frames;
-    bool _demo, _calm, _selfTest, _finale, _top;
+    bool _demo, _calm, _selfTest, _finale, _top, _inspect;
     int _look = -1;
     /// <summary>--cam=x,z,yaw,pitch,zoom: where the camera looks for a screenshot, x and z in voxels.</summary>
     float[] _cam;
@@ -62,6 +65,8 @@ public partial class Main : Node3D
     string _pose = "";
     /// <summary>How long the staged siege runs before the screenshot (--at=seconds).</summary>
     double _poseSeconds = 14;
+    /// <summary>--ui-scale=S: the interface drawn at this size for this run, whatever the player set.</summary>
+    float _uiScale;
 
     public override void _Ready()
     {
@@ -81,9 +86,15 @@ public partial class Main : Node3D
             else if (a.StartsWith("--tool=") && int.TryParse(a["--tool=".Length..], out int tn)) _tool = tn;
             else if (a.StartsWith("--cam=")) _cam = Array.ConvertAll(a["--cam=".Length..].Split(','), v => float.Parse(v, System.Globalization.CultureInfo.InvariantCulture));
             else if (a == "--selftest") _selfTest = true;
+            else if (a == "--inspect") _inspect = true;
             else if (a.StartsWith("--pose=")) _pose = a["--pose=".Length..];
             else if (a.StartsWith("--at=") && double.TryParse(a["--at=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double at)) _poseSeconds = at;
+            else if (a.StartsWith("--ui-scale=") && float.TryParse(a["--ui-scale=".Length..], System.Globalization.CultureInfo.InvariantCulture, out float us)) _uiScale = us;
         }
+        // scripted runs draw the interface at its usual size, unless told otherwise, and leave the player's settings be
+        if (_selfTest || _demo || _shot != null || _uiScale > 0) Settings.Scripted(_uiScale);
+        else Settings.Load();
+        Settings.Apply(GetTree().Root);
 
         var sw = Stopwatch.StartNew();
         var mp = new MapParams { Seed = _seed };
@@ -135,6 +146,9 @@ public partial class Main : Node3D
         var trails = new TrailView();
         AddChild(trails);
         trails.Init(this);
+        var cover = new CoverView();
+        AddChild(cover);
+        cover.Init(this);
         // where the warbands will go is shown in play; scripted runs keep the horde's ways to the waves
         Sim.WantTrails = !_selfTest;
         if (Sim.WantTrails && !_demo) Sim.ComputeFields(coming: true);
@@ -152,7 +166,7 @@ public partial class Main : Node3D
         if (!_selfTest && !_demo) LoadBlueprints();
         Hud.Init(this);
 
-        Sim.Said += (text, kind) => Hud.Log(text, (Hud.Kind)Math.Clamp(kind, 0, 3));
+        Sim.Said += (text, kind, x, z) => Hud.Log(text, (Hud.Kind)Math.Clamp(kind, 0, 3), x, z);
         Sim.Mined = (x, y, z, m) => { if (Random.Shared.NextDouble() < .045) Debris.Spawn(m, x, y, z, 1, 1.3f); };
         Sim.Hacked = (x, y, z, m) => { if (Random.Shared.NextDouble() < .16) Debris.Spawn(m, x, y, z, 1, 1.8f); };
         Sim.Raised = (x, y, z, m) => { if (Random.Shared.NextDouble() < .05) Debris.Spawn(m, x, y, z, 1, .8f); };
@@ -173,6 +187,8 @@ public partial class Main : Node3D
             Hud.Log("Крепость вокруг цитадели наполовину разрушена. Починка (0), щелчок по стене — рабочие вернут ей прежний вид, " +
                 "рамкой — только проломы. Камень ломают в скалах, валунах и руинах (8 и Z).", Hud.Kind.Warn);
         }
+        Hud.Log("Вождь орды высматривает, где ваши стены слабее, и шлёт ватаги туда. Кольцо вокруг цитадели показывает, как он видит " +
+            "каждую сторону: красная — слабая, зелёная — крепкая, ярче — куда пойдёт ватага. J — показать или скрыть пути орды.");
         Hud.Log("Орда придёт с запада через десять минут. Ройте, рубите и стройте, пока есть время.", Hud.Kind.Warn);
         GD.Print($"[voxel-tower] world {genMs:0} ms, navigation {navMs:0} ms, mesh {View.LastFullMeshMs:0} ms, {View.Triangles()} triangles");
 
@@ -189,6 +205,11 @@ public partial class Main : Node3D
             Hud.OnSelectionChanged();
         }
         if (_tab != null) Hud.OpenPanel(_tab);
+        if (_inspect && (Sim.Units.Find(u => !u.Dead && u.Team == Team.Horde) ?? Sim.Units.Find(u => !u.Dead && u.Team == Team.Wild)) is { } seen)
+        {
+            Inspected = seen;
+            Rig.Set(World.WX(seen.X), World.WZ(seen.Z), -.66f, .62f, 2.2f, snap: true);
+        }
         if (_tool >= 0 && _tool < Hud.ToolDefs.Length) Tools.SetTool(Hud.ToolDefs[_tool].tool);
         if (_cam is { Length: 5 }) Rig.Set(World.WX(_cam[0]), World.WZ(_cam[1]), _cam[2], _cam[3], _cam[4], snap: true);
         if (_top) Rig.ToggleTopDown();
@@ -522,6 +543,14 @@ public partial class Main : Node3D
         Check("a frame takes the bridge back", Sim.Orders.BuildTotal <= bb0 + 10, $"{Sim.Orders.BuildTotal - bb0} left of {bridged}");
         await Drag((630, 430), (652, 570));
         Check("a frame takes the marks back", Removals() <= r3 + 10, $"{Removals() - r3} left of {moat}");
+        // Ctrl+Z takes the frames back, the last first: the moat is marked again, then the bridge with the end of the moat under it
+        KeyPress(Key.Z, ctrl: true);
+        int moatBack = Removals() - r3;
+        KeyPress(Key.Z, ctrl: true);
+        Check("Ctrl+Z takes the frames back one by one: the moat is marked again, then the bridge",
+            moatBack > moat / 2 && Removals() - r3 >= moat - 10 && Sim.Orders.BuildTotal - bb0 >= bridged - 10,
+            $"moat {moatBack}, then {Removals() - r3} of {moat}; bridge {Sim.Orders.BuildTotal - bb0} of {bridged}");
+        Sim.CancelArea(600, 420, 690, 580);
 
         // capture what the workers built, mark a copy
         KeyPress(Key.Escape); KeyPress(Key.Z);
@@ -613,6 +642,11 @@ public partial class Main : Node3D
         KeyPress(Key.Tab);
         Check("Tab changes the speed", Speed == 2 && !Paused);
         Speed = 1;
+        KeyPress(Key.Equal, ctrl: true);
+        float larger = GetTree().Root.ContentScaleFactor;
+        KeyPress(Key.Key0, ctrl: true);
+        Check("Ctrl+= draws the interface larger, Ctrl+0 as it was", Math.Abs(larger - 1.1f) < .01f && Math.Abs(GetTree().Root.ContentScaleFactor - 1) < .01f,
+            $"{larger:0.00} → {GetTree().Root.ContentScaleFactor:0.00}");
 
         var before = Rig.Target;
         Hud.Map.Jump(new Vector2(10, 10));

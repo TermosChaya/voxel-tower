@@ -203,7 +203,7 @@ public sealed partial class Sim
             {
                 if (u.Wounds != null) { u.Wounds.Bleed = 0; u.Wounds.Arrows.Clear(); }
                 Escaped.Add(new Survivor { Kind = u.T, Look = u.Look, Hp = u.Hp, Wounds = u.Wounds });
-                Say($"{u.T.Name} ушёл живым — вернётся со следующей волной.", 2);
+                Say($"{u.T.Name} ушёл живым — вернётся со следующей волной.", 2, u);
             }
             u.Dead = true; u.DiedAt = -999; u.State = UnitState.Dead;
             return;

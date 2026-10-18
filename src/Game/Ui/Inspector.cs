@@ -42,6 +42,7 @@ public partial class Inspector : Control
     {
         if (_m.Tools.Tool != Tool.None) return "tool";
         var sel = Chosen();
+        if (sel.Count == 0 && _m.Inspected is { } look) return "look:" + look.Id;
         if (sel.Count == 0) return "home";
         return (sel.Count == 1 ? "one:" : "many:") + string.Join(",", sel.ConvertAll(u => u.Id));
     }
@@ -63,7 +64,8 @@ public partial class Inspector : Control
         box.SetAnchorsPreset(LayoutPreset.FullRect);
         foreach (var (side, px) in new[] { ("margin_left", 14), ("margin_right", 12), ("margin_top", 8), ("margin_bottom", 8) }) box.AddThemeConstantOverride(side, px);
         var sel = Chosen();
-        box.AddChild(_key == "tool" ? ToolPane() : sel.Count == 0 ? HomePane() : sel.Count == 1 ? OnePane(sel[0]) : GroupPane(sel));
+        box.AddChild(_key == "tool" ? ToolPane() : _key.StartsWith("look:") && _m.Inspected != null ? LookPane(_m.Inspected)
+            : sel.Count == 0 ? HomePane() : sel.Count == 1 ? OnePane(sel[0]) : GroupPane(sel));
         AddChild(box);
         _pane = box;
     }
@@ -95,6 +97,10 @@ public partial class Inspector : Control
         hint.VerticalAlignment = VerticalAlignment.Center;
         hint.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         head.AddChild(hint);
+        var undo = Btn("Отменить · Ctrl+Z", Hud.UndoTip, () => _m.Tools.Undo());
+        undo.Disabled = _m.Sim.UndoDepth == 0;
+        _refresh.Add(() => undo.Disabled = _m.Sim.UndoDepth == 0);
+        head.AddChild(undo);
         col.AddChild(head);
         var opts = new HBoxContainer();
         opts.AddThemeConstantOverride("separation", 16);
@@ -258,6 +264,54 @@ public partial class Inspector : Control
             militia?.SetPressedNoSignal(chosen.TrueForAll(u => u.T.Work < 1 || u.Militia));
         });
         return row;
+    }
+
+    // ---------------------------------------------------------------- a raider or a beast, looked at
+
+    Control LookPane(Unit u)
+    {
+        One = u;
+        var col = new VBoxContainer();
+        col.AddThemeConstantOverride("separation", 4);
+        var top = new HBoxContainer();
+        top.AddThemeConstantOverride("separation", 16);
+        var who = new VBoxContainer { CustomMinimumSize = new Vector2(380, 0) };
+        who.AddThemeConstantOverride("separation", 0);
+        string band = u.Band != null ? " · " + u.Band.Name : "";
+        who.AddChild(Hud.Text(u.Name + band, Ornament.SerifBold, 16, u.Team == Team.Horde ? Ornament.Blood.Lightened(.25f) : Ornament.Moss));
+        var bar = new HealthBar { Unit = u, CustomMinimumSize = new Vector2(260, 14) };
+        who.AddChild(bar);
+        var doing = Hud.Text("", Ornament.SerifItalic, 13, Ornament.BronzeLight);
+        doing.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        doing.CustomMinimumSize = new Vector2(380, 0);
+        who.AddChild(doing);
+        var hurt = Hud.Text("", Ornament.Serif, 12, Ornament.Blood);
+        hurt.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        hurt.CustomMinimumSize = new Vector2(380, 0);
+        who.AddChild(hurt);
+        top.AddChild(who);
+        var chart = new BodyChart { Unit = u, CustomMinimumSize = new Vector2(58, 74), TooltipText = "Тело\nЧто от него осталось, по частям: зелёное цело, жёлтое задето, рыжее изранено, красное едва держится; перечёркнутое отрублено." };
+        top.AddChild(chart);
+        var about = new VBoxContainer();
+        about.AddThemeConstantOverride("separation", 2);
+        about.AddChild(Hud.CapsLabel(u.Team == Team.Horde ? "Налётчик" : "Зверь", 8));
+        string note = u.Team == Team.Wild
+            ? $"{u.T.Bounty} зол. за добычу; убегает от тех, кто подходит. Выберите своих и ПКМ по нему — охота."
+            : (u.Leader ? $"Вожак: втрое дороже за голову ({u.T.Bounty * 3} зол.). " : $"{u.T.Bounty} зол. за голову. ")
+              + (u.Returned ? "Бежал в прошлый раз и вернулся. " : "") + "Выберите своих и ПКМ по нему — в атаку.";
+        var noteLabel = Hud.Text(note, Ornament.Serif, 12, Ornament.Aged, wrap: true);
+        noteLabel.CustomMinimumSize = new Vector2(330, 0);
+        about.AddChild(noteLabel);
+        top.AddChild(about);
+        col.AddChild(top);
+        _refresh.Add(() =>
+        {
+            doing.Text = Retinue.Doing(u, _m.Sim);
+            string h = Retinue.Hurt(u);
+            hurt.Text = u.Dead ? (u.Team == Team.Wild ? "добыт" : "пал") : h != "" ? h : u.Hp < u.MaxHp - .5f ? "ушиблен" : "цел";
+            bar.QueueRedraw(); chart.QueueRedraw();
+        });
+        return col;
     }
 
     // ---------------------------------------------------------------- several

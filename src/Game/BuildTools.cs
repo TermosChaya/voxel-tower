@@ -321,6 +321,10 @@ public partial class BuildTools : Node3D
                 if (mb.Pressed) Press(mb);
                 else if (_lmb) Release(mb);
                 break;
+            case InputEventKey { Pressed: true, Echo: false, PhysicalKeycode: global::Godot.Key.Z } z when z.CtrlPressed || z.MetaPressed:
+                Undo();
+                GetViewport().SetInputAsHandled();
+                break;
             case InputEventKey k when k.Pressed && !k.CtrlPressed && !k.MetaPressed:
                 if (Key(k)) GetViewport().SetInputAsHandled();
                 break;
@@ -363,8 +367,34 @@ public partial class BuildTools : Node3D
         return false;
     }
 
+    // ---------------------------------------------------------------- taking back
+
+    /// <summary>What the marking being drawn is called, for the chronicle when it is taken back.</summary>
+    string _markName;
+
+    /// <summary>The hand is lifted: what it marked becomes one step for Ctrl+Z.</summary>
+    void Lift()
+    {
+        _m.Sim.EndMarking(_markName ?? ToolName(Tool));
+        _markName = null;
+    }
+
+    /// <summary>Ctrl+Z: the last marking is taken back as far as it still can be; what is built or dug stays.</summary>
+    public void Undo()
+    {
+        if (_lmb) return;
+        var mk = _m.Sim.UndoMarking(out int n);
+        if (mk == null) { Refuse("отменять нечего"); return; }
+        string what = mk.What.Length > 0 ? mk.What : "разметка";
+        _m.Hud.Log($"Отменено: {what}" + (n > 0 ? $" ({Fmt.M3(n)} м³ разметки)" : ""));
+        _m.Hud.Float($"отменено: {what.ToLowerInvariant()}", Ornament.BronzeLight);
+        _planKey = "~";
+    }
+
     void Press(InputEventMouseButton mb)
     {
+        _markName = null;
+        _m.Sim.BeginMarking();
         _lmb = true;
         _pressPos = mb.Position;
         _shift = mb.ShiftPressed;
@@ -376,7 +406,7 @@ public partial class BuildTools : Node3D
         _level = Shapes.Level(w, _startPt.x, _startPt.z, StrokeNow());
         if (Tool == Tool.Brush)
         {
-            if (DigNow && _hasTree) { FellTree(); _lmb = false; return; }
+            if (DigNow && _hasTree) { FellTree(); _lmb = false; Lift(); return; }
             _paint = true;
             _lastG = (_startPt.x, _startPt.z);
             _lastHit = new Vector3(_hover.X, _hover.Y, _hover.Z);
@@ -386,6 +416,12 @@ public partial class BuildTools : Node3D
 
     void Release(InputEventMouseButton mb)
     {
+        try { Let(mb); }
+        finally { Lift(); }
+    }
+
+    void Let(InputEventMouseButton mb)
+    {
         _lmb = false;
         var w = _m.World;
         bool click = (mb.Position - _pressPos).Length() <= 8;
@@ -393,7 +429,8 @@ public partial class BuildTools : Node3D
         if (_paint)
         {
             _paint = false;
-            if (_strokeVox > 0) _m.Hud.Log($"{(dig ? "Копать" : ToolName(Tool))}: {Summary(_strokeEst, dig, _strokeSec)}");
+            _markName = dig ? "Копать" : ToolName(Tool);
+            if (_strokeVox > 0) _m.Hud.Log($"{_markName}: {Summary(_strokeEst, dig, _strokeSec)}");
             return;
         }
         if (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather or Tool.Repair or Tool.Bridge)
@@ -408,6 +445,7 @@ public partial class BuildTools : Node3D
             if (Tool == Tool.Capture) { Capture(a, b); return; }
             if (Tool == Tool.Unmark)
             {
+                _markName = "Снятие разметки";
                 int n = _m.Sim.CancelArea(a.x, a.z, b.x, b.z), zones = _m.Sim.RemoveZones(a.x, a.z, b.x, b.z);
                 if (n == 0 && zones == 0) Refuse("в рамке нет разметки");
                 else _m.Hud.Float((n > 0 ? $"разметка снята: {Fmt.M3(n)} м³" : "") + (zones > 0 ? (n > 0 ? ", " : "") + $"делянок снято: {zones}" : ""), Ornament.BronzeLight);
@@ -430,6 +468,7 @@ public partial class BuildTools : Node3D
         {
             var gp = GatePlan.At(w, _m.Site, _hover);
             if (gp == null) { Refuse("ворота ставят в боковую грань стены толщиной до 4 м"); return; }
+            _markName = "Ворота";
             _m.Sim.AddGate(gp);
             _m.Hud.Log("Ворота: " + GateSummary(gp));
             _planKey = "~";
@@ -537,6 +576,7 @@ public partial class BuildTools : Node3D
     {
         if (_mendGhost.Count == 0 && _mendClear.Count == 0) { Refuse("цело: чинить нечего"); return; }
         string text = MendSummary(out _);
+        _markName = "Починка";
         int n = _m.Sim.Mend(_mendLay, _mendClear);
         foreach (var g in _mendGates) n += _m.Sim.MendGate(g);
         if (n == 0) { Refuse("всё, что нужно, уже размечено"); return; }
@@ -557,6 +597,7 @@ public partial class BuildTools : Node3D
     void UnmarkAt()
     {
         if (!_hasHover) return;
+        _markName = "Снятие разметки";
         int n = _m.Sim.CancelOrders(_hover.X, _hover.Y, _hover.Z, UnmarkR);
         int zones = _m.Sim.RemoveZones(_hover.X, _hover.Z, _hover.X, _hover.Z);
         if (n == 0 && zones == 0) Refuse("здесь нет разметки");
@@ -585,6 +626,7 @@ public partial class BuildTools : Node3D
     {
         string text = SurveyText(a.x, a.z, b.x, b.z, out bool any);
         if (!any) { Refuse(text); return; }
+        _markName = Zone.Name0(GatherKind);
         _m.Sim.AddZone(a.x, a.z, b.x, b.z, GatherKind, Opt.Depth);
         _m.Hud.Log(text + ". Свободные рабочие возьмутся за неё сами.");
     }
@@ -702,6 +744,7 @@ public partial class BuildTools : Node3D
         double sec = Labour.Estimate(_m.World, plan, dig, _est);
         int n = dig ? _m.Sim.DesignateRemove(plan) : _m.Sim.DesignateBuild(plan);
         if (n == 0) { Refuse(dig ? "здесь нечего копать" : "здесь нечего класть: всё уже занято"); return false; }
+        _markName = what;
         _m.Hud.Log($"{what}: {Summary(_est, dig, sec)}");
         _planKey = "~";
         return true;

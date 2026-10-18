@@ -19,6 +19,8 @@ public sealed class Figure
 {
     public const int Parts = 5;
     public readonly ArrayMesh[] Mesh = new ArrayMesh[Parts];
+    /// <summary>The same parts in whole voxels, for when the camera is far and a half-voxel is less than a pixel.</summary>
+    public readonly ArrayMesh[] Far = new ArrayMesh[Parts];
     /// <summary>Where each part turns: the body at the hips, the arms at the shoulders, the legs at the hips.</summary>
     public readonly Vector3[] Joint = new Vector3[Parts];
     /// <summary>Voxels walked in one full stride, both legs.</summary>
@@ -46,6 +48,7 @@ public sealed class Figure
         {
             f.Joint[p] = new Vector3(plan.JX[p], plan.JY[p], plan.JZ[p]);
             f.Mesh[p] = MeshOf(plan.Grid[p]);
+            f.Far[p] = CoarseOf(plan.Grid[p]);
         }
         Cache[plan] = f;
         return f;
@@ -59,5 +62,50 @@ public sealed class Figure
         if (b == null || b.Quads == 0) return null;
         for (int i = 0; i < b.Pos.Length; i++) b.Pos[i] /= BodyPlan.Sub;
         return GodotMesh.From(b);
+    }
+
+    static int Down(int v) => v >= 0 ? v / BodyPlan.Sub : (v - BodyPlan.Sub + 1) / BodyPlan.Sub;
+
+    /// <summary>
+    /// A part in whole voxels: each voxel is filled where two of its eight half-voxels are, so that blades and shafts
+    /// a half-voxel thin are kept, with the material most of them are of.
+    /// </summary>
+    public static ArrayMesh CoarseOf(PartGrid g)
+    {
+        if (g == null || g.Count == 0) return null;
+        const int S = BodyPlan.Sub;
+        int x0 = Down(g.X0), y0 = Down(g.Y0), z0 = Down(g.Z0);
+        int sx = Down(g.X0 + g.SX - 1) - x0 + 1, sy = Down(g.Y0 + g.SY - 1) - y0 + 1, sz = Down(g.Z0 + g.SZ - 1) - z0 + 1;
+        int px = sx + 2, pz = sz + 2;
+        var vox = new byte[px * (sy + 2) * pz];
+        Span<byte> mats = stackalloc byte[S * S * S];
+        int any = 0;
+        for (int y = 0; y < sy; y++)
+            for (int z = 0; z < sz; z++)
+                for (int x = 0; x < sx; x++)
+                {
+                    int n = 0;
+                    for (int dy = 0; dy < S; dy++)
+                        for (int dz = 0; dz < S; dz++)
+                            for (int dx = 0; dx < S; dx++)
+                            {
+                                byte m = g.Mat((x0 + x) * S + dx, (y0 + y) * S + dy, (z0 + z) * S + dz);
+                                if (m != 0) mats[n++] = m;
+                            }
+                    if (n < 2) continue;
+                    byte best = mats[0];
+                    int bestN = 0;
+                    for (int i = 0; i < n; i++)
+                    {
+                        int c = 0;
+                        for (int j = 0; j < n; j++) if (mats[j] == mats[i]) c++;
+                        if (c > bestN) { bestN = c; best = mats[i]; }
+                    }
+                    vox[((y + 1) * pz + (z + 1)) * px + (x + 1)] = best;
+                    any++;
+                }
+        if (any == 0) return null;
+        var b = Mesher.Mesh(vox, sx, sy, sz, x0, y0, z0);
+        return b == null || b.Quads == 0 ? null : GodotMesh.From(b);
     }
 }

@@ -323,7 +323,7 @@ public partial class Stores : Control
 {
     public readonly string[] Values = { "0", "0", "0", "0" };
     public readonly bool[] Short = new bool[4];
-    public const float W = 430;
+    public const float W = 430, MinW = 300;
 
     static readonly (Icons.Painter icon, string tip)[] Groups =
     {
@@ -335,7 +335,7 @@ public partial class Stores : Control
 
     public Stores()
     {
-        CustomMinimumSize = new Vector2(W, 30);
+        CustomMinimumSize = new Vector2(MinW, 30);
         MouseFilter = MouseFilterEnum.Stop;
     }
 
@@ -352,7 +352,8 @@ public partial class Stores : Control
             float x = 6 + g * Cell;
             if (g > 0) Ornament.Diamond(this, new Vector2(x, Size.Y / 2), 3.2f, Ornament.Fade(Ornament.BronzeLight, .85f));
             Groups[g].icon(this, new Rect2(x + 10, (Size.Y - 22) / 2, 22, 22), Ornament.BronzeLight);
-            DrawString(Ornament.Display, new Vector2(x + 38, Size.Y / 2 + 7.5f), Values[g], HorizontalAlignment.Left, Cell - 40, 21, Short[g] ? Ornament.Blood : Ornament.Parchment);
+            int size = Cell < 96 ? 18 : 21;
+            DrawString(Ornament.Display, new Vector2(x + 36, Size.Y / 2 + size * .36f), Values[g], HorizontalAlignment.Left, Cell - 38, size, Short[g] ? Ornament.Blood : Ornament.Parchment);
         }
     }
 

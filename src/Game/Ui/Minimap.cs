@@ -113,7 +113,7 @@ public partial class Minimap : Control
         }
         poly[^1] = poly[0];
         DrawPlaces();
-        if (_m.Sim.WantTrails) DrawTrails();
+        if (_m.Sim.WantTrails) { DrawSides(); DrawTrails(); }
         DrawCreatures();
         DrawPolyline(poly, new Color(0, 0, 0, .6f), 3f, true);
         DrawPolyline(poly, Ornament.BronzeLight, 1.4f, true);
@@ -145,6 +145,22 @@ public partial class Minimap : Control
             DrawRect(new Rect2(p - new Vector2(5, 5), new Vector2(10, 10)), Rim);
             DrawRect(new Rect2(p - new Vector2(3.8f, 3.8f), new Vector2(7.6f, 7.6f)), c);
             DrawRect(new Rect2(p - new Vector2(1.4f, 1.4f), new Vector2(2.8f, 2.8f)), Ornament.BronzeLight);
+        }
+    }
+
+    /// <summary>The chief's ring round the citadel: how weak each side looks to him.</summary>
+    void DrawSides()
+    {
+        var sim = _m.Sim;
+        if (!sim.Bands.Exists(b => b.State is BandState.Coming or BandState.Forming or BandState.March && b.Target == null)) return;
+        var c = ToMap(_m.Site.KeepX, _m.Site.KeepZ);
+        float r = ToMap(_m.Site.KeepX + 30 * VoxelWorld.PerMetre, _m.Site.KeepZ).X - c.X;
+        for (int s = 0; s < Sim.Sides; s++)
+        {
+            float a0 = (s - .5f) * MathF.PI / 4 + .05f, a1 = (s + .5f) * MathF.PI / 4 - .05f;
+            var col = TrailView.SideColor(sim.SideSeen[s], sim.SideBands[s] > 0);
+            DrawArc(c, r, a0, a1, 8, new Color(0, 0, 0, .6f), 4.2f, true);
+            DrawArc(c, r, a0, a1, 8, new Color(col, Math.Min(1, col.A + .35f)), 2.6f, true);
         }
     }
 

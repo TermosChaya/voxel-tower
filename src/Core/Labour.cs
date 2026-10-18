@@ -145,6 +145,8 @@ public sealed class Orders
     public readonly HashSet<int> Active = new();
     public int Total { get; private set; }
     public int BuildTotal { get; private set; }
+    /// <summary>The player's marking being drawn, written down order by order for Ctrl+Z; null when the hand is off.</summary>
+    public Marking Writing;
 
     public Orders(VoxelWorld w, Site site)
     {
@@ -180,11 +182,8 @@ public sealed class Orders
             byte m = L.M(i);
             int x = L.X(i), y = L.Y(i), z = L.Z(i);
             if (m == 0 || !_w.InBounds(x, y, z) || !Brushes.Free(_w.Get(x, y, z)) || _site.Forbidden(x, z)) continue;
-            byte cur = Layer.Get(x, y, z);
-            if (cur == m) continue;
-            if (cur != 0) Count(x, z, -1, cur);
-            Layer.Set(x, y, z, m);
-            Count(x, z, 1, m);
+            if (Layer.Get(x, y, z) == m) continue;
+            Put(x, y, z, m);
             n++;
         }
         return n;
@@ -199,16 +198,55 @@ public sealed class Orders
         {
             int x = L.X(i), y = L.Y(i), z = L.Z(i);
             if (!_w.InBounds(x, y, z) || !Labour.Diggable(_w.Get(x, y, z)) || _site.Forbidden(x, z)) continue;
-            byte cur = Layer.Get(x, y, z);
-            if (IsRemove(cur)) continue;
-            if (cur != 0) Count(x, z, -1, cur);
-            byte o = RemoveFor(_w.Get(x, y, z));
-            Layer.Set(x, y, z, o);
-            Count(x, z, 1, o);
+            if (IsRemove(Layer.Get(x, y, z))) continue;
+            Put(x, y, z, RemoveFor(_w.Get(x, y, z)));
             n++;
         }
         return n;
     }
+
+    /// <summary>Sets one order, writing down what it was when the player's hand is at work.</summary>
+    void Put(int x, int y, int z, byte o)
+    {
+        byte cur = Layer.Get(x, y, z);
+        if (cur == o) return;
+        Writing?.Note(WaterPlanner.Pack(x, y, z), cur, o);
+        if (cur != 0) Count(x, z, -1, cur);
+        Layer.Set(x, y, z, o);
+        if (o != 0) Count(x, z, 1, o);
+    }
+
+    /// <summary>Whether an order could be marked at a voxel as the world stands now.</summary>
+    bool Fits(int x, int y, int z, byte o)
+    {
+        if (!_w.InBounds(x, y, z) || _site.Forbidden(x, z)) return false;
+        byte cur = _w.Get(x, y, z);
+        return IsRemove(o) ? Labour.Diggable(cur) : Brushes.Free(cur);
+    }
+
+    /// <summary>
+    /// Takes a marking back: every order it set that nothing has touched since is put back as it was — where that can
+    /// still be marked — and what the pawns have done of it stays done. Returns how many orders changed.
+    /// </summary>
+    internal int Undo(Marking mk)
+    {
+        int n = 0;
+        for (int i = mk.At.Count - 1; i >= 0; i--)
+        {
+            var (x, y, z) = WaterPlanner.Unpack(mk.At[i]);
+            byte now = mk.Now[i], was = mk.Was[i];
+            if (Layer.Get(x, y, z) != now) continue;
+            if (was != 0 && !Fits(x, y, z, was)) was = 0;
+            else if (IsRemove(was)) was = RemoveFor(_w.Get(x, y, z));
+            if (was == now) continue;
+            Put(x, y, z, was);
+            n++;
+        }
+        return n;
+    }
+
+    /// <summary>Takes back the orders to take something out on the columns of a rectangle; returns how many.</summary>
+    internal int CancelRemovals(int x0, int z0, int x1, int z1) => CancelArea(x0, z0, x1, z1, true);
 
     /// <summary>Drops one order (done or no longer possible).</summary>
     public void Clear(int x, int y, int z)
@@ -228,13 +266,15 @@ public sealed class Orders
                 for (int x = Math.Max(0, cx - r); x <= Math.Min(_w.SX - 1, cx + r); x++)
                 {
                     if (Brushes.Dist(x - cx, y - cy, z - cz) > radius + .01 || Layer.Get(x, y, z) == 0) continue;
-                    Clear(x, y, z); n++;
+                    Put(x, y, z, 0); n++;
                 }
         return n;
     }
 
     /// <summary>Takes back every order standing on the columns of a rectangle, at any height; returns how many.</summary>
-    public int CancelArea(int x0, int z0, int x1, int z1)
+    public int CancelArea(int x0, int z0, int x1, int z1) => CancelArea(x0, z0, x1, z1, false);
+
+    int CancelArea(int x0, int z0, int x1, int z1, bool removalsOnly)
     {
         if (x1 < x0) (x0, x1) = (x1, x0);
         if (z1 < z0) (z0, z1) = (z1, z0);
@@ -248,10 +288,10 @@ public sealed class Orders
                     if (d == null) continue;
                     for (int i = 0; i < d.Length; i++)
                     {
-                        if (d[i] == 0) continue;
+                        if (d[i] == 0 || removalsOnly && !IsRemove(d[i])) continue;
                         int x = cx * VoxelWorld.CS + (i & 31), z = cz * VoxelWorld.CS + (i >> 5 & 31), y = cy * VoxelWorld.CS + (i >> 10);
                         if (x < x0 || x > x1 || z < z0 || z > z1) continue;
-                        Clear(x, y, z); n++;
+                        Put(x, y, z, 0); n++;
                     }
                 }
         return n;

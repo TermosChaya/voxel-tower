@@ -45,6 +45,8 @@ public partial class Commander : Node
         var hit = UnitAt(mb.Position);
         if (hit == null && _m.Tools.HoverGate is { } gate) { Toggle(gate); return; }
         if (!add) _m.Selected.Clear();
+        // one of ours is picked; a raider or a beast is only looked at
+        _m.Inspected = hit != null && hit.Team != Team.Player && _m.Selected.Count == 0 ? hit : null;
         if (hit != null && hit.Team == Team.Player)
         {
             if (add && _m.Selected.Contains(hit)) _m.Selected.Remove(hit); else _m.Selected.Add(hit);
@@ -216,10 +218,11 @@ public partial class Commander : Node
         _m.Rig.Focus(_m.World.WX(x / units.Count), _m.World.WZ(z / units.Count));
     }
 
-    /// <summary>Drops the fallen from the chosen.</summary>
+    /// <summary>Drops the fallen from the chosen, and stops looking at one gone from the valley.</summary>
     public void Prune()
     {
         if (_m.Selected.RemoveWhere(u => u.Dead) > 0) _m.Hud.OnSelectionChanged();
+        if (_m.Inspected != null && (_m.Selected.Count > 0 || !_m.Sim.Units.Contains(_m.Inspected))) { _m.Inspected = null; _m.Hud.OnSelectionChanged(); }
     }
 
     // ---------------------------------------------------------------- orders
@@ -327,6 +330,15 @@ public partial class Commander : Node
         {
             int n = (int)(k.PhysicalKeycode - Key.Key1);
             if (k.ShiftPressed) CallSquad(n); else RememberSquad(n);
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+        // the interface larger or smaller, as a page in a browser: Ctrl and + or −, Ctrl+0 as it was
+        if ((k.CtrlPressed || k.MetaPressed) && k.PhysicalKeycode is Key.Equal or Key.Minus or Key.Key0)
+        {
+            int dir = k.PhysicalKeycode == Key.Equal ? 1 : k.PhysicalKeycode == Key.Minus ? -1 : 0;
+            float s = Settings.Step(GetTree().Root, dir);
+            _m.Hud.Float($"интерфейс: {Math.Round(s * 100)} %", Ornament.BronzeLight);
             GetViewport().SetInputAsHandled();
             return;
         }

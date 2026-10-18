@@ -50,6 +50,7 @@ public sealed partial class Sim
                 for (int x = x0; x <= x1; x++) zone.Floor[(z - z0) * zone.W + (x - x0)] = Math.Max(3, World.SurfAt(x, z) - zone.Depth);
         }
         Zones.Add(zone);
+        Orders.Writing?.Added.Add(zone);
         ZonesVersion++;
         return zone;
     }
@@ -59,7 +60,15 @@ public sealed partial class Sim
     {
         if (x1 < x0) (x0, x1) = (x1, x0);
         if (z1 < z0) (z0, z1) = (z1, z0);
-        int n = Zones.RemoveAll(z => z.X0 <= x1 && z.X1 >= x0 && z.Z0 <= z1 && z.Z1 >= z0);
+        int n = 0;
+        for (int i = Zones.Count - 1; i >= 0; i--)
+        {
+            var z = Zones[i];
+            if (z.X0 > x1 || z.X1 < x0 || z.Z0 > z1 || z.Z1 < z0) continue;
+            Zones.RemoveAt(i);
+            Orders.Writing?.Removed.Add(z);
+            n++;
+        }
         if (n > 0) ZonesVersion++;
         return n;
     }
@@ -208,7 +217,7 @@ public sealed partial class Sim
                 Stockpile.Wood => "Делянка вырублена.",
                 Stockpile.Stone => "Каменоломня выбрана до дна.",
                 _ => "Карьер выкопан.",
-            }, 1);
+            }, 1, (z.X0 + z.X1) / 2f, (z.Z0 + z.Z1) / 2f);
         return false;
     }
 

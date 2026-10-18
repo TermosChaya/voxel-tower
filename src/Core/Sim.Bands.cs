@@ -55,6 +55,8 @@ public sealed class Warband
     internal List<int> RallyPath;
     internal int RallyStep;
     internal double RallySearch;
+    /// <summary>How long its way to the citadel takes, in seconds, as its trail was last worked out (hacking and building counted).</summary>
+    public float TrailSeconds;
     /// <summary>The way to the gathering place as last worked out for the trail, from where and when.</summary>
     internal List<int> WayCache;
     internal int WayFrom = -1, WayTo = -1;
@@ -133,6 +135,13 @@ public sealed partial class Sim
     public static readonly string[] SideNames = { "восточную", "юго-восточную", "южную", "юго-западную", "западную", "северо-западную", "северную", "северо-восточную" };
     /// <summary>How many of ours keep each side, as the chief last counted them (archers count more), for the panel and the tests.</summary>
     public readonly float[] SideKeep = new float[Sides];
+    /// <summary>
+    /// The sides as the chief sees them, for the ring round the citadel: 1 the weakest to his eye, 0 the strongest, −1
+    /// where he finds nowhere to gather; how many bands he sends at each; and a count that goes up when he weighs again.
+    /// </summary>
+    public readonly float[] SideSeen = new float[Sides];
+    public readonly int[] SideBands = new int[Sides];
+    public int SidesRev;
     double _nextChoice;
 
     /// <summary>
@@ -163,20 +172,30 @@ public sealed partial class Sim
         var rally = new int[Sides];
         for (int s = 0; s < Sides; s++) rally[s] = RallyPoint(s);
         var taken = new int[Sides];
+        var seenBest = new float[Sides];
+        Array.Fill(seenBest, float.PositiveInfinity);
         foreach (var b in coming)
         {
             var lead = b.Roster.Count > 0 ? b.Roster[0] : Kinds.Goblin;
             Fields.TryGetValue(lead, out var f);
             var (ex, _, ez) = b.Entry >= 0 ? Nav.Feet(b.Entry) : (0f, 0f, Site.KeepZ);
             var score = new float[Sides];
-            float lo = float.MaxValue, hi = float.MinValue;
+            var round = new float[Sides];
+            float lo = float.MaxValue, hi = float.MinValue, nearest = float.MaxValue;
+            for (int s = 0; s < Sides; s++)
+            {
+                round[s] = float.PositiveInfinity;
+                if (rally[s] < 0) continue;
+                var (rx, _, rz) = Nav.Feet(rally[s]);
+                round[s] = MathF.Sqrt((rx - ex) * (rx - ex) + (rz - ez) * (rz - ez)) / (lead.Move.Speed * NavGrid.CS);
+                nearest = Math.Min(nearest, round[s]);
+            }
             for (int s = 0; s < Sides; s++)
             {
                 float way = rally[s] < 0 ? float.PositiveInfinity : f == null ? 0 : f.Dist[rally[s]];
                 if (float.IsPositiveInfinity(way)) { score[s] = float.PositiveInfinity; continue; }
-                var (rx, _, rz) = Nav.Feet(rally[s]);
-                float round = MathF.Sqrt((rx - ex) * (rx - ex) + (rz - ez) * (rz - ez)) / (lead.Move.Speed * NavGrid.CS);
-                score[s] = way + round * .6f + SideKeep[s] * 20;
+                // the way round counts, and a long way round counts double: he will not march the band half the day
+                score[s] = way + round[s] + Math.Max(0, round[s] - nearest - 30) * 1.5f + SideKeep[s] * 18;
                 lo = Math.Min(lo, score[s]); hi = Math.Max(hi, score[s]);
             }
             if (lo == float.MaxValue) { b.Side = b.RallyCell = -1; b.Why = ""; continue; }
@@ -186,7 +205,8 @@ public sealed partial class Sim
             for (int s = 0; s < Sides; s++)
             {
                 if (float.IsPositiveInfinity(score[s])) continue;
-                float seen = (float)(intel * score[s] + (1 - intel) * (lo + spread * b.Hunch[s])) + taken[s] * spread * .3f;
+                float guess = (float)(intel * score[s] + (1 - intel) * (lo + spread * b.Hunch[s])), seen = guess + taken[s] * spread * .3f;
+                seenBest[s] = Math.Min(seenBest[s], guess);
                 if (seen < bestSeen) { bestSeen = seen; best = s; }
             }
             taken[best]++;
@@ -198,6 +218,15 @@ public sealed partial class Sim
                 : SideKeep[best] <= fewest + .3f ? "там стражи меньше всего"
                 : "там короче путь";
         }
+        // the ring round the citadel: how weak each side looks to him
+        float min = float.MaxValue, max = float.MinValue;
+        foreach (float v in seenBest) if (!float.IsPositiveInfinity(v)) { min = Math.Min(min, v); max = Math.Max(max, v); }
+        for (int s = 0; s < Sides; s++)
+        {
+            SideSeen[s] = float.IsPositiveInfinity(seenBest[s]) ? -1 : max - min < 1e-3f ? .5f : (max - seenBest[s]) / (max - min);
+            SideBands[s] = taken[s];
+        }
+        SidesRev++;
     }
 
     /// <summary>
@@ -335,14 +364,14 @@ public sealed partial class Sim
                 bool fell = b.Leader != null;
                 b.LostLeader |= fell;
                 MakeLeader(b, next);
-                if (fell && b.Alive > 1) Say($"{b.Name}: вожак пал, ватагу ведёт {next.T.Name.ToLowerInvariant()}.", 1);
+                if (fell && b.Alive > 1) Say($"{b.Name}: вожак пал, ватагу ведёт {next.T.Name.ToLowerInvariant()}.", 1, next);
             }
             // its leader fallen and two in three of it gone: the rest have had enough
             if (!b.Broken && b.LostLeader && b.Spawned >= b.Size && b.Alive * 3 <= b.Size && b.Target == null)
             {
                 b.Broken = true;
                 foreach (var m in b.Members) if (!m.Dead) m.Routed = true;
-                Say($"{b.Name} дрогнула и бежит: {(b.Alive == 1 ? "уцелел один" : $"уцелело {b.Alive}")}.", 1);
+                Say($"{b.Name} дрогнула и бежит: {(b.Alive == 1 ? "уцелел один" : $"уцелело {b.Alive}")}.", 1, b.Leader ?? b.Members.Find(m => !m.Dead));
             }
             var l = b.Leader;
             if (b.State is BandState.March or BandState.Rally && Time >= b.HeadingAt) { b.HeadingAt = Time + .5; Heading(b); }
@@ -376,7 +405,7 @@ public sealed partial class Sim
                     if (Time - b.Since > 3 && near >= alive * .75f || Time - b.Since > 14)
                     {
                         Enter(b, BandState.Storm);
-                        Say($"{b.Name} идёт на штурм: {alive} {Raiders(alive)}.", 2);
+                        Say($"{b.Name} идёт на штурм: {alive} {Raiders(alive)}.", 2, l);
                     }
                     break;
                 }
@@ -591,12 +620,14 @@ public sealed partial class Sim
         }
         if (!Fields.TryGetValue(kind, out var f)) return;
         // first to where the chief sent it, on foot, then on from there as the field leads
+        float walk = 0;
         if (b.RallyCell >= 0 && b.State is BandState.Coming or BandState.Forming or BandState.March)
         {
             var way = b.State == BandState.March && b.RallyPath != null && b.RallyStep < b.RallyPath.Count
                 ? b.RallyPath.GetRange(b.RallyStep, b.RallyPath.Count - b.RallyStep) : WayToRally(b, c, kind);
-            if (way is { Count: > 0 }) { b.Trail.AddRange(way); c = way[^1]; }
+            if (way is { Count: > 0 }) { b.Trail.AddRange(way); c = way[^1]; walk = way.Count * 1.15f / kind.Move.Speed; }
         }
+        b.TrailSeconds = walk + (float.IsPositiveInfinity(f.Dist[c]) ? 0 : f.Dist[c]);
         _goalSet ??= new HashSet<int>(Goals);
         for (int step = 0; step < 1500 && !_goalSet.Contains(c); step++)
         {

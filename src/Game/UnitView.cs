@@ -32,7 +32,9 @@ public partial class UnitView : Node3D
 
     Main _m;
     VoxelWorld _w;
-    ShaderMaterial _mat;
+    ShaderMaterial _mat, _matFar;
+    /// <summary>The camera is far: figures are drawn in whole voxels and cast no shadows (a half-voxel is under a pixel).</summary>
+    bool _far;
     readonly Dictionary<BodyPlan, Kind> _kinds = new();
     readonly Dictionary<int, Look> _looks = new();
     readonly HashSet<int> _alive = new();
@@ -54,6 +56,8 @@ public partial class UnitView : Node3D
         _mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/voxel.gdshader") };
         // the figures are sculpted in half-voxels: their grain and bevels follow those
         _mat.SetShaderParameter("grid", (float)BodyPlan.Sub);
+        _matFar = (ShaderMaterial)_mat.Duplicate();
+        _matFar.SetShaderParameter("grid", 1f);
 
         // an arrow is 70 cm long, a little under five voxels
         var shaft = new BoxMesh { Size = new Vector3(.022f, .022f, .35f), Material = new StandardMaterial3D { AlbedoColor = new Color("4a3424"), Roughness = .9f } };
@@ -78,7 +82,34 @@ public partial class UnitView : Node3D
         for (int p = 0; p < Figure.Parts; p++)
             if (k.Fig.Mesh[p] != null) k.Parts[p] = Multi(k.Fig.Mesh[p], _mat, true);
         _kinds[plan] = k;
+        if (_far) Dress(k);
         return k;
+    }
+
+    /// <summary>Near or far, every kind of figure in the meshes and the material for it.</summary>
+    void Dress(Kind k)
+    {
+        for (int p = 0; p < Figure.Parts; p++)
+        {
+            var mi = k.Parts[p];
+            if (mi == null) continue;
+            var mesh = _far ? k.Fig.Far[p] : k.Fig.Mesh[p];
+            mi.Visible = mesh != null;
+            if (mesh == null) continue;
+            mi.Multimesh.Mesh = mesh;
+            mi.MaterialOverride = _far ? _matFar : _mat;
+            mi.CastShadow = _far ? GeometryInstance3D.ShadowCastingSetting.Off : GeometryInstance3D.ShadowCastingSetting.On;
+        }
+    }
+
+    /// <summary>How many pixels of the window a voxel takes: under three, the figures go over to whole voxels.</summary>
+    void Distance()
+    {
+        float px = GetTree().Root.Size.Y / Math.Max(.01f, _m.Rig.Cam.Size) * VoxelWorld.Vox;
+        bool far = _far ? px < 3.6f : px < 3.2f;
+        if (far == _far) return;
+        _far = far;
+        foreach (var k in _kinds.Values) Dress(k);
     }
 
     MultiMeshInstance3D Multi(Mesh mesh, Material mat, bool colors)
@@ -108,6 +139,7 @@ public partial class UnitView : Node3D
         float dt = (float)Math.Min(delta, .1);
         _t += dt;
         var sim = _m.Sim;
+        Distance();
         look_xf.Clear();
         foreach (var k in _kinds.Values) k.Count = 0;
         foreach (var u in sim.Units) if (u.Wounds == null) KindOf(u).Count++;
@@ -541,23 +573,26 @@ public partial class UnitView : Node3D
     {
         var mm = _rings.Multimesh;
         var sel = _m.Selected;
-        int n = 0;
+        // ours chosen, and the raider or beast looked at, ringed in blood
+        var seen = _m.Inspected is { Dead: false } l ? l : null;
+        int n = seen != null ? 1 : 0;
         foreach (var u in sel) if (!u.Dead) n++;
         if (n == 0) { mm.VisibleInstanceCount = 0; return; }
         if (mm.InstanceCount < n) { mm.InstanceCount = Math.Max(16, n * 2); _ringBuf = new float[mm.InstanceCount * 16]; }
         int i = 0;
         float pulse = 1 + MathF.Sin((float)_t * 4) * .04f;
-        foreach (var u in sel)
+        // ours glow (the light runs over white), the one looked at stays plain blood red
+        void Ring(Unit u, Color c, float glow)
         {
-            if (u.Dead) continue;
             float r = (u.T.BodyR + 2f) * VoxelWorld.Vox * pulse;
             int o = i++ * 16;
             _ringBuf[o] = r; _ringBuf[o + 1] = 0; _ringBuf[o + 2] = 0; _ringBuf[o + 3] = _w.WX(u.X);
             _ringBuf[o + 4] = 0; _ringBuf[o + 5] = r * .5f; _ringBuf[o + 6] = 0; _ringBuf[o + 7] = _w.WY(u.Y + .6f);
             _ringBuf[o + 8] = 0; _ringBuf[o + 9] = 0; _ringBuf[o + 10] = r; _ringBuf[o + 11] = _w.WZ(u.Z);
-            var c = u.Hold ? Ornament.BronzeLight : Ornament.EmberGlow;
-            _ringBuf[o + 12] = c.R * 1.6f; _ringBuf[o + 13] = c.G * 1.6f; _ringBuf[o + 14] = c.B * 1.6f; _ringBuf[o + 15] = 1;
+            _ringBuf[o + 12] = c.R * glow; _ringBuf[o + 13] = c.G * glow; _ringBuf[o + 14] = c.B * glow; _ringBuf[o + 15] = 1;
         }
+        foreach (var u in sel) if (!u.Dead) Ring(u, u.Hold ? Ornament.BronzeLight : Ornament.EmberGlow, 1.6f);
+        if (seen != null) Ring(seen, new Color("c8281c"), .9f);
         RenderingServer.MultimeshSetBuffer(mm.GetRid(), _ringBuf);
         mm.VisibleInstanceCount = n;
     }

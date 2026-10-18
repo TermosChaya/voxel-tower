@@ -9,7 +9,9 @@ namespace VoxelTower.Game;
 /// Where the horde's warbands will go: for every band a dashed line on the ground in its own colour, from where it comes
 /// in (or from its leader, once it is in the valley) to the citadel, with arrowheads along it; red rings where it will
 /// hack through something, amber ones where it will raise a ladder, lay a bridge or fill a ditch; and a tag over its
-/// head with its name and strength. One line a band, not a line a raider.
+/// head with its name, strength and how long its way is. One line a band, not a line a raider. Round the citadel lies
+/// the chief's ring: the eight sides as he sees them, red where he finds the walls weak, green where strong, brighter
+/// where he sends a band.
 /// </summary>
 public partial class TrailView : Node3D
 {
@@ -30,6 +32,8 @@ public partial class TrailView : Node3D
     public static Color ColorOf(Warband b) => Palette[(b.Id - 1) % Palette.Length];
 
     Main _m;
+    MeshInstance3D _sides;
+    int _sidesRev = -1;
     readonly Dictionary<Warband, Drawn> _drawn = new();
     readonly List<Warband> _gone = new();
     StandardMaterial3D _lineMat, _breach, _works;
@@ -50,6 +54,53 @@ public partial class TrailView : Node3D
         StandardMaterial3D Ring(Color c) => new() { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = c, NoDepthTest = true, RenderPriority = 5 };
         _breach = Ring(new Color(1f, .16f, .1f));
         _works = Ring(new Color(1f, .7f, .2f));
+        // the ring lies over everything, level with the foot of the citadel, so hills and cliffs do not break it
+        var over = (StandardMaterial3D)_lineMat.Duplicate();
+        over.NoDepthTest = true;
+        over.RenderPriority = 4;
+        _sides = new MeshInstance3D { MaterialOverride = over, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        AddChild(_sides);
+    }
+
+    /// <summary>How a side looks to the chief, as a colour: green strong, amber, red weak; grey where he cannot gather.</summary>
+    public static Color SideColor(float seen, bool sent)
+    {
+        if (seen < 0) return new Color(.5f, .5f, .5f, .2f);
+        Color strong = new(.32f, .62f, .24f), middle = new(.92f, .56f, .1f), weak = new(.8f, .08f, .04f);
+        var c = seen < .5f ? strong.Lerp(middle, seen * 2) : middle.Lerp(weak, seen * 2 - 1);
+        return new Color(c, sent ? .85f : .55f);
+    }
+
+    /// <summary>The chief's ring: eight arcs on the ground round the citadel, thirty metres out.</summary>
+    void RebuildSides()
+    {
+        var w = _m.World; var sim = _m.Sim; var site = _m.Site;
+        var st = new SurfaceTool();
+        st.Begin(Mesh.PrimitiveType.Triangles);
+        const float R = 30 * VoxelWorld.PerMetre, Band = .9f * VoxelWorld.PerMetre;
+        float level = site.KeepBase + 2;
+        for (int s = 0; s < Sim.Sides; s++)
+        {
+            float a0 = (s - .5f) * MathF.PI / 4 + .03f, a1 = (s + .5f) * MathF.PI / 4 - .03f;
+            bool sent = sim.SideBands[s] > 0;
+            var col = SideColor(sim.SideSeen[s], sent);
+            float wide = sent ? Band * 1.5f : Band;
+            const int Steps = 16;
+            for (int i = 0; i < Steps; i++)
+            {
+                float t0 = a0 + (a1 - a0) * i / Steps, t1 = a0 + (a1 - a0) * (i + 1) / Steps;
+                bool off = false;
+                Vector3 P(float a, float r)
+                {
+                    float x = site.KeepX + MathF.Cos(a) * r, z = site.KeepZ + MathF.Sin(a) * r;
+                    if (x < 0 || z < 0 || x >= w.SX || z >= w.SZ) off = true;
+                    return new Vector3(x, level, z);
+                }
+                Vector3 p0 = P(t0, R - wide / 2), p1 = P(t0, R + wide / 2), p2 = P(t1, R + wide / 2), p3 = P(t1, R - wide / 2);
+                if (!off) Quad(st, w, p0, p1, p2, p3, col);
+            }
+        }
+        _sides.Mesh = st.Commit();
     }
 
     public override void _Process(double delta)
@@ -58,6 +109,9 @@ public partial class TrailView : Node3D
         var sim = _m.Sim;
         Visible = sim.WantTrails;
         if (!Visible) return;
+        if (_sidesRev != sim.SidesRev) { _sidesRev = sim.SidesRev; RebuildSides(); }
+        // the ring is for the bands still to come and on the march
+        _sides.Visible = sim.Bands.Exists(b => b.State is BandState.Coming or BandState.Forming or BandState.March && b.Target == null);
         foreach (var b in sim.Bands)
         {
             if (!_drawn.TryGetValue(b, out var d)) _drawn[b] = d = Make(b);
@@ -111,7 +165,8 @@ public partial class TrailView : Node3D
             _ => b.Target != null ? "на " + b.Target.Name.ToLowerInvariant() : "в походе",
         };
         int n = b.State == BandState.Coming ? b.Size : b.Strength;
-        d.Tag.Text = $"{b.Name} · {n} · {what}";
+        bool going = b.State is BandState.Coming or BandState.Forming or BandState.March && b.TrailSeconds > 0;
+        d.Tag.Text = $"{b.Name} · {n} · {what}" + (going ? $" · {Fmt.Clock(b.TrailSeconds)} до цитадели" : "");
     }
 
     void Rebuild(Warband b, Drawn d)

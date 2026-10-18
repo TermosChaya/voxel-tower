@@ -376,7 +376,7 @@ public sealed partial class Sim
         if (u.PushEffort < 1.2f) return true;
         u.Swing = 1;
         int n = ThrowDown(u.PushVoxel.x, u.PushVoxel.y, u.PushVoxel.z);
-        if (n > 20) Say($"{u.T.Name} сбросил осадную лестницу.", 1);
+        if (n > 20) Say($"{u.T.Name} сбросил осадную лестницу.", 1, u);
         u.PushCell = -1;
         return true;
     }
@@ -433,7 +433,7 @@ public sealed partial class Sim
             u.Mending = true;
             ReleaseSite(u);
             u.Prey = null; u.Path = null; u.NextSearch = 0; u.Patient = null;
-            Say($"{u.T.Name} тяжело ранен и отходит к цитадели.", 3);
+            Say($"{u.T.Name} тяжело ранен и отходит к цитадели.", 3, u);
         }
         else if (u.Hp >= u.MaxHp * .75f && bleed < .1f)
         {
@@ -509,7 +509,7 @@ public sealed partial class Sim
         if (u.BandageEffort >= 2.5f)
         {
             p.Wounds.Bleed *= .1f;
-            Say($"{u.T.Name} перевязал {Whom(p.T)}.", 1);
+            Say($"{u.T.Name} перевязал {Whom(p.T)}.", 1, p);
             p.Bandager = null; u.Patient = null;
         }
         return true;

@@ -26,13 +26,14 @@ public partial class Hud : CanvasLayer
         "Кисти ничего не строят сами: они размечают работу, а пешки делают её — кладут из запасов, копают, рубят.\n" +
         "1–5 — кисти, 6 — снять разметку, 7 — лестница, 8 — делянка (добыча с участка), 9 — ворота, 0 — починка, M — мост, B — снять чертёж, N — сетка, Esc — убрать кисть. Z, X, C — камень, брёвна, земля; " +
         "V — кирка: копать, рубить, ломать камень, разбирать свою кладку. Shift с кистью — тоже кирка. Те же кисти — в сетке справа внизу.\n" +
-        "[ и ] — толщина, − и = — высота (с киркой — глубина). F — форма или заливка, G — ровно или по рельефу.\n" +
+        "[ и ] — толщина, − и = — высота (с киркой — глубина). F — форма или заливка, G — ровно или по рельефу. Ctrl+Z — отменить последнюю разметку.\n" +
         "Без кисти: ЛКМ — выбрать пешку, рамкой — нескольких; ПКМ по земле — послать (посланные вместе идут строем), по зверю — охотиться, по врагу — атаковать.\n" +
         "Лица дружины под верхней балкой: щелчок — выбрать, ещё раз — показать, Shift — добавить. Что с выбранным и какие работы ему велены — посередине внизу.\n" +
         "Вкладки на балке: задачи, летопись, чертежи, работы (кто что делает и в каком порядке, 1 — первым делом), орда.\n" +
         "Пробел — позвать орду раньше (она меньше узнает о вас), P — пауза, Tab — скорость, T — тревога, J — пути орды.\n" +
         "Ctrl+1…5 — запомнить выбранных отрядом, Shift+1…5 — выбрать отряд (дважды — показать).\n" +
-        "ПКМ тянет карту, колесо — масштаб, СКМ или Q/E — поворот, WASD — сдвиг, Y — вид сверху, H — вернуть вид.";
+        "ПКМ тянет карту, колесо — масштаб, СКМ или Q/E — поворот, WASD — сдвиг, Y — вид сверху, H — вернуть вид.\n" +
+        "Ctrl и + или − — интерфейс крупнее или мельче, Ctrl+0 — как был (на Mac — ⌘).";
 
     public static readonly (Tool tool, Icons.Painter icon, string key, string tip)[] ToolDefs =
     {
@@ -56,6 +57,8 @@ public partial class Hud : CanvasLayer
         (Mat.Wood, "X", Stockpile.Wood, "Брёвна\nРубят в лесу: кирка, щелчок по дереву. Ложатся быстрее камня, но топор орка берёт их легко."),
         (Mat.Rammed, "C", Stockpile.Earth, "Земля\nЕё даёт любой ров и котлован. Насыпь кладётся быстрее всего, а гоблину без кирки сквозь неё не пройти."),
     };
+
+    public const string UndoTip = "Отменить — Ctrl+Z (на Mac ⌘Z)\nСнимает последнюю разметку, как не бывало: стену, ров, лестницу, мост, делянку, ворота, починку — и возвращает снятую. До сорока шагов назад. Что уже построено или выкопано, остаётся.";
 
     public const string PickTip = "Кирка\nКисти размечают не кладку, а работу кирки: выкопать ров, срубить лес, наломать камня, разобрать свою стену. Всё добытое идёт в запасы.";
 
@@ -289,8 +292,10 @@ public partial class Hud : CanvasLayer
         _clockPanel.Position = new Vector2(vp.X - WaveClock.W - 58, 0);
         _help.Position = new Vector2(vp.X - 50, 1);
         float tabsEnd = _tabs.Position.X + _tabs.Size.X;
-        _stores.Size = new Vector2(Stores.W, 30);
-        _stores.Position = new Vector2(Math.Max(tabsEnd + 14, tabsEnd + (_clockPanel.Position.X - tabsEnd - Stores.W) / 2), 4);
+        // on a narrow screen (or a large interface) the stores close up rather than go under the clock
+        float storesW = Math.Clamp(_clockPanel.Position.X - tabsEnd - 28, Stores.MinW, Stores.W);
+        _stores.Size = new Vector2(storesW, 30);
+        _stores.Position = new Vector2(Math.Max(tabsEnd + 14, tabsEnd + (_clockPanel.Position.X - tabsEnd - storesW) / 2), 4);
         _drop.Bottom = vp.Y - BottomConsole.Wing - 6;
         _colonists.From = Math.Max(14, _drop.RightEdge + 12);
         _colonists.To = _clockPanel.Position.X - 12;
@@ -452,13 +457,31 @@ public partial class Hud : CanvasLayer
 
     // ---------------------------------------------------------------- messages
 
-    public void Log(string text, Kind kind = Kind.Plain)
+    /// <summary>A line for the chronicle; one that happened at a place (voxels of the valley) takes the camera there when clicked.</summary>
+    public void Log(string text, Kind kind = Kind.Plain, float x = float.NaN, float z = float.NaN)
     {
         if (_toasts == null) return;
         var color = kind switch { Kind.Ok => Ornament.Moss, Kind.Warn => Ornament.BronzeLight, Kind.Bad => Ornament.Blood, _ => Ornament.Parchment };
         _toasts.Push(text, color);
         // and into the chronicle's tab, newest on top
-        var l = Text(text, Ornament.Serif, 13, color, wrap: true);
+        var l = Text(float.IsNaN(x) ? text : "◎ " + text, Ornament.Serif, 13, color, wrap: true);
+        if (!float.IsNaN(x))
+        {
+            float px = x, pz = z;
+            l.MouseFilter = Control.MouseFilterEnum.Stop;
+            l.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
+            l.TooltipText = "Где это было\nЩелчок — посмотреть на это место.";
+            l.MouseEntered += () => l.AddThemeColorOverride("font_color", color.Lightened(.3f));
+            l.MouseExited += () => l.AddThemeColorOverride("font_color", color);
+            l.GuiInput += e =>
+            {
+                if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true })
+                {
+                    _m.Rig.Focus(_m.World.WX(px), _m.World.WZ(pz));
+                    l.AcceptEvent();
+                }
+            };
+        }
         _history.AddChild(l);
         _history.MoveChild(l, 0);
         while (_history.GetChildCount() > 80) _history.GetChild(_history.GetChildCount() - 1).QueueFree();
