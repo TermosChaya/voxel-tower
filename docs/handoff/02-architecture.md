@@ -93,6 +93,10 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   (`Struck`), `Moon` (`BloodMoonUntil` → `Lit` всюду), `Terrify`, `Chain` (`Unit.ChainedUntil`, в `RaiderTick` стоит),
   `RaiseDead` (`Kinds.Risen` из `Kinds.Summoned`, `Unit.CrumbleAt`, `RisenTick` из `PawnTick`), `Watch` (`EyeUntil` →
   `FogRange` 1). `TickSpells` — в `StepWorld`. Событие `Spelled` — для вида.
+- `Sim.Shamans.cs` — шаманы орды: `Kinds.Shaman` (в `Kinds.Casters`, не в `HordeKinds`: путь — поле гоблина через
+  `FieldOf`), `ShamanTick` из `RaiderTick` (`Unit.NextHeal` — лечит в 6 м, `NextCurse` — `CurseTarget` → `Curse` в
+  `Curses` на 40 с, если не `Warded` — святилище или жрец ближе 20 м), `CurseHack` в `Carve` (×2), `TickCurses`;
+  события `Healed`, `Hexed`; в `BestTarget` шаман −110 к очереди; в `PlanWave` — с 4-й волны.
 - `Sim.Research.cs` — награды и знания: `Lore`, `Lores`, `Branches`, `Knowledge`, `Learnt`, `Learn`, `Reward(wave)`;
   в конце — что даёт изученное (`BowRange`, `HireCost`, `StoneHack`, `LayPace` и др.), их читают на местах.
 - `Sim.Engines.cs` — осадные машины: `EngineTick`, `CatapultTick`/`AimFor`/`Throw`/`StoneLands`, `MantletTick`/`Cover`,

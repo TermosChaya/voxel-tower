@@ -107,6 +107,8 @@ public sealed partial class Sim
         if (u.Bound) { BoundTick(u, dt); return; }
         // held fast in a spell's chains: it neither goes nor strikes
         if (Time < u.ChainedUntil) { u.State = UnitState.Idle; u.Path = null; return; }
+        // a shaman's spells, cast as it goes
+        if (u.T == Kinds.Shaman && !u.Routed) ShamanTick(u);
         // hurt to a quarter of itself, a raider has had enough (a leader leads to the end, a guard keeps its camp)
         if (!u.Routed && !u.Leader && !u.Guard && u.Hp < u.MaxHp * .25f) u.Routed = true;
         // the horde's envoy comes to bargain, and fights nobody
@@ -155,7 +157,7 @@ public sealed partial class Sim
         if (u.BuildCell >= 0) { BuildTick(u, dt); return; }
         if (u.Path != null && u.PathI < u.Path.Count) { Walk(u, dt); return; }
         if (BandStep(u, dt)) return;
-        if (!Fields.TryGetValue(u.T, out var f)) { u.State = UnitState.Idle; return; }
+        if (FieldOf(u.T) is not { } f) { u.State = UnitState.Idle; return; }
         int next = f.Next(Nav, u.Cell, out float carve, out var works);
         if (next < 0) { u.State = UnitState.Idle; return; }
         if (works != Works.None)
@@ -289,8 +291,8 @@ public sealed partial class Sim
             if (!Blocks(m)) { u.CarveI++; continue; }
             int g = Group(m);
             if (g < 0 || rate == null || rate[g] <= 0) { StopCarve(u); return; }
-            // stone in lime mortar holds out a third longer
-            float cost = 1f / (rate[g] * (g == 2 ? StoneHack : 1));
+            // stone in lime mortar holds out a third longer; what a shaman cursed gives twice as fast
+            float cost = 1f / (rate[g] * (g == 2 ? StoneHack : 1) * (Curses.Count > 0 ? CurseHack(x, y, z) : 1));
             if (u.CarveEffort < cost) break;
             u.CarveEffort -= cost;
             u.CarveI++;

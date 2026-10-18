@@ -108,6 +108,8 @@ public sealed partial class Sim
         for (int i = 0; i < (n >= 5 ? (n - 3) / 3 : 0); i++) list.Add(Kinds.Troll);
         // thieves from the second wave, one more every third
         for (int i = 0; i < (n >= 2 ? 1 + (n - 2) / 3 : 0); i++) list.Add(Kinds.Thief);
+        // a shaman from the fourth wave, another from the eighth
+        for (int i = 0; i < (n >= 8 ? 2 : n >= 4 ? 1 : 0); i++) list.Add(Kinds.Shaman);
         // engines: a ram from the third wave and another from the seventh, a catapult from the fourth and another from the eighth
         for (int i = 0; i < (n >= 7 ? 2 : n >= 3 ? 1 : 0); i++) list.Add(Kinds.Ram);
         for (int i = 0; i < (n >= 8 ? 2 : n >= 4 ? 1 : 0); i++) list.Add(Kinds.Catapult);
@@ -185,7 +187,7 @@ public sealed partial class Sim
         foreach (var b in coming)
         {
             var lead = b.Roster.Count > 0 ? b.Roster[0] : Kinds.Goblin;
-            Fields.TryGetValue(lead, out var f);
+            var f = FieldOf(lead);
             var (ex, _, ez) = b.Entry >= 0 ? Nav.Feet(b.Entry) : (0f, 0f, Site.KeepZ);
             var score = new float[Sides];
             var round = new float[Sides];
@@ -517,7 +519,7 @@ public sealed partial class Sim
     void Heading(Warband b)
     {
         var l = b.Leader;
-        if (l == null || l.Dead || !Fields.TryGetValue(l.T, out var f)) return;
+        if (l == null || l.Dead || FieldOf(l.T) is not { } f) return;
         int c = l.Cell;
         for (int n = 0; n < 6; n++)
         {
@@ -628,7 +630,7 @@ public sealed partial class Sim
             if (path != null) b.Trail.AddRange(path);
             return;
         }
-        if (!Fields.TryGetValue(kind, out var f)) return;
+        if (FieldOf(kind) is not { } f) return;
         // first to where the chief sent it, on foot, then on from there as the field leads
         float walk = 0;
         if (b.RallyCell >= 0 && b.State is BandState.Coming or BandState.Forming or BandState.March)

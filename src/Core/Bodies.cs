@@ -84,7 +84,7 @@ public static class Bodies
     /// <summary>How many looks a kind comes in.</summary>
     public static int Looks(UnitType t) => t.Key switch
     {
-        "worker" => 8, "archer" => 6, "sword" => 6, "priest" => 3, "risen" => 2, "goblin" => 8, "sapper" => 4, "orc" => 6, "miner" => 4, "troll" => 3, "thief" => 3, "deer" => 2, "ram" => 2, "catapult" => 2, "mantlet" => 2, "tower" => 1, "stag" => 1, "bear" => 1, _ => 1,
+        "worker" => 8, "archer" => 6, "sword" => 6, "priest" => 3, "risen" => 2, "shaman" => 2, "goblin" => 8, "sapper" => 4, "orc" => 6, "miner" => 4, "troll" => 3, "thief" => 3, "deer" => 2, "ram" => 2, "catapult" => 2, "mantlet" => 2, "tower" => 1, "stag" => 1, "bear" => 1, _ => 1,
     };
 
     /// <summary>A look for a unit, from its number, so it keeps it.</summary>
@@ -107,6 +107,7 @@ public static class Bodies
             "troll" => Troll(look),
             "sapper" => Sapper(look),
             "thief" => Thief(look),
+            "shaman" => Shaman(look),
             "ram" => RamPlan(look),
             "catapult" => CatapultPlan(look),
             "mantlet" => MantletPlan(look),
@@ -864,6 +865,33 @@ public static class Bodies
         s.Box(Body, -3, b.Waist, b.Z0 - 3, 3, b.Neck, b.Z0, Mat.Sack, Tissue.Gear);
         s.Box(Body, -2, b.Neck, b.Z0 - 2, 2, b.Neck + 2, b.Z0, Mat.Sack, Tissue.Gear);
         Knife(s, b);
+        return Done(s, f, b);
+    }
+
+    /// <summary>
+    /// A goblin shaman: a skull worn over its face with the glint showing through the eye holes, a crest of red and
+    /// ochre feathers over it, a cloak of hides, a necklace of teeth, and a crooked staff with a horn at its head and an
+    /// ember glowing in the horn.
+    /// </summary>
+    static BodyPlan Shaman(int look)
+    {
+        var f = new BodyPlan { Chop = .9f, Carry = -.2f, Stride = 6 };
+        var b = GoblinBuild(look == 0 ? Mat.ClothBrown : Mat.Rag, Mat.Leather, GoblinSkins[(look + 2) % 3]);
+        var s = Humanoid(b, f);
+        GoblinFace(s, b);
+        int hx = b.HeadW, hz1 = b.HZ1, hy0 = b.Neck, eye = hy0 + 4;
+        s.Box(Body, -hx + 1, hy0 + 1, hz1, hx - 1, b.Crown - 1, hz1 + 1, Mat.Bone, Tissue.Gear);
+        s.Pair(Body, Body, -3, eye, hz1, -1, eye + 1, hz1 + 1, Mat.EyeGlint, Tissue.Gear);
+        s.Box(Body, -1, hy0 + 1, hz1 + 1, 1, hy0 + 3, hz1 + 2, Mat.Bone, Tissue.Gear);
+        for (int i = -2; i <= 2; i++) s.Box(Body, i, b.Crown, -1, i + 1, b.Crown + 3 - Math.Abs(i), 0, (i & 1) == 0 ? Mat.ClothRed : Mat.ClothOchre, Tissue.Gear);
+        s.Box(Body, -b.Chest - 1, b.Waist - 2, b.Z0 - 1, b.Chest + 1, b.Neck + 1, b.Z0, Mat.FurBoar, Tissue.Gear);
+        for (int x = -2; x <= 1; x++) s.Dot(Body, x, b.Neck - 1, b.Z1, Mat.Bone, Tissue.Gear);
+        int fx = b.FistX, fz = (b.ArmZ0 + b.ArmZ1) / 2, top = b.Crown + 4;
+        s.Box(Main, fx, 1, fz, fx + 1, top, fz + 1, Mat.Handle, Tissue.Gear);
+        s.Box(Main, fx - 1, top, fz, fx, top + 3, fz + 1, Mat.Bone, Tissue.Gear);
+        s.Box(Main, fx - 2, top + 2, fz, fx - 1, top + 4, fz + 1, Mat.Bone, Tissue.Gear);
+        s.Dot(Main, fx, top, fz, Mat.Ember, Tissue.Gear);
+        s.Dot(Main, fx, top + 1, fz, Mat.Ember, Tissue.Gear);
         return Done(s, f, b);
     }
 

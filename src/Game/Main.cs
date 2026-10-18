@@ -14,7 +14,8 @@ namespace VoxelTower.Game;
 /// points the camera first),
 /// --demo sets up a fort with pawns at work (--pose=battle: the horde bridging the moat and laddering the wall;
 /// --pose=faith: priests at prayer on the barrow, --pose=captives: a rite at the altar there, prisoners bound and led,
-/// --pose=spells: the spells at work at night under the red moon (--look=1 a bolt of lightning, close), --pose=trees: the valley's trees in a row, --look=0..2 choosing which; --pose=people: every figure in every look,
+/// --pose=spells: the spells at work at night under the red moon (--look=1 a bolt of lightning, close), --pose=shaman:
+/// a goblin shaman cursing a wall of ours, --pose=trees: the valley's trees in a row, --look=0..2 choosing which; --pose=people: every figure in every look,
 /// --look=0..4 choosing a row),
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
 /// --top looks straight down, --look=N at the Nth named place of the valley, --seed=N makes another valley; --select[=N]
@@ -146,6 +147,7 @@ public partial class Main : Node3D
         // the field of the traps cleared of trees, so they are to be seen
         if (_demo && _pose == "engines") ClearTrees(Site.KeepX - Site.KeepR - 420, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 20, Site.KeepZ + 140);
         if (_demo && _pose == "drawbridge") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 120);
+        if (_demo && _pose == "shaman") ClearTrees(Site.KeepX - Site.KeepR - 240, Site.KeepZ - 90, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 90);
         if (_demo && _pose == "spells") ClearTrees(Site.KeepX - Site.KeepR - 260, Site.KeepZ - 100, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
         if (_demo && _pose == "traps") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
         World.Compact();
@@ -353,7 +355,7 @@ public partial class Main : Node3D
             {
                 if (u.Team == Team.Wild) continue;
                 string field = "";
-                if (u.Team == Team.Horde && Sim.Fields.TryGetValue(u.T, out var f))
+                if (u.Team == Team.Horde && Sim.Fields.TryGetValue(u.T == Kinds.Shaman ? Kinds.Goblin : u.T, out var f))
                 {
                     int next = f.Next(Sim.Nav, u.Cell, out float carve, out var works);
                     field = $", field {f.Dist[u.Cell]:0} s, next {next} {works} carve {carve:0.0}, no build until {u.NoBuildUntil:0.0}";
@@ -895,6 +897,7 @@ public partial class Main : Node3D
         if (_pose == "faith") { Faith(); return; }
         if (_pose == "captives") { Captives(); return; }
         if (_pose == "spells") { Spellwork(); return; }
+        if (_pose == "shaman") { Hexing(); return; }
         var w = World; var s = Site; var sim = Sim;
         sim.Waves.Countdown = Waves.Prep;
         sim.Stock.Gold = 140;
@@ -1258,6 +1261,26 @@ public partial class Main : Node3D
         Hud.Refresh();
     }
 
+    /// <summary>A goblin shaman before a wall of ours west of the citadel, a curse laid on it, the hurt of its band mending about it.</summary>
+    void Hexing()
+    {
+        var sim = Sim; var w = World;
+        sim.Waves.Countdown = 100;
+        int wx = Site.KeepX - Site.KeepR - 90, kz = Site.KeepZ;
+        int top = Shapes.LevelTop(w, wx, kz, 32);
+        sim.InstantLabour = true;
+        sim.DesignateBuild(Shapes.Line(w, Site, wx, kz - 40, wx, kz + 40, new Stroke { Mat = Mat.Stone, Width = 8, Height = 32, Level = true }, top));
+        sim.InstantLabour = false;
+        Unit Camp(UnitType t, int dx, int dz) { var u = sim.Spawn(t, sim.NearestStand(wx + dx, kz + dz, t.Move.Height)); u.Guard = true; u.Home = u.Cell; return u; }
+        var shaman = Camp(Kinds.Shaman, -64, 4);
+        foreach (var (dx, dz) in new[] { (-56, -14), (-52, 16), (-74, 22), (-70, -20) }) { var g = Camp(Kinds.Goblin, dx, dz); g.Hp = g.MaxHp * .4f; }
+        Camp(Kinds.Orc, -60, -30);
+        for (int t = 0; t < 120 && sim.Curses.Count == 0; t++) Advance(.25);
+        Advance(1);
+        Rig.SetAt(w.WX(wx - 30), w.WY(top - 16), w.WZ(kz), -.75f, .55f, _look == 1 ? 3.4f : 2.1f);
+        Hud.Refresh();
+    }
+
     void Sheltering()
     {
         var w = World; var s = Site; var sim = Sim;
@@ -1601,7 +1624,7 @@ public partial class Main : Node3D
         Paused = true;
         var rows = new[]
         {
-            new[] { Kinds.Worker }, new[] { Kinds.Archer, Kinds.Swordsman }, new[] { Kinds.Goblin, Kinds.Sapper, Kinds.Thief },
+            new[] { Kinds.Worker, Kinds.Priest }, new[] { Kinds.Archer, Kinds.Swordsman, Kinds.Risen }, new[] { Kinds.Goblin, Kinds.Sapper, Kinds.Thief, Kinds.Shaman },
             new[] { Kinds.Orc, Kinds.Miner }, new[] { Kinds.Troll, Kinds.Deer, Kinds.Boar, Kinds.Hare, Kinds.Bear, Kinds.WhiteStag }, new[] { Kinds.Ram, Kinds.Catapult, Kinds.Mantlet, Kinds.SiegeTower },
         };
         const float yaw = -.3f, pitch = .42f, gap = 34;

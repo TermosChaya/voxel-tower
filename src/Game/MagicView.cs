@@ -21,6 +21,8 @@ public partial class MagicView : Node3D
     readonly List<Flash> _flashes = new();
     readonly List<Ring> _rings = new();
     readonly Dictionary<Mire, (MeshInstance3D node, StandardMaterial3D mat)> _mires = new();
+    readonly Dictionary<Curse, (MeshInstance3D node, StandardMaterial3D mat)> _curses = new();
+    static readonly Color Hex = new(.45f, .85f, .28f);
     MultiMeshInstance3D _drops, _chains, _marks;
     StandardMaterial3D _mote, _bolt;
     double _t;
@@ -44,6 +46,8 @@ public partial class MagicView : Node3D
         m.Sim.RiteDone += Given;
         m.Sim.Spelled += Cast;
         m.Sim.Struck += Bolt;
+        m.Sim.Healed += Mended;
+        m.Sim.Hexed += Cursed;
     }
 
     MultiMeshInstance3D Multi(Mesh mesh, Material mat)
@@ -91,6 +95,16 @@ public partial class MagicView : Node3D
         var at = At(x, y + 6, z);
         Flare(at + Vector3.Up * .6f, Violet, 9, 9, 3.5f, Motes(at, Pale, 48, 2.2f, .45f));
     }
+
+    /// <summary>A shaman mends those about it: a sickly green glimmer round it.</summary>
+    void Mended(float x, float y, float z)
+    {
+        var at = At(x, y + 6, z);
+        Flare(at, Hex, 2.5f, 7, 1.2f, Motes(at, Hex, 26, 1.1f, .6f));
+    }
+
+    /// <summary>A curse laid on our walls: a green flash where it took.</summary>
+    void Cursed(float x, float y, float z) => Flare(At(x, y + 2, z), Hex, 5, 9, 1.5f, Motes(At(x, y, z), Hex, 40, .8f, .8f));
 
     void Cast(SpellKind k, float x, float y, float z)
     {
@@ -184,6 +198,7 @@ public partial class MagicView : Node3D
             _rings.RemoveAt(i);
         }
         Bogs(sim);
+        Curses(sim);
         Drops(sim);
         Chains(sim);
         Marks(sim);
@@ -216,6 +231,28 @@ public partial class MagicView : Node3D
             mat.AlbedoColor = new Color(.13f, .16f, .09f, a);
         }
         if (gone != null) foreach (var m in gone) _mires.Remove(m);
+    }
+
+    /// <summary>Each cursed patch of our walls under a faint green haze while the curse lasts.</summary>
+    void Curses(Sim sim)
+    {
+        foreach (var c in sim.Curses)
+        {
+            if (_curses.ContainsKey(c)) continue;
+            var mat = new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = new Color(Hex, 0), Transparency = BaseMaterial3D.TransparencyEnum.Alpha, CullMode = BaseMaterial3D.CullModeEnum.Disabled };
+            float r = c.R * VoxelWorld.Vox * 1.3f;
+            var node = new MeshInstance3D { Mesh = new SphereMesh { Radius = r, Height = r * 2, RadialSegments = 20, Rings = 10 }, MaterialOverride = mat, Position = At(c.X, c.Y, c.Z), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+            AddChild(node);
+            _curses[c] = (node, mat);
+        }
+        List<Curse> gone = null;
+        foreach (var (c, (node, mat)) in _curses)
+        {
+            double left = c.Until - sim.Time;
+            if (!sim.Curses.Contains(c) || left <= 0) { node.QueueFree(); (gone ??= new()).Add(c); continue; }
+            mat.AlbedoColor = new Color(Hex, (float)Math.Clamp(left / 3, 0, 1) * (.16f + .05f * MathF.Sin((float)_t * 3)));
+        }
+        if (gone != null) foreach (var c in gone) _curses.Remove(c);
     }
 
     /// <summary>The burning pitch, the last second of its fall.</summary>
@@ -275,5 +312,7 @@ public partial class MagicView : Node3D
         _m.Sim.RiteDone -= Given;
         _m.Sim.Spelled -= Cast;
         _m.Sim.Struck -= Bolt;
+        _m.Sim.Healed -= Mended;
+        _m.Sim.Hexed -= Cursed;
     }
 }

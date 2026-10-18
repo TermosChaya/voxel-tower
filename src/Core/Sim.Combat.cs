@@ -313,8 +313,8 @@ public sealed partial class Sim
             bool busy = o.State is UnitState.Carve or UnitState.Siege or UnitState.Work || Climbing(o);
             // a thief making off with what it took, or with one of ours, before anything
             bool making = o.Loot > 0 || o.Captive != null;
-            // an engine: hardly worth a plain arrow, the first mark for a fire arrow
-            float engine = Kinds.IsEngine(o.T) ? (u.FireArrows ? -96 : 96) : 0;
+            // an engine: hardly worth a plain arrow, the first mark for a fire arrow; a shaman before anyone
+            float engine = Kinds.IsEngine(o.T) ? (u.FireArrows ? -96 : 96) : o.T == Kinds.Shaman ? -110 : 0;
             // with fire arrows, those standing on a deck, a ladder or pitch: one arrow sets it all alight under them
             float pri = d - (making ? 96 : hurting ? 64 : busy ? 48 : 0) - (u.FireArrows && OnTinder(o) ? 40 : 0) + engine;
             if (pri >= bd || !Sight(u, o)) continue;

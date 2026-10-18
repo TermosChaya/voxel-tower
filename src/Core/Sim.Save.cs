@@ -15,7 +15,7 @@ namespace VoxelTower.Core;
 /// </summary>
 public sealed partial class Sim
 {
-    public const int SaveVersion = 11;
+    public const int SaveVersion = 12;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -25,7 +25,7 @@ public sealed partial class Sim
         if (_kindByKey == null)
         {
             _kindByKey = new Dictionary<string, UnitType>();
-            foreach (var arr in new[] { Kinds.PlayerKinds, Kinds.HordeKinds, Kinds.WildKinds, Kinds.Engines, Kinds.Summoned }) foreach (var t in arr) _kindByKey[t.Key] = t;
+            foreach (var arr in new[] { Kinds.PlayerKinds, Kinds.HordeKinds, Kinds.WildKinds, Kinds.Engines, Kinds.Summoned, Kinds.Casters }) foreach (var t in arr) _kindByKey[t.Key] = t;
         }
         return _kindByKey.TryGetValue(key, out var k) ? k : null;
     }
@@ -101,6 +101,7 @@ public sealed partial class Sim
         foreach (double t in _spellReady) w.Write(t);
         w.Write(Mires.Count); foreach (var m in Mires) { w.Write(m.X); w.Write(m.Z); w.Write(m.R); w.Write(m.Until); }
         w.Write(BloodMoonUntil); w.Write(EyeUntil);
+        w.Write(Curses.Count); foreach (var c in Curses) { w.Write(c.X); w.Write(c.Y); w.Write(c.Z); w.Write(c.R); w.Write(c.Until); }
         w.Write(Knowledge); w.Write(Learnt.Count);
         foreach (string k in Learnt) w.Write(k);
         w.Write(Waves._lastBand?.Id ?? -1);
@@ -323,6 +324,8 @@ public sealed partial class Sim
         Mires.Clear();
         for (int i = r.ReadInt32(); i > 0; i--) Mires.Add(new Mire { X = r.ReadSingle(), Z = r.ReadSingle(), R = r.ReadSingle(), Until = r.ReadDouble() });
         BloodMoonUntil = r.ReadDouble(); EyeUntil = r.ReadDouble();
+        Curses.Clear();
+        for (int i = r.ReadInt32(); i > 0; i--) Curses.Add(new Curse { X = r.ReadSingle(), Y = r.ReadSingle(), Z = r.ReadSingle(), R = r.ReadSingle(), Until = r.ReadDouble() });
         Knowledge = r.ReadDouble();
         Learnt.Clear();
         for (int i = r.ReadInt32(); i > 0; i--) Learnt.Add(r.ReadString());

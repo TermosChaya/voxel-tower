@@ -2726,6 +2726,66 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--spells")
         $"by day: {dayMoon ?? "cast"}; at night: {nightMoon ?? "cast"}; reach into the dark {dark / VoxelWorld.PerMetre:0.0} → {lit / VoxelWorld.PerMetre:0.0} m");
 }
 
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--shaman")
+{
+    Console.WriteLine();
+    var mpH = new MapParams();
+    var wH = new VoxelWorld(mpH.SizeX, mpH.SizeY, mpH.SizeZ);
+    var siteH = MapGen.Generate(wH, mpH);
+    wH.Compact();
+    var simH = new Sim(wH, siteH);
+    simH.Waves.Countdown = 1e9; simH.WildTarget = 0;
+    void RunH(double seconds) { for (double t = 0; t < seconds; t += .05) simH.Step(.05f); }
+    int kxH = siteH.KeepX, kzH = siteH.KeepZ;
+    Unit Camp(UnitType t, int x, int z) { var u = simH.Spawn(t, simH.NearestStand(x, z, t.Move.Height)); u.Guard = true; u.Home = u.Cell; return u; }
+    void Gone(Unit u) { u.Dead = true; u.DiedAt = -999; }
+
+    // a shaman mends those of its band hurt about it
+    var shamanH = Camp(Kinds.Shaman, kxH - 300, kzH + 200);
+    var hurtH = Camp(Kinds.Goblin, kxH - 290, kzH + 200);
+    hurtH.Hp = 12;
+    RunH(10);
+    Check("a shaman mends the hurt of the horde about it", hurtH.Hp >= 12 + 24, $"the goblin 12 → {hurtH.Hp:0} hp in 10 s");
+    Gone(shamanH); Gone(hurtH);
+
+    // a shaman lays a curse on the nearest piece of our walls: the horde hacks it twice as fast; by a sanctuary it does not take
+    Stroke wallH = new() { Mat = Mat.Stone, Width = 8, Height = 24, Level = true };
+    int w1x = kxH - 240, w1z = kzH - 260, w2x = kxH - 240, w2z = kzH + 120;
+    simH.InstantLabour = true;
+    simH.DesignateBuild(Shapes.Line(wH, siteH, w1x, w1z, w1x, w1z + 48, wallH, Shapes.LevelTop(wH, w1x, w1z + 24, 24)));
+    simH.DesignateBuild(Shapes.Line(wH, siteH, w2x, w2z, w2x, w2z + 48, wallH, Shapes.LevelTop(wH, w2x, w2z + 24, 24)));
+    simH.InstantLabour = false;
+    simH.AddZone(w2x + 30, w2z, w2x + 70, w2z + 48, Zone.Sanctum, 1);
+    var hex1 = Camp(Kinds.Shaman, w1x - 80, w1z + 24);
+    var hex2 = Camp(Kinds.Shaman, w2x - 80, w2z + 24);
+    RunH(30);
+    var curseH = simH.Curses.Find(c => MathF.Abs(c.X - w1x) < 16 && c.Z > w1z - 8 && c.Z < w1z + 56);
+    bool wardedH = !simH.Curses.Exists(c => MathF.Abs(c.X - w2x) < 16 && c.Z > w2z - 8 && c.Z < w2z + 56);
+    float hackIn = curseH == null ? 0 : simH.CurseHack((int)curseH.X, (int)curseH.Y, (int)curseH.Z), hackOut = simH.CurseHack(w1x, (int)(curseH?.Y ?? 0), w1z + 200);
+    Check("a shaman curses the nearest piece of our walls, and the horde hacks it twice as fast; by a sanctuary the curse does not take",
+        curseH != null && hackIn == 2 && hackOut == 1 && wardedH,
+        $"curses {simH.Curses.Count}, on the open wall {(curseH != null ? $"at {curseH.X:0},{curseH.Z:0}" : "none")}, hacking there ×{hackIn}, elsewhere ×{hackOut}; the wall by the sanctuary {(wardedH ? "untouched" : "cursed")}");
+    Gone(hex1); Gone(hex2);
+
+    // our archers shoot a shaman before a goblin nearer to them
+    // in the clearing round the citadel, nothing between them
+    var bowH = simH.Spawn(Kinds.Archer, simH.NearestStand(kxH - 60, kzH + 100, 2));
+    // both standing about, neither at one of ours (one cutting down one of ours would come first)
+    var nearGob = simH.Spawn(Kinds.Goblin, simH.NearestStand((int)bowH.X + 56, (int)bowH.Z, 2));
+    var farSham = simH.Spawn(Kinds.Shaman, simH.NearestStand((int)bowH.X + 120, (int)bowH.Z + 10, 2));
+    RunH(1);
+    Check("our archers shoot a shaman before a goblin nearer to them", bowH.Target == farSham,
+        $"the archer aims at {bowH.Target?.T.Name ?? "nobody"}; the goblin {Sim.Dist(bowH, nearGob) / VoxelWorld.PerMetre:0.0} m off, the shaman {Sim.Dist(bowH, farSham) / VoxelWorld.PerMetre:0.0} m");
+    Gone(bowH); Gone(nearGob); Gone(farSham);
+
+    // a shaman comes with the fourth wave, not before
+    simH.PlanWave(3);
+    bool third = simH.Bands.Exists(b => b.Roster.Contains(Kinds.Shaman));
+    simH.PlanWave(4);
+    bool fourth = simH.Bands.Exists(b => b.Roster.Contains(Kinds.Shaman));
+    Check("shamans come from the fourth wave", !third && fourth, $"in the third {third}, in the fourth {fourth}");
+}
+
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--lore")
 {
     Console.WriteLine();

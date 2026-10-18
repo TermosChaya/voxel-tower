@@ -190,6 +190,19 @@ public static class Kinds
     };
     /// <summary>What the spells raise: not hired, not the household's, gone in a minute.</summary>
     public static readonly UnitType[] Summoned = { Risen };
+
+    /// <summary>
+    /// A goblin shaman: a skull for a face and an ember in the horn of its staff; it mends the band it goes with and lays
+    /// curses on our walls. It goes the goblins' way.
+    /// </summary>
+    public static readonly UnitType Shaman = new()
+    {
+        Key = "shaman", Name = "Шаман гоблинов", Team = Team.Horde,
+        Move = new Mover { Height = 2, Climb = 1, Drop = 5, Speed = 2.8f, Carve = new float[] { 10, 22, 3, 1 }, Build = .3f },
+        Hp = 60, Damage = 5, AttackTime = 1f, KeepDamage = 1, Bounty = 12, BodyH = 10, BodyR = 1.5f, Reach = 9, Tool = "staff",
+    };
+    /// <summary>The horde's sorcerers.</summary>
+    public static readonly UnitType[] Casters = { Shaman };
 }
 
 /// <summary>One pawn or attacker on the field. Positions are in voxels, feet on the ground.</summary>
@@ -334,6 +347,8 @@ public sealed class Unit
     public double ChainedUntil = -1;
     /// <summary>One of the risen: when it falls apart.</summary>
     public double CrumbleAt;
+    /// <summary>A shaman: when it next mends those about it, and when it next lays a curse.</summary>
+    public double NextHeal, NextCurse;
 
     // beasts, and pawns with nothing to do
     /// <summary>Where it grazes and wanders round; for a pawn, where it idles round.</summary>
