@@ -1,0 +1,494 @@
+using System;
+using System.Collections.Generic;
+using Godot;
+using VoxelTower.Core;
+
+namespace VoxelTower.Game;
+
+/// <summary>
+/// The valley's sounds, made by the game itself rather than recorded: each a moment of samples worked out at the start
+/// from noise, strings and bells — a pick on rock, an axe in timber, a spade in earth, a stone set down, a bowstring, an
+/// arrow going home, blades meeting, a club, a death cry, the horn, stone coming down, thunder, a spell, the gong of a
+/// rite, a shaman's croon — and the fire and the rain as loops. Each is played where it happens, as loud as that is
+/// near the middle of the view, the same one no more often than it would be heard apart, a score of them at most.
+/// </summary>
+public partial class Sound : Node
+{
+    const int Rate = 22050;
+    readonly Dictionary<string, AudioStreamWav> _clips = new();
+    readonly List<AudioStreamPlayer> _pool = new();
+    readonly Dictionary<string, double> _last = new();
+    readonly Dictionary<int, float> _swing = new();
+    readonly HashSet<int> _dead = new();
+    readonly HashSet<Arrow> _landed = new();
+    AudioStreamPlayer _fire, _rain;
+    Main _m;
+    readonly Random _rnd = new(5);
+    double _t;
+    int _wave;
+
+    /// <summary>Sounds played since the start, and which of them were heard at all (the self-test asks).</summary>
+    public int Played { get; private set; }
+    public readonly HashSet<string> Heard = new();
+    /// <summary>The sounds there are.</summary>
+    public int Clips => _clips.Count;
+
+    /// <summary>Writes every sound into a folder as a .wav, to be listened to.</summary>
+    public void SaveAll(string dir)
+    {
+        DirAccess.MakeDirRecursiveAbsolute(dir);
+        foreach (var (name, wav) in _clips) wav.SaveToWav($"{dir}/{name}.wav");
+    }
+
+    public void Init(Main m)
+    {
+        _m = m;
+        Make();
+        for (int i = 0; i < 20; i++) { var p = new AudioStreamPlayer(); AddChild(p); _pool.Add(p); }
+        _fire = Loop("fire");
+        _rain = Loop("rain");
+        var sim = m.Sim;
+        _wave = sim.Waves.Number;
+        sim.Mined += (x, y, z, mat) => Struck(Dug(mat), x, y, z, .07);
+        sim.Hacked += (x, y, z, mat) => Struck(Dug(mat), x, y, z, .09);
+        sim.Collapsed += (n, x, y, z) => Play("rumble", x, y, z, .4, Math.Clamp(.4f + n / 2000f, .4f, 1.3f));
+        sim.Spelled += (k, x, y, z) => Play("spell", x, y, z, .2, 1, far: true);
+        sim.Struck += (x, y, z) => Play("thunder", x, y, z, .1, 1.3f, far: true);
+        sim.RiteDone += (x, y, z) => Play("gong", x, y, z, .5, 1, far: true);
+        sim.Healed += (x, y, z) => Play("hex", x, y, z, .6, .5f);
+        sim.Hexed += (x, y, z) => Play("hex", x, y, z, .6, 1);
+    }
+
+    /// <summary>What a voxel dug or hacked out sounds like: rock and masonry knock, timber thuds, earth sighs.</summary>
+    static string Dug(byte m) => Mat.Def[m].Group switch { MatGroup.Wood => "chop", MatGroup.Earth => "dig", _ => "pick" };
+
+    void Struck(string clip, int x, int y, int z, double every) => Play(clip, x + .5f, y, z + .5f, every, .8f);
+
+    AudioStreamPlayer Loop(string clip)
+    {
+        var p = new AudioStreamPlayer { Stream = _clips[clip], VolumeDb = -80 };
+        AddChild(p);
+        p.Play();
+        return p;
+    }
+
+    /// <summary>How loud a spot of the valley is heard: full at the middle of the view, nothing some fifty metres off.</summary>
+    float Near(float x, float z, bool far = false)
+    {
+        var w = _m.World;
+        var c = _m.Rig.Target;
+        float dx = w.WX(x) - c.X, dz = w.WZ(z) - c.Y, d = MathF.Sqrt(dx * dx + dz * dz);
+        float reach = (far ? 110 : 50) / MathF.Sqrt(Math.Max(.4f, _m.Rig.Aim.zoom));
+        return Math.Clamp(1 - d / reach, 0, 1);
+    }
+
+    /// <summary>Plays a sound at a spot (voxels), unless the same one was heard just now or it is too far to be heard.</summary>
+    void Play(string clip, float x, float y, float z, double every, float loud, bool far = false)
+    {
+        if (!_clips.TryGetValue(clip, out var wav)) return;
+        if (_last.TryGetValue(clip, out double at) && _t - at < every) return;
+        float gain = Near(x, z, far) * loud;
+        if (gain < .03f) return;
+        foreach (var p in _pool)
+        {
+            if (p.Playing) continue;
+            _last[clip] = _t;
+            p.Stream = wav;
+            p.VolumeDb = Mathf.LinearToDb(gain * gain);
+            p.PitchScale = .92f + (float)_rnd.NextDouble() * .16f;
+            p.Play();
+            Played++;
+            Heard.Add(clip);
+            return;
+        }
+    }
+
+    /// <summary>A sound heard everywhere alike: the horn.</summary>
+    void Everywhere(string clip, float loud)
+    {
+        if (!_clips.TryGetValue(clip, out var wav)) return;
+        foreach (var p in _pool)
+        {
+            if (p.Playing) continue;
+            p.Stream = wav; p.VolumeDb = Mathf.LinearToDb(loud); p.PitchScale = 1;
+            p.Play();
+            Played++;
+            Heard.Add(clip);
+            return;
+        }
+    }
+
+    public override void _Process(double delta)
+    {
+        if (_m?.Sim == null) return;
+        _t += delta;
+        var sim = _m.Sim;
+        // the horn for every wave that comes, even one begun and over between two frames
+        if (sim.Waves.Number > _wave) Everywhere("horn", .9f);
+        _wave = sim.Waves.Number;
+        if (_m.Paused) { _fire.VolumeDb = _rain.VolumeDb = -80; return; }
+        // blows struck and bows loosed, as they happen; the fallen, once
+        foreach (var u in sim.Units)
+        {
+            if (u.Dead)
+            {
+                if (_dead.Add(u.Id) && !Kinds.IsEngine(u.T) && sim.Time - u.DiedAt < 1) Play(u.Team == Team.Wild ? "blunt" : "death", u.X, u.Y, u.Z, .15, .9f);
+                continue;
+            }
+            float was = _swing.GetValueOrDefault(u.Id);
+            _swing[u.Id] = u.Swing;
+            if (u.Swing < .99f || was > .6f || u.Inside) continue;
+            if (u.State == UnitState.Fight)
+            {
+                if (u.T.Ranged) { Play("bow", u.X, u.Y, u.Z, .08, .7f); continue; }
+                var (cut, _, _) = Sim.WeaponOf(u.T);
+                Play(cut is Sim.Cut.Crush ? "blunt" : "blade", u.X, u.Y, u.Z, .09, .85f);
+            }
+            else if (u.State == UnitState.Work && u.Team == Team.Player && u.JobI > 0 && u.JobI <= u.Jobs.Count && !Orders.IsRemove(u.Jobs[u.JobI - 1].m))
+                Play("lay", u.X, u.Y, u.Z, .08, .55f);
+        }
+        foreach (var a in sim.Arrows)
+            if (a.Done && a.Hits && _landed.Add(a) && a.Target != null && !a.Stone) Play("arrow", a.X1, a.Y1, a.Z1, .06, .7f);
+        if (_landed.Count > 400) _landed.RemoveWhere(a => !sim.Arrows.Contains(a));
+        if (_dead.Count > 2000) _dead.Clear();
+        // the fire, by how much of it burns near the middle of the view; the rain, while it rains
+        int burning = 0, look = 0;
+        foreach (int p in sim.Burning.Keys)
+        {
+            if (++look > 600) break;
+            var (x, _, z) = WaterPlanner.Unpack(p);
+            if (Near(x, z) > .3f) burning++;
+        }
+        _fire.VolumeDb = burning == 0 ? -80 : Mathf.LinearToDb(Math.Clamp(burning / 120f, .12f, .8f));
+        _rain.VolumeDb = sim.Weather == Weather.Rain ? -9 : -80;
+    }
+
+    // ---------------------------------------------------------------- making the sounds
+
+    void Make()
+    {
+        Add("pick", Pick());
+        Add("chop", Chop());
+        Add("dig", Dig());
+        Add("lay", Lay());
+        Add("bow", Bow());
+        Add("arrow", ArrowIn());
+        Add("blade", Blades());
+        Add("blunt", Thud());
+        Add("death", Cry());
+        Add("horn", Horn());
+        Add("rumble", Rumble(1.4f, .9f));
+        Add("thunder", Thunder());
+        Add("spell", Spell());
+        Add("gong", Gong());
+        Add("hex", Croon());
+        Add("fire", Crackle(), loop: true);
+        Add("rain", RainLoop(), loop: true);
+    }
+
+    void Add(string name, float[] s, bool loop = false)
+    {
+        var bytes = new byte[s.Length * 2];
+        for (int i = 0; i < s.Length; i++)
+        {
+            short v = (short)Math.Clamp(s[i] * 32000, -32768, 32767);
+            bytes[2 * i] = (byte)v; bytes[2 * i + 1] = (byte)(v >> 8);
+        }
+        var wav = new AudioStreamWav { Format = AudioStreamWav.FormatEnum.Format16Bits, MixRate = Rate, Stereo = false, Data = bytes };
+        if (loop) { wav.LoopMode = AudioStreamWav.LoopModeEnum.Forward; wav.LoopBegin = 0; wav.LoopEnd = s.Length; }
+        _clips[name] = wav;
+    }
+
+    static float[] Buf(float seconds) => new float[(int)(seconds * Rate)];
+    float Noise() => (float)(_rnd.NextDouble() * 2 - 1);
+    static float Decay(int i, float tau) => MathF.Exp(-i / (tau * Rate));
+
+    /// <summary>A two-pole resonator: noise through it rings at a pitch.</summary>
+    sealed class Ring
+    {
+        readonly float _a1, _a2, _g;
+        float _y1, _y2;
+        public Ring(float freq, float q)
+        {
+            float r = MathF.Exp(-MathF.PI * freq / (q * Rate)), th = MathF.Tau * freq / Rate;
+            _a1 = 2 * r * MathF.Cos(th); _a2 = -r * r; _g = 1 - r;
+        }
+        public float Step(float x) { float y = _g * x + _a1 * _y1 + _a2 * _y2; _y2 = _y1; _y1 = y; return y; }
+    }
+
+    /// <summary>A one-pole low-pass: what is above the cut-off fades.</summary>
+    sealed class Low
+    {
+        readonly float _a; float _y;
+        public Low(float cut) { _a = 1 - MathF.Exp(-MathF.Tau * cut / Rate); }
+        public float Step(float x) => _y += _a * (x - _y);
+    }
+
+    static void Normalise(float[] s, float peak = .9f)
+    {
+        float m = 1e-6f;
+        foreach (float v in s) m = Math.Max(m, Math.Abs(v));
+        for (int i = 0; i < s.Length; i++) s[i] *= peak / m;
+    }
+
+    /// <summary>A pick on rock: a sharp tick and the iron ringing a moment.</summary>
+    float[] Pick()
+    {
+        var s = Buf(.14f);
+        var r1 = new Ring(2300, 18); var r2 = new Ring(3550, 22); var lo = new Low(5000);
+        for (int i = 0; i < s.Length; i++)
+        {
+            float n = Noise() * Decay(i, .006f);
+            s[i] = lo.Step(n) * .6f + r1.Step(n) * 9 * Decay(i, .05f) + r2.Step(n) * 6 * Decay(i, .035f);
+        }
+        Normalise(s, .7f);
+        return s;
+    }
+
+    /// <summary>An axe in timber: a dull knock with the wood's body under it.</summary>
+    float[] Chop()
+    {
+        var s = Buf(.2f);
+        var lo = new Low(900); var body = new Ring(260, 6);
+        for (int i = 0; i < s.Length; i++)
+        {
+            float n = Noise() * Decay(i, .02f);
+            float t = i / (float)Rate, thump = MathF.Sin(MathF.Tau * (150 - 60 * t) * t) * Decay(i, .06f);
+            s[i] = lo.Step(n) * .8f + body.Step(n) * 3 + thump * .6f;
+        }
+        Normalise(s, .75f);
+        return s;
+    }
+
+    /// <summary>A spade in earth: a soft gritty push.</summary>
+    float[] Dig()
+    {
+        var s = Buf(.18f);
+        var lo = new Low(650); var lo2 = new Low(1800);
+        for (int i = 0; i < s.Length; i++)
+        {
+            float env = Math.Min(1, i / (.012f * Rate)) * Decay(i, .06f);
+            s[i] = (lo.Step(Noise()) * 1.4f + lo2.Step(Noise()) * .25f) * env;
+        }
+        Normalise(s, .6f);
+        return s;
+    }
+
+    /// <summary>A stone set down on stone, or a log on a log: a short clack.</summary>
+    float[] Lay()
+    {
+        var s = Buf(.1f);
+        var r = new Ring(1150, 9); var lo = new Low(2500);
+        for (int i = 0; i < s.Length; i++)
+        {
+            float n = Noise() * Decay(i, .008f);
+            s[i] = r.Step(n) * 4 * Decay(i, .02f) + lo.Step(n) * .5f;
+        }
+        Normalise(s, .6f);
+        return s;
+    }
+
+    /// <summary>A bowstring let go: a plucked string, quickly damped, and the hiss of the arrow leaving.</summary>
+    float[] Bow()
+    {
+        var s = Buf(.32f);
+        int period = Rate / 170;
+        var line = new float[period];
+        for (int i = 0; i < period; i++) line[i] = Noise();
+        var lo = new Low(3000);
+        for (int i = 0, k = 0; i < s.Length; i++, k = (k + 1) % period)
+        {
+            float v = line[k];
+            line[k] = (line[k] + line[(k + 1) % period]) * .493f;
+            float hiss = lo.Step(Noise()) * .12f * Decay(i, .05f);
+            s[i] = v * Decay(i, .09f) + hiss;
+        }
+        Normalise(s, .55f);
+        return s;
+    }
+
+    /// <summary>An arrow going home: a short dull thud with a click on it.</summary>
+    float[] ArrowIn()
+    {
+        var s = Buf(.09f);
+        var lo = new Low(500);
+        for (int i = 0; i < s.Length; i++) s[i] = lo.Step(Noise()) * 2 * Decay(i, .025f) + (i < 40 ? Noise() * .3f : 0);
+        Normalise(s, .6f);
+        return s;
+    }
+
+    /// <summary>Blades meeting: iron ringing in several pitches that are no chord, and the scrape of the edge.</summary>
+    float[] Blades()
+    {
+        var s = Buf(.45f);
+        float[] f = { 1240, 2870, 4110, 5420 }, tau = { .18f, .12f, .09f, .06f };
+        var lo = new Low(6000);
+        for (int i = 0; i < s.Length; i++)
+        {
+            float t = i / (float)Rate, v = 0;
+            for (int k = 0; k < f.Length; k++) v += MathF.Sin(MathF.Tau * f[k] * t + k) * Decay(i, tau[k]) / (k + 1);
+            s[i] = v * .8f + lo.Step(Noise()) * .5f * Decay(i, .012f);
+        }
+        Normalise(s, .55f);
+        return s;
+    }
+
+    /// <summary>A club or a fist on a body: a deep thud.</summary>
+    float[] Thud()
+    {
+        var s = Buf(.16f);
+        var lo = new Low(300);
+        for (int i = 0; i < s.Length; i++)
+        {
+            float t = i / (float)Rate;
+            s[i] = MathF.Sin(MathF.Tau * (110 - 50 * t) * t) * Decay(i, .05f) + lo.Step(Noise()) * Decay(i, .03f) * 1.5f;
+        }
+        Normalise(s, .7f);
+        return s;
+    }
+
+    /// <summary>A death cry: a rough voice falling away, through the throat's resonance.</summary>
+    float[] Cry()
+    {
+        var s = Buf(.42f);
+        var f1 = new Ring(720, 5); var f2 = new Ring(1150, 6);
+        float phase = 0;
+        for (int i = 0; i < s.Length; i++)
+        {
+            float t = i / (float)Rate, pitch = 190 - 120 * t;
+            phase += pitch / Rate;
+            float saw = 2 * (phase - MathF.Floor(phase)) - 1 + Noise() * .15f;
+            float env = Math.Min(1, t / .03f) * MathF.Exp(-t / .16f);
+            s[i] = (f1.Step(saw) + f2.Step(saw) * .6f) * env;
+        }
+        Normalise(s, .5f);
+        return s;
+    }
+
+    /// <summary>The war horn: a low brazen note swelling, wavering, and dying away.</summary>
+    float[] Horn()
+    {
+        var s = Buf(2.6f);
+        var lo = new Low(700); var lo2 = new Low(1100);
+        float phase = 0, phase2 = 0;
+        for (int i = 0; i < s.Length; i++)
+        {
+            float t = i / (float)Rate, f = 98 * (1 + .012f * MathF.Sin(MathF.Tau * 5 * t)) * (t < .2f ? .94f + .3f * t : 1);
+            phase += f / Rate; phase2 += f * 1.5f / Rate;
+            float saw = 2 * (phase - MathF.Floor(phase)) - 1, saw2 = 2 * (phase2 - MathF.Floor(phase2)) - 1;
+            float env = Math.Min(1, t / .3f) * (t > 2f ? Math.Max(0, 1 - (t - 2f) / .6f) : 1);
+            s[i] = (lo2.Step(lo.Step(saw)) + lo.Step(saw2) * .25f) * env;
+        }
+        Normalise(s, .7f);
+        return s;
+    }
+
+    /// <summary>Stone coming down: a rolling rumble with cracks in its first moments.</summary>
+    float[] Rumble(float seconds, float peak)
+    {
+        var s = Buf(seconds);
+        var lo = new Low(140); var lo2 = new Low(260);
+        float brown = 0;
+        for (int i = 0; i < s.Length; i++)
+        {
+            float t = i / (float)Rate;
+            brown = Math.Clamp(brown + Noise() * .06f, -1, 1);
+            float crack = t < .35f && _rnd.NextDouble() < .002 ? 1 : 0;
+            s[i] = (lo.Step(brown) * 3 + lo2.Step(Noise()) * .4f) * Math.Min(1, t / .02f) * MathF.Exp(-t / (seconds * .4f)) + crack * Noise();
+        }
+        Normalise(s, peak);
+        return s;
+    }
+
+    /// <summary>Thunder close by: a crack like the sky splitting, and the long roll after it.</summary>
+    float[] Thunder()
+    {
+        var roll = Rumble(2.4f, .9f);
+        for (int i = 0; i < (int)(.05f * Rate); i++) roll[i] += Noise() * (1 - i / (.05f * Rate));
+        Normalise(roll, .9f);
+        return roll;
+    }
+
+    /// <summary>A spell: a rushing breath rising in pitch, and a cold chime over it.</summary>
+    float[] Spell()
+    {
+        var s = Buf(1.1f);
+        float y1 = 0, y2 = 0;
+        for (int i = 0; i < s.Length; i++)
+        {
+            float t = i / (float)Rate, f = 300 + 1700 * t / 1.1f, r = .985f, th = MathF.Tau * f / Rate;
+            float y = (1 - r) * Noise() * 14 + 2 * r * MathF.Cos(th) * y1 - r * r * y2;
+            y2 = y1; y1 = y;
+            float swell = MathF.Sin(MathF.PI * Math.Min(1, t / 1.1f));
+            float chime = (MathF.Sin(MathF.Tau * 880 * t) + .6f * MathF.Sin(MathF.Tau * 1318 * t)) * (t > .45f ? MathF.Exp(-(t - .45f) / .35f) : 0);
+            s[i] = y * swell * .6f + chime * .35f;
+        }
+        Normalise(s, .55f);
+        return s;
+    }
+
+    /// <summary>The gong of a rite: deep tones a little apart, beating as they fade.</summary>
+    float[] Gong()
+    {
+        var s = Buf(2.8f);
+        float[] f = { 72, 73.4f, 146, 215, 290 }, a = { 1, .8f, .5f, .3f, .15f };
+        for (int i = 0; i < s.Length; i++)
+        {
+            float t = i / (float)Rate, v = 0;
+            for (int k = 0; k < f.Length; k++) v += a[k] * MathF.Sin(MathF.Tau * f[k] * t) * MathF.Exp(-t / (1.6f - k * .2f));
+            s[i] = v * Math.Min(1, t / .01f);
+        }
+        Normalise(s, .7f);
+        return s;
+    }
+
+    /// <summary>A shaman's croon: a low tone wavering, a hiss under it.</summary>
+    float[] Croon()
+    {
+        var s = Buf(.9f);
+        var lo = new Low(2500);
+        for (int i = 0; i < s.Length; i++)
+        {
+            float t = i / (float)Rate, trem = .6f + .4f * MathF.Sin(MathF.Tau * 7 * t);
+            float env = MathF.Sin(MathF.PI * t / .9f);
+            s[i] = (MathF.Sin(MathF.Tau * 160 * t + .8f * MathF.Sin(MathF.Tau * 3 * t)) * trem + lo.Step(Noise()) * .2f) * env;
+        }
+        Normalise(s, .5f);
+        return s;
+    }
+
+    /// <summary>A fire: a low roar and the crackle of what it burns, two seconds that go round.</summary>
+    float[] Crackle()
+    {
+        var s = Buf(2);
+        var lo = new Low(220);
+        for (int i = 0; i < s.Length; i++) s[i] = lo.Step(Noise()) * .9f;
+        for (int k = 0; k < 70; k++)
+        {
+            int at = _rnd.Next(s.Length - 400);
+            float amp = .2f + (float)_rnd.NextDouble() * .5f;
+            var r = new Ring(1500 + (float)_rnd.NextDouble() * 2500, 8);
+            for (int j = 0; j < 300; j++) s[at + j] += r.Step(Noise() * (j < 30 ? 1 : 0)) * 6 * amp * Decay(j, .004f);
+        }
+        // the ends meet without a click
+        for (int j = 0; j < 400; j++) { float k = j / 400f; s[j] = s[j] * k + s[s.Length - 400 + j] * (1 - k); }
+        Normalise(s, .6f);
+        return s;
+    }
+
+    /// <summary>Rain: a steady hush of many drops, two seconds that go round.</summary>
+    float[] RainLoop()
+    {
+        var s = Buf(2);
+        var lo = new Low(3800); var hi = new Low(400);
+        for (int i = 0; i < s.Length; i++) { float n = lo.Step(Noise()); s[i] = n - hi.Step(n); }
+        for (int k = 0; k < 160; k++)
+        {
+            int at = _rnd.Next(s.Length - 120);
+            for (int j = 0; j < 100; j++) s[at + j] += Noise() * .25f * Decay(j, .002f);
+        }
+        for (int j = 0; j < 400; j++) { float k = j / 400f; s[j] = s[j] * k + s[s.Length - 400 + j] * (1 - k); }
+        Normalise(s, .5f);
+        return s;
+    }
+}

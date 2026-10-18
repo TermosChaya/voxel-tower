@@ -171,9 +171,10 @@ public partial class GameMenu : Control
             () => $"{Math.Round(Settings.UiScale * 100)} %", d => Settings.Step(_m.GetTree().Root, d));
         scale.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
         _page.AddChild(scale);
-        var note = Hud.Text("Звук и прочие настройки появятся позже.", Ornament.SerifItalic, 12, Ornament.Faded);
-        note.HorizontalAlignment = HorizontalAlignment.Center;
-        _page.AddChild(note);
+        var volume = new Stepper("Громкость", "Громкость\nКак громко слышна долина: кирки, тетивы, мечи, рог, огонь, дождь, заклинания. Звуки делает сама игра; " +
+            "слышно то, что ближе к середине экрана.", () => Settings.Volume <= 0 ? "без звука" : $"{Math.Round(Settings.Volume * 100)} %", d => Settings.StepVolume(d));
+        volume.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+        _page.AddChild(volume);
         _page.AddChild(new Rule(false));
         _page.AddChild(Big("Назад", "", Main_));
     }

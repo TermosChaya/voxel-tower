@@ -4,8 +4,9 @@ using Godot;
 namespace VoxelTower.Game;
 
 /// <summary>
-/// The player's own settings, kept between games in user://settings.cfg. For now only how large the interface is
-/// drawn, over what the window's size already gives it: Ctrl and + or − steps it, Ctrl+0 puts it back as it was.
+/// The player's own settings, kept between games in user://settings.cfg: how large the interface is drawn, over what
+/// the window's size already gives it (Ctrl and + or − steps it, Ctrl+0 puts it back as it was), and how loud the
+/// sounds are.
 /// </summary>
 public static class Settings
 {
@@ -13,6 +14,8 @@ public static class Settings
     /// <summary>The sizes the interface can be drawn at, as shares of its usual size.</summary>
     public static readonly float[] Scales = { .7f, .8f, .9f, 1f, 1.1f };
     public static float UiScale { get; private set; } = 1;
+    /// <summary>How loud the sounds are, from nothing to full, in tenths.</summary>
+    public static float Volume { get; private set; } = .8f;
     /// <summary>A scripted run (a test, a screenshot) neither reads the player's settings nor keeps its own.</summary>
     static bool _scripted;
 
@@ -22,6 +25,7 @@ public static class Settings
         var cfg = new ConfigFile();
         if (cfg.Load(File) != Error.Ok) return;
         UiScale = Snap(cfg.GetValue("interface", "scale", 1f).AsSingle());
+        Volume = Math.Clamp(MathF.Round(cfg.GetValue("sound", "volume", .8f).AsSingle() * 10) / 10, 0, 1);
     }
 
     static void Save()
@@ -31,6 +35,7 @@ public static class Settings
         // whatever else is kept there stays
         cfg.Load(File);
         cfg.SetValue("interface", "scale", UiScale);
+        cfg.SetValue("sound", "volume", Volume);
         cfg.Save(File);
     }
 
@@ -46,6 +51,23 @@ public static class Settings
     {
         _scripted = true;
         UiScale = scale > 0 ? Snap(scale) : 1;
+        // a scripted run makes its sounds, but nobody needs to hear them
+        Volume = 0;
+    }
+
+    /// <summary>Sets how loud everything is heard.</summary>
+    public static void ApplyVolume()
+    {
+        AudioServer.SetBusMute(0, Volume <= 0);
+        AudioServer.SetBusVolumeDb(0, Volume <= 0 ? -80 : Mathf.LinearToDb(Volume));
+    }
+
+    /// <summary>A tenth louder or quieter; kept for next time.</summary>
+    public static void StepVolume(int dir)
+    {
+        Volume = Math.Clamp(MathF.Round(Volume * 10 + dir) / 10, 0, 1);
+        ApplyVolume();
+        Save();
     }
 
     /// <summary>Sets the interface's size on the window: the beam, the console, the panels and the tooltips all follow.</summary>

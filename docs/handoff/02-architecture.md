@@ -255,7 +255,11 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   «Таинства»: вмешательство, святилища, жертвы, заклинания по кругам — изучить или взять в руку); `MagicView.cs` (мир) —
   вспышка над алтарём, капли смолы, молния, трясины, кольца Ужаса и Цепей, метки Ока, пыль и искры; заклинание в руке —
   `Tool.Spell` в `BuildTools` (`TakeSpell`, `CastHere`, круг/шар/вал у курсора), в консоли — `Inspector.SpellPane`;
-  кровавая луна — `Atmosphere._blood`; `Envoy.cs` — `EnvoyCard`; `Widgets.cs` — `Slot`, `Stepper`, `Choice`, `Tooltip`, `CursorTag`,
+  кровавая луна — `Atmosphere._blood`; `Sound.cs` — звуки, синтезированные при запуске (`Make`: шум через резонаторы
+  и фильтры, струна Карплуса — Стронга, колокольные призвуки; 16 бит, 22 050 Гц), играются по событиям ядра (`Mined`,
+  `Hacked`, `Collapsed`, `Spelled`, `Struck`, `RiteDone`, `Healed`, `Hexed`) и по взмахам (`Unit.Swing`), громкость —
+  по расстоянию от середины вида (`Near`), каждый не чаще своего промежутка, 20 проигрывателей; огонь и дождь — петли;
+  громкость — `Settings.Volume` (в прогонах — 0); `Envoy.cs` — `EnvoyCard`; `Widgets.cs` — `Slot`, `Stepper`, `Choice`, `Tooltip`, `CursorTag`,
   `Medallion`, `Toasts`; палитра и шрифты — `Ornament.cs`, значки — `Icons.cs`. Корень интерфейса тянет текстуры
   с повтором (`TextureRepeat`). Летопись: `Hud.Log(text, kind, x, z)` — строка с местом получает «◎» и по щелчку
   ведёт камеру туда; ядро говорит через `Sim.Said` (`Say(text, kind, x, z)` / `Say(text, kind, unit)`). Запасы на

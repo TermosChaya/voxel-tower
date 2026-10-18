@@ -23,7 +23,8 @@ namespace VoxelTower.Game;
 /// --ui-scale=S draws the interface at that size instead of the player's own, --inspect looks at the first raider (or beast),
 /// --day=F starts at that time of the day (0 dawn, 1 sunset), --alarm=S raises the alarm and runs on S seconds,
 /// --weather=rain|fog|wind brings that weather at once, --envoy sends the horde's envoy and waits for its offer,
-/// --lore=N,key,… puts N knowledge in hand with that lore learnt, --load=file.sav reads a saved game back.
+/// --lore=N,key,… puts N knowledge in hand with that lore learnt, --sounds=folder writes every sound out as a .wav and quits,
+/// --load=file.sav reads a saved game back.
 /// </summary>
 public partial class Main : Node3D
 {
@@ -52,6 +53,8 @@ public partial class Main : Node3D
     /// <summary>Game seconds per real second: 1, 2 or 3.</summary>
     public int Speed = 1;
     public bool Paused;
+    /// <summary>The valley's sounds.</summary>
+    public Sound Sound;
 
     const string BlueprintFile = "user://blueprints.json";
 
@@ -81,6 +84,8 @@ public partial class Main : Node3D
     bool _envoy;
     /// <summary>--lore=N,key,…: N knowledge in hand and that lore learnt already (screenshots of «Знания»).</summary>
     string _lore;
+    /// <summary>--sounds=folder: every sound the game makes written there as a .wav, and out.</summary>
+    string _soundsTo;
     /// <summary>--select or --select=N: all our pawns (or the first N) chosen at the start, for screenshots of the console.</summary>
     int _select;
     /// <summary>--tab=key: a panel let down from the beam at the start; --tool=N: the Nth tool of the grid in hand.</summary>
@@ -110,6 +115,7 @@ public partial class Main : Node3D
             else if (a.StartsWith("--weather=")) _weather = a["--weather=".Length..];
             else if (a == "--envoy") _envoy = true;
             else if (a.StartsWith("--lore=")) _lore = a["--lore=".Length..];
+            else if (a.StartsWith("--sounds=")) _soundsTo = a["--sounds=".Length..];
             else if (a == "--select") _select = int.MaxValue;
             else if (a.StartsWith("--select=") && int.TryParse(a["--select=".Length..], out int sn)) _select = sn;
             else if (a.StartsWith("--tab=")) _tab = a["--tab=".Length..];
@@ -127,6 +133,7 @@ public partial class Main : Node3D
         if (_selfTest || _demo || _shot != null || _uiScale > 0) Settings.Scripted(_uiScale);
         else Settings.Load();
         Settings.Apply(GetTree().Root);
+        Settings.ApplyVolume();
 
         // a saved game: its valley is made again from its seed, and what play changed of it laid over
         SaveReader save = null;
@@ -211,6 +218,10 @@ public partial class Main : Node3D
         var magic = new MagicView();
         AddChild(magic);
         magic.Init(this);
+        Sound = new Sound();
+        AddChild(Sound);
+        Sound.Init(this);
+        if (_soundsTo != null) { Sound.SaveAll(_soundsTo); GD.Print($"[voxel-tower] {Sound.Clips} sounds written to {_soundsTo}"); GetTree().Quit(); }
         // where the warbands will go is shown in play; scripted runs keep the horde's ways to the waves
         Sim.WantTrails = !_selfTest;
         if (Sim.WantTrails && !_demo) Sim.ComputeFields(coming: true);
@@ -857,6 +868,9 @@ public partial class Main : Node3D
         KeyPress(Key.Key0, ctrl: true);
         Check("Ctrl+= draws the interface larger, Ctrl+0 as it was", Math.Abs(larger - 1.1f) < .01f && Math.Abs(GetTree().Root.ContentScaleFactor - 1) < .01f,
             $"{larger:0.00} → {GetTree().Root.ContentScaleFactor:0.00}");
+
+        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 17 && Sound.Heard.Count >= 4,
+            $"{Sound.Clips} sounds, {Sound.Played} played: {string.Join(", ", Sound.Heard)}");
 
         var before = Rig.Target;
         Hud.Map.Jump(new Vector2(10, 10));
