@@ -102,7 +102,7 @@ public sealed partial class Sim
     public static bool HasOffHand(Unit u) => u.Wounds?.OffHand ?? true;
 
     /// <summary>Can still fight: a hand for the weapon, and both for a bow.</summary>
-    public static bool Armed(Unit u) => u.Wounds == null || u.Wounds.MainHand && (!u.T.Ranged || u.Wounds.OffHand);
+    public static bool Armed(Unit u) => !Kinds.IsEngine(u.T) && (u.Wounds == null || u.Wounds.MainHand && (!u.T.Ranged || u.Wounds.OffHand));
 
     /// <summary>How well it walks: on two legs, hopping on one, or dragging itself.</summary>
     public static float Gait(Unit u) => u.Wounds == null ? 1 : u.Wounds.Legs switch { >= 2 => 1, 1 => .4f, _ => .15f };

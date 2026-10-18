@@ -2184,6 +2184,129 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--thieves")
         $"bound after {boundAt} s ({lone.Hp:0} hp), led {(led0 - ledTo) / VoxelWorld.PerMetre:0.0} m west at {toThief / VoxelWorld.PerMetre:0.0} m behind; freed {lone.Captor == null}, {lone.State}");
 }
 
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--engines")
+{
+    Console.WriteLine();
+    var mpE = new MapParams();
+    var wE = new VoxelWorld(mpE.SizeX, mpE.SizeY, mpE.SizeZ);
+    var siteE = MapGen.Generate(wE, mpE);
+    wE.Compact();
+    var simE = new Sim(wE, siteE);
+    simE.Waves.Countdown = 1e9; simE.WildTarget = 0;
+    simE.HordeStock[Stockpile.Wood] = simE.HordeStock[Stockpile.Earth] = 0;
+    foreach (var u in simE.Units) if (u.Team == Team.Player) { u.Dead = true; u.DiedAt = -999; }
+    void RunE(double seconds) { for (double t = 0; t < seconds; t += .05) simE.Step(.05f); }
+    int kxE = siteE.KeepX, kzE = siteE.KeepZ;
+    int Masonry(int x0, int z0, int x1, int z1, int y0, int y1)
+    {
+        int n = 0;
+        for (int z = z0; z <= z1; z++) for (int x = x0; x <= x1; x++) for (int y = y0; y < y1; y++) if (Mat.IsMasonry(wE.Get(x, y, z))) n++;
+        return n;
+    }
+    // a stone wall four metres high across the way west of the citadel
+    int wxE = kxE - siteE.KeepR - 60, wz0E = kzE - 60, wz1E = kzE + 60;
+    simE.InstantLabour = true;
+    int topE = Shapes.LevelTop(wE, wxE, kzE, 32);
+    simE.DesignateBuild(Shapes.Line(wE, siteE, wxE, wz0E, wxE, wz1E, new Stroke { Mat = Mat.Stone, Width = 8, Height = 32, Level = true }, topE));
+    simE.InstantLabour = false;
+    int wall0 = Masonry(wxE - 6, wz0E, wxE + 6, wz1E, 0, topE + 2);
+
+    // a catapult sixty metres out: it comes to where it throws from, out of bowshot, and breaks the wall up; its guard keeps by it
+    var cat = simE.Spawn(Kinds.Catapult, simE.NearestStand(wxE - 480, kzE, 3));
+    var guardsE = new System.Collections.Generic.List<Unit>();
+    foreach (var t in new[] { Kinds.Orc, Kinds.Goblin })
+    {
+        var g = simE.Spawn(t, simE.NearestStand((int)cat.X + 10, (int)cat.Z + 10, 2));
+        g.Escort = cat; g.Guard = true; g.Home = cat.Cell; guardsE.Add(g);
+    }
+    double firstThrow = -1; float far = 0;
+    for (int t = 0; t < 240 && simE.Time < 200; t++)
+    {
+        RunE(.5);
+        if (firstThrow < 0 && cat.State == UnitState.Siege) { firstThrow = simE.Time; far = MathF.Abs(cat.X - wxE) / VoxelWorld.PerMetre; }
+        if (firstThrow > 0 && simE.Time - firstThrow > 70) break;
+    }
+    int wall1 = Masonry(wxE - 6, wz0E, wxE + 6, wz1E, 0, topE + 2);
+    float guardFar = 0; foreach (var g in guardsE) guardFar = Math.Max(guardFar, Sim.Dist(g, cat) / VoxelWorld.PerMetre);
+    Check("a catapult comes to where it throws from, out of bowshot of the wall, and breaks the wall up; its guard keeps by it",
+        firstThrow > 0 && far > 26 && far <= 41 && wall1 < wall0 - 300 && guardFar < 8,
+        $"throwing from {far:0.0} m after {firstThrow:0} s; the wall {wall0} → {wall1} voxels of masonry in 70 s; guard at most {guardFar:0.0} m off");
+
+    // plain arrows hardly hurt it; a fire arrow burns it down
+    Unit bowE = null;
+    foreach (var (bx, bz) in new[] { (150, 0), (120, 40), (120, -40), (0, 150), (0, -150), (-150, 0), (90, 90), (90, -90) })
+    {
+        bowE = simE.Spawn(Kinds.Archer, simE.NearestStand((int)cat.X + bx, (int)cat.Z + bz, 4));
+        if (simE.Sight(bowE, cat) && Sim.Dist(bowE, cat) < 22 * VoxelWorld.PerMetre) break;
+        bowE.Dead = true; bowE.DiedAt = -999;
+    }
+    bowE.Dead = false; bowE.DiedAt = 0;
+    simE.Command(new[] { bowE }, bowE.Cell);
+    foreach (var g in guardsE) { g.Dead = true; g.DiedAt = -999; }
+    float chp0 = cat.Hp;
+    for (int i = 0; i < 10; i++) simE.Arrows.Add(new Arrow { X0 = bowE.X, Y0 = bowE.Y + 12, Z0 = bowE.Z, X1 = cat.X, Y1 = cat.Y + 10, Z1 = cat.Z, Dur = .5f, Target = cat, From = bowE, Hits = true, Damage = 18 });
+    RunE(1);
+    float plain = chp0 - cat.Hp;
+    simE.SetFireArrows(new[] { bowE }, true);
+    double burntAt = -1;
+    for (int t = 0; t < 120 && burntAt < 0; t++) { RunE(.5); if (cat.Dead) burntAt = (t + 1) * .5; }
+    Check("plain arrows hardly hurt an engine, a fire arrow burns it down", plain < 50 && burntAt > 0,
+        $"ten arrows: {plain:0} of {chp0:0}; with fire arrows it burnt {(burntAt > 0 ? $"down in {burntAt} s" : $"to {cat.Hp:0}")}");
+    bowE.Dead = true; bowE.DiedAt = -999;
+
+    // a ram breaks through a wall a metre thick, a long one it would take long to go round, in well under a minute
+    int rwx = wxE + 40;
+    simE.InstantLabour = true;
+    int rtopE = Shapes.LevelTop(wE, rwx, kzE, 32);
+    simE.DesignateBuild(Shapes.Line(wE, siteE, rwx, kzE - 300, rwx, kzE + 300, new Stroke { Mat = Mat.Stone, Width = 8, Height = 32, Level = true }, rtopE));
+    simE.InstantLabour = false;
+    simE.ComputeFields();
+    var ram = simE.Spawn(Kinds.Ram, simE.NearestStand(rwx - 30, kzE + 40, 3));
+    int before = Masonry(rwx - 6, kzE - 20, rwx + 6, kzE + 100, 0, rtopE + 2);
+    double through = -1;
+    for (int t = 0; t < 120 && through < 0; t++) { RunE(.5); if (ram.X > rwx + 8) through = (t + 1) * .5; }
+    int after = Masonry(rwx - 6, kzE - 20, rwx + 6, kzE + 100, 0, rtopE + 2);
+    Check("a ram breaks through a stone wall a metre thick in well under a minute", through > 0 && through < 50 && after < before,
+        $"through after {through} s, {before - after} voxels of masonry broken; it is now {ram.State}, {MathF.Sqrt((ram.X - kxE) * (ram.X - kxE) + (ram.Z - kzE) * (ram.Z - kzE)) / VoxelWorld.PerMetre:0} m from the citadel");
+    ram.Dead = true; ram.DiedAt = -999;
+
+    // a mantlet between an archer of ours and a goblin takes the arrows loosed at the goblin
+    Unit bowM = null, gobM = null;
+    foreach (var (bx, bz) in new[] { (-300, -200), (-300, 200), (-340, 0), (-260, -120) })
+    {
+        bowM = simE.Spawn(Kinds.Archer, simE.NearestStand(rwx + bx, kzE + bz, 4));
+        gobM = simE.Spawn(Kinds.Goblin, simE.NearestStand((int)bowM.X - 120, (int)bowM.Z, 2));
+        if (simE.Sight(bowM, gobM) && Sim.Dist(bowM, gobM) > 12 * VoxelWorld.PerMetre) break;
+        bowM.Dead = gobM.Dead = true; bowM.DiedAt = gobM.DiedAt = -999;
+    }
+    simE.Command(new[] { bowM }, bowM.Cell);
+    gobM.Raid = null; gobM.Guard = true; gobM.Home = gobM.Cell; gobM.Hp = gobM.MaxHp = 500;
+    var shield = simE.Spawn(Kinds.Mantlet, simE.NearestStand((int)(gobM.X + (bowM.X - gobM.X) * .12f), (int)(gobM.Z + (bowM.Z - gobM.Z) * .12f), 2));
+    float ghp0 = gobM.Hp, shp0 = shield.Hp;
+    int shotsM = simE.Shots;
+    RunE(8);
+    Check("a mantlet before a goblin takes the arrows loosed at it", simE.Shots - shotsM >= 3 && gobM.Hp >= ghp0 - 1 && shield.Hp < shp0,
+        $"{simE.Shots - shotsM} arrows: the goblin {ghp0:0} → {gobM.Hp:0}, the mantlet {shp0:0} → {shield.Hp:0}, {Sim.Dist(shield, gobM) / VoxelWorld.PerMetre:0.0} m before it");
+    foreach (var x in new[] { bowM, gobM, shield }) { x.Dead = true; x.DiedAt = -999; }
+
+    // a siege tower rolls up to a wall three metres high and drops its ladder against it; broken, the ladder comes down with it
+    int twx = rwx - 150;
+    simE.InstantLabour = true;
+    int ttop = Shapes.LevelTop(wE, twx, kzE - 150, 24);
+    simE.DesignateBuild(Shapes.Line(wE, siteE, twx, kzE - 240, twx, kzE - 60, new Stroke { Mat = Mat.Stone, Width = 8, Height = 24, Level = true }, ttop));
+    simE.InstantLabour = false;
+    var tower = simE.Spawn(Kinds.SiegeTower, simE.NearestStand(twx - 90, kzE - 150, 3));
+    double dockedAt = -1;
+    for (int t = 0; t < 120 && dockedAt < 0; t++) { RunE(.5); if (tower.Docked.Count > 0) dockedAt = (t + 1) * .5; }
+    int ladder = 0; foreach (int p in tower.Docked) { var (x, y, z) = WaterPlanner.Unpack(p); if (wE.Get(x, y, z) == Mat.TowerLadder) ladder++; }
+    simE.Hurt(tower, null, 5000, "test");
+    int left = 0;
+    for (int z = kzE - 240; z < kzE - 60; z++) for (int x = twx - 24; x < twx; x++) for (int y = ttop - 30; y < ttop + 6; y++) if (wE.Get(x, y, z) == Mat.TowerLadder) left++;
+    Check("a siege tower rolls up to a wall and drops its ladder against it; broken, the ladder comes down with it",
+        dockedAt > 0 && ladder > 20 && left == 0,
+        $"docked after {dockedAt} s with {ladder} voxels of ladder; broken: {left} left");
+}
+
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
 {
     Console.WriteLine();

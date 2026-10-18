@@ -105,6 +105,8 @@ public sealed partial class Sim
         _goalSet ??= new HashSet<int>(Goals);
         // hurt to a quarter of itself, a raider has had enough (a leader leads to the end, a guard keeps its camp)
         if (!u.Routed && !u.Leader && !u.Guard && u.Hp < u.MaxHp * .25f) u.Routed = true;
+        // the horde's engines go about their own work, and never run
+        if (Kinds.IsEngine(u.T)) { EngineTick(u, dt); return; }
         // a thief goes about its own business near the citadel
         if (u.T == Kinds.Thief && !u.Routed && ThiefTick(u, dt)) return;
         var foe = Nearest(u, Team.Player, u.T.Reach + 8);
@@ -120,12 +122,22 @@ public sealed partial class Sim
         u.Target = null;
         // nothing left to fight with, or no heart left for it: back west and out of the valley
         if (!Armed(u) || u.Routed) { StopCarve(u); StopBuild(u); Retreat(u, dt); return; }
+        KeepEscort(u);
         if (u.Guard) { GuardTick(u, dt); return; }
         // one of its own fighting close by: it goes to help
         if (u.CarveCell < 0 && u.BuildCell < 0 && u.Band is not { State: BandState.Forming } && Help(u, dt)) return;
         // a band gathers where it came in before it sets out
         if (u.Band is { State: BandState.Forming }) { u.State = UnitState.Idle; return; }
         if (u.Raid != null && RaidTick(u, dt)) return;
+        March(u, dt);
+    }
+
+    /// <summary>
+    /// On along the horde's way: at the citadel, batter it; hack through what stands in the way, build what has to be
+    /// built, walk the rest, with the band or by the field.
+    /// </summary>
+    void March(Unit u, float dt)
+    {
         if (_goalSet.Contains(u.Cell))
         {
             u.State = UnitState.Siege;

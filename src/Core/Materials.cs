@@ -61,7 +61,9 @@ public static class Mat
     public const byte Stakes = 99, TrapDeck = 100, DropStone = 101;
     /// <summary>The oak planks of a drawbridge: they turn with it, so they are the bridge's own business, like a gate's leaves.</summary>
     public const byte DrawDeck = 102;
-    public const int Count = 103;
+    /// <summary>The ladder a siege tower drops against a wall: inside the tower's timbers, so it cannot be thrown down.</summary>
+    public const byte TowerLadder = 103;
+    public const int Count = 104;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
     public static readonly bool[] IsVeg = new bool[Count], IsPlayer = new bool[Count], IsEarthy = new bool[Count],
@@ -159,6 +161,7 @@ public static class Mat
         D(TrapDeck, "Ловчий настил", 0x56632f, .3f, MatGroup.Wood, Player);
         D(DropStone, "Камни на сброс", 0x8e8881, .32f, MatGroup.Stone, Player);
         D(DrawDeck, "Подъёмный мост", 0x6e4b2b, .16f, MatGroup.Wood, Player);
+        D(TowerLadder, "Лестница башни", 0x5a3d24, .2f, MatGroup.Wood, 0);
 
         D(SkinHuman, "кожа", 0xc29878, .08f, MatGroup.Hard, 0); D(SkinGoblin, "кожа", 0x6d8a39, .12f, MatGroup.Hard, 0);
         D(SkinOrc, "кожа", 0x56673f, .12f, MatGroup.Hard, 0); D(SkinTroll, "кожа", 0x66705f, .16f, MatGroup.Hard, 0);
@@ -183,8 +186,8 @@ public static class Mat
         D(Board, "доски", 0x80603d, .16f, MatGroup.Hard, 0); D(BoardDark, "доски", 0x6a4c30, .16f, MatGroup.Hard, 0);
 
         foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage, Flower, Bloom, Birch, NeedleLight, FoliageLight, FoliageGold, PineBark, Snag }) IsVeg[m] = true;
-        foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame, Stakes, Pitch }) Passable[m] = true;
-        IsLadder[Ladder] = IsLadder[SiegeLadder] = true;
+        foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame, Stakes, Pitch, TowerLadder }) Passable[m] = true;
+        IsLadder[Ladder] = IsLadder[SiegeLadder] = IsLadder[TowerLadder] = true;
         foreach (var m in new[] { Tuft, Flower, Bloom }) SwayKind[m] = 1;
         foreach (var m in new[] { Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold }) SwayKind[m] = 2;
         foreach (var m in new[] { Stone, StoneDark, StoneLight, StoneWarm, StoneCool, Mortar, Keep, KeepShade, KeepDark }) Smooth[m] = true;

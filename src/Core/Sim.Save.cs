@@ -15,7 +15,7 @@ namespace VoxelTower.Core;
 /// </summary>
 public sealed partial class Sim
 {
-    public const int SaveVersion = 5;
+    public const int SaveVersion = 6;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -25,7 +25,7 @@ public sealed partial class Sim
         if (_kindByKey == null)
         {
             _kindByKey = new Dictionary<string, UnitType>();
-            foreach (var arr in new[] { Kinds.PlayerKinds, Kinds.HordeKinds, Kinds.WildKinds }) foreach (var t in arr) _kindByKey[t.Key] = t;
+            foreach (var arr in new[] { Kinds.PlayerKinds, Kinds.HordeKinds, Kinds.WildKinds, Kinds.Engines }) foreach (var t in arr) _kindByKey[t.Key] = t;
         }
         return _kindByKey.TryGetValue(key, out var k) ? k : null;
     }
@@ -137,6 +137,8 @@ public sealed partial class Sim
         w.Write(u.Guard); w.Write(u.Raid == null ? -1 : Mines.IndexOf(u.Raid)); w.Write(u.Band?.Id ?? -1); w.Write(u.Leader);
         w.Write(u.Routed); w.Write(u.Returned); w.Write(u.Mending); w.Write(u.Sapped);
         w.Write(u.LootKind); w.Write(u.Loot); w.Write(u.Captor?.Id ?? -1);
+        w.Write(u.Escort?.Id ?? -1); w.Write(u.AimAt);
+        w.Write(u.Docked.Count); foreach (int p in u.Docked) w.Write(p);
         WriteBody(w, u.Wounds);
     }
 
@@ -185,7 +187,7 @@ public sealed partial class Sim
 
     /// <summary>Reads the siege back, after the valley (<see cref="SaveReader.Valley"/>) and a new sim on it; returns what
     /// the screen kept.</summary>
-    readonly Dictionary<Unit, int> _captorOf = new();
+    readonly Dictionary<Unit, int> _captorOf = new(), _escortOf = new();
 
     public string Load(SaveReader save)
     {
@@ -277,6 +279,8 @@ public sealed partial class Sim
         foreach (var (u, id) in _captorOf)
             if (id >= 0 && byId.TryGetValue(id, out var thief)) { u.Captor = thief; thief.Captive = u; }
         _captorOf.Clear();
+        foreach (var (u, id) in _escortOf) if (id >= 0 && byId.TryGetValue(id, out var engine)) u.Escort = engine;
+        _escortOf.Clear();
         Waves.Number = r.ReadInt32(); Waves.Active = r.ReadBoolean(); Waves.Countdown = r.ReadDouble(); Waves.Intel = r.ReadDouble(); Waves._spawnT = r.ReadDouble();
         Waves.DawnLeft = r.ReadDouble();
         Alarm = r.ReadBoolean();
@@ -317,6 +321,8 @@ public sealed partial class Sim
         u.Guard = r.ReadBoolean(); int raid = r.ReadInt32(); band = r.ReadInt32(); u.Leader = r.ReadBoolean();
         u.Routed = r.ReadBoolean(); u.Returned = r.ReadBoolean(); u.Mending = r.ReadBoolean(); u.Sapped = r.ReadInt32();
         u.LootKind = r.ReadInt32(); u.Loot = r.ReadDouble(); _captorOf[u] = r.ReadInt32();
+        _escortOf[u] = r.ReadInt32(); u.AimAt = r.ReadInt32();
+        int nd = r.ReadInt32(); for (int k = 0; k < nd; k++) u.Docked.Add(r.ReadInt32());
         var body = ReadBody(r, t, u.Look);
         if (t == null) return null;
         u.Wounds = body;

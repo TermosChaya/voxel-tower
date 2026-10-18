@@ -12,6 +12,8 @@ public sealed class Arrow
     public float Damage;
     /// <summary>A fire arrow; and the voxel (packed) it was loosed at to set alight, or −1 when it was loosed at someone.</summary>
     public bool Fire;
+    /// <summary>A catapult's stone, not an arrow: it breaks out what it comes down on.</summary>
+    public bool Stone;
     public int At = -1;
 }
 
@@ -81,7 +83,7 @@ public sealed partial class Sim
         float dx = b.X - a.X, dz = b.Z - a.Z, l = MathF.Max(.01f, MathF.Sqrt(dx * dx + dz * dz));
         float tx = b.X - dz / l * side, tz = b.Z + dx / l * side;
         b.HurtBy = a;
-        float share = Wound(b, cut, depth, reach, a.X, hand, a.Z, tx - a.X, aim - hand, tz - a.Z);
+        float share = Kinds.IsEngine(b.T) ? EngineShare(false) : Wound(b, cut, depth, reach, a.X, hand, a.Z, tx - a.X, aim - hand, tz - a.Z);
         Hurt(b, a, a.T.Damage * (.8f + (float)Rng.NextDouble() * .4f) * share);
     }
 
@@ -104,6 +106,7 @@ public sealed partial class Sim
         u.KilledBy = cause ?? by?.T.Name ?? "";
         if (u.Team == Team.Horde) Kills++;
         if (u.T == Kinds.Thief) ThiefFell(u);
+        if (u.T == Kinds.SiegeTower) TowerFell(u);
         if (u.Captor != null) { u.Captor.Captive = null; u.Captor = null; }
         ReleaseSite(u);
         StopCarve(u); StopBuild(u);
@@ -291,8 +294,10 @@ public sealed partial class Sim
             bool busy = o.State is UnitState.Carve or UnitState.Siege or UnitState.Work || Climbing(o);
             // a thief making off with what it took, or with one of ours, before anything
             bool making = o.Loot > 0 || o.Captive != null;
+            // an engine: hardly worth a plain arrow, the first mark for a fire arrow
+            float engine = Kinds.IsEngine(o.T) ? (u.FireArrows ? -96 : 96) : 0;
             // with fire arrows, those standing on a deck, a ladder or pitch: one arrow sets it all alight under them
-            float pri = d - (making ? 96 : hurting ? 64 : busy ? 48 : 0) - (u.FireArrows && OnTinder(o) ? 40 : 0);
+            float pri = d - (making ? 96 : hurting ? 64 : busy ? 48 : 0) - (u.FireArrows && OnTinder(o) ? 40 : 0) + engine;
             if (pri >= bd || !Sight(u, o)) continue;
             bd = pri; best = o;
         }
@@ -315,6 +320,8 @@ public sealed partial class Sim
 
     void Shoot(Unit u, Unit t)
     {
+        // a mantlet before the one aimed at takes the arrow
+        t = Cover(u, t) ?? t;
         float d = Dist(u, t);
         float chance = Math.Clamp(.9f - d / u.T.Range * .45f + (u.Y - t.Y > 16 ? .08f : 0), .35f, .92f);
         // a shape in the dark is harder to hit than one in the light
@@ -337,6 +344,7 @@ public sealed partial class Sim
             a.T += dt;
             if (a.T < a.Dur || a.Done) continue;
             a.Done = true;
+            if (a.Stone) { StoneLands(a); continue; }
             if (a.Hits && a.Target != null && !a.Target.Dead)
             {
                 ShotHits++;
@@ -351,7 +359,7 @@ public sealed partial class Sim
                 float dl = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
                 var (cut, depth, _) = WeaponOf(a.From?.T ?? Kinds.Archer);
                 if (a.From != null) t.HurtBy = a.From;
-                float share = Wound(t, cut, depth, 0, tx - dx / dl * 30, hy - dy / dl * 30, tz - dz / dl * 30, dx, dy, dz);
+                float share = Kinds.IsEngine(t.T) ? EngineShare(true) : Wound(t, cut, depth, 0, tx - dx / dl * 30, hy - dy / dl * 30, tz - dz / dl * 30, dx, dy, dz);
                 Hurt(t, a.From, a.Damage * share, "стрела");
             }
             if (a.Fire) FireArrowLands(a);

@@ -201,7 +201,7 @@ public sealed partial class Sim
             }
             if (u.Burn <= 0) continue;
             u.Burn -= step;
-            Hurt(u, null, BurnDamage * u.BurnHeat * step, "огонь");
+            Hurt(u, null, BurnDamage * u.BurnHeat * step * (Kinds.IsEngine(u.T) ? 3 : 1), "огонь");
             if (u.Burn <= 0) { u.Burn = 0; u.BurnHeat = 1; }
         }
     }
@@ -486,7 +486,8 @@ public sealed partial class Sim
         }
         if (a.Hits && a.Target is { Dead: false } t)
         {
-            t.Burn = Math.Max(t.Burn, 2.5f);
+            // an engine is dry timber: it goes on burning
+            t.Burn = Math.Max(t.Burn, Kinds.IsEngine(t.T) ? 15 : 2.5f);
             if (Rng.NextDouble() < .5) Ignite((int)t.X, (int)MathF.Floor(t.Y) - 1, (int)t.Z);
             return;
         }

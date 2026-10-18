@@ -84,7 +84,7 @@ public static class Bodies
     /// <summary>How many looks a kind comes in.</summary>
     public static int Looks(UnitType t) => t.Key switch
     {
-        "worker" => 8, "archer" => 6, "sword" => 6, "goblin" => 8, "sapper" => 4, "orc" => 6, "miner" => 4, "troll" => 3, "thief" => 3, "deer" => 2, _ => 1,
+        "worker" => 8, "archer" => 6, "sword" => 6, "goblin" => 8, "sapper" => 4, "orc" => 6, "miner" => 4, "troll" => 3, "thief" => 3, "deer" => 2, "ram" => 2, "catapult" => 2, "mantlet" => 2, "tower" => 1, _ => 1,
     };
 
     /// <summary>A look for a unit, from its number, so it keeps it.</summary>
@@ -105,6 +105,10 @@ public static class Bodies
             "troll" => Troll(look),
             "sapper" => Sapper(look),
             "thief" => Thief(look),
+            "ram" => RamPlan(look),
+            "catapult" => CatapultPlan(look),
+            "mantlet" => MantletPlan(look),
+            "tower" => TowerPlan(),
             "deer" => Deer(look),
             "boar" => Boar(),
             "hare" => Hare(),
@@ -771,6 +775,137 @@ public static class Bodies
         s.Box(Body, -2, b.Neck, b.Z0 - 2, 2, b.Neck + 2, b.Z0, Mat.Sack, Tissue.Gear);
         Knife(s, b);
         return Done(s, f, b);
+    }
+
+    // ---------------------------------------------------------------- the horde's engines (in half-voxels, facing +z)
+
+    /// <summary>Four wheels on axles under a frame of beams, the timber of an engine's base.</summary>
+    static void Wheels(Sculpt s, int halfX, int frontZ, int backZ)
+    {
+        foreach (int x in new[] { -halfX - 2, halfX })
+            foreach (int z in new[] { backZ, frontZ - 8 })
+            {
+                s.Box(Body, x, 0, z, x + 2, 8, z + 8, Mat.Wood);
+                s.Box(Body, x, 3, z + 3, x + 2, 5, z + 5, Mat.Iron);
+                s.Cut(Body, x, 0, z, x + 2, 1, z + 1, both: true);
+                s.Cut(Body, x, 7, z, x + 2, 8, z + 1, both: true);
+                s.Cut(Body, x, 0, z + 7, x + 2, 1, z + 8, both: true);
+                s.Cut(Body, x, 7, z + 7, x + 2, 8, z + 8, both: true);
+            }
+        s.Box(Body, -halfX, 3, backZ + 3, halfX, 5, backZ + 5, Mat.Handle);
+        s.Box(Body, -halfX, 3, frontZ - 5, halfX, 5, frontZ - 3, Mat.Handle);
+    }
+
+    /// <summary>A battering ram: a shed of posts and boards under a ridge of wet hides, on four wheels, and slung from its roof a log with an iron head that swings out before it.</summary>
+    static BodyPlan RamPlan(int look)
+    {
+        var f = new BodyPlan { Chop = 1.2f, Stride = 40 };
+        var s = new Sculpt();
+        Wheels(s, 12, 22, -22);
+        s.Box(Body, -12, 5, -22, 12, 7, 22, Mat.Wood);
+        foreach (int x in new[] { -12, 10 })
+            foreach (int z in new[] { -22, -2, 18 })
+                s.Box(Body, x, 7, z, x + 2, 26, z + 3, Mat.Wood);
+        // the roof: boards, and hides over them against fire
+        byte hide = look == 0 ? Mat.Leather : Mat.FurBoar;
+        s.Box(Body, -14, 26, -23, 14, 28, 23, Mat.Board);
+        s.Box(Body, -11, 28, -23, 11, 31, 23, hide);
+        s.Box(Body, -6, 31, -23, 6, 34, 23, hide);
+        s.Box(Body, -2, 34, -23, 2, 36, 23, hide);
+        // boards down the sides, a gap at the foot
+        s.Box(Body, -14, 12, -20, -12, 26, 20, Mat.BoardDark);
+        s.Box(Body, 12, 12, -20, 14, 26, 20, Mat.BoardDark);
+        // the log on its chains, its iron head out before the shed
+        s.Box(Main, -1, 19, -12, 1, 26, -10, Mat.Iron, Tissue.Gear);
+        s.Box(Main, -1, 19, 10, 1, 26, 12, Mat.Iron, Tissue.Gear);
+        s.Box(Main, -3, 14, -22, 3, 20, 30, Mat.Trunk, Tissue.Gear);
+        s.Box(Main, -4, 13, 30, 4, 21, 35, Mat.Iron, Tissue.Gear);
+        Joint(f, Main, 0, 26 / H, 0);
+        f.HeadY0 = 26; f.HeadY1 = 36;
+        return s.Into(f, 8, 26, 12);
+    }
+
+    /// <summary>A stone-thrower: a frame of beams on wheels, two posts with a padded beam across them before, and between them the arm, cocked back, a sling-cup of hide at its end with a stone in it.</summary>
+    static BodyPlan CatapultPlan(int look)
+    {
+        var f = new BodyPlan { Chop = 1, Stride = 40 };
+        var s = new Sculpt();
+        Wheels(s, 12, 22, -22);
+        s.Box(Body, -12, 5, -22, -8, 9, 22, Mat.Wood);
+        s.Box(Body, 8, 5, -22, 12, 9, 22, Mat.Wood);
+        s.Box(Body, -12, 5, -22, 12, 9, -18, Mat.Wood);
+        s.Box(Body, -12, 5, 18, 12, 9, 22, Mat.Wood);
+        // the posts and the beam the arm strikes, padded with straw
+        s.Box(Body, -12, 9, 8, -9, 30, 12, Mat.Wood);
+        s.Box(Body, 9, 9, 8, 12, 30, 12, Mat.Wood);
+        s.Box(Body, -12, 27, 8, 12, 30, 12, Mat.Board);
+        s.Box(Body, -6, 25, 8, 6, 27, 12, look == 0 ? Mat.Straw : Mat.Sack);
+        // the winch at the back, the skein of rope round the axle at the arm's foot
+        s.Box(Body, -8, 9, -20, 8, 11, -17, Mat.Handle);
+        s.Box(Body, -8, 8, -6, 8, 12, -2, Mat.Rag);
+        // the arm, lying back from its axle, the cup and the stone at its end
+        s.Box(Main, -2, 9, -26, 2, 12, -2, Mat.Trunk, Tissue.Gear);
+        s.Box(Main, -4, 10, -32, 4, 14, -24, Mat.Leather, Tissue.Gear);
+        s.Box(Main, -2, 14, -30, 2, 18, -26, Mat.Stone, Tissue.Gear);
+        Joint(f, Main, 0, 10 / H, -4 / H);
+        f.HeadY0 = 24; f.HeadY1 = 30;
+        return s.Into(f, 8, 26, 12);
+    }
+
+    /// <summary>A mantlet: a wall of upright planks a little over a man's height, an iron band along its top and a slit to look through, on two wheels, the handles to push it by behind.</summary>
+    static BodyPlan MantletPlan(int look)
+    {
+        var f = new BodyPlan { Chop = 1, Stride = 40 };
+        var s = new Sculpt();
+        byte plank = look == 0 ? Mat.BoardDark : Mat.Wood;
+        s.Box(Body, -18, 3, 4, 18, 32, 8, plank);
+        for (int x = -16; x < 18; x += 5) s.Box(Body, x, 3, 8, x + 1, 32, 9, Mat.Wood);
+        s.Box(Body, -18, 30, 3, 18, 32, 9, Mat.Iron);
+        s.Cut(Body, -6, 22, 4, 6, 23, 8, both: true);
+        foreach (int x in new[] { -20, 18 })
+        {
+            s.Box(Body, x, 0, 0, x + 2, 8, 8, Mat.Wood);
+            s.Box(Body, x, 3, 3, x + 2, 5, 5, Mat.Iron);
+        }
+        s.Box(Body, -18, 3, 2, 18, 5, 4, Mat.Handle);
+        s.Box(Body, -12, 12, -10, -10, 14, 4, Mat.Handle);
+        s.Box(Body, 10, 12, -10, 12, 14, 4, Mat.Handle);
+        f.HeadY0 = 22; f.HeadY1 = 32;
+        return s.Into(f, 8, 26, 12);
+    }
+
+    /// <summary>A siege tower: posts and boards five metres up on a frame with six wheels, hides hung over its front and sides against fire, a fighting top with merlons, and a flap at the top to drop onto a wall.</summary>
+    static BodyPlan TowerPlan()
+    {
+        var f = new BodyPlan { Chop = 1, Stride = 40 };
+        var s = new Sculpt();
+        foreach (int x in new[] { -18, 16 })
+            foreach (int z in new[] { -18, -4, 10 })
+            {
+                s.Box(Body, x, 0, z, x + 2, 8, z + 8, Mat.Wood);
+                s.Box(Body, x, 3, z + 3, x + 2, 5, z + 5, Mat.Iron);
+            }
+        s.Box(Body, -16, 4, -18, 16, 8, 18, Mat.Wood);
+        // the corner posts and the boarded sides, hides over the front and the flanks
+        foreach (int x in new[] { -16, 13 })
+            foreach (int z in new[] { -16, 13 })
+                s.Box(Body, x, 8, z, x + 3, 84, z + 3, Mat.Wood);
+        s.Box(Body, -16, 8, -16, 16, 80, -14, Mat.BoardDark);
+        s.Box(Body, -16, 8, -16, -14, 80, 16, Mat.Leather);
+        s.Box(Body, 14, 8, -16, 16, 80, 16, Mat.Leather);
+        s.Box(Body, -16, 8, 14, 16, 70, 16, Mat.Leather);
+        for (int y = 20; y < 80; y += 14) s.Box(Body, -16, y, 14, 16, y + 2, 17, Mat.Wood);
+        // the fighting top: a floor, merlons round it, the flap hinged at its front edge
+        s.Box(Body, -17, 80, -17, 17, 82, 17, Mat.Board);
+        for (int x = -17; x < 17; x += 8)
+        {
+            s.Box(Body, x, 82, -17, x + 4, 88, -15, Mat.Board);
+            s.Box(Body, -17, 82, x, -15, 88, x + 4, Mat.Board);
+            s.Box(Body, 15, 82, x, 17, 88, x + 4, Mat.Board);
+        }
+        s.Box(Body, -12, 70, 16, 12, 72, 30, Mat.Board);
+        f.HeadY0 = 80; f.HeadY1 = 88;
+        return s.Into(f, 8, 26, 12);
     }
 
     static BodyPlan Miner(int look)

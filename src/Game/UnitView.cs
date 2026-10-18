@@ -39,7 +39,8 @@ public partial class UnitView : Node3D
     readonly Dictionary<int, Look> _looks = new();
     readonly HashSet<int> _alive = new();
     readonly List<int> _gone = new();
-    MultiMeshInstance3D _arrows, _rings, _standards, _stuck;
+    MultiMeshInstance3D _arrows, _rings, _standards, _stuck, _stones;
+    float[] _stoneBuf = Array.Empty<float>();
     float[] _arrowBuf = Array.Empty<float>(), _ringBuf = Array.Empty<float>(), _standardBuf = Array.Empty<float>(), _stuckBuf = Array.Empty<float>();
     readonly Dictionary<int, Own> _own = new();
     readonly List<Fallen> _fallen = new();
@@ -63,6 +64,9 @@ public partial class UnitView : Node3D
         var shaft = new BoxMesh { Size = new Vector3(.022f, .022f, .35f), Material = new StandardMaterial3D { AlbedoColor = new Color("4a3424"), Roughness = .9f } };
         _arrows = Multi(shaft, null, false);
         _stuck = Multi(shaft, null, false);
+        // a catapult's stone, half a metre of it
+        var stone = new BoxMesh { Size = Vector3.One * .55f, Material = new StandardMaterial3D { AlbedoColor = new Color("7d776f"), Roughness = .95f } };
+        _stones = Multi(stone, null, false);
         m.Sim.Severed += Fall;
         var ring = new TorusMesh { InnerRadius = .82f, OuterRadius = 1f, Rings = 32, RingSegments = 4 };
         var ringMat = new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, VertexColorUseAsAlbedo = true, AlbedoColor = Colors.White };
@@ -208,7 +212,15 @@ public partial class UnitView : Node3D
     {
         float legR = 0, legL = 0, main = f.Carry, off = 0, lean = 0, bob = 0, fall = 0, sink = 0;
         float seed = u.Id * .618f;
-        if (u.Dead)
+        if (Kinds.IsEngine(u.T))
+        {
+            // an engine does not walk: the ram's log swings as it batters, the catapult's arm flies up as it throws
+            if (u.T == Kinds.Ram && u.State is UnitState.Carve or UnitState.Siege) main = MathF.Sin((float)_t * MathF.Tau / f.Chop + seed) * .28f;
+            // thrown, the arm stands up against the beam a while, then is winched back down for the next
+            else if (u.T == Kinds.Catapult) main = u.Dead ? 0 : 1.9f * Math.Clamp(u.Cooldown / u.T.AttackTime * 1.5f, 0, 1);
+            if (u.Dead) sink = Math.Max(0, (float)(_m.Sim.Time - u.DiedAt) - 18) * .8f;
+        }
+        else if (u.Dead)
         {
             float since = (float)(_m.Sim.Time - u.DiedAt);
             fall = Math.Clamp(since / .45f, 0, 1);
@@ -506,13 +518,14 @@ public partial class UnitView : Node3D
     {
         var mm = _arrows.Multimesh;
         int n = 0;
-        foreach (var a in sim.Arrows) if (!(a.Done && a.Hits)) n++;
+        DrawStones(sim);
+        foreach (var a in sim.Arrows) if (!(a.Done && a.Hits) && !a.Stone) n++;
         if (n == 0) { mm.VisibleInstanceCount = 0; return; }
         if (mm.InstanceCount < n) { mm.InstanceCount = Math.Max(32, n * 2); _arrowBuf = new float[mm.InstanceCount * 12]; }
         int i = 0;
         foreach (var a in sim.Arrows)
         {
-            if (a.Done && a.Hits) continue;
+            if (a.Done && a.Hits || a.Stone) continue;
             float s = Math.Clamp(a.T / Math.Max(a.Dur, 1e-3f), 0, 1);
             var p0 = new Vector3(a.X0, a.Y0, a.Z0); var p1 = new Vector3(a.X1, a.Y1, a.Z1);
             float h = p0.DistanceTo(p1) * .1f;
@@ -530,6 +543,32 @@ public partial class UnitView : Node3D
             _arrowBuf[o + 8] = x.Z; _arrowBuf[o + 9] = y.Z; _arrowBuf[o + 10] = z.Z; _arrowBuf[o + 11] = at.Z;
         }
         RenderingServer.MultimeshSetBuffer(mm.GetRid(), _arrowBuf);
+        mm.VisibleInstanceCount = n;
+    }
+
+    /// <summary>Stones in flight from the catapults: high over, turning as they go.</summary>
+    void DrawStones(Sim sim)
+    {
+        var mm = _stones.Multimesh;
+        int n = 0;
+        foreach (var a in sim.Arrows) if (a.Stone && !a.Done) n++;
+        if (n == 0) { mm.VisibleInstanceCount = 0; return; }
+        if (mm.InstanceCount < n) { mm.InstanceCount = Math.Max(8, n * 2); _stoneBuf = new float[mm.InstanceCount * 12]; }
+        int i = 0;
+        foreach (var a in sim.Arrows)
+        {
+            if (!a.Stone || a.Done) continue;
+            float s = Math.Clamp(a.T / Math.Max(a.Dur, 1e-3f), 0, 1);
+            var p0 = new Vector3(a.X0, a.Y0, a.Z0); var p1 = new Vector3(a.X1, a.Y1, a.Z1);
+            var p = p0.Lerp(p1, s) + Vector3.Up * 4 * (p0.DistanceTo(p1) * .35f) * s * (1 - s);
+            var at = new Vector3(_w.WX(p.X), _w.WY(p.Y), _w.WZ(p.Z));
+            var b = new Basis(new Vector3(1, .6f, .3f).Normalized(), a.T * 5);
+            int o = i++ * 12;
+            _stoneBuf[o] = b.X.X; _stoneBuf[o + 1] = b.Y.X; _stoneBuf[o + 2] = b.Z.X; _stoneBuf[o + 3] = at.X;
+            _stoneBuf[o + 4] = b.X.Y; _stoneBuf[o + 5] = b.Y.Y; _stoneBuf[o + 6] = b.Z.Y; _stoneBuf[o + 7] = at.Y;
+            _stoneBuf[o + 8] = b.X.Z; _stoneBuf[o + 9] = b.Y.Z; _stoneBuf[o + 10] = b.Z.Z; _stoneBuf[o + 11] = at.Z;
+        }
+        RenderingServer.MultimeshSetBuffer(mm.GetRid(), _stoneBuf);
         mm.VisibleInstanceCount = n;
     }
 

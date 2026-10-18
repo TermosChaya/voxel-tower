@@ -63,7 +63,7 @@ public static class Labour
         D(Mat.Rubble, 1.5f, Stockpile.Stone, .75f); D(Mat.Lumber, 1, Stockpile.Wood, .5f);
         // the traps come apart as what they are made of
         D(Mat.Stakes, 1, Stockpile.Wood, .5f); D(Mat.TrapDeck, 1, Stockpile.Wood, .5f); D(Mat.DropStone, 1.2f, Stockpile.Stone, 1);
-        D(Mat.DrawDeck, 2.5f, Stockpile.Wood, .75f);
+        D(Mat.DrawDeck, 2.5f, Stockpile.Wood, .75f); D(Mat.TowerLadder, 1, Stockpile.Wood, .75f);
         LayCost[Mat.Rammed] = 1; LayCost[Mat.Wood] = 1.5f;
         foreach (var m in new[] { Mat.Stone, Mat.Mortar, Mat.StoneDark, Mat.StoneLight, Mat.StoneWarm, Mat.StoneCool }) LayCost[m] = 2;
         // a ladder is joinery: rails and rungs take longer than the logs they are made of; a gate more so

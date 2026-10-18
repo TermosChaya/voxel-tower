@@ -134,6 +134,7 @@ public partial class Main : Node3D
         if (_demo && _pose == "trees") Grove();
         if (_demo && _pose == "people") ClearGrove();
         // the field of the traps cleared of trees, so they are to be seen
+        if (_demo && _pose == "engines") ClearTrees(Site.KeepX - Site.KeepR - 420, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 20, Site.KeepZ + 140);
         if (_demo && _pose == "drawbridge") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 120);
         if (_demo && _pose == "traps") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
         World.Compact();
@@ -773,6 +774,7 @@ public partial class Main : Node3D
         if (_pose == "traps") { Trapped(); return; }
         if (_pose == "drawbridge") { Drawn(); return; }
         if (_pose == "thieves") { Robbed(); return; }
+        if (_pose == "engines") { Engines(); return; }
         if (_pose == "wounds") { Wounded(); return; }
         if (_pose == "flood") { Flood(); return; }
         if (_pose == "trees") { LookAtGrove(); return; }
@@ -1195,6 +1197,55 @@ public partial class Main : Node3D
         Marks.Flush();
     }
 
+    /// <summary>
+    /// The horde's engines before a stone wall west of the citadel: a catapult with its guard throwing at the wall from
+    /// out of bowshot, a ram rolling up to it, archers on the wall (--at: how long it has gone on).
+    /// </summary>
+    void Engines()
+    {
+        var w = World; var s = Site; var sim = Sim;
+        sim.Waves.Countdown = 1e9;
+        int kx = s.KeepX, kz = s.KeepZ;
+        int wx = kx - s.KeepR - 70;
+        int top = Shapes.LevelTop(w, wx, kz, 32);
+        sim.InstantLabour = true;
+        sim.DesignateBuild(Shapes.Line(w, s, wx, kz - 110, wx, kz + 110, new Stroke { Mat = Mat.Stone, Width = 9, Height = 32, Level = true }, top));
+        sim.InstantLabour = false;
+        foreach (int dz in new[] { -30, 0, 30 })
+        {
+            int c = sim.NearestStand(wx + 2, kz + dz, 4);
+            sim.Command(new[] { sim.Spawn(Kinds.Archer, c) }, c);
+        }
+        sim.HordeStock[Stockpile.Wood] = sim.HordeStock[Stockpile.Earth] = 0;
+        var cat = sim.Spawn(Kinds.Catapult, sim.NearestStand(wx - 300, kz - 10, 3));
+        foreach (var t in new[] { Kinds.Orc, Kinds.Goblin })
+        {
+            var g = sim.Spawn(t, sim.NearestStand((int)cat.X + 12, (int)cat.Z + 14, 2));
+            g.Escort = cat; g.Guard = true; g.Home = cat.Cell;
+        }
+        sim.ComputeFields();
+        sim.Spawn(Kinds.Ram, sim.NearestStand(wx - 120, kz + 30, 3));
+        foreach (var (t, dx, dz) in new[] { (Kinds.Goblin, -130, 20), (Kinds.Goblin, -136, 44), (Kinds.Orc, -140, 34) })
+            sim.Spawn(t, sim.NearestStand(wx + dx, kz + dz, t.Move.Height));
+        // a siege tower making for the wall further along, a mantlet before a band of goblins
+        sim.Spawn(Kinds.SiegeTower, sim.NearestStand(wx - 110, kz - 70, 3));
+        var band = new Warband { Id = 99, Name = "Ватага Грызя", State = BandState.March };
+        var lead = sim.Spawn(Kinds.Orc, sim.NearestStand(wx - 170, kz - 20, 2));
+        band.Members.Add(lead); band.Leader = lead; lead.Band = band;
+        sim.Bands.Add(band);
+        var shield = sim.Spawn(Kinds.Mantlet, sim.NearestStand(wx - 156, kz - 20, 2));
+        shield.Band = band; band.Members.Add(shield);
+        foreach (var (dx, dz) in new[] { (-180, -14), (-180, -26), (-186, -20) })
+        {
+            var g = sim.Spawn(Kinds.Goblin, sim.NearestStand(wx + dx, kz + dz, 2));
+            g.Band = band; band.Members.Add(g);
+        }
+        Advance(_poseSeconds);
+        Rig.Set(World.WX(wx - 150), World.WZ(kz + 10), -.95f, .66f, .95f, snap: true);
+        Hud.Refresh();
+        Marks.Flush();
+    }
+
     /// <summary>A row of the hurt for a close look: an arm cut off, arrows stuck in, a head split, a goblin cut down.</summary>
     void Wounded()
     {
@@ -1333,13 +1384,13 @@ public partial class Main : Node3D
         var rows = new[]
         {
             new[] { Kinds.Worker }, new[] { Kinds.Archer, Kinds.Swordsman }, new[] { Kinds.Goblin, Kinds.Sapper, Kinds.Thief },
-            new[] { Kinds.Orc, Kinds.Miner }, new[] { Kinds.Troll, Kinds.Deer, Kinds.Boar, Kinds.Hare },
+            new[] { Kinds.Orc, Kinds.Miner }, new[] { Kinds.Troll, Kinds.Deer, Kinds.Boar, Kinds.Hare }, new[] { Kinds.Ram, Kinds.Catapult },
         };
         const float yaw = -.3f, pitch = .42f, gap = 34;
         float sin = MathF.Sin(yaw), cos = MathF.Cos(yaw);
         var (gx, gz) = GroveAt;
         float cx = gx + 150, cz = gz + 110;
-        bool one = _look is >= 0 and < 5;
+        bool one = _look >= 0 && _look < rows.Length;
         float width = 0;
         for (int r = 0; r < rows.Length; r++)
         {
@@ -1363,7 +1414,7 @@ public partial class Main : Node3D
                     along += Spacing(t) / 2;
                 }
         }
-        static float Spacing(UnitType t) => t == Kinds.Troll ? 20 : t == Kinds.Deer ? 14 : t == Kinds.Hare ? 6 : t.BodyH <= 10 ? 9 : 11;
+        static float Spacing(UnitType t) => Kinds.IsEngine(t) ? 34 : t == Kinds.Troll ? 20 : t == Kinds.Deer ? 14 : t == Kinds.Hare ? 6 : t.BodyH <= 10 ? 9 : 11;
         // the camera looks at a plane 4 m up: the figures' middles are higher, so look past it by as much
         float over = (World.WY(World.SurfAt((int)cx, (int)cz) + 8) - 4) / MathF.Tan(pitch);
         float zoom = Math.Clamp(248 / (width / 1.6f + 12), 1.2f, 9);

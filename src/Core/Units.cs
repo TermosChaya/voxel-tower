@@ -99,6 +99,38 @@ public static class Kinds
         Hp = 35, Damage = 7, AttackTime = .8f, KeepDamage = 0, Bounty = 6, BodyH = 10, BodyR = 1.5f, Reach = 9, Tool = "knife",
     };
 
+    // the horde's engines: timber on wheels, slow, little hurt by arrows and quick to burn; none of them fights
+    /// <summary>A battering ram under a roof of hides on four wheels: it breaks through walls and gates like nothing else, and at the citadel batters that.</summary>
+    public static readonly UnitType Ram = new()
+    {
+        Key = "ram", Name = "Таран", Team = Team.Horde,
+        Move = new Mover { Height = 3, Climb = 1, Drop = 1, Speed = 1.1f, Carve = new float[] { 30, 600, 220, 12 }, Build = 0 },
+        Hp = 520, Damage = 0, AttackTime = 2.4f, KeepDamage = 45, Bounty = 30, BodyH = 18, BodyR = 6, Reach = 14,
+    };
+    /// <summary>A stone-thrower: it stops out of bowshot of the walls and throws stones that break them up, a little at a time.</summary>
+    public static readonly UnitType Catapult = new()
+    {
+        Key = "catapult", Name = "Камнемёт", Team = Team.Horde,
+        Move = new Mover { Height = 3, Climb = 1, Drop = 1, Speed = .9f, Build = 0 },
+        Hp = 300, Damage = 0, AttackTime = 7, Bounty = 30, BodyH = 20, BodyR = 6, Range = 40 * VoxelWorld.PerMetre,
+    };
+    /// <summary>A mantlet: a wall of planks on two wheels pushed before a band; arrows loosed at those behind it strike it instead.</summary>
+    public static readonly UnitType Mantlet = new()
+    {
+        Key = "mantlet", Name = "Мантлет", Team = Team.Horde,
+        Move = new Mover { Height = 2, Climb = 1, Drop = 2, Speed = 2.2f, Build = 0 },
+        Hp = 260, Damage = 0, AttackTime = 1, Bounty = 12, BodyH = 16, BodyR = 5,
+    };
+    /// <summary>A siege tower: a tower of timber under hides on six wheels; rolled up to a wall it drops a ladder against it, inside its own timbers, that no one can throw down.</summary>
+    public static readonly UnitType SiegeTower = new()
+    {
+        Key = "tower", Name = "Осадная башня", Team = Team.Horde,
+        Move = new Mover { Height = 3, Climb = 1, Drop = 1, Speed = .7f, Build = 0 },
+        Hp = 800, Damage = 0, AttackTime = 1, Bounty = 40, BodyH = 44, BodyR = 8,
+    };
+    public static readonly UnitType[] Engines = { Ram, Catapult, Mantlet, SiegeTower };
+    public static bool IsEngine(UnitType t) => t == Ram || t == Catapult || t == Mantlet || t == SiegeTower;
+
     // the valley's beasts: they graze and wander, bolt from anyone who comes near, and pay for the hunt
     public static readonly UnitType Deer = new()
     {
@@ -120,7 +152,8 @@ public static class Kinds
     };
 
     public static readonly UnitType[] PlayerKinds = { Worker, Archer, Swordsman };
-    public static readonly UnitType[] HordeKinds = { Goblin, Orc, Miner, Troll, Sapper, Thief };
+    /// <summary>The horde's kinds that find their way by the field (the catapult goes its own way to where it throws from).</summary>
+    public static readonly UnitType[] HordeKinds = { Goblin, Orc, Miner, Troll, Sapper, Thief, Ram };
     public static readonly UnitType[] WildKinds = { Deer, Boar, Hare };
 }
 
@@ -239,6 +272,11 @@ public sealed class Unit
     public double Loot;
     /// <summary>One of ours a thief leads off bound; for one of ours, the thief leading it off.</summary>
     public Unit Captive, Captor;
+    /// <summary>The engine a raider guards, keeping by it; and for a catapult, where it throws at (packed voxel, −1 none).</summary>
+    public Unit Escort;
+    public int AimAt = -1;
+    /// <summary>A siege tower at a wall: the voxels of the ladder it dropped against it (packed).</summary>
+    public readonly List<int> Docked = new();
 
     // beasts, and pawns with nothing to do
     /// <summary>Where it grazes and wanders round; for a pawn, where it idles round.</summary>

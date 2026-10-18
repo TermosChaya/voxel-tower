@@ -57,6 +57,11 @@ public static class Retinue
         if (u.Team == Team.Horde && u.T == Kinds.Thief && u.State == UnitState.Walk)
             return "крадётся к цитадели";
         if (u.Captor != null) return "в плену: его уводят на запад";
+        if (u.T == Kinds.Catapult) return u.State == UnitState.Siege ? "мечет камни по стенам" : "его катят туда, откуда бросать";
+        if (u.T == Kinds.Ram) return u.State switch { UnitState.Carve => "проламывает стену", UnitState.Siege => "бьёт в цитадель", _ => "катится к стенам" };
+        if (u.Escort is { Dead: false } && u.State != UnitState.Fight) return "охраняет камнемёт";
+        if (u.T == Kinds.Mantlet) return "прикрывает ватагу от стрел";
+        if (u.T == Kinds.SiegeTower) return u.Docked.Count > 0 ? "стоит у стены: по ней лезут наверх" : "катится к стене";
         if (u.Team == Team.Horde)
             return u.State switch
             {

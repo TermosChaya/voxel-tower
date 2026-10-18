@@ -91,7 +91,7 @@ public sealed partial class Sim
         "Гаррука", "Мрога", "Ухтара", "Грызя", "Шкуродёра", "Буржука", "Карга", "Зуборыла", "Ржавого", "Хряща", "Одноглазого", "Гнилозуба",
     };
 
-    static int Rank(UnitType t) => t == Kinds.Troll ? 5 : t == Kinds.Orc ? 4 : t == Kinds.Miner ? 3 : t == Kinds.Goblin ? 2 : 1;
+    static int Rank(UnitType t) => t == Kinds.Troll ? 5 : t == Kinds.Orc ? 4 : t == Kinds.Miner ? 3 : t == Kinds.Goblin ? 2 : Kinds.IsEngine(t) ? 0 : 1;
 
     /// <summary>
     /// Draws up the next wave: who comes, split into warbands of six or so, each with its strongest at its head, and
@@ -108,6 +108,12 @@ public sealed partial class Sim
         for (int i = 0; i < (n >= 5 ? (n - 3) / 3 : 0); i++) list.Add(Kinds.Troll);
         // thieves from the second wave, one more every third
         for (int i = 0; i < (n >= 2 ? 1 + (n - 2) / 3 : 0); i++) list.Add(Kinds.Thief);
+        // engines: a ram from the third wave and another from the seventh, a catapult from the fourth and another from the eighth
+        for (int i = 0; i < (n >= 7 ? 2 : n >= 3 ? 1 : 0); i++) list.Add(Kinds.Ram);
+        for (int i = 0; i < (n >= 8 ? 2 : n >= 4 ? 1 : 0); i++) list.Add(Kinds.Catapult);
+        // mantlets before the bands from the fifth, a siege tower from the sixth and another from the tenth
+        for (int i = 0; i < (n >= 9 ? 2 : n >= 5 ? 1 : 0); i++) list.Add(Kinds.Mantlet);
+        for (int i = 0; i < (n >= 10 ? 2 : n >= 6 ? 1 : 0); i++) list.Add(Kinds.SiegeTower);
         int count = Math.Clamp((list.Count + 5) / 7, 1, 5);
         // the strongest are dealt out first, one to a band, and lead it
         for (int i = list.Count - 1; i > 0; i--) { int j = Rng.Next(i + 1); (list[i], list[j]) = (list[j], list[i]); }
@@ -312,6 +318,8 @@ public sealed partial class Sim
     /// </summary>
     public Unit SpawnRaider(UnitType t, Warband b, Survivor back = null)
     {
+        // a catapult goes its own way, with its own guard
+        if (t == Kinds.Catapult) { b.Spawned++; return SpawnCatapult(b); }
         int h = t.Move.Height, at = b.Entry >= 0 ? Spread(b.Entry, b.Spawned, h) : -1;
         if (at < 0) return SpawnRaider(t);
         var u = Spawn(t, at);
