@@ -52,7 +52,13 @@ public static class Mat
     public const byte Rubble = 96, Lumber = 97;
     /// <summary>The eyes of goblins, catching what light there is: two sparks out of the dark at night.</summary>
     public const byte EyeGlint = 98;
-    public const int Count = 99;
+    /// <summary>
+    /// Traps the brushes lay: sharpened stakes standing a hand apart, that tear and slow whoever goes among them; a trap
+    /// floor of thin poles under turf, laid flush over a pit, that holds our people and gives way under the horde; stones
+    /// heaped on the battlements, to be tipped onto whoever comes to the foot of the wall.
+    /// </summary>
+    public const byte Stakes = 99, TrapDeck = 100, DropStone = 101;
+    public const int Count = 102;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
     public static readonly bool[] IsVeg = new bool[Count], IsPlayer = new bool[Count], IsEarthy = new bool[Count],
@@ -146,6 +152,9 @@ public static class Mat
         D(Rubble, "Обломки", 0x5b5755, .34f, MatGroup.Stone, 0);
         D(Lumber, "Обломки дерева", 0x45311f, .3f, MatGroup.Wood, 0);
         D(EyeGlint, "глаз", 0xffc24a, .05f, MatGroup.Hard, Glows);
+        D(Stakes, "Колья", 0x9c7b4c, .22f, MatGroup.Wood, Player);
+        D(TrapDeck, "Ловчий настил", 0x56632f, .3f, MatGroup.Wood, Player);
+        D(DropStone, "Камни на сброс", 0x8e8881, .32f, MatGroup.Stone, Player);
 
         D(SkinHuman, "кожа", 0xc29878, .08f, MatGroup.Hard, 0); D(SkinGoblin, "кожа", 0x6d8a39, .12f, MatGroup.Hard, 0);
         D(SkinOrc, "кожа", 0x56673f, .12f, MatGroup.Hard, 0); D(SkinTroll, "кожа", 0x66705f, .16f, MatGroup.Hard, 0);
@@ -170,7 +179,7 @@ public static class Mat
         D(Board, "доски", 0x80603d, .16f, MatGroup.Hard, 0); D(BoardDark, "доски", 0x6a4c30, .16f, MatGroup.Hard, 0);
 
         foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage, Flower, Bloom, Birch, NeedleLight, FoliageLight, FoliageGold, PineBark, Snag }) IsVeg[m] = true;
-        foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame }) Passable[m] = true;
+        foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame, Stakes }) Passable[m] = true;
         IsLadder[Ladder] = IsLadder[SiegeLadder] = true;
         foreach (var m in new[] { Tuft, Flower, Bloom }) SwayKind[m] = 1;
         foreach (var m in new[] { Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold }) SwayKind[m] = 2;
@@ -195,6 +204,8 @@ public static class Mat
         F(.3f, 6, 0, Banner, BannerTrim, Sack);
         F(.08f, 20, .3f, Cask, Crate, CrateEdge);
         F(.06f, 25, .3f, Lumber);
+        F(.05f, 25, .35f, Stakes);
+        F(.06f, 18, .3f, TrapDeck);
         F(3, 50, 0, Pitch);
         Heat[Pitch] = 2;
     }

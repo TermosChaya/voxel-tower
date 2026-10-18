@@ -27,6 +27,8 @@ public sealed class NavGrid
     public readonly byte[] Ladder;
     /// <summary>Water voxels in the cell.</summary>
     public readonly ushort[] Water;
+    /// <summary>Voxels of stakes in the cell: whoever goes through it goes slowly and is torn.</summary>
+    public readonly ushort[] Spikes;
     /// <summary>
     /// Gate leaves our people can open: for them those don't block (they knock and wait), for the horde they do. A leaf
     /// voxel weighs double, so a leaf hung across a cell boundary still shuts both cells.
@@ -60,7 +62,7 @@ public sealed class NavGrid
         NX = w.SX >> Shift; NY = w.SY >> Shift; NZ = w.SZ >> Shift; Layer = NX * NZ; Count = Layer * NY;
         Fill = new ushort[Count]; Earth = new ushort[Count]; Wood = new ushort[Count]; Stone = new ushort[Count]; Rock = new ushort[Count];
         Hard = new byte[Count]; Keep = new byte[Count]; Floor = new ushort[Count];
-        Ladder = new byte[Count]; Water = new ushort[Count]; GateFill = new ushort[Count];
+        Ladder = new byte[Count]; Water = new ushort[Count]; GateFill = new ushort[Count]; Spikes = new ushort[Count];
         _dirty = new bool[Count];
         w.Edited += OnEdit;
     }
@@ -146,9 +148,9 @@ public sealed class NavGrid
         foreach (int c in _dirtyList)
         {
             _dirty[c] = false;
-            bool was = Fill[c] >= SolidT, ladder = Ladder[c] != 0, deep = Water[c] >= DeepT;
+            bool was = Fill[c] >= SolidT, ladder = Ladder[c] != 0, deep = Water[c] >= DeepT, spiked = Spikes[c] != 0;
             Recompute(c);
-            if ((Fill[c] >= SolidT) != was || (Ladder[c] != 0) != ladder || (Water[c] >= DeepT) != deep) changed++;
+            if ((Fill[c] >= SolidT) != was || (Ladder[c] != 0) != ladder || (Water[c] >= DeepT) != deep || (Spikes[c] != 0) != spiked) changed++;
         }
         _dirtyList.Clear();
         if (changed > 0) Version++;
@@ -162,7 +164,7 @@ public sealed class NavGrid
         int i = I(c), k = K(c), y = Y(c), x0 = i << Shift, y0 = y << Shift, z0 = k << Shift;
         int ci = World.ChunkIndex(x0 >> VoxelWorld.Shift, y0 >> VoxelWorld.Shift, z0 >> VoxelWorld.Shift);
         var d = World.ChunkData(ci);
-        int fill = 0, e = 0, wd = 0, st = 0, rk = 0, hard = 0, keep = 0, lad = 0, wat = 0, gate = 0;
+        int fill = 0, e = 0, wd = 0, st = 0, rk = 0, hard = 0, keep = 0, lad = 0, wat = 0, gate = 0, spk = 0;
         if (d == null)
         {
             byte u = World.ChunkUniform(ci), cls = Cls[u];
@@ -187,6 +189,7 @@ public sealed class NavGrid
                         }
                         else if (v == Mat.Water) wat++;
                         else if (Mat.IsLadder[v]) lad++;
+                        else if (v == Mat.Stakes) spk++;
                     }
                 }
         }
@@ -196,6 +199,7 @@ public sealed class NavGrid
         Ladder[c] = (byte)(lad >= 6 ? 1 : 0);
         Water[c] = (ushort)wat;
         GateFill[c] = (ushort)gate;
+        Spikes[c] = (ushort)spk;
         Floor[c] = (ushort)FloorIn(x0, y0, z0);
     }
 

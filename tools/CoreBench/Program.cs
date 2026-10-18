@@ -1878,6 +1878,122 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--shelter")
         $"fled {fled}, in after {gotIn} s; 10 s on: inside {runner.Inside}, {runner.Hp:0} of {runner.MaxHp:0} hp; the goblin {chaser.State} {Sim.Dist(chaser, runner) / VoxelWorld.PerMetre:0.0} m off");
 }
 
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--traps")
+{
+    Console.WriteLine();
+    var mpT = new MapParams();
+    var wT = new VoxelWorld(mpT.SizeX, mpT.SizeY, mpT.SizeZ);
+    var siteT = MapGen.Generate(wT, mpT);
+    wT.Compact();
+    var simT = new Sim(wT, siteT);
+    simT.Waves.Countdown = 1e9; simT.WildTarget = 0;
+    void RunT(double seconds) { for (double t = 0; t < seconds; t += .05) simT.Step(.05f); }
+    void GoneT(Unit u) { u.Dead = true; u.DiedAt = -999; }
+    int kxT = siteT.KeepX, kzT = siteT.KeepZ;
+    int Count(byte m, int x0, int z0, int x1, int z1)
+    {
+        int n = 0;
+        for (int z = z0; z <= z1; z++) for (int x = x0; x <= x1; x++) for (int y = 0; y < wT.SY; y++) if (wT.Get(x, y, z) == m) n++;
+        return n;
+    }
+
+    // a field of stakes a metre high: a goblin kept among them is torn and treads some down
+    int sx0 = kxT - 150, sz0 = kzT - 160;
+    simT.InstantLabour = true;
+    simT.DesignateBuild(Shapes.Box(wT, siteT, sx0, sz0, sx0 + 40, sz0 + 40, new Stroke { Mat = Mat.Stakes, Height = 8 }, 0));
+    simT.InstantLabour = false;
+    simT.Nav.Flush();
+    int stakes0 = Count(Mat.Stakes, sx0, sz0, sx0 + 40, sz0 + 40);
+    var gobT = simT.Spawn(Kinds.Goblin, simT.NearestStand(sx0 + 20, sz0 + 20, 2));
+    gobT.Raid = null; gobT.Guard = true; gobT.Home = gobT.Cell;
+    float hp0T = gobT.Hp;
+    bool spiked = simT.Nav.Spikes[gobT.Cell] > 0;
+    RunT(4);
+    int stakes1 = Count(Mat.Stakes, sx0, sz0, sx0 + 40, sz0 + 40);
+    Check("stakes tear whoever stands among them, and are trodden down a little",
+        stakes0 > 300 && spiked && hp0T - gobT.Hp > 12 && stakes1 < stakes0,
+        $"{stakes0} voxels of stakes, the goblin's cell spiked {spiked}: {hp0T:0} → {gobT.Hp:0} hp in 4 s; stakes {stakes0} → {stakes1}");
+    GoneT(gobT);
+
+    // a worker sent past the field goes round it, not through
+    var walker = simT.Spawn(Kinds.Worker, simT.NearestStand(sx0 - 20, sz0 + 20, 4));
+    int beyond = simT.NearestStand(sx0 + 60, sz0 + 20, 4);
+    simT.Command(new[] { walker }, beyond);
+    int through = 0;
+    if (walker.Path != null) foreach (int c in walker.Path) if (simT.Nav.Spikes[c] > 0) through++;
+    int pathLen = walker.Path?.Count ?? 0;
+    RunT(30);
+    Check("a pawn of ours sent past a field of stakes goes round it", pathLen > 0 && through == 0 && walker.Cell == beyond && walker.Hp >= walker.MaxHp - .5f,
+        $"path of {pathLen} cells, {through} of them among stakes; there {walker.Cell == beyond}, {walker.Hp:0} hp");
+    GoneT(walker);
+
+    // a pit two metres deep with stakes at the bottom, under a trap floor flush with the ground: it holds a worker of
+    // ours walking over it, and gives way under a goblin, which goes down onto the stakes
+    int px0 = kxT - 150, pz0 = kzT + 120, ground = 0;
+    for (int z = pz0; z < pz0 + 24; z++) for (int x = px0; x < px0 + 24; x++) ground = Math.Max(ground, wT.SurfAt(x, z));
+    for (int z = pz0 - 16; z < pz0 + 40; z++)
+        for (int x = px0 - 16; x < px0 + 40; x++)
+        {
+            // flat ground round it, and the pit dug out of it
+            for (int y = ground; y < ground + 30; y++) wT.Set(x, y, z, Mat.Air);
+            for (int y = ground - 20; y < ground; y++) wT.Set(x, y, z, Mat.Soil);
+            wT.Set(x, ground - 1, z, Mat.Grass);
+        }
+    for (int z = pz0; z < pz0 + 24; z++)
+        for (int x = px0; x < px0 + 24; x++)
+        {
+            for (int y = ground - 18; y < ground; y++) wT.Set(x, y, z, Mat.Air);
+            if (x % 3 == 0 && z % 3 == 0) for (int y = ground - 18; y < ground - 12; y++) wT.Set(x, y, z, Mat.Stakes);
+        }
+    simT.InstantLabour = true;
+    simT.DesignateBuild(Shapes.Box(wT, siteT, px0, pz0, px0 + 23, pz0 + 23, new Stroke { Mat = Mat.TrapDeck, Height = 0, Level = true }, ground));
+    simT.InstantLabour = false;
+    simT.Nav.Flush();
+    int deck0 = Count(Mat.TrapDeck, px0, pz0, px0 + 23, pz0 + 23);
+    var over = simT.Spawn(Kinds.Worker, simT.NearestStand(px0 - 10, pz0 + 12, 4));
+    int farSide = simT.NearestStand(px0 + 34, pz0 + 12, 4);
+    simT.Command(new[] { over }, farSide);
+    float lowest = over.Y;
+    for (int t = 0; t < 60 && over.Cell != farSide; t++) { RunT(.5); lowest = Math.Min(lowest, over.Y); }
+    bool crossed = over.Cell == farSide;
+    int deck1 = Count(Mat.TrapDeck, px0, pz0, px0 + 23, pz0 + 23);
+    var prey = simT.Spawn(Kinds.Goblin, simT.NearestStand(px0 + 12, pz0 + 12, 2));
+    prey.Raid = null; prey.Guard = true; prey.Home = prey.Cell;
+    float py0 = prey.Y, php0 = prey.Hp;
+    RunT(4);
+    int deck2 = Count(Mat.TrapDeck, px0, pz0, px0 + 23, pz0 + 23);
+    Check("a trap floor over a pit holds a worker of ours and gives way under a goblin, which goes down onto the stakes",
+        deck0 > 1800 && deck1 == deck0 && lowest > ground - 2 && crossed && deck2 < deck0 / 4 && prey.Y < ground - 12 && php0 - prey.Hp > 25,
+        $"{deck0} voxels of floor; the worker crossed it {crossed}, lowest at {lowest - ground:0} voxels, floor {deck1} after; " +
+        $"the goblin {py0 - ground:0} → {prey.Y - ground:0} voxels, {php0:0} → {prey.Hp:0} hp, floor {deck2} left");
+    GoneT(over); GoneT(prey);
+
+    // a stone wall four metres high with stones laid along its outer edge, an archer of ours on it by them, a goblin at
+    // its foot under them: the archer tips them over, and they come down on the goblin
+    int wx0 = kxT - 220, wz0 = kzT - 40;
+    simT.InstantLabour = true;
+    int wallTop = Shapes.LevelTop(wT, wx0 + 4, wz0 + 40, 32);
+    simT.DesignateBuild(Shapes.Line(wT, siteT, wx0 + 4, wz0, wx0 + 4, wz0 + 80, new Stroke { Mat = Mat.Stone, Width = 9, Height = 32, Level = true }, wallTop));
+    simT.InstantLabour = false;
+    int edge = wx0;
+    while (edge < wx0 + 10 && wT.Get(edge, wallTop - 1, wz0 + 40) == Mat.Air) edge++;
+    for (int z = wz0 + 30; z < wz0 + 50; z++)
+        for (int y = wallTop; y < wallTop + 3; y++) { wT.Set(edge, y, z, Mat.DropStone); wT.Set(edge + 1, y, z, Mat.DropStone); }
+    simT.Nav.Flush();
+    int dropped0 = Count(Mat.DropStone, wx0 - 4, wz0 + 28, wx0 + 12, wz0 + 52);
+    var guardT = simT.Spawn(Kinds.Archer, simT.NearestStand(edge + 5, wz0 + 40, 4));
+    simT.Command(new[] { guardT }, guardT.Cell);
+    var footGob = simT.Spawn(Kinds.Goblin, simT.NearestStand(edge - 5, wz0 + 40, 2));
+    footGob.Raid = null; footGob.Guard = true; footGob.Home = footGob.Cell;
+    float fhp0 = footGob.Hp;
+    float onWall = guardT.Y - wallTop;
+    RunT(3);
+    int dropped1 = Count(Mat.DropStone, wx0 - 4, wz0 + 28, wx0 + 12, wz0 + 52);
+    Check("stones on a wall are tipped onto a goblin at its foot by an archer of ours beside them",
+        dropped0 >= 100 && Math.Abs(onWall) < 4 && dropped1 < dropped0 && (footGob.Dead || fhp0 - footGob.Hp >= 25),
+        $"{dropped0} stones on the wall, the archer {onWall:0} voxels from its top; {dropped1} left; the goblin {fhp0:0} → {(footGob.Dead ? "dead" : $"{footGob.Hp:0} hp")}");
+}
+
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
 {
     Console.WriteLine();

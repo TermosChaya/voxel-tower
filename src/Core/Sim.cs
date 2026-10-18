@@ -57,6 +57,7 @@ public sealed partial class Sim
         Stock[Stockpile.Earth] = 16 * VoxelWorld.PerM3;
         w.Replaced += OnWaterEdit;
         w.Replaced += OnSupportEdit;
+        w.Replaced += OnTrapEdit;
         // from here on, what is written to the valley is what a save has to keep
         w.TrackEdits = true;
     }
@@ -139,6 +140,7 @@ public sealed partial class Sim
         TickTrails();
         TendWildlife();
         TickShelter();
+        TickTraps();
         CountBodies();
         for (int n = 0; n < Units.Count; n++)
         {
@@ -220,7 +222,8 @@ public sealed partial class Sim
         bool climbing = Nav.I(next) == Nav.I(u.Cell) && Nav.K(next) == Nav.K(u.Cell) && next != u.Cell;
         if (climbing) { tx = u.X; tz = u.Z; ty = (Nav.Y(next) << NavGrid.Shift) + (Nav.Solid(Nav.I(next), Nav.Y(next) - 1, Nav.K(next)) ? Nav.Floor[next] - (Nav.Y(next) << NavGrid.Shift) : 0); }
         else { tx += u.OffX; tz += u.OffZ; }
-        float speed = u.T.Move.Speed * NavGrid.CS * pace * u.Pace * (u.Hp < u.MaxHp * .4f ? .7f : 1) * (Nav.Water[u.Cell] > 0 ? .6f : 1) * Gait(u);
+        float speed = u.T.Move.Speed * NavGrid.CS * pace * u.Pace * (u.Hp < u.MaxHp * .4f ? .7f : 1) * (Nav.Water[u.Cell] > 0 ? .6f : 1)
+            * (Nav.Spikes[u.Cell] > 0 ? .4f : 1) * Gait(u);
         float step = speed * dt * (climbing ? .5f : 1);
         float dx = tx - u.X, dz = tz - u.Z, dyv = ty - u.Y;
         float dist = climbing ? MathF.Abs(dyv) : MathF.Sqrt(dx * dx + dz * dz);

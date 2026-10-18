@@ -122,14 +122,28 @@ public partial class Inspector : Control
         opts.AddThemeConstantOverride("separation", 16);
         Options(opts);
         col.AddChild(opts);
-        // what the brushes that lay are laying: the three of the stores, and pitch
+        // what the brushes that lay are laying: the three of the stores and pitch, or a trap
         if (!o.Dig && t.Tool is Tool.Brush or Tool.Line or Tool.Box or Tool.Circle or Tool.Extrude)
-            col.AddChild(new Choice("Материал", MaterialTip, new[] { "камень", "брёвна", "земля", "смола" }, Math.Max(0, Array.IndexOf(Laid, o.Material)), i => t.SetMaterial(Laid[i])));
+        {
+            var mats = new HBoxContainer();
+            mats.AddThemeConstantOverride("separation", 18);
+            mats.AddChild(new Choice("Материал", MaterialTip, new[] { "камень", "брёвна", "земля", "смола" }, Array.IndexOf(Laid, o.Material), i => t.SetMaterial(Laid[i])));
+            mats.AddChild(new Choice("Ловушка", TrapTip, new[] { "колья", "настил", "камни" }, Array.IndexOf(Traps, o.Material), i => t.SetMaterial(Traps[i])));
+            col.AddChild(mats);
+        }
         if (opts.GetChildCount() == 0) col.AddChild(Hud.Text("Esc — убрать кисть. Щелчок по ячейке справа или клавиша — взять другую.", Ornament.SerifItalic, 12, Ornament.Faded));
         return col;
     }
 
     static readonly byte[] Laid = { Mat.Stone, Mat.Wood, Mat.Rammed, Mat.Pitch };
+    static readonly byte[] Traps = { Mat.Stakes, Mat.TrapDeck, Mat.DropStone };
+
+    const string TrapTip = "Ловушки\nКолья — частокол заострённых кольев в ладонь друг от друга, высотой с «Высоту»: кто идёт сквозь них, идёт " +
+        "медленно и ранится и понемногу их вытаптывает; орда обходит их, если обход недолог, наши — всегда, где есть как. Из брёвен, горят.\n" +
+        "Настил — ловчий: тонкие жерди под дёрном вровень с землёй, где начат мазок, и только над тем, что ниже, — над ямой, рвом. Наших держит, " +
+        "под ордой проваливается весь, сколько его в трёх метрах. Выройте под ним яму глубже человеческого роста и поставьте на дне колья. Из брёвен.\n" +
+        "Камни — на сброс: сложите их на стене у края. Когда налётчик встанет у подножия под ними, а наш будет рядом с камнями, он столкнёт их " +
+        "врагу на голову; камни бьют всех, кто под ними, и ложатся обломками. Из камня.";
 
     const string MaterialTip = "Материал\nКамень (Z), брёвна (X), земля (C) — из запасов. Смола варится из брёвен: слой её на дне рва " +
         "вспыхивает весь разом от огненной стрелы и горит долго и вдвое жарче — налётчики в нём сгорают, а кто выбежал, горит ещё. " +

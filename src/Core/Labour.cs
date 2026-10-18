@@ -61,6 +61,8 @@ public static class Labour
         D(Mat.Char, .5f, Stockpile.None, 0); D(Mat.Pitch, 1, Stockpile.None, 0);
         // what a fall left: broken stone comes away more easily than masonry, broken timber too, each giving back some
         D(Mat.Rubble, 1.5f, Stockpile.Stone, .75f); D(Mat.Lumber, 1, Stockpile.Wood, .5f);
+        // the traps come apart as what they are made of
+        D(Mat.Stakes, 1, Stockpile.Wood, .5f); D(Mat.TrapDeck, 1, Stockpile.Wood, .5f); D(Mat.DropStone, 1.2f, Stockpile.Stone, 1);
         LayCost[Mat.Rammed] = 1; LayCost[Mat.Wood] = 1.5f;
         foreach (var m in new[] { Mat.Stone, Mat.Mortar, Mat.StoneDark, Mat.StoneLight, Mat.StoneWarm, Mat.StoneCool }) LayCost[m] = 2;
         // a ladder is joinery: rails and rungs take longer than the logs they are made of; a gate more so
@@ -68,6 +70,8 @@ public static class Labour
         LayCost[Mat.Gate] = 4;
         // pitch is boiled out of pine and poured: slower than logs
         LayCost[Mat.Pitch] = 2.5f;
+        // stakes are cut and sharpened one by one, a trap floor is poles and turf over them; stones are only heaped up
+        LayCost[Mat.Stakes] = 2.5f; LayCost[Mat.TrapDeck] = 2.5f; LayCost[Mat.DropStone] = 1.2f;
     }
 
     /// <summary>Pawns can take this out of the world (bedrock and the citadel they cannot).</summary>
@@ -80,8 +84,8 @@ public static class Labour
     /// <summary>The store a voxel of this material is laid from.</summary>
     public static int CostKind(byte m) => m switch
     {
-        Mat.Stone or Mat.Mortar or Mat.StoneDark or Mat.StoneLight or Mat.StoneWarm or Mat.StoneCool => Stockpile.Stone,
-        Mat.Wood or Mat.Ladder or Mat.Gate or Mat.GateShut or Mat.GateOpen or Mat.Pitch => Stockpile.Wood,
+        Mat.Stone or Mat.Mortar or Mat.StoneDark or Mat.StoneLight or Mat.StoneWarm or Mat.StoneCool or Mat.DropStone => Stockpile.Stone,
+        Mat.Wood or Mat.Ladder or Mat.Gate or Mat.GateShut or Mat.GateOpen or Mat.Pitch or Mat.Stakes or Mat.TrapDeck => Stockpile.Wood,
         Mat.Rammed => Stockpile.Earth,
         _ => Stockpile.None,
     };

@@ -133,6 +133,8 @@ public partial class Main : Node3D
         Site = MapGen.Generate(World, mp);
         if (_demo && _pose == "trees") Grove();
         if (_demo && _pose == "people") ClearGrove();
+        // the field of the traps cleared of trees, so they are to be seen
+        if (_demo && _pose == "traps") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
         World.Compact();
         save?.Valley(World, Site);
         double genMs = sw.Elapsed.TotalMilliseconds;
@@ -767,6 +769,7 @@ public partial class Main : Node3D
         if (_pose == "fire") { Blaze(); return; }
         if (_pose == "sap") { Sapping(); return; }
         if (_pose == "shelter") { Sheltering(); return; }
+        if (_pose == "traps") { Trapped(); return; }
         if (_pose == "wounds") { Wounded(); return; }
         if (_pose == "flood") { Flood(); return; }
         if (_pose == "trees") { LookAtGrove(); return; }
@@ -1059,6 +1062,62 @@ public partial class Main : Node3D
         Marks.Flush();
     }
 
+    /// <summary>
+    /// The traps at work: a stone wall west of the citadel with stones heaped on its battlements and archers by them, a
+    /// strip of stakes before it, a wolf pit under a trap floor further out with stakes at its bottom, and a band of
+    /// the horde coming on.
+    /// </summary>
+    void Trapped()
+    {
+        var w = World; var s = Site; var sim = Sim;
+        sim.Waves.Countdown = 1e9;
+        int kx = s.KeepX, kz = s.KeepZ;
+        int wx = kx - s.KeepR - 70, z0 = kz - 64, z1 = kz + 64;
+        int top = Shapes.LevelTop(w, wx, kz, 32);
+        sim.InstantLabour = true;
+        sim.DesignateBuild(Shapes.Line(w, s, wx, z0, wx, z1, new Stroke { Mat = Mat.Stone, Width = 9, Height = 32, Level = true }, top));
+        // stones along the outer edge of its top, in the middle
+        int edge = wx - 8;
+        while (edge < wx && w.Get(edge, top - 1, kz) == Mat.Air) edge++;
+        var stones = new VoxelList();
+        for (int z = kz - 30; z < kz + 30; z++)
+            for (int y = top; y < top + 3; y++) { stones.Add(edge, y, z, Mat.DropStone); stones.Add(edge + 1, y, z, Mat.DropStone); }
+        sim.DesignateBuild(stones);
+        // stakes a metre high, two to five metres out
+        sim.DesignateBuild(Shapes.Box(w, s, wx - 40, z0 + 10, wx - 18, z1 - 10, new Stroke { Mat = Mat.Stakes, Height = 8 }, 0));
+        // a wolf pit further out: two metres down, stakes at its bottom, a trap floor over it flush with the ground
+        int px = wx - 90, pz = kz - 12, ground = Shapes.LevelTop(w, px + 12, pz + 12, 0);
+        var pit = new VoxelList();
+        for (int z = pz; z < pz + 24; z++)
+            for (int x = px; x < px + 24; x++)
+                for (int y = w.SurfAt(x, z) - 1; y >= ground - 18; y--) if (w.Get(x, y, z) != Mat.Air) w.Set(x, y, z, Mat.Air);
+        for (int z = pz; z < pz + 24; z++)
+            for (int x = px; x < px + 24; x++)
+                if (x % 3 == 0 && z % 3 == 0) for (int y = ground - 18; y < ground - 12; y++) w.Set(x, y, z, Mat.Stakes);
+        sim.DesignateBuild(Shapes.Box(w, s, px, pz, px + 23, pz + 23, new Stroke { Mat = Mat.TrapDeck, Height = 0, Level = true }, ground));
+        sim.InstantLabour = false;
+        foreach (int dz in new[] { -20, 0, 20 })
+        {
+            int c = sim.NearestStand(edge + 6, kz + dz, 4);
+            var a = sim.Spawn(Kinds.Archer, c);
+            sim.Command(new[] { a }, c);
+        }
+        // a band come on by day, so the traps are to be seen
+        Advance(1);
+        sim.HordeStock[Stockpile.Wood] = sim.HordeStock[Stockpile.Earth] = 0;
+        foreach (var (t, dx, dz) in new[] { (Kinds.Goblin, -120, -10), (Kinds.Goblin, -126, 8), (Kinds.Goblin, -116, 20), (Kinds.Orc, -134, 0),
+            (Kinds.Goblin, -60, -40), (Kinds.Goblin, -66, 30), (Kinds.Orc, -72, -20), (Kinds.Goblin, -56, 44) })
+        {
+            int c = sim.NearestStand(wx + dx, kz + dz, t.Move.Height);
+            if (c >= 0) sim.Spawn(t, c);
+        }
+        sim.ComputeFields();
+        Advance(_poseSeconds);
+        Rig.Set(World.WX(wx - 48), World.WZ(kz - 4), -.5f, .8f, 1.35f, snap: true);
+        Hud.Refresh();
+        Marks.Flush();
+    }
+
     /// <summary>A row of the hurt for a close look: an arm cut off, arrows stuck in, a head split, a goblin cut down.</summary>
     void Wounded()
     {
@@ -1156,6 +1215,19 @@ public partial class Main : Node3D
     }
 
     /// <summary>Takes the trees off the grove's ground (and, for the figures, the grass that would hide their feet).</summary>
+    /// <summary>Takes the trees off a stretch of the valley before it is drawn.</summary>
+    void ClearTrees(int x0, int z0, int x1, int z1)
+    {
+        var w = World;
+        for (int z = Math.Max(0, z0); z < Math.Min(w.SZ, z1); z++)
+            for (int x = Math.Max(0, x0); x < Math.Min(w.SX, x1); x++)
+                for (int y = w.SurfAt(x, z); y < w.SY; y++)
+                {
+                    byte m = w.Get(x, y, z);
+                    if (Mat.IsTrunk(m) || Mat.IsLeafy(m)) w.SetRaw(x, y, z, Mat.Air);
+                }
+    }
+
     void ClearGrove()
     {
         var w = World;

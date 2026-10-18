@@ -64,6 +64,10 @@ public sealed class PathFinder
         _cost = new float[g.Count]; _from = new int[g.Count]; _seen = new int[g.Count]; _closed = new int[g.Count];
     }
 
+    /// <summary>How much more a step into a cell counts than on dry open ground: wading, or picking a way among stakes.</summary>
+    public const float AmongStakes = 6;
+    static float Going(NavGrid g, int c) => (g.Water[c] > 0 ? FlowField.Wade : 1) * (g.Spikes[c] > 0 ? AmongStakes : 1);
+
     /// <summary>
     /// Cells from start (exclusive) to the first cell that satisfies goal, or null.
     /// The heuristic should not overestimate; cost is in cells walked. Ladders are climbed, slowly.
@@ -98,7 +102,7 @@ public sealed class PathFinder
                     // no cutting corners: both sides must be walkable at this level, and only on the ground
                     if (!standing || !g.Stand(ni, y, nk, m.Height, gates) || !g.Stand(i + DX[dir], y, k, m.Height, gates) || !g.Stand(i, y, k + DK[dir], m.Height, gates)) continue;
                     int dn = g.Id(ni, y, nk);
-                    Relax(c, dn, 1.414f * (g.Water[dn] > 0 ? FlowField.Wade : 1), heuristic);
+                    Relax(c, dn, 1.414f * Going(g, dn), heuristic);
                     continue;
                 }
                 // level first, then a step up, then the shortest drop; onto ground or onto a ladder,
@@ -112,7 +116,7 @@ public sealed class PathFinder
                     if (dy > 0 && !OpenColumn(i, k, y + m.Height, y + m.Height + dy - 1)) continue;
                     if (dy < 0 && !OpenColumn(ni, nk, ny + m.Height, y + m.Height - 1)) continue;
                     int sn = g.Id(ni, ny, nk);
-                    Relax(c, sn, (1 + (dy > 0 ? .6f * dy : -.3f * dy)) * (g.Water[sn] > 0 ? FlowField.Wade : 1), heuristic);
+                    Relax(c, sn, (1 + (dy > 0 ? .6f * dy : -.3f * dy)) * Going(g, sn), heuristic);
                     break;
                 }
             }
@@ -315,6 +319,8 @@ public sealed class FlowField
 
     /// <summary>How much longer a step through standing or running water counts for, against one on dry land.</summary>
     public const float Wade = 3f;
+    /// <summary>How much longer a step among stakes counts for the horde: it goes round if the way round is short.</summary>
+    public const float Spiked = 2.5f;
 
     /// <summary>A step the legs manage, in voxels: up a little over a cell per Climb, down as far as Drop allows.</summary>
     public static bool StepsOk(Mover m, int from, int to) =>
@@ -356,6 +362,7 @@ public sealed class FlowField
         // falling a long way hurts and the horde avoids it a little; wading is slow and nobody does it if a bridge is near
         float walk = (1 + (dy > 0 ? .6f * dy : -.3f * dy)) / m.Speed + (dy <= -4 ? 2 : 0);
         if (g.Water[g.Id(qi, qy, qk)] > 0) walk *= Wade;
+        if (g.Spikes[g.Id(qi, qy, qk)] > 0) walk *= Spiked;
         return t + walk;
     }
 

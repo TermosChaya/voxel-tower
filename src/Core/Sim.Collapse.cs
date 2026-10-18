@@ -41,7 +41,7 @@ public sealed partial class Sim
         if (m == Mat.Air || Mat.Passable[m] || Mat.IsAnchor[m] || m == Mat.Water || Mat.IsDecor[m] || Mat.IsLeaf(m) || m == Mat.Ore) return 0;
         if (Mat.IsMasonry(m) || m == Mat.Keep) return 10;
         if (Mat.IsTrunk(m)) return 30;
-        return m switch { Mat.Wood or Mat.Deck => 16, Mat.Rammed => 4, Mat.Char or Mat.Rubble => 2, Mat.Lumber => 4, Mat.Pitch => 1, Mat.Ruin => Free, _ => 8 };
+        return m switch { Mat.Wood or Mat.Deck or Mat.TrapDeck => 16, Mat.Rammed => 4, Mat.Char or Mat.Rubble or Mat.DropStone => 2, Mat.Lumber => 4, Mat.Pitch => 1, Mat.Ruin => Free, _ => 8 };
     }
 
     /// <summary>
@@ -50,7 +50,7 @@ public sealed partial class Sim
     /// </summary>
     public bool Footed(int x, int y, int z)
     {
-        static bool Solid(byte m) => m != Mat.Air && m != Mat.Water && (!Mat.Passable[m] || Mat.IsLadder[m]);
+        static bool Solid(byte m) => m != Mat.Air && m != Mat.Water && (!Mat.Passable[m] || Mat.IsLadder[m] || m == Mat.Stakes);
         if (Solid(World.Get(x, y - 1, z)) || Solid(World.Get(x + 1, y, z)) || Solid(World.Get(x - 1, y, z))
             || Solid(World.Get(x, y, z + 1)) || Solid(World.Get(x, y, z - 1))) return true;
         // the curved members of an arch touch at their corners
@@ -70,6 +70,9 @@ public sealed partial class Sim
 
     /// <summary>What holds a thing set into it from the side: rock and the citadel's masonry, not loose earth.</summary>
     static bool Hard(byte m) => m is Mat.Rock or Mat.Bed or Mat.Moss or Mat.Ore or Mat.Keep or Mat.KeepShade or Mat.KeepDark or Mat.Roof or Mat.Iron or Mat.Plank or Mat.Ember;
+
+    /// <summary>What holds a voxel of this from the side: what is hard, and for the poles of a trap floor, whose ends are dug into the pit's sides, the ground too.</summary>
+    static bool HoldsAside(byte m, byte side) => Hard(side) || m == Mat.TrapDeck && Ground(side);
 
     /// <summary>A gate's leaf goes when the wall round it does, and it is the gate's own business otherwise.</summary>
     static bool Bound(byte m) => Holds(m) || Mat.IsLeaf(m);
@@ -138,6 +141,7 @@ public sealed partial class Sim
             var (px, py, pz) = WaterPlanner.Unpack(_flood.Pop());
             // an arch holds together at its members' corners as well
             if (Arched.Get(px, py, pz) != 0 && Corners(px, py, pz)) { held = true; break; }
+            byte here = World.Get(px, py, pz);
             foreach (int d in Order)
             {
                 var (nx, ny, nz) = Step6(px, py, pz, d);
@@ -145,7 +149,7 @@ public sealed partial class Sim
                 if (!World.InBounds(nx, ny, nz)) continue;
                 byte m = World.Get(nx, ny, nz);
                 // resting on the ground, or set into rock sideways (not hanging under it)
-                if (d == 3 ? Ground(m) : d != 2 && Hard(m)) { held = true; break; }
+                if (d == 3 ? Ground(m) : d != 2 && HoldsAside(here, m)) { held = true; break; }
                 if (!Bound(m)) continue;
                 int q = WaterPlanner.Pack(nx, ny, nz);
                 if (_held.Contains(q)) { held = true; break; }
@@ -228,8 +232,8 @@ public sealed partial class Sim
                         if (x < bx0 || x > bx1 || z < bz0 || z > bz1 || y < 1) continue;
                         _built.Add(WaterPlanner.Pack(x, y, z));
                         // held from the start: on the ground, set into rock aside, at the edge of the patch, or an arch
-                        bool held = Ground(World.Get(x, y - 1, z)) || Hard(World.Get(x + 1, y, z)) || Hard(World.Get(x - 1, y, z))
-                            || Hard(World.Get(x, y, z + 1)) || Hard(World.Get(x, y, z - 1))
+                        bool held = Ground(World.Get(x, y - 1, z)) || HoldsAside(m, World.Get(x + 1, y, z)) || HoldsAside(m, World.Get(x - 1, y, z))
+                            || HoldsAside(m, World.Get(x, y, z + 1)) || HoldsAside(m, World.Get(x, y, z - 1))
                             || x == bx0 || x == bx1 || z == bz0 || z == bz1 || SpanOf(m) == Free || Arched.Get(x, y, z) != 0;
                         if (!held) continue;
                         _reach[I(x, y, z)] = 0;
@@ -468,8 +472,8 @@ public sealed partial class Sim
     /// <summary>What a voxel is once it has fallen: masonry broken stone, timber broken timber, rammed earth loose earth;
     /// trees lie as logs, and the rest as it was.</summary>
     static byte Broken(byte m) =>
-        Mat.IsMasonry(m) || m is Mat.Ruin or Mat.Keep ? Mat.Rubble
-        : m is Mat.Wood or Mat.Deck or Mat.Plank || Mat.IsLeaf(m) ? Mat.Lumber
+        Mat.IsMasonry(m) || m is Mat.Ruin or Mat.Keep or Mat.DropStone ? Mat.Rubble
+        : m is Mat.Wood or Mat.Deck or Mat.Plank or Mat.TrapDeck or Mat.Stakes || Mat.IsLeaf(m) ? Mat.Lumber
         : m == Mat.Rammed ? Mat.Soil : m;
 
     /// <summary>Where a falling voxel comes to rest: down its column onto whatever is solid, then off its heap down to a

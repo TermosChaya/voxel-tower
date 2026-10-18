@@ -266,9 +266,10 @@ public sealed partial class Sim
         int ne = r.ReadInt32();
         for (int i = 0; i < ne; i++) { var s = ReadSurvivor(r); if (s != null) Escaped.Add(s); }
         string extra = r.ReadString();
-        // the ways of the horde are worked out again for the valley as it now is
+        // the ways of the horde are worked out again for the valley as it now is, and the stones to throw down found again
         _fieldVersion = -1;
         SidesRev++;
+        FindDropStones();
         return extra;
     }
 

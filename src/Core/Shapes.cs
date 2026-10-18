@@ -136,6 +136,14 @@ public static class Shapes
         }
         int bottom = w.SurfAt(x, z);
         int top = st.Level ? levelTop : bottom + st.Height;
+        // a trap floor lies flush with the ground the stroke began on, half a metre of poles and turf, over whatever is lower
+        if (st.Mat == Mat.TrapDeck) { top = levelTop - st.Height; bottom = Math.Max(bottom, top - 4); }
+        // stakes stand a hand apart, each a little taller or shorter than the next
+        if (st.Mat == Mat.Stakes)
+        {
+            if (x % 3 != 0 || z % 3 != 0) return;
+            top += (int)(Hash.H3(x, 7, z) * 3) - 1;
+        }
         if (top <= bottom) return;
         int last = bottom;
         for (int y = Math.Max(1, bottom); y < top && y < w.SY; y++)
