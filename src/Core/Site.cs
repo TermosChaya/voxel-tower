@@ -3,9 +3,12 @@ using System.Collections.Generic;
 
 namespace VoxelTower.Core;
 
-public enum LandmarkKind : byte { Mine, Ruin }
+public enum LandmarkKind : byte { Mine, Ruin, Power }
 
-/// <summary>A named place of the valley: a mine (what it pays a minute while it is ours, whether the horde camps at it) or a ruin.</summary>
+/// <summary>
+/// A named place of the valley: a mine (what it pays a minute while it is ours, whether the horde camps at it), a ruin, or
+/// a place of power, where prayer is heard better than anywhere else.
+/// </summary>
 public sealed class Landmark
 {
     public LandmarkKind Kind;

@@ -224,11 +224,14 @@ public partial class BuildTools : Node3D
     public void Cancel() { if (Tool != Tool.None) SetTool(Tool.None); }
 
     /// <summary>A material to lay; puts the pick away.</summary>
-    public void SetMaterial(byte m) { Opt.Material = m; Opt.Dig = false; Shelter = false; Changed(); }
+    public void SetMaterial(byte m) { Opt.Material = m; Opt.Dig = false; Shelter = Sanctum = false; Changed(); }
 
     /// <summary>The area tool sets aside a shelter, not a resource to take.</summary>
     public bool Shelter;
-    public void SetShelter(bool on) { Shelter = on; Changed(); }
+    public void SetShelter(bool on) { Shelter = on; if (on) Sanctum = false; Changed(); }
+    /// <summary>The area tool sets aside a sanctuary, where the priests pray.</summary>
+    public bool Sanctum;
+    public void SetSanctum(bool on) { Sanctum = on; if (on) Shelter = false; Changed(); }
 
     /// <summary>Takes up the pick (or puts it away): the brushes then mark digging instead of laying.</summary>
     public void SetDig(bool dig)
@@ -302,7 +305,7 @@ public partial class BuildTools : Node3D
     (int x, int y, int z) HoverGround() => Snap(_hover.Ground(_m.World));
 
     /// <summary>What a gathering area takes: the material in hand says which; or a shelter.</summary>
-    public int GatherKind => Shelter ? Zone.Shelter : Opt.Material switch { Mat.Wood => Stockpile.Wood, Mat.Rammed => Stockpile.Earth, _ => Stockpile.Stone };
+    public int GatherKind => Shelter ? Zone.Shelter : Sanctum ? Zone.Sanctum : Opt.Material switch { Mat.Wood => Stockpile.Wood, Mat.Rammed => Stockpile.Earth, _ => Stockpile.Stone };
 
     /// <summary>The pick is in hand, or Shift turns the brush into one for this stroke.</summary>
     bool DigNow => Opt.Dig || (Tool == Tool.Brush && (_lmb ? _shift : Input.IsKeyPressed(global::Godot.Key.Shift)));
@@ -617,7 +620,7 @@ public partial class BuildTools : Node3D
         var zone = _m.Sim.ZoneAt(_hover.X, _hover.Z);
         int zones = _m.Sim.RemoveZones(_hover.X, _hover.Z, _hover.X, _hover.Z);
         if (n == 0 && zones == 0) Refuse("здесь нет разметки");
-        else _m.Hud.Float(zones > 0 ? (zone?.Kind == Zone.Shelter ? "убежище снято" : "делянка снята") : $"разметка снята: {Fmt.M3(n)} м³", Ornament.BronzeLight);
+        else _m.Hud.Float(zones > 0 ? (zone?.Kind switch { Zone.Shelter => "убежище снято", Zone.Sanctum => "святилище снято", _ => "делянка снята" }) : $"разметка снята: {Fmt.M3(n)} м³", Ornament.BronzeLight);
     }
 
     /// <summary>"Делянка: деревьев 12, ≈ 115 м³ брёвен" or "Каменоломня: ≈ 9,5 м³ камня до 2 м вглубь".</summary>
@@ -629,9 +632,18 @@ public partial class BuildTools : Node3D
             // how many it holds: a place to a cell of standing room
             int places = _m.Sim.ShelterRoom(x0, z0, x1, z1);
             any = places > 0;
-            int m10 = places % 10, m100 = places % 100;
-            string word = m10 == 1 && m100 != 11 ? "место" : m10 is >= 2 and <= 4 && m100 is < 12 or > 14 ? "места" : "мест";
-            return places == 0 ? "Убежище: здесь негде встать" : $"Убежище: {places} {word} — сюда по тревоге уходят мирные";
+            return places == 0 ? "Убежище: здесь негде встать" : $"Убежище: {places} {PlaceWord(places)} — сюда по тревоге уходят мирные";
+        }
+        if (kind == Zone.Sanctum)
+        {
+            var (room, power) = _m.Sim.SanctumRoom(x0, z0, x1, z1);
+            any = room > 0;
+            if (room == 0) return "Святилище: здесь негде встать";
+            string at = power == null ? "на простой земле; на месте силы молитву слышат втрое лучше"
+                : power.Holder == Holder.Ours ? $"на месте силы «{power.Name}»: молитву слышат втрое лучше"
+                : power.Holder == Holder.Horde ? $"на месте силы «{power.Name}», осквернённом ордой: пока его не отбить, молитву не слышат"
+                : $"на месте силы «{power.Name}»: жрецы займут его, и молитву услышат втрое лучше";
+            return $"Святилище: {room} {PlaceWord(room)} для молитвы, {at}";
         }
         var (trees, vox) = _m.Sim.Survey(x0, z0, x1, z1, kind, Opt.Depth);
         any = vox > 0;
@@ -639,6 +651,12 @@ public partial class BuildTools : Node3D
         if (kind == Stockpile.Wood) return trees == 0 ? $"{name}: деревьев нет" : $"{name}: деревьев {trees}, ≈ {Fmt.M3(vox)} м³ брёвен";
         string depth = Len(Opt.Depth);
         return vox <= 0 ? $"{name}: {(kind == Stockpile.Stone ? "скалы" : "земли")} здесь нет" : $"{name}: ≈ {Fmt.M3(vox)} м³ {(kind == Stockpile.Stone ? "камня" : "земли")} до {depth} вглубь";
+    }
+
+    static string PlaceWord(int n)
+    {
+        int m10 = n % 10, m100 = n % 100;
+        return m10 == 1 && m100 != 11 ? "место" : m10 is >= 2 and <= 4 && m100 is < 12 or > 14 ? "места" : "мест";
     }
 
     static string Len(int voxels)
@@ -653,7 +671,12 @@ public partial class BuildTools : Node3D
         if (!any) { Refuse(text); return; }
         _markName = Zone.Name0(GatherKind);
         _m.Sim.AddZone(a.x, a.z, b.x, b.z, GatherKind, Opt.Depth);
-        _m.Hud.Log(text + (GatherKind == Zone.Shelter ? ". Тревога — T." : ". Свободные рабочие возьмутся за неё сами."));
+        _m.Hud.Log(text + (GatherKind switch
+        {
+            Zone.Shelter => ". Тревога — T.",
+            Zone.Sanctum => ". Днём здесь молятся жрецы: их нанимают в консоли, когда никто не выбран.",
+            _ => ". Свободные рабочие возьмутся за неё сами.",
+        }));
     }
 
     void FellTree()

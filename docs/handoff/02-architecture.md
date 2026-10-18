@@ -68,6 +68,12 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   (`Site.Arched`, `Landmarks.OldBridge`).
 - `Sim.Events.cs` — события: погода (`Weather`, `RainFire`, `WeatherAim`, `FogRange`), редкие звери (`RareBeast`,
   `BearTick`), посол орды (`SendEnvoy`, `EnvoyTick`, `MakeOffer`, `Answer`, `Deal`).
+- `Sim.Faith.cs` — вера: `Favour` (вмешательство), `PriestTick` (днём к месту в святилище — `ShrineFor`, `Unit.Shrine`,
+  `Pastime.Pray`; ночью `TakeShelter`, в цитадели до утра — `Indoors`), `Hearing(zone)` (1, ×3 на удержанном месте силы,
+  0 на осквернённом), `PowerUnder`, `SanctumAt`, `PrayerNow`. Святилище — `Zone.Sanctum` (10). Места силы — `Landmark`
+  вида `LandmarkKind.Power` (`Landmarks.Barrow`, `BlackStone`, `DeadSpring` в `MapGen` после мостов) и `Mine` с
+  `Power = true` в общем списке `Mines`: держатся тем же `TickMines`, золота не платят (`Income` 0), орда ходит к ним
+  `SendRaid` и `Muster`. Жрец — `Kinds.Priest` (`UnitType.Prays`, работы все 0, нет в таблице работ).
 - `Sim.Research.cs` — награды и знания: `Lore`, `Lores`, `Branches`, `Knowledge`, `Learnt`, `Learn`, `Reward(wave)`;
   в конце — что даёт изученное (`BowRange`, `HireCost`, `StoneHack`, `LayPace` и др.), их читают на местах.
 - `Sim.Engines.cs` — осадные машины: `EngineTick`, `CatapultTick`/`AimFor`/`Throw`/`StoneLands`, `MantletTick`/`Cover`,
@@ -242,8 +248,13 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
 | 78–79 | Char (головни: что остаётся от сгоревшего дерева), Pitch (смола: кладётся из брёвен, горит вдвое жарче) |
 | 80–95 | Flesh, Brain, Heart, Blood, HairBrown, HairGinger, HairGrey, SkinTan, SkinPale, SkinGoblinDark, SkinGoblinPale, SkinOrcGrey, ClothGreen, ClothBrown, ClothOchre, Straw |
 | 96–97 | Rubble (обломки кладки), Lumber (обломки дерева): что оставляет обвал; не «стоят» за постройку |
+| 98 | EyeGlint — глаза гоблинов, светятся в темноте |
+| 99–101 | ловушки: Stakes (колья, проходимы), TrapDeck (ловчий настил), DropStone (камни на сброс) |
+| 102–103 | DrawDeck (настил подъёмного моста, поворачивается сам), TowerLadder (лестница осадной башни) |
+| 104 | Menhir — чёрный камень мест силы: не копается и не рубится (`MatGroup.Hard`), держит, что на нём |
+| 105–107 | цвета фигур: Robe (ряса жреца), RobeTrim (кайма), SoulFire (мертвенный огонь, светится) |
 
-`Mat.Count = 98`. Новый материал: `D(...)` в `Materials.cs`, нужные флаги, строка в `Labour` (копать/класть,
+`Mat.Count = 108`. Новый материал: `D(...)` в `Materials.cs`, нужные флаги, строка в `Labour` (копать/класть,
 выход), при необходимости — в `NavGrid.Cls` (группа для рубки).
 
 ## Соглашения

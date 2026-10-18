@@ -44,7 +44,7 @@ public partial class Hud : CanvasLayer
         (Tool.Extrude, Icons.Extrude, "5", "Выдавить\nЩелчок по ровной грани: она нарастёт на шаг выбранным материалом. С киркой — грань вынут на шаг вглубь: ступени в склоне, проход в скале."),
         (Tool.Unmark, Icons.Erase, "6", "Снять разметку\nРамка снимает всю разметку внутри, щелчок — разметку поблизости. Что уже сделано, остаётся."),
         (Tool.Ladder, Icons.Ladder, "7", "Лестница\nЩелчок по боковой грани стены, башни или обрыва: рабочие приставят лестницу от земли до верха. По лестницам ваши пешки поднимаются на стены. Орда тоже ими пользуется — и ставит свои."),
-        (Tool.Gather, Icons.Gather, "8", "Делянка\nРамкой отметьте участок, откуда брать ресурс: Z — камень (скалы и валуны), X — лес, C — земля; у камня и земли — глубина. Размечать каждое дерево не нужно: свободные пешки сами берут оттуда работу понемногу, а разметка стен и рвов идёт первой. В консоли можно выбрать и «убежище»: участок, куда по тревоге (T) уходят мирные."),
+        (Tool.Gather, Icons.Gather, "8", "Делянка\nРамкой отметьте участок, откуда брать ресурс: Z — камень (скалы и валуны), X — лес, C — земля; у камня и земли — глубина. Размечать каждое дерево не нужно: свободные пешки сами берут оттуда работу понемногу, а разметка стен и рвов идёт первой. В консоли можно выбрать и «убежище»: участок, куда по тревоге (T) уходят мирные, — и «святилище», где днём молятся жрецы."),
         (Tool.Gate, Icons.GateIcon, "9", "Ворота\nЩелчок по боковой грани стены: рабочие прорубят проём в два метра шириной и три высотой и навесят дубовые створки на железе. Свои открывают их на ходу, перед ордой они закрыты, и рубить их ей не легче камня. Щелчок по воротам без кисти — держать открытыми, на засов или снова сами."),
         (Tool.Repair, Icons.Mend, "0", "Починка\nЩелчок по разрушенной постройке: рабочие вернут ей прежний вид — разберут завал, где он лёг на кладку, доложат недостающее тем же камнем, навесят ворота. Помнится всё, что вы построили, и старая крепость тоже. Рамка чинит только то, что в ней."),
         (Tool.Bridge, Icons.BridgeIcon, "M", "Мост\nЗажмите на одном берегу и протяните до другого: рабочие перекинут мост, который идёт аркой, а не плоско. Каменный (Z) — на арке, с парапетами; деревянный (X) — настил на гнутых рёбрах, с перилами. Строят от берегов, стоя на уже уложенном. Пролёт — от 2 до 25 м. Подъёмный («Вид» в консоли) — дубовый настил над рвом от 2 до 6 м на петлях у берега, что ближе к цитадели: опущен, пока не подойдёт орда, тогда поднимается сам и сбрасывает в ров тех, кто на нём. Щелчок по нему без кисти — сам / опущен / поднят."),
@@ -215,7 +215,7 @@ public partial class Hud : CanvasLayer
         _history = new VBoxContainer();
         _history.AddThemeConstantOverride("separation", 4);
         chronicle.AddChild(_history);
-        Tab("chronicle", Icons.Horn, "Летопись", "Летопись\nВсё, что было: подсказки начала, вести о волнах, рудниках, павших и сделанном. Последние строки и так видны на минуту над консолью.", chronicle, 440);
+        var chronicleTab = Tab("chronicle", Icons.Horn, "Летопись", "Летопись\nВсё, что было: подсказки начала, вести о волнах, рудниках, павших и сделанном. Последние строки и так видны на минуту над консолью.", chronicle, 440);
         var bpBox = new VBoxContainer();
         bpBox.AddThemeConstantOverride("separation", 8);
         var bpHead = new HBoxContainer();
@@ -228,16 +228,17 @@ public partial class Hud : CanvasLayer
         _bpList = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         _bpList.AddThemeConstantOverride("separation", 6);
         bpBox.AddChild(_bpList);
-        Tab("blueprints", Icons.Box, "Чертежи", "Свитки чертежей\nСнятые постройки: щелчок по свитку — разметить копию. B — снять новый чертёж рамкой.", bpBox, 380);
+        var blueprintsTab = Tab("blueprints", Icons.Box, "Чертежи", "Свитки чертежей\nСнятые постройки: щелчок по свитку — разметить копию. B — снять новый чертёж рамкой.", bpBox, 380);
         _works = new WorkTable();
         _works.Init(m);
-        Tab("works", Icons.Pick, "Работы", "Работы\nКто из дружины какую работу делает и в каком порядке, как в RimWorld: 1 — первым делом, 4 — в последнюю очередь, пусто — никогда. И кто что добывает сам, кто в ополчении.", _works, WorkTable.Width);
+        var worksTab = Tab("works", Icons.Pick, "Работы", "Работы\nКто из дружины какую работу делает и в каком порядке, как в RimWorld: 1 — первым делом, 4 — в последнюю очередь, пусто — никогда. И кто что добывает сам, кто в ополчении.", _works, WorkTable.Width);
         _horde = new HordeInfo();
         _hordeTab = Tab("horde", Icons.Sword, "Орда", "Орда\nВатаги грядущей волны (или той, что в долине): из кого, кто ведёт, откуда войдут; их пути — на поле и на карте (J). И брёвна с землёй орды на осадные работы.", _horde, 360);
         _horde.Init(m);
         _lore = new LorePanel();
         _lore.Init(m);
         _loreTab = Tab("lore", Icons.Tome, "Знания", "Знания\nЧему выучилась крепость. Каждая отбитая волна приносит знания, и на них учатся умениям пяти ветвей: луки, кладка, труд, дружина, ловушки. Цифра на вкладке — сколько знаний ждёт, когда есть чему учиться.", _lore, LorePanel.Width);
+        _squeeze.AddRange(new[] { blueprintsTab, chronicleTab, worksTab, _goalsTab, _hordeTab, _loreTab });
 
         _stores = new Stores();
         _beam.AddChild(_stores);
@@ -281,6 +282,7 @@ public partial class Hud : CanvasLayer
         RefreshGoals();
         var st = _m.Sim.Stock;
         _stores.Values[0] = Fmt.Int(Math.Floor(st.Gold));
+        _stores.Values[4] = Fmt.Int(Math.Floor(_m.Sim.Favour));
         var t = _m.Tools;
         for (int k = 1; k <= 3; k++)
         {
@@ -310,6 +312,7 @@ public partial class Hud : CanvasLayer
         _help.Position = new Vector2(vp.X - 50, 1);
         _menuButton.Position = new Vector2(vp.X - 92, 1);
         _envoy.Position = new Vector2(vp.X - EnvoyCard.W - 14, WaveClock.H + 10);
+        Squeeze(_clockPanel.Position.X);
         float tabsEnd = _tabs.Position.X + _tabs.Size.X;
         // on a narrow screen (or a large interface) the stores close up rather than go under the clock
         float storesW = Math.Clamp(_clockPanel.Position.X - tabsEnd - 28, Stores.MinW, Stores.W);
@@ -377,8 +380,13 @@ public partial class Hud : CanvasLayer
             if (sim.FortGate is { } g)
                 yield return g.Ready && !g.Broken ? ("Ворота навешены", true) : g.Broken ? ("Навесить ворота: починкой по проёму", false) : ("Ворота навешивают", false);
         }
+        // a sanctuary on a place of power we hold
+        bool heard = false;
+        foreach (var z in sim.Zones) if (z.Kind == Zone.Sanctum && sim.PowerUnder(z) is { Holder: Holder.Ours }) heard = true;
+        if (sim.Waves.Number > 0 || sim.Zones.Exists(z => z.Kind == Zone.Sanctum))
+            yield return heard ? ("Святилище на месте силы", true) : ("Святилище на месте силы (8 → «святилище») и жрецы в нём", false);
         foreach (var m in sim.Mines)
-            yield return m.Holder switch
+            if (!m.Power) yield return m.Holder switch
             {
                 Holder.Ours => ($"{m.Name} ваш: +{m.Income} зол./мин", true),
                 Holder.Horde => ($"Отбить у орды: {m.Name}, +{m.Income} зол./мин", false),
@@ -420,12 +428,46 @@ public partial class Hud : CanvasLayer
         _lore.Refresh();
     }
 
-    /// <summary>What the tag says over a mine or a ruin.</summary>
+    /// <summary>
+    /// The tabs give up their names, the least looked at first, when the beam has no room for them and the stores before
+    /// the clock; they take them back when there is room again.
+    /// </summary>
+    void Squeeze(float clockX)
+    {
+        float room = clockX - 28 - Stores.MinW - 14 - (_tabs.Position.X + _tabs.GetCombinedMinimumSize().X);
+        if (room < 0)
+        {
+            foreach (var t in _squeeze) if (!t.Compact) { t.Compact = true; _tabs.ResetSize(); return; }
+        }
+        else
+            for (int i = _squeeze.Count - 1; i >= 0; i--)
+                if (_squeeze[i].Compact)
+                {
+                    if (room > _squeeze[i].Saved + 8) { _squeeze[i].Compact = false; _tabs.ResetSize(); }
+                    return;
+                }
+    }
+
+    /// <summary>The tabs in the order they give up their names when the beam is crowded.</summary>
+    readonly List<TabPlaque> _squeeze = new();
+
+    /// <summary>What the tag says over a mine, a ruin or a place of power.</summary>
     (string head, string sub, Color color) PlaceTag(Landmark l)
     {
         if (l.Kind == LandmarkKind.Ruin) return (l.Name, "старая кладка: её можно поднять как стояла (0 — починка) или разобрать на камень (8 и Z)", Ornament.Aged);
         var m = _m.Sim.Mines.Find(x => x.Place == l);
         if (m == null) return (l.Name, "", Ornament.Aged);
+        if (m.Power)
+        {
+            const string why = "святилище на нём (8 → «святилище») слышат втрое лучше";
+            if (m.Ours > 0 && m.Theirs > 0) return ($"{m.Name} · место силы · за него бьются", why, Ornament.EmberGlow);
+            return m.Holder switch
+            {
+                Holder.Ours => ($"{m.Name} · место силы · ваше", why + "; держите его — орда придёт осквернить", Ornament.Moss),
+                Holder.Horde => ($"{m.Name} · место силы · осквернено", "перебейте орду у него и встаньте там сами: пока оно у орды, святилище на нём молчит", Ornament.Blood),
+                _ => ($"{m.Name} · место силы · ничьё", "пошлите людей или жрецов — займут за несколько секунд; " + why, Ornament.EmberGlow),
+            };
+        }
         string pay = $"+{m.Income} зол./мин";
         if (m.Ours > 0 && m.Theirs > 0) return ($"{m.Name} · за него бьются", pay, Ornament.EmberGlow);
         return m.Holder switch

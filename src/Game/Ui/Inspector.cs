@@ -104,7 +104,7 @@ public partial class Inspector : Control
         var head = new HBoxContainer();
         head.AddThemeConstantOverride("separation", 14);
         head.AddChild(Hud.Text(t.Tool == Tool.Paste && t.PasteBp != null ? $"Чертёж «{t.PasteBp.Name}»" : BuildTools.ToolName(t.Tool), Ornament.Display, 22, Ornament.EmberGlow));
-        var mat = Hud.CapsLabel((t.Tool == Tool.Gather ? (t.Shelter ? "убежище от орды" : "добывать: " + (t.GatherKind switch { Stockpile.Wood => "лес", Stockpile.Earth => "землю", _ => "камень" }))
+        var mat = Hud.CapsLabel((t.Tool == Tool.Gather ? (t.Shelter ? "убежище от орды" : t.Sanctum ? "святилище жрецов" : "добывать: " + (t.GatherKind switch { Stockpile.Wood => "лес", Stockpile.Earth => "землю", _ => "камень" }))
             : o.Dig ? "кирка: копать и рубить" : "материал: " + Mat.NameOf(o.Material).ToLowerInvariant()), 9);
         mat.VerticalAlignment = VerticalAlignment.Center;
         head.AddChild(mat);
@@ -195,9 +195,10 @@ public partial class Inspector : Control
                 break;
             case Tool.Gather:
                 opts.AddChild(new Choice("Участок", "Участок\nКамень (Z), лес (X), земля (C) — откуда брать этот запас. Убежище — куда по тревоге (T) уходят мирные " +
-                    "и где пережидают её: под крышей, за стенами; ближайшее из убежищ и цитадели.",
-                    new[] { "камень", "лес", "земля", "убежище" }, t.GatherKind switch { Stockpile.Wood => 1, Stockpile.Earth => 2, Zone.Shelter => 3, _ => 0 },
-                    i => { if (i == 3) t.SetShelter(true); else t.SetMaterial(new[] { Mat.Stone, Mat.Wood, Mat.Rammed }[i]); }));
+                    "и где пережидают её: под крышей, за стенами; ближайшее из убежищ и цитадели. Святилище — где днём молятся жрецы и копят вмешательство " +
+                    "для заклинаний; на месте силы (Курган, Чёрный камень, Мёртвый родник), пока оно ваше, молитву слышат втрое лучше.",
+                    new[] { "камень", "лес", "земля", "убежище", "святилище" }, t.GatherKind switch { Stockpile.Wood => 1, Stockpile.Earth => 2, Zone.Shelter => 3, Zone.Sanctum => 4, _ => 0 },
+                    i => { if (i == 3) t.SetShelter(true); else if (i == 4) t.SetSanctum(true); else t.SetMaterial(new[] { Mat.Stone, Mat.Wood, Mat.Rammed }[i]); }));
                 if (t.GatherKind is Stockpile.Stone or Stockpile.Earth)
                     opts.AddChild(new Stepper("Глубина", "Глубина\nДо какой глубины от нынешней поверхности брать камень или землю. Клавиши − и =.", () => Len(o.Depth), d => t.StepHeight(d)));
                 break;
@@ -245,12 +246,24 @@ public partial class Inspector : Control
         top.AddChild(chart);
         var work = new VBoxContainer();
         work.AddThemeConstantOverride("separation", 3);
-        work.AddChild(Hud.CapsLabel("Работы · 1 — первым делом, пусто — никогда", 8));
-        var cells = new HBoxContainer();
-        cells.AddThemeConstantOverride("separation", 4);
         var cellList = new List<PriorityCell>();
-        for (int k = 0; k < Work.Kinds; k++) { var c = new PriorityCell(_m, u, (WorkKind)k); cells.AddChild(c); cellList.Add(c); }
-        work.AddChild(cells);
+        if (u.T.Prays)
+        {
+            // a priest does none of the pawns' work: what it does instead
+            work.AddChild(Hud.CapsLabel("Жрец", 8));
+            var about = Hud.Text("Днём молится в святилище, ночью уходит в цитадель. Молитва копит вмешательство; на месте силы её слышат втрое лучше.",
+                Ornament.Serif, 12, Ornament.Aged, wrap: true);
+            about.CustomMinimumSize = new Vector2(300, 0);
+            work.AddChild(about);
+        }
+        else
+        {
+            work.AddChild(Hud.CapsLabel("Работы · 1 — первым делом, пусто — никогда", 8));
+            var cells = new HBoxContainer();
+            cells.AddThemeConstantOverride("separation", 4);
+            for (int k = 0; k < Work.Kinds; k++) { var c = new PriorityCell(_m, u, (WorkKind)k); cells.AddChild(c); cellList.Add(c); }
+            work.AddChild(cells);
+        }
         top.AddChild(work);
         col.AddChild(top);
         var orders = Orders(new List<Unit> { u });
@@ -275,11 +288,15 @@ public partial class Inspector : Control
         row.AddChild(Btn("За работу", "За работу\nВыбранные снова сами ищут работу по разметке.", () => _m.Command.ReleaseSelected(), 92));
         row.AddChild(Btn("Стоять", "Стоять здесь\nВыбранные остаются на месте; для солдат это место становится постом.", () => _m.Command.HoldSelected(), 70));
         row.AddChild(AlarmButton(70));
+        var duty = new List<Button>();
+        // priests bring nothing in
+        bool labour = chosen.Exists(u => !u.T.Prays);
+        if (labour)
+        {
         row.AddChild(new Rule(true));
         var cap = Hud.CapsLabel("Добывать", 8);
         cap.VerticalAlignment = VerticalAlignment.Center;
         row.AddChild(cap);
-        var duty = new List<Button>();
         foreach (var (text, kind, tip) in new[]
         {
             ("—", Stockpile.None, "Ничего не добывать самим\nТолько размеченная работа и делянки."),
@@ -294,7 +311,8 @@ public partial class Inspector : Control
             duty.Add(b);
             row.AddChild(b);
         }
-        bool workers = chosen.Exists(u => u.T.Work >= 1), archers = chosen.Exists(u => u.T.Ranged);
+        }
+        bool workers = chosen.Exists(u => u.T.Work >= 1 && !u.T.Prays), archers = chosen.Exists(u => u.T.Ranged);
         Button militia = null, fire = null;
         if (archers)
         {
@@ -315,8 +333,8 @@ public partial class Inspector : Control
         _refresh.Add(() =>
         {
             int[] kinds = { Stockpile.None, Stockpile.Stone, Stockpile.Wood, Stockpile.Earth };
-            for (int i = 0; i < duty.Count; i++) duty[i].SetPressedNoSignal(chosen.TrueForAll(u => u.Duty == kinds[i]));
-            militia?.SetPressedNoSignal(chosen.TrueForAll(u => u.T.Work < 1 || u.Militia));
+            for (int i = 0; i < duty.Count; i++) duty[i].SetPressedNoSignal(chosen.TrueForAll(u => u.T.Prays || u.Duty == kinds[i]));
+            militia?.SetPressedNoSignal(chosen.TrueForAll(u => u.T.Work < 1 || u.T.Prays || u.Militia));
             fire?.SetPressedNoSignal(chosen.TrueForAll(u => !u.T.Ranged || u.FireArrows));
         });
         return row;
@@ -394,13 +412,13 @@ public partial class Inspector : Control
     Control HomePane()
     {
         var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", 14);
+        row.AddThemeConstantOverride("separation", 10);
         foreach (var kind in Kinds.PlayerKinds)
         {
             var t = kind;
             var block = new HBoxContainer();
-            block.AddThemeConstantOverride("separation", 8);
-            var face = new KindFace { Kind = t, CustomMinimumSize = new Vector2(48, 48), SizeFlagsVertical = SizeFlags.ShrinkBegin, TooltipText = Retinue.Tip(t) };
+            block.AddThemeConstantOverride("separation", 6);
+            var face = new KindFace { Kind = t, CustomMinimumSize = new Vector2(44, 44), SizeFlagsVertical = SizeFlags.ShrinkBegin, TooltipText = Retinue.Tip(t) };
             face.Clicked += () => _m.Command.SelectKind(t);
             block.AddChild(face);
             var info = new VBoxContainer();
@@ -408,9 +426,9 @@ public partial class Inspector : Control
             var name = Hud.Text("", Ornament.SerifBold, 14, Ornament.Parchment);
             info.AddChild(name);
             var note = Hud.Text("", Ornament.Serif, 12, Ornament.Aged);
-            note.CustomMinimumSize = new Vector2(128, 0);
+            note.CustomMinimumSize = new Vector2(112, 0);
             info.AddChild(note);
-            var hire = Btn("", "", () => _m.Command.Hire(t), 104);
+            var hire = Btn("", "", () => _m.Command.Hire(t), 98);
             hire.SizeFlagsHorizontal = SizeFlags.ShrinkBegin;
             info.AddChild(hire);
             block.AddChild(info);

@@ -86,10 +86,12 @@ public sealed partial class Sim
         // the alarm is up: to shelter (one the player sent somewhere goes where it was sent)
         if (!fighter && Alarm && !u.Hold && TakeShelter(u, dt)) { Busy(u); return; }
         if (u.Prey != null && HuntTick(u, dt)) { Busy(u); return; }
+        // a priest prays by day and shelters by night, and does nothing else (unless the player sent it somewhere)
+        if (u.T.Prays && !u.Hold) { PriestTick(u, dt); return; }
         // a comrade bleeding close by comes before any work (soldiers keep to their posts while the horde is here)
-        if ((!soldier || !Waves.Active) && Bandage(u, dt)) { Busy(u); return; }
+        if (!u.T.Prays && (!soldier || !Waves.Active) && Bandage(u, dt)) { Busy(u); return; }
         // a fire in what we built or round the citadel, if putting it out comes before the work at hand
-        if ((!soldier || !Waves.Active) && FightFire(u, dt)) { Busy(u); return; }
+        if (!u.T.Prays && (!soldier || !Waves.Active) && FightFire(u, dt)) { Busy(u); return; }
         if (soldier && HasMainHand(u) && PushLadders(u, dt)) { Busy(u); return; }
         if (u.Path != null && u.PathI < u.Path.Count && (u.Hold || u.Site < 0) && u.Pastime != Pastime.Stroll) { Walk(u, dt); return; }
         if (u.Hold)

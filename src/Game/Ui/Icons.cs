@@ -288,6 +288,24 @@ public static class Icons
         }
     }
 
+    /// <summary>An eye wide open under three rays, its pupil a slit: what the old powers see of the valley.</summary>
+    public static void Eye(CanvasItem c, Rect2 r, Color ink)
+    {
+        const int n = 14;
+        var lid = new Vector2[n * 2];
+        for (int i = 0; i < n; i++)
+        {
+            float t = i / (float)(n - 1), x = .08f + .84f * t, s = MathF.Sin(t * MathF.PI);
+            lid[i] = P(r, x, .56f - s * .27f);
+            lid[n * 2 - 1 - i] = P(r, x, .56f + s * .22f);
+        }
+        Fill(c, Shade(ink, .92f), lid);
+        c.DrawCircle(P(r, .5f, .56f), S(r, .17f), Shade(ink, .5f), true, -1, true);
+        c.DrawColoredPolygon(new[] { P(r, .5f, .41f), P(r, .54f, .56f), P(r, .5f, .71f), P(r, .46f, .56f) }, new Color(0, 0, 0, .85f * ink.A));
+        foreach (var (x0, y0, x1, y1) in new[] { (.5f, .2f, .5f, .06f), (.3f, .25f, .22f, .12f), (.7f, .25f, .78f, .12f) })
+            Line(c, Shade(ink, .8f), S(r, .05f), P(r, x0, y0), P(r, x1, y1));
+    }
+
     /// <summary>An open book, its spine down the middle and a ribbon hanging out of it.</summary>
     public static void Tome(CanvasItem c, Rect2 r, Color ink)
     {

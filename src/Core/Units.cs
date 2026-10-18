@@ -8,7 +8,7 @@ public enum Team : byte { Player, Horde, Wild }
 public enum UnitState : byte { Idle, Walk, Work, Fight, Carve, Siege, Flee, Dead }
 
 /// <summary>What a pawn with nothing to do passes the time with: for its pose and for the panel.</summary>
-public enum Pastime : byte { None, Stroll, Look, Sit, Talk, Stretch, Warm, Watch }
+public enum Pastime : byte { None, Stroll, Look, Sit, Talk, Stretch, Warm, Watch, Pray }
 
 /// <summary>A kind of pawn or attacker: how it moves, works, fights, and what it looks like.</summary>
 public sealed class UnitType
@@ -32,6 +32,8 @@ public sealed class UnitType
     public string Tool = "";
     /// <summary>How many raiders of this kind come with a torch, to burn through what is wooden.</summary>
     public float TorchShare;
+    /// <summary>A priest: it prays in a sanctuary by day and does no other work.</summary>
+    public bool Prays;
 }
 
 public static class Kinds
@@ -55,6 +57,13 @@ public static class Kinds
         Key = "sword", Name = "Мечник", Team = Team.Player,
         Move = new Mover { Height = 2, Climb = 2, Speed = 2.4f },
         Work = .4f, Yield = .6f, Hp = 140, Damage = 16, AttackTime = 1f, Cost = 35, Tool = "sword", BodyR = 2.5f, Reach = 11,
+    };
+    /// <summary>A priest of the old powers: in a dark robe and hood, with a staff; it prays, and fights only for its life.</summary>
+    public static readonly UnitType Priest = new()
+    {
+        Key = "priest", Name = "Жрец", Team = Team.Player,
+        Move = new Mover { Height = 2, Climb = 2, Speed = 2.5f },
+        Work = 1, Yield = 0, Hp = 50, Damage = 4, AttackTime = 1.3f, Cost = 50, Tool = "staff", Prays = true,
     };
     public static readonly UnitType Goblin = new()
     {
@@ -151,7 +160,7 @@ public static class Kinds
         Hp = 10, Damage = 0, AttackTime = 1, Bounty = 2, BodyH = 4, BodyR = 1.5f, FleeDist = 12 * VoxelWorld.PerMetre,
     };
 
-    public static readonly UnitType[] PlayerKinds = { Worker, Archer, Swordsman };
+    public static readonly UnitType[] PlayerKinds = { Worker, Archer, Swordsman, Priest };
     /// <summary>The horde's kinds that find their way by the field (the catapult goes its own way to where it throws from).</summary>
     public static readonly UnitType[] HordeKinds = { Goblin, Orc, Miner, Troll, Sapper, Thief, Ram };
     /// <summary>A white stag, seen in the valley once in a long while: the swiftest thing in it, and worth a deal of gold to whoever runs it down.</summary>
@@ -281,6 +290,8 @@ public sealed class Unit
     public bool Inside;
     /// <summary>The shelter it makes for: the citadel's door, or a place in a shelter area; −1 for none.</summary>
     public int Refuge = -1;
+    /// <summary>A priest: the place in a sanctuary it prays at; −1 for none.</summary>
+    public int Shrine = -1;
 
     // a thief, and those it takes
     /// <summary>What a thief carries off from the stores: the store (0 for gold, −1 for nothing), and how much of it.</summary>

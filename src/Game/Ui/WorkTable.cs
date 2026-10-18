@@ -42,7 +42,8 @@ public partial class WorkTable : Control
     {
         if (_m == null || !IsVisibleInTree()) return;
         _rows.Clear();
-        foreach (var u in _m.Sim.Units) if (!u.Dead && u.Team == Team.Player) _rows.Add(u);
+        // priests do none of this work: they are not in the table
+        foreach (var u in _m.Sim.Units) if (!u.Dead && u.Team == Team.Player && !u.T.Prays) _rows.Add(u);
         _rows.Sort((a, b) => a.T == b.T ? a.Id.CompareTo(b.Id) : Array.IndexOf(Kinds.PlayerKinds, a.T).CompareTo(Array.IndexOf(Kinds.PlayerKinds, b.T)));
         CustomMinimumSize = new Vector2(Width - 40, Head + Math.Max(1, _rows.Count) * Row + 34);
         QueueRedraw();

@@ -126,7 +126,7 @@ public partial class Minimap : Control
 
     static readonly Color Ours = new(.62f, .86f, 1f), Horde = new(1f, .3f, .22f), Beast = new(.66f, .47f, .28f), Rim = new(0, 0, 0, .75f);
 
-    static readonly Color RuinGrey = new(.66f, .64f, .6f);
+    static readonly Color RuinGrey = new(.66f, .64f, .6f), PowerViolet = new(.62f, .38f, .86f);
 
     /// <summary>The named places: ruins as grey diamonds, mines as squares in the colours of whoever holds them.</summary>
     void DrawPlaces()
@@ -141,6 +141,15 @@ public partial class Minimap : Control
         foreach (var m in _m.Sim.Mines)
         {
             var p = ToMap(m.Place.X, m.Place.Z);
+            if (m.Power)
+            {
+                // a place of power: a round mark, violet, ringed in the colours of whoever holds it
+                var ring = m.Holder switch { Holder.Ours => MineView.Ours, Holder.Horde => MineView.Horde, _ => MineView.Nobody };
+                DrawCircle(p, 5.6f, Rim, true, -1, true);
+                DrawCircle(p, 4.4f, ring, true, -1, true);
+                DrawCircle(p, 2.7f, PowerViolet, true, -1, true);
+                continue;
+            }
             var c = m.Holder switch { Holder.Ours => MineView.Ours, Holder.Horde => MineView.Horde, _ => MineView.Nobody };
             DrawRect(new Rect2(p - new Vector2(5, 5), new Vector2(10, 10)), Rim);
             DrawRect(new Rect2(p - new Vector2(3.8f, 3.8f), new Vector2(7.6f, 7.6f)), c);

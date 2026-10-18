@@ -222,6 +222,8 @@ public sealed partial class Sim
         }
         u.Why = "в цитадели: пережидает";
         if (Alarm && !Fighter(u) || Time - _raiderByDoor < KeepInFor) return;
+        // a priest keeps in till the morning
+        if (u.T.Prays && Waves.Active) { u.Why = "в цитадели: молится до утра"; return; }
         Leave(u);
     }
 }

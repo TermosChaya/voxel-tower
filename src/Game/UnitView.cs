@@ -260,7 +260,8 @@ public partial class UnitView : Node3D
             float a = look.Move;
             legR = -MathF.Sin(phase) * .6f * a;
             legL = -legR;
-            main += -legR * .7f;
+            // a priest walks with its staff, not swinging it
+            main += -legR * (u.T.Prays ? .2f : .7f);
             // the shield is carried before the body, not swung into it
             off = f.Shield ? -.3f - legL * .2f : -legL * .7f;
             bob = (MathF.Abs(MathF.Cos(phase)) - .64f) * a * .55f;
@@ -451,6 +452,14 @@ public partial class UnitView : Node3D
             case Pastime.Watch:
                 off = -2.45f;
                 lean = .05f;
+                break;
+            case Pastime.Pray:
+                // the staff planted, the other hand raised to the sky, swaying a little as it chants
+                float sway = MathF.Sin(t * 1.1f + seed);
+                main = -.12f + sway * .03f;
+                off = -2.75f + sway * .12f;
+                lean = -.07f + sway * .02f;
+                bob += MathF.Sin(t * 2.2f + seed) * .05f;
                 break;
         }
     }

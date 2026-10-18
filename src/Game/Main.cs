@@ -13,7 +13,7 @@ namespace VoxelTower.Game;
 /// Command-line options after "--": --shot=file.png [--frames=N] takes a screenshot and quits (--cam=x,z,yaw,pitch,zoom
 /// points the camera first),
 /// --demo sets up a fort with pawns at work (--pose=battle: the horde bridging the moat and laddering the wall;
-/// --pose=trees: the valley's trees in a row, --look=0..2 choosing which; --pose=people: every figure in every look,
+/// --pose=faith: priests at prayer on the barrow, --pose=trees: the valley's trees in a row, --look=0..2 choosing which; --pose=people: every figure in every look,
 /// --look=0..4 choosing a row),
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
 /// --top looks straight down, --look=N at the Nth named place of the valley, --seed=N makes another valley; --select[=N]
@@ -598,6 +598,21 @@ public partial class Main : Node3D
         await Drag((bx - 24, bz - 24), (bx + 24, bz + 24));
         Check("the unmarking frame takes the quarry back", Sim.Zones.Count == zones0, $"{Sim.Zones.Count} zones");
 
+        // a sanctuary: the area tool set to «святилище», a priest hired, and it goes there and prays
+        KeyPress(Key.Key8);
+        Tools.SetSanctum(true);
+        Check("8 with «святилище» sets out a sanctuary", Tools.Tool == Tool.Gather && Tools.GatherKind == Zone.Sanctum);
+        int sx0 = kx - 200, sz0 = kz + 60;
+        await Look(sx0 + 20, sz0 + 20);
+        await Drag((sx0, sz0), (sx0 + 40, sz0 + 40));
+        var sanctum = Sim.Zones.Find(z => z.Kind == Zone.Sanctum);
+        var priest = Command.Hire(Kinds.Priest);
+        double favour0 = Sim.Favour;
+        Advance(60);
+        Check("a frame sets the sanctuary, and a priest hired goes there and prays", sanctum != null && priest != null && priest.Pastime == Pastime.Pray && Sim.Favour > favour0 + .4,
+            $"sanctuary {(sanctum != null ? $"{sanctum.W}×{sanctum.D}" : "none")}; the priest: {(priest == null ? "not hired" : Retinue.DoingNow(priest, Sim))}; intervention +{Sim.Favour - favour0:0.00}");
+        Tools.SetMaterial(Mat.Stone);
+
         // marking and unmarking; on the grid, a line drawn askew comes out straight along it
         KeyPress(Key.Key2);
         if (!Tools.Opt.Dig) KeyPress(Key.V);
@@ -821,6 +836,7 @@ public partial class Main : Node3D
         if (_pose == "flood") { Flood(); return; }
         if (_pose == "trees") { LookAtGrove(); return; }
         if (_pose == "people") { People(); return; }
+        if (_pose == "faith") { Faith(); return; }
         var w = World; var s = Site; var sim = Sim;
         sim.Waves.Countdown = Waves.Prep;
         sim.Stock.Gold = 140;
@@ -1082,6 +1098,24 @@ public partial class Main : Node3D
     /// The alarm out in the valley: a palisade yard south-east of the citadel set aside as a shelter, the workers who were
     /// about it standing in it, a place each; the rest of ours gone into the citadel.
     /// </summary>
+    /// <summary>Priests at prayer on the barrow, in a sanctuary set aside round it, in the evening light; the place is ours.</summary>
+    void Faith()
+    {
+        var sim = Sim;
+        sim.Waves.Countdown = 100;
+        var barrow = sim.Mines.Find(m => m.Power && m.Name == "Курган");
+        var p = barrow.Place;
+        sim.AddZone(p.X - 40, p.Z - 40, p.X + 40, p.Z + 40, Zone.Sanctum, 1);
+        barrow.Holder = Holder.Ours; barrow.Grip = 1;
+        foreach (var (dx, dz) in new[] { (30, 10), (-20, 34), (10, -36), (-36, -10), (40, -24) })
+            sim.Spawn(Kinds.Priest, sim.NearestStand(p.X + dx, p.Z + dz, 2));
+        sim.Favour = 23;
+        Advance(_poseSeconds + 6);
+        Rig.Set(World.WX(p.X + 6), World.WZ(p.Z + 10), -.62f, .56f, _look == 1 ? 3.2f : 1.6f, snap: true);
+        Hud.Refresh();
+        Marks.Flush();
+    }
+
     void Sheltering()
     {
         var w = World; var s = Site; var sim = Sim;

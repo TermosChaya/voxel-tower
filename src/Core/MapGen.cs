@@ -241,6 +241,8 @@ public static class MapGen
         });
 
         bool NearKeep(int x, int z, int margin) => Brushes.Dist(x - site.KeepX, z - site.KeepZ) < site.KeepR + margin;
+        // where water stands, for whatever lays a pool of its own
+        site.WaterTop = water;
 
         // the named places, before the rocks and trees: mines worth holding, and ruins of what stood here before
         (int x, int z) Free(int x, int z, int r)
@@ -305,6 +307,14 @@ public static class MapGen
             int za = whole ? (int)Math.Round(RoadZ(xa)) : bz, zb = whole ? (int)Math.Round(RoadZ(xb)) : bz;
             Landmarks.OldBridge(w, site, xa, za, xb, zb, name, whole, seed + (whole ? 8u : 9u));
         }
+        // the places of power: a barrow on the plateau north of the citadel, the black stone in the lowland under the
+        // cliff to the south, a dead spring beyond the river, in the horde's country
+        var barrow = Free(site.KeepX - 110, site.KeepZ - 200, 56);
+        Landmarks.Barrow(w, site, barrow.x, barrow.z, "Курган", seed + 10);
+        var black = Free((int)EdgeX(SZ * .86) - 110, (int)(SZ * .86), 38);
+        Landmarks.BlackStone(w, site, black.x, black.z, "Чёрный камень", seed + 11);
+        var spring = Free((int)(SX * .16), (int)(SZ * .64), 50);
+        Landmarks.DeadSpring(w, site, spring.x, spring.z, "Мёртвый родник", seed + 12);
 
         bool Clear(int x, int z)
         {
@@ -365,7 +375,6 @@ public static class MapGen
                 }
             }
 
-        site.WaterTop = water;
         site.RiverMid = new float[SZ]; site.RiverHalfWidth = new float[SZ];
         for (int z = 0; z < SZ; z++) { site.RiverMid[z] = (float)RiverX(z); site.RiverHalfWidth[z] = (float)RiverHalf(z); }
         site.KeepBase = WorldGen.Keep(w, site);

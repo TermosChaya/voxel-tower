@@ -18,8 +18,8 @@ public sealed class Zone
     /// <summary>Set by a pawn told to bring in a resource, not by the player.</summary>
     public bool Auto;
 
-    /// <summary>The kind of an area that is a shelter, past the kinds of the stores.</summary>
-    public const int Shelter = 9;
+    /// <summary>The kind of an area that is a shelter, past the kinds of the stores; and of one that is a sanctuary, where priests pray.</summary>
+    public const int Shelter = 9, Sanctum = 10;
 
     public int W => X1 - X0 + 1;
     public int D => Z1 - Z0 + 1;
@@ -27,7 +27,7 @@ public sealed class Zone
     public int FloorAt(int x, int z) => Floor == null ? 0 : Floor[(z - Z0) * W + (x - X0)];
 
     public string Name => Name0(Kind);
-    public static string Name0(int kind) => kind switch { Stockpile.Wood => "Делянка", Stockpile.Stone => "Каменоломня", Shelter => "Убежище", _ => "Карьер" };
+    public static string Name0(int kind) => kind switch { Stockpile.Wood => "Делянка", Stockpile.Stone => "Каменоломня", Shelter => "Убежище", Sanctum => "Святилище", _ => "Карьер" };
 }
 
 public sealed partial class Sim
@@ -190,7 +190,7 @@ public sealed partial class Sim
             Zone best = null; float bd = float.MaxValue;
             foreach (var z in Zones)
             {
-                if (z.Kind == Zone.Shelter || z.Auto && u.Duty != Stockpile.None && z != u.DutyZone) continue;
+                if (z.Kind is Zone.Shelter or Zone.Sanctum || z.Auto && u.Duty != Stockpile.None && z != u.DutyZone) continue;
                 // not the work it does
                 if (!Work.Does(u, Work.For(z.Kind))) continue;
                 float dx = Math.Max(0, Math.Max(z.X0 - u.X, u.X - z.X1)), dz = Math.Max(0, Math.Max(z.Z0 - u.Z, u.Z - z.Z1));

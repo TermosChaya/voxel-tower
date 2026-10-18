@@ -84,7 +84,7 @@ public static class Bodies
     /// <summary>How many looks a kind comes in.</summary>
     public static int Looks(UnitType t) => t.Key switch
     {
-        "worker" => 8, "archer" => 6, "sword" => 6, "goblin" => 8, "sapper" => 4, "orc" => 6, "miner" => 4, "troll" => 3, "thief" => 3, "deer" => 2, "ram" => 2, "catapult" => 2, "mantlet" => 2, "tower" => 1, "stag" => 1, "bear" => 1, _ => 1,
+        "worker" => 8, "archer" => 6, "sword" => 6, "priest" => 3, "goblin" => 8, "sapper" => 4, "orc" => 6, "miner" => 4, "troll" => 3, "thief" => 3, "deer" => 2, "ram" => 2, "catapult" => 2, "mantlet" => 2, "tower" => 1, "stag" => 1, "bear" => 1, _ => 1,
     };
 
     /// <summary>A look for a unit, from its number, so it keeps it.</summary>
@@ -99,6 +99,7 @@ public static class Bodies
             "worker" => Worker(look),
             "archer" => Archer(look),
             "sword" => Swordsman(look),
+            "priest" => Priest(look),
             "goblin" => Goblin(look),
             "orc" => Orc(look),
             "miner" => Miner(look),
@@ -691,6 +692,56 @@ public static class Bodies
         }
         Sword(s, b);
         Shield(s, b);
+        return Done(s, f, b);
+    }
+
+    /// <summary>
+    /// A priest's staff: a shaft through the fist from the ground to over the head, and bound at its top a small skull
+    /// with the pale fire in its eyes.
+    /// </summary>
+    static void Staff(Sculpt s, Build b)
+    {
+        int x = b.FistX, z = (b.ArmZ0 + b.ArmZ1) / 2, top = b.Crown + 3;
+        s.Box(Main, x, 1, z, x + 1, top, z + 1, Mat.Handle, Tissue.Gear);
+        s.Box(Main, x - 1, top, z - 1, x + 2, top + 3, z + 2, Mat.Bone, Tissue.Gear);
+        s.Dot(Main, x - 1, top + 1, z + 1, Mat.SoulFire, Tissue.Gear);
+        s.Dot(Main, x + 1, top + 1, z + 1, Mat.SoulFire, Tissue.Gear);
+        s.Dot(Main, x, top - 1, z + 1, Mat.Bone, Tissue.Gear);
+        // a few turns of cord under it, a feather hanging from them
+        s.Box(Main, x - 1, top - 2, z - 1, x + 2, top - 1, z + 2, Mat.RobeTrim, Tissue.Gear);
+        s.Box(Main, x + 1, top - 5, z - 1, x + 2, top - 2, z, Mat.ClothDark, Tissue.Gear);
+    }
+
+    /// <summary>
+    /// A priest of the old powers: a robe to the ankles dark as old blood (or black), its hem and a rope girdle in tarnished
+    /// trim, the hood up over a pale face, a bone charm on the chest, and a staff taller than itself in the right hand.
+    /// </summary>
+    static BodyPlan Priest(int look)
+    {
+        var f = new BodyPlan { Chop = 1.2f, Stride = 7 };
+        byte robe = look == 1 ? Mat.ClothDark : Mat.Robe;
+        var b = new Build
+        {
+            Shirt = robe, Trousers = robe, Sleeve = robe, Boots = Mat.Leather, Belt = Mat.RobeTrim, Boot = 2,
+            Skin = look == 2 ? Mat.SkinTan : Mat.SkinPale, Hair = Hairs[(look + 3) % 4], HairStyle = 3,
+        };
+        var s = Humanoid(b, f);
+        // the skirt of the robe down to the ankles, a little wider than the legs, a slit at the front, the hem in trim
+        s.Box(Body, -b.Chest, 3, b.Z0 - 1, b.Chest, b.Waist, b.Z1 + 1, robe);
+        s.Cut(Body, -1, 3, b.Z1, 1, 7, b.Z1 + 1, both: false);
+        s.Paint(Body, -b.Chest, 3, b.Z0 - 1, b.Chest, 4, b.Z1 + 1, Mat.RobeTrim);
+        // the girdle's ends hanging, wide sleeves, the charm
+        s.Box(Body, 1, b.Waist - 4, b.Z1 + 1, 2, b.Waist, b.Z1 + 2, Mat.RobeTrim);
+        s.Box(Body, 2, b.Waist - 3, b.Z1 + 1, 3, b.Waist, b.Z1 + 2, Mat.RobeTrim);
+        s.Pair(Main, Off, b.ArmX0 - 1, b.HandY + b.Hand, b.ArmZ0, b.ArmX0, b.HandY + b.Hand + 3, b.ArmZ1, robe);
+        s.Box(Body, -1, b.Neck - 5, b.Z1, 1, b.Neck - 3, b.Z1 + 1, Mat.Bone, Tissue.Gear);
+        s.Dot(Body, 0, b.Neck - 3, b.Z1, Mat.RobeTrim, Tissue.Gear);
+        Hood(s, b, robe);
+        // the trim round the face
+        s.Paint(Body, -b.HeadW, b.Neck, b.HZ1 - 2, -b.HeadW + 1, b.Crown, b.HZ1, Mat.RobeTrim);
+        s.Paint(Body, b.HeadW - 1, b.Neck, b.HZ1 - 2, b.HeadW, b.Crown, b.HZ1, Mat.RobeTrim);
+        if (look == 0) Beard(s, b, Mat.HairGrey);
+        Staff(s, b);
         return Done(s, f, b);
     }
 

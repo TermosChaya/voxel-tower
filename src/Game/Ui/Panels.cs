@@ -17,6 +17,8 @@ public static class Retinue
         (Kinds.Archer, "Лучник\nСтреляет на 24 м, первыми бьёт тех, кто ломает стены, ставит лестницы или лезет по ним. Сверху бьёт точнее. " +
             "Ночью в темноте видит врага лишь на 13 м — дальше только освещённого. Лучший охотник. Щелчок — выбрать всех."),
         (Kinds.Swordsman, "Мечник\nДержит землю на 12 м вокруг поста, в кольчуге и со щитом. Сбрасывает осадные лестницы. Щелчок — выбрать всех."),
+        (Kinds.Priest, "Жрец\nДнём молится в святилище — участке, отмеченном делянкой (8) как «святилище»; молитва копит вмешательство для заклинаний, " +
+            "а на месте силы, пока оно ваше, её слышат втрое лучше. Ночью уходит в цитадель. Не работает, почти не дерётся, от орды бежит. Щелчок — выбрать всех."),
     };
 
     public static string Tip(UnitType t) => Array.Find(Defs, d => d.t == t).tip ?? t.Name;
@@ -96,7 +98,7 @@ public static class Retinue
         string leisure = u.Pastime switch
         {
             Pastime.Look => "осматривается", Pastime.Sit => "отдыхает", Pastime.Talk => "беседует", Pastime.Stretch => "потягивается",
-            Pastime.Warm => "греется у огня", Pastime.Watch => "смотрит на запад", _ => "",
+            Pastime.Warm => "греется у огня", Pastime.Watch => "смотрит на запад", Pastime.Pray => "молится", _ => "",
         };
         if (u.Hold) return leisure == "" ? "стоит по приказу" : "стоит по приказу, " + leisure;
         if (u.Why != "") return u.Why;
@@ -107,18 +109,20 @@ public static class Retinue
     /// <summary>How many of a kind there are and what they are busy with: "за работой 3 · без дела 1".</summary>
     public static (int count, string text) Summary(Sim sim, UnitType t)
     {
-        int n = 0, busy = 0, idle = 0, fight = 0, hunt = 0, inside = 0;
+        int n = 0, busy = 0, idle = 0, fight = 0, hunt = 0, inside = 0, pray = 0;
         foreach (var u in sim.Units)
         {
             if (u.Dead || u.T != t) continue;
             n++;
             if (u.Inside) inside++;
+            else if (u.Pastime == Pastime.Pray) pray++;
             else if (u.State is UnitState.Work) busy++;
             else if (u.Prey != null) hunt++;
             else if (u.State is UnitState.Fight) fight++;
             else if (u.State == UnitState.Idle && !u.Hold) idle++;
         }
         var parts = new List<string>();
+        if (pray > 0) parts.Add($"молятся {pray}");
         if (busy > 0) parts.Add($"за работой {busy}");
         if (fight > 0) parts.Add($"в бою {fight}");
         if (hunt > 0) parts.Add($"на охоте {hunt}");
@@ -128,7 +132,7 @@ public static class Retinue
     }
 
     /// <summary>"Рабочие", "Лучники", "Мечники".</summary>
-    public static string Many(UnitType t) => t.Key switch { "worker" => "Рабочие", "archer" => "Лучники", "sword" => "Мечники", _ => t.Name };
+    public static string Many(UnitType t) => t.Key switch { "worker" => "Рабочие", "archer" => "Лучники", "sword" => "Мечники", "priest" => "Жрецы", _ => t.Name };
 
     /// <summary>"4 рабочих", "1 лучник", "2 мечника".</summary>
     public static string Plural(UnitType t, int n)
@@ -138,6 +142,7 @@ public static class Retinue
             "worker" => new[] { "рабочий", "рабочих", "рабочих" },
             "archer" => new[] { "лучник", "лучника", "лучников" },
             "sword" => new[] { "мечник", "мечника", "мечников" },
+            "priest" => new[] { "жрец", "жреца", "жрецов" },
             _ => new[] { t.Name.ToLowerInvariant(), t.Name.ToLowerInvariant(), t.Name.ToLowerInvariant() },
         };
         int m10 = n % 10, m100 = n % 100;
@@ -257,7 +262,8 @@ public partial class UnitOverlay : Control
             if (u.Dead || u.Inside) continue;
             bool sel = _m.Selected.Contains(u);
             bool hurt = u.Hp < u.MaxHp - .5f;
-            bool why = u.Team == Team.Player && !u.Hold && u.State == UnitState.Idle && u.Why != "";
+            // why one stands about; a priest at prayer is about its business
+            bool why = u.Team == Team.Player && !u.Hold && u.State == UnitState.Idle && u.Why != "" && u.Pastime != Pastime.Pray;
             if (!sel && !hurt && !why) continue;
             var top = _m.Command.Screen(u, 1) - new Vector2(0, 7);
             if (top.X < -40 || top.Y < -40 || top.X > vp.X + 40 || top.Y > vp.Y + 40) continue;

@@ -63,7 +63,11 @@ public static class Mat
     public const byte DrawDeck = 102;
     /// <summary>The ladder a siege tower drops against a wall: inside the tower's timbers, so it cannot be thrown down.</summary>
     public const byte TowerLadder = 103;
-    public const int Count = 104;
+    /// <summary>The black stone of the valley's places of power, older than anyone's memory of them: no pick or axe bites on it.</summary>
+    public const byte Menhir = 104;
+    /// <summary>For the figures: the priests' robes, dark as old blood, and their tarnished trim; the pale fire in a dead man's eyes.</summary>
+    public const byte Robe = 105, RobeTrim = 106, SoulFire = 107;
+    public const int Count = 108;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
     public static readonly bool[] IsVeg = new bool[Count], IsPlayer = new bool[Count], IsEarthy = new bool[Count],
@@ -162,6 +166,9 @@ public static class Mat
         D(DropStone, "Камни на сброс", 0x8e8881, .32f, MatGroup.Stone, Player);
         D(DrawDeck, "Подъёмный мост", 0x6e4b2b, .16f, MatGroup.Wood, Player);
         D(TowerLadder, "Лестница башни", 0x5a3d24, .2f, MatGroup.Wood, 0);
+        D(Menhir, "Чёрный камень", 0x1d1a22, .1f, MatGroup.Hard, Natural);
+        D(Robe, "ряса", 0x3e1518, .14f, MatGroup.Hard, 0); D(RobeTrim, "кайма", 0x7a6236, .12f, MatGroup.Hard, 0);
+        D(SoulFire, "мертвенный огонь", 0x9ef2c4, .08f, MatGroup.Hard, Glows);
 
         D(SkinHuman, "кожа", 0xc29878, .08f, MatGroup.Hard, 0); D(SkinGoblin, "кожа", 0x6d8a39, .12f, MatGroup.Hard, 0);
         D(SkinOrc, "кожа", 0x56673f, .12f, MatGroup.Hard, 0); D(SkinTroll, "кожа", 0x66705f, .16f, MatGroup.Hard, 0);
@@ -193,7 +200,7 @@ public static class Mat
         foreach (var m in new[] { Stone, StoneDark, StoneLight, StoneWarm, StoneCool, Mortar, Keep, KeepShade, KeepDark }) Smooth[m] = true;
         foreach (var m in new[] { Steel, Mail, Brass, Pitch }) Metal[m] = true;
         // what holds the world up: loose pieces resting on these never fall
-        foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank }) IsAnchor[m] = true;
+        foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank, Menhir }) IsAnchor[m] = true;
 
         // what burns: needles and leaves flare up and are gone in seconds, grass and flowers in a moment; timber
         // catches slowly and burns long, and some of it stands charred after; a living trunk and oak bound with iron

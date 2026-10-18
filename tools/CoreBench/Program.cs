@@ -7,6 +7,20 @@ using VoxelTower.Core;
 
 // Checks the engine-free core against numbers measured in the browser prototype, and times the heavy parts.
 int failures = 0;
+// what stands where a gate's lost leaf voxels should be, for a gate check that fails
+string GoneLeaves(Sim sim, Gateway g)
+{
+    var parts = new System.Collections.Generic.List<string>();
+    for (int i = 0; i < Gateway.Voxels && parts.Count < 4; i++)
+    {
+        if (!g.Gone[i]) continue;
+        var (x, y, z) = g.Place(i, g.Step < 0 ? 0 : g.Step);
+        var who = sim.Units.Find(u => !u.Dead && u.Cell == sim.Nav.CellOf(x, y, z));
+        parts.Add($"{x},{y},{z}: {Mat.NameOf(sim.World.Get(x, y, z))}{(who != null ? " under " + who.T.Key : "")}");
+    }
+    return parts.Count == 0 ? "" : "; gone: " + string.Join("; ", parts);
+}
+string Retinue0(Unit u) => u.Why != "" ? u.Why : u.State.ToString();
 void Check(string what, bool ok, string detail = "")
 {
     Console.WriteLine($"{(ok ? "ok  " : "FAIL")} {what}{(detail.Length > 0 ? "  — " + detail : "")}");
@@ -273,9 +287,9 @@ if (args.Length == 0 || args[0] == "--seeds")
                     foreach (var (sx, sz) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
                         if (ws.Get(x + sx, y, z + sz) == Mat.Air) open++;
             }
-        int mines = ss.Landmarks.Count(l => l.Kind == LandmarkKind.Mine), ruins = ss.Landmarks.Count(l => l.Kind == LandmarkKind.Ruin);
-        Check($"seed {seed}: a whole valley", ss.KeepBase > 70 && open == 0 && mines == 3 && ruins == 6 && ss.Ponds.Count == 2,
-            $"keep base {ss.KeepBase}, {open} open water faces, {mines} mines, {ruins} ruins, {ss.Ponds.Count} ponds");
+        int mines = ss.Landmarks.Count(l => l.Kind == LandmarkKind.Mine), ruins = ss.Landmarks.Count(l => l.Kind == LandmarkKind.Ruin), powers = ss.Landmarks.Count(l => l.Kind == LandmarkKind.Power);
+        Check($"seed {seed}: a whole valley", ss.KeepBase > 70 && open == 0 && mines == 3 && ruins == 6 && powers == 3 && ss.Ponds.Count == 2,
+            $"keep base {ss.KeepBase}, {open} open water faces, {mines} mines, {ruins} ruins, {powers} places of power, {ss.Ponds.Count} ponds");
     }
 }
 
@@ -574,10 +588,15 @@ if (args.Length == 0 || args[0] == "--sim")
             $"way out while barred: {barred}, opened for the orc to {opened:0.00}, leaf voxels hacked {gate.Hacked} of {Gateway.Voxels}, broken {gate.Broken}, orc out of the yard {Out(brute)} at ({brute.X:0}, {brute.Z:0})");
         brute.Dead = true; brute.DiedAt = -999;
         int mended = sim.MendGate(gate);
+        // nobody standing in the gateway while it is hung at once (laid by hand, a leaf waits for whoever is there to pass)
+        var (gmx, _, gmz) = gate.Middle;
+        int clear = sim.NearestStand((int)gmx, (int)gmz + 120, 4);
+        foreach (var o in sim.Units)
+            if (!o.Dead && Math.Abs(o.X - gmx) < 40 && Math.Abs(o.Z - gmz) < 40) { o.Cell = clear; (o.X, o.Y, o.Z) = sim.Nav.Feet(clear); o.Path = null; }
         sim.CompleteAll();
         Run(2);
         Check("a broken gate is mended and works again", mended > 1000 && gate.Ready && !gate.Broken && gate.Hacked == 0,
-            $"{mended} leaf voxels to lay anew, ready {gate.Ready}");
+            $"{mended} leaf voxels to lay anew, ready {gate.Ready}, broken {gate.Broken}, hacked {gate.Hacked}" + GoneLeaves(sim, gate));
         sim.InstantLabour = true;
         sim.DesignateRemove(Shapes.Box(w4, site4, yx - 36, yz - 36, yx + 36, yz + 36, new Stroke { Width = 14, Height = 40, Dig = true, Hollow = true }, 0));
         sim.InstantLabour = false;
@@ -596,8 +615,8 @@ if (args.Length == 0 || args[0] == "--sim")
         double g1 = sim.Stock.Gold;
         Run(60);
         double paid = sim.Stock.Gold - g1;
-        Check("workers sent to a mine take it, and it pays while it is ours", sim.Mines.Count == 3 && ruins == 6 && taken && paid > copper.Income * .9,
-            $"{sim.Mines.Count} mines, {ruins} ruins; {copper.Name} {(taken ? "taken" : "not taken")}, +{paid:0.0} gold in a minute (pays {copper.Income})");
+        Check("workers sent to a mine take it, and it pays while it is ours", sim.Mines.Count(m => !m.Power) == 3 && ruins == 6 && taken && paid > copper.Income * .9,
+            $"{sim.Mines.Count(m => !m.Power)} mines, {ruins} ruins; {copper.Name} {(taken ? "taken" : "not taken")}, +{paid:0.0} gold in a minute (pays {copper.Income})");
 
         // the vein: the ore showing in the adit, marked for the pick
         var ore = new VoxelList();
@@ -2409,6 +2428,71 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--events")
         envoy != null && offerAt > 0 && struck && held && simV.Angered && rosterB > rosterA,
         $"offer after {offerAt} s: {kind}; struck {struck}, held {held} (countdown {cd0:0} → {simV.Waves.Countdown:0}, raiders {roster0} → {roster1}, gold {gold0V:0} → {simV.Stock.Gold:0}); " +
         $"the second cut down: angered {simV.Angered}, raiders {rosterA} → {rosterB}");
+}
+
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--faith")
+{
+    Console.WriteLine();
+    var mpF = new MapParams();
+    var wF = new VoxelWorld(mpF.SizeX, mpF.SizeY, mpF.SizeZ);
+    var siteF = MapGen.Generate(wF, mpF);
+    wF.Compact();
+    var simF = new Sim(wF, siteF);
+    simF.Waves.Countdown = 1e9; simF.WildTarget = 0;
+    void RunF(double seconds) { for (double t = 0; t < seconds; t += .05) simF.Step(.05f); }
+    int kxF = siteF.KeepX, kzF = siteF.KeepZ;
+    // the valley's three places of power, each what it should be
+    var powers = simF.Mines.FindAll(m => m.Power);
+    var barrowF = powers.Find(m => m.Name == "Курган");
+    var blackF = powers.Find(m => m.Name == "Чёрный камень");
+    var springF = powers.Find(m => m.Name == "Мёртвый родник");
+    int menhir = 0, pool = 0, passage = 0;
+    if (blackF != null) for (int y = 0; y < wF.SY; y++) if (wF.Get(blackF.Place.X, y, blackF.Place.Z) == Mat.Menhir) menhir++;
+    if (springF != null) for (int y = 0; y < wF.SY; y++) if (wF.Get(springF.Place.X, y, springF.Place.Z) == Mat.Water) pool++;
+    if (barrowF != null)
+    {
+        // the passage into the mound: open under its crown
+        int bx = barrowF.Place.X, bz = barrowF.Place.Z, top = wF.SurfAt(bx, bz);
+        for (int y = top - 1; y > top - 30; y--) if (wF.Get(bx, y, bz) == Mat.Air) passage++;
+    }
+    Check("the valley has its three places of power: a barrow with a passage into it, the black stone, a dead spring",
+        powers.Count == 3 && barrowF != null && passage > 4 && menhir >= 40 && pool >= 5,
+        $"{powers.Count} places; the barrow's passage {passage} voxels high under the crown, the black stone {menhir} voxels tall, the spring {pool} deep");
+
+    // a priest goes to a sanctuary on plain ground and prays: intervention comes in, a point a minute
+    var priestF = simF.Spawn(Kinds.Priest, simF.Gate);
+    var plainF = simF.AddZone(kxF - 200, kzF + 60, kxF - 160, kzF + 100, Zone.Sanctum, 1);
+    double f0 = simF.Favour;
+    RunF(90);
+    double plainGain = simF.Favour - f0;
+    bool prayed = priestF.Pastime == Pastime.Pray && priestF.Shrine >= 0 && simF.Nav.Feet(priestF.Shrine) is var (fxF, _, fzF) && plainF.Contains((int)fxF, (int)fzF);
+    Check("a priest goes to the sanctuary and prays there, and the prayer brings in intervention", prayed && plainGain > .8 && plainGain < 1.6,
+        $"praying {prayed} ({Retinue0(priestF)}), +{plainGain:0.00} in 90 s");
+
+    // a sanctuary on the barrow: the priest takes the place, and there it is heard thrice as well
+    simF.RemoveZones(plainF.X0, plainF.Z0, plainF.X1, plainF.Z1);
+    var bp = barrowF.Place;
+    var onBarrow = simF.AddZone(bp.X - 32, bp.Z - 32, bp.X + 32, bp.Z + 32, Zone.Sanctum, 1);
+    RunF(60);
+    bool heldF = barrowF.Holder == Holder.Ours;
+    double f1 = simF.Favour;
+    RunF(60);
+    double powerGain = simF.Favour - f1;
+    // defiled, it is not heard at all
+    barrowF.Holder = Holder.Horde; barrowF.Grip = -1;
+    double deaf = simF.Hearing(onBarrow);
+    barrowF.Holder = Holder.Ours; barrowF.Grip = 1;
+    Check("a priest takes the place of power it prays at; there prayer is heard thrice as well, and not at all once the horde defiles it",
+        heldF && powerGain > 2.4 && powerGain < 3.3 && deaf == 0,
+        $"{bp.Name} {(heldF ? "ours" : barrowF.Holder.ToString())}, +{powerGain:0.00} a minute ({Retinue0(priestF)}); defiled, heard ×{deaf}");
+
+    // at night the priest goes into the citadel and keeps in till the morning
+    simF.Waves.StartNow(simF);
+    for (int t = 0; t < 120 && !priestF.Inside; t++) RunF(.5);
+    bool inF = priestF.Inside;
+    RunF(10);
+    Check("at night the priest shelters in the citadel and stays there", inF && priestF.Inside, $"inside {inF}, still {priestF.Inside}");
+    simF.Waves.CallOff(simF);
 }
 
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--lore")

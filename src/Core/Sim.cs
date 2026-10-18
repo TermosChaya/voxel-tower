@@ -97,6 +97,8 @@ public sealed partial class Sim
         u.X += u.OffX; u.Z += u.OffZ;
         u.Facing = (float)(Rng.NextDouble() * Math.PI * 2);
         if (t.Team == Team.Player && t.Work < 1) u.Post = cell;
+        // a priest does no work of the pawns'
+        if (t.Prays) Array.Fill(u.Priority, (byte)0);
         // some of the horde come with torches, picked by the raider (not by the dice, which the rest of the valley shares)
         u.Torch = t.TorchShare > 0 && Hash.H3(u.Id, 11, 7) < t.TorchShare;
         Units.Add(u);
@@ -484,7 +486,7 @@ public sealed partial class Sim
     {
         foreach (var u in units)
         {
-            if (u.Dead || u.Team != Team.Player) continue;
+            if (u.Dead || u.Team != Team.Player || u.T.Prays) continue;
             u.Duty = kind;
             // sent to bring it in, it does that work, whatever else it was set to
             if (kind != Stockpile.None && !Work.Does(u, Work.For(kind))) u.Priority[(int)Work.For(kind)] = Work.Usual;
@@ -498,7 +500,7 @@ public sealed partial class Sim
     /// <summary>Calls workers up to fight like swordsmen, or lets them go back to running from the horde.</summary>
     public void SetMilitia(IEnumerable<Unit> units, bool on)
     {
-        foreach (var u in units) if (!u.Dead && u.Team == Team.Player && u.T.Work >= 1) u.Militia = on;
+        foreach (var u in units) if (!u.Dead && u.Team == Team.Player && u.T.Work >= 1 && !u.T.Prays) u.Militia = on;
     }
 
     /// <summary>Lets pawns go back to work by themselves.</summary>

@@ -47,12 +47,23 @@ public partial class TabPlaque : Control
 
     public TabPlaque() { }
 
+    readonly float _len;
+    bool _compact;
+    /// <summary>On a narrow beam the tab shows its icon only; its name is in the tooltip.</summary>
+    public bool Compact
+    {
+        get => _compact;
+        set { if (_compact == value) return; _compact = value; CustomMinimumSize = new Vector2(value ? 48 : _len + 50, 28); Size = CustomMinimumSize; QueueRedraw(); }
+    }
+    /// <summary>How much wider it is with its name shown.</summary>
+    public float Saved => _len + 2;
+
     public TabPlaque(Icons.Painter icon, string caption, string tooltip)
     {
         _icon = icon; _caption = caption;
         TooltipText = tooltip;
-        float len = Ornament.Caps.GetStringSize(caption.ToUpperInvariant(), HorizontalAlignment.Left, -1, 10).X;
-        CustomMinimumSize = new Vector2(len + 50, 28);
+        _len = Ornament.Caps.GetStringSize(caption.ToUpperInvariant(), HorizontalAlignment.Left, -1, 10).X;
+        CustomMinimumSize = new Vector2(_len + 50, 28);
         MouseFilter = MouseFilterEnum.Stop;
         MouseDefaultCursorShape = CursorShape.PointingHand;
         MouseEntered += () => { _hover = true; QueueRedraw(); };
@@ -70,8 +81,9 @@ public partial class TabPlaque : Control
         Craft.Plaque(this, r, _hover, Selected);
         var ink = Selected ? Ornament.EmberGlow : _hover ? Ornament.BronzeLight : Ornament.Bronze;
         _icon?.Invoke(this, new Rect2(7, 5, Size.Y - 10, Size.Y - 10), ink);
-        DrawString(Ornament.Caps, new Vector2(Size.Y + 2, Size.Y / 2 + 4), _caption.ToUpperInvariant(), HorizontalAlignment.Left, -1, 10,
-            Selected ? Ornament.Parchment : _hover ? Ornament.BronzeLight : Ornament.Aged);
+        if (!_compact)
+            DrawString(Ornament.Caps, new Vector2(Size.Y + 2, Size.Y / 2 + 4), _caption.ToUpperInvariant(), HorizontalAlignment.Left, -1, 10,
+                Selected ? Ornament.Parchment : _hover ? Ornament.BronzeLight : Ornament.Aged);
         if (!string.IsNullOrEmpty(Badge))
         {
             var c = new Vector2(Size.X - 6, 5);
@@ -332,9 +344,9 @@ public partial class WaveClock : Control
 /// <summary>The stores on the beam: gold, then stone, logs and earth in cubic metres; what a stroke lacks shows in blood.</summary>
 public partial class Stores : Control
 {
-    public readonly string[] Values = { "0", "0", "0", "0" };
-    public readonly bool[] Short = new bool[4];
-    public const float W = 430, MinW = 300;
+    public readonly string[] Values = { "0", "0", "0", "0", "0" };
+    public readonly bool[] Short = new bool[5];
+    public const float W = 520, MinW = 370;
 
     static readonly (Icons.Painter icon, string tip)[] Groups =
     {
@@ -342,6 +354,8 @@ public partial class Stores : Control
         (Icons.Material(Mat.Stone), "Камень, м³\nЕго ломают в скалах, валунах и руинах (кирка или делянка с Z); разобранная кладка возвращает три четверти. Из него кладут стены."),
         (Icons.Material(Mat.Wood), "Брёвна, м³\nРубят в лесу. Из них — деревянные стены, лестницы, мосты и ворота."),
         (Icons.Earth, "Земля, м³\nЕё даёт любой ров и котлован. Насыпь кладётся быстрее всего."),
+        (Icons.Eye, "Вмешательство\nЭзотерическое вмешательство — то, на что старые силы готовы ради долины. Его копят жрецы молитвой в святилище " +
+            "(на месте силы, пока оно ваше, — втрое больше) и жертвами; тратят на заклинания."),
     };
 
     public Stores()

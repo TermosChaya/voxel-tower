@@ -7,11 +7,15 @@ namespace VoxelTower.Game;
 
 /// <summary>
 /// A flag on a pole at the mouth of every mine, in the colours of whoever holds it: pale for nobody, our blue, the horde's
-/// red. It climbs the pole as the mine is being taken and sinks as it is being lost, and stirs in the wind.
+/// red. It climbs the pole as the mine is being taken and sinks as it is being lost, and stirs in the wind. A place of
+/// power has no flag: a pale light wakes over it while it is ours, and a dull red one while the horde has defiled it.
 /// </summary>
 public partial class MineView : Node3D
 {
     sealed class Flag { public Mine Mine; public MeshInstance3D Cloth; public StandardMaterial3D Mat; public Vector3 Foot; }
+    sealed class Glow { public Mine Mine; public OmniLight3D Light; public float Seed; }
+    readonly List<Glow> _glows = new();
+    static readonly Color Heard = new(.62f, .95f, .78f), Defiled = new(.85f, .2f, .14f);
 
     public static readonly Color Nobody = new(.78f, .74f, .66f), Ours = new(.36f, .55f, .82f), Horde = new(.72f, .16f, .12f);
     const float Pole = 36, ClothW = 10, ClothH = 7;
@@ -28,6 +32,15 @@ public partial class MineView : Node3D
         var wood = new StandardMaterial3D { AlbedoColor = new Color("3b2a1f"), Roughness = .9f };
         foreach (var mine in m.Sim.Mines)
         {
+            if (mine.Power)
+            {
+                int px = mine.Place.X, pz = mine.Place.Z;
+                var at = new Vector3(w.WX(px + .5f), w.WY(w.SurfAt(px, pz) + 10), w.WZ(pz + .5f));
+                var light = new OmniLight3D { Position = at, OmniRange = 7, LightEnergy = 0, ShadowEnabled = false, LightColor = Heard };
+                AddChild(light);
+                _glows.Add(new Glow { Mine = mine, Light = light, Seed = px * .37f });
+                continue;
+            }
             int sx = mine.Place.StandX, sz = mine.Place.StandZ;
             var foot = new Vector3(w.WX(sx + .5f), w.WY(w.SurfAt(sx, sz)), w.WZ(sz + .5f));
             AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(1.2f * v, Pole * v, 1.2f * v) }, MaterialOverride = wood, Position = foot + new Vector3(0, Pole * v / 2, 0) });
@@ -43,6 +56,13 @@ public partial class MineView : Node3D
     {
         _t += delta;
         float v = VoxelWorld.Vox;
+        foreach (var g in _glows)
+        {
+            // it breathes slowly; brighter at night, when there is little else to see by
+            float want = g.Mine.Holder == Holder.None ? 0 : (.7f + 1.6f * _m.Sim.Waves.Darkness) * (.85f + .15f * MathF.Sin((float)_t * .9f + g.Seed));
+            g.Light.LightColor = g.Mine.Holder == Holder.Horde ? Defiled : Heard;
+            g.Light.LightEnergy += (want - g.Light.LightEnergy) * Math.Min(1, (float)delta * 2);
+        }
         foreach (var f in _flags)
         {
             float g = f.Mine.Grip;

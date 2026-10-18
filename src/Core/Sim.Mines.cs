@@ -7,7 +7,9 @@ public enum Holder : byte { None, Ours, Horde }
 
 /// <summary>
 /// A mine and who holds it. Whoever stands at its mouth while nobody of the other side is there takes it in a few seconds;
-/// while it is ours it pays its gold every minute, and the ore in its vein pays more to whoever breaks it out.
+/// while it is ours it pays its gold every minute, and the ore in its vein pays more to whoever breaks it out. A place of
+/// power is held the same way: it pays no gold, but prayer in a sanctuary on it is heard thrice as well, and the horde
+/// comes to defile it.
 /// </summary>
 public sealed class Mine
 {
@@ -19,6 +21,7 @@ public sealed class Mine
     public int Ours, Theirs;
     public string Name => Place.Name;
     public int Income => Place.Income;
+    public bool Power => Place.Kind == LandmarkKind.Power;
 }
 
 public sealed partial class Sim
@@ -33,7 +36,7 @@ public sealed partial class Sim
     void FindMines()
     {
         foreach (var l in Site.Landmarks)
-            if (l.Kind == LandmarkKind.Mine) Mines.Add(new Mine { Place = l });
+            if (l.Kind is LandmarkKind.Mine or LandmarkKind.Power) Mines.Add(new Mine { Place = l });
     }
 
     /// <summary>The horde's camps at the mines it holds when the game begins: goblins and an orc who keep by it.</summary>
@@ -79,15 +82,20 @@ public sealed partial class Sim
             if (m.Grip >= 1 && m.Holder != Holder.Ours)
             {
                 m.Holder = Holder.Ours;
-                Say($"{m.Name} ваш: +{m.Income} золота в минуту, пока его держите.", 1, m.Place.StandX, m.Place.StandZ);
+                Say(m.Power ? $"Место силы {m.Name} ваше: святилище на нём услышат втрое лучше, пока его держите."
+                    : $"{m.Name} ваш: +{m.Income} золота в минуту, пока его держите.", 1, m.Place.StandX, m.Place.StandZ);
             }
             else if (m.Grip <= -1 && m.Holder != Holder.Horde)
             {
                 m.Holder = Holder.Horde;
-                Say($"Орда захватила: {m.Name}.", 3, m.Place.StandX, m.Place.StandZ);
+                Say(m.Power ? $"Орда осквернила место силы: {m.Name}. Святилище на нём молчит, пока его не отбить." : $"Орда захватила: {m.Name}.", 3, m.Place.StandX, m.Place.StandZ);
             }
-            else if (m.Holder == Holder.Ours && m.Grip <= 0) { m.Holder = Holder.None; Say($"{m.Name} потерян.", 2, m.Place.StandX, m.Place.StandZ); }
-            else if (m.Holder == Holder.Horde && m.Grip >= 0) { m.Holder = Holder.None; Say($"{m.Name} отбит у орды: держитесь у входа, чтобы занять его.", 1, m.Place.StandX, m.Place.StandZ); }
+            else if (m.Holder == Holder.Ours && m.Grip <= 0) { m.Holder = Holder.None; Say(m.Power ? $"Место силы {m.Name} потеряно." : $"{m.Name} потерян.", 2, m.Place.StandX, m.Place.StandZ); }
+            else if (m.Holder == Holder.Horde && m.Grip >= 0)
+            {
+                m.Holder = Holder.None;
+                Say(m.Power ? $"Место силы {m.Name} отбито у орды: постойте у него, чтобы занять." : $"{m.Name} отбит у орды: держитесь у входа, чтобы занять его.", 1, m.Place.StandX, m.Place.StandZ);
+            }
         }
     }
 

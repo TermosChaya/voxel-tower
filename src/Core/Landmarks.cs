@@ -273,4 +273,178 @@ public static class Landmarks
         s.Landmarks.Add(l);
         return l;
     }
+
+    // ---------------------------------------------------------------- places of power
+
+    /// <summary>An old stone standing upright in the ground: a little rounded at the corners, moss on its crown.</summary>
+    static void Standing(VoxelWorld w, Site s, int x0, int z0, int wx, int wz, int h, byte m)
+    {
+        int g = Ground(w, s, x0 + wx / 2, z0 + wz / 2);
+        for (int z = z0; z < z0 + wz; z++)
+            for (int x = x0; x < x0 + wx; x++)
+            {
+                if (!In(w, x, z)) continue;
+                bool corner = (x == x0 || x == x0 + wx - 1) && (z == z0 || z == z0 + wz - 1);
+                int top = g + h - (corner ? 2 : 0) - (int)(Hash.H3(x, z, 63) * 2);
+                for (int y = g - 3; y < top; y++) w.SetRaw(x, y, z, y == top - 1 && m == Mat.Ruin && Hash.H3(x, z, 65) < .5 ? Mat.Moss : m);
+            }
+    }
+
+    /// <summary>
+    /// A barrow: a mound in long dry grass over the dead of the old days, a doorway of three stones in it facing the
+    /// citadel and dark inside, a ring of standing stones round it, and a black stone laid flat on its crown.
+    /// </summary>
+    public static Landmark Barrow(VoxelWorld w, Site s, int cx, int cz, string name, uint seed)
+    {
+        const int R = 34, H = 18, Ring = 46;
+        // the doorway looks toward the citadel
+        double ax = s.KeepX - cx, az = s.KeepZ - cz, al = Math.Max(1, Math.Sqrt(ax * ax + az * az));
+        ax /= al; az /= al;
+        double Along(int x, int z) => (x - cx) * ax + (z - cz) * az;
+        double Across(int x, int z) => -(x - cx) * az + (z - cz) * ax;
+        for (int z = cz - R; z <= cz + R; z++)
+            for (int x = cx - R; x <= cx + R; x++)
+            {
+                double d = Brushes.Dist(x - cx, z - cz);
+                if (d > R || !In(w, x, z)) continue;
+                // the forecourt before the doorway is cut back to the ground
+                if (Along(x, z) > R - 13 && Math.Abs(Across(x, z)) < 10) continue;
+                int i = z * w.SX + x, g = s.HTop[i];
+                int top = g + (int)(H * Math.Pow(1 - d * d / (R * R), .7) * (.92 + .16 * Hash.H3(x >> 2, z >> 2, (int)seed)));
+                if (top <= g) continue;
+                for (int y = g; y < top; y++) w.SetRaw(x, y, z, y == top - 1 ? Mat.GrassDry : Mat.Soil);
+                s.HTop[i] = top;
+            }
+        // the doorway: two stones and a black lintel across them, the passage into the mound behind
+        int g0 = Ground(w, s, cx + (int)(ax * (R - 6)), cz + (int)(az * (R - 6)));
+        for (int a = -24; a <= R - 12; a++)
+            for (int c = -10; c <= 10; c++)
+            {
+                int x = cx + (int)Math.Round(ax * a - az * c), z = cz + (int)Math.Round(az * a + ax * c);
+                if (!In(w, x, z)) continue;
+                bool jamb = Math.Abs(c) >= 5 && Math.Abs(c) <= 9 && a >= R - 16, opening = Math.Abs(c) < 5;
+                if (jamb) for (int y = g0 - 2; y < g0 + 16; y++) w.SetRaw(x, y, z, Mat.Ruin);
+                else if (opening) for (int y = g0; y < g0 + 12; y++) w.SetRaw(x, y, z, Mat.Air);
+                if (a >= R - 16 && Math.Abs(c) <= 9) for (int y = g0 + 12; y < g0 + 16; y++) if (!jamb) w.SetRaw(x, y, z, Mat.Menhir);
+                if (a >= R - 16 && Math.Abs(c) <= 9) for (int y = g0 + 16; y < g0 + 18; y++) w.SetRaw(x, y, z, Mat.Menhir);
+            }
+        // the capstone on the crown, sunk in the turf
+        int crown = Ground(w, s, cx, cz);
+        for (int z = cz - 4; z <= cz + 4; z++)
+            for (int x = cx - 4; x <= cx + 4; x++)
+                if (In(w, x, z) && Brushes.Dist((x - cx) * .8, z - cz) < 3.7) for (int y = crown - 2; y < crown + 1; y++) w.SetRaw(x, y, z, Mat.Menhir);
+        // the ring of stones, open where the doorway looks out
+        for (int n = 0; n < 9; n++)
+        {
+            double a = Math.Atan2(az, ax) + Math.PI * 2 * (n + .5) / 9;
+            int x = cx + (int)(Math.Cos(a) * Ring), z = cz + (int)(Math.Sin(a) * Ring);
+            if (Math.Cos(a - Math.Atan2(az, ax)) > .94) continue;
+            Standing(w, s, x - 2, z - 2, 5, 4 + n % 2, 12 + (int)(Hash.H3(n, (int)seed, 67) * 10), Mat.Ruin);
+        }
+        var l = new Landmark { Kind = LandmarkKind.Power, Name = name, X = cx, Z = cz, R = Ring + 10, StandX = cx, StandZ = cz };
+        s.Landmarks.Add(l);
+        return l;
+    }
+
+    /// <summary>
+    /// The black stone: a knoll of bare rock and on it a menhir taller than three men, leaning a little, that nobody ever
+    /// cut, of a stone found nowhere else in the valley; a few broken pieces of it lie in the grass below.
+    /// </summary>
+    public static Landmark BlackStone(VoxelWorld w, Site s, int cx, int cz, string name, uint seed)
+    {
+        const int R = 26, H = 10, Tall = 50;
+        var noise = new ValueNoise(seed * 71 + 3);
+        for (int z = cz - R; z <= cz + R; z++)
+            for (int x = cx - R; x <= cx + R; x++)
+            {
+                double d = Brushes.Dist(x - cx, z - cz);
+                if (d > R || !In(w, x, z)) continue;
+                int i = z * w.SX + x, g = s.HTop[i];
+                int top = g + (int)((1 - d * d / (R * R)) * H * (.75 + .5 * noise.Sample(x * .17, z * .17)));
+                for (int y = g; y < top; y++) w.SetRaw(x, y, z, y == top - 1 && Hash.H3(x, z, 69) < .3 ? Mat.Moss : Mat.Rock);
+                if (top > g) s.HTop[i] = top;
+            }
+        int foot = Ground(w, s, cx, cz) - 3;
+        for (int y = 0; y < Tall + 5; y++)
+        {
+            double t = y / (double)Tall;
+            // narrowing up to a blunt point, and leaning over toward the east
+            double hw = y < Tall ? 5.4 - 2.2 * t : 3.2 - (y - Tall) * .6, hd = y < Tall ? 4.3 - 1.6 * t : 2.7 - (y - Tall) * .5, ox = 2.6 * t * t;
+            for (int z = -6; z <= 6; z++)
+                for (int x = -7; x <= 8; x++)
+                {
+                    double ex = (x + .5 - ox) / hw, ez = (z + .5) / hd;
+                    if (ex * ex + ez * ez > 1 + (Hash.H3(x * 5 + y, z, 73) - .5) * .25) continue;
+                    if (In(w, cx + x, cz + z)) w.SetRaw(cx + x, foot + y, cz + z, Mat.Menhir);
+                }
+        }
+        // broken pieces in the grass
+        for (int n = 0; n < 5; n++)
+        {
+            double a = Hash.H3(n, (int)seed, 75) * Math.PI * 2, r = R - 6 + Hash.H3(n, (int)seed, 77) * 12;
+            int px = cx + (int)(Math.Cos(a) * r), pz = cz + (int)(Math.Sin(a) * r);
+            int sz = 2 + n % 2, g = Ground(w, s, px, pz);
+            for (int z = pz - sz; z <= pz + sz; z++)
+                for (int x = px - sz; x <= px + sz; x++)
+                    if (In(w, x, z) && Brushes.Dist(x - px, z - pz) <= sz) for (int y = g - 1; y < g + sz; y++) w.SetRaw(x, y, z, Mat.Menhir);
+        }
+        // held from beside the stone, on the side toward the citadel
+        int toward = s.KeepX >= cx ? 1 : -1;
+        var l = new Landmark { Kind = LandmarkKind.Power, Name = name, X = cx, Z = cz, R = R + 12, StandX = cx + toward * 16, StandZ = cz };
+        s.Landmarks.Add(l);
+        return l;
+    }
+
+    /// <summary>
+    /// A dead spring: a black pool in a hollow of bare earth where nothing grows, ringed with old stones, and round it
+    /// trees long dead and grey.
+    /// </summary>
+    public static Landmark DeadSpring(VoxelWorld w, Site s, int cx, int cz, string name, uint seed)
+    {
+        const int Pool = 14, Hollow = 32, Ring = 22;
+        // the hollow: the ground goes down gently to the pool, bare
+        for (int z = cz - Hollow; z <= cz + Hollow; z++)
+            for (int x = cx - Hollow; x <= cx + Hollow; x++)
+            {
+                double d = Brushes.Dist(x - cx, z - cz);
+                if (d > Hollow || !In(w, x, z)) continue;
+                int i = z * w.SX + x, g = s.HTop[i];
+                int top = g - (int)(5 * (1 - d / Hollow));
+                for (int y = top; y < g + 2; y++) w.SetRaw(x, y, z, Mat.Air);
+                w.SetRaw(x, top - 1, z, d < Hollow - 4 || Hash.H3(x, z, 79) < .5 ? Mat.Soil : Mat.GrassDry);
+                s.HTop[i] = top;
+            }
+        // the pool, its surface a voxel under the lowest point of its edge, so it lies still
+        int rim = int.MaxValue;
+        for (int z = cz - Pool - 2; z <= cz + Pool + 2; z++)
+            for (int x = cx - Pool - 2; x <= cx + Pool + 2; x++)
+            {
+                double d = Brushes.Dist(x - cx, z - cz);
+                if (d >= Pool && d < Pool + 2 && In(w, x, z)) rim = Math.Min(rim, s.HTop[z * w.SX + x]);
+            }
+        for (int z = cz - Pool; z <= cz + Pool; z++)
+            for (int x = cx - Pool; x <= cx + Pool; x++)
+            {
+                double d = Brushes.Dist(x - cx, z - cz);
+                if (d >= Pool || !In(w, x, z)) continue;
+                int i = z * w.SX + x, bed = rim - 6 - (int)(5 * (1 - d / Pool));
+                for (int y = bed; y <= Math.Max(s.HTop[i], rim); y++) w.SetRaw(x, y, z, y < rim - 1 ? Mat.Water : Mat.Air);
+                w.SetRaw(x, bed - 1, z, Mat.Soil);
+                s.HTop[i] = bed;
+                if (s.WaterTop != null) s.WaterTop[i] = (short)(rim - 1);
+            }
+        for (int n = 0; n < 8; n++)
+        {
+            double a = Math.PI * 2 * n / 8 + Hash.H3((int)seed, n, 81) * .3;
+            int x = cx + (int)(Math.Cos(a) * Ring), z = cz + (int)(Math.Sin(a) * Ring);
+            Standing(w, s, x - 2, z - 1, 4, 3, 6 + (int)(Hash.H3(n, (int)seed, 83) * 7), Mat.Ruin);
+        }
+        foreach (var (a, r) in new[] { (.4, 40), (2.5, 44), (4.4, 38) })
+            Flora.DeadTree(w, cx + (int)(Math.Cos(a + seed % 7) * r), cz + (int)(Math.Sin(a + seed % 7) * r), grown: true, scale: 1.3);
+        // held from the shore, on the side toward the citadel
+        int toward = s.KeepX >= cx ? 1 : -1;
+        var l = new Landmark { Kind = LandmarkKind.Power, Name = name, X = cx, Z = cz, R = Hollow + 18, StandX = cx + toward * (Pool + 5), StandZ = cz };
+        s.Landmarks.Add(l);
+        return l;
+    }
 }
