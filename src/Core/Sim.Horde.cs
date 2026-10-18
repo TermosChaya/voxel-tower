@@ -249,6 +249,8 @@ public sealed partial class Sim
 
     void Carve(Unit u, float dt)
     {
+        // with a torch, what burns is set alight first
+        if (u.Torch && Kindle(u, dt)) return;
         u.State = UnitState.Carve;
         u.CarveEffort += dt;
         var rate = u.T.Move.Carve;
@@ -396,6 +398,7 @@ public sealed partial class Sim
             u.BuildEffort -= perVoxel;
             u.BuildI++;
             World.Set(x, y, z, m);
+            if (m is Mat.SiegeLadder or Mat.Deck) _works.Add(Nav.CellOf(x, y, z));
             Raised?.Invoke(x, y, z, m);
             u.Swing = 1;
         }

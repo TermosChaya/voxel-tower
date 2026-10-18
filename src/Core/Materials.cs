@@ -42,6 +42,8 @@ public static class Mat
     public const byte NeedleLight = 71, FoliageLight = 72, FoliageGold = 73, PineBark = 74, Snag = 75;
     /// <summary>The boards of a shield, in two shades: lighter than the timber of the walls.</summary>
     public const byte Board = 76, BoardDark = 77;
+    /// <summary>What a fire leaves of timber, and pitch laid to be set alight: a ditch of it burns long and hot.</summary>
+    public const byte Char = 78, Pitch = 79;
     /// <summary>Inside the bodies, and more colours for them: never placed in the world.</summary>
     public const byte Flesh = 80, Brain = 81, Heart = 82, Blood = 83, HairBrown = 84, HairGinger = 85, HairGrey = 86, SkinTan = 87,
         SkinPale = 88, SkinGoblinDark = 89, SkinGoblinPale = 90, SkinOrcGrey = 91, ClothGreen = 92, ClothBrown = 93, ClothOchre = 94, Straw = 95;
@@ -62,6 +64,11 @@ public static class Mat
     public static readonly bool[] Passable = new bool[Count];
     /// <summary>Ladders: bodies hang on them and climb.</summary>
     public static readonly bool[] IsLadder = new bool[Count];
+    /// <summary>
+    /// Fire: how readily it catches from a burning neighbour (a chance a second), how many seconds it burns once
+    /// caught, what is left of it when it has burnt (timber may stand charred), and how hot it burns (pitch twice).
+    /// </summary>
+    public static readonly float[] Catch = new float[Count], Fuel = new float[Count], Heat = new float[Count], CharShare = new float[Count];
     /// <summary>Linear RGB, three floats per material.</summary>
     public static readonly float[] Lin = new float[Count * 3];
     public static readonly float[] Variance = new float[Count], Emission = new float[Count];
@@ -129,6 +136,8 @@ public static class Mat
         D(Crate, "Ящик", 0x6e5134, .14f, MatGroup.Wood, Decor);
         D(CrateEdge, "Ящик", 0x47311f, .12f, MatGroup.Wood, Decor);
         D(Sack, "Мешки", 0x8c7c5b, .14f, MatGroup.Wood, Decor);
+        D(Char, "Головни", 0x1d1714, .34f, MatGroup.Earth, 0);
+        D(Pitch, "Смола", 0x17120f, .08f, MatGroup.Earth, Player);
 
         D(SkinHuman, "кожа", 0xc29878, .08f, MatGroup.Hard, 0); D(SkinGoblin, "кожа", 0x6d8a39, .12f, MatGroup.Hard, 0);
         D(SkinOrc, "кожа", 0x56673f, .12f, MatGroup.Hard, 0); D(SkinTroll, "кожа", 0x66705f, .16f, MatGroup.Hard, 0);
@@ -158,10 +167,31 @@ public static class Mat
         foreach (var m in new[] { Tuft, Flower, Bloom }) SwayKind[m] = 1;
         foreach (var m in new[] { Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold }) SwayKind[m] = 2;
         foreach (var m in new[] { Stone, StoneDark, StoneLight, StoneWarm, StoneCool, Mortar, Keep, KeepShade, KeepDark }) Smooth[m] = true;
-        foreach (var m in new[] { Steel, Mail, Brass }) Metal[m] = true;
+        foreach (var m in new[] { Steel, Mail, Brass, Pitch }) Metal[m] = true;
         // what holds the world up: loose pieces resting on these never fall
         foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank }) IsAnchor[m] = true;
+
+        // what burns: needles and leaves flare up and are gone in seconds, grass and flowers in a moment; timber
+        // catches slowly and burns long, and some of it stands charred after; a living trunk and oak bound with iron
+        // slower still, a dead tree readily; pitch catches from anything, runs with fire and burns long, twice as hot
+        void F(float caught, float fuel, float charred, params byte[] ms) { foreach (var m in ms) { Catch[m] = caught; Fuel[m] = fuel; CharShare[m] = charred; Heat[m] = 1; } }
+        F(.5f, 4, 0, Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold);
+        F(.35f, 1.5f, 0, Tuft, Flower, Bloom);
+        F(.03f, 40, .6f, Trunk, Birch, PineBark);
+        F(.1f, 30, .6f, Snag);
+        F(.04f, 35, .35f, Wood);
+        F(.03f, 30, .35f, Plank);
+        F(.12f, 15, 0, Ladder, SiegeLadder);
+        F(.1f, 20, .2f, Deck);
+        F(.03f, 45, .2f, Gate, GateShut, GateOpen);
+        F(.3f, 6, 0, Banner, BannerTrim, Sack);
+        F(.08f, 20, .3f, Cask, Crate, CrateEdge);
+        F(3, 50, 0, Pitch);
+        Heat[Pitch] = 2;
     }
+
+    /// <summary>It can catch fire.</summary>
+    public static bool Burns(byte m) => Catch[m] > 0;
 
     static void D(byte id, string name, uint srgb, float variance, MatGroup group, int flags)
     {

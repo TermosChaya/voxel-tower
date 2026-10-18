@@ -77,6 +77,7 @@ public sealed partial class Sim
 
     void WildTick(Unit u, float dt)
     {
+        if (EscapeFire(u, dt)) return;
         // a wounded boar goes for whoever wounded it, for a while
         var foe = u.Target;
         if (foe != null && (foe.Dead || Time - u.LastHurt > 8 || Dist(u, foe) > 24 * 16)) { u.Target = foe = null; u.Path = null; }

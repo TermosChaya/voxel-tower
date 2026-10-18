@@ -30,6 +30,8 @@ public sealed class UnitType
     /// <summary>Body size in voxels, for the model and for being hit: a man is 15 tall (1.9 m with his hat).</summary>
     public float BodyH = 15, BodyR = 2;
     public string Tool = "";
+    /// <summary>How many raiders of this kind come with a torch, to burn through what is wooden.</summary>
+    public float TorchShare;
 }
 
 public static class Kinds
@@ -58,13 +60,13 @@ public static class Kinds
     {
         Key = "goblin", Name = "Гоблин", Team = Team.Horde,
         Move = new Mover { Height = 2, Climb = 1, Drop = 5, Speed = 3f, Carve = new float[] { 10, 22, 3, 1 }, Build = .35f },
-        Hp = 40, Damage = 5, AttackTime = .9f, KeepDamage = 1, Bounty = 3, BodyH = 10, BodyR = 1.5f, Reach = 9, Tool = "knife",
+        Hp = 40, Damage = 5, AttackTime = .9f, KeepDamage = 1, Bounty = 3, BodyH = 10, BodyR = 1.5f, Reach = 9, Tool = "knife", TorchShare = .4f,
     };
     public static readonly UnitType Orc = new()
     {
         Key = "orc", Name = "Орк-рубака", Team = Team.Horde,
         Move = new Mover { Height = 2, Speed = 2f, Carve = new float[] { 5, 120, 14, 2 }, Build = .25f },
-        Hp = 110, Damage = 14, AttackTime = 1.2f, KeepDamage = 3, Bounty = 5, BodyH = 16, BodyR = 2.5f, Reach = 11, Tool = "axe",
+        Hp = 110, Damage = 14, AttackTime = 1.2f, KeepDamage = 3, Bounty = 5, BodyH = 16, BodyR = 2.5f, Reach = 11, Tool = "axe", TorchShare = .25f,
     };
     public static readonly UnitType Miner = new()
     {
@@ -203,7 +205,7 @@ public sealed class Unit
     public double NextLook;
 
     /// <summary>Its priority for every kind of work (<see cref="WorkKind"/>): 1 first, 4 last, 0 never.</summary>
-    public readonly byte[] Priority = { Work.Usual, Work.Usual, Work.Usual, Work.Usual };
+    public readonly byte[] Priority = { Work.Usual, Work.Usual, Work.Usual, Work.Usual, 1 };
     /// <summary>The kinds of work (bits by <see cref="WorkKind"/>) it went to its site for; it does only those there.</summary>
     public int SiteWork = (1 << Work.Kinds) - 1;
     /// <summary>A resource the player told it to bring in by itself (a store kind, or none), and the area it works for it.</summary>
@@ -223,6 +225,21 @@ public sealed class Unit
     public Unit Mate;
     /// <summary>The way it looks while at it: at a fire, out over the wall.</summary>
     public float Gaze;
+
+    // fire
+    /// <summary>Seconds it will go on burning (its clothes alight, or standing in the flames), and how hot.</summary>
+    public float Burn, BurnHeat = 1;
+    /// <summary>A raider carrying a torch; when it may set the next thing alight, and how long it has been at it.</summary>
+    public bool Torch;
+    public double NextTorch;
+    public float Kindling;
+    /// <summary>An archer of ours shooting fire arrows; the voxel (packed) the player told it to set alight, or −1.</summary>
+    public bool FireArrows;
+    public int KindleAt = -1;
+    /// <summary>A pawn putting out a fire: the cell of the fire it went to, and how far along the next beat is.</summary>
+    public int FireCell = -1;
+    public float FireBeat;
+    public double NextFireLook;
 
     /// <summary>Walk cycle phase, for the legs.</summary>
     public float Stride;

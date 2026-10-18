@@ -108,6 +108,14 @@ public static class Icons
         Dot(c, P(r, .08f, .76f), S(r, .025f), Shade(ink, .8f));
     }
 
+    /// <summary>A tongue of flame with a hotter one inside it: fire, and putting it out.</summary>
+    public static void Flame(CanvasItem c, Rect2 r, Color ink)
+    {
+        Fill(c, ink, P(r, .5f, .07f), P(r, .64f, .28f), P(r, .79f, .5f), P(r, .8f, .72f), P(r, .66f, .9f), P(r, .34f, .9f), P(r, .2f, .72f),
+            P(r, .22f, .5f), P(r, .33f, .35f), P(r, .41f, .5f), P(r, .45f, .29f));
+        Fill(c, Shade(ink, .5f), P(r, .53f, .43f), P(r, .63f, .6f), P(r, .62f, .76f), P(r, .5f, .86f), P(r, .38f, .76f), P(r, .4f, .62f), P(r, .47f, .66f));
+    }
+
     public static void Shovel(CanvasItem c, Rect2 r, Color ink)
     {
         Line(c, Shade(ink, .8f), S(r, .065f), P(r, .8f, .14f), P(r, .45f, .56f));

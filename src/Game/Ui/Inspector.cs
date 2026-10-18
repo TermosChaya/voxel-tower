@@ -106,9 +106,18 @@ public partial class Inspector : Control
         opts.AddThemeConstantOverride("separation", 16);
         Options(opts);
         col.AddChild(opts);
+        // what the brushes that lay are laying: the three of the stores, and pitch
+        if (!o.Dig && t.Tool is Tool.Brush or Tool.Line or Tool.Box or Tool.Circle or Tool.Extrude)
+            col.AddChild(new Choice("Материал", MaterialTip, new[] { "камень", "брёвна", "земля", "смола" }, Math.Max(0, Array.IndexOf(Laid, o.Material)), i => t.SetMaterial(Laid[i])));
         if (opts.GetChildCount() == 0) col.AddChild(Hud.Text("Esc — убрать кисть. Щелчок по ячейке справа или клавиша — взять другую.", Ornament.SerifItalic, 12, Ornament.Faded));
         return col;
     }
+
+    static readonly byte[] Laid = { Mat.Stone, Mat.Wood, Mat.Rammed, Mat.Pitch };
+
+    const string MaterialTip = "Материал\nКамень (Z), брёвна (X), земля (C) — из запасов. Смола варится из брёвен: слой её на дне рва " +
+        "вспыхивает весь разом от огненной стрелы и горит долго и вдвое жарче — налётчики в нём сгорают, а кто выбежал, горит ещё. " +
+        "Рабочие смолу не тушат; сгоревшую возвращает починка (0).";
 
     void Options(HBoxContainer opts)
     {
@@ -248,8 +257,17 @@ public partial class Inspector : Control
             duty.Add(b);
             row.AddChild(b);
         }
-        bool workers = chosen.Exists(u => u.T.Work >= 1);
-        Button militia = null;
+        bool workers = chosen.Exists(u => u.T.Work >= 1), archers = chosen.Exists(u => u.T.Ranged);
+        Button militia = null, fire = null;
+        if (archers)
+        {
+            row.AddChild(new Rule(true));
+            fire = Btn("Огонь", "Огненные стрелы\nЛучники стреляют огнём: поджигают лестницы и настилы орды, смолу и доски под ногами налётчиков, " +
+                "а налётчик, в которого попали, горит. Стреляют реже. ПКМ по деревянному, по дереву или смоле — поджечь. Ещё раз — простые стрелы.",
+                () => _m.Command.FireArrowsSelected(), 60);
+            fire.ToggleMode = true;
+            row.AddChild(fire);
+        }
         if (workers)
         {
             row.AddChild(new Rule(true));
@@ -262,6 +280,7 @@ public partial class Inspector : Control
             int[] kinds = { Stockpile.None, Stockpile.Stone, Stockpile.Wood, Stockpile.Earth };
             for (int i = 0; i < duty.Count; i++) duty[i].SetPressedNoSignal(chosen.TrueForAll(u => u.Duty == kinds[i]));
             militia?.SetPressedNoSignal(chosen.TrueForAll(u => u.T.Work < 1 || u.Militia));
+            fire?.SetPressedNoSignal(chosen.TrueForAll(u => !u.T.Ranged || u.FireArrows));
         });
         return row;
     }
@@ -540,7 +559,7 @@ public partial class PriorityCell : Control
         MouseExited += () => { _hover = false; QueueRedraw(); };
     }
 
-    public static Icons.Painter IconOf(WorkKind k) => k switch { WorkKind.Build => Icons.Box, WorkKind.Dig => Icons.Shovel, WorkKind.Fell => Icons.Gather, _ => Icons.Pick };
+    public static Icons.Painter IconOf(WorkKind k) => k switch { WorkKind.Build => Icons.Box, WorkKind.Dig => Icons.Shovel, WorkKind.Fell => Icons.Gather, WorkKind.Fire => Icons.Flame, _ => Icons.Pick };
 
     public static Color InkOf(byte p) => p switch { 1 => Ornament.EmberGlow, 2 => Ornament.BronzeLight, 3 => Ornament.Parchment, 4 => Ornament.Aged, _ => Ornament.Faded };
 

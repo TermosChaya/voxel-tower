@@ -74,6 +74,17 @@ public partial class Commander : Node
         _m.Hud.Refresh();
     }
 
+    /// <summary>Fire arrows for the chosen archers, or plain ones again if all of them had them.</summary>
+    public void FireArrowsSelected()
+    {
+        bool any = false, all = true;
+        foreach (var u in _m.Selected) if (u.T.Ranged) { any = true; all &= u.FireArrows; }
+        if (!any) { _m.Hud.Float("огнём стреляют лучники", Ornament.Aged); return; }
+        _m.Sim.SetFireArrows(_m.Selected, !all);
+        _m.Hud.Float(all ? "простые стрелы" : "огненные стрелы: ПКМ по деревянному — поджечь", Ornament.BronzeLight);
+        _m.Hud.Refresh();
+    }
+
     /// <summary>A click on a gate: opens for our people → stands open → barred → round again; a holed one is mended.</summary>
     void Toggle(Gateway g)
     {
@@ -245,7 +256,16 @@ public partial class Commander : Node
         }
         var (o, d) = _m.Rig.Ray(screen);
         var w = _m.World;
-        if (!Raycast.Cast(w, (o.X - w.OriginX) / VoxelWorld.Vox, o.Y / VoxelWorld.Vox, (o.Z - w.OriginZ) / VoxelWorld.Vox, d.X, d.Y, d.Z, out var hit, skipVeg: true)) return;
+        float ox = (o.X - w.OriginX) / VoxelWorld.Vox, oy = o.Y / VoxelWorld.Vox, oz = (o.Z - w.OriginZ) / VoxelWorld.Vox;
+        // archers with fire arrows, a click on something that burns (not the grass underfoot): set it alight
+        bool fire = false;
+        foreach (var u in _m.Selected) fire |= u.FireArrows && !u.Dead;
+        if (fire && Raycast.Cast(w, ox, oy, oz, d.X, d.Y, d.Z, out var lit, skipVeg: false) && Mat.Burns(lit.M) && lit.M is not (Mat.Tuft or Mat.Flower or Mat.Bloom))
+        {
+            int n = _m.Sim.KindleOrder(_m.Selected, lit.X, lit.Y, lit.Z);
+            if (n > 0) { _m.Hud.Float("поджечь: " + Mat.NameOf(lit.M).ToLowerInvariant(), Ornament.EmberGlow); _m.Hud.OnSelectionChanged(); return; }
+        }
+        if (!Raycast.Cast(w, ox, oy, oz, d.X, d.Y, d.Z, out var hit, skipVeg: true)) return;
         var g = hit.Ground(w);
         int cell = StandNear(g.x, g.y, g.z);
         if (cell < 0) { _m.Hud.Float("туда не встать", Ornament.Blood); return; }

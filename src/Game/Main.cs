@@ -149,6 +149,9 @@ public partial class Main : Node3D
         var cover = new CoverView();
         AddChild(cover);
         cover.Init(this);
+        var fire = new FireView();
+        AddChild(fire);
+        fire.Init(this);
         // where the warbands will go is shown in play; scripted runs keep the horde's ways to the waves
         Sim.WantTrails = !_selfTest;
         if (Sim.WantTrails && !_demo) Sim.ComputeFields(coming: true);
@@ -250,7 +253,7 @@ public partial class Main : Node3D
         await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
         var vp = GetViewport();
         GD.Print($"[voxel-tower] {Engine.GetFramesPerSecond()} fps, {vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.PrimitivesInFrame) / 1000} k triangles in {vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.DrawCallsInFrame)} draw calls (+{vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.PrimitivesInFrame) / 1000} k for shadows), {RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.VideoMemUsed) / 1048576} MB video memory");
-        GD.Print($"[voxel-tower] {Sim.Units.Count} units, {Sim.Orders.Total} voxels marked, game time {Sim.Time:0} s, slowest frame {_slowest * 1000:0} ms, {Units.Drawn()} figures and {Units.ArrowsDrawn} arrows drawn");
+        GD.Print($"[voxel-tower] {Sim.Units.Count} units, {Sim.Orders.Total} voxels marked, {Sim.Burning.Count} burning, game time {Sim.Time:0} s, slowest frame {_slowest * 1000:0} ms, {Units.Drawn()} figures and {Units.ArrowsDrawn} arrows drawn");
         if (OS.IsDebugBuild())
             foreach (var u in Sim.Units)
             {
@@ -627,6 +630,26 @@ public partial class Main : Node3D
         double gold1 = Sim.Stock.Gold;
         Advance(60);
         Check("…and the boar is taken for gold", boar.Dead && Sim.Stock.Gold >= gold1 + Kinds.Boar.Bounty, $"boar {(boar.Dead ? "taken" : $"{boar.Hp:0} hp")}, +{Sim.Stock.Gold - gold1:0} gold");
+
+        // fire arrows: «Огонь», then a right click on the ladder sets it alight, and the workers put it out
+        Selected.Clear(); Selected.Add(archer);
+        Hud.OnSelectionChanged();
+        Command.FireArrowsSelected();
+        await Look(face - 6, 460);
+        var rung = ScreenAt(face - .5f, fy + 2.5f, 460.5f);
+        Rig._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true, Position = rung });
+        Rig._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = false, Position = rung });
+        Check("«Огонь» gives the archer fire arrows, and a right click on the ladder tells it to set it alight", archer.FireArrows && archer.KindleAt >= 0,
+            $"fire arrows {archer.FireArrows}, mark {archer.KindleAt}, at the ladder: {Mat.NameOf(World.Get(face - 1, fy + 2, 460))}");
+        var (mx, my, mz) = archer.KindleAt >= 0 ? WaterPlanner.Unpack(archer.KindleAt) : (0, 0, 0);
+        string marked = $"{Mat.NameOf(World.Get(mx, my, mz))} at {mx},{my},{mz} (the wall face at {face}, {fy})";
+        int caughtN = 0;
+        Action<int, int, int, byte> count = (_, _, _, _) => caughtN++;
+        Sim.Caught += count;
+        for (int t = 0; t < 40 && (caughtN == 0 || Sim.Burning.Count > 0); t++) Advance(.5);
+        Sim.Caught -= count;
+        Check("…it catches, and the workers put it out", caughtN > 0 && Sim.Burning.Count == 0, $"{marked}: {caughtN} caught, {Sim.Burning.Count} left burning");
+        Command.FireArrowsSelected();
         Command.ClearSelection();
 
         // the horde called early: no gold for it, only less known of the defences
@@ -668,6 +691,7 @@ public partial class Main : Node3D
     void Demo()
     {
         if (_pose == "battle") { Siege(); return; }
+        if (_pose == "fire") { Blaze(); return; }
         if (_pose == "wounds") { Wounded(); return; }
         if (_pose == "flood") { Flood(); return; }
         if (_pose == "trees") { LookAtGrove(); return; }
@@ -809,6 +833,85 @@ public partial class Main : Node3D
         sim.ComputeFields();
         Advance(_poseSeconds);
         Rig.Set(World.WX(kx - 64), World.WZ(kz + 2), -1.0f, .6f, 1.7f, snap: true);
+        Hud.Refresh();
+        Marks.Flush();
+        foreach (var u in archers) Selected.Add(u);
+    }
+
+    /// <summary>
+    /// The siege by fire: a ring of wall round the citadel whose western arc is of logs, a dry ditch before it floored
+    /// with pitch, archers on the wall with fire arrows, goblins and orcs with torches coming at the timber, and a tree
+    /// by the ditch already alight.
+    /// </summary>
+    void Blaze()
+    {
+        var w = World; var s = Site; var sim = Sim;
+        sim.Waves.Countdown = 1e9;
+        sim.Stock.Gold = 90;
+        int kx = s.KeepX, kz = s.KeepZ;
+        bool West(int x, int z) => MathF.Abs(Mathf.Wrap(MathF.Atan2(z - kz, x - kx) - MathF.PI, -MathF.PI, MathF.PI)) < .55f;
+        sim.InstantLabour = true;
+        int top = Shapes.LevelTop(w, kx - 64, kz, 40);
+        var ring = Shapes.Circle(w, s, kx, kz, s.KeepR + 44, new Stroke { Mat = Mat.Stone, Width = 10, Height = 40, Level = true, Hollow = true }, top);
+        var laid = new VoxelList();
+        for (int i = 0; i < ring.Count; i++) laid.Add(ring.X(i), ring.Y(i), ring.Z(i), West(ring.X(i), ring.Z(i)) ? Mat.Wood : ring.M(i));
+        sim.DesignateBuild(laid);
+        var ditch = Shapes.Circle(w, s, kx, kz, s.KeepR + 84, new Stroke { Width = 18, Height = 20, Dig = true, Hollow = true }, 0);
+        sim.DesignateRemove(ditch);
+        sim.InstantLabour = false;
+        // the bottom of the ditch on the west poured with pitch
+        var floor = new HashSet<(int, int)>();
+        for (int i = 0; i < ditch.Count; i++) if (West(ditch.X(i), ditch.Z(i))) floor.Add((ditch.X(i), ditch.Z(i)));
+        foreach (var (x, z) in floor) { int y = w.SurfAt(x, z) - 1; if (y > 0) w.Set(x, y, z, Mat.Pitch); }
+        var archers = new List<Unit>();
+        foreach (var (dx, dz) in new[] { (-62, -14), (-60, 18), (-52, -36), (-48, 40), (-63, 2) })
+        {
+            int c = sim.NearestStand(kx + dx, kz + dz, 4);
+            var a = sim.Spawn(Kinds.Archer, c);
+            sim.Command(new[] { a }, c);
+            a.FireArrows = true;
+            archers.Add(a);
+        }
+        Advance(2);
+        sim.Waves.Countdown = 0;
+        sim.Step(.05f);
+        sim.Waves.Countdown = 1e9;
+        sim.HordeStock[Stockpile.Wood] = 24 * VoxelWorld.PerM3;
+        foreach (var (t, dx, dz, torch) in new[] { (Kinds.Goblin, -128, -6, true), (Kinds.Goblin, -132, 20, true), (Kinds.Orc, -140, 4, true), (Kinds.Sapper, -122, -24, false),
+            (Kinds.Sapper, -120, 30, false), (Kinds.Orc, -146, -16, false), (Kinds.Goblin, -126, 40, true) })
+        {
+            int c = sim.NearestStand(kx + dx, kz + dz, t.Move.Height);
+            if (c >= 0) sim.Spawn(t, c).Torch = torch;
+        }
+        // the nearest tree outside the ditch, its crown alight
+        (int x, int z) tree = (-1, -1);
+        for (int r = 130; r < 400 && tree.x < 0; r += 6)
+            for (int a = 0; a < 360 && tree.x < 0; a += 4)
+            {
+                int x = kx + (int)(MathF.Cos(a * MathF.PI / 180) * r), z = kz + (int)(MathF.Sin(a * MathF.PI / 180) * r);
+                if (x > 10 && z > 10 && x < w.SX - 10 && z < w.SZ - 10 && x < kx && Mat.IsTrunk(w.Get(x, w.SurfAt(x, z) + 2, z))) tree = (x, z);
+            }
+        if (tree.x >= 0)
+        {
+            int g = w.SurfAt(tree.x, tree.z), lit = 0;
+            for (int y = g; y < g + 90 && lit < 6; y++)
+                for (int dz = -10; dz <= 10 && lit < 6; dz += 2)
+                    for (int dx = -10; dx <= 10 && lit < 6; dx += 2)
+                        if (Mat.IsLeafy(w.Get(tree.x + dx, y, tree.z + dz)) && sim.Ignite(tree.x + dx, y, tree.z + dz)) lit++;
+            GD.Print($"[fire] a tree alight at {tree.x},{tree.z}: {lit} voxels of its crown");
+        }
+        sim.ComputeFields();
+        if (OS.GetEnvironment("FIRE_DEBUG") != "")
+            for (double t = 0; t < _poseSeconds; t += 5)
+            {
+                Advance(5);
+                int wood = 0, pitch = 0;
+                foreach (int p in sim.Burning.Keys) { var (x, y, z) = WaterPlanner.Unpack(p); byte m = w.Get(x, y, z); if (m == Mat.Wood) wood++; else if (m == Mat.Pitch) pitch++; }
+                GD.Print($"[fire] {t + 5:0} s: {sim.Burning.Count} burning, {wood} logs, {pitch} pitch; " +
+                    string.Join(", ", sim.Units.FindAll(u => !u.Dead && u.Team == Team.Player).ConvertAll(u => $"{u.T.Name} {u.State} fire {u.FireCell}")));
+            }
+        else Advance(_poseSeconds);
+        Rig.Set(World.WX(kx - 90), World.WZ(kz + 4), -1.0f, .62f, 1.15f, snap: true);
         Hud.Refresh();
         Marks.Flush();
         foreach (var u in archers) Selected.Add(u);

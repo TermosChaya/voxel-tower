@@ -10,6 +10,9 @@ public sealed class Arrow
     public Unit Target, From;
     public bool Hits, Done;
     public float Damage;
+    /// <summary>A fire arrow; and the voxel (packed) it was loosed at to set alight, or −1 when it was loosed at someone.</summary>
+    public bool Fire;
+    public int At = -1;
 }
 
 public sealed partial class Sim
@@ -163,6 +166,8 @@ public sealed partial class Sim
     {
         if (u.T.Ranged)
         {
+            // what the player pointed at to set alight comes first
+            if (u.KindleAt >= 0 && KindleShot(u, dt)) return true;
             var t = u.Target;
             if (t == null || t.Dead || Dist(u, t) > u.T.Range || Time >= u.NextSearch)
             {
@@ -170,11 +175,12 @@ public sealed partial class Sim
                 u.Target = t;
                 u.NextSearch = Time + .4;
             }
-            if (t == null) return false;
+            if (t == null) return KindleShot(u, dt);
             // sent somewhere and not there yet: shoot on the way, but keep going
             bool marching = u.Hold && u.Dest >= 0 && CellsApart(u.Cell, u.Dest) > 1 && u.Path != null && u.PathI < u.Path.Count;
             if (!marching) { u.State = UnitState.Fight; u.Path = null; u.Facing = MathF.Atan2(t.Z - u.Z, t.X - u.X); }
-            if (u.Cooldown <= 0) { Shoot(u, t); u.Cooldown = u.T.AttackTime * (.9f + (float)Rng.NextDouble() * .2f); }
+            // a fire arrow takes a moment to light
+            if (u.Cooldown <= 0) { Shoot(u, t); u.Cooldown = u.T.AttackTime * (u.FireArrows ? 1.35f : 1) * (.9f + (float)Rng.NextDouble() * .2f); }
             return !marching;
         }
         // swordsmen hold the ground round themselves or their post
@@ -233,7 +239,8 @@ public sealed partial class Sim
             // ladders or climbing them
             bool hurting = o.State == UnitState.Fight && o.Target is { Dead: false, Team: Team.Player };
             bool busy = o.State is UnitState.Carve or UnitState.Siege or UnitState.Work || Climbing(o);
-            float pri = d - (hurting ? 64 : busy ? 48 : 0);
+            // with fire arrows, those standing on a deck, a ladder or pitch: one arrow sets it all alight under them
+            float pri = d - (hurting ? 64 : busy ? 48 : 0) - (u.FireArrows && OnTinder(o) ? 40 : 0);
             if (pri >= bd || !Sight(u, o)) continue;
             bd = pri; best = o;
         }
@@ -265,7 +272,7 @@ public sealed partial class Sim
             X0 = u.X, Y0 = u.Y + u.T.BodyH * .85f, Z0 = u.Z,
             X1 = t.X + (float)(Rng.NextDouble() - .5) * 4, Y1 = t.Y + t.T.BodyH * .55f, Z1 = t.Z + (float)(Rng.NextDouble() - .5) * 4,
             Dur = Math.Max(.08f, d / ArrowSpeed), Target = t, From = u, Hits = Rng.NextDouble() < chance,
-            Damage = u.T.Damage * (.8f + (float)Rng.NextDouble() * .5f),
+            Damage = u.T.Damage * (.8f + (float)Rng.NextDouble() * .5f), Fire = u.FireArrows,
         });
     }
 
@@ -293,6 +300,7 @@ public sealed partial class Sim
                 float share = Wound(t, cut, depth, 0, tx - dx / dl * 30, hy - dy / dl * 30, tz - dz / dl * 30, dx, dy, dz);
                 Hurt(t, a.From, a.Damage * share, "стрела");
             }
+            if (a.Fire) FireArrowLands(a);
         }
         Arrows.RemoveAll(a => a.Done && a.T > a.Dur + 1.5f);
     }

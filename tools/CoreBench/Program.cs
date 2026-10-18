@@ -1434,6 +1434,190 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--wits")
     foreach (var a in watch) Gone(a);
 }
 
+// ---- fire: timber burns and stone does not, water stops it, fire arrows and torches set things alight, pitch burns
+// hot under the horde, and our people beat fires out
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--fire")
+{
+    Console.WriteLine();
+    var mpF = new MapParams();
+    var wF = new VoxelWorld(mpF.SizeX, mpF.SizeY, mpF.SizeZ);
+    var siteF = MapGen.Generate(wF, mpF);
+    wF.Compact();
+    var simF = new Sim(wF, siteF);
+    simF.Waves.Countdown = 1e9; simF.WildTarget = 0;
+    void RunF(double seconds) { for (double t = 0; t < seconds; t += .05) simF.Step(.05f); }
+    void GoneF(Unit u) { u.Dead = true; u.DiedAt = -999; }
+    int kxF = siteF.KeepX, kzF = siteF.KeepZ;
+    int CountF(byte m, int x0, int z0, int x1, int z1)
+    {
+        int n = 0;
+        for (int z = z0; z <= z1; z++) for (int x = x0; x <= x1; x++) for (int y = 0; y < wF.SY; y++) if (wF.Get(x, y, z) == m) n++;
+        return n;
+    }
+    int BurningIn(int x0, int z0, int x1, int z1)
+    {
+        int n = 0;
+        foreach (int p in simF.Burning.Keys) { var (x, _, z) = WaterPlanner.Unpack(p); if (x >= x0 && x <= x1 && z >= z0 && z <= z1) n++; }
+        return n;
+    }
+    // a wall of logs or stone a man high, following the ground
+    void WallF(int x0, int z0, int x1, int z1, int high, Func<int, int, byte> mat)
+    {
+        for (int z = z0; z <= z1; z++)
+            for (int x = x0; x <= x1; x++)
+            {
+                int g = wF.SurfAt(x, z);
+                for (int y = g; y < g + high; y++) wF.Set(x, y, z, mat(x, z));
+            }
+    }
+
+    // a wall half of logs and half of stone, set alight in the middle of the logs: the logs burn down, the stone stands
+    int fx0 = kxF - 130, fz0 = kzF + 90, baseF = wF.SurfAt(fx0, fz0 + 20);
+    WallF(fx0, fz0, fx0 + 3, fz0 + 79, 16, (x, z) => z < fz0 + 40 ? Mat.Wood : Mat.Stone);
+    int wood0F = CountF(Mat.Wood, fx0, fz0, fx0 + 3, fz0 + 79), stone0F = CountF(Mat.Stone, fx0, fz0, fx0 + 3, fz0 + 79);
+    bool litF = simF.Ignite(fx0 + 1, baseF + 1, fz0 + 20);
+    int mostF = 0;
+    for (int t = 0; t < 420; t++) { RunF(1); mostF = Math.Max(mostF, BurningIn(fx0, fz0, fx0 + 3, fz0 + 79)); }
+    int wood1F = CountF(Mat.Wood, fx0, fz0, fx0 + 3, fz0 + 79), stone1F = CountF(Mat.Stone, fx0, fz0, fx0 + 3, fz0 + 79), charF = CountF(Mat.Char, fx0, fz0, fx0 + 3, fz0 + 79);
+    int leftF = BurningIn(fx0, fz0, fx0 + 3, fz0 + 79);
+    Check("a wall of logs set alight burns down slowly, and the stone wall beside it does not catch",
+        litF && wood1F < wood0F * .5 && mostF < wood0F / 3 && stone1F == stone0F && charF > 0,
+        $"{wood0F} voxels of logs → {wood1F} ({charF} charred) in 7 min, up to {mostF} burning at once; stone {stone0F} → {stone1F}; {leftF} still burning");
+
+    // a floor of logs over a slab of stone with a pool sunk in it: what lies on the water never catches, the rest burns
+    int sx0 = kxF - 200, sz0 = kzF - 40, sg = 0;
+    for (int z = sz0; z < sz0 + 10; z++) for (int x = sx0; x < sx0 + 30; x++) sg = Math.Max(sg, wF.SurfAt(x, z));
+    for (int z = sz0; z < sz0 + 10; z++)
+        for (int x = sx0; x < sx0 + 30; x++)
+        {
+            for (int y = sg; y < sg + 24; y++) wF.Set(x, y, z, Mat.Air);
+            wF.Set(x, sg, z, Mat.Stone); wF.Set(x, sg + 1, z, Mat.Stone);
+        }
+    for (int z = sz0 + 2; z < sz0 + 8; z++) for (int x = sx0 + 18; x < sx0 + 28; x++) wF.Set(x, sg + 1, z, Mat.Water);
+    var deck = new System.Collections.Generic.List<(int x, int z, bool wet)>();
+    for (int z = sz0; z < sz0 + 10; z++)
+        for (int x = sx0; x < sx0 + 30; x++)
+        {
+            wF.Set(x, sg + 2, z, Mat.Wood);
+            deck.Add((x, z, wF.Get(x, sg + 1, z) == Mat.Water));
+        }
+    RunF(.5);
+    int wetDeck = deck.FindAll(d => d.wet).Count, dryDeck = deck.Count - wetDeck;
+    bool farLit = simF.Ignite(sx0 + 1, sg + 2, sz0 + 5), wetLit = simF.Ignite(sx0 + 22, sg + 2, sz0 + 5);
+    RunF(240);
+    int wetLeft = deck.FindAll(d => d.wet && wF.Get(d.x, sg + 2, d.z) == Mat.Wood).Count, dryLeft = deck.FindAll(d => !d.wet && wF.Get(d.x, sg + 2, d.z) == Mat.Wood).Count;
+    Check("a floor of logs over stone and a pool: what lies on the water never catches, the rest burns",
+        farLit && !wetLit && wetLeft == wetDeck && dryLeft < dryDeck / 2,
+        $"{wetDeck} voxels on the water, {wetLeft} left; {dryDeck} on the stone, {dryLeft} left; {BurningIn(sx0, sz0, sx0 + 29, sz0 + 9)} burning");
+
+    // an archer with fire arrows told to set a post of logs alight does; a goblin struck by one burns
+    int px0F = kxF - 110, pz0F = kzF - 120;
+    var bowman = simF.Spawn(Kinds.Archer, simF.NearestStand(px0F, pz0F, 4));
+    simF.Command(new[] { bowman }, bowman.Cell);
+    simF.SetFireArrows(new[] { bowman }, true);
+    int postX = (int)bowman.X + 100, postZ = (int)bowman.Z, postY = wF.SurfAt(postX, postZ);
+    WallF(postX, postZ, postX + 1, postZ + 1, 14, (x, z) => Mat.Wood);
+    int post0 = CountF(Mat.Wood, postX, postZ, postX + 1, postZ + 1);
+    int told = simF.KindleOrder(new[] { bowman }, postX, postY + 8, postZ);
+    double caughtAt = -1;
+    for (int t = 0; t < 30 && caughtAt < 0; t++) { RunF(1); if (BurningIn(postX, postZ, postX + 1, postZ + 1) > 0 || CountF(Mat.Wood, postX, postZ, postX + 1, postZ + 1) < post0) caughtAt = t + 1; }
+    // a goblin where the archer can see it
+    Unit gobF = null;
+    foreach (var (gx, gz) in new[] { (-70, 20), (-60, -30), (40, 60), (50, -60), (-90, 0), (0, 80), (0, -80) })
+    {
+        gobF = simF.Spawn(Kinds.Goblin, simF.NearestStand((int)bowman.X + gx, (int)bowman.Z + gz, 2));
+        gobF.Raid = null;
+        if (simF.Sight(bowman, gobF)) break;
+        GoneF(gobF);
+    }
+    float burnt = 0;
+    for (int t = 0; t < 12 * 20 && !gobF.Dead; t++) { simF.Step(.05f); burnt = Math.Max(burnt, gobF.Burn); }
+    Check("an archer with fire arrows sets a post of logs alight as told, and a goblin struck by one burns",
+        told == 1 && caughtAt > 0 && burnt > 0, $"the post caught after {caughtAt} s; the goblin burnt {burnt:0.0} s at most, {(gobF.Dead ? "dead" : $"{gobF.Hp:0} hp")}; " +
+        $"the archer {bowman.State}, target {bowman.Target?.T.Name ?? "none"}, {simF.Shots} shots, {Sim.Dist(bowman, gobF) / VoxelWorld.PerMetre:0.0} m, sight {simF.Sight(bowman, gobF)}");
+    GoneF(gobF); GoneF(bowman);
+    simF.Burning.Clear();
+
+    // a goblin with a torch comes to a ring of logs round the citadel: it sets the timber alight and goes through
+    simF.InstantLabour = true;
+    simF.DesignateBuild(Shapes.Circle(wF, siteF, kxF, kzF, siteF.KeepR + 44, new Stroke { Mat = Mat.Wood, Width = 8, Height = 48, Hollow = true }, 0));
+    simF.InstantLabour = false;
+    simF.HordeStock[Stockpile.Wood] = simF.HordeStock[Stockpile.Earth] = 0;
+    simF.ComputeFields();
+    float DistKeepF(Unit u) => MathF.Sqrt((u.X - kxF) * (u.X - kxF) + (u.Z - kzF) * (u.Z - kzF));
+    int caught = 0;
+    simF.Caught = (x, y, z, m) => caught++;
+    var torchGob = simF.Spawn(Kinds.Goblin, simF.NearestStand(kxF - siteF.KeepR - 100, kzF, 2));
+    torchGob.Torch = true;
+    float dg0 = DistKeepF(torchGob);
+    string sawKindle = "";
+    for (int t = 0; t < 150 && DistKeepF(torchGob) > siteF.KeepR + 30; t++) { RunF(1); if (torchGob.Kindling > 0) sawKindle = "kindled"; }
+    float dg1 = DistKeepF(torchGob);
+    Check("a goblin with a torch sets a ring of logs alight and goes through it", caught >= 5 && dg1 < siteF.KeepR + 40,
+        $"{caught} voxels caught ({sawKindle}), {dg0 / VoxelWorld.PerMetre:0.0} → {dg1 / VoxelWorld.PerMetre:0.0} m from the citadel, {torchGob.State}");
+    GoneF(torchGob);
+    if (Environment.GetEnvironmentVariable("FIRE_DEBUG") != null)
+        for (int t = 0; t < 12; t++) { RunF(5); Console.WriteLine($"  +{(t + 1) * 5} s: {simF.Burning.Count} burning, {caught} caught"); }
+    simF.Caught = null;
+    simF.Burning.Clear();
+
+    // workers put a fire out in a wall of ours before it eats much of it
+    int bx0F = kxF - 100, bz0F = kzF - 210;
+    WallF(bx0F, bz0F, bx0F + 3, bz0F + 47, 16, (x, z) => Mat.Wood);
+    int bw0 = CountF(Mat.Wood, bx0F, bz0F, bx0F + 3, bz0F + 47);
+    var crewF = new System.Collections.Generic.List<Unit>();
+    for (int i = 0; i < 3; i++) crewF.Add(simF.Spawn(Kinds.Worker, simF.NearestStand(bx0F - 30, bz0F + 10 + i * 12, 2)));
+    int bbase = wF.SurfAt(bx0F - 1, bz0F + 24);
+    foreach (int dz in new[] { 8, 20, 32, 44 }) simF.Ignite(bx0F, wF.SurfAt(bx0F - 2, bz0F + dz) + 3, bz0F + dz);
+    int fightersSeen = 0;
+    for (int t = 0; t < 60 && BurningIn(bx0F, bz0F, bx0F + 3, bz0F + 47) > 0; t++)
+    {
+        RunF(1);
+        fightersSeen = Math.Max(fightersSeen, crewF.FindAll(u => u.FireCell >= 0).Count);
+        if (Environment.GetEnvironmentVariable("FIRE_DEBUG") != null)
+            Console.WriteLine($"  t {t}: {BurningIn(bx0F, bz0F, bx0F + 3, bz0F + 47)} burning; " + string.Join("; ", crewF.ConvertAll(u => $"#{u.Id} {u.State} fire {u.FireCell} at {u.X - bx0F:0},{u.Y - bbase:0},{u.Z - bz0F:0} path {(u.Path == null ? -1 : u.Path.Count - u.PathI)} burn {u.Burn:0.0} hp {u.Hp:0} why {u.Why}")));
+    }
+    int bw1 = CountF(Mat.Wood, bx0F, bz0F, bx0F + 3, bz0F + 47), stillF = BurningIn(bx0F, bz0F, bx0F + 3, bz0F + 47);
+    Check("workers put out a fire in a wall of ours before it eats much of it", stillF == 0 && bw1 > bw0 * .85 && fightersSeen >= 2,
+        $"{fightersSeen} went to it; {stillF} still burning after {simF.Time:0} s, {bw1} of {bw0} voxels of logs left");
+    foreach (var u in crewF) GoneF(u);
+
+    // goblins standing on pitch set alight burn, twice as hot as in timber
+    int qx0 = kxF - 60, qz0 = kzF + 200;
+    for (int z = qz0; z < qz0 + 48; z++) for (int x = qx0; x < qx0 + 48; x++) wF.Set(x, wF.SurfAt(x, z) - 1, z, Mat.Pitch);
+    var onPitch = new System.Collections.Generic.List<Unit>();
+    foreach (var (dx, dz) in new[] { (16, 16), (24, 30), (32, 20) })
+    {
+        var g = simF.Spawn(Kinds.Goblin, simF.NearestStand(qx0 + dx, qz0 + dz, 2));
+        g.Raid = null; g.Band = null;
+        onPitch.Add(g);
+    }
+    // a fire arrow at the feet of each
+    int litPitch = 0;
+    foreach (var g in onPitch)
+        for (int y = (int)g.Y + 1; y > g.Y - 4; y--)
+            if (wF.Get((int)g.X, y, (int)g.Z) == Mat.Pitch) { if (simF.Ignite((int)g.X, y, (int)g.Z)) litPitch++; break; }
+    RunF(6);
+    int scorched = onPitch.FindAll(g => g.Dead || g.Hp < g.MaxHp * .4f).Count;
+    Check("goblins on pitch set alight burn, and the pitch clings as they run off it", scorched >= 2,
+        string.Join(", ", onPitch.ConvertAll(g => (g.Dead ? "dead" : $"{g.Hp:0} of {g.MaxHp:0} hp") + $" at {g.X - qx0:0},{g.Z - qz0:0}")) + $"; {BurningIn(qx0, qz0, qx0 + 47, qz0 + 47)} burning, {litPitch} lit");
+    foreach (var g in onPitch) GoneF(g);
+    simF.Burning.Clear();
+
+    // a worker pours a line of pitch from the timber in the stores
+    simF.Stock[Stockpile.Wood] = 10 * VoxelWorld.PerM3;
+    double woodF0 = simF.Stock[Stockpile.Wood];
+    int lx0 = kxF - 90, lz0 = kzF + 130;
+    var pourer = simF.Spawn(Kinds.Worker, simF.NearestStand(lx0 - 16, lz0, 2));
+    int poured0 = CountF(Mat.Pitch, lx0 - 4, lz0 - 4, lx0 + 4, lz0 + 40);
+    simF.DesignateBuild(Shapes.Line(wF, siteF, lx0, lz0, lx0, lz0 + 32, new Stroke { Mat = Mat.Pitch, Width = 4, Height = 2 }, 0));
+    RunF(40);
+    int poured = CountF(Mat.Pitch, lx0 - 4, lz0 - 4, lx0 + 4, lz0 + 40) - poured0;
+    Check("a worker pours pitch from the timber in the stores", poured > 100 && simF.Stock[Stockpile.Wood] <= woodF0 - poured + 1,
+        $"{poured} voxels poured, timber {Fmt.M3(woodF0)} → {Fmt.M3(simF.Stock[Stockpile.Wood])} m³");
+    GoneF(pourer);
+}
+
 // ---- bodies of voxels: a skeleton inside, blows carving out what they strike, limbs cut off, vital wounds, bleeding
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bodies")
 {

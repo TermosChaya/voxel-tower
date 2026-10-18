@@ -18,7 +18,9 @@ public partial class WorkTable : Control
     int _hoverRow = -1, _hoverCol = -1;
 
     public const float Head = 30, Row = 30;
-    const float FaceW = 30, NameW = 150, CellW = 76, DutyW = 92, MilitiaW = 82;
+    const float FaceW = 30, NameW = 150, CellW = 70, DutyW = 92, MilitiaW = 82;
+    /// <summary>The columns past the kinds of work: what it brings in, the militia, what it is doing.</summary>
+    const int DutyCol = Work.Kinds + 1, MilitiaCol = Work.Kinds + 2, DoingCol = Work.Kinds + 3;
     /// <summary>Where the column of a kind of work begins.</summary>
     public static float WorkX(int k) => FaceW + NameW + k * CellW;
     static float DutyX => WorkX(Work.Kinds);
@@ -46,8 +48,8 @@ public partial class WorkTable : Control
         QueueRedraw();
     }
 
-    /// <summary>Which column a point is in: 0 the face and name, 1–4 the kinds of work, 5 what it brings in, 6 the militia, 7 what it is doing.</summary>
-    static int Column(float x) => x < FaceW + NameW ? 0 : x < DutyX ? 1 + (int)((x - WorkX(0)) / CellW) : x < MilitiaX ? 5 : x < DoingX ? 6 : 7;
+    /// <summary>Which column a point is in: 0 the face and name, then the kinds of work, what it brings in, the militia, what it is doing.</summary>
+    static int Column(float x) => x < FaceW + NameW ? 0 : x < DutyX ? 1 + (int)((x - WorkX(0)) / CellW) : x < MilitiaX ? DutyCol : x < DoingX ? MilitiaCol : DoingCol;
 
     public override void _GuiInput(InputEvent e)
     {
@@ -83,11 +85,11 @@ public partial class WorkTable : Control
             case >= 1 and <= Work.Kinds:
                 _m.Sim.SetPriority(p, (WorkKind)(col - 1), Work.Cycle(p.Priority[col - 1], back));
                 break;
-            case 5:
+            case DutyCol:
                 int at = Math.Max(0, Array.IndexOf(Duties, p.Duty));
                 _m.Sim.SetDuty(new[] { p }, Duties[(at + (back ? Duties.Length - 1 : 1)) % Duties.Length]);
                 break;
-            case 6:
+            case MilitiaCol:
                 if (p.T.Work >= 1) _m.Sim.SetMilitia(new[] { p }, !p.Militia);
                 break;
         }
@@ -102,8 +104,8 @@ public partial class WorkTable : Control
             {
                 0 => "Дружина\nЩелчок по имени — выбрать пешку, ещё раз — показать.",
                 >= 1 and <= Work.Kinds => Work.Tips[col - 1] + "\n\nЩелчок по заголовку — весь столбец как у первой строки, следующим числом; ПКМ — обратно.",
-                5 => "Добывать самим\nЧто пешка добывает сама, когда размеченной работы нет: ломает валуны и руины, рубит лес или роет яму поодаль. Щелчок — по кругу.",
-                6 => "Ополчение\nРабочие не бегут от орды, а встречают её с кирками, как мечники. Солдатам не нужно.",
+                DutyCol => "Добывать самим\nЧто пешка добывает сама, когда размеченной работы нет: ломает валуны и руины, рубит лес или роет яму поодаль. Щелчок — по кругу.",
+                MilitiaCol => "Ополчение\nРабочие не бегут от орды, а встречают её с кирками, как мечники. Солдатам не нужно.",
                 _ => "Чем занят\nЧто пешка делает сейчас, и почему без дела, если без дела.",
             };
         return col is >= 1 and <= Work.Kinds ? Work.Tips[col - 1] + "\n\nЩелчок — 1, 2, 3, 4, никогда по очереди; ПКМ — обратно. 1 — первым делом." : "";
@@ -152,7 +154,7 @@ public partial class WorkTable : Control
             if (u.T.Work >= 1)
             {
                 var box = new Rect2(MilitiaX + 8, y + 7, 16, 16);
-                Ornament.Well(this, box, r == _hoverRow && _hoverCol == 6, u.Militia, false);
+                Ornament.Well(this, box, r == _hoverRow && _hoverCol == MilitiaCol, u.Militia, false);
                 if (u.Militia) DrawString(Ornament.SerifBold, new Vector2(box.Position.X, box.End.Y - 2), "✓", HorizontalAlignment.Center, box.Size.X, 14, Ornament.EmberGlow);
             }
             else DrawString(Ornament.Serif, new Vector2(MilitiaX + 8, y + 19), "солдат", HorizontalAlignment.Left, MilitiaW - 10, 12, Ornament.Faded);

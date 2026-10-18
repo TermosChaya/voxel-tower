@@ -26,6 +26,7 @@ public static class Retinue
         if (u.Dead) return u.Team == Team.Wild ? "добыт" : "пал";
         string hurt = Hurt(u);
         string what = DoingNow(u, sim);
+        if (u.Burn > 0) hurt = hurt == "" ? "горит" : "горит, " + hurt;
         return hurt == "" ? what : what + " · " + hurt;
     }
 
@@ -45,18 +46,21 @@ public static class Retinue
         if (u.Dead) return u.Team == Team.Wild ? "добыт" : "пал";
         if (u.PushCell >= 0) return "сбрасывает лестницу";
         if (sim.Climbing(u)) return "лезет по лестнице";
+        if (u.Burn > 0 && u.State == UnitState.Flee && u.Team != Team.Horde) return "выбегает из огня";
         if (u.Team == Team.Wild)
             return u.State switch { UnitState.Flee => "убегает", UnitState.Fight => "бросается в атаку", UnitState.Walk => "бродит", _ => "пасётся" };
         if (u.Team == Team.Horde)
             return u.State switch
             {
-                UnitState.Carve => "прорубает дорогу", UnitState.Siege => "бьёт в цитадель", UnitState.Fight => "бьётся",
+                UnitState.Carve => "прорубает дорогу", UnitState.Siege => u.Kindling > 0 ? "поджигает факелом" : "бьёт в цитадель", UnitState.Fight => "бьётся",
                 UnitState.Work => u.Building switch { Works.Ladder => "ставит лестницу", Works.Bridge => "кладёт мост", Works.Fill => "засыпает ров", _ => "строит" },
                 UnitState.Flee => u.Routed && Sim.Armed(u) ? "бежит прочь" : "уползает прочь",
-                _ => u.Returned ? "идёт к цитадели · бежал в прошлый раз" : "идёт к цитадели",
+                _ => (u.Returned ? "идёт к цитадели · бежал в прошлый раз" : "идёт к цитадели") + (u.Torch ? " · с факелом" : ""),
             };
         if (u.Mending) return u.State == UnitState.Fight ? "ранен, отбивается" : u.State == UnitState.Idle ? "отлёживается у цитадели" : "ранен, отходит к цитадели";
         if (u.Patient is { Dead: false } patient) return "перевязывает: " + patient.T.Name.ToLowerInvariant();
+        if (u.FireCell >= 0) return u.State == UnitState.Work ? "тушит пожар" : "бежит тушить пожар";
+        if (u.KindleAt >= 0) return "поджигает огненной стрелой";
         if (u.Prey is { Dead: false } prey) return (prey.Team == Team.Wild ? "охотится: " : "атакует: ") + prey.T.Name.ToLowerInvariant();
         switch (u.State)
         {
@@ -66,7 +70,7 @@ public static class Retinue
                 if (!Orders.IsRemove(job.m)) return "строит";
                 byte at = sim.World.Get(job.x, job.y, job.z);
                 return Mat.IsVeg[at] ? "рубит лес" : at is Mat.Rock or Mat.Moss or Mat.Ruin or Mat.Ore || Mat.IsMasonry(at) ? "ломает камень" : "копает";
-            case UnitState.Fight: return "бьётся";
+            case UnitState.Fight: return u.FireArrows ? "стреляет огнём" : "бьётся";
             case UnitState.Flee: return "бежит к цитадели";
             case UnitState.Walk:
                 return u.Site >= 0 ? "идёт к работе" : u.Hold ? "идёт по приказу"

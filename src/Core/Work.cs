@@ -2,8 +2,11 @@ using System;
 
 namespace VoxelTower.Core;
 
-/// <summary>The kinds of work a pawn can be set to, the columns of the work table: laying, and taking out earth, wood or stone.</summary>
-public enum WorkKind : byte { Build, Dig, Fell, Quarry }
+/// <summary>
+/// The kinds of work a pawn can be set to, the columns of the work table: laying; taking out earth, wood or stone; and
+/// putting out fires in what we built and round the citadel, which comes first unless told otherwise.
+/// </summary>
+public enum WorkKind : byte { Build, Dig, Fell, Quarry, Fire }
 
 /// <summary>
 /// What each pawn takes up and in what order, as colonists are set in RimWorld: for every kind of work a priority
@@ -12,13 +15,15 @@ public enum WorkKind : byte { Build, Dig, Fell, Quarry }
 /// </summary>
 public static class Work
 {
-    public const int Kinds = 4;
-    /// <summary>The priority a new pawn has for everything.</summary>
+    public const int Kinds = 5;
+    /// <summary>The priority a new pawn has for everything (but putting out fires, which is 1).</summary>
     public const byte Usual = 3;
+    /// <summary>The kinds of work that are marked out on the orders layer (all but putting out fires), as bits.</summary>
+    public const int Marked = (1 << (int)WorkKind.Fire) - 1;
 
-    public static readonly string[] Names = { "Стройка", "Копать", "Рубить", "Камень" };
+    public static readonly string[] Names = { "Стройка", "Копать", "Рубить", "Камень", "Тушить" };
     /// <summary>What it is to do it: "не велено: копать".</summary>
-    public static readonly string[] Verbs = { "строить", "копать", "рубить", "ломать камень" };
+    public static readonly string[] Verbs = { "строить", "копать", "рубить", "ломать камень", "тушить" };
 
     public static readonly string[] Tips =
     {
@@ -26,6 +31,7 @@ public static class Work
         "Копать\nВынимать землю: рвы, котлованы, ямы, земля с делянок.",
         "Рубить\nВалить лес и разбирать деревянное: деревья, кусты, лестницы, настилы орды, брёвна стен.",
         "Камень\nЛомать камень: скалы, валуны, руины, руду в жилах и свою кладку, если её велено разобрать.",
+        "Тушить\nСбивать огонь с того, что мы построили, и вокруг цитадели. Лес вдали пусть горит. Сначала у всех стоит 1: пожар — первым делом.",
     };
 
     /// <summary>The work an order is: laying for what is to be laid, else what is taken out.</summary>

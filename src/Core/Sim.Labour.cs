@@ -69,6 +69,8 @@ public sealed partial class Sim
 
     void PawnTick(Unit u, float dt)
     {
+        // standing in the flames: out of them before anything
+        if (EscapeFire(u, dt)) { Busy(u); return; }
         // badly hurt: out of the fight to mend by the citadel
         if (FallBack(u, dt)) { Busy(u); return; }
         // one that has lost the hand it fights with (or, with a bow, either hand) runs like a worker
@@ -80,6 +82,8 @@ public sealed partial class Sim
         if (u.Prey != null && HuntTick(u, dt)) { Busy(u); return; }
         // a comrade bleeding close by comes before any work (soldiers keep to their posts while the horde is here)
         if ((!soldier || !Waves.Active) && Bandage(u, dt)) { Busy(u); return; }
+        // a fire in what we built or round the citadel, if putting it out comes before the work at hand
+        if ((!soldier || !Waves.Active) && FightFire(u, dt)) { Busy(u); return; }
         if (soldier && HasMainHand(u) && PushLadders(u, dt)) { Busy(u); return; }
         if (u.Path != null && u.PathI < u.Path.Count && (u.Hold || u.Site < 0) && u.Pastime != Pastime.Stroll) { Walk(u, dt); return; }
         if (u.Hold)
@@ -228,7 +232,7 @@ public sealed partial class Sim
     void FindWork(Unit u)
     {
         u.NextSearch = Time + .3 + Rng.NextDouble() * .4;
-        if (Work.Allowed(u) == 0) { u.Why = "все работы отключены"; return; }
+        if ((Work.Allowed(u) & Work.Marked) == 0) { u.Why = "все работы отключены"; return; }
         if (Orders.Active.Count == 0)
         {
             u.Why = "";

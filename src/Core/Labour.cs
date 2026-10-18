@@ -57,11 +57,15 @@ public static class Labour
         // the dressing of the buildings comes away at a touch; casks and crates are a little timber
         foreach (var m in new[] { Mat.Banner, Mat.BannerTrim, Mat.Sconce, Mat.Flame, Mat.Hoop, Mat.Sack }) D(m, .25f, Stockpile.None, 0);
         foreach (var m in new[] { Mat.Cask, Mat.Crate, Mat.CrateEdge }) D(m, .5f, Stockpile.Wood, .3f);
+        // charred timber crumbles at a touch and is good for nothing; set pitch comes up like earth, and is lost
+        D(Mat.Char, .5f, Stockpile.None, 0); D(Mat.Pitch, 1, Stockpile.None, 0);
         LayCost[Mat.Rammed] = 1; LayCost[Mat.Wood] = 1.5f;
         foreach (var m in new[] { Mat.Stone, Mat.Mortar, Mat.StoneDark, Mat.StoneLight, Mat.StoneWarm, Mat.StoneCool }) LayCost[m] = 2;
         // a ladder is joinery: rails and rungs take longer than the logs they are made of; a gate more so
         LayCost[Mat.Ladder] = 6;
         LayCost[Mat.Gate] = 4;
+        // pitch is boiled out of pine and poured: slower than logs
+        LayCost[Mat.Pitch] = 2.5f;
     }
 
     /// <summary>Pawns can take this out of the world (bedrock and the citadel they cannot).</summary>
@@ -75,7 +79,7 @@ public static class Labour
     public static int CostKind(byte m) => m switch
     {
         Mat.Stone or Mat.Mortar or Mat.StoneDark or Mat.StoneLight or Mat.StoneWarm or Mat.StoneCool => Stockpile.Stone,
-        Mat.Wood or Mat.Ladder or Mat.Gate or Mat.GateShut or Mat.GateOpen => Stockpile.Wood,
+        Mat.Wood or Mat.Ladder or Mat.Gate or Mat.GateShut or Mat.GateOpen or Mat.Pitch => Stockpile.Wood,
         Mat.Rammed => Stockpile.Earth,
         _ => Stockpile.None,
     };

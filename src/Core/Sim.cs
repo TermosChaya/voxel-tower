@@ -92,6 +92,8 @@ public sealed partial class Sim
         u.X += u.OffX; u.Z += u.OffZ;
         u.Facing = (float)(Rng.NextDouble() * Math.PI * 2);
         if (t.Team == Team.Player && t.Work < 1) u.Post = cell;
+        // some of the horde come with torches, picked by the raider (not by the dice, which the rest of the valley shares)
+        u.Torch = t.TorchShare > 0 && Hash.H3(u.Id, 11, 7) < t.TorchShare;
         Units.Add(u);
         return u;
     }
@@ -120,6 +122,7 @@ public sealed partial class Sim
         if (Over) return;
         Time += dt;
         TickWater(dt);
+        TickFire(dt);
         TickGates(dt);
         TickDecor();
         TickMines(dt);
