@@ -32,7 +32,8 @@ public partial class ColonistBar : Control
     {
         if (_m?.Sim == null) return;
         _pawns.Clear();
-        foreach (var u in _m.Sim.Units) if (!u.Dead && u.Team == Team.Player) _pawns.Add(u);
+        // the risen are no household of ours
+        foreach (var u in _m.Sim.Units) if (!u.Dead && u.Team == Team.Player && u.T != Kinds.Risen) _pawns.Add(u);
         _pawns.Sort((a, b) => a.T == b.T ? a.Id.CompareTo(b.Id) : Array.IndexOf(Kinds.PlayerKinds, a.T).CompareTo(Array.IndexOf(Kinds.PlayerKinds, b.T)));
         int breaks = 0;
         for (int i = 1; i < _pawns.Count; i++) if (_pawns[i].T != _pawns[i - 1].T) breaks++;

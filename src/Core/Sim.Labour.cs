@@ -71,6 +71,8 @@ public sealed partial class Sim
 
     void PawnTick(Unit u, float dt)
     {
+        // one of the dead raised: it goes for the horde, and does nothing else
+        if (u.T == Kinds.Risen) { RisenTick(u, dt); return; }
         // bound and led off by a thief: it goes where it is led till it is freed
         if (u.Captor != null) { Led(u, dt); return; }
         // standing in the flames: out of them before anything

@@ -86,6 +86,13 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `Done`), `Sacrifice(kind, victim)` (днём, святилище и жрец; возвращает причину отказа), `RiteTick` (из `PriestTick`),
   `Fulfil` (`Worth`, `CarcassWorth`, `OwnFavour`; ×1,5 на удержанном месте силы; `RiteDone` — вспышка),
   `CancelRite`, `AltarFor`; `Revelations`, `Carcasses` (из `Kill` зверя нашими), `MournUntil` (`WorkTick` ×0,75).
+- `Sim.Spells.cs` — заклинания: `SpellKind`, `Spell` (круг, `ByFavour`/`Learn`, `Cost`, `Cooldown`, `Radius`, `Stroke`),
+  `Sim.Spells` (10), `Known`, `LearnSpell`, `ReadyIn`, `Cast(kind, x, y, z, x2, z2)` — возвращает причину отказа;
+  по заклинанию: `RaiseBank` (Длань: `_rising` по слоям за 3 с, `RiseNow`), `BogDown` (`Mires`, в `Walk` ×0,35),
+  `BringDown` (шар → `Fall` из `Sim.Collapse`), `RainFireOn`/`Land` (`Drops`, капли находят налётчиков), `Thunderbolt`
+  (`Struck`), `Moon` (`BloodMoonUntil` → `Lit` всюду), `Terrify`, `Chain` (`Unit.ChainedUntil`, в `RaiderTick` стоит),
+  `RaiseDead` (`Kinds.Risen` из `Kinds.Summoned`, `Unit.CrumbleAt`, `RisenTick` из `PawnTick`), `Watch` (`EyeUntil` →
+  `FogRange` 1). `TickSpells` — в `StepWorld`. Событие `Spelled` — для вида.
 - `Sim.Research.cs` — награды и знания: `Lore`, `Lores`, `Branches`, `Knowledge`, `Learnt`, `Learn`, `Reward(wave)`;
   в конце — что даёт изученное (`BowRange`, `HireCost`, `StoneHack`, `LayPace` и др.), их читают на местах.
 - `Sim.Engines.cs` — осадные машины: `EngineTick`, `CatapultTick`/`AimFor`/`Throw`/`StoneLands`, `MantletTick`/`Cover`,
@@ -241,7 +248,10 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `HealthBar`, `BodyChart`, `PriorityCell`, `MiniCard`, `KindFace`; `WorkTable.cs` — таблица работ (рисуется
   целиком в `_Draw`, щелчки в `_GuiInput`); `Panels.cs` — `Retinue` (только помощники: что делает, раны, сводка),
   `HordeInfo`, `UnitOverlay`; `Lore.cs` — `LorePanel` (вкладка «Знания»); `Mysteries.cs` — `MysteryPanel` (вкладка
-  «Таинства»: вмешательство, святилища, жертвы); `MagicView.cs` (мир) — вспышка над алтарём; `Envoy.cs` — `EnvoyCard`; `Widgets.cs` — `Slot`, `Stepper`, `Choice`, `Tooltip`, `CursorTag`,
+  «Таинства»: вмешательство, святилища, жертвы, заклинания по кругам — изучить или взять в руку); `MagicView.cs` (мир) —
+  вспышка над алтарём, капли смолы, молния, трясины, кольца Ужаса и Цепей, метки Ока, пыль и искры; заклинание в руке —
+  `Tool.Spell` в `BuildTools` (`TakeSpell`, `CastHere`, круг/шар/вал у курсора), в консоли — `Inspector.SpellPane`;
+  кровавая луна — `Atmosphere._blood`; `Envoy.cs` — `EnvoyCard`; `Widgets.cs` — `Slot`, `Stepper`, `Choice`, `Tooltip`, `CursorTag`,
   `Medallion`, `Toasts`; палитра и шрифты — `Ornament.cs`, значки — `Icons.cs`. Корень интерфейса тянет текстуры
   с повтором (`TextureRepeat`). Летопись: `Hud.Log(text, kind, x, z)` — строка с местом получает «◎» и по щелчку
   ведёт камеру туда; ядро говорит через `Sim.Said` (`Say(text, kind, x, z)` / `Say(text, kind, unit)`). Запасы на

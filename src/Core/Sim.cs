@@ -134,6 +134,7 @@ public sealed partial class Sim
         TickWater(dt);
         TickFire(dt);
         TickLight();
+        TickSpells();
         TickCollapse(dt);
         TickGates(dt);
         TickDrawbridges(dt);
@@ -230,7 +231,7 @@ public sealed partial class Sim
         if (climbing) { tx = u.X; tz = u.Z; ty = (Nav.Y(next) << NavGrid.Shift) + (Nav.Solid(Nav.I(next), Nav.Y(next) - 1, Nav.K(next)) ? Nav.Floor[next] - (Nav.Y(next) << NavGrid.Shift) : 0); }
         else { tx += u.OffX; tz += u.OffZ; }
         float speed = u.T.Move.Speed * NavGrid.CS * pace * u.Pace * (u.Hp < u.MaxHp * .4f ? .7f : 1) * (Nav.Water[u.Cell] > 0 ? .6f : 1)
-            * (Nav.Spikes[u.Cell] > 0 ? .4f : 1) * Gait(u);
+            * (Nav.Spikes[u.Cell] > 0 ? .4f : 1) * Gait(u) * (Mires.Count > 0 && InMire(u.X, u.Z) ? .35f : 1);
         float step = speed * dt * (climbing ? .5f : 1);
         float dx = tx - u.X, dz = tz - u.Z, dyv = ty - u.Y;
         float dist = climbing ? MathF.Abs(dyv) : MathF.Sqrt(dx * dx + dz * dz);
@@ -513,7 +514,7 @@ public sealed partial class Sim
     public void Recall()
     {
         foreach (var u in Units)
-            if (!u.Dead && u.Team == Team.Player && u.T.Work < 1 && u.Post >= 0)
+            if (!u.Dead && u.Team == Team.Player && u.T.Work < 1 && u.Post >= 0 && u.T != Kinds.Risen)
             {
                 ReleaseSite(u);
                 Busy(u);

@@ -180,6 +180,16 @@ public static class Kinds
     };
 
     public static readonly UnitType[] WildKinds = { Deer, Boar, Hare, WhiteStag, Bear };
+
+    /// <summary>The dead raised by a spell: bones and a rusted blade, fighting for us a minute, then falling apart.</summary>
+    public static readonly UnitType Risen = new()
+    {
+        Key = "risen", Name = "Мертвец", Team = Team.Player,
+        Move = new Mover { Height = 2, Climb = 1, Drop = 5, Speed = 2.3f },
+        Work = 0, Yield = 0, Hp = 60, Damage = 11, AttackTime = 1.1f, Reach = 10, Tool = "sword",
+    };
+    /// <summary>What the spells raise: not hired, not the household's, gone in a minute.</summary>
+    public static readonly UnitType[] Summoned = { Risen };
 }
 
 /// <summary>One pawn or attacker on the field. Positions are in voxels, feet on the ground.</summary>
@@ -322,6 +332,8 @@ public sealed class Unit
     public Rite Rite;
     /// <summary>Till when it is held fast in the chains of a spell.</summary>
     public double ChainedUntil = -1;
+    /// <summary>One of the risen: when it falls apart.</summary>
+    public double CrumbleAt;
 
     // beasts, and pawns with nothing to do
     /// <summary>Where it grazes and wanders round; for a pawn, where it idles round.</summary>

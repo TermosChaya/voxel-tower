@@ -40,6 +40,7 @@ public partial class Inspector : Control
 
     string Key()
     {
+        if (_m.Tools.Tool == Tool.Spell) return "spell:" + (int)_m.Tools.CurrentSpell;
         if (_m.Tools.Tool != Tool.None) return "tool";
         var sel = Chosen();
         if (sel.Count == 0 && _m.Inspected is { } look) return "look:" + look.Id;
@@ -64,7 +65,7 @@ public partial class Inspector : Control
         box.SetAnchorsPreset(LayoutPreset.FullRect);
         foreach (var (side, px) in new[] { ("margin_left", 14), ("margin_right", 12), ("margin_top", 8), ("margin_bottom", 8) }) box.AddThemeConstantOverride(side, px);
         var sel = Chosen();
-        box.AddChild(_key == "tool" ? ToolPane() : _key.StartsWith("look:") && _m.Inspected != null ? LookPane(_m.Inspected)
+        box.AddChild(_key == "tool" ? ToolPane() : _key.StartsWith("spell:") ? SpellPane() : _key.StartsWith("look:") && _m.Inspected != null ? LookPane(_m.Inspected)
             : sel.Count == 0 ? HomePane() : sel.Count == 1 ? OnePane(sel[0]) : GroupPane(sel));
         AddChild(box);
         _pane = box;
@@ -216,6 +217,35 @@ public partial class Inspector : Control
     {
         double m = voxels / (double)VoxelWorld.PerMetre;
         return m < 1 ? $"{Math.Round(m * 100)} см" : (Fmt.One(m) + " м").Replace(",0 м", " м");
+    }
+
+    // ---------------------------------------------------------------- a spell in hand
+
+    Control SpellPane()
+    {
+        var sp = Sim.SpellOf(_m.Tools.CurrentSpell);
+        var col = new VBoxContainer();
+        col.AddThemeConstantOverride("separation", 6);
+        var head = new HBoxContainer();
+        head.AddThemeConstantOverride("separation", 14);
+        head.AddChild(Hud.Text(sp.Name, Ornament.Display, 22, Ornament.EmberGlow));
+        var circle = Hud.CapsLabel(Sim.Circles[sp.Circle], 9);
+        circle.VerticalAlignment = VerticalAlignment.Center;
+        head.AddChild(circle);
+        col.AddChild(head);
+        var about = Hud.Text(sp.About, Ornament.Serif, 13, Ornament.Parchment, wrap: true);
+        about.CustomMinimumSize = new Vector2(640, 0);
+        col.AddChild(about);
+        var state = Hud.Text("", Ornament.SerifItalic, 13, Ornament.BronzeLight);
+        col.AddChild(state);
+        _refresh.Add(() =>
+        {
+            double ready = _m.Sim.ReadyIn(sp.Kind), have = _m.Sim.Favour;
+            string how = sp.Stroke ? "проведите линию по земле" : sp.Radius <= 0 ? "щёлкните по полю где угодно" : sp.Kind == SpellKind.Fall ? "щёлкните по стене, скале или постройке" : "щёлкните по полю";
+            state.Text = $"{sp.Cost:0} вмешательства (есть {have:0})" + (ready > 0 ? $" · будет готово через {ready:0} с" : " · готово") + $" · {how} · Esc — убрать";
+            state.AddThemeColorOverride("font_color", ready > 0 || have < sp.Cost ? Ornament.Blood.Lightened(.3f) : Ornament.BronzeLight);
+        });
+        return col;
     }
 
     // ---------------------------------------------------------------- one pawn

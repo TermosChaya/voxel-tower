@@ -136,7 +136,7 @@ public sealed partial class Sim
                 Say($"Добыт {u.T.Name.ToLowerInvariant()}: +{u.T.Bounty} золота.", 1, u);
             }
         }
-        else if (cause != GivenToPowers) Say($"{u.T.Name} пал.", 3, u);
+        else if (cause != GivenToPowers && u.T != Kinds.Risen) Say($"{u.T.Name} пал.", 3, u);
     }
 
     /// <summary>Beasts taken by the pawns since the start.</summary>
@@ -290,7 +290,7 @@ public sealed partial class Sim
     }
 
     /// <summary>Whether a spot is lit at night.</summary>
-    public bool Lit(float x, float z) => _lit.Contains(LitKey((int)Math.Clamp(x, 0, World.SX - 1), (int)Math.Clamp(z, 0, World.SZ - 1)));
+    public bool Lit(float x, float z) => Time < BloodMoonUntil || _lit.Contains(LitKey((int)Math.Clamp(x, 0, World.SX - 1), (int)Math.Clamp(z, 0, World.SZ - 1)));
 
     /// <summary>How far a bow carries into the dark now: all the way by day, little more than half at night.</summary>
     public float DarkRange(Unit a) => BowRange(a) * FogRange * (1 - .45f * Waves.Darkness);

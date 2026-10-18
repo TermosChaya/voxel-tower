@@ -232,6 +232,7 @@ public partial class Atmosphere : Node3D
             float k = _calm ? 1 : (float)delta / 5;
             _wet = Mathf.MoveToward(_wet, _sim.Weather == Weather.Rain ? 1 : 0, k);
             _fog = Mathf.MoveToward(_fog, _sim.Weather == Weather.Fog ? 1 : 0, k);
+            _blood = Mathf.MoveToward(_blood, _sim.Time < _sim.BloodMoonUntil ? 1 : 0, _calm ? 1 : (float)delta / 2);
             _rain.Emitting = _wet > .3f;
             _rain.AmountRatio = Math.Clamp(_wet, .05f, 1);
         }
@@ -253,7 +254,9 @@ public partial class Atmosphere : Node3D
     }
 
     // the day's sun at morning, noon and sunset, and the night's moon
-    static readonly Color Morning = new("f0cfae"), Noon = new("eee0cc"), Evening = new("ffb066"), Sunset = new("ff6c3c"), Moon = new("7d92d8");
+    static readonly Color Morning = new("f0cfae"), Noon = new("eee0cc"), Evening = new("ffb066"), Sunset = new("ff6c3c"), Moon = new("7d92d8"), BloodMoon = new("d8341f");
+    /// <summary>How far the red moon of the spell is in the sky, eased.</summary>
+    float _blood;
 
     /// <summary>
     /// The light for a time of day (0 dawn, ½ noon, 1 sunset) and a darkness (0 day, 1 night): where the sun stands and
@@ -269,19 +272,20 @@ public partial class Atmosphere : Node3D
         // the moon stands high in the south-west all night
         var moonDir = new Vector3(-.4f, .72f, .48f).Normalized();
         dir = dir.Normalized().Lerp(moonDir, dark).Normalized();
-        _sun.LightColor = col.Lerp(Moon, dark);
-        _sun.LightEnergy = Mathf.Lerp(energy, .3f, dark);
+        // under the red moon of the spell the night is lit, and lit red
+        _sun.LightColor = col.Lerp(Moon.Lerp(BloodMoon, _blood), dark);
+        _sun.LightEnergy = Mathf.Lerp(energy, .3f + .45f * _blood, dark);
         _sun.LookAtFromPosition(dir * 20, Vector3.Zero, Mathf.Abs(dir.Y) > .98f ? Vector3.Forward : Vector3.Up);
         _rim.LightEnergy = Mathf.Lerp(.55f, .22f, dark);
         // rain greys the light and dims it; fog comes in close, pale by day and dark at night
-        Env.AmbientLightEnergy = Mathf.Lerp(.82f, .27f, dark) * (1 - .18f * _wet);
+        Env.AmbientLightEnergy = Mathf.Lerp(.82f, .27f + .2f * _blood, dark) * (1 - .18f * _wet);
         _sun.LightEnergy *= 1 - .45f * _wet - .3f * _fog;
         var fogDay = new Color(0.114f, 0.086f, 0.149f).Lerp(new Color(.34f, .35f, .38f), _fog * .8f + _wet * .3f);
         Env.FogLightColor = fogDay.Lerp(new Color(.03f, .035f, .07f), dark);
         Env.FogDepthBegin = Mathf.Lerp(84, 22, _fog) - 20 * _wet;
         Env.FogDepthEnd = Mathf.Lerp(170, 80, _fog) - 30 * _wet;
         Env.FogDensity = Mathf.Lerp(.55f, .82f, Math.Max(_fog, _wet * .5f));
-        _skyMat.SetShaderParameter("amb_sky", new Vector3(0.254f, 0.246f, 0.578f).Lerp(new Vector3(.09f, .11f, .3f), dark));
+        _skyMat.SetShaderParameter("amb_sky", new Vector3(0.254f, 0.246f, 0.578f).Lerp(new Vector3(.09f, .11f, .3f).Lerp(new Vector3(.42f, .07f, .06f), _blood), dark));
         _skyMat.SetShaderParameter("bg_top", new Vector3(0.027f, 0.017f, 0.040f).Lerp(new Vector3(.006f, .008f, .02f), dark));
         LampBoost = 1 + .7f * dark;
     }

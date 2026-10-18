@@ -38,7 +38,7 @@ public partial class Commander : Node
             var r = Box(_from, mb.Position);
             if (!add) _m.Selected.Clear();
             foreach (var u in _m.Sim.Units)
-                if (!u.Dead && !u.Inside && u.Team == Team.Player && r.HasPoint(Screen(u, .5f))) _m.Selected.Add(u);
+                if (!u.Dead && !u.Inside && u.Team == Team.Player && u.T != Kinds.Risen && r.HasPoint(Screen(u, .5f))) _m.Selected.Add(u);
             _m.Hud.OnSelectionChanged();
             return;
         }
@@ -46,9 +46,10 @@ public partial class Commander : Node
         if (hit == null && _m.Tools.HoverGate is { } gate) { Toggle(gate); return; }
         if (hit == null && _m.Tools.HoverBridge is { } draw) { Toggle(draw); return; }
         if (!add) _m.Selected.Clear();
-        // one of ours is picked; a raider or a beast is only looked at
-        _m.Inspected = hit != null && hit.Team != Team.Player && _m.Selected.Count == 0 ? hit : null;
-        if (hit != null && hit.Team == Team.Player)
+        // one of ours is picked; a raider, a beast or one of the risen is only looked at
+        bool ours = hit != null && hit.Team == Team.Player && hit.T != Kinds.Risen;
+        _m.Inspected = hit != null && !ours && _m.Selected.Count == 0 ? hit : null;
+        if (ours)
         {
             if (add && _m.Selected.Contains(hit)) _m.Selected.Remove(hit); else _m.Selected.Add(hit);
         }

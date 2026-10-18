@@ -47,7 +47,8 @@ public sealed partial class Sim
     /// <summary>What rain does to fire catching and burning on, and to aim; what fog does to how far a bow is any use.</summary>
     public float RainFire => Weather == Weather.Rain ? .3f : Weather == Weather.Wind ? 1.8f : 1;
     public float WeatherAim => Weather switch { Weather.Rain => .85f, Weather.Wind => .9f, _ => 1 };
-    public float FogRange => Weather == Weather.Fog ? .6f : 1;
+    /// <summary>How far one sees in the fog, as a share; the Eye of the spells sees through it.</summary>
+    public float FogRange => Weather == Weather.Fog && Time >= EyeUntil ? .6f : 1;
 
     public static string WeatherName(Weather w) => w switch { Weather.Rain => "дождь", Weather.Fog => "туман", Weather.Wind => "ветер", _ => "ясно" };
 

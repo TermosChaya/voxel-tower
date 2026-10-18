@@ -5,7 +5,7 @@ using VoxelTower.Core;
 
 namespace VoxelTower.Game;
 
-public enum Tool { None, Brush, Line, Box, Circle, Extrude, Ladder, Gate, Repair, Bridge, Gather, Unmark, Capture, Paste }
+public enum Tool { None, Brush, Line, Box, Circle, Extrude, Ladder, Gate, Repair, Bridge, Gather, Unmark, Capture, Paste, Spell }
 
 public enum BrushForm { Column, Ball }
 
@@ -54,7 +54,7 @@ public partial class BuildTools : Node3D
     {
         Tool.Brush => "Кисть", Tool.Line => "Линия", Tool.Box => "Прямоугольник", Tool.Circle => "Круг",
         Tool.Extrude => "Выдавить", Tool.Ladder => "Лестница", Tool.Gate => "Ворота", Tool.Repair => "Починка", Tool.Bridge => "Мост", Tool.Gather => "Делянка", Tool.Unmark => "Снять разметку", Tool.Capture => "Снять чертёж",
-        Tool.Paste => "Чертёж", _ => "Без кисти",
+        Tool.Paste => "Чертёж", Tool.Spell => "Заклинание", _ => "Без кисти",
     };
 
     public static string Hint(Tool t, bool dig) => (t, dig) switch
@@ -222,6 +222,22 @@ public partial class BuildTools : Node3D
     }
 
     public void Cancel() { if (Tool != Tool.None) SetTool(Tool.None); }
+
+    /// <summary>The spell in hand while the tool is a spell.</summary>
+    public SpellKind CurrentSpell { get; private set; }
+
+    /// <summary>Takes a spell in hand: the next click on the field (or a stroke, for the Hand) casts it.</summary>
+    public void TakeSpell(SpellKind k)
+    {
+        Tool = Tool.Spell;
+        CurrentSpell = k;
+        PasteBp = null;
+        _lmb = _paint = _hasStart = false;
+        _planKey = "~";
+        _m.Hud.OnToolChanged();
+    }
+
+    bool SpellStroke => Tool == Tool.Spell && Sim.SpellOf(CurrentSpell).Stroke;
 
     /// <summary>A material to lay; puts the pick away.</summary>
     public void SetMaterial(byte m) { Opt.Material = m; Opt.Dig = false; Shelter = Sanctum = false; Changed(); }
@@ -442,6 +458,7 @@ public partial class BuildTools : Node3D
         _lmb = false;
         var w = _m.World;
         bool click = (mb.Position - _pressPos).Length() <= 8;
+        if (Tool == Tool.Spell) { CastHere(click); return; }
         bool dig = Opt.Dig || (Tool == Tool.Brush && _shift);
         if (_paint)
         {
@@ -499,6 +516,31 @@ public partial class BuildTools : Node3D
             Designate(plan, dig, dig ? "Вдавить" : "Выдавить");
         }
         else if (Tool == Tool.Paste && PasteBp != null) Designate(PlanPasteAtHover(), false, PasteBp.Name);
+    }
+
+    /// <summary>
+    /// The spell in hand let go at the field: the Fall at the voxel aimed at, the Hand along the stroke, the rest at the
+    /// ground under the cursor.
+    /// </summary>
+    void CastHere(bool click)
+    {
+        var sp = Sim.SpellOf(CurrentSpell);
+        if (!_hasStart) return;
+        string why;
+        if (sp.Stroke)
+        {
+            if (!_hasDrag || click) { Refuse("проведите линию по земле: где встанет вал"); return; }
+            why = _m.Sim.Cast(CurrentSpell, _startPt.x + .5f, _startPt.y, _startPt.z + .5f, _dragPt.x + .5f, _dragPt.z + .5f);
+        }
+        else
+        {
+            if (!click || !_hasHover) return;
+            var at = CurrentSpell == SpellKind.Fall ? (_hover.X, _hover.Y, _hover.Z) : HoverGround();
+            why = _m.Sim.Cast(CurrentSpell, at.Item1 + .5f, at.Item2, at.Item3 + .5f);
+        }
+        if (why != null) Refuse(why);
+        _planKey = "~";
+        _m.Hud.Refresh();
     }
 
     // ---------------------------------------------------------------- mending
@@ -847,7 +889,7 @@ public partial class BuildTools : Node3D
             _hasTree = true;
         }
         _hasDrag = false;
-        if (_lmb && _hasStart && (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather or Tool.Repair || ColumnStroke) && Math.Abs(d.Y) > 1e-4f)
+        if (_lmb && _hasStart && (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather or Tool.Repair || ColumnStroke || SpellStroke) && Math.Abs(d.Y) > 1e-4f)
         {
             float t = (w.WY(_startPt.y) - o.Y) / d.Y;
             if (t > 0)
@@ -974,12 +1016,42 @@ public partial class BuildTools : Node3D
                 new Vector3(w.WX(_hover.X + .5f), w.WY(_hover.Y + .5f), w.WZ(_hover.Z + .5f)), new Color(.83f, .3f, .22f, .22f));
             show = true;
         }
+        else if (Tool == Tool.Spell && _hasHover)
+        {
+            // where the spell will fall: its circle on the ground, the ball the Fall knocks out, the bank of the Hand
+            var sp = Sim.SpellOf(CurrentSpell);
+            var violet = new Color(.62f, .38f, .95f, .24f);
+            if (sp.Stroke && _lmb && _hasStart && _hasDrag)
+            {
+                float dx = _dragPt.x - _startPt.x, dz = _dragPt.z - _startPt.z, len = Math.Min(MathF.Sqrt(dx * dx + dz * dz), 16 * VoxelWorld.PerMetre);
+                float yaw = -MathF.Atan2(dz, dx), l = Math.Max(1, MathF.Sqrt(dx * dx + dz * dz));
+                SetShape(new BoxMesh { Size = new Vector3(len * VoxelWorld.Vox, 20 * VoxelWorld.Vox, 2 * VoxelWorld.PerMetre * VoxelWorld.Vox) },
+                    new Vector3(w.WX(_startPt.x + dx / l * len / 2 + .5f), w.WY(_startPt.y + 10), w.WZ(_startPt.z + dz / l * len / 2 + .5f)), violet, yaw);
+                show = true;
+            }
+            else if (CurrentSpell == SpellKind.Fall)
+            {
+                float r = sp.Radius * VoxelWorld.Vox;
+                SetShape(new SphereMesh { Radius = r, Height = r * 2, RadialSegments = 24, Rings = 12 },
+                    new Vector3(w.WX(_hover.X + .5f), w.WY(_hover.Y + .5f), w.WZ(_hover.Z + .5f)), violet);
+                show = true;
+            }
+            else if (sp.Radius > 0)
+            {
+                var g = HoverGround();
+                float r = sp.Radius * VoxelWorld.Vox;
+                SetShape(new CylinderMesh { TopRadius = r, BottomRadius = r, Height = .06f, RadialSegments = 40 },
+                    new Vector3(w.WX(g.x + .5f), w.WY(g.y) + .08f, w.WZ(g.z + .5f)), violet);
+                show = true;
+            }
+        }
         _shape.Visible = show;
     }
 
     string _shapeKey = "";
-    void SetShape(PrimitiveMesh mesh, Vector3 at, Color c)
+    void SetShape(PrimitiveMesh mesh, Vector3 at, Color c, float yaw = 0)
     {
+        _shape.Rotation = new Vector3(0, yaw, 0);
         string key = mesh switch
         {
             BoxMesh bm => "B" + bm.Size, CylinderMesh cm => "C" + cm.Height + "/" + cm.TopRadius, SphereMesh sm => "S" + sm.Radius, _ => "?",
@@ -1000,6 +1072,18 @@ public partial class BuildTools : Node3D
         string opts = $"{dig}|{Opt.Material}|{Opt.Width}|{Opt.Height}|{Opt.Depth}|{Opt.Step}|{Opt.Level}|{Opt.Hollow}|{Opt.Form}|{_rev}|{stock}";
         string key = "";
         bool dragging = Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Bridge && _lmb && _hasStart && _hasDrag;
+        if (Tool == Tool.Spell)
+        {
+            // a spell shows what it takes and whether it is ready, no ghost
+            _ghost.Visible = false;
+            var sp = Sim.SpellOf(CurrentSpell);
+            double ready = _m.Sim.ReadyIn(sp.Kind), have = _m.Sim.Favour;
+            PlanText = $"«{sp.Name}» · {sp.Cost:0} вмешательства" + (ready > 0 ? $" · через {ready:0} с" : "") + (have < sp.Cost ? $" — есть {have:0}" : "");
+            PlanAffordable = ready <= 0 && have >= sp.Cost;
+            PlanIsDig = false;
+            _planKey = "~";
+            return;
+        }
         if (Tool == Tool.Gather)
         {
             // a gathering area shows what it holds, no ghost

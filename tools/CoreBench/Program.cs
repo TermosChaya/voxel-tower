@@ -2580,6 +2580,152 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--captives")
         $"struck {tookC}, the orc {(orcC.Dead ? orcC.KilledBy : "still held")}, gold +{simC.Stock.Gold - goldC:0}");
 }
 
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--spells")
+{
+    Console.WriteLine();
+    var mpP = new MapParams();
+    var wP = new VoxelWorld(mpP.SizeX, mpP.SizeY, mpP.SizeZ);
+    var siteP = MapGen.Generate(wP, mpP);
+    wP.Compact();
+    var simP = new Sim(wP, siteP);
+    simP.Waves.Countdown = 1e9; simP.WildTarget = 0;
+    void RunP(double seconds) { for (double t = 0; t < seconds; t += .05) simP.Step(.05f); }
+    int kxP = siteP.KeepX, kzP = siteP.KeepZ;
+    Unit Raider(UnitType t, int x, int z) { var u = simP.Spawn(t, simP.NearestStand(x, z, t.Move.Height)); u.Guard = true; u.Home = u.Cell; return u; }
+    void Gone(Unit u) { u.Dead = true; u.DiedAt = -999; }
+
+    // learning: the first of each circle for intervention, the rest for revelations
+    simP.Favour = 25;
+    bool mireFirst = simP.LearnSpell(SpellKind.Mire), handP = simP.LearnSpell(SpellKind.Hand);
+    simP.Revelations = 2;
+    bool mireP = simP.LearnSpell(SpellKind.Mire);
+    Check("spells are learnt: the first of a circle for intervention, the rest for revelations", !mireFirst && handP && mireP && simP.Favour == 5 && simP.Revelations == 0,
+        $"the Mire before any revelation {mireFirst}, the Hand {handP}, the Mire then {mireP}; {simP.Favour} intervention, {simP.Revelations} revelations left");
+    foreach (var s in Sim.Spells) simP.Known.Add(s.Kind);
+    simP.Favour = 5000;
+
+    // the Hand: a bank of earth rises along the stroke; cast again at once, it is not ready
+    int hx = kxP - 220, hz0 = kzP - 60, hz1 = kzP + 20, hmid = (hz0 + hz1) / 2;
+    int hg0 = wP.SurfAt(hx, hmid);
+    string castHand = simP.Cast(SpellKind.Hand, hx, hg0, hz0, hx, hz1), againHand = simP.Cast(SpellKind.Hand, hx, hg0, hz0, hx, hz1);
+    RunP(4);
+    int hg1 = wP.SurfAt(hx, hmid);
+    Check("the Hand of the earth raises a bank along the stroke, and the spell waits before it can be cast again", castHand == null && againHand != null && hg1 - hg0 >= 16,
+        $"cast: {castHand ?? "yes"}, again at once: {againHand ?? "yes"}; the ground {hg0} → {hg1}");
+
+    // the Mire: one walking through it goes at a third of the pace
+    int mx0 = kxP - 150, mz = kzP + 150, mx1 = kxP + 90;
+    var walkerA = simP.Spawn(Kinds.Worker, simP.NearestStand(mx0, mz, 2));
+    simP.Command(new[] { walkerA }, simP.NearestStand(mx1, mz, 2));
+    float ax0 = walkerA.X;
+    RunP(8);
+    float freeWay = walkerA.X - ax0;
+    Gone(walkerA);
+    var walkerB = simP.Spawn(Kinds.Worker, simP.NearestStand(mx0, mz, 2));
+    simP.Cast(SpellKind.Mire, mx0 + 50, wP.SurfAt(mx0 + 50, mz), mz);
+    simP.Command(new[] { walkerB }, simP.NearestStand(mx1, mz, 2));
+    float bx0 = walkerB.X;
+    RunP(8);
+    float boggedWay = walkerB.X - bx0;
+    Gone(walkerB);
+    Check("in the Mire one goes at a third of the pace", freeWay > 80 && boggedWay < freeWay * .55f, $"8 s: {freeWay / 8:0} voxels on dry ground, {boggedWay / 8:0} in the bog");
+
+    // the Fall: a ball knocked out of a stone wall comes down, and the goblin at its foot is hurt
+    int fx = kxP - 200, fz0 = kzP - 200, fz1 = fz0 + 64;
+    int ftop = Shapes.LevelTop(wP, fx, fz0 + 32, 40);
+    simP.InstantLabour = true;
+    simP.DesignateBuild(Shapes.Line(wP, siteP, fx, fz0, fx, fz1, new Stroke { Mat = Mat.Stone, Width = 8, Height = 40, Level = true }, ftop));
+    simP.InstantLabour = false;
+    int StoneIn() { int n = 0; for (int z = fz0 - 4; z <= fz1 + 4; z++) for (int x = fx - 8; x <= fx + 8; x++) for (int y = ftop - 48; y < ftop + 4; y++) if (Mat.IsMasonry(wP.Get(x, y, z))) n++; return n; }
+    int stone0 = StoneIn();
+    var gobF = Raider(Kinds.Goblin, fx - 14, fz0 + 32);
+    float fh0 = gobF.Hp;
+    string castFall = simP.Cast(SpellKind.Fall, fx, ftop - 20, fz0 + 32);
+    RunP(3);
+    int stone1 = StoneIn();
+    Check("the Fall knocks a ball out of a wall: it comes down, and the goblin at its foot is hurt", castFall == null && stone0 - stone1 > 1000 && (gobF.Dead || gobF.Hp < fh0 - 20),
+        $"cast: {castFall ?? "yes"}; masonry {stone0} → {stone1}; the goblin {(gobF.Dead ? "dead: " + gobF.KilledBy : $"{gobF.Hp:0} of {fh0:0}")}");
+    Gone(gobF);
+
+    // the Fire Rain: a wall of logs catches, and a goblin by it burns
+    int rx = kxP - 300, rz = kzP - 120;
+    for (int z = rz; z < rz + 40; z++) for (int x = rx; x < rx + 4; x++) { int g = wP.SurfAt(x, z); for (int y = g; y < g + 14; y++) wP.Set(x, y, z, Mat.Wood); }
+    var gobR = Raider(Kinds.Goblin, rx + 9, rz + 20);
+    float rh0 = gobR.Hp;
+    int caughtR = 0;
+    Action<int, int, int, byte> catchR = (_, _, _, _) => caughtR++;
+    simP.Caught += catchR;
+    string castRain = simP.Cast(SpellKind.FireRain, rx + 4, wP.SurfAt(rx + 4, rz + 20), rz + 20);
+    RunP(5);
+    simP.Caught -= catchR;
+    Check("the Fire Rain sets the logs alight and burns the goblin under it", castRain == null && caughtR > 0 && (gobR.Dead || gobR.Hp < rh0 - 10),
+        $"cast: {castRain ?? "yes"}; {caughtR} voxels caught; the goblin {(gobR.Dead ? "dead: " + gobR.KilledBy : $"{gobR.Hp:0} of {rh0:0}")}");
+    simP.Burning.Clear(); Gone(gobR);
+
+    // the Finger of thunder: the raider by the cursor takes 150 and burns
+    var trollT = Raider(Kinds.Troll, kxP - 260, kzP + 240);
+    float th0 = trollT.Hp;
+    string castBolt = simP.Cast(SpellKind.Thunder, trollT.X + 10, trollT.Y, trollT.Z);
+    float th1 = trollT.Hp;
+    Check("the Finger of thunder strikes the raider by the cursor: 150, and it burns", castBolt == null && th0 - th1 >= 145 && trollT.Burn > 0,
+        $"cast: {castBolt ?? "yes"}; the troll {th0:0} → {th1:0}, burning {trollT.Burn:0.0} s");
+    Gone(trollT);
+
+    // Dread: the goblins in the circle run
+    var scared = new System.Collections.Generic.List<Unit>();
+    for (int i = 0; i < 4; i++) scared.Add(Raider(Kinds.Goblin, kxP - 340 + i * 12, kzP + 60));
+    string castDread = simP.Cast(SpellKind.Dread, kxP - 322, wP.SurfAt(kxP - 322, kzP + 60), kzP + 60);
+    Check("Dread puts the goblins in the circle to flight", castDread == null && scared.TrueForAll(u => u.Routed), $"cast: {castDread ?? "yes"}; running {scared.FindAll(u => u.Routed).Count} of 4");
+    foreach (var u in scared) Gone(u);
+
+    // Chains: a goblin held fast does not move, and a swordsman told to take them alive fells it at three fifths
+    var heldC = Raider(Kinds.Goblin, kxP - 240, kzP - 280);
+    heldC.Guard = false; heldC.Hp = 30;
+    var (cx0, cz0) = (heldC.X, heldC.Z);
+    string castChains = simP.Cast(SpellKind.Chains, heldC.X, heldC.Y, heldC.Z);
+    RunP(2);
+    float moved = MathF.Abs(heldC.X - cx0) + MathF.Abs(heldC.Z - cz0);
+    var swordP = simP.Spawn(Kinds.Swordsman, simP.NearestStand((int)heldC.X + 10, (int)heldC.Z, 2));
+    swordP.TakeAlive = true;
+    for (int t = 0; t < 40 && !heldC.Bound && !heldC.Dead; t++) RunP(.2);
+    Check("Chains hold a goblin fast, and a swordsman told to take them alive fells it at three fifths of itself", castChains == null && moved < 2 && heldC.Bound && !heldC.Dead,
+        $"cast: {castChains ?? "yes"}; moved {moved:0.0} voxels in chains; the goblin {(heldC.Dead ? "dead" : heldC.Bound ? $"bound at {heldC.Hp:0}" : $"free, {heldC.Hp:0}")}");
+    Gone(heldC); Gone(swordP);
+
+    // the dead raised: goblins cut down get up as dead men, go for a goblin, and after their minute fall apart
+    int dx = kxP - 380, dz = kzP - 40;
+    for (int i = 0; i < 3; i++) { var d = Raider(Kinds.Goblin, dx + i * 10, dz); simP.Hurt(d, null, 1000, "test"); }
+    RunP(.5);
+    var foeD = Raider(Kinds.Goblin, dx + 40, dz + 20);
+    string castRaise = simP.Cast(SpellKind.Raise, dx + 10, wP.SurfAt(dx + 10, dz), dz);
+    int risenN = simP.Count(Kinds.Risen);
+    for (int t = 0; t < 60 && !foeD.Dead; t++) RunP(.5);
+    bool slew = foeD.Dead;
+    RunP(62);
+    Check("the dead raised get up and go for the horde, and after their minute they fall apart", castRaise == null && risenN == 3 && slew && simP.Count(Kinds.Risen) == 0,
+        $"cast: {castRaise ?? "yes"}; {risenN} risen; the goblin {(slew ? "cut down" : "alive")}; {simP.Count(Kinds.Risen)} still standing after a minute");
+
+    // the Eye: in the fog an archer sees as far as on a clear day
+    var bowP = simP.Spawn(Kinds.Archer, simP.NearestStand(kxP - 160, kzP - 100, 2));
+    simP.StartWeather(Weather.Fog, 600);
+    float fogged = simP.RangeAt(bowP, bowP.X + 100, bowP.Z);
+    string castEye = simP.Cast(SpellKind.Eye, kxP, 0, kzP);
+    float seen = simP.RangeAt(bowP, bowP.X + 100, bowP.Z);
+    simP.Weather = Weather.Clear; simP.WeatherLeft = 0;
+    Check("the Eye: in the fog the archers see as far as on a clear day", castEye == null && seen > fogged * 1.6f, $"cast: {castEye ?? "yes"}; reach {fogged / VoxelWorld.PerMetre:0.0} → {seen / VoxelWorld.PerMetre:0.0} m");
+
+    // the Blood Moon: by day it will not rise; at night it lights the dark for the archers
+    string dayMoon = simP.Cast(SpellKind.BloodMoon, kxP, 0, kzP);
+    simP.Waves.StartNow(simP);
+    RunP(.5);
+    float dark = simP.RangeAt(bowP, bowP.X + 100, bowP.Z);
+    string nightMoon = simP.Cast(SpellKind.BloodMoon, kxP, 0, kzP);
+    float lit = simP.RangeAt(bowP, bowP.X + 100, bowP.Z);
+    simP.Waves.CallOff(simP);
+    Check("the Blood Moon will not rise by day; at night it lights the dark for the archers", dayMoon != null && nightMoon == null && lit > dark * 1.5f,
+        $"by day: {dayMoon ?? "cast"}; at night: {nightMoon ?? "cast"}; reach into the dark {dark / VoxelWorld.PerMetre:0.0} → {lit / VoxelWorld.PerMetre:0.0} m");
+}
+
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--lore")
 {
     Console.WriteLine();
@@ -2661,6 +2807,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
     simS.Knowledge = 4;
     simS.Learn("mortar");
     simS.Revelations = 2; simS.Carcasses.Add(Kinds.Boar); simS.Favour = 17;
+    simS.Known.Add(SpellKind.Hand); simS.Known.Add(SpellKind.Eye);
     var ms = new System.IO.MemoryStream();
     var watch = System.Diagnostics.Stopwatch.StartNew();
     simS.Save(ms, SeedS, "Волна 1", "the screen's own");
@@ -2708,7 +2855,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
         && simL.Bands.Count == simS.Bands.Count && simL.Waves.Number == simS.Waves.Number && simL.Waves.Active == simS.Waves.Active
         && simL.Waves.Coming == simS.Waves.Coming && simL.Mines.TrueForAll(m => m.Holder == simS.Mines[simL.Mines.IndexOf(m)].Holder) && extra == "the screen's own"
         && simL.Knowledge == 2 && simL.Knows("mortar") && simL.Learnt.Count == 1
-        && simL.Revelations == 2 && simL.Carcasses.Count == 1 && simL.Carcasses[0] == Kinds.Boar && Math.Abs(simL.Favour - simS.Favour) < 1e-9;
+        && simL.Revelations == 2 && simL.Carcasses.Count == 1 && simL.Carcasses[0] == Kinds.Boar && Math.Abs(simL.Favour - simS.Favour) < 1e-9
+        && simL.Known.SetEquals(simS.Known);
     Check("a game saved and read back is the same: the valley as play changed it, the household and the horde, the siege",
         chunksOff == 0 && designOff == 0 && unitsOff == 0 && livingS.Count == simL.Units.Count && sameSiege && simS.Burning.Count > 0 && simS.Bands.Count > 0,
         $"{bytes / 1024} KB, written in {saveMs} ms, read in {loadMs} ms (the valley made again); {chunksOff} chunks and {designOff} of the design differ; " +

@@ -13,7 +13,8 @@ namespace VoxelTower.Game;
 /// Command-line options after "--": --shot=file.png [--frames=N] takes a screenshot and quits (--cam=x,z,yaw,pitch,zoom
 /// points the camera first),
 /// --demo sets up a fort with pawns at work (--pose=battle: the horde bridging the moat and laddering the wall;
-/// --pose=faith: priests at prayer on the barrow, --pose=captives: a rite at the altar there, prisoners bound and led, --pose=trees: the valley's trees in a row, --look=0..2 choosing which; --pose=people: every figure in every look,
+/// --pose=faith: priests at prayer on the barrow, --pose=captives: a rite at the altar there, prisoners bound and led,
+/// --pose=spells: the spells at work at night under the red moon (--look=1 a bolt of lightning, close), --pose=trees: the valley's trees in a row, --look=0..2 choosing which; --pose=people: every figure in every look,
 /// --look=0..4 choosing a row),
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
 /// --top looks straight down, --look=N at the Nth named place of the valley, --seed=N makes another valley; --select[=N]
@@ -145,6 +146,7 @@ public partial class Main : Node3D
         // the field of the traps cleared of trees, so they are to be seen
         if (_demo && _pose == "engines") ClearTrees(Site.KeepX - Site.KeepR - 420, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 20, Site.KeepZ + 140);
         if (_demo && _pose == "drawbridge") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 120);
+        if (_demo && _pose == "spells") ClearTrees(Site.KeepX - Site.KeepR - 260, Site.KeepZ - 100, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
         if (_demo && _pose == "traps") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
         World.Compact();
         save?.Valley(World, Site);
@@ -808,6 +810,33 @@ public partial class Main : Node3D
             $"yew learnt {Sim.Knows("yew")}, {Sim.Knowledge} knowledge left");
         Hud.ClosePanel();
 
+        // a spell: Dread learnt with a click on its plaque in «Таинства», taken in hand with another, and a click on the
+        // field among three goblins puts them to flight
+        Sim.Favour += 60;
+        Hud.OpenPanel("magic");
+        Hud.Refresh();
+        Hud.Mysteries.SpellPlaque(SpellKind.Dread).EmitSignal(BaseButton.SignalName.Pressed);
+        bool learnt = Sim.Known.Contains(SpellKind.Dread);
+        Hud.Refresh();
+        Hud.Mysteries.SpellPlaque(SpellKind.Dread).EmitSignal(BaseButton.SignalName.Pressed);
+        bool inHand = Tools.Tool == Tool.Spell && Tools.CurrentSpell == SpellKind.Dread;
+        int sx1 = kx - 260, sz1 = kz - 120;
+        var flock = new List<Unit>();
+        for (int i = 0; i < 3; i++)
+        {
+            var g = Sim.Spawn(Kinds.Goblin, Sim.NearestStand(sx1 + i * 10, sz1, 2));
+            g.Guard = true; g.Home = g.Cell;
+            flock.Add(g);
+        }
+        await Look(sx1 + 10, sz1);
+        double favourBefore = Sim.Favour;
+        await Click(sx1 + 10, sz1);
+        Check("a spell is learnt and taken in hand from «Таинства», and a click on the field casts it: Dread puts the goblins to flight",
+            learnt && inHand && flock.TrueForAll(g => g.Routed) && Sim.Favour < favourBefore,
+            $"learnt {learnt}, in hand {inHand}, running {flock.FindAll(g => g.Routed).Count} of 3, intervention {favourBefore:0} → {Sim.Favour:0}");
+        KeyPress(Key.Escape);
+        foreach (var g in flock) { g.Dead = true; g.DiedAt = -999; }
+
         // the horde called early: no gold for it, only less known of the defences
         Sim.Waves.Countdown = 200;
         double gold0 = Sim.Stock.Gold;
@@ -865,6 +894,7 @@ public partial class Main : Node3D
         if (_pose == "people") { People(); return; }
         if (_pose == "faith") { Faith(); return; }
         if (_pose == "captives") { Captives(); return; }
+        if (_pose == "spells") { Spellwork(); return; }
         var w = World; var s = Site; var sim = Sim;
         sim.Waves.Countdown = Waves.Prep;
         sim.Stock.Gold = 140;
@@ -1176,6 +1206,56 @@ public partial class Main : Node3D
         Rig.SetAt(World.WX(at.X + 12), World.WY(at.Y + 4), World.WZ(at.Z + 6), -.62f, .52f, _look == 1 ? 3.4f : 2.2f);
         Hud.Refresh();
         Marks.Flush();
+    }
+
+    /// <summary>
+    /// The spells at work, at night under the red moon: a band coming on west of the citadel, in a bog, chains on some of
+    /// it, burning pitch coming down on the rest, the dead got up among them, the Eye open; with --look=1 a bolt of
+    /// lightning striking a troll, close.
+    /// </summary>
+    void Spellwork()
+    {
+        var sim = Sim; var w = World;
+        foreach (var s in Sim.Spells) sim.Known.Add(s.Kind);
+        sim.Favour = 600;
+        sim.Waves.StartNow(sim);
+        sim.Waves._queue.Clear();
+        foreach (var u in sim.Units) if (u.Team == Team.Horde && !u.Dead && !u.Guard) { u.Dead = true; u.DiedAt = -999; }
+        int cx = Site.KeepX - Site.KeepR - 150, cz = Site.KeepZ + 10;
+        Unit Raider(UnitType t, int dx, int dz) { var u = sim.Spawn(t, sim.NearestStand(cx + dx, cz + dz, t.Move.Height)); u.Guard = true; u.Home = u.Cell; return u; }
+        // one raider far off in the west keeps the night going: the wave is not over while it is in the valley
+        var straggler = sim.Spawn(Kinds.Goblin, sim.NearestStand(Site.SpawnStrip + 30, Site.KeepZ, 2));
+        straggler.ChainedUntil = 1e9;
+        if (_look == 1)
+        {
+            var troll = Raider(Kinds.Troll, 0, 0);
+            Raider(Kinds.Goblin, -16, 12); Raider(Kinds.Goblin, -10, -14);
+            Advance(.5);
+            sim.Cast(SpellKind.BloodMoon, cx, 0, cz);
+            Advance(.2);
+            Rig.SetAt(w.WX(troll.X), w.WY(troll.Y + 12), w.WZ(troll.Z), -.62f, .5f, 2.6f);
+            sim.Cast(SpellKind.Thunder, troll.X, troll.Y, troll.Z);
+            _shotFrames = Math.Min(_shotFrames, 4);
+            Hud.Refresh();
+            return;
+        }
+        // the dead to raise
+        for (int i = 0; i < 3; i++) { var d = Raider(Kinds.Goblin, 30 + i * 9, -30); sim.Hurt(d, null, 1000, "test"); }
+        var band = new List<Unit>();
+        foreach (var (t, dx, dz) in new[] { (Kinds.Orc, -20, 0), (Kinds.Goblin, -10, 14), (Kinds.Goblin, -6, -12), (Kinds.Troll, 6, 4), (Kinds.Goblin, 14, 18),
+            (Kinds.Orc, 20, -8), (Kinds.Goblin, 28, 10), (Kinds.Sapper, -26, 20), (Kinds.Goblin, 36, -20), (Kinds.Orc, 44, 6) })
+            band.Add(Raider(t, dx, dz));
+        Advance(.5);
+        sim.Cast(SpellKind.BloodMoon, cx, 0, cz);
+        sim.Cast(SpellKind.Mire, cx - 10, w.SurfAt(cx - 10, cz), cz + 4);
+        sim.Cast(SpellKind.Chains, cx + 24, w.SurfAt(cx + 24, cz), cz);
+        sim.Cast(SpellKind.Raise, cx + 40, w.SurfAt(cx + 40, cz - 30), cz - 30);
+        sim.Cast(SpellKind.Eye, cx, 0, cz);
+        Advance(1.2);
+        sim.Cast(SpellKind.FireRain, cx - 12, w.SurfAt(cx - 12, cz), cz + 6);
+        Advance(2.2);
+        Rig.SetAt(w.WX(cx + 8), w.WY(w.SurfAt(cx, cz) + 4), w.WZ(cz), -.62f, .55f, 1.5f);
+        Hud.Refresh();
     }
 
     void Sheltering()

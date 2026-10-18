@@ -105,6 +105,8 @@ public sealed partial class Sim
         _goalSet ??= new HashSet<int>(Goals);
         // bound: it lies where it fell, or goes where it is led
         if (u.Bound) { BoundTick(u, dt); return; }
+        // held fast in a spell's chains: it neither goes nor strikes
+        if (Time < u.ChainedUntil) { u.State = UnitState.Idle; u.Path = null; return; }
         // hurt to a quarter of itself, a raider has had enough (a leader leads to the end, a guard keeps its camp)
         if (!u.Routed && !u.Leader && !u.Guard && u.Hp < u.MaxHp * .25f) u.Routed = true;
         // the horde's envoy comes to bargain, and fights nobody

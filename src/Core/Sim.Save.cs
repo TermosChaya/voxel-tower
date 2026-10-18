@@ -15,7 +15,7 @@ namespace VoxelTower.Core;
 /// </summary>
 public sealed partial class Sim
 {
-    public const int SaveVersion = 10;
+    public const int SaveVersion = 11;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -25,7 +25,7 @@ public sealed partial class Sim
         if (_kindByKey == null)
         {
             _kindByKey = new Dictionary<string, UnitType>();
-            foreach (var arr in new[] { Kinds.PlayerKinds, Kinds.HordeKinds, Kinds.WildKinds, Kinds.Engines }) foreach (var t in arr) _kindByKey[t.Key] = t;
+            foreach (var arr in new[] { Kinds.PlayerKinds, Kinds.HordeKinds, Kinds.WildKinds, Kinds.Engines, Kinds.Summoned }) foreach (var t in arr) _kindByKey[t.Key] = t;
         }
         return _kindByKey.TryGetValue(key, out var k) ? k : null;
     }
@@ -96,6 +96,11 @@ public sealed partial class Sim
         w.Write(Offer != null); if (Offer != null) { w.Write((byte)Offer.Kind); w.Write(Offer.Store); w.Write(Offer.Cost); w.Write(Offer.Envoy?.Id ?? -1); w.Write(Offer.Until); }
         w.Write(Favour); w.Write(Revelations); w.Write(MournUntil);
         w.Write(Carcasses.Count); foreach (var t in Carcasses) w.Write(t.Key);
+        // the spells known and when each is ready; the bogs, the red moon, the eye
+        w.Write(Known.Count); foreach (var k in Known) w.Write((byte)k);
+        foreach (double t in _spellReady) w.Write(t);
+        w.Write(Mires.Count); foreach (var m in Mires) { w.Write(m.X); w.Write(m.Z); w.Write(m.R); w.Write(m.Until); }
+        w.Write(BloodMoonUntil); w.Write(EyeUntil);
         w.Write(Knowledge); w.Write(Learnt.Count);
         foreach (string k in Learnt) w.Write(k);
         w.Write(Waves._lastBand?.Id ?? -1);
@@ -146,7 +151,7 @@ public sealed partial class Sim
         w.Write(u.Escort?.Id ?? -1); w.Write(u.AimAt);
         w.Write(u.Docked.Count); foreach (int p in u.Docked) w.Write(p);
         w.Write(u.Envoy);
-        w.Write(u.TakeAlive); w.Write(u.Bound); w.Write(u.BoundAt); w.Write(u.Unguarded); w.Write(u.ChainedUntil);
+        w.Write(u.TakeAlive); w.Write(u.Bound); w.Write(u.BoundAt); w.Write(u.Unguarded); w.Write(u.ChainedUntil); w.Write(u.CrumbleAt);
         // a sacrifice under way
         w.Write(u.Rite != null);
         if (u.Rite is { } rite)
@@ -312,6 +317,12 @@ public sealed partial class Sim
         Favour = r.ReadDouble(); Revelations = r.ReadInt32(); MournUntil = r.ReadDouble();
         Carcasses.Clear();
         for (int i = r.ReadInt32(); i > 0; i--) if (KindOf(r.ReadString()) is { } beast) Carcasses.Add(beast);
+        Known.Clear();
+        for (int i = r.ReadInt32(); i > 0; i--) Known.Add((SpellKind)r.ReadByte());
+        for (int i = 0; i < _spellReady.Length; i++) _spellReady[i] = r.ReadDouble();
+        Mires.Clear();
+        for (int i = r.ReadInt32(); i > 0; i--) Mires.Add(new Mire { X = r.ReadSingle(), Z = r.ReadSingle(), R = r.ReadSingle(), Until = r.ReadDouble() });
+        BloodMoonUntil = r.ReadDouble(); EyeUntil = r.ReadDouble();
         Knowledge = r.ReadDouble();
         Learnt.Clear();
         for (int i = r.ReadInt32(); i > 0; i--) Learnt.Add(r.ReadString());
@@ -355,7 +366,7 @@ public sealed partial class Sim
         _escortOf[u] = r.ReadInt32(); u.AimAt = r.ReadInt32();
         int nd = r.ReadInt32(); for (int k = 0; k < nd; k++) u.Docked.Add(r.ReadInt32());
         u.Envoy = r.ReadBoolean();
-        u.TakeAlive = r.ReadBoolean(); u.Bound = r.ReadBoolean(); u.BoundAt = r.ReadDouble(); u.Unguarded = r.ReadDouble(); u.ChainedUntil = r.ReadDouble();
+        u.TakeAlive = r.ReadBoolean(); u.Bound = r.ReadBoolean(); u.BoundAt = r.ReadDouble(); u.Unguarded = r.ReadDouble(); u.ChainedUntil = r.ReadDouble(); u.CrumbleAt = r.ReadDouble();
         if (r.ReadBoolean())
         {
             var rite = new Rite { Kind = (RiteKind)r.ReadByte() };
