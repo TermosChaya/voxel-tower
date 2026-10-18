@@ -107,8 +107,12 @@ public sealed partial class Sim
         if (u.Bound) { BoundTick(u, dt); return; }
         // held fast in a spell's chains: it neither goes nor strikes
         if (Time < u.ChainedUntil) { u.State = UnitState.Idle; u.Path = null; return; }
-        // a shaman's spells, cast as it goes
+        // a bone thrall's minute is up
+        if (u.T == Kinds.Thrall && Time >= u.CrumbleAt) { Kill(u, null, "рассыпался"); return; }
+        // a sorcerer's spells, cast as it goes
         if (u.T == Kinds.Shaman && !u.Routed) ShamanTick(u);
+        else if (u.T == Kinds.Witch && !u.Routed) WitchTick(u);
+        else if (u.T == Kinds.Necromancer && !u.Routed) NecromancerTick(u, dt);
         // hurt to a quarter of itself, a raider has had enough (a leader leads to the end, a guard keeps its camp)
         if (!u.Routed && !u.Leader && !u.Guard && u.Hp < u.MaxHp * .25f) u.Routed = true;
         // the horde's envoy comes to bargain, and fights nobody
@@ -292,7 +296,8 @@ public sealed partial class Sim
             int g = Group(m);
             if (g < 0 || rate == null || rate[g] <= 0) { StopCarve(u); return; }
             // stone in lime mortar holds out a third longer; what a shaman cursed gives twice as fast
-            float cost = 1f / (rate[g] * (g == 2 ? StoneHack : 1) * (Curses.Count > 0 ? CurseHack(x, y, z) : 1));
+            // under a stone skin three times as long
+            float cost = 1f / (rate[g] * (g == 2 ? StoneHack : 1) * (Curses.Count > 0 ? CurseHack(x, y, z) : 1) * (Skins.Count > 0 ? SkinHack(x, y, z) : 1));
             if (u.CarveEffort < cost) break;
             u.CarveEffort -= cost;
             u.CarveI++;

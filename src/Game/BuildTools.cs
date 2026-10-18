@@ -202,6 +202,8 @@ public partial class BuildTools : Node3D
 
     public void SetTool(Tool t)
     {
+        // what telekinesis holds is let go when the spell is put away
+        Throw();
         Tool = Tool == t ? Tool.None : t;
         // these only build
         if (Tool is Tool.Bridge or Tool.Repair or Tool.Gate or Tool.Ladder) Opt.Dig = false;
@@ -229,6 +231,7 @@ public partial class BuildTools : Node3D
     /// <summary>Takes a spell in hand: the next click on the field (or a stroke, for the Hand) casts it.</summary>
     public void TakeSpell(SpellKind k)
     {
+        Throw();
         Tool = Tool.Spell;
         CurrentSpell = k;
         PasteBp = null;
@@ -238,6 +241,13 @@ public partial class BuildTools : Node3D
     }
 
     bool SpellStroke => Tool == Tool.Spell && Sim.SpellOf(CurrentSpell).Stroke;
+
+    /// <summary>The weather the spell calls down: an index into <see cref="Sim.Summonable"/>.</summary>
+    public int WeatherPick;
+    /// <summary>Telekinesis has hold of something, and the button is still down: it follows the cursor.</summary>
+    bool _holding;
+    /// <summary>Where the cursor was last seen over the field.</summary>
+    Vector2 _mouse;
 
     /// <summary>A material to lay; puts the pick away.</summary>
     public void SetMaterial(byte m) { Opt.Material = m; Opt.Dig = false; Shelter = Sanctum = false; Changed(); }
@@ -338,11 +348,13 @@ public partial class BuildTools : Node3D
         switch (e)
         {
             case InputEventMouseMotion mm:
+                _mouse = mm.Position;
                 Pick(mm.Position);
                 if (Tool == Tool.None) _m.Command.Motion(mm);
                 else if (_lmb && _paint) PaintTo();
                 break;
             case InputEventMouseButton mb when mb.ButtonIndex == MouseButton.Left && !mb.AltPressed:
+                _mouse = mb.Position;
                 Pick(mb.Position);
                 if (Tool == Tool.None && !_lmb) { _m.Command.Button(mb); break; }
                 if (mb.Pressed) Press(mb);
@@ -435,6 +447,7 @@ public partial class BuildTools : Node3D
         _strokeVox = 0; _strokeSec = 0; Array.Clear(_strokeEst);
         if (!_hasHover) return;
         var w = _m.World;
+        if (Tool == Tool.Spell && CurrentSpell == SpellKind.Telekinesis) { GrabHere(); return; }
         _startPt = Tool == Tool.Brush ? _hover.Ground(w) : HoverGround();
         _level = Shapes.Level(w, _startPt.x, _startPt.z, StrokeNow());
         if (Tool == Tool.Brush)
@@ -458,7 +471,7 @@ public partial class BuildTools : Node3D
         _lmb = false;
         var w = _m.World;
         bool click = (mb.Position - _pressPos).Length() <= 8;
-        if (Tool == Tool.Spell) { CastHere(click); return; }
+        if (Tool == Tool.Spell) { if (CurrentSpell == SpellKind.Telekinesis) Throw(); else CastHere(click); return; }
         bool dig = Opt.Dig || (Tool == Tool.Brush && _shift);
         if (_paint)
         {
@@ -535,12 +548,43 @@ public partial class BuildTools : Node3D
         else
         {
             if (!click || !_hasHover) return;
-            var at = CurrentSpell == SpellKind.Fall ? (_hover.X, _hover.Y, _hover.Z) : HoverGround();
-            why = _m.Sim.Cast(CurrentSpell, at.Item1 + .5f, at.Item2, at.Item3 + .5f);
+            var at = sp.AtVoxel ? (_hover.X, _hover.Y, _hover.Z) : HoverGround();
+            why = _m.Sim.Cast(CurrentSpell, at.Item1 + .5f, at.Item2, at.Item3 + .5f, variant: WeatherPick);
         }
         if (why != null) Refuse(why);
         _planKey = "~";
         _m.Hud.Refresh();
+    }
+
+    /// <summary>Telekinesis takes hold of what is under the cursor as the button goes down.</summary>
+    void GrabHere()
+    {
+        string why = _m.Sim.Cast(SpellKind.Telekinesis, _hover.X + .5f, _hover.Y + .5f, _hover.Z + .5f);
+        _holding = why == null;
+        if (why != null) Refuse(why);
+        else Steer();
+        _planKey = "~";
+        _m.Hud.Refresh();
+    }
+
+    /// <summary>The hand that holds goes three metres over the ground under the cursor; the button let up (anywhere), it throws.</summary>
+    void Steer()
+    {
+        if (_m.Sim.HeldNow == null) { _holding = false; return; }
+        // the button let up anywhere at all, over the panels too (a script has no hand on the mouse: it lets go by its own events)
+        if (!_lmb || !_m.Scripted && !Input.IsMouseButtonPressed(MouseButton.Left)) { Throw(); return; }
+        // picked again every frame: the view may move under a still cursor
+        Pick(_mouse);
+        if (!_hasHover) return;
+        var g = _hover.Ground(_m.World);
+        _m.Sim.HoldAt(g.x + .5f, g.y + 3 * VoxelWorld.PerMetre, g.z + .5f);
+    }
+
+    void Throw()
+    {
+        if (!_holding) return;
+        _holding = false;
+        _m.Sim.LetGo();
     }
 
     // ---------------------------------------------------------------- mending
@@ -945,6 +989,7 @@ public partial class BuildTools : Node3D
     public override void _Process(double delta)
     {
         _clock += delta;
+        if (_holding) Steer();
         UpdateCursor();
         UpdateShape();
         UpdatePlan();
@@ -1029,7 +1074,7 @@ public partial class BuildTools : Node3D
                     new Vector3(w.WX(_startPt.x + dx / l * len / 2 + .5f), w.WY(_startPt.y + 10), w.WZ(_startPt.z + dz / l * len / 2 + .5f)), violet, yaw);
                 show = true;
             }
-            else if (CurrentSpell == SpellKind.Fall)
+            else if (sp.AtVoxel && !_holding)
             {
                 float r = sp.Radius * VoxelWorld.Vox;
                 SetShape(new SphereMesh { Radius = r, Height = r * 2, RadialSegments = 24, Rings = 12 },
@@ -1078,7 +1123,9 @@ public partial class BuildTools : Node3D
             _ghost.Visible = false;
             var sp = Sim.SpellOf(CurrentSpell);
             double ready = _m.Sim.ReadyIn(sp.Kind), have = _m.Sim.Favour;
-            PlanText = $"«{sp.Name}» · {sp.Cost:0} вмешательства" + (ready > 0 ? $" · через {ready:0} с" : "") + (have < sp.Cost ? $" — есть {have:0}" : "");
+            string pick = sp.Kind == SpellKind.Weather ? $" · {Sim.WeatherName(Sim.Summonable[WeatherPick])}" : "";
+            PlanText = $"«{sp.Name}»{pick} · {sp.Cost:0} вмешательства" + (ready > 0 ? $" · через {ready:0} с" : "") + (have < sp.Cost ? $" — есть {have:0}" : "")
+                + (_holding && _m.Sim.HeldNow is { } held ? $" · держит ещё {Math.Max(0, held.HeldUntil - _m.Sim.Time):0.0} с" : "");
             PlanAffordable = ready <= 0 && have >= sp.Cost;
             PlanIsDig = false;
             _planKey = "~";

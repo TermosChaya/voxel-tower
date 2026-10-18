@@ -101,6 +101,9 @@ public sealed partial class Sim
         if (Curses.Count > 0) Curses.RemoveAll(c => c.Until <= Time);
     }
 
-    /// <summary>Whose field a raider finds its way by: a shaman goes the goblins' way.</summary>
-    FlowField FieldOf(UnitType t) => Fields.TryGetValue(t == Kinds.Shaman ? Kinds.Goblin : t, out var f) ? f : null;
+    /// <summary>Whose way a raider goes: a shaman, a witch and a bone thrall the goblins', a necromancer the orcs'.</summary>
+    public static UnitType FieldKind(UnitType t) => t == Kinds.Shaman || t == Kinds.Witch || t == Kinds.Thrall ? Kinds.Goblin : t == Kinds.Necromancer ? Kinds.Orc : t;
+
+    /// <summary>The field a raider finds its way by.</summary>
+    FlowField FieldOf(UnitType t) => Fields.TryGetValue(FieldKind(t), out var f) ? f : null;
 }

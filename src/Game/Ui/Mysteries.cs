@@ -8,7 +8,7 @@ namespace VoxelTower.Game;
 /// <summary>
 /// The mysteries, as a panel let down from the beam: the intervention at hand and the revelations, where the priests
 /// pray and how well they are heard, the sacrifices that can be asked for now — a prisoner, a carcass from the hunt,
-/// or one of our own (two clicks: it cannot be taken back) — and the spells in their three circles: one learnt is
+/// or one of our own (two clicks: it cannot be taken back) — and the spells in their four circles: one learnt is
 /// taken in hand with a click, one not yet learnt is learnt with a click when there is what it takes.
 /// </summary>
 public partial class MysteryPanel : VBoxContainer
@@ -48,24 +48,32 @@ public partial class MysteryPanel : VBoxContainer
         _rite.CustomMinimumSize = new Vector2(Width - 30, 0);
         AddChild(_rite);
         AddChild(Hud.CapsLabel("Заклинания · первое в круге — за вмешательство, остальные — за откровения", 9, Ornament.BronzeLight));
-        var circles = new HBoxContainer();
-        circles.AddThemeConstantOverride("separation", 8);
+        // a row to each circle: its name, then its spells, as many to a line as there is room for
+        var circles = new VBoxContainer();
+        circles.AddThemeConstantOverride("separation", 6);
         for (int c = 0; c < Sim.Circles.Length; c++)
         {
-            var col = new VBoxContainer { CustomMinimumSize = new Vector2(240, 0) };
-            col.AddThemeConstantOverride("separation", 5);
-            col.AddChild(Hud.CapsLabel(Sim.Circles[c], 8, Ornament.Aged));
+            var line = new HBoxContainer();
+            line.AddThemeConstantOverride("separation", 8);
+            var name = Hud.CapsLabel(Sim.Circles[c], 8, Ornament.Aged);
+            name.CustomMinimumSize = new Vector2(104, 0);
+            name.VerticalAlignment = VerticalAlignment.Center;
+            line.AddChild(name);
+            var flow = new HFlowContainer { CustomMinimumSize = new Vector2(Width - 150, 0), SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            flow.AddThemeConstantOverride("h_separation", 6);
+            flow.AddThemeConstantOverride("v_separation", 5);
             foreach (var sp in Sim.Spells)
             {
                 if (sp.Circle != c) continue;
                 var spell = sp;
-                var b = new Button { FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(240, 34), MouseDefaultCursorShape = CursorShape.PointingHand };
-                b.AddThemeFontSizeOverride("font_size", 13);
+                var b = new Button { FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(196, 30), MouseDefaultCursorShape = CursorShape.PointingHand };
+                b.AddThemeFontSizeOverride("font_size", 12);
                 b.Pressed += () => SpellPressed(spell);
-                col.AddChild(b);
+                flow.AddChild(b);
                 _spells.Add((sp, b));
             }
-            circles.AddChild(col);
+            line.AddChild(flow);
+            circles.AddChild(line);
         }
         AddChild(circles);
         Refresh();

@@ -108,8 +108,11 @@ public sealed partial class Sim
         for (int i = 0; i < (n >= 5 ? (n - 3) / 3 : 0); i++) list.Add(Kinds.Troll);
         // thieves from the second wave, one more every third
         for (int i = 0; i < (n >= 2 ? 1 + (n - 2) / 3 : 0); i++) list.Add(Kinds.Thief);
-        // a shaman from the fourth wave, another from the eighth
+        // a shaman from the fourth wave, another from the eighth; a witch from the sixth and another from the tenth; a
+        // necromancer from the eighth and another from the eleventh
         for (int i = 0; i < (n >= 8 ? 2 : n >= 4 ? 1 : 0); i++) list.Add(Kinds.Shaman);
+        for (int i = 0; i < (n >= 10 ? 2 : n >= 6 ? 1 : 0); i++) list.Add(Kinds.Witch);
+        for (int i = 0; i < (n >= 11 ? 2 : n >= 8 ? 1 : 0); i++) list.Add(Kinds.Necromancer);
         // engines: a ram from the third wave and another from the seventh, a catapult from the fourth and another from the eighth
         for (int i = 0; i < (n >= 7 ? 2 : n >= 3 ? 1 : 0); i++) list.Add(Kinds.Ram);
         for (int i = 0; i < (n >= 8 ? 2 : n >= 4 ? 1 : 0); i++) list.Add(Kinds.Catapult);

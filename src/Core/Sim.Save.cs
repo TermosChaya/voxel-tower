@@ -15,7 +15,7 @@ namespace VoxelTower.Core;
 /// </summary>
 public sealed partial class Sim
 {
-    public const int SaveVersion = 12;
+    public const int SaveVersion = 13;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -77,7 +77,7 @@ public sealed partial class Sim
         w.Write(Fixtures.Count);
         foreach (var f in Fixtures)
         {
-            w.Write((byte)f.Kind); w.Write(f.Anchor); w.Write(f.LX); w.Write(f.LY); w.Write(f.LZ);
+            w.Write((byte)f.Kind); w.Write(f.Anchor); w.Write(f.LX); w.Write(f.LY); w.Write(f.LZ); w.Write(f.DarkUntil);
             w.Write(f.Voxels.Count);
             foreach (var (x, y, zz, m) in f.Voxels) { w.Write(x); w.Write(y); w.Write(zz); w.Write(m); }
         }
@@ -102,6 +102,11 @@ public sealed partial class Sim
         w.Write(Mires.Count); foreach (var m in Mires) { w.Write(m.X); w.Write(m.Z); w.Write(m.R); w.Write(m.Until); }
         w.Write(BloodMoonUntil); w.Write(EyeUntil);
         w.Write(Curses.Count); foreach (var c in Curses) { w.Write(c.X); w.Write(c.Y); w.Write(c.Z); w.Write(c.R); w.Write(c.Until); }
+        foreach (var list in new[] { Skins, DeadFogs })
+        {
+            w.Write(list.Count);
+            foreach (var p in list) { w.Write(p.X); w.Write(p.Y); w.Write(p.Z); w.Write(p.R); w.Write(p.Until); }
+        }
         w.Write(Knowledge); w.Write(Learnt.Count);
         foreach (string k in Learnt) w.Write(k);
         w.Write(Waves._lastBand?.Id ?? -1);
@@ -153,6 +158,7 @@ public sealed partial class Sim
         w.Write(u.Docked.Count); foreach (int p in u.Docked) w.Write(p);
         w.Write(u.Envoy);
         w.Write(u.TakeAlive); w.Write(u.Bound); w.Write(u.BoundAt); w.Write(u.Unguarded); w.Write(u.ChainedUntil); w.Write(u.CrumbleAt);
+        w.Write(u.PlagueUntil); w.Write(u.OathUntil); w.Write(u.NextHeal); w.Write(u.NextCurse);
         // a sacrifice under way
         w.Write(u.Rite != null);
         if (u.Rite is { } rite)
@@ -267,7 +273,7 @@ public sealed partial class Sim
         int nf = r.ReadInt32();
         for (int i = 0; i < nf; i++)
         {
-            var f = new Fixture { Kind = (FixtureKind)r.ReadByte(), Anchor = r.ReadInt32(), LX = r.ReadSingle(), LY = r.ReadSingle(), LZ = r.ReadSingle() };
+            var f = new Fixture { Kind = (FixtureKind)r.ReadByte(), Anchor = r.ReadInt32(), LX = r.ReadSingle(), LY = r.ReadSingle(), LZ = r.ReadSingle(), DarkUntil = r.ReadDouble() };
             int nv = r.ReadInt32();
             for (int k = 0; k < nv; k++) f.Voxels.Add((r.ReadInt32(), r.ReadInt32(), r.ReadInt32(), r.ReadByte()));
             Fixtures.Add(f);
@@ -326,6 +332,13 @@ public sealed partial class Sim
         BloodMoonUntil = r.ReadDouble(); EyeUntil = r.ReadDouble();
         Curses.Clear();
         for (int i = r.ReadInt32(); i > 0; i--) Curses.Add(new Curse { X = r.ReadSingle(), Y = r.ReadSingle(), Z = r.ReadSingle(), R = r.ReadSingle(), Until = r.ReadDouble() });
+        foreach (var list in new[] { Skins, DeadFogs })
+        {
+            list.Clear();
+            for (int i = r.ReadInt32(); i > 0; i--) list.Add(new Patch { X = r.ReadSingle(), Y = r.ReadSingle(), Z = r.ReadSingle(), R = r.ReadSingle(), Until = r.ReadDouble() });
+        }
+        // what was in the air is not kept: what was thrown stands where the save found it, and comes down from there
+        Fliers.Clear();
         Knowledge = r.ReadDouble();
         Learnt.Clear();
         for (int i = r.ReadInt32(); i > 0; i--) Learnt.Add(r.ReadString());
@@ -370,6 +383,7 @@ public sealed partial class Sim
         int nd = r.ReadInt32(); for (int k = 0; k < nd; k++) u.Docked.Add(r.ReadInt32());
         u.Envoy = r.ReadBoolean();
         u.TakeAlive = r.ReadBoolean(); u.Bound = r.ReadBoolean(); u.BoundAt = r.ReadDouble(); u.Unguarded = r.ReadDouble(); u.ChainedUntil = r.ReadDouble(); u.CrumbleAt = r.ReadDouble();
+        u.PlagueUntil = r.ReadDouble(); u.OathUntil = r.ReadDouble(); u.NextHeal = r.ReadDouble(); u.NextCurse = r.ReadDouble();
         if (r.ReadBoolean())
         {
             var rite = new Rite { Kind = (RiteKind)r.ReadByte() };

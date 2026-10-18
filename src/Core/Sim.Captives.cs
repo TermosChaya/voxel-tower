@@ -25,7 +25,7 @@ public sealed partial class Sim
     public static bool TakesAlive(Unit u) => !u.Dead && u.Team == Team.Player && !u.T.Ranged && !u.T.Prays && (u.T.Work < 1 || u.Militia);
 
     /// <summary>A raider that can be taken alive: not an engine, not the envoy, not one already bound.</summary>
-    static bool Takeable(Unit u) => u.Team == Team.Horde && !Kinds.IsEngine(u.T) && !u.Envoy && !u.Bound;
+    static bool Takeable(Unit u) => u.Team == Team.Horde && !Kinds.IsEngine(u.T) && u.T != Kinds.Thrall && !u.Envoy && !u.Bound;
 
     /// <summary>How low a raider has to be beaten before it can be felled and bound: a quarter of itself, three fifths in chains.</summary>
     float TakeAt(Unit u) => u.MaxHp * (Time < u.ChainedUntil ? .6f : .25f);

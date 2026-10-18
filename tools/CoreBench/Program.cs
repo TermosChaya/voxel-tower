@@ -2724,6 +2724,220 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--spells")
     simP.Waves.CallOff(simP);
     Check("the Blood Moon will not rise by day; at night it lights the dark for the archers", dayMoon != null && nightMoon == null && lit > dark * 1.5f,
         $"by day: {dayMoon ?? "cast"}; at night: {nightMoon ?? "cast"}; reach into the dark {dark / VoxelWorld.PerMetre:0.0} → {lit / VoxelWorld.PerMetre:0.0} m");
+    Gone(bowP);
+
+    // a stone skin on a wall of ours: the horde hacks it three times as long there, and nowhere else; on bare ground it will not take
+    int sx = kxP - 120, sz0 = kzP + 260;
+    int stop = Shapes.LevelTop(wP, sx, sz0 + 24, 24);
+    simP.InstantLabour = true;
+    simP.DesignateBuild(Shapes.Line(wP, siteP, sx, sz0, sx, sz0 + 48, new Stroke { Mat = Mat.Stone, Width = 8, Height = 24, Level = true }, stop));
+    simP.InstantLabour = false;
+    string skinBare = simP.Cast(SpellKind.Skin, sx - 60, wP.SurfAt(sx - 60, sz0), sz0);
+    string skinWall = simP.Cast(SpellKind.Skin, sx, stop - 10, sz0 + 24);
+    float hardIn = simP.SkinHack(sx, stop - 10, sz0 + 24), hardOut = simP.SkinHack(sx, stop - 10, sz0 + 200);
+    Check("a stone skin makes our wall three times as long to hack, and will not take on bare ground", skinBare != null && skinWall == null && MathF.Abs(hardIn - 1 / 3f) < .01f && hardOut == 1,
+        $"on bare ground: {skinBare ?? "cast"}; on the wall: {skinWall ?? "cast"}; hacking there ×{1 / hardIn:0.#} as long, elsewhere ×{1 / hardOut:0.#}");
+
+    // the weather called down: rain for three minutes
+    simP.WeatherLeft = 0; simP.Weather = Weather.Clear;
+    string castWeather = simP.Cast(SpellKind.Weather, kxP, 0, kzP, variant: 0);
+    Check("the weather is called down: rain, for three minutes", castWeather == null && simP.Weather == Weather.Rain && simP.WeatherLeft >= 179,
+        $"cast: {castWeather ?? "yes"}; now {Sim.WeatherName(simP.Weather)}, {simP.WeatherLeft:0} s more");
+    simP.Weather = Weather.Clear; simP.WeatherLeft = 0;
+
+    // the fog of the dead: a goblin in it wastes away, one of ours in it does not
+    int ox = kxP - 300, oz = kzP + 330;
+    var gobO = Raider(Kinds.Goblin, ox, oz);
+    var ourO = simP.Spawn(Kinds.Worker, simP.NearestStand(ox + 12, oz, 2));
+    ourO.Hold = true;
+    float go0 = gobO.Hp, wo0 = ourO.Hp;
+    string castFog = simP.Cast(SpellKind.DeadFog, ox + 6, wP.SurfAt(ox + 6, oz), oz);
+    RunP(4);
+    Check("the fog of the dead wastes the raiders in it, and leaves ours be", castFog == null && go0 - gobO.Hp >= 10 && ourO.Hp >= wo0,
+        $"cast: {castFog ?? "yes"}; in 4 s the goblin {go0:0} → {gobO.Hp:0}, the worker {wo0:0} → {ourO.Hp:0}");
+    Gone(gobO); Gone(ourO);
+    simP.DeadFogs.Clear();
+
+    // the plague: the goblin it falls on sickens, and it passes to those standing by it, outside the circle
+    int px = kxP - 380, pz = kzP + 120;
+    var sickA = Raider(Kinds.Goblin, px, pz);
+    var sickB = Raider(Kinds.Goblin, px + 12, pz);
+    var sickC = Raider(Kinds.Goblin, px + 24, pz);
+    string castPlague = simP.Cast(SpellKind.Plague, px - 34, wP.SurfAt(px - 34, pz), pz);
+    bool onlyA = sickA.PlagueUntil > simP.Time && sickB.PlagueUntil < simP.Time && sickC.PlagueUntil < simP.Time;
+    float pa0 = sickA.Hp;
+    RunP(8);
+    Check("the plague sickens the raider it falls on, and passes on to those standing by it", castPlague == null && onlyA && pa0 - sickA.Hp >= 12 && sickB.PlagueUntil > simP.Time - 1 && sickC.PlagueUntil > simP.Time - 1,
+        $"cast: {castPlague ?? "yes"}; at first only the nearest: {onlyA}; it {pa0:0} → {sickA.Hp:0} in 8 s; the next {(sickB.PlagueUntil > 0 ? "sick" : "well")}, the one past it {(sickC.PlagueUntil > 0 ? "sick" : "well")}");
+    Gone(sickA); Gone(sickB); Gone(sickC);
+
+    // the blood oath: ours in the circle mend two fifths and stop bleeding
+    var oathW = simP.Spawn(Kinds.Worker, simP.NearestStand(kxP - 140, kzP - 40, 2));
+    oathW.Hold = true; oathW.Hp = 15;
+    string castOath = simP.Cast(SpellKind.Oath, oathW.X, oathW.Y, oathW.Z);
+    Check("the blood oath mends ours in the circle by two fifths, and holds a minute", castOath == null && oathW.Hp >= 15 + oathW.MaxHp * .39f && oathW.OathUntil > simP.Time + 59,
+        $"cast: {castOath ?? "yes"}; the worker 15 → {oathW.Hp:0} of {oathW.MaxHp:0}, the oath for {oathW.OathUntil - simP.Time:0} s");
+    Gone(oathW);
+
+    // the call: one of ours led off by a thief is in the citadel that instant, and the thief goes empty-handed
+    var ledW = simP.Spawn(Kinds.Worker, simP.NearestStand(kxP - 260, kzP - 140, 2));
+    var thiefW = simP.Spawn(Kinds.Thief, simP.NearestStand(kxP - 268, kzP - 140, 2));
+    thiefW.Captive = ledW; ledW.Captor = thiefW;
+    string castCall = simP.Cast(SpellKind.Recall, ledW.X + 4, ledW.Y, ledW.Z);
+    Check("the call takes one of ours out of a thief's hands into the citadel", castCall == null && ledW.Inside && ledW.Captor == null && thiefW.Captive == null,
+        $"cast: {castCall ?? "yes"}; the worker {(ledW.Inside ? "in the citadel" : "outside")}, led by {(ledW.Captor == null ? "nobody" : "the thief")}");
+    Gone(thiefW);
+}
+
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--physics")
+{
+    Console.WriteLine();
+    var mpY = new MapParams();
+    var wY = new VoxelWorld(mpY.SizeX, mpY.SizeY, mpY.SizeZ);
+    var siteY = MapGen.Generate(wY, mpY);
+    wY.Compact();
+    var simY = new Sim(wY, siteY);
+    simY.Waves.Countdown = 1e9; simY.WildTarget = 0;
+    void RunY(double seconds) { for (double t = 0; t < seconds; t += .05) simY.Step(.05f); }
+    int kxY = siteY.KeepX, kzY = siteY.KeepZ;
+    Unit Stand(UnitType t, int x, int z) { var u = simY.Spawn(t, simY.NearestStand(x, z, t.Move.Height)); u.Guard = true; u.Home = u.Cell; return u; }
+    void Gone(Unit u) { u.Dead = true; u.DiedAt = -999; }
+    float Far(Unit u, float x, float z) => MathF.Sqrt((u.X - x) * (u.X - x) + (u.Z - z) * (u.Z - z)) / VoxelWorld.PerMetre;
+    foreach (var s in Sim.Spells) simY.Known.Add(s.Kind);
+    simY.Favour = 5000;
+    // no trees in the way of what flies
+    for (int z = kzY - 400; z < kzY + 400; z++)
+        for (int x = kxY - 480; x < kxY - 40; x++)
+            for (int y = wY.SurfAt(x, z), top = wY.ColTop(x, z); y < top; y++)
+                if (Mat.IsVeg[wY.Get(x, y, z)]) wY.Set(x, y, z, Mat.Air);
+    int CountY(int x0, int z0, int x1, int z1, Func<byte, bool> what)
+    {
+        int n = 0;
+        for (int z = z0; z <= z1; z++) for (int x = x0; x <= x1; x++) for (int y = 4; y < wY.SY - 1; y++) if (what(wY.Get(x, y, z))) n++;
+        return n;
+    }
+
+    // a blast in a stone wall: the heart of it goes to dust, the rest flies in pieces that come down as rubble, some of it
+    // far off; what stood on it falls; the goblin by it is hurt and thrown
+    int ex = kxY - 220, ez0 = kzY + 160, ez1 = ez0 + 80, emid = (ez0 + ez1) / 2;
+    int etop = Shapes.LevelTop(wY, ex, emid, 48);
+    simY.InstantLabour = true;
+    simY.DesignateBuild(Shapes.Line(wY, siteY, ex, ez0, ex, ez1, new Stroke { Mat = Mat.Stone, Width = 8, Height = 48, Level = true }, etop));
+    simY.InstantLabour = false;
+    int stoneE0 = CountY(ex - 8, ez0 - 4, ex + 8, ez1 + 4, Mat.IsMasonry);
+    var gobE = Stand(Kinds.Goblin, ex - 20, emid);
+    float gobE0 = gobE.Hp;
+    float gx0 = gobE.X, gz0 = gobE.Z;
+    string castBlast = simY.Cast(SpellKind.Explosion, ex, etop - 30, emid);
+    int flying = simY.Fliers.Count, aloft = simY.Aloft;
+    bool thrownE = gobE.Airborne != null;
+    RunY(8);
+    int stoneE1 = CountY(ex - 8, ez0 - 4, ex + 8, ez1 + 4, Mat.IsMasonry);
+    int rubble = 0; float farthest = 0;
+    for (int z = emid - 200; z <= emid + 200; z++)
+        for (int x = ex - 200; x <= ex + 200; x++)
+        {
+            int top = wY.ColTop(x, z);
+            for (int y = Math.Max(4, top - 6); y < top; y++)
+                if (wY.Get(x, y, z) == Mat.Rubble) { rubble++; farthest = MathF.Max(farthest, MathF.Sqrt((x - ex) * (x - ex) + (z - emid) * (z - emid)) / VoxelWorld.PerMetre); }
+        }
+    Check("a blast in a wall: it goes up in pieces that fly and come down as rubble far about, and the wall over it falls",
+        castBlast == null && flying >= 10 && aloft > 3000 && simY.Fliers.Count == 0 && stoneE0 - stoneE1 > 6000 && rubble > 2000 && farthest > 8,
+        $"cast: {castBlast ?? "yes"}; {flying} pieces, {aloft} voxels in the air, {simY.Fliers.Count} still flying after 8 s; masonry {stoneE0} → {stoneE1}; rubble {rubble}, the farthest {farthest:0.0} m off");
+    Check("the goblin by the blast is hurt and thrown", thrownE && (gobE.Dead || gobE.Hp < gobE0 - 20) && gobE.Airborne == null && Far(gobE, gx0, gz0) > 2,
+        $"thrown {thrownE}; the goblin {(gobE.Dead ? "dead: " + gobE.KilledBy : $"{gobE.Hp:0} of {gobE0:0}")}, {Far(gobE, gx0, gz0):0.0} m from where it stood, {(gobE.Airborne == null ? "down" : "still in the air")}");
+    Gone(gobE);
+
+    // telekinesis takes a goblin up, and swung hard and let go it flies off and is dashed down
+    var gobT = Stand(Kinds.Goblin, kxY - 300, kzY - 200);
+    float tx0 = gobT.X, tz0 = gobT.Z, ty0 = gobT.Y;
+    string castGrip = simY.Cast(SpellKind.Telekinesis, gobT.X, gobT.Y + 5, gobT.Z);
+    bool heldT = simY.HeldNow?.Unit == gobT;
+    simY.HoldAt(gobT.X, ty0 + 32, gobT.Z);
+    RunY(1);
+    float lifted = (gobT.Y - ty0) / VoxelWorld.PerMetre;
+    simY.HoldAt(gobT.X - 400, ty0 + 60, gobT.Z);
+    RunY(.4);
+    simY.LetGo();
+    for (int t = 0; t < 40 && gobT.Airborne != null; t++) RunY(.25);
+    Check("telekinesis takes a goblin up, and swung and let go it flies off and is dashed down", castGrip == null && heldT && lifted > 2.5f && gobT.Airborne == null && Far(gobT, tx0, tz0) > 15 && (gobT.Dead || gobT.Hp < gobT.MaxHp - 20),
+        $"cast: {castGrip ?? "yes"}; held {heldT}; lifted {lifted:0.0} m; landed {Far(gobT, tx0, tz0):0.0} m off, {(gobT.Dead ? "dead: " + gobT.KilledBy : $"{gobT.Hp:0} of {gobT.MaxHp:0}")}");
+    Gone(gobT);
+
+    // a ball of earth torn out of the ground and let fall on a goblin: it is struck, and the earth lies in a heap where it fell
+    int bx = kxY - 260, bz = kzY - 60, bg = wY.SurfAt(bx, bz);
+    var gobB = Stand(Kinds.Goblin, bx + 120, bz);
+    float gb0 = gobB.Hp;
+    int SoilBy() { int n = 0; for (int z = (int)gobB.Z - 20; z <= gobB.Z + 20; z++) for (int x = (int)gobB.X - 20; x <= gobB.X + 20; x++) for (int y = (int)gobB.Y - 2; y < gobB.Y + 24; y++) if (wY.Get(x, y, z) == Mat.Soil) n++; return n; }
+    int soil0 = SoilBy();
+    simY.ReadyNow(SpellKind.Telekinesis);
+    string castBall = simY.Cast(SpellKind.Telekinesis, bx + .5f, bg - 3, bz + .5f);
+    var ball = simY.HeldNow;
+    int ballN = ball?.Voxels.Count ?? 0;
+    bool hole = wY.Get(bx, bg - 3, bz) == Mat.Air;
+    simY.HoldAt(gobB.X, gobB.Y + 40, gobB.Z);
+    RunY(3);
+    simY.LetGo();
+    RunY(3);
+    RunY(3);
+    int heap = SoilBy() - soil0;
+    Check("a ball of earth torn out and let fall on a goblin strikes it, and lies in a heap where it fell", castBall == null && ballN > 600 && hole && (gobB.Dead || gobB.Hp < gb0 - 15) && heap > 300,
+        $"cast: {castBall ?? "yes"}; {ballN} voxels lifted, a hole {hole}; the goblin {(gobB.Dead ? "dead: " + gobB.KilledBy : $"{gobB.Hp:0} of {gb0:0}")}; {heap} voxels of earth heaped by it");
+    Gone(gobB);
+
+    // what telekinesis holds does not go through a wall: pulled at one from behind it, it stays on its side
+    int qx = kxY - 330, qz0 = kzY + 40;
+    int qtop = Shapes.LevelTop(wY, qx, qz0 + 24, 48);
+    simY.InstantLabour = true;
+    simY.DesignateBuild(Shapes.Line(wY, siteY, qx, qz0, qx, qz0 + 48, new Stroke { Mat = Mat.Stone, Width = 8, Height = 48, Level = true }, qtop));
+    simY.InstantLabour = false;
+    var gobQ = Stand(Kinds.Goblin, qx - 30, qz0 + 24);
+    simY.ReadyNow(SpellKind.Telekinesis);
+    string castQ = simY.Cast(SpellKind.Telekinesis, gobQ.X, gobQ.Y + 5, gobQ.Z);
+    simY.HoldAt(qx + 40, gobQ.Y + 16, gobQ.Z);
+    RunY(2);
+    float side = gobQ.X;
+    simY.LetGo();
+    RunY(2);
+    Check("what telekinesis holds does not go through a wall", castQ == null && side < qx - 3, $"cast: {castQ ?? "yes"}; the goblin at x {side:0}, the wall at {qx - 4}..{qx + 4}");
+    Gone(gobQ);
+
+    // the black wind: the ladders against a wall are torn away, and the raiders there thrown off, away from the citadel
+    int lx = kxY - 200, lz0 = kzY - 300;
+    int ltop = Shapes.LevelTop(wY, lx, lz0 + 24, 40);
+    simY.InstantLabour = true;
+    simY.DesignateBuild(Shapes.Line(wY, siteY, lx, lz0, lx, lz0 + 48, new Stroke { Mat = Mat.Stone, Width = 8, Height = 40, Level = true }, ltop));
+    simY.InstantLabour = false;
+    for (int z = lz0 + 20; z < lz0 + 28; z++) { int g = wY.SurfAt(lx - 6, z); for (int y = g; y < ltop + 40; y++) if (wY.Get(lx - 5, y, z) == Mat.Air) wY.Set(lx - 5, y, z, Mat.SiegeLadder); }
+    int ladders0 = CountY(lx - 8, lz0, lx, lz0 + 48, m => m == Mat.SiegeLadder);
+    var gobW = Stand(Kinds.Goblin, lx - 24, lz0 + 12);
+    var orcW = Stand(Kinds.Orc, lx - 24, lz0 + 36);
+    float gw0 = MathF.Sqrt((gobW.X - kxY) * (gobW.X - kxY) + (gobW.Z - kzY) * (gobW.Z - kzY)), ow0 = MathF.Sqrt((orcW.X - kxY) * (orcW.X - kxY) + (orcW.Z - kzY) * (orcW.Z - kzY));
+    string castWind = simY.Cast(SpellKind.BlackWind, lx - 10, wY.SurfAt(lx - 10, lz0 + 24), lz0 + 24);
+    RunY(5);
+    int ladders1 = CountY(lx - 8, lz0, lx, lz0 + 48, m => m == Mat.SiegeLadder);
+    float gw1 = MathF.Sqrt((gobW.X - kxY) * (gobW.X - kxY) + (gobW.Z - kzY) * (gobW.Z - kzY)), ow1 = MathF.Sqrt((orcW.X - kxY) * (orcW.X - kxY) + (orcW.Z - kzY) * (orcW.Z - kzY));
+    Check("the black wind tears the ladders from a wall and throws the raiders off, away from the citadel",
+        castWind == null && ladders0 > 100 && ladders1 == 0 && (gw1 - gw0) / VoxelWorld.PerMetre > 6 && (ow1 - ow0) / VoxelWorld.PerMetre > 4 && gobW.Hp < gobW.MaxHp,
+        $"cast: {castWind ?? "yes"}; ladder voxels {ladders0} → {ladders1}; the goblin {(gw1 - gw0) / VoxelWorld.PerMetre:0.0} m farther off ({(gobW.Dead ? "dead" : $"{gobW.Hp:0} hp")}), the orc {(ow1 - ow0) / VoxelWorld.PerMetre:0.0} m");
+    Gone(gobW); Gone(orcW);
+
+    // the rift: the ground sinks in a bowl, the goblin on it falls in hurt, and a wall standing on it comes down into it
+    int fx2 = kxY - 360, fz2 = kzY + 220;
+    int ftop2 = Shapes.LevelTop(wY, fx2, fz2, 32);
+    simY.InstantLabour = true;
+    simY.DesignateBuild(Shapes.Line(wY, siteY, fx2, fz2 - 24, fx2, fz2 + 24, new Stroke { Mat = Mat.Wood, Width = 8, Height = 32, Level = true }, ftop2));
+    simY.InstantLabour = false;
+    int woodR0 = CountY(fx2 - 8, fz2 - 28, fx2 + 8, fz2 + 28, m => m == Mat.Wood);
+    var gobR = Stand(Kinds.Goblin, fx2 - 12, fz2);
+    int gr0 = wY.GroundTop(fx2 - 6, fz2);
+    string castRift = simY.Cast(SpellKind.Rift, fx2 - 6, gr0, fz2);
+    int gr1 = wY.GroundTop(fx2 - 6, fz2);
+    RunY(3);
+    int woodR1 = CountY(fx2 - 8, fz2 - 28, fx2 + 8, fz2 + 28, m => m == Mat.Wood);
+    Check("the rift: the ground sinks, the goblin on it falls in hurt, and the wall standing there comes down", castRift == null && gr0 - gr1 >= 16 && gobR.Hp <= gobR.MaxHp - 15 && woodR0 - woodR1 > 500,
+        $"cast: {castRift ?? "yes"}; the ground {gr0} → {gr1}; the goblin {(gobR.Dead ? "dead: " + gobR.KilledBy : $"{gobR.Hp:0} of {gobR.MaxHp:0}")}; logs standing {woodR0} → {woodR1}");
+    Gone(gobR);
 }
 
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--shaman")
@@ -2784,6 +2998,96 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--shaman")
     simH.PlanWave(4);
     bool fourth = simH.Bands.Exists(b => b.Roster.Contains(Kinds.Shaman));
     Check("shamans come from the fourth wave", !third && fourth, $"in the third {third}, in the fourth {fourth}");
+}
+
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--sorcerers")
+{
+    Console.WriteLine();
+    var mpV = new MapParams();
+    var wV = new VoxelWorld(mpV.SizeX, mpV.SizeY, mpV.SizeZ);
+    var siteV = MapGen.Generate(wV, mpV);
+    wV.Compact();
+    var simV = new Sim(wV, siteV);
+    simV.Waves.Countdown = 1e9; simV.WildTarget = 0;
+    void RunV(double seconds) { for (double t = 0; t < seconds; t += .05) simV.Step(.05f); }
+    int kxV = siteV.KeepX, kzV = siteV.KeepZ;
+    Unit Camp(UnitType t, int x, int z) { var u = simV.Spawn(t, simV.NearestStand(x, z, t.Move.Height)); u.Guard = true; u.Home = u.Cell; return u; }
+    void Gone(Unit u) { u.Dead = true; u.DiedAt = -999; }
+    Stroke wallV = new() { Mat = Mat.Stone, Width = 8, Height = 32, Level = true };
+
+    // a witch puts out the torches on our wall about her; by a sanctuary she cannot, and a minute on they are lit again
+    int vx1 = kxV - 150, vz1 = kzV - 120, vx2 = kxV - 150, vz2 = kzV + 60;
+    simV.InstantLabour = true;
+    simV.DesignateBuild(Shapes.Line(wV, siteV, vx1, vz1, vx1, vz1 + 64, wallV, Shapes.LevelTop(wV, vx1, vz1 + 32, 32)));
+    simV.DesignateBuild(Shapes.Line(wV, siteV, vx2, vz2, vx2, vz2 + 64, wallV, Shapes.LevelTop(wV, vx2, vz2 + 32, 32)));
+    simV.InstantLabour = false;
+    simV.Decorate();
+    var torches1 = simV.Fixtures.FindAll(f => f.Kind == FixtureKind.Torch && MathF.Abs(f.LX - vx1) < 12 && f.LZ > vz1 - 4 && f.LZ < vz1 + 68);
+    var torches2 = simV.Fixtures.FindAll(f => f.Kind == FixtureKind.Torch && MathF.Abs(f.LX - vx2) < 12 && f.LZ > vz2 - 4 && f.LZ < vz2 + 68);
+    simV.AddZone(vx2 + 24, vz2, vx2 + 60, vz2 + 64, Zone.Sanctum, 1);
+    var witch1 = Camp(Kinds.Witch, vx1 - 60, vz1 + 32);
+    var witch2 = Camp(Kinds.Witch, vx2 - 60, vz2 + 32);
+    RunV(12);
+    bool flameGone(Fixture f) { foreach (var (x, y, z, m) in f.Voxels) if (m == Mat.Flame) return wV.Get(x, y, z) == Mat.Sconce; return false; }
+    int dark1 = torches1.FindAll(f => f.DarkUntil > simV.Time && flameGone(f) && simV.Fixtures.Contains(f)).Count;
+    int dark2 = torches2.FindAll(f => f.DarkUntil > simV.Time).Count;
+    Gone(witch1); Gone(witch2);
+    RunV(64);
+    int relit = torches1.FindAll(f => f.DarkUntil <= simV.Time && !flameGone(f) && simV.Fixtures.Contains(f)).Count;
+    Check("a witch puts out the torches on our wall about her, by a sanctuary she cannot, and a minute on they burn again",
+        torches1.Count > 0 && torches2.Count > 0 && dark1 == torches1.Count && dark2 == 0 && relit == torches1.Count,
+        $"torches on the open wall {torches1.Count}, put out {dark1}; by the sanctuary {torches2.Count}, put out {dark2}; lit again after a minute {relit}");
+
+    // a witch puts out the fires about her, and the raiders burning there
+    int bxV = kxV - 300, bzV = kzV + 200;
+    for (int z = bzV; z < bzV + 16; z++) for (int x = bxV; x < bxV + 3; x++) { int g = wV.SurfAt(x, z); for (int y = g; y < g + 10; y++) wV.Set(x, y, z, Mat.Wood); }
+    var witch3 = Camp(Kinds.Witch, bxV - 30, bzV + 8);
+    var burnt = Camp(Kinds.Goblin, bxV - 22, bzV + 8);
+    int litV = 0;
+    for (int z = bzV; z < bzV + 16; z += 2) { int g = wV.SurfAt(bxV, z); if (simV.Ignite(bxV, g - 1, z)) litV++; }
+    burnt.Burn = 8; burnt.BurnHeat = 1;
+    RunV(4);
+    int stillV = 0;
+    foreach (int p in simV.Burning.Keys) { var (x, _, z) = WaterPlanner.Unpack(p); if (x >= bxV - 2 && x < bxV + 6 && z >= bzV - 2 && z < bzV + 18) stillV++; }
+    Check("a witch puts out the fires about her and the raiders burning there", litV > 0 && stillV == 0 && burnt.Burn <= 0,
+        $"{litV} voxels set alight, {stillV} still burning after 4 s; the goblin {(burnt.Burn > 0 ? $"burning {burnt.Burn:0.0} s more" : "put out")}");
+    Gone(witch3); Gone(burnt);
+    simV.Burning.Clear();
+
+    // a necromancer gets the fallen about it up as bone thralls, three at most, and after their minute they fall apart
+    int nxV = kxV - 330, nzV = kzV - 260;
+    var necro = Camp(Kinds.Necromancer, nxV, nzV);
+    for (int i = 0; i < 4; i++) { var d = Camp(Kinds.Goblin, nxV + 12 + i * 8, nzV + 6); simV.Hurt(d, null, 1000, "test"); }
+    for (int t = 0; t < 30 && simV.Count(Kinds.Thrall) == 0; t++) RunV(.5);
+    int thralls = simV.Count(Kinds.Thrall);
+    var oneThrall = simV.Units.Find(u => !u.Dead && u.T == Kinds.Thrall);
+    Gone(necro);
+    RunV(62);
+    Check("a necromancer gets the fallen about it up as bone thralls, three at most, and they fall apart after a minute",
+        thralls == 3 && oneThrall?.Team == Team.Horde && simV.Count(Kinds.Thrall) == 0,
+        $"{thralls} thralls got up of 4 fallen, {(oneThrall?.Team == Team.Horde ? "the horde's" : "not the horde's")}; {simV.Count(Kinds.Thrall)} still standing after a minute");
+
+    // near a sanctuary of ours the intervention drains away while a necromancer stands there
+    simV.AddZone(kxV - 200, kzV + 300, kxV - 160, kzV + 340, Zone.Sanctum, 1);
+    var necro2 = Camp(Kinds.Necromancer, kxV - 240, kzV + 320);
+    simV.Favour = 100;
+    RunV(10);
+    double drained = 100 - simV.Favour;
+    Gone(necro2);
+    Check("near a sanctuary of ours the intervention drains away while a necromancer stands there", drained >= 9 && drained <= 11, $"{drained:0.0} intervention drained in 10 s");
+
+    // our archers shoot a witch or a necromancer before a goblin nearer to them
+    var bowV = simV.Spawn(Kinds.Archer, simV.NearestStand(kxV - 60, kzV + 100, 2));
+    var gobV = simV.Spawn(Kinds.Goblin, simV.NearestStand((int)bowV.X + 56, (int)bowV.Z, 2));
+    var witchV = simV.Spawn(Kinds.Witch, simV.NearestStand((int)bowV.X + 120, (int)bowV.Z + 10, 2));
+    RunV(1);
+    Check("our archers shoot a witch before a goblin nearer to them", bowV.Target == witchV, $"the archer aims at {bowV.Target?.T.Name ?? "nobody"}");
+    Gone(bowV); Gone(gobV); Gone(witchV);
+
+    // witches come from the sixth wave, necromancers from the eighth
+    bool W(int n, UnitType t) { simV.PlanWave(n); return simV.Bands.Exists(b => b.Roster.Contains(t)); }
+    bool w5 = W(5, Kinds.Witch), w6 = W(6, Kinds.Witch), n7 = W(7, Kinds.Necromancer), n8 = W(8, Kinds.Necromancer);
+    Check("witches come from the sixth wave, necromancers from the eighth", !w5 && w6 && !n7 && n8, $"a witch in the fifth {w5}, the sixth {w6}; a necromancer in the seventh {n7}, the eighth {n8}");
 }
 
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--lore")

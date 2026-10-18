@@ -9,8 +9,9 @@ namespace VoxelTower.Game;
 /// The valley's sounds, made by the game itself rather than recorded: each a moment of samples worked out at the start
 /// from noise, strings and bells — a pick on rock, an axe in timber, a spade in earth, a stone set down, a bowstring, an
 /// arrow going home, blades meeting, a club, a death cry, the horn, stone coming down, thunder, a spell, the gong of a
-/// rite, a shaman's croon — and the fire and the rain as loops. Each is played where it happens, as loud as that is
-/// near the middle of the view, the same one no more often than it would be heard apart, a score of them at most.
+/// rite, a shaman's croon, a blast, stone crashing down, the black wind — and the fire, the rain and the hum of the hand
+/// of telekinesis as loops. Each is played where it happens, as loud as that is near the middle of the view, the same
+/// one no more often than it would be heard apart, a score of them at most.
 /// </summary>
 public partial class Sound : Node
 {
@@ -21,7 +22,7 @@ public partial class Sound : Node
     readonly Dictionary<int, float> _swing = new();
     readonly HashSet<int> _dead = new();
     readonly HashSet<Arrow> _landed = new();
-    AudioStreamPlayer _fire, _rain;
+    AudioStreamPlayer _fire, _rain, _hum;
     Main _m;
     readonly Random _rnd = new(5);
     double _t;
@@ -47,16 +48,26 @@ public partial class Sound : Node
         for (int i = 0; i < 20; i++) { var p = new AudioStreamPlayer(); AddChild(p); _pool.Add(p); }
         _fire = Loop("fire");
         _rain = Loop("rain");
+        _hum = Loop("hum");
         var sim = m.Sim;
         _wave = sim.Waves.Number;
         sim.Mined += (x, y, z, mat) => Struck(Dug(mat), x, y, z, .07);
         sim.Hacked += (x, y, z, mat) => Struck(Dug(mat), x, y, z, .09);
         sim.Collapsed += (n, x, y, z) => Play("rumble", x, y, z, .4, Math.Clamp(.4f + n / 2000f, .4f, 1.3f));
-        sim.Spelled += (k, x, y, z) => Play("spell", x, y, z, .2, 1, far: true);
+        sim.Spelled += (k, x, y, z) =>
+        {
+            if (k == SpellKind.Explosion) Play("boom", x, y, z, .1, 1.3f, far: true);
+            else if (k == SpellKind.BlackWind) Play("wind", x, y, z, .2, 1.1f, far: true);
+            if (k != SpellKind.Explosion) Play("spell", x, y, z, .2, 1, far: true);
+        };
+        // a piece of the world coming down: the heavier, the louder
+        sim.Landed += (x, y, z, n, speed) => { if (n >= 20) Play("crash", x, y, z, .07, Math.Clamp(.25f + n / 700f, .25f, 1.1f)); };
         sim.Struck += (x, y, z) => Play("thunder", x, y, z, .1, 1.3f, far: true);
         sim.RiteDone += (x, y, z) => Play("gong", x, y, z, .5, 1, far: true);
         sim.Healed += (x, y, z) => Play("hex", x, y, z, .6, .5f);
         sim.Hexed += (x, y, z) => Play("hex", x, y, z, .6, 1);
+        sim.Darkened += (x, y, z) => Play("hex", x, y, z, .6, .9f);
+        sim.Woken += (x, y, z) => Play("gong", x, y, z, 1, .6f);
     }
 
     /// <summary>What a voxel dug or hacked out sounds like: rock and masonry knock, timber thuds, earth sighs.</summary>
@@ -126,7 +137,8 @@ public partial class Sound : Node
         // the horn for every wave that comes, even one begun and over between two frames
         if (sim.Waves.Number > _wave) Everywhere("horn", .9f);
         _wave = sim.Waves.Number;
-        if (_m.Paused) { _fire.VolumeDb = _rain.VolumeDb = -80; return; }
+        if (_m.Paused) { _fire.VolumeDb = _rain.VolumeDb = _hum.VolumeDb = -80; return; }
+        _hum.VolumeDb = sim.HeldNow is { } held && Near(held.X, held.Z, far: true) is var hn && hn > .05f ? Mathf.LinearToDb(hn * .5f) : -80;
         // blows struck and bows loosed, as they happen; the fallen, once
         foreach (var u in sim.Units)
         {
@@ -182,8 +194,12 @@ public partial class Sound : Node
         Add("spell", Spell());
         Add("gong", Gong());
         Add("hex", Croon());
+        Add("boom", Boom());
+        Add("crash", Crash());
+        Add("wind", Gust());
         Add("fire", Crackle(), loop: true);
         Add("rain", RainLoop(), loop: true);
+        Add("hum", Hum(), loop: true);
     }
 
     void Add(string name, float[] s, bool loop = false)
@@ -424,6 +440,73 @@ public partial class Sound : Node
             s[i] = y * swell * .6f + chime * .35f;
         }
         Normalise(s, .55f);
+        return s;
+    }
+
+    /// <summary>A blast: a crack that splits the air, a blow felt in the chest falling in pitch, and the rubble raining after.</summary>
+    float[] Boom()
+    {
+        var s = Buf(3.2f);
+        var lo = new Low(90); var lo2 = new Low(400);
+        float brown = 0, phase = 0;
+        for (int i = 0; i < s.Length; i++)
+        {
+            float t = i / (float)Rate;
+            brown = Math.Clamp(brown + Noise() * .08f, -1, 1);
+            phase += (62 - 34 * Math.Min(1, t / .6f)) / Rate;
+            float thump = MathF.Sin(MathF.Tau * phase) * MathF.Exp(-t / .35f) * 1.6f;
+            float crack = t < .04f ? Noise() * (1 - t / .04f) * 1.3f : 0;
+            float roll = (lo.Step(brown) * 4 + lo2.Step(Noise()) * .5f) * Math.Min(1, t / .01f) * MathF.Exp(-t / .9f);
+            // stones pattering down after it
+            float patter = t > .6f && _rnd.NextDouble() < .0016 * MathF.Exp(-(t - .6f) / .9f) ? 1 : 0;
+            s[i] = thump + crack + roll + patter * Noise() * .8f;
+        }
+        Normalise(s, .95f);
+        return s;
+    }
+
+    /// <summary>A stone coming down on the ground: a heavy dull blow and the grit of it.</summary>
+    float[] Crash()
+    {
+        var s = Buf(.5f);
+        var lo = new Low(180); var lo2 = new Low(1400);
+        for (int i = 0; i < s.Length; i++)
+        {
+            float t = i / (float)Rate;
+            float body = MathF.Sin(MathF.Tau * (85 - 40 * t) * t) * Decay(i, .07f);
+            s[i] = body * 1.2f + lo.Step(Noise()) * 2.5f * Decay(i, .09f) + lo2.Step(Noise()) * .5f * Decay(i, .04f);
+        }
+        Normalise(s, .8f);
+        return s;
+    }
+
+    /// <summary>The black wind: a gust howling up and dying away.</summary>
+    float[] Gust()
+    {
+        var s = Buf(2.2f);
+        float y1 = 0, y2 = 0;
+        var lo = new Low(500);
+        for (int i = 0; i < s.Length; i++)
+        {
+            float t = i / (float)Rate, f = 220 + 520 * MathF.Sin(MathF.PI * t / 2.2f), r = .992f, th = MathF.Tau * f / Rate;
+            float y = (1 - r) * Noise() * 10 + 2 * r * MathF.Cos(th) * y1 - r * r * y2;
+            y2 = y1; y1 = y;
+            s[i] = (y * .7f + lo.Step(Noise()) * 1.4f) * MathF.Sin(MathF.PI * t / 2.2f);
+        }
+        Normalise(s, .7f);
+        return s;
+    }
+
+    /// <summary>The hand of telekinesis holding: a low hum, beating slowly, a second that goes round.</summary>
+    float[] Hum()
+    {
+        var s = Buf(1);
+        for (int i = 0; i < s.Length; i++)
+        {
+            float t = i / (float)Rate;
+            s[i] = (MathF.Sin(MathF.Tau * 74 * t) + .6f * MathF.Sin(MathF.Tau * 75 * t) + .25f * MathF.Sin(MathF.Tau * 148 * t)) * .5f;
+        }
+        Normalise(s, .5f);
         return s;
     }
 

@@ -84,7 +84,7 @@ public sealed partial class Sim
         float tx = b.X - dz / l * side, tz = b.Z + dx / l * side;
         b.HurtBy = a;
         float share = Kinds.IsEngine(b.T) ? EngineShare(false) : Wound(b, cut, depth, reach, a.X, hand, a.Z, tx - a.X, aim - hand, tz - a.Z);
-        float dmg = a.T.Damage * (.8f + (float)Rng.NextDouble() * .4f) * share;
+        float dmg = a.T.Damage * (.8f + (float)Rng.NextDouble() * .4f) * share * Oath(a);
         // told to take them alive: the blow that would bring a raider down to a quarter of itself (three fifths in
         // chains), or kill it, fells it instead, to be bound where it lies
         if (a.TakeAlive && !b.Dead && Takeable(b) && b.Hp - dmg <= TakeAt(b))
@@ -114,7 +114,7 @@ public sealed partial class Sim
         by ??= u.HurtBy;
         u.Dead = true; u.DiedAt = Time; u.State = UnitState.Dead; u.Hp = 0;
         u.KilledBy = cause ?? by?.T.Name ?? "";
-        if (u.Team == Team.Horde) Kills++;
+        if (u.Team == Team.Horde && u.T != Kinds.Thrall) Kills++;
         if (u.T == Kinds.Thief) ThiefFell(u);
         if (u.T == Kinds.SiegeTower) TowerFell(u);
         if (u.Captor != null) { u.Captor.Captive = null; u.Captor = null; }
@@ -276,7 +276,8 @@ public sealed partial class Sim
                 for (float dx = -r; dx <= r; dx += 16)
                     if (dx * dx + dz * dz <= r * r) _lit.Add(LitKey((int)Math.Clamp(x + dx, 0, World.SX - 1), (int)Math.Clamp(z + dz, 0, World.SZ - 1)));
         }
-        foreach (var f in Fixtures) if (f.Kind == FixtureKind.Torch) Around(f.LX, f.LZ, TorchLight);
+        // a torch a witch put out gives no light till it is lit again
+        foreach (var f in Fixtures) if (f.Kind == FixtureKind.Torch && f.DarkUntil <= Time) Around(f.LX, f.LZ, TorchLight);
         Around(Site.KeepX, Site.KeepZ, Site.KeepR + 8 * VoxelWorld.PerMetre);
         int n = 0;
         foreach (int p in Burning.Keys)
@@ -313,8 +314,8 @@ public sealed partial class Sim
             bool busy = o.State is UnitState.Carve or UnitState.Siege or UnitState.Work || Climbing(o);
             // a thief making off with what it took, or with one of ours, before anything
             bool making = o.Loot > 0 || o.Captive != null;
-            // an engine: hardly worth a plain arrow, the first mark for a fire arrow; a shaman before anyone
-            float engine = Kinds.IsEngine(o.T) ? (u.FireArrows ? -96 : 96) : o.T == Kinds.Shaman ? -110 : 0;
+            // an engine: hardly worth a plain arrow, the first mark for a fire arrow; a sorcerer before anyone
+            float engine = Kinds.IsEngine(o.T) ? (u.FireArrows ? -96 : 96) : Kinds.IsCaster(o.T) ? -110 : 0;
             // with fire arrows, those standing on a deck, a ladder or pitch: one arrow sets it all alight under them
             float pri = d - (making ? 96 : hurting ? 64 : busy ? 48 : 0) - (u.FireArrows && OnTinder(o) ? 40 : 0) + engine;
             if (pri >= bd || !Sight(u, o)) continue;
@@ -353,7 +354,7 @@ public sealed partial class Sim
             X0 = u.X, Y0 = u.Y + u.T.BodyH * .85f, Z0 = u.Z,
             X1 = t.X + (float)(Rng.NextDouble() - .5) * 4, Y1 = t.Y + t.T.BodyH * .55f, Z1 = t.Z + (float)(Rng.NextDouble() - .5) * 4,
             Dur = Math.Max(.08f, d / ArrowSpeed), Target = t, From = u, Hits = Rng.NextDouble() < chance,
-            Damage = u.T.Damage * (.8f + (float)Rng.NextDouble() * .5f) * (u.Team == Team.Player ? ArrowHarm : 1), Fire = u.FireArrows,
+            Damage = u.T.Damage * (.8f + (float)Rng.NextDouble() * .5f) * (u.Team == Team.Player ? ArrowHarm : 1) * Oath(u), Fire = u.FireArrows,
         });
     }
 

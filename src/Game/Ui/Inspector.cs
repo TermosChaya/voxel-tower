@@ -236,12 +236,45 @@ public partial class Inspector : Control
         var about = Hud.Text(sp.About, Ornament.Serif, 13, Ornament.Parchment, wrap: true);
         about.CustomMinimumSize = new Vector2(640, 0);
         col.AddChild(about);
+        if (sp.Kind == SpellKind.Weather)
+        {
+            // which weather: rain, fog or wind
+            var pick = new HBoxContainer();
+            pick.AddThemeConstantOverride("separation", 6);
+            var buttons = new List<Button>();
+            for (int i = 0; i < Sim.Summonable.Length; i++)
+            {
+                int n = i;
+                var w = Sim.Summonable[i];
+                var b = Btn(char.ToUpper(Sim.WeatherName(w)[0]) + Sim.WeatherName(w)[1..], w switch
+                {
+                    Weather.Rain => "Дождь: пожары гаснут, смола не горит, огненный дождь вдвое слабее, молния в полтора раза сильнее; стрелы летят хуже.",
+                    Weather.Fog => "Туман: лучники — и наши, и орды — видят врага лишь вблизи.",
+                    _ => "Ветер: огонь бежит вдвое быстрее, стрелы сносит.",
+                }, () => { _m.Tools.WeatherPick = n; }, 110);
+                b.ToggleMode = true;
+                buttons.Add(b);
+                pick.AddChild(b);
+            }
+            col.AddChild(pick);
+            _refresh.Add(() => { for (int i = 0; i < buttons.Count; i++) buttons[i].SetPressedNoSignal(_m.Tools.WeatherPick == i); });
+        }
         var state = Hud.Text("", Ornament.SerifItalic, 13, Ornament.BronzeLight);
         col.AddChild(state);
         _refresh.Add(() =>
         {
             double ready = _m.Sim.ReadyIn(sp.Kind), have = _m.Sim.Favour;
-            string how = sp.Stroke ? "проведите линию по земле" : sp.Radius <= 0 ? "щёлкните по полю где угодно" : sp.Kind == SpellKind.Fall ? "щёлкните по стене, скале или постройке" : "щёлкните по полю";
+            string how = sp.Kind switch
+            {
+                _ when sp.Stroke => "проведите линию по земле",
+                SpellKind.Weather => "выберите погоду и щёлкните по полю",
+                SpellKind.Telekinesis => "зажмите кнопку на ком-то или на камне и ведите; отпустите — бросок",
+                SpellKind.Skin => "щёлкните по нашей постройке",
+                SpellKind.Recall => "щёлкните рядом с нашим",
+                SpellKind.Fall or SpellKind.Explosion => "щёлкните по стене, скале, земле или постройке",
+                _ when sp.Radius <= 0 => "щёлкните по полю где угодно",
+                _ => "щёлкните по полю",
+            };
             state.Text = $"{sp.Cost:0} вмешательства (есть {have:0})" + (ready > 0 ? $" · будет готово через {ready:0} с" : " · готово") + $" · {how} · Esc — убрать";
             state.AddThemeColorOverride("font_color", ready > 0 || have < sp.Cost ? Ornament.Blood.Lightened(.3f) : Ornament.BronzeLight);
         });

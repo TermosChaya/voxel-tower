@@ -229,6 +229,13 @@ public partial class UnitView : Node3D
             main = f.Beast ? .5f : -.4f; off = f.Beast ? .4f : f.Shield ? -.2f : .3f;
             if (f.Beast) { legR = -.4f; legL = -.3f; }
         }
+        else if (u.Airborne != null)
+        {
+            // in the air: arms and legs flung about
+            float flail = MathF.Sin((float)_t * 11 + seed);
+            main = f.Beast ? .6f * flail : -2.4f + flail * .5f; off = f.Beast ? -.6f * flail : -2.2f - flail * .5f;
+            legR = .5f + flail * .4f; legL = -.5f - flail * .4f;
+        }
         else if (f.Beast)
         {
             // diagonal pairs of legs together; a gallop when bolting or charging
@@ -311,6 +318,13 @@ public partial class UnitView : Node3D
         var at = new Vector3(_w.WX(u.X), _w.WY(u.Y + bob - sink), _w.WZ(u.Z));
         // a leader stands a little taller than its kind
         var root = new Transform3D(new Basis(Vector3.Up, MathF.PI / 2 - look.Face).Scaled(Vector3.One * VoxelWorld.Vox * (u.Leader ? 1.15f : 1)), at);
+        // thrown through the air, it tumbles about its middle as it flies
+        if (u.Airborne is { } fl && new Vector3(fl.AX, 0, fl.AZ) is var axis && axis.LengthSquared() > 1e-4f)
+        {
+            var mid = at + Vector3.Up * u.T.BodyH * .5f * VoxelWorld.Vox;
+            var spin = new Basis(axis.Normalized(), fl.Turn);
+            root = new Transform3D(spin, mid - spin * mid) * root;
+        }
         // the fallen lie down: on the back, or a beast on its side
         if (fall > 0)
             root *= f.Beast

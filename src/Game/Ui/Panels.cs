@@ -30,6 +30,8 @@ public static class Retinue
         string hurt = Hurt(u);
         string what = DoingNow(u, sim);
         if (u.Burn > 0) hurt = hurt == "" ? "горит" : "горит, " + hurt;
+        if (u.PlagueUntil > sim.Time) hurt = hurt == "" ? "болен мором" : "болен мором, " + hurt;
+        if (u.OathUntil > sim.Time) what += " · под кровавым обетом";
         return hurt == "" ? what : what + " · " + hurt;
     }
 
@@ -47,6 +49,7 @@ public static class Retinue
     public static string DoingNow(Unit u, Sim sim)
     {
         if (u.Dead) return u.Team == Team.Wild ? "добыт" : "пал";
+        if (u.Airborne is { } flying) return flying.Held ? "в хватке телекинеза" : "летит по воздуху";
         if (u.PushCell >= 0) return "сбрасывает лестницу";
         if (sim.Climbing(u)) return "лезет по лестнице";
         if (u.Burn > 0 && u.State == UnitState.Flee && u.Team != Team.Horde) return "выбегает из огня";
@@ -70,6 +73,7 @@ public static class Retinue
         if (u.Escort is { Dead: false } && u.State != UnitState.Fight) return "охраняет камнемёт";
         if (u.T == Kinds.Mantlet) return "прикрывает ватагу от стрел";
         if (u.T == Kinds.SiegeTower) return u.Docked.Count > 0 ? "стоит у стены: по ней лезут наверх" : "катится к стене";
+        if (u.T == Kinds.Thrall) return $"костяк орды: рассыплется через {Math.Max(0, u.CrumbleAt - sim.Time):0} с" + (u.State == UnitState.Fight ? ", бьётся" : "");
         if (u.Team == Team.Horde)
             return u.State switch
             {

@@ -246,6 +246,8 @@ public partial class Atmosphere : Node3D
             Light(_day, _dark);
         }
         float t = _calm ? 0 : (float)_t;
+        // a torch a witch put out is dark till it is lit again
+        if (_sim != null) foreach (var (f, l) in _sconces) l.Visible = f.DarkUntil <= _sim.Time;
         foreach (var (l, ph) in _torches)
         {
             float base0 = _sconces.Count > 0 && l.OmniRange < 4 ? 1.6f : 2.4f;

@@ -86,13 +86,36 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `Done`), `Sacrifice(kind, victim)` (днём, святилище и жрец; возвращает причину отказа), `RiteTick` (из `PriestTick`),
   `Fulfil` (`Worth`, `CarcassWorth`, `OwnFavour`; ×1,5 на удержанном месте силы; `RiteDone` — вспышка),
   `CancelRite`, `AltarFor`; `Revelations`, `Carcasses` (из `Kill` зверя нашими), `MournUntil` (`WorkTick` ×0,75).
-- `Sim.Spells.cs` — заклинания: `SpellKind`, `Spell` (круг, `ByFavour`/`Learn`, `Cost`, `Cooldown`, `Radius`, `Stroke`),
-  `Sim.Spells` (10), `Known`, `LearnSpell`, `ReadyIn`, `Cast(kind, x, y, z, x2, z2)` — возвращает причину отказа;
+- `Sim.Spells.cs` — заклинания: `SpellKind` (20, по кругам; массив `Sim.Spells` — строго в порядке перечисления,
+  `SpellOf(k) => Spells[(int)k]`), `Spell` (круг, `ByFavour`/`Learn`, `Cost`, `Cooldown`, `Radius`, `Stroke`, `AtVoxel` —
+  наводится на сам воксель, а не на землю), `Circles` (4), `Known`, `LearnSpell`, `ReadyIn`, `ReadyNow` (для тестов),
+  `Cast(kind, x, y, z, x2, z2, variant)` — возвращает причину отказа (`variant` — погода из `Summonable`);
   по заклинанию: `RaiseBank` (Длань: `_rising` по слоям за 3 с, `RiseNow`), `BogDown` (`Mires`, в `Walk` ×0,35),
   `BringDown` (шар → `Fall` из `Sim.Collapse`), `RainFireOn`/`Land` (`Drops`, капли находят налётчиков), `Thunderbolt`
   (`Struck`), `Moon` (`BloodMoonUntil` → `Lit` всюду), `Terrify`, `Chain` (`Unit.ChainedUntil`, в `RaiderTick` стоит),
   `RaiseDead` (`Kinds.Risen` из `Kinds.Summoned`, `Unit.CrumbleAt`, `RisenTick` из `PawnTick`), `Watch` (`EyeUntil` →
-  `FogRange` 1). `TickSpells` — в `StepWorld`. Событие `Spelled` — для вида.
+  `FogRange` 1); новые — `Open` (Разверзнуть: природный грунт столбами вниз от `GroundTop`, чаша `RiftDeep`), `Harden` +
+  `Skins` (`Patch`) + `SkinHack` (⅓ в `Carve`), `CallWeather` (`StartWeather(…, 180)`), `Gale` (Чёрный ветер: лестницы и
+  настилы — кусками через `Loose`, налётчики — `Fling` от цитадели), `Shroud` + `DeadFogs` (в `Walk` ×0,5 для орды),
+  `Sicken` (`Unit.PlagueUntil`), `Swear` (`Unit.OathUntil` → `Oath(u)` ×1,5 в `Strike` и `Shoot`), `CallHome` (`Enter`),
+  `Grab` (Телекинез, в `Sim.Flight`), `Blast` (Взрыв: сердцевина в пыль, оболочка — куски вокруг случайных затравок,
+  каждый воксель к ближайшей; тела — `Fling`). `TickSpells` → `TickHexes` (раз в 0,5 с: туман и мор, мор переходит в
+  2,5 м с вероятностью ¼). `Deathless` — кого туман и мор не берут. Событие `Spelled` — для вида и звука.
+- `Sim.Flight.cs` — летящее: `Flier` (середина, скорость, кувырок `AX/AZ/Turn/Spin`, воксели куска относительно
+  середины либо `Unit`, `Held`/`HeldUntil`, `Gentle`, `Burning`), `Fliers`, `Aloft`/`MaxAloft` (24 000), `Loose(voxels,
+  v, cause)` — вынуть воксели из мира куском (`Breakable`: не Hard, не вода), `Fling(u, v, cause)` — бросить тело
+  (`Unit.Airborne`; такие не ходят — `StepWorld` их пропускает, не толкаются, не считаются в `_bodies`); рука
+  телекинеза: `Grab`, `HoldAt`, `LetGo`, `HeldNow`, `Hold` (тянется к руке, скользит по стенам — `Blocked`, бьёт тех,
+  мимо кого пронесён). `TickFlight` (в `StepWorld` после обвалов): шаги по ~вокселю, `Hits` (кусок: передняя точка,
+  низ, тела; первые 0,15 с — только середина; тело: ноги, а о стену — удар и сползание), `ComeDown` (`Blow` — урон по
+  весу и скорости, тяжёлый выбивает немного, груда `Shattered` через `Landing`; событие `Landed`), `Alight` (тело на
+  `StandBelow`, урон от скорости). Летящее не сохраняется.
+- `Sim.Sorcery.cs` — ворожея и некромант: `WitchTick` (`Douse` раз в 2 с — `Burning` и горящие налётчики в 10 м;
+  раз в 15 с — `Quench` наших факелов в 16 м на минуту: `Fixture.DarkUntil`, пламя → бра, `Relight` в `TickDecor`,
+  `Whole` это терпит, `TickLight` не светит), `NecromancerTick` (раз в 20 с — до трёх павших в 10 м → `Kinds.Thrall`,
+  `CrumbleAt`, рассыпается в `RaiderTick`; у святилища ближе 25 м — `Favour` −1/с); события `Doused`, `Darkened`,
+  `Woken`; `Warded` — как у шамана. `FieldKind(t)` (в `Sim.Shamans`) — чьё поле: шаман, ворожея и костяк — гоблина,
+  некромант — орка.
 - `Sim.Shamans.cs` — шаманы орды: `Kinds.Shaman` (в `Kinds.Casters`, не в `HordeKinds`: путь — поле гоблина через
   `FieldOf`), `ShamanTick` из `RaiderTick` (`Unit.NextHeal` — лечит в 6 м, `NextCurse` — `CurseTarget` → `Curse` в
   `Curses` на 40 с, если не `Warded` — святилище или жрец ближе 20 м), `CurseHack` в `Carve` (×2), `TickCurses`;
@@ -252,9 +275,15 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `HealthBar`, `BodyChart`, `PriorityCell`, `MiniCard`, `KindFace`; `WorkTable.cs` — таблица работ (рисуется
   целиком в `_Draw`, щелчки в `_GuiInput`); `Panels.cs` — `Retinue` (только помощники: что делает, раны, сводка),
   `HordeInfo`, `UnitOverlay`; `Lore.cs` — `LorePanel` (вкладка «Знания»); `Mysteries.cs` — `MysteryPanel` (вкладка
-  «Таинства»: вмешательство, святилища, жертвы, заклинания по кругам — изучить или взять в руку); `MagicView.cs` (мир) —
-  вспышка над алтарём, капли смолы, молния, трясины, кольца Ужаса и Цепей, метки Ока, пыль и искры; заклинание в руке —
-  `Tool.Spell` в `BuildTools` (`TakeSpell`, `CastHere`, круг/шар/вал у курсора), в консоли — `Inspector.SpellPane`;
+  «Таинства»: вмешательство, святилища, жертвы, заклинания строками по кругам — изучить или взять в руку); `MagicView.cs`
+  (мир) — вспышка над алтарём, капли смолы, молния, трясины, кольца Ужаса и Цепей, метки Ока, пыль и искры; летящие куски
+  (`Pieces`: MultiMesh по вокселю, буфер целиком за кадр, `PiecesDrawn`), хватка (`Grip`: свет и кольцо прицела),
+  каменная кожа, туман мёртвых (`Fogs`: плоские мягкие клубы своим MultiMesh — частицы Godot давали чёрные пятна),
+  метки мора и обета (`Afflicted`), пыль приземления, вспышки ворожеи и некроманта; брошенные кувыркаются в
+  `UnitView.Pose` (поворот корня вокруг середины тела). Заклинание в руке — `Tool.Spell` в `BuildTools` (`TakeSpell`,
+  `CastHere`, круг/шар/вал у курсора; Телекинез: `GrabHere` на нажатии, `Steer` каждый кадр по `_mouse` — последнему
+  положению из событий, `Throw` на отпускании или смене кисти; `WeatherPick`), в консоли — `Inspector.SpellPane`
+  (выбор погоды);
   кровавая луна — `Atmosphere._blood`; `Sound.cs` — звуки, синтезированные при запуске (`Make`: шум через резонаторы
   и фильтры, струна Карплуса — Стронга, колокольные призвуки; 16 бит, 22 050 Гц), играются по событиям ядра (`Mined`,
   `Hacked`, `Collapsed`, `Spelled`, `Struck`, `RiteDone`, `Healed`, `Hexed`) и по взмахам (`Unit.Swing`), громкость —

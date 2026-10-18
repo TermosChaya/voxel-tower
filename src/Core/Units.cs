@@ -188,8 +188,15 @@ public static class Kinds
         Move = new Mover { Height = 2, Climb = 1, Drop = 5, Speed = 2.3f },
         Work = 0, Yield = 0, Hp = 60, Damage = 11, AttackTime = 1.1f, Reach = 10, Tool = "sword",
     };
-    /// <summary>What the spells raise: not hired, not the household's, gone in a minute.</summary>
-    public static readonly UnitType[] Summoned = { Risen };
+    /// <summary>A bone thrall: one of the horde's fallen got up again by a necromancer; it fights for the horde a minute, then falls apart.</summary>
+    public static readonly UnitType Thrall = new()
+    {
+        Key = "thrall", Name = "Костяк", Team = Team.Horde,
+        Move = new Mover { Height = 2, Climb = 1, Drop = 5, Speed = 2.4f, Carve = new float[] { 10, 22, 3, 1 } },
+        Hp = 45, Damage = 9, AttackTime = 1.1f, KeepDamage = 1, Bounty = 0, BodyH = 15, BodyR = 2, Reach = 10, Tool = "sword",
+    };
+    /// <summary>What the spells raise, ours or the horde's: not hired, not the household's, gone in a minute.</summary>
+    public static readonly UnitType[] Summoned = { Risen, Thrall };
 
     /// <summary>
     /// A goblin shaman: a skull for a face and an ember in the horn of its staff; it mends the band it goes with and lays
@@ -201,8 +208,30 @@ public static class Kinds
         Move = new Mover { Height = 2, Climb = 1, Drop = 5, Speed = 2.8f, Carve = new float[] { 10, 22, 3, 1 }, Build = .3f },
         Hp = 60, Damage = 5, AttackTime = 1f, KeepDamage = 1, Bounty = 12, BodyH = 10, BodyR = 1.5f, Reach = 9, Tool = "staff",
     };
+    /// <summary>
+    /// A witch of the horde: an old orc woman bent under a shawl, grey hair loose, a staff hung with herbs and bones. She
+    /// puts out the torches on our walls about her, and the fires that burn the horde. She goes the goblins' way.
+    /// </summary>
+    public static readonly UnitType Witch = new()
+    {
+        Key = "witch", Name = "Ворожея", Team = Team.Horde,
+        Move = new Mover { Height = 2, Climb = 1, Drop = 5, Speed = 2.5f, Carve = new float[] { 10, 22, 3, 1 }, Build = .3f },
+        Hp = 70, Damage = 5, AttackTime = 1.1f, KeepDamage = 1, Bounty = 14, BodyH = 13, BodyR = 2, Reach = 9, Tool = "staff",
+    };
+    /// <summary>
+    /// A necromancer of the horde: a tall orc in a black hooded robe, a skull on its staff with pale fire in its eyes. It
+    /// gets the horde's fallen up again as bone thralls, and near a sanctuary of ours the intervention drains away while it
+    /// stands there. It goes the orcs' way.
+    /// </summary>
+    public static readonly UnitType Necromancer = new()
+    {
+        Key = "necro", Name = "Некромант", Team = Team.Horde,
+        Move = new Mover { Height = 2, Speed = 2f, Carve = new float[] { 5, 120, 14, 2 }, Build = .25f },
+        Hp = 120, Damage = 8, AttackTime = 1.3f, KeepDamage = 2, Bounty = 20, BodyH = 16, BodyR = 2.5f, Reach = 10, Tool = "staff",
+    };
     /// <summary>The horde's sorcerers.</summary>
-    public static readonly UnitType[] Casters = { Shaman };
+    public static readonly UnitType[] Casters = { Shaman, Witch, Necromancer };
+    public static bool IsCaster(UnitType t) => t == Shaman || t == Witch || t == Necromancer;
 }
 
 /// <summary>One pawn or attacker on the field. Positions are in voxels, feet on the ground.</summary>
@@ -347,8 +376,13 @@ public sealed class Unit
     public double ChainedUntil = -1;
     /// <summary>One of the risen: when it falls apart.</summary>
     public double CrumbleAt;
-    /// <summary>A shaman: when it next mends those about it, and when it next lays a curse.</summary>
+    /// <summary>A sorcerer of the horde: when it next casts each of its two spells — a shaman mends and curses, a witch
+    /// douses fires and puts out torches, a necromancer raises the fallen.</summary>
     public double NextHeal, NextCurse;
+    /// <summary>Off its feet and in the air — thrown by a blast or a wind, or held up by telekinesis — or null.</summary>
+    public Flier Airborne;
+    /// <summary>A raider: till when the plague is on it. One of ours: till when the blood oath holds.</summary>
+    public double PlagueUntil = -1, OathUntil = -1;
 
     // beasts, and pawns with nothing to do
     /// <summary>Where it grazes and wanders round; for a pawn, where it idles round.</summary>

@@ -84,7 +84,7 @@ public static class Bodies
     /// <summary>How many looks a kind comes in.</summary>
     public static int Looks(UnitType t) => t.Key switch
     {
-        "worker" => 8, "archer" => 6, "sword" => 6, "priest" => 3, "risen" => 2, "shaman" => 2, "goblin" => 8, "sapper" => 4, "orc" => 6, "miner" => 4, "troll" => 3, "thief" => 3, "deer" => 2, "ram" => 2, "catapult" => 2, "mantlet" => 2, "tower" => 1, "stag" => 1, "bear" => 1, _ => 1,
+        "worker" => 8, "archer" => 6, "sword" => 6, "priest" => 3, "risen" => 2, "thrall" => 2, "shaman" => 2, "witch" => 2, "necro" => 2, "goblin" => 8, "sapper" => 4, "orc" => 6, "miner" => 4, "troll" => 3, "thief" => 3, "deer" => 2, "ram" => 2, "catapult" => 2, "mantlet" => 2, "tower" => 1, "stag" => 1, "bear" => 1, _ => 1,
     };
 
     /// <summary>A look for a unit, from its number, so it keeps it.</summary>
@@ -100,7 +100,8 @@ public static class Bodies
             "archer" => Archer(look),
             "sword" => Swordsman(look),
             "priest" => Priest(look),
-            "risen" => Risen(look),
+            "risen" => Bones(look, Mat.SoulFire, Mat.Rag),
+            "thrall" => Bones(look, Mat.Ember, Mat.ClothRed),
             "goblin" => Goblin(look),
             "orc" => Orc(look),
             "miner" => Miner(look),
@@ -108,6 +109,8 @@ public static class Bodies
             "sapper" => Sapper(look),
             "thief" => Thief(look),
             "shaman" => Shaman(look),
+            "witch" => Witch(look),
+            "necro" => Necromancer(look),
             "ram" => RamPlan(look),
             "catapult" => CatapultPlan(look),
             "mantlet" => MantletPlan(look),
@@ -749,16 +752,16 @@ public static class Bodies
 
     /// <summary>
     /// One of the dead raised: bare bones held together by nothing that should hold them — the ribs showing in dark
-    /// gaps, the belly gone to the spine — the pale fire in its eye sockets, a rag about its hips, a rusted blade; on one
-    /// a dented helmet still.
+    /// gaps, the belly gone to the spine — fire in its eye sockets (pale for ours, an ember's for the horde's thralls), a
+    /// rag about its hips, a rusted blade; on one a dented helmet still.
     /// </summary>
-    static BodyPlan Risen(int look)
+    static BodyPlan Bones(int look, byte eye, byte rag)
     {
         var f = new BodyPlan { Chop = .7f, Carry = -.3f, Stride = 8 };
         var b = new Build
         {
-            Skin = Mat.Bone, Shirt = Mat.Bone, Trousers = Mat.Bone, Sleeve = Mat.Bone, Boots = Mat.Bone, Belt = Mat.Rag, Hair = Mat.Bone, Brow = Mat.Bone,
-            Eye = Mat.SoulFire, Mouth = Mat.Hair, HairStyle = 3, Boot = 0, Chest = 3, LegW = 2, Gap = 1,
+            Skin = Mat.Bone, Shirt = Mat.Bone, Trousers = Mat.Bone, Sleeve = Mat.Bone, Boots = Mat.Bone, Belt = rag, Hair = Mat.Bone, Brow = Mat.Bone,
+            Eye = eye, Mouth = Mat.Hair, HairStyle = 3, Boot = 0, Chest = 3, LegW = 2, Gap = 1,
         };
         var s = Humanoid(b, f);
         // the ribs across the chest, the belly gone to the spine
@@ -768,7 +771,7 @@ public static class Bodies
         s.Paint(Body, -b.HeadW + 1, b.Neck + 2, b.FaceZ, b.HeadW - 1, b.Neck + 3, b.HZ1, Mat.Hair);
         s.Pair(Body, Body, -2, b.Neck + 1, b.FaceZ, -1, b.Neck + 2, b.HZ1, Mat.Bone);
         // a rag about the hips
-        s.Box(Body, -b.Chest, b.Waist - 2, b.Z0, b.Chest, b.Waist + 1, b.Z1, Mat.Rag);
+        s.Box(Body, -b.Chest, b.Waist - 2, b.Z0, b.Chest, b.Waist + 1, b.Z1, rag);
         s.Cut(Body, -1, b.Waist - 2, b.Z1 - 1, 1, b.Waist - 1, b.Z1, both: false);
         if (look == 1)
         {
@@ -892,6 +895,79 @@ public static class Bodies
         s.Box(Main, fx - 2, top + 2, fz, fx - 1, top + 4, fz + 1, Mat.Bone, Tissue.Gear);
         s.Dot(Main, fx, top, fz, Mat.Ember, Tissue.Gear);
         s.Dot(Main, fx, top + 1, fz, Mat.Ember, Tissue.Gear);
+        return Done(s, f, b);
+    }
+
+    /// <summary>
+    /// A witch of the horde: an old orc woman in a long skirt of sacking and a shawl over her head and shoulders, grey
+    /// hair hanging out from under it, a hooked nose and a tusk; a crooked staff with a bunch of herbs and a bone hung
+    /// from its head.
+    /// </summary>
+    static BodyPlan Witch(int look)
+    {
+        var f = new BodyPlan { Chop = 1.1f, Carry = -.2f, Stride = 6 };
+        byte skin = look == 1 ? Mat.SkinOrcGrey : Mat.SkinOrc, shawl = look == 1 ? Mat.ClothDark : Mat.ClothBrown;
+        var b = new Build
+        {
+            Leg = 9, LegW = 3, LegD = 4, Gap = 1, Boot = 0, Torso = 9, Chest = 4, ChestD = 5, Head = 8, HeadW = 4, HeadD = 8, HeadZ = -3,
+            Arm = 9, ArmW = 2, ArmD = 3, Hand = 3, Skin = skin, Shirt = shawl, Trousers = Mat.Rag, Boots = skin, Sleeve = shawl,
+            Hair = Mat.HairGrey, HairStyle = 2, Eye = Mat.Ember, Brow = Mat.HairGrey, Mouth = Mat.Hair,
+        };
+        var s = Humanoid(b, f);
+        int hx = b.HeadW, hz1 = b.HZ1, hy0 = b.Neck;
+        // a hooked nose, and a tusk out of the lower lip
+        s.Box(Body, -1, hy0 + 3, hz1, 1, hy0 + 5, hz1 + 1, skin);
+        s.Box(Body, -1, hy0 + 2, hz1 + 1, 0, hy0 + 3, hz1 + 2, skin);
+        s.Box(Body, 1, hy0 + 1, hz1, 2, hy0 + 3, hz1 + 1, Mat.Bone);
+        // the skirt to the ground, wider than the legs, and its ragged hem
+        s.Box(Body, -b.Chest - 1, 1, b.Z0 - 1, b.Chest + 1, b.Waist, b.Z1 + 1, Mat.Rag);
+        for (int x = -b.Chest - 1; x < b.Chest + 1; x += 3) s.Cut(Body, x, 1, b.Z1, x + 1, 2, b.Z1 + 1, both: false);
+        // the shawl over the head and down over the shoulders, grey hair hanging out of it either side of the face
+        Hood(s, b, shawl);
+        s.Box(Body, -b.Chest - 1, b.Neck - 4, b.Z0 - 1, b.Chest + 1, b.Neck, b.Z1 + 1, shawl);
+        s.Pair(Body, Body, -hx - 1, hy0 - 3, hz1 - 3, -hx, hy0 + 3, hz1 - 1, Mat.HairGrey);
+        // the crooked staff: a bunch of herbs and a bone hung from its head
+        int x0 = b.FistX, z = (b.ArmZ0 + b.ArmZ1) / 2, top = b.Crown + 2;
+        s.Box(Main, x0, 1, z, x0 + 1, top, z + 1, Mat.Handle, Tissue.Gear);
+        s.Box(Main, x0 - 1, top, z, x0, top + 2, z + 1, Mat.Handle, Tissue.Gear);
+        s.Box(Main, x0 - 2, top + 1, z - 1, x0, top + 3, z + 2, Mat.FoliageLight, Tissue.Gear);
+        s.Dot(Main, x0 - 1, top + 3, z, Mat.Flower, Tissue.Gear);
+        s.Box(Main, x0, top - 3, z + 1, x0 + 1, top - 1, z + 2, Mat.Bone, Tissue.Gear);
+        return Done(s, f, b);
+    }
+
+    /// <summary>
+    /// A necromancer of the horde: a tall orc in a black robe to the ground and a hood drawn low, pale fire for eyes under
+    /// it, small bones strung across its chest, and a staff topped with a skull with the same fire in its sockets.
+    /// </summary>
+    static BodyPlan Necromancer(int look)
+    {
+        var f = new BodyPlan { Chop = 1.2f, Carry = -.25f, Stride = 9 };
+        byte skin = look == 1 ? Mat.SkinOrcGrey : Mat.SkinOrc, robe = Mat.ClothDark;
+        var b = new Build
+        {
+            Leg = 12, LegW = 3, LegD = 5, Gap = 1, Boot = 2, Torso = 12, Chest = 5, ChestD = 6, Head = 8, HeadW = 4, HeadD = 8, HeadZ = -2,
+            Arm = 12, ArmW = 3, ArmD = 4, Hand = 3, Skin = skin, Shirt = robe, Trousers = robe, Sleeve = robe, Boots = Mat.Leather, Belt = Mat.Bone,
+            Eye = Mat.SoulFire, Brow = skin, Mouth = Mat.Hair, HairStyle = 3,
+        };
+        var s = Humanoid(b, f);
+        int hy0 = b.Neck, hz1 = b.HZ1;
+        // tusks out of the jaw
+        s.Pair(Body, Body, -3, hy0 + 1, hz1, -2, hy0 + 3, hz1 + 1, Mat.Bone);
+        // the robe to the ground with its hem dark as old blood, wide sleeves, the hood
+        s.Box(Body, -b.Chest - 1, 1, b.Z0 - 1, b.Chest + 1, b.Waist, b.Z1 + 1, robe);
+        s.Paint(Body, -b.Chest - 1, 1, b.Z0 - 1, b.Chest + 1, 2, b.Z1 + 1, Mat.Robe);
+        s.Pair(Main, Off, b.ArmX0 - 1, b.HandY + b.Hand, b.ArmZ0 - 1, b.ArmX0, b.HandY + b.Hand + 4, b.ArmZ1 + 1, robe);
+        Hood(s, b, robe);
+        // a string of small bones across the chest
+        for (int x = -b.Chest + 1; x < b.Chest - 1; x += 2) s.Dot(Body, x, b.Neck - 3 - Math.Abs(x) / 2, b.Z1, Mat.Bone, Tissue.Gear);
+        // the staff with its skull
+        int fx = b.FistX, fz = (b.ArmZ0 + b.ArmZ1) / 2, top = b.Crown + 3;
+        s.Box(Main, fx, 1, fz, fx + 1, top, fz + 1, Mat.Handle, Tissue.Gear);
+        s.Box(Main, fx - 1, top, fz - 1, fx + 2, top + 3, fz + 2, Mat.Bone, Tissue.Gear);
+        s.Dot(Main, fx - 1, top + 1, fz + 1, Mat.SoulFire, Tissue.Gear);
+        s.Dot(Main, fx + 1, top + 1, fz + 1, Mat.SoulFire, Tissue.Gear);
+        s.Box(Main, fx - 1, top - 1, fz, fx + 2, top, fz + 2, Mat.Bone, Tissue.Gear);
         return Done(s, f, b);
     }
 

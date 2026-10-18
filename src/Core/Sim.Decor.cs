@@ -14,6 +14,8 @@ public sealed class Fixture
     public readonly List<(int x, int y, int z, byte m)> Voxels = new();
     /// <summary>Where a torch's flame burns, in voxels.</summary>
     public float LX, LY, LZ;
+    /// <summary>A torch a witch of the horde put out: till when it stays dark (0 for one alight).</summary>
+    public double DarkUntil;
 }
 
 /// <summary>
@@ -40,6 +42,8 @@ public sealed partial class Sim
         if (Time < _nextDecor) return;
         _nextDecor = Time + 2;
         for (int i = Fixtures.Count - 1; i >= 0; i--) if (!Whole(Fixtures[i])) TakeDown(i);
+        // the torches put out are lit again when their minute is up
+        foreach (var f in Fixtures) if (f.DarkUntil > 0 && f.DarkUntil <= Time) Relight(f);
         Decorate(8);
     }
 
@@ -56,8 +60,22 @@ public sealed partial class Sim
     {
         var (ax, ay, az) = WaterPlanner.Unpack(f.Anchor);
         if (MeantAt(ax, ay, az) == 0 || Brushes.Free(World.Get(ax, ay, az))) return false;
-        foreach (var (x, y, z, m) in f.Voxels) if (World.Get(x, y, z) != m) return false;
+        // a torch put out stands with its sconce where the flame was
+        foreach (var (x, y, z, m) in f.Voxels) if (World.Get(x, y, z) != m && !(m == Mat.Flame && f.DarkUntil > 0 && World.Get(x, y, z) == Mat.Sconce)) return false;
         return true;
+    }
+
+    /// <summary>A torch put out: its flame is gone for a while.</summary>
+    void Quench(Fixture f, double seconds)
+    {
+        f.DarkUntil = Time + seconds;
+        foreach (var (x, y, z, m) in f.Voxels) if (m == Mat.Flame && World.Get(x, y, z) == Mat.Flame) World.Set(x, y, z, Mat.Sconce);
+    }
+
+    void Relight(Fixture f)
+    {
+        f.DarkUntil = 0;
+        foreach (var (x, y, z, m) in f.Voxels) if (m == Mat.Flame && World.Get(x, y, z) == Mat.Sconce) World.Set(x, y, z, Mat.Flame);
     }
 
     void TakeDown(int i)

@@ -137,6 +137,7 @@ public sealed partial class Sim
         TickSpells();
         TickCurses();
         TickCollapse(dt);
+        TickFlight(dt);
         TickGates(dt);
         TickDrawbridges(dt);
         TickDecor();
@@ -158,6 +159,8 @@ public sealed partial class Sim
             // in the citadel: out of the world till it comes out
             if (u.Inside) { if (u.Team == Team.Horde) Imprisoned(u, dt); else Indoors(u, dt); continue; }
             u.Swing = Math.Max(0, u.Swing - dt * 3);
+            // in the air: nothing to do but come down
+            if (u.Airborne != null) continue;
             u.Cooldown -= dt;
             Settle(u);
             if (u.Team == Team.Player) PawnTick(u, dt);
@@ -177,7 +180,7 @@ public sealed partial class Sim
     {
         Array.Clear(_bodies);
         foreach (var u in Units)
-            if (!u.Dead && !u.Inside)
+            if (!u.Dead && !u.Inside && u.Airborne == null)
                 for (int d = 0; d < u.T.Move.Height && Nav.Y(u.Cell) + d < Nav.NY; d++) _bodies[u.Cell + d * Nav.Layer]++;
     }
 
@@ -232,7 +235,8 @@ public sealed partial class Sim
         if (climbing) { tx = u.X; tz = u.Z; ty = (Nav.Y(next) << NavGrid.Shift) + (Nav.Solid(Nav.I(next), Nav.Y(next) - 1, Nav.K(next)) ? Nav.Floor[next] - (Nav.Y(next) << NavGrid.Shift) : 0); }
         else { tx += u.OffX; tz += u.OffZ; }
         float speed = u.T.Move.Speed * NavGrid.CS * pace * u.Pace * (u.Hp < u.MaxHp * .4f ? .7f : 1) * (Nav.Water[u.Cell] > 0 ? .6f : 1)
-            * (Nav.Spikes[u.Cell] > 0 ? .4f : 1) * Gait(u) * (Mires.Count > 0 && InMire(u.X, u.Z) ? .35f : 1);
+            * (Nav.Spikes[u.Cell] > 0 ? .4f : 1) * Gait(u) * (Mires.Count > 0 && InMire(u.X, u.Z) ? .35f : 1)
+            * (DeadFogs.Count > 0 && u.Team == Team.Horde && !Deathless(u) && InDeadFog(u.X, u.Z) ? .5f : 1);
         float step = speed * dt * (climbing ? .5f : 1);
         float dx = tx - u.X, dz = tz - u.Z, dyv = ty - u.Y;
         float dist = climbing ? MathF.Abs(dyv) : MathF.Sqrt(dx * dx + dz * dz);
@@ -278,11 +282,11 @@ public sealed partial class Sim
         for (int a = 0; a < Units.Count; a++)
         {
             var u = Units[a];
-            if (u.Dead || u.Inside || Nav.Ladder[u.Cell] != 0) continue;
+            if (u.Dead || u.Inside || u.Airborne != null || Nav.Ladder[u.Cell] != 0) continue;
             for (int b = a + 1; b < Units.Count; b++)
             {
                 var v = Units[b];
-                if (v.Dead || v.Inside || Nav.Ladder[v.Cell] != 0) continue;
+                if (v.Dead || v.Inside || v.Airborne != null || Nav.Ladder[v.Cell] != 0) continue;
                 float dx = v.X - u.X, dz = v.Z - u.Z, min = u.T.BodyR + v.T.BodyR + .5f;
                 if (dx * dx + dz * dz >= min * min || MathF.Abs(v.Y - u.Y) > Math.Min(u.T.BodyH, v.T.BodyH) * .8f) continue;
                 float d = MathF.Sqrt(dx * dx + dz * dz);
@@ -309,7 +313,7 @@ public sealed partial class Sim
         _stood.Clear();
         foreach (var u in Units)
         {
-            if (u.Dead || u.Inside || u.State != UnitState.Idle || u.Path != null && u.PathI < u.Path.Count || Nav.Ladder[u.Cell] != 0) continue;
+            if (u.Dead || u.Inside || u.Airborne != null || u.State != UnitState.Idle || u.Path != null && u.PathI < u.Path.Count || Nav.Ladder[u.Cell] != 0) continue;
             if (u.Team == Team.Player && u.Site >= 0) continue;
             if (_stood.TryAdd(u.Cell, u)) continue;
             int c = FreeBeside(u);

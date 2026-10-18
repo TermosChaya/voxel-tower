@@ -15,7 +15,11 @@ namespace VoxelTower.Game;
 /// --demo sets up a fort with pawns at work (--pose=battle: the horde bridging the moat and laddering the wall;
 /// --pose=faith: priests at prayer on the barrow, --pose=captives: a rite at the altar there, prisoners bound and led,
 /// --pose=spells: the spells at work at night under the red moon (--look=1 a bolt of lightning, close), --pose=shaman:
-/// a goblin shaman cursing a wall of ours, --pose=trees: the valley's trees in a row, --look=0..2 choosing which; --pose=people: every figure in every look,
+/// a goblin shaman cursing a wall of ours, --pose=blast: a wall of ours blown up, its pieces in the air (--look=1 coming
+/// down, --look=2 what is left), --pose=grip: a ball of earth held by telekinesis over a band, --pose=wind: the black wind
+/// throwing a band off our wall with its ladders, --pose=hexes: the fog of the dead, the plague, the blood oath and a stone
+/// skin at night, --pose=sorcerers: a witch with our torches put out and a necromancer with his thralls, at night,
+/// --pose=trees: the valley's trees in a row, --look=0..2 choosing which; --pose=people: every figure in every look,
 /// --look=0..4 choosing a row),
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
 /// --top looks straight down, --look=N at the Nth named place of the valley, --seed=N makes another valley; --select[=N]
@@ -55,6 +59,9 @@ public partial class Main : Node3D
     public bool Paused;
     /// <summary>The valley's sounds.</summary>
     public Sound Sound;
+    public MagicView Magic;
+    /// <summary>A run driven by a script (a test, a staged scene, a screenshot), not by a hand on the mouse.</summary>
+    public bool Scripted => _selfTest || _demo || _shot != null;
 
     const string BlueprintFile = "user://blueprints.json";
 
@@ -157,6 +164,7 @@ public partial class Main : Node3D
         if (_demo && _pose == "shaman") ClearTrees(Site.KeepX - Site.KeepR - 240, Site.KeepZ - 90, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 90);
         if (_demo && _pose == "spells") ClearTrees(Site.KeepX - Site.KeepR - 260, Site.KeepZ - 100, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
         if (_demo && _pose == "traps") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
+        if (_demo && _pose is "blast" or "grip" or "wind" or "hexes" or "sorcerers") ClearTrees(Site.KeepX - Site.KeepR - 300, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 140);
         World.Compact();
         save?.Valley(World, Site);
         double genMs = sw.Elapsed.TotalMilliseconds;
@@ -215,9 +223,9 @@ public partial class Main : Node3D
         var fire = new FireView();
         AddChild(fire);
         fire.Init(this);
-        var magic = new MagicView();
-        AddChild(magic);
-        magic.Init(this);
+        Magic = new MagicView();
+        AddChild(Magic);
+        Magic.Init(this);
         Sound = new Sound();
         AddChild(Sound);
         Sound.Init(this);
@@ -366,7 +374,7 @@ public partial class Main : Node3D
             {
                 if (u.Team == Team.Wild) continue;
                 string field = "";
-                if (u.Team == Team.Horde && Sim.Fields.TryGetValue(u.T == Kinds.Shaman ? Kinds.Goblin : u.T, out var f))
+                if (u.Team == Team.Horde && Sim.Fields.TryGetValue(Sim.FieldKind(u.T), out var f))
                 {
                     int next = f.Next(Sim.Nav, u.Cell, out float carve, out var works);
                     field = $", field {f.Dist[u.Cell]:0} s, next {next} {works} carve {carve:0.0}, no build until {u.NoBuildUntil:0.0}";
@@ -850,6 +858,49 @@ public partial class Main : Node3D
         KeyPress(Key.Escape);
         foreach (var g in flock) { g.Dead = true; g.DiedAt = -999; }
 
+        // the spells in their four circles, twenty of them, each with its plaque
+        bool plaques = Array.TrueForAll(Sim.Spells, sp => Hud.Mysteries.SpellPlaque(sp.Kind) != null);
+        Check("«Таинства» hold the spells in four circles, twenty of them, each with its plaque", Sim.Circles.Length == 4 && Sim.Spells.Length == 20 && plaques,
+            $"{Sim.Circles.Length} circles, {Sim.Spells.Length} spells, plaques for all {plaques}");
+        Hud.ClosePanel();
+
+        // a blast at a click: the ground there goes up in pieces that are seen flying, and come down
+        Sim.Known.Add(SpellKind.Explosion); Sim.Known.Add(SpellKind.Telekinesis);
+        Sim.Favour += 200;
+        Tools.TakeSpell(SpellKind.Explosion);
+        int ex1 = kx - 240, ez1 = kz + 80;
+        await Look(ex1, ez1);
+        await Click(ex1, ez1);
+        int flyingNow = Sim.Fliers.Count;
+        await Frames(2);
+        int drawn = Magic.PiecesDrawn;
+        Advance(10);
+        Check("a blast at a click: what is there goes up in pieces, seen flying, that come down", flyingNow > 3 && drawn > 500 && Sim.Fliers.Count == 0,
+            $"{flyingNow} pieces, {drawn} voxels drawn in the air; {Sim.Fliers.Count} still flying after 10 s");
+        KeyPress(Key.Escape);
+
+        // telekinesis with the mouse: the button goes down on a goblin, it is lifted, carried after the cursor, and thrown
+        Tools.TakeSpell(SpellKind.Telekinesis);
+        int tx1 = kx - 200, tz1 = kz - 160;
+        var lifted = Sim.Spawn(Kinds.Goblin, Sim.NearestStand(tx1, tz1, 2));
+        lifted.Guard = true; lifted.Home = lifted.Cell;
+        await Look(tx1, tz1);
+        float lx0 = lifted.X, lz0 = lifted.Z;
+        var grab = ScreenAt(lifted.X, lifted.Y + 6, lifted.Z);
+        Move(grab); await Frames(2); Button(grab, true);
+        bool gripped = Sim.HeldNow?.Unit == lifted;
+        var away = Screen(tx1 + 120, tz1);
+        // the test runs the valley by hand: a twentieth of a second for every frame of the stroke
+        for (int i = 1; i <= 20; i++) { Move(grab.Lerp(away, i / 20f)); await Frames(1); Advance(.05); }
+        Button(away, false);
+        await Frames(2);
+        Advance(6);
+        float flown = MathF.Sqrt((lifted.X - lx0) * (lifted.X - lx0) + (lifted.Z - lz0) * (lifted.Z - lz0)) / VoxelWorld.PerMetre;
+        Check("telekinesis with the mouse: a goblin taken up, carried after the cursor and thrown", gripped && lifted.Airborne == null && flown > 4,
+            $"gripped {gripped}; it came down {flown:0.0} m off, {(lifted.Dead ? "dead" : $"{lifted.Hp:0} hp")}");
+        KeyPress(Key.Escape);
+        lifted.Dead = true; lifted.DiedAt = -999;
+
         // the horde called early: no gold for it, only less known of the defences
         Sim.Waves.Countdown = 200;
         double gold0 = Sim.Stock.Gold;
@@ -869,7 +920,7 @@ public partial class Main : Node3D
         Check("Ctrl+= draws the interface larger, Ctrl+0 as it was", Math.Abs(larger - 1.1f) < .01f && Math.Abs(GetTree().Root.ContentScaleFactor - 1) < .01f,
             $"{larger:0.00} → {GetTree().Root.ContentScaleFactor:0.00}");
 
-        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 17 && Sound.Heard.Count >= 4,
+        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 21 && Sound.Heard.Count >= 4,
             $"{Sound.Clips} sounds, {Sound.Played} played: {string.Join(", ", Sound.Heard)}");
 
         var before = Rig.Target;
@@ -912,6 +963,11 @@ public partial class Main : Node3D
         if (_pose == "captives") { Captives(); return; }
         if (_pose == "spells") { Spellwork(); return; }
         if (_pose == "shaman") { Hexing(); return; }
+        if (_pose == "blast") { Blasting(); return; }
+        if (_pose == "grip") { Gripping(); return; }
+        if (_pose == "wind") { Gale(); return; }
+        if (_pose == "hexes") { Hexes(); return; }
+        if (_pose == "sorcerers") { Sorcerers(); return; }
         var w = World; var s = Site; var sim = Sim;
         sim.Waves.Countdown = Waves.Prep;
         sim.Stock.Gold = 140;
@@ -1272,6 +1328,142 @@ public partial class Main : Node3D
         sim.Cast(SpellKind.FireRain, cx - 12, w.SurfAt(cx - 12, cz), cz + 6);
         Advance(2.2);
         Rig.SetAt(w.WX(cx + 8), w.WY(w.SurfAt(cx, cz) + 4), w.WZ(cz), -.62f, .55f, 1.5f);
+        Hud.Refresh();
+    }
+
+    /// <summary>Every spell known, intervention to spare, and the clock of the waves stopped.</summary>
+    void Sorcerous()
+    {
+        foreach (var s in Sim.Spells) Sim.Known.Add(s.Kind);
+        Sim.Favour = 600;
+        Sim.Waves.Countdown = 1e9;
+    }
+
+    /// <summary>Night, with no wave coming in: one raider far off in the west, held fast, keeps it going.</summary>
+    void Nightfall()
+    {
+        var sim = Sim;
+        sim.Waves.StartNow(sim);
+        sim.Waves._queue.Clear();
+        foreach (var u in sim.Units) if (u.Team == Team.Horde && !u.Dead && !u.Guard) { u.Dead = true; u.DiedAt = -999; }
+        var straggler = sim.Spawn(Kinds.Goblin, sim.NearestStand(Site.SpawnStrip + 30, Site.KeepZ, 2));
+        straggler.ChainedUntil = 1e9;
+    }
+
+    /// <summary>A wall of ours a little west of the citadel, its top; and a raider standing on guard by it.</summary>
+    int WallWest(int dx, int height, int halfLength)
+    {
+        int wx = Site.KeepX - Site.KeepR + dx, kz = Site.KeepZ;
+        int top = Shapes.LevelTop(World, wx, kz, height);
+        Sim.InstantLabour = true;
+        Sim.DesignateBuild(Shapes.Line(World, Site, wx, kz - halfLength, wx, kz + halfLength, new Stroke { Mat = Mat.Stone, Width = 8, Height = height, Level = true }, top));
+        Sim.InstantLabour = false;
+        return top;
+    }
+
+    Unit Camp(UnitType t, int x, int z) { var u = Sim.Spawn(t, Sim.NearestStand(x, z, t.Move.Height)); u.Guard = true; u.Home = u.Cell; return u; }
+
+    /// <summary>A wall of ours west of the citadel blown up before a band of the horde: its pieces in the air.</summary>
+    void Blasting()
+    {
+        var sim = Sim; var w = World;
+        Sorcerous();
+        int wx = Site.KeepX - Site.KeepR - 110, kz = Site.KeepZ, top = WallWest(-110, 40, 56);
+        foreach (var (t, dx, dz) in new[] { (Kinds.Goblin, -22, -10), (Kinds.Orc, -26, 10), (Kinds.Goblin, -18, 22), (Kinds.Goblin, -30, -26), (Kinds.Troll, -44, 2), (Kinds.Orc, -40, -18) })
+            Camp(t, wx + dx, kz + dz);
+        Advance(.3);
+        sim.Cast(SpellKind.Explosion, wx, top - 22, kz);
+        Advance(_look == 2 ? 10 : _look == 1 ? .9 : .3);
+        Paused = true;
+        Rig.SetAt(w.WX(wx - 24), w.WY(top - 18), w.WZ(kz), -.75f, .45f, _look == 2 ? 2.2f : 2.9f);
+        Hud.Refresh();
+    }
+
+    /// <summary>A ball of earth torn out of the ground by telekinesis and held over a band of the horde, the hole it left beside them.</summary>
+    void Gripping()
+    {
+        var sim = Sim; var w = World;
+        Sorcerous();
+        int cx = Site.KeepX - Site.KeepR - 120, cz = Site.KeepZ + 10;
+        foreach (var (t, dx, dz) in new[] { (Kinds.Goblin, -8, -10), (Kinds.Orc, 4, 6), (Kinds.Goblin, 12, -4), (Kinds.Goblin, -14, 12), (Kinds.Orc, 10, 18), (Kinds.Sapper, -4, 22) })
+            Camp(t, cx + dx, cz + dz);
+        int bx = cx + 40, bz = cz - 30, g = w.SurfAt(bx, bz);
+        sim.Cast(SpellKind.Telekinesis, bx + .5f, g - 3, bz + .5f);
+        sim.HoldAt(cx, w.SurfAt(cx, cz) + 48, cz + 4);
+        Advance(1.5);
+        // over the band where it stands now
+        float mx = 0, mz = 0; int n = 0;
+        foreach (var u in sim.Units) if (!u.Dead && u.Team == Team.Horde && Math.Abs(u.X - cx) < 60 && Math.Abs(u.Z - cz) < 60) { mx += u.X; mz += u.Z; n++; }
+        if (n > 0) sim.HoldAt(mx / n, w.SurfAt((int)(mx / n), (int)(mz / n)) + 48, mz / n);
+        Advance(1.2);
+        Paused = true;
+        Rig.SetAt(w.WX(cx + 14), w.WY(w.SurfAt(cx, cz) + 18), w.WZ(cz - 6), -.75f, .42f, 2.6f);
+        Hud.Refresh();
+    }
+
+    /// <summary>The black wind over our wall: the band on its ladders and at its foot thrown off through the air, the ladders torn away in pieces.</summary>
+    void Gale()
+    {
+        var sim = Sim; var w = World;
+        Sorcerous();
+        int wx = Site.KeepX - Site.KeepR - 100, kz = Site.KeepZ, top = WallWest(-100, 40, 48);
+        // two ladders against the outer face
+        foreach (int lz in new[] { kz - 18, kz + 14 })
+            for (int z = lz; z < lz + 6; z++)
+            {
+                int g = w.SurfAt(wx - 6, z);
+                for (int y = g; y < top + 2; y++) if (w.Get(wx - 5, y, z) == Mat.Air) w.Set(wx - 5, y, z, Mat.SiegeLadder);
+            }
+        foreach (var (t, dx, dz) in new[] { (Kinds.Goblin, -12, -14), (Kinds.Orc, -16, 4), (Kinds.Goblin, -14, 18), (Kinds.Goblin, -24, -4), (Kinds.Orc, -22, 24), (Kinds.Goblin, -30, 10) })
+            Camp(t, wx + dx, kz + dz);
+        Advance(.5);
+        sim.Cast(SpellKind.BlackWind, wx - 14, w.SurfAt(wx - 14, kz), kz);
+        Advance(.55);
+        Paused = true;
+        Rig.SetAt(w.WX(wx - 40), w.WY(top - 10), w.WZ(kz), -.75f, .4f, 3.6f);
+        Hud.Refresh();
+    }
+
+    /// <summary>At night: a band in the fog of the dead, the plague going through it, our swordsmen under the blood oath by a wall with a stone skin on it.</summary>
+    void Hexes()
+    {
+        var sim = Sim; var w = World;
+        Sorcerous();
+        Nightfall();
+        int wx = Site.KeepX - Site.KeepR - 90, kz = Site.KeepZ, top = WallWest(-90, 32, 44);
+        sim.Decorate();
+        var band = new List<Unit>();
+        foreach (var (t, dx, dz) in new[] { (Kinds.Goblin, -40, -12), (Kinds.Orc, -46, 6), (Kinds.Goblin, -36, 18), (Kinds.Goblin, -54, -20), (Kinds.Orc, -58, 14), (Kinds.Goblin, -50, 30), (Kinds.Troll, -64, -2) })
+            band.Add(Camp(t, wx + dx, kz + dz));
+        foreach (var (dx, dz) in new[] { (12, -10), (14, 8), (12, 22) }) { var s = Camp(Kinds.Swordsman, wx + dx, kz + dz); s.Hp = s.MaxHp * .5f; }
+        Advance(.5);
+        sim.Cast(SpellKind.DeadFog, wx - 48, w.SurfAt(wx - 48, kz), kz + 4);
+        sim.Cast(SpellKind.Plague, wx - 40, w.SurfAt(wx - 40, kz), kz);
+        sim.Cast(SpellKind.Oath, wx + 13, w.SurfAt(wx + 13, kz), kz + 8);
+        sim.Cast(SpellKind.Skin, wx, top - 12, kz);
+        Advance(3);
+        Rig.SetAt(w.WX(wx - 22), w.WY(top - 18), w.WZ(kz + 4), -.75f, .5f, 2.4f);
+        Hud.Refresh();
+    }
+
+    /// <summary>At night: a witch of the horde by our wall with its torches put out, and a necromancer getting the fallen up as thralls.</summary>
+    void Sorcerers()
+    {
+        var sim = Sim; var w = World;
+        Sorcerous();
+        Nightfall();
+        // a long wall: the torches at its far end out of the witch's reach still burn
+        int wx = Site.KeepX - Site.KeepR - 90, kz = Site.KeepZ, top = WallWest(-90, 32, 150);
+        sim.Decorate();
+        var witch = Camp(Kinds.Witch, wx - 30, kz - 110);
+        for (int t = 0; t < 60 && !sim.Fixtures.Exists(f => f.DarkUntil > sim.Time); t++) Advance(.25);
+        var necro = Camp(Kinds.Necromancer, wx - 44, kz - 60);
+        foreach (var (dx, dz) in new[] { (8, -6), (12, 8), (-4, 12) }) { var d = Camp(Kinds.Goblin, wx - 44 + dx, kz - 60 + dz); sim.Hurt(d, null, 1000, "test"); }
+        Camp(Kinds.Goblin, wx - 28, kz - 84); Camp(Kinds.Orc, wx - 36, kz - 90);
+        for (int t = 0; t < 120 && sim.Count(Kinds.Thrall) == 0; t++) Advance(.25);
+        Advance(1.2);
+        // from inside the wall along it: its far end lit, the near one dark, the witch and the necromancer beyond it
+        Rig.SetAt(w.WX(wx - 20), w.WY(top - 24), w.WZ(kz - 40), _look == 1 ? -.75f : 2.39f, .5f, 2.6f);
         Hud.Refresh();
     }
 
@@ -1638,8 +1830,8 @@ public partial class Main : Node3D
         Paused = true;
         var rows = new[]
         {
-            new[] { Kinds.Worker, Kinds.Priest }, new[] { Kinds.Archer, Kinds.Swordsman, Kinds.Risen }, new[] { Kinds.Goblin, Kinds.Sapper, Kinds.Thief, Kinds.Shaman },
-            new[] { Kinds.Orc, Kinds.Miner }, new[] { Kinds.Troll, Kinds.Deer, Kinds.Boar, Kinds.Hare, Kinds.Bear, Kinds.WhiteStag }, new[] { Kinds.Ram, Kinds.Catapult, Kinds.Mantlet, Kinds.SiegeTower },
+            new[] { Kinds.Worker, Kinds.Priest }, new[] { Kinds.Archer, Kinds.Swordsman, Kinds.Risen, Kinds.Thrall }, new[] { Kinds.Goblin, Kinds.Sapper, Kinds.Thief, Kinds.Shaman, Kinds.Witch },
+            new[] { Kinds.Orc, Kinds.Miner, Kinds.Necromancer }, new[] { Kinds.Troll, Kinds.Deer, Kinds.Boar, Kinds.Hare, Kinds.Bear, Kinds.WhiteStag }, new[] { Kinds.Ram, Kinds.Catapult, Kinds.Mantlet, Kinds.SiegeTower },
         };
         const float yaw = -.3f, pitch = .42f, gap = 34;
         float sin = MathF.Sin(yaw), cos = MathF.Cos(yaw);

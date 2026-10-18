@@ -50,7 +50,7 @@ public sealed partial class Sim
     /// <summary>What a prisoner is worth to the old powers, by its kind: intervention and revelations.</summary>
     public static (double favour, int revelations) Worth(UnitType t) => t.Key switch
     {
-        "troll" or "shaman" => (40, 3),
+        "troll" or "shaman" or "witch" or "necro" => (40, 3),
         "orc" or "miner" => (25, 2),
         _ => (15, 1),
     };
