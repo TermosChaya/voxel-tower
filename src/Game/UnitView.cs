@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using Godot;
 using VoxelTower.Core;
 
@@ -31,8 +32,8 @@ public partial class UnitView : Node3D
     sealed class Look { public float Face, Move, LastX, LastZ; public bool Seen; public Transform3D Body; }
 
     /// <summary>
-    /// A hurt body: the parts its wounds have changed (and what they hold) drawn on their own, meshed again after every
-    /// wound and when the distance changes; the rest are drawn with their kind.
+    /// A hurt body: the parts its wounds have changed (and what they hold) drawn on their own, meshed again after a wound
+    /// changes them and kept at each distance they have been drawn at; the rest are drawn with their kind.
     /// </summary>
     sealed class Own
     {
@@ -40,8 +41,21 @@ public partial class UnitView : Node3D
         public MeshInstance3D[] Dress = Array.Empty<MeshInstance3D>();
         public readonly bool[] Hurt = new bool[Figure.Parts];
         public readonly int[] Sums = new int[Figure.Parts];
-        public int Rev = -1, Lod = -1;
+        /// <summary>The distance each part is drawn at now (-1: to be drawn again at once, a wound has changed it).</summary>
+        public readonly int[] At = { -1, -1, -1, -1, -1 };
+        /// <summary>The meshes made of each part as it is now, at each distance (null: not made yet).</summary>
+        public readonly Made[,] Kept = new Made[Figure.Parts, 3];
+        /// <summary>The wounds last drawn, and how far they had gone.</summary>
+        public BodyState Of;
+        public int Rev = -1;
+        /// <summary>Put away while the body is someone's eyes (first person).</summary>
+        public bool Hidden;
+        /// <summary>The tint its kind's figures are drawn in this frame (grey when dead, red when struck).</summary>
+        public Color Tint = Colors.White;
     }
+
+    /// <summary>A hurt part's mesh at one distance, and of what hangs on it (by the index of the dress).</summary>
+    sealed class Made { public Mesh Body; public Mesh[] Dress; }
 
     /// <summary>A piece cut off a body, falling and then lying where it fell.</summary>
     sealed class Fallen { public MeshInstance3D Node; public Transform3D From, To; public double At; }
@@ -50,6 +64,10 @@ public partial class UnitView : Node3D
     VoxelWorld _w;
     /// <summary>How near the figures are drawn: 0 in cells of 3 cm, 1 in half-voxels, 2 in whole voxels and without shadows.</summary>
     int _lod = 1;
+    /// <summary>A distance the figures are kept at whatever the zoom (--figures=near|mid|far, for pictures), or -1.</summary>
+    int _pinned = -1;
+    /// <summary>Time spent this frame making meshes of hurt bodies, in ticks of <see cref="Stopwatch"/>.</summary>
+    long _meshing;
     readonly Dictionary<BodyPlan, Kind> _kinds = new();
     readonly Dictionary<int, Look> _looks = new();
     readonly HashSet<int> _alive = new();
@@ -97,6 +115,8 @@ public partial class UnitView : Node3D
         // a warband's leader carries its standard on its back: a pole and a rag of red cloth
         var cube = new BoxMesh { Size = Vector3.One };
         _standards = Multi(cube, new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = .9f, CullMode = BaseMaterial3D.CullModeEnum.Disabled }, true);
+        foreach (var a in OS.GetCmdlineUserArgs())
+            if (a.StartsWith("--figures=")) _pinned = a[10..] switch { "near" => 0, "mid" => 1, "far" => 2, _ => -1 };
     }
 
     /// <summary>The figures of one kind in one look, added the first time someone of that look turns up.</summary>
@@ -187,22 +207,26 @@ public partial class UnitView : Node3D
     void Distance()
     {
         int lod = 0;
-        if (!ForceNear)
+        if (_pinned >= 0) lod = _pinned;
+        else if (!ForceNear)
         {
             float px = GetTree().Root.Size.Y / Math.Max(.01f, _m.Rig.Cam.Size) * VoxelWorld.Vox;
             lod = px >= (_lod == 0 ? NearPx * .9f : NearPx) ? 0 : px < (_lod == 2 ? 3.6f : 3.2f) ? 2 : 1;
         }
         if (lod == _lod) return;
+        // the kinds' meshes are all made: they change over at once; the hurt bodies each in turn (DrawOwn)
         _lod = lod;
         foreach (var k in _kinds.Values) Fit(k);
-        foreach (var own in _own.Values) own.Rev = -1;
     }
 
     /// <summary>Pixels of the window to a voxel from which the figures are drawn in their finest cells.</summary>
     const float NearPx = 7;
 
-    /// <summary>How near the figures are drawn now: 0 in their finest cells, 1 in half-voxels, 2 in whole voxels.</summary>
-    public int Detail => _lod;
+    /// <summary>
+    /// Time in a frame for making the meshes of hurt bodies only to draw them at another distance: when the zoom crosses
+    /// a threshold they go over a few at a time, each drawn as it was until its turn, not all at once in one long frame.
+    /// </summary>
+    static readonly long Spare = Stopwatch.Frequency * 2 / 1000;
 
     MultiMeshInstance3D Multi(Mesh mesh, Material mat, bool colors)
     {
@@ -210,6 +234,15 @@ public partial class UnitView : Node3D
         var mi = new MultiMeshInstance3D { Multimesh = mm, MaterialOverride = mat, CastShadow = GeometryInstance3D.ShadowCastingSetting.On, CustomAabb = Everywhere };
         AddChild(mi);
         return mi;
+    }
+
+    /// <summary>Whether every part of one's body a wound has changed is drawn, on its own (the self-test, after first person).</summary>
+    public bool HurtShown(int id)
+    {
+        if (!_own.TryGetValue(id, out var own)) return false;
+        for (int p = 0; p < Figure.Parts; p++)
+            if (own.Hurt[p] && own.Of.Grid[p] is { Count: > 0 } && (own.Parts[p] is not { } n || !n.Visible || n.Mesh == null)) return false;
+        return Array.IndexOf(own.Hurt, true) >= 0;
     }
 
     /// <summary>Arrows drawn in the last frame.</summary>
@@ -232,6 +265,7 @@ public partial class UnitView : Node3D
         _t += dt;
         var sim = _m.Sim;
         Distance();
+        _meshing = 0;
         look_xf.Clear();
         foreach (var k in _kinds.Values) k.Count = 0;
         // those in the citadel are not to be seen
@@ -248,12 +282,13 @@ public partial class UnitView : Node3D
             var tint = Pose(u, k.Fig, look);
             if (u.Id == HiddenId)
             {
-                // its own wounded body hidden, and made anew when it is drawn again
-                if (_own.TryGetValue(u.Id, out var hid)) { Show(hid, false); hid.Rev = -1; }
+                // its own wounded body put away, and shown again (and drawn as its wounds are by then) when it is drawn again
+                if (_own.TryGetValue(u.Id, out var hid) && !hid.Hidden) { Show(hid, false); hid.Hidden = true; }
                 continue;
             }
             // with its kind: all of it, or what the wounds have not changed (the rest, drawn on its own, is folded away here)
-            var hurt = u.Wounds != null ? DrawOwn(u, k.Fig) : null;
+            if (u.Wounds == null && _own.Count > 0 && _own.Remove(u.Id, out var whole)) Free(whole);
+            var hurt = u.Wounds != null ? DrawOwn(u, k.Fig, tint) : null;
             int o = k.Count++ * 16;
             for (int p = 0; p < Figure.Parts; p++) Write(k.Bufs[p], o, hurt != null && hurt[p] ? Folded : _xf[p], tint);
             for (int d = 0; d < k.DressBufs.Length; d++)
@@ -268,9 +303,7 @@ public partial class UnitView : Node3D
         foreach (int id in _gone)
         {
             _looks.Remove(id);
-            if (!_own.Remove(id, out var own)) continue;
-            foreach (var n in own.Parts) n?.QueueFree();
-            foreach (var n in own.Dress) n?.QueueFree();
+            if (_own.Remove(id, out var own)) Free(own);
         }
         DrawArrows(sim);
         DrawStuck(sim);
@@ -528,40 +561,45 @@ public partial class UnitView : Node3D
     }
 
     /// <summary>
-    /// A hurt body: the parts its wounds have changed, and what hangs on them, drawn on their own — meshed again when a
-    /// wound changes that part (not the others) or the distance changes — and posed like any other. Returns which parts
-    /// are drawn here.
+    /// A hurt body: the parts its wounds have changed, and what hangs on them, drawn on their own and posed like any
+    /// other, in the kind's tint. A part a wound has changed is meshed again at once (not the others); one only to be
+    /// drawn at another distance takes the meshes kept from when it was last drawn there, or waits its turn for new
+    /// ones while there is time in the frame (<see cref="Spare"/>), drawn as it was meanwhile. Returns which parts are
+    /// drawn here.
     /// </summary>
-    bool[] DrawOwn(Unit u, Figure fig)
+    bool[] DrawOwn(Unit u, Figure fig, Color tint)
     {
         var w = u.Wounds;
         var plan = w.Plan;
-        if (!_own.TryGetValue(u.Id, out var own)) _own[u.Id] = own = new Own { Dress = new MeshInstance3D[plan.Dress.Count] };
-        if (own.Rev != w.Rev || own.Lod != _lod)
+        // (one come back from a game read in, of another look, is drawn anew)
+        if (_own.TryGetValue(u.Id, out var own) && own.Of != null && own.Of.Plan != plan) { Free(own); own = null; }
+        if (own == null) _own[u.Id] = own = new Own { Dress = new MeshInstance3D[plan.Dress.Count], Tint = tint };
+        if (own.Of != w || own.Rev != w.Rev)
         {
-            bool relod = own.Lod != _lod;
-            own.Rev = w.Rev; own.Lod = _lod;
+            own.Of = w; own.Rev = w.Rev;
             for (int p = 0; p < Figure.Parts; p++)
             {
                 var g = w.Grid[p]; var g0 = plan.Grid[p];
                 bool hurt = g != g0 && (g == null || g0 == null || g.Count != g0.Count || !g.M.AsSpan().SequenceEqual(g0.M));
                 int sum = Sum(g);
-                if (hurt && own.Hurt[p] && own.Sums[p] == sum && !relod) continue;
-                own.Hurt[p] = hurt; own.Sums[p] = sum;
-                Mesh body = null;
-                if (hurt)
-                    body = _lod == 0 ? GodotMesh.From(Figure.NearOf(plan, p, g, out _)) : _lod == 1 ? GodotMesh.From(Figure.MidOf(plan, p, g, 0, out _)) : Figure.CoarseOf(g);
-                Put(ref own.Parts[p], body, _lod == 0 ? BodyPlan.FineSub : _lod == 1 ? BodyPlan.Sub : 1);
-                for (int d = 0; d < plan.Dress.Count; d++)
-                {
-                    if ((int)plan.Dress[d].On != p) continue;
-                    Mesh worn = null;
-                    if (hurt && _lod < 2)
-                        worn = GodotMesh.From(_lod == 0 ? Figure.DressOf(plan, d, g, out _) : Figure.MidOf(plan, p, g, d + 1, out _));
-                    Put(ref own.Dress[d], worn, _lod == 0 ? plan.Dress[d].Sub : BodyPlan.Sub);
-                }
+                if (own.At[p] >= 0 && hurt == own.Hurt[p] && sum == own.Sums[p]) continue;
+                own.Hurt[p] = hurt; own.Sums[p] = sum; own.At[p] = -1;
+                for (int l = 0; l < 3; l++) own.Kept[p, l] = null;
             }
         }
+        for (int p = 0; p < Figure.Parts; p++)
+        {
+            if (own.At[p] == _lod) continue;
+            if (own.At[p] >= 0 && own.Kept[p, _lod] == null && _meshing >= Spare) continue;
+            Draw(own, plan, p, w.Grid[p]);
+        }
+        if (tint != own.Tint)
+        {
+            own.Tint = tint;
+            foreach (var n in own.Parts) n?.SetInstanceShaderParameter(Tinted, tint);
+            foreach (var n in own.Dress) n?.SetInstanceShaderParameter(Tinted, tint);
+        }
+        if (own.Hidden) { own.Hidden = false; Show(own, true); }
         for (int p = 0; p < Figure.Parts; p++) if (own.Parts[p] != null) own.Parts[p].Transform = _xf[p];
         for (int d = 0; d < own.Dress.Length; d++) if (own.Dress[d] != null) own.Dress[d].Transform = _xf[(int)fig.DressOn[d]] * Wrist(u, fig, d);
         // for the arrows stuck in it
@@ -569,21 +607,66 @@ public partial class UnitView : Node3D
         return own.Hurt;
     }
 
-    /// <summary>A node of a hurt body given its mesh (made the first time one is wanted), or hidden when there is none.</summary>
-    void Put(ref MeshInstance3D node, Mesh mesh, int grid)
+    /// <summary>
+    /// One part of a hurt body drawn at the distance the figures are drawn at now, and what hangs on it: from the meshes
+    /// kept for it there, or new ones made (nothing, for a part no wound has changed: its kind draws it).
+    /// </summary>
+    void Draw(Own own, BodyPlan plan, int p, PartGrid g)
+    {
+        int lod = _lod;
+        var made = own.Kept[p, lod];
+        if (made == null)
+        {
+            long t0 = Stopwatch.GetTimestamp();
+            made = new Made { Dress = new Mesh[plan.Dress.Count] };
+            if (own.Hurt[p])
+            {
+                made.Body = lod == 0 ? GodotMesh.From(Figure.NearOf(plan, p, g, out _)) : lod == 1 ? GodotMesh.From(Figure.MidOf(plan, p, g, 0, out _)) : Figure.CoarseOf(plan.Seen(p, g));
+                for (int d = 0; d < plan.Dress.Count && lod < 2; d++)
+                    if ((int)plan.Dress[d].On == p)
+                        made.Dress[d] = GodotMesh.From(lod == 0 ? Figure.DressOf(plan, d, g, out _) : Figure.MidOf(plan, p, g, d + 1, out _));
+            }
+            own.Kept[p, lod] = made;
+            _meshing += Stopwatch.GetTimestamp() - t0;
+        }
+        Put(ref own.Parts[p], made.Body, lod == 0 ? BodyPlan.FineSub : lod == 1 ? BodyPlan.Sub : 1, lod, own);
+        for (int d = 0; d < plan.Dress.Count; d++)
+            if ((int)plan.Dress[d].On == p) Put(ref own.Dress[d], made.Dress[d], lod == 0 ? plan.Dress[d].Sub : BodyPlan.Sub, lod, own);
+        own.At[p] = lod;
+    }
+
+    /// <summary>The figures' shader's tint for one drawn on its own (its kind's figures have theirs from the MultiMesh).</summary>
+    static readonly StringName Tinted = "tint";
+
+    /// <summary>
+    /// A node of a hurt body given its mesh (made the first time one is wanted), or hidden when there is none: its
+    /// material for the cells it is made of, its shadow unless it is drawn far.
+    /// </summary>
+    void Put(ref MeshInstance3D node, Mesh mesh, int grid, int lod, Own own)
     {
         if (node == null && mesh == null) return;
-        if (node == null) { node = new MeshInstance3D(); AddChild(node); }
+        if (node == null)
+        {
+            node = new MeshInstance3D();
+            AddChild(node);
+            node.SetInstanceShaderParameter(Tinted, own.Tint);
+        }
         node.Mesh = mesh;
-        node.Visible = mesh != null;
+        node.Visible = mesh != null && !own.Hidden;
         node.MaterialOverride = Figure.Material(grid);
-        node.CastShadow = _lod == 2 ? GeometryInstance3D.ShadowCastingSetting.Off : GeometryInstance3D.ShadowCastingSetting.On;
+        node.CastShadow = lod == 2 ? GeometryInstance3D.ShadowCastingSetting.Off : GeometryInstance3D.ShadowCastingSetting.On;
     }
 
     static void Show(Own own, bool on)
     {
         foreach (var n in own.Parts) if (n != null) n.Visible = on && n.Mesh != null;
         foreach (var n in own.Dress) if (n != null) n.Visible = on && n.Mesh != null;
+    }
+
+    static void Free(Own own)
+    {
+        foreach (var n in own.Parts) n?.QueueFree();
+        foreach (var n in own.Dress) n?.QueueFree();
     }
 
     /// <summary>A sum of a part's half-voxels that changes when any of them does (so only a part a wound changed is meshed again).</summary>

@@ -45,8 +45,6 @@ public sealed class Figure
     /// <summary>How far the off arm comes up in a fight (radians, negative is up).</summary>
     public float Guard = -1.05f;
     public BodyPlan Plan;
-    /// <summary>Quads of the whole figure near, at the middle distance and far (dress included).</summary>
-    public int QuadsNear, QuadsMid, QuadsFar;
 
     static readonly Dictionary<BodyPlan, Figure> Cache = new();
     static readonly GreedyMesher Mesher = new();
@@ -57,13 +55,12 @@ public sealed class Figure
     {
         if (Cache.TryGetValue(plan, out var f)) return f;
         f = new Figure { Plan = plan, Stride = plan.Stride, Chop = plan.Chop, Carry = plan.Carry, Shield = plan.Shield, Beast = plan.Beast, Mounted = plan.Mounted, Guard = plan.Guard };
-        int n;
         for (int p = 0; p < Parts; p++)
         {
             f.Joint[p] = new Vector3(plan.JX[p], plan.JY[p], plan.JZ[p]);
-            f.Mesh[p] = GodotMesh.From(NearOf(plan, p, plan.Grid[p], out n)); f.QuadsNear += n;
-            f.Mid[p] = GodotMesh.From(MidOf(plan, p, plan.Grid[p], 0, out n)); f.QuadsMid += n;
-            f.Far[p] = CoarseOf(plan.Grid[p], out n); f.QuadsFar += n;
+            f.Mesh[p] = GodotMesh.From(NearOf(plan, p, plan.Grid[p], out _));
+            f.Mid[p] = GodotMesh.From(MidOf(plan, p, plan.Grid[p], 0, out _));
+            f.Far[p] = CoarseOf(plan.Seen(p, plan.Grid[p]));
         }
         int dn = plan.Dress.Count;
         f.DressNear = new ArrayMesh[dn]; f.DressMid = new ArrayMesh[dn]; f.DressOn = new Part[dn];
@@ -71,8 +68,8 @@ public sealed class Figure
         {
             var dress = plan.Dress[d];
             f.DressOn[d] = (Part)dress.On;
-            f.DressNear[d] = GodotMesh.From(DressOf(plan, d, plan.Grid[(int)dress.On], out n)); f.QuadsNear += n;
-            f.DressMid[d] = GodotMesh.From(MidOf(plan, (int)dress.On, plan.Grid[(int)dress.On], d + 1, out n)); f.QuadsMid += n;
+            f.DressNear[d] = GodotMesh.From(DressOf(plan, d, plan.Grid[(int)dress.On], out _));
+            f.DressMid[d] = GodotMesh.From(MidOf(plan, (int)dress.On, plan.Grid[(int)dress.On], d + 1, out _));
         }
         Cache[plan] = f;
         return f;
@@ -121,13 +118,16 @@ public sealed class Figure
 
     /// <summary>
     /// A part at the middle distance, in half-voxels: only the body's own (owner 0), or only one piece of its dress (1 +
-    /// its index), and only what its cells fill enough of (<see cref="BodyPlan.Solid"/>).
+    /// its index), and only what its cells fill enough of (<see cref="BodyPlan.Solid"/>), each showing what it shows
+    /// (<see cref="BodyPlan.Shown"/>) where no wound has changed it.
     /// </summary>
     public static MeshBuffers MidOf(BodyPlan plan, int part, PartGrid now, int owner, out int quads)
     {
         quads = 0;
         var own = plan.Owner[part];
         var solid = plan.Solid[part];
+        var shown = plan.Shown[part];
+        var was = plan.Grid[part];
         if (now == null || now.Count == 0 || own == null || own.Length != now.M.Length) return null;
         int px = now.SX + 2, pz = now.SZ + 2;
         var pad = new byte[px * (now.SY + 2) * pz];
@@ -138,7 +138,7 @@ public sealed class Figure
                 {
                     int i = (y * now.SZ + z) * now.SX + x;
                     if (now.M[i] == 0 || own[i] != owner || !solid[i]) continue;
-                    pad[((y + 1) * pz + (z + 1)) * px + (x + 1)] = now.M[i];
+                    pad[((y + 1) * pz + (z + 1)) * px + (x + 1)] = shown != null && shown[i] != 0 && now.M[i] == was.M[i] ? shown[i] : now.M[i];
                     any = true;
                 }
         if (!any) return null;
@@ -221,11 +221,8 @@ public sealed class Figure
     /// A part in whole voxels: each voxel is filled where two of its eight half-voxels are, so that blades and shafts
     /// a half-voxel thin are kept, with the material most of them are of.
     /// </summary>
-    public static ArrayMesh CoarseOf(PartGrid g) => CoarseOf(g, out _);
-
-    public static ArrayMesh CoarseOf(PartGrid g, out int quads)
+    public static ArrayMesh CoarseOf(PartGrid g)
     {
-        quads = 0;
         if (g == null || g.Count == 0) return null;
         const int S = BodyPlan.Sub;
         int x0 = Down(g.X0, S), y0 = Down(g.Y0, S), z0 = Down(g.Z0, S);
@@ -261,7 +258,6 @@ public sealed class Figure
         if (any == 0) return null;
         var b = Mesher.Mesh(vox, sx, sy, sz, x0, y0, z0);
         if (b == null || b.Quads == 0) return null;
-        quads = b.Quads;
         return GodotMesh.From(b);
     }
 

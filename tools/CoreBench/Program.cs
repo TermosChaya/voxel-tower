@@ -4314,6 +4314,39 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bodies")
         looseAll == 0 && unarmed == 0 && armed > 80 && heavy == 0,
         $"{looseAll} loose half-voxels, {armed} armed, {unarmed} unarmed with a hand; the heaviest near {heaviest}, {maxQuads} quads; {string.Join("; ", looseWhere.Take(6))}");
 
+    // drawn in half-voxels (the middle distance), every half-voxel a weapon or a shield fills enough of is drawn — none
+    // left out at the fist, where a knuckle has it and too little of it — and a painted shield shows its paint there,
+    // not the planks under it
+    int holes = 0, shieldHalves = 0, bare = 0;
+    var holeWhere = new System.Collections.Generic.List<string>();
+    foreach (var t in everyKind)
+        for (int l = 0; l < Bodies.Looks(t); l++)
+        {
+            var plan = Bodies.Plan(t, l);
+            for (int d = 0; d < plan.Dress.Count; d++)
+            {
+                var dress = plan.Dress[d];
+                int p = (int)dress.On, r = dress.Sub / BodyPlan.Sub;
+                var g = plan.Grid[p]; var dg = dress.Grid;
+                var solid = plan.Solid[p]; var owner = plan.Owner[p]; var shown = plan.Shown[p];
+                for (int i = 0; i < g.M.Length; i++)
+                {
+                    if (g.M[i] == 0) continue;
+                    int x = i % g.SX + g.X0, z = i / g.SX % g.SZ + g.Z0, y = i / (g.SX * g.SZ) + g.Y0, n = 0;
+                    for (int dy = 0; dy < r; dy++) for (int dz = 0; dz < r; dz++) for (int dx = 0; dx < r; dx++)
+                        if (dg.Mat(x * r + dx, y * r + dy, z * r + dz) != 0) n++;
+                    if (n >= Math.Max(1, r * r * r / 16) && !solid[i] && holes++ < 6) holeWhere.Add($"{t.Key}{l} {(BodyPart)p} {x},{y},{z}");
+                    if (dress.Kind != DressKind.Shield || owner[i] != d + 1 || !solid[i]) continue;
+                    shieldHalves++;
+                    byte m = shown != null && shown[i] != 0 ? shown[i] : g.M[i];
+                    if (m is Mat.Board or Mat.BoardDark) bare++;
+                }
+            }
+        }
+    Check("drawn in half-voxels, every half-voxel a weapon or a shield fills is drawn, the haft on into the fist, and a shield shows its paint and not its planks",
+        holes == 0 && shieldHalves > 300 && bare * 8 < shieldHalves,
+        $"{holes} left out ({string.Join("; ", holeWhere)}); of {shieldHalves} half-voxels of shields {bare} bare planks");
+
     var mpB = new MapParams();
     var wB = new VoxelWorld(mpB.SizeX, mpB.SizeY, mpB.SizeZ);
     var siteB = MapGen.Generate(wB, mpB);

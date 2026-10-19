@@ -1076,6 +1076,15 @@ public partial class Main : Node3D
         // the game put away; it walks where it is told, and Esc lets it go, the view back over the valley and it chosen
         var mine = Sim.Units.Find(u => Sim.CanPossess(u) && u.T == Kinds.Swordsman) ?? Sim.Units.Find(u => Sim.CanPossess(u) && u.T.Work < 1) ?? Sim.Units.Find(Sim.CanPossess);
         Selected.Clear(); Selected.Add(mine); Hud.OnSelectionChanged();
+        // a nick out of its off arm first, so that the arm is drawn on its own: put away with it, and back after
+        var nicked = new BodyState(Bodies.Plan(mine.T, mine.Look));
+        var arm = nicked.Grid[(int)BodyPart.Off];
+        int nick = Array.FindLastIndex(arm.M, m => m != 0);
+        arm.Clear(nick % arm.SX + arm.X0, nick / (arm.SX * arm.SZ) + arm.Y0, nick / arm.SX % arm.SZ + arm.Z0);
+        nicked.Rev++;
+        mine.Wounds = nicked;
+        await Frames(2);
+        bool nickShown = Units.HurtShown(mine.Id);
         KeyPress(Key.I);
         bool into = FP.On && FP.Unit == mine && Sim.Possessed == mine && FP.Cam.Current && Hud.InFirstPerson && Rig.Held && Units.HiddenId == mine.Id;
         float fx0 = mine.X, fz0 = mine.Z;
@@ -1089,8 +1098,9 @@ public partial class Main : Node3D
         FP._Input(new InputEventKey { PhysicalKeycode = Key.Escape, Keycode = Key.Escape, Pressed = true });
         await Frames(2);
         bool outOf = !FP.On && Sim.Possessed == null && Rig.Cam.Current && !Hud.InFirstPerson && !Rig.Held && Units.HiddenId < 0 && Selected.Contains(mine);
-        Check("I goes into the one chosen and the view is its eyes; it walks where it is told; Esc lets it go and the view goes back over the valley",
-            into && strode > 2 && outOf, $"in {into}, walked {strode:0.0} m, out {outOf}");
+        bool nickBack = Units.HurtShown(mine.Id);
+        Check("I goes into the one chosen and the view is its eyes; it walks where it is told; Esc lets it go and the view goes back over the valley, its nicked arm drawn again",
+            into && strode > 2 && outOf && nickShown && nickBack, $"in {into}, walked {strode:0.0} m, out {outOf}; the nicked arm drawn {nickShown}, again after {nickBack}");
 
         // the citadel's muster: a click on the citadel opens it; a worker taken on is paid for at once and comes out of
         // its door only when made ready. Whoever stands about the citadel's foot by now is sent a little way off first (an

@@ -100,6 +100,12 @@ public sealed class BodyPlan
     /// The blows cut all of <see cref="Grid"/>, filled however little.
     /// </summary>
     public readonly bool[][] Solid = new bool[Parts][];
+    /// <summary>
+    /// What a half-voxel shows drawn in half-voxels or in voxels, where that is not what the blows find in it (0 where
+    /// it is): a shield's paint over the planks it is painted on, the haft going on into a fist where a knuckle has the
+    /// half-voxel but too little of it to be drawn.
+    /// </summary>
+    public readonly byte[][] Shown = new byte[Parts][];
     public readonly List<Dress> Dress = new();
     /// <summary>Where each part turns, in figure voxels: the body at the hips, the arms at the shoulders, the legs at the hips.</summary>
     public readonly float[] JX = new float[Parts], JY = new float[Parts], JZ = new float[Parts];
@@ -123,6 +129,20 @@ public sealed class BodyPlan
     public Dress Weapon => Dress.Find(d => d.On == BodyPart.Main && d.Kind == DressKind.Weapon) ?? Dress.Find(d => d.Kind == DressKind.Weapon);
     /// <summary>The shield on the left forearm, if it has one.</summary>
     public Dress ShieldDress => Dress.Find(d => d.Kind == DressKind.Shield);
+
+    /// <summary>
+    /// A part as it is drawn in half-voxels or in voxels: <paramref name="now"/> (the part whole, or as its wounds have
+    /// left it) with what each half-voxel shows (<see cref="Shown"/>) wherever a wound has not changed it.
+    /// </summary>
+    public PartGrid Seen(int part, PartGrid now)
+    {
+        var shown = Shown[part]; var was = Grid[part];
+        if (shown == null || now == null || was == null || now.M.Length != shown.Length) return now;
+        var g = new PartGrid { X0 = now.X0, Y0 = now.Y0, Z0 = now.Z0, SX = now.SX, SY = now.SY, SZ = now.SZ, M = (byte[])now.M.Clone(), T = now.T, Count = now.Count };
+        for (int i = 0; i < shown.Length; i++)
+            if (shown[i] != 0 && g.M[i] != 0 && g.M[i] == was.M[i]) g.M[i] = shown[i];
+        return g;
+    }
 }
 
 /// <summary>
@@ -814,7 +834,7 @@ public static class Bodies
                     Grip = (gear.Grip.X / H, gear.Grip.Y / H, gear.Grip.Z / H), Tip = (gear.Tip.X / H, gear.Tip.Y / H, gear.Tip.Z / H), Edge = gear.Edge,
                 });
             }
-            var mats = new List<(byte m, byte t, int w)>(8);
+            List<(byte m, byte t, int w)> mats = new(8), seen = new(8);
             for (int p = 0; p < BodyPlan.Parts; p++)
             {
                 var fine = _c.Grid(p, out var finer);
@@ -826,11 +846,12 @@ public static class Bodies
                 }
                 if (fine != null) Span(fine, K);
                 // the dress that hangs on this part, in the order it was sculpted (and so the index the plan keeps)
-                var hung = new List<(int index, PartGrid grid, DressKind kind, int r)>();
+                var hung = new List<(int index, PartGrid grid, int r, (int, int, int) face)>();
                 for (int d = 0, kept = 0; d < _gear.Count; d++)
                 {
                     if (dressGrids[d] == null) continue;
-                    if (_gear[d].On == (BodyPart)p) { hung.Add((kept, dressGrids[d], _gear[d].Kind, _gear[d].C.R)); Span(dressGrids[d], _gear[d].C.R); }
+                    var gear = _gear[d];
+                    if (gear.On == (BodyPart)p) { hung.Add((kept, dressGrids[d], gear.C.R, gear.Kind == DressKind.Shield ? Facing(gear.Edge) : default)); Span(dressGrids[d], gear.C.R); }
                     kept++;
                 }
                 if (x0 == int.MaxValue) continue;
@@ -839,6 +860,7 @@ public static class Bodies
                 g.T = new byte[g.M.Length];
                 var owner = new byte[g.M.Length];
                 var solid = new bool[g.M.Length];
+                var shown = new byte[g.M.Length];
                 // cells a half-voxel's must be to be drawn at the middle distance: three of eight (one of one, unsculpted)
                 int enough = Math.Max(1, (3 * K * K * K + 7) / 8);
                 for (int y = y0; y <= y1; y++)
@@ -866,40 +888,87 @@ public static class Bodies
                                         }
                             if (mats.Count > 0) { Most(mats, out g.M[i], out g.T[i]); g.Count++; solid[i] = had >= enough; continue; }
                             // else a piece of dress, where any of its cells is: a blade or a shaft however thin
-                            foreach (var (index, dg, _, DR) in hung)
+                            foreach (var (index, dg, DR, face) in hung)
                             {
-                                int n = 0;
-                                for (int dy = 0; dy < DR; dy++)
-                                    for (int dz = 0; dz < DR; dz++)
-                                        for (int dx = 0; dx < DR; dx++)
-                                        {
-                                            int fx = x * DR + dx, fy = y * DR + dy, fz = z * DR + dz;
-                                            if (!dg.In(fx, fy, fz)) continue;
-                                            int fi = dg.Index(fx, fy, fz);
-                                            if (dg.M[fi] == 0) continue;
-                                            Add(mats, dg.M[fi], dg.T[fi], 1);
-                                            n++;
-                                        }
+                                int n = DressCells(dg, DR, x, y, z, face, mats, seen);
                                 if (n == 0) continue;
                                 Most(mats, out g.M[i], out g.T[i]);
                                 g.Count++;
                                 owner[i] = (byte)(index + 1);
                                 // a rivet or a stud alone in its half-voxel is not drawn as a block of one at the middle distance
                                 solid[i] = n >= Math.Max(1, DR * DR * DR / 16);
+                                Most(seen, out byte look, out _);
+                                if (look != g.M[i]) shown[i] = look;
                                 break;
                             }
                         }
                 Inside(g, owner, solid, (BodyPart)p, f, waist, neck, chestX);
+                // a half-voxel the body has too little of to be drawn (a knuckle of the fist) that a piece of dress fills
+                // enough of is drawn with that piece — the haft going on into the hand, a crossguard whole before it —
+                // though the blows find the knuckle there, as before (and the depths under the skin are already reckoned)
+                for (int i = 0; i < g.M.Length && hung.Count > 0; i++)
+                {
+                    if (g.M[i] == 0 || owner[i] != 0 || solid[i]) continue;
+                    int x = i % g.SX + g.X0, z = i / g.SX % g.SZ + g.Z0, y = i / (g.SX * g.SZ) + g.Y0;
+                    foreach (var (index, dg, DR, face) in hung)
+                    {
+                        if (DressCells(dg, DR, x, y, z, face, mats, seen) < Math.Max(1, DR * DR * DR / 16)) continue;
+                        owner[i] = (byte)(index + 1);
+                        solid[i] = true;
+                        Most(seen, out byte look, out _);
+                        if (look != g.M[i]) shown[i] = look;
+                        break;
+                    }
+                }
                 f.Grid[p] = g;
                 f.Fine[p] = fine;
                 f.Owner[p] = owner;
                 f.Solid[p] = solid;
+                f.Shown[p] = Array.Exists(shown, v => v != 0) ? shown : null;
                 f.Top = Math.Max(f.Top, (y1 + 2) / 2);
             }
             return f;
         }
 
         static int Down(int v, int r) => v >= 0 ? v / r : (v - r + 1) / r;
+
+        /// <summary>The way a shield's face looks, along the axis nearest it (one step of a cell).</summary>
+        static (int, int, int) Facing((float X, float Y, float Z) e)
+        {
+            float ax = MathF.Abs(e.X), ay = MathF.Abs(e.Y), az = MathF.Abs(e.Z);
+            if (ax >= ay && ax >= az) return (Math.Sign(e.X), 0, 0);
+            return ay >= az ? (0, Math.Sign(e.Y), 0) : (0, 0, Math.Sign(e.Z));
+        }
+
+        /// <summary>
+        /// The cells of a piece of dress (<paramref name="r"/> to a half-voxel each way) in the half-voxel (x, y, z): how
+        /// many there are; what they are, each counted once (<paramref name="mats"/>, what the blows find); and what they
+        /// show (<paramref name="seen"/>) — a cell open to the air three times one inside, and on a shield one on the face
+        /// it turns to the foe (<paramref name="face"/>) three times that again, so that it shows its paint and not the
+        /// planks the paint is on.
+        /// </summary>
+        static int DressCells(PartGrid dg, int r, int x, int y, int z, (int x, int y, int z) face, List<(byte m, byte t, int w)> mats, List<(byte m, byte t, int w)> seen)
+        {
+            mats.Clear(); seen.Clear();
+            int n = 0;
+            bool shield = face != default;
+            for (int dy = 0; dy < r; dy++)
+                for (int dz = 0; dz < r; dz++)
+                    for (int dx = 0; dx < r; dx++)
+                    {
+                        int fx = x * r + dx, fy = y * r + dy, fz = z * r + dz;
+                        if (!dg.In(fx, fy, fz)) continue;
+                        int fi = dg.Index(fx, fy, fz);
+                        if (dg.M[fi] == 0) continue;
+                        Add(mats, dg.M[fi], dg.T[fi], 1);
+                        bool front = shield && dg.Mat(fx + face.x, fy + face.y, fz + face.z) == 0;
+                        bool open = front || dg.Mat(fx + 1, fy, fz) == 0 || dg.Mat(fx - 1, fy, fz) == 0 || dg.Mat(fx, fy + 1, fz) == 0
+                            || dg.Mat(fx, fy - 1, fz) == 0 || dg.Mat(fx, fy, fz + 1) == 0 || dg.Mat(fx, fy, fz - 1) == 0;
+                        Add(seen, dg.M[fi], dg.T[fi], front ? 9 : open ? 3 : 1);
+                        n++;
+                    }
+            return n;
+        }
 
         static void Add(List<(byte m, byte t, int w)> mats, byte m, byte t, int w)
         {

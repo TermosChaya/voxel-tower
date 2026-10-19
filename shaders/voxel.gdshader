@@ -15,6 +15,9 @@ render_mode cull_back, diffuse_burley, specular_schlick_ggx;
 // a unit of the mesh holds, so the jitter and the bevel follow the cells they are made of.
 
 uniform float grid = 1.0;
+// a figure's tint (grey when dead, red when struck), for a hurt part drawn on its own: its kind's figures have theirs
+// from the MultiMesh, in COLOR already
+instance uniform vec4 tint = vec4(1.0);
 // the bevel line between voxels: 1 drawn, 0 not (a setting of the player's)
 global uniform float voxel_lines;
 // the wind's strength: 1 on a fair day, more in a storm (the grass hears of it too)
@@ -154,6 +157,7 @@ float scorch(vec2 p, float px) {
 }
 
 void vertex() {
+	COLOR.rgb *= tint.rgb;
 	v_vox = VERTEX * grid;
 	v_nrm = NORMAL;
 	v_ext = UV;
