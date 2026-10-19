@@ -533,11 +533,11 @@ public partial class Inspector : Control
         row.AddChild(new Rule(true));
         var kinds = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         kinds.AddThemeConstantOverride("h_separation", 4);
-        kinds.AddThemeConstantOverride("v_separation", 4);
+        kinds.AddThemeConstantOverride("v_separation", 3);
         _tiles.Clear();
         foreach (var t in Kinds.PlayerKinds)
         {
-            var tile = new KindTile(_m, t) { CustomMinimumSize = new Vector2(38, 48) };
+            var tile = new KindTile(_m, t) { CustomMinimumSize = new Vector2(35, 44) };
             _tiles.Add(tile);
             kinds.AddChild(tile);
         }

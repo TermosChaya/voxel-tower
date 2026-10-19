@@ -4110,6 +4110,11 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--dwelling")
     Check("the workers furnish a dwelling of timber, bunks along the walls (and a table in the middle if there is room), and every whole bunk is a place",
         home.Closed && home.Beds == ok.Bunks && simD.Places == places0 + home.Beds && bunk > 0 && bedding > 0 && simD.Stock[Stockpile.Wood] < wood0,
         $"{home.Beds} of {ok.Bunks} bunks whole ({bunk} voxels of frame, {bedding} of bedding, {table} of table and benches), timber {Fmt.M3(wood0 - simD.Stock[Stockpile.Wood])} m³; places {places0} → {simD.Places}");
+    // the same house framed again: still one house, its bunks counted once
+    int placesOnce = simD.Places;
+    simD.AddZone(hx - 30, hz - 44, hx + 29, hz + 43, Zone.Dwelling, 0);
+    RunD(6);
+    Check("a house framed twice over is one house: its bunks are places once", simD.Places == placesOnce, $"places {placesOnce} → {simD.Places}");
     // a hole hacked through its wall: it is open, and its places are lost till it is closed again
     for (int y = ytop - 32; y < ytop - 8; y++) for (int z = hz - 8; z < hz + 8; z++) for (int x = hx - 23; x < hx - 15; x++) wD.Set(x, y, z, Mat.Air);
     RunD(6);

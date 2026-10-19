@@ -86,6 +86,8 @@ public sealed partial class Sim
         // from high over the valley and a dozen metres to the west, on an arc that ends at the spot — straight down
         // when a hill to the west stands in its way
         float y0 = Math.Min(World.SY - 12, ground + 40 * VoxelWorld.PerMetre), x0 = x - 12 * VoxelWorld.PerMetre;
+        // near the valley's west edge it comes straight down, not from beyond the edge
+        if (x0 < 4) x0 = x;
         float lx = x - x0, ly = ground + StarRock - y0, ll = MathF.Sqrt(lx * lx + ly * ly);
         if (Raycast.Cast(World, x0, y0, z, lx / ll, ly / ll, 0, out var hit, skipVeg: true)
             && MathF.Sqrt((hit.X - x0) * (hit.X - x0) + (hit.Y - y0) * (hit.Y - y0)) < ll - 3 * StarRock) x0 = x;

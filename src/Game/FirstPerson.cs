@@ -139,7 +139,7 @@ public partial class FirstPerson : Node3D
                 break;
             case InputEventKey { Pressed: true, Echo: false } k:
                 if (k.PhysicalKeycode == Key.Escape) { Exit(); break; }
-                if (k.PhysicalKeycode == Key.F && _u.T.Ranged) { _u.FireArrows = !_u.FireArrows; break; }
+                if (k.PhysicalKeycode == Key.F && Sim.Kindles(_u.T)) { _u.FireArrows = !_u.FireArrows; break; }
                 if (k.PhysicalKeycode is Key.Key1 or Key.Key2 or Key.Key3)
                 {
                     sim.LayMat = k.PhysicalKeycode == Key.Key1 ? Mat.Stone : k.PhysicalKeycode == Key.Key2 ? Mat.Wood : Mat.Rammed;
@@ -260,7 +260,7 @@ public partial class FirstPerson : Node3D
         _aim.Text = aim;
         _aim.Position = new Vector2((vp.X - _aim.Size.X) / 2, vp.Y / 2 + 26);
         _hint.Text = "WASD — идти, Shift — бегом · мышь — смотреть · ЛКМ — " + (u.T.Ranged ? "выстрел" : u.T.Work > 0 ? "удар или кирка" : "удар")
-            + (u.T.Work > 0 ? " · ПКМ — класть (1 камень, 2 брёвна, 3 земля)" : "") + (u.T.Ranged ? " · F — огненные стрелы" : "")
+            + (u.T.Work > 0 ? " · ПКМ — класть (1 камень, 2 брёвна, 3 земля)" : "") + (Sim.Kindles(u.T) ? " · F — огненные стрелы" : "")
             + " · Пробел / C — вверх и вниз по лестнице · Esc — выйти";
         _hint.Position = new Vector2((vp.X - _hint.Size.X) / 2, vp.Y - 34);
         _sights.Foe = seen != null && seen.Team != Team.Player && along <= (u.T.Ranged ? sim.BowRange(u) : u.T.Reach + seen.T.BodyR + 2);

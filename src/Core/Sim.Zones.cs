@@ -23,6 +23,9 @@ public sealed class Zone
     public float Area;
     public string Why = "";
     internal double NextLook;
+    /// <summary>Looked over at least once since it was set out or read back; the whole bunks, by where each stands (packed).</summary>
+    internal bool Seen;
+    internal readonly HashSet<int> BunksWhole = new();
 
     /// <summary>
     /// The kind of an area that is a shelter, past the kinds of the stores; of one that is a sanctuary, where priests

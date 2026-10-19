@@ -80,6 +80,8 @@ public sealed partial class Sim
     /// <summary>One gone into, for a tick: its going, its climbing, and what its hands do.</summary>
     void PossessedTick(Unit u, float dt)
     {
+        // a rider at the gallop, a troll's flesh knitting: as under its own wits
+        if (u.T.Mounted || u.T == Kinds.TameTroll) TroopTick(u, dt);
         u.Facing = LookYaw;
         float wl = MathF.Sqrt(WishX * WishX + WishZ * WishZ);
         bool moving = wl > .05f;
@@ -223,7 +225,7 @@ public sealed partial class Sim
         {
             if (t.Dead || t.Inside || t.Team == Team.Player || t.Bound || t.Envoy) continue;
             float dx = t.X - u.X, dz = t.Z - u.Z, d = MathF.Sqrt(dx * dx + dz * dz);
-            if (d > u.T.Reach + t.T.BodyR + 2 || MathF.Abs(t.Y - u.Y) > Math.Max(u.T.BodyH, t.T.BodyH)) continue;
+            if (d > ReachOf(u) + t.T.BodyR + 2 || MathF.Abs(t.Y - u.Y) > Math.Max(u.T.BodyH, t.T.BodyH)) continue;
             float ahead = d < .5f ? 1 : (dx * fx + dz * fz) / d;
             if (ahead < .6f) continue;
             float score = d * (2 - ahead);
@@ -241,31 +243,38 @@ public sealed partial class Sim
     }
 
     /// <summary>
-    /// An arrow loosed along the eyes: it goes to whoever it meets first before the ground or a wall — and strikes it
-    /// surely, held as steady as the player holds it — or into what it meets of the world, or on out of reach.
+    /// A shot loosed along the eyes, of whatever the kind shoots — an arrow, a bolt, a sling stone, a pot of powder: it
+    /// goes to whoever it meets first before the ground or a wall — and strikes it surely, held as steady as the player
+    /// holds it — or into what it meets of the world (a pot bursts there), or on out of reach.
     /// </summary>
     void Loose(Unit u)
     {
         var (ox, oy, oz, dx, dy, dz) = Gaze(u);
-        float range = BowRange(u);
+        float range = ShotRange(u);
         float wall = range;
-        if (Raycast.Cast(World, ox, oy, oz, dx, dy, dz, out var hit, skipVeg: true))
-            wall = MathF.Min(range, MathF.Sqrt((hit.X + .5f - ox) * (hit.X + .5f - ox) + (hit.Y + .5f - oy) * (hit.Y + .5f - oy) + (hit.Z + .5f - oz) * (hit.Z + .5f - oz)));
+        bool struck = Raycast.Cast(World, ox, oy, oz, dx, dy, dz, out var hit, skipVeg: true);
+        if (struck) wall = MathF.Min(range, MathF.Sqrt((hit.X + .5f - ox) * (hit.X + .5f - ox) + (hit.Y + .5f - oy) * (hit.Y + .5f - oy) + (hit.Z + .5f - oz) * (hit.Z + .5f - oz)));
         var t = Sighted(u, wall, out float along);
         if (t != null && t.Team == Team.Player) t = null;
         float d = t != null ? along : wall;
         float chance = Math.Clamp(.97f - d / range * .3f, .6f, .97f) * WeatherAim;
+        var kind = ShotOf(u.T);
+        float harm = kind == Shot.Stone && Knows("leadshot") ? 1.33f : 1;
+        if (kind == Shot.Stone && Knows("firepots") && Rng.NextDouble() < FirePotShare && (t == null || PotSafe(t))) kind = Shot.FirePot;
+        // a pot thrown at one of the horde stood among ours is held back, as a bombardier holds it
+        if (kind == Shot.Pot && t != null && !PotSafe(t)) { Say("Горшок не брошен: рядом с врагом свои.", 2); u.Cooldown = .5f; return; }
         u.Swing = 1;
-        u.Cooldown = u.T.AttackTime * VolleyPace(u) * (u.FireArrows ? (Knows("soaked") ? 1.1f : 1.35f) : 1);
+        u.Cooldown = u.T.AttackTime * ShotPace(u) * (u.FireArrows && Kindles(u.T) ? (Knows("soaked") ? 1.1f : 1.35f) : 1);
         Shots++;
         var a = new Arrow
         {
-            X0 = ox, Y0 = oy, Z0 = oz, X1 = ox + dx * d, Y1 = oy + dy * d, Z1 = oz + dz * d, Dur = Math.Max(.06f, d / ArrowSpeed),
+            X0 = ox, Y0 = oy, Z0 = oz, X1 = ox + dx * d, Y1 = oy + dy * d, Z1 = oz + dz * d, Dur = Math.Max(.06f, d / SpeedOf(kind)),
             Target = t, From = u, Hits = t != null && Rng.NextDouble() < chance,
-            Damage = u.T.Damage * (.9f + (float)Rng.NextDouble() * .4f) * ArrowHarm * Oath(u), Fire = u.FireArrows,
+            Damage = u.T.Damage * (.9f + (float)Rng.NextDouble() * .4f) * ShotHarm(u) * harm * Oath(u), Fire = u.FireArrows && Kindles(u.T),
+            Kind = kind, Arc = ArcOf(kind),
         };
         // a fire arrow into the world sets alight what it strikes
-        if (t == null && u.FireArrows && wall < range) a.At = WaterPlanner.Pack(hit.X, hit.Y, hit.Z);
+        if (t == null && a.Fire && struck && wall < range) a.At = WaterPlanner.Pack(hit.X, hit.Y, hit.Z);
         Arrows.Add(a);
     }
 

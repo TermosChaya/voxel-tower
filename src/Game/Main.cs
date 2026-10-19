@@ -266,7 +266,9 @@ public partial class Main : Node3D
         Command = new Commander();
         AddChild(Command);
         Command.Init(this);
-        // last, so it hears the keys and the mouse before anything else when the player is in one of ours
+        // last, so it hears the keys and the mouse before anything else when the player is in one of ours; the mouse,
+        // held in first person, is free again in a game loaded from there
+        Input.MouseMode = Input.MouseModeEnum.Visible;
         FP = new FirstPerson();
         AddChild(FP);
         Tools.Init(this);

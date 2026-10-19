@@ -47,10 +47,12 @@ public sealed partial class Sim
     /// <summary>The bunks standing whole in closed dwellings: the household's places beyond the citadel's.</summary>
     public int DwellingBeds()
     {
-        int n = 0;
-        foreach (var z in Zones) if (z.Kind == Zone.Dwelling && z.Closed) n += z.Beds;
-        return n;
+        // a house framed twice over is one house: each bunk counts once, by where it stands
+        _bunksCounted.Clear();
+        foreach (var z in Zones) if (z.Kind == Zone.Dwelling && z.Closed) _bunksCounted.UnionWith(z.BunksWhole);
+        return _bunksCounted.Count;
     }
+    readonly HashSet<int> _bunksCounted = new();
 
     /// <summary>
     /// The room in a frame: the space reached from the floor inside it without passing a wall, a roof or a door. It is a
@@ -174,7 +176,8 @@ public sealed partial class Sim
         {
             var (x, y, z) = WaterPlanner.Unpack(p);
             byte under = World.Get(x, y - 1, z);
-            if (!Walled(under) && !Mat.IsFurniture[under]) continue;
+            // the floor is what the room stands on, not the tops of its furniture
+            if (!Walled(under)) continue;
             bool head = true;
             for (int k = 1; k < Headroom && head; k++) head = room.Contains(WaterPlanner.Pack(x, y + k, z));
             if (!head) continue;
@@ -207,13 +210,17 @@ public sealed partial class Sim
         var check = Room(z.X0, z.Z0, z.X1, z.Z1, floor);
         bool was = z.Closed;
         int had = z.Beds;
+        // looked over the first time (just set out, or read back from a save): no word of it, as nothing changed
+        bool quiet = !z.Seen;
+        z.Seen = true;
         z.Closed = check.Ok;
         z.Why = check.Why;
         z.Area = check.Area;
         if (!check.Ok)
         {
             z.Beds = 0;
-            if (was && had > 0) Say($"Жилой дом открыт ({check.Why}) — его {had} {PlacesWord(had)} не в счёт, пока его не закроют.", 2, (z.X0 + z.X1) / 2f, (z.Z0 + z.Z1) / 2f);
+            z.BunksWhole.Clear();
+            if (was && had > 0 && !quiet) Say($"Жилой дом открыт ({check.Why}) — его {had} {PlacesWord(had)} не в счёт, пока его не закроют.", 2, (z.X0 + z.X1) / 2f, (z.Z0 + z.Z1) / 2f);
             return;
         }
         if (!_furnishing.TryGetValue(z.Id, out var plan) || plan.Voxels.Count == 0)
@@ -230,14 +237,18 @@ public sealed partial class Sim
         if (want.Count > 0) DesignateBuild(want);
         // a bunk counts once it stands near whole
         int beds = 0;
+        z.BunksWhole.Clear();
         foreach (var (from, count) in plan.Bunks)
         {
             int whole = 0;
             for (int i = from; i < from + count; i++)
                 if (World.Get(plan.Voxels.X(i), plan.Voxels.Y(i), plan.Voxels.Z(i)) == plan.Voxels.M(i)) whole++;
-            if (whole >= count * .9f) beds++;
+            if (whole < count * .9f) continue;
+            beds++;
+            z.BunksWhole.Add(WaterPlanner.Pack(plan.Voxels.X(from), plan.Voxels.Y(from), plan.Voxels.Z(from)));
         }
         z.Beds = beds;
+        if (quiet) return;
         if (beds > had) Say(had == 0 && !was ? $"Жилой дом обставлен: {beds} {PlacesWord(beds)} в войске." : $"В жилом доме готово лежанок: {beds}.", 1, (z.X0 + z.X1) / 2f, (z.Z0 + z.Z1) / 2f);
         else if (!was && beds > 0) Say($"Жилой дом снова закрыт: {beds} {PlacesWord(beds)} в войске.", 1, (z.X0 + z.X1) / 2f, (z.Z0 + z.Z1) / 2f);
     }

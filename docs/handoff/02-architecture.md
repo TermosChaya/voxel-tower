@@ -261,14 +261,14 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   если `Raycast` упирается в холм — отвесно; `Flier.Star`, `Burning`), `StarStrikes` (из `ComeDown`: `Detonate` в 3 м ×
   `Might`, машинам 300, поджог вокруг; глыба дальше живёт как камень — катится), `Unleash` + `Whirls` (`Whirl`) +
   `TickWhirls` (из `TickSpells`: 5 раз в секунду идёт к ближайшему налётчику в 40 м, крутит и вышвыривает тех, кто в
-  нём, рвёт лестницы, машинам по 12; наших не трогает). Вихри не сохраняются; `Flier.Star` сохраняется.
+  нём, рвёт лестницы, машинам по 12; наших не трогает). Вихри и `Flier.Star` сохраняются.
 - `Sim.Muster.cs` — набор войска в цитадели: `Recruit` (`Kind`, `Done`, `Paid`), очередь `Recruits` (до `RecruitsMax`
   = 6; готовится только первая), `Household()` (живые наши, кроме мертвецов, по `UnitType.Room`), `Spoken()` (с
   очередью), `Places` (`CitadelPlaces` = 10, +4 за «barracks», + лежанки домов, ×2 за «bunks»), `TrainTime(t)`
   (`UnitType.Train`, ×0,7 за «drillyard»), `Unlocked(t)` (`UnitType.Lore`), `CantEnlist(t)` — причина отказа строкой,
   `Enlist` (платит сразу), `Dismiss(i)` (возвращает `Paid`), `TickMuster` (готовый `Arrive`: `Spawn` у `Gate`,
   `Outfit` — стёганки, `Enter` — выходит сам через `Indoors`; если мест не стало — ждёт). `Hire` остался мгновенным —
-  только для стенда и сцен. Сохраняется (версия 17): очередь по `Key` с `Done` и `Paid`.
+  только для стенда и сцен. Сохраняется (версия 18; 17 — очередь, 18 — ещё вихри `Whirls`): очередь по `Key` с `Done` и `Paid`.
 - `Sim.Dwellings.cs` — жилые дома: `Zone.Dwelling = 11` (поля зоны `Closed`, `Beds`, `Planned`, `Area`, `Why`,
   `NextLook` не сохраняются — пересчитываются). `CheckDwelling(рамка)` → `DwellingCheck` (`Ok`, `Why`, `Area`, `Bunks`):
   заливка по вокселям от пола внутри рамки (сиды — открытые воксели над твёрдым от `GroundTop` вверх, ближние к

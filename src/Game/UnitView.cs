@@ -183,7 +183,12 @@ public partial class UnitView : Node3D
             if (!_looks.TryGetValue(u.Id, out var look)) _looks[u.Id] = look = new Look();
             Track(u, look, dt);
             var tint = Pose(u, k.Fig, look);
-            if (u.Id == HiddenId) { if (_own.TryGetValue(u.Id, out var hid)) foreach (var part in hid.Parts) if (part != null) part.Visible = false; continue; }
+            if (u.Id == HiddenId)
+            {
+                // its own wounded body hidden, and made anew when it is drawn again
+                if (_own.TryGetValue(u.Id, out var hid)) { foreach (var part in hid.Parts) if (part != null) part.Visible = false; hid.Rev = -1; }
+                continue;
+            }
             if (u.Wounds == null)
             {
                 int o = k.Count++ * 16;

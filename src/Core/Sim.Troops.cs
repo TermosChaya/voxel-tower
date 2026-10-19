@@ -323,8 +323,11 @@ public sealed partial class Sim
         // those about it: hurt and thrown out of it; an engine battered where it stands
         float reach = r * 1.5f;
         var near = Units.FindAll(u => !u.Dead && !u.Inside && MathF.Abs(u.X - fx) < reach + u.T.BodyR && MathF.Abs(u.Z - fz) < reach + u.T.BodyR);
+        int broke = done;
         foreach (var u in near)
         {
+            // ours it passes by: the pot is thrown with a care for them, and the burst is the horde's
+            if (u.Team == Team.Player) continue;
             float dx = u.X - fx, dz = u.Z - fz, dy = u.Y + MathF.Min(u.T.BodyH * .5f, 8) - fy;
             float d = MathF.Max(0, MathF.Sqrt(dx * dx + dy * dy + dz * dz) - u.T.BodyR * .5f);
             if (d > reach) continue;
@@ -336,7 +339,8 @@ public sealed partial class Sim
             float push = (2.5f + 4 * k) * VoxelWorld.PerMetre * MathF.Min(1, 15 / u.T.BodyH);
             Fling(u, ux * push, push * .8f, uz * push, "горшок с порохом");
         }
-        if (done > 0) InvalidateFields();
+        // the horde's ways are worked out again only when what it walks on changed, not for every body struck
+        if (broke > 0) InvalidateFields();
         Exploded?.Invoke(fx, fy, fz, r);
         Bursts++;
         return done;

@@ -357,7 +357,15 @@ public sealed partial class Sim
     void Nudge(Unit u, float dx, float dz)
     {
         u.X += dx; u.Z += dz;
-        if (u.Path != null && u.PathI < u.Path.Count || u == Possessed) return;
+        if (u.Path != null && u.PathI < u.Path.Count) return;
+        // the one gone into may stand right at the edge of its cell, but is not shoved out of it into a wall or over a drop
+        if (u == Possessed)
+        {
+            int px0 = Nav.I(u.Cell) << NavGrid.Shift, pz0 = Nav.K(u.Cell) << NavGrid.Shift;
+            u.X = Math.Clamp(u.X, px0 + .05f, px0 + NavGrid.CS - .05f);
+            u.Z = Math.Clamp(u.Z, pz0 + .05f, pz0 + NavGrid.CS - .05f);
+            return;
+        }
         float r = Math.Min(u.T.BodyR, NavGrid.CS / 2f - .5f);
         int x0 = Nav.I(u.Cell) << NavGrid.Shift, z0 = Nav.K(u.Cell) << NavGrid.Shift;
         u.X = Math.Clamp(u.X, x0 + r, x0 + NavGrid.CS - r);

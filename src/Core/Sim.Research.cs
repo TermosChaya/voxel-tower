@@ -293,5 +293,5 @@ public sealed partial class Sim
     /// <summary>How much harder the spells strike and how much longer they last, with the strength of faith.</summary>
     float Might => Knows("might") ? 1.3f : 1;
     /// <summary>What the spells kill with: a raider killed so gives intervention back with the reaping.</summary>
-    static readonly HashSet<string> SpellCauses = new() { "обвал", "провал", "огненный дождь", "молния", "мор", "туман мёртвых", "взрыв", "чёрный ветер", "землетрясение", "звезда", "смерч" };
+    static readonly HashSet<string> SpellCauses = new() { "заклятый обвал", "провал", "огненный дождь", "молния", "мор", "туман мёртвых", "взрыв", "чёрный ветер", "землетрясение", "звезда", "смерч", "телекинез" };
 }

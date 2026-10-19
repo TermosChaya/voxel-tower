@@ -279,8 +279,8 @@ public sealed partial class Sim
         {
             if (u.Dead || u.Inside) continue;
             float d = MathF.Sqrt((u.X - x) * (u.X - x) + (u.Y - y) * (u.Y - y) * .5f + (u.Z - z) * (u.Z - z));
-            if (Kinds.IsEngine(u.T) && d < r + 3 * VoxelWorld.PerMetre) Hurt(u, null, 280 * Might, "обвал");
-            else if (d < r + 1.5f * VoxelWorld.PerMetre) Hurt(u, null, 45 * Might, "обвал");
+            if (Kinds.IsEngine(u.T) && d < r + 3 * VoxelWorld.PerMetre) Hurt(u, null, 280 * Might, "заклятый обвал");
+            else if (d < r + 1.5f * VoxelWorld.PerMetre) Hurt(u, null, 45 * Might, "заклятый обвал");
         }
         Fall(ball, quiet: false);
         return null;
@@ -431,7 +431,7 @@ public sealed partial class Sim
     /// <summary>The weather of the player's choosing, for three minutes.</summary>
     string CallWeather(int variant)
     {
-        StartWeather(Summonable[Math.Clamp(variant, 0, Summonable.Length - 1)], 180);
+        StartWeather(Summonable[Math.Clamp(variant, 0, Summonable.Length - 1)], 180 * Might);
         return null;
     }
 
@@ -678,7 +678,7 @@ public sealed partial class Sim
             {
                 float dx = u.X - s.X, dz = u.Z - s.Z, dy = u.Y - s.Y;
                 if (dx * dx + dz * dz + dy * dy > PlagueReach * PlagueReach) continue;
-                if (Rng.NextDouble() < .25) u.PlagueUntil = Time + PlagueFor;
+                if (Rng.NextDouble() < .25) u.PlagueUntil = Time + PlagueFor * Might;
                 break;
             }
         }

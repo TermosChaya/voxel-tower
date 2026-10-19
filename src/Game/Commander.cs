@@ -386,6 +386,8 @@ public partial class Commander : Node
     /// <summary>The citadel's muster in the console; asked again while it is open, the view goes to the citadel.</summary>
     public void OpenKeep()
     {
+        // a brush in hand is put down: the muster shows only with nothing in hand
+        if (_m.Tools.Tool != Tool.None) _m.Tools.SetTool(Tool.None);
         if (_m.KeepChosen && _m.Selected.Count == 0) { _m.Rig.Focus(_m.World.WX(_m.Site.KeepX), _m.World.WZ(_m.Site.KeepZ)); return; }
         _m.Selected.Clear();
         _m.Inspected = null;

@@ -226,12 +226,15 @@ public sealed partial class Sim
         // the altar of grace: half as much again, and a revelation more
         favour *= SacrificeMore;
         if (Knows("altar")) revelations++;
+        double held = Favour;
         GainFavour(favour);
+        // what the household could hold of it: past the vessel's brim it is lost
+        double kept = Favour - held;
         Revelations += revelations;
         priest.Rite = null; priest.Captive = null; priest.State = UnitState.Idle; priest.NextSearch = 0;
         RiteDone?.Invoke(ax, ay, az);
-        Say($"Жертва принята: {what}. Вмешательство +{favour:0}" + (revelations > 0 ? $", откровения +{revelations}" : "") +
-            (power ? " — на месте силы в полтора раза больше." : "."), 1, priest);
+        Say($"Жертва принята: {what}. Вмешательство +{kept:0}" + (kept < favour - .5 ? $" (из {favour:0}: больше не вместить)" : "")
+            + (revelations > 0 ? $", откровения +{revelations}" : "") + (power ? " — на месте силы в полтора раза больше." : "."), 1, priest);
         if (r.Kind == RiteKind.Own) Say("Дружина скорбит по своему: пять минут работа идёт на четверть медленнее.", 2);
     }
 

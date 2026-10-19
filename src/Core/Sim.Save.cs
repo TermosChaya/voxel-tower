@@ -15,7 +15,7 @@ namespace VoxelTower.Core;
 /// </summary>
 public sealed partial class Sim
 {
-    public const int SaveVersion = 17;
+    public const int SaveVersion = 18;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -138,6 +138,8 @@ public sealed partial class Sim
         foreach (var (kind, band, back) in Waves._queue) { w.Write(kind.Key); w.Write(band?.Id ?? -1); WriteSurvivor(w, back); }
         w.Write(Escaped.Count);
         foreach (var s in Escaped) WriteSurvivor(w, s);
+        w.Write(Whirls.Count);
+        foreach (var wh in Whirls) { w.Write(wh.X); w.Write(wh.Z); w.Write(wh.VX); w.Write(wh.VZ); w.Write(wh.R); w.Write(wh.Until); w.Write(wh.Next); }
         w.Write(Recruits.Count);
         foreach (var m in Recruits) { w.Write(m.Kind.Key); w.Write(m.Done); w.Write(m.Paid); }
         w.Write(extra ?? "");
@@ -402,6 +404,9 @@ public sealed partial class Sim
         Escaped.Clear();
         int ne = r.ReadInt32();
         for (int i = 0; i < ne; i++) { var s = ReadSurvivor(r); if (s != null) Escaped.Add(s); }
+        Whirls.Clear();
+        for (int i = r.ReadInt32(); i > 0; i--)
+            Whirls.Add(new Whirl { X = r.ReadSingle(), Z = r.ReadSingle(), VX = r.ReadSingle(), VZ = r.ReadSingle(), R = r.ReadSingle(), Until = r.ReadDouble(), Next = r.ReadDouble() });
         Recruits.Clear();
         for (int i = r.ReadInt32(); i > 0; i--)
         {
