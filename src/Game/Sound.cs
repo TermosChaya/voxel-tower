@@ -8,7 +8,8 @@ namespace VoxelTower.Game;
 /// <summary>
 /// The valley's sounds, made by the game itself rather than recorded: each a moment of samples worked out at the start
 /// from noise, strings and bells — a pick on rock, an axe in timber, a spade in earth, a stone set down, a bowstring, an
-/// arrow going home, blades meeting, a club, a death cry, the horn, stone coming down, thunder, a spell, the gong of a
+/// arrow going home, a blade swung through the air, blades meeting, a blade biting flesh, a club, a death cry, the
+/// horn, stone coming down, thunder, a spell, the gong of a
 /// rite, a shaman's croon, a blast, stone crashing down, the black wind — and the fire, the rain and the hum of the hand
 /// of telekinesis as loops. Each is played where it happens, as loud as that is near the middle of the view, the same
 /// one no more often than it would be heard apart, a score of them at most.
@@ -68,6 +69,9 @@ public partial class Sound : Node
             if (r > 1.5f * VoxelWorld.PerMetre) GetTree().CreateTimer(.3).Timeout += () => Play("rumble", x, y, z, 0, loud * .8f, far: true, pitch: .7f);
         };
         sim.Planted += c => Play("fuse", c.X, c.Y, c.Z, .5, 1);
+        // a blow heard where it lands, as the blade is seen to get there: steel rings on steel and mail, a shield's
+        // boards knock, flesh takes a blade wetly and a club with a thud
+        sim.Smote += h => GetTree().CreateTimer(.075).Timeout += () => Landed(h);
         // a piece of the world coming down: the heavier, the louder
         // a piece of the world coming down: the heavier, the louder, and a great one deeper
         sim.Landed += (x, y, z, n, speed) => { if (n >= 20) Play("crash", x, y, z, .07, Math.Clamp(.25f + n / 700f, .25f, 1.1f), pitch: n >= 600 ? .72f : 0); };
@@ -77,6 +81,18 @@ public partial class Sound : Node
         sim.Hexed += (x, y, z) => Play("hex", x, y, z, .6, 1);
         sim.Darkened += (x, y, z) => Play("hex", x, y, z, .6, .9f);
         sim.Woken += (x, y, z) => Play("gong", x, y, z, 1, .6f);
+    }
+
+    /// <summary>A blow landing: on steel, iron or mail a ring (higher off one turned aside), on boards a knock, into flesh a blade's bite or a club's thud.</summary>
+    void Landed(Smiting h)
+    {
+        byte m = h.Mat;
+        bool metal = m != Mat.Air && (Mat.Metal[m] && m != Mat.Pitch || m == Mat.Iron);
+        bool crush = h.Stroke is StrokeKind.Smash or StrokeKind.Bash || Sim.WeaponOf(h.By.T).cut == Sim.Cut.Crush;
+        if (metal) Play("blade", h.X, h.Y, h.Z, .06, m == Mat.Mail ? .6f : .85f, pitch: h.Glanced ? 1.15f : m == Mat.Mail ? .8f : 0);
+        else if (m is Mat.Board or Mat.BoardDark or Mat.Handle) Play("chop", h.X, h.Y, h.Z, .06, .8f, pitch: 1.2f);
+        else if (h.Flesh > 0) Play(crush || h.By.T.NoHands ? "blunt" : "hew", h.X, h.Y, h.Z, .06, Math.Clamp(.55f + h.Flesh * .02f, .55f, .95f));
+        else if (m != Mat.Air) Play("blunt", h.X, h.Y, h.Z, .08, .5f);
     }
 
     /// <summary>What a voxel dug or hacked out sounds like: rock and masonry knock, timber thuds, earth sighs.</summary>
@@ -162,8 +178,10 @@ public partial class Sound : Node
             if (u.State == UnitState.Fight)
             {
                 if (u.T.Ranged) { Play("bow", u.X, u.Y, u.Z, .08, .7f); continue; }
+                // the blow through the air; where it lands is heard as it lands
                 var (cut, _, _) = Sim.WeaponOf(u.T);
-                Play(cut is Sim.Cut.Crush ? "blunt" : "blade", u.X, u.Y, u.Z, .09, .85f);
+                if (u.T.NoHands) Play("blunt", u.X, u.Y, u.Z, .09, .6f);
+                else Play("swish", u.X, u.Y, u.Z, .05, cut is Sim.Cut.Crush ? .55f : .7f, pitch: cut is Sim.Cut.Crush ? .7f : u.T.BodyH > 18 ? .8f : 0);
             }
             else if (u.State == UnitState.Work && u.Team == Team.Player && u.JobI > 0 && u.JobI <= u.Jobs.Count && !Orders.IsRemove(u.Jobs[u.JobI - 1].m))
                 Play("lay", u.X, u.Y, u.Z, .08, .55f);
@@ -194,7 +212,9 @@ public partial class Sound : Node
         Add("lay", Lay());
         Add("bow", Bow());
         Add("arrow", ArrowIn());
+        Add("swish", Swish());
         Add("blade", Blades());
+        Add("hew", Hew());
         Add("blunt", Thud());
         Add("death", Cry());
         Add("horn", Horn());
@@ -356,6 +376,48 @@ public partial class Sound : Node
             s[i] = v * .8f + lo.Step(Noise()) * .5f * Decay(i, .012f);
         }
         Normalise(s, .55f);
+        return s;
+    }
+
+    /// <summary>A blade swung through the air: a breath of noise rising and falling in pitch as the edge goes by.</summary>
+    float[] Swish()
+    {
+        var s = Buf(.24f);
+        for (int i = 0; i < s.Length; i++)
+        {
+            float k = i / (float)s.Length;
+            // the edge nearest at a third of the way: loudest and highest there
+            float near = MathF.Exp(-(k - .35f) * (k - .35f) / .03f);
+            s[i] = Noise() * near;
+        }
+        // the hiss through a resonance that sweeps up and back down
+        var outp = new float[s.Length];
+        float y1 = 0, y2 = 0;
+        for (int i = 0; i < s.Length; i++)
+        {
+            float k = i / (float)s.Length, f = 700 + 1500 * MathF.Exp(-(k - .35f) * (k - .35f) / .02f);
+            float r = MathF.Exp(-MathF.PI * f / (3.5f * Rate)), th = MathF.Tau * f / Rate;
+            float y = (1 - r) * s[i] + 2 * r * MathF.Cos(th) * y1 - r * r * y2;
+            y2 = y1; y1 = y; outp[i] = y;
+        }
+        Normalise(outp, .45f);
+        return outp;
+    }
+
+    /// <summary>A blade biting into flesh: a short wet knock with a tearing edge to it.</summary>
+    float[] Hew()
+    {
+        var s = Buf(.2f);
+        var lo = new Low(420); var body = new Ring(170, 4); var hi = new Low(2600); var under = new Low(600);
+        for (int i = 0; i < s.Length; i++)
+        {
+            float t = i / (float)Rate, n = Noise();
+            float knock = body.Step(n * Decay(i, .012f)) * 5;
+            float wet = lo.Step(n) * Decay(i, .05f) * 1.4f * (1 + .5f * MathF.Sin(MathF.Tau * 31 * t));
+            float tear = (hi.Step(n) - under.Step(n)) * Decay(i, .018f) * .5f;
+            s[i] = knock + wet + tear;
+        }
+        Normalise(s, .7f);
         return s;
     }
 

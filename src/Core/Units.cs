@@ -398,6 +398,17 @@ public sealed class Unit
     /// <summary>Who last drew its blood: a mortal wound or bleeding out is put down to them (the hunter is paid).</summary>
     public Unit HurtBy;
     public float Swing;
+    // the blow it is at and the one it means next; none of it goes into a save, a blow is over in a second
+    /// <summary>The stroke it struck last, and when (simulation seconds); the one it is drawing back for, and at whom.</summary>
+    public StrokeKind Stroke, NextStroke;
+    public double StrokeTime = -99;
+    public Unit StrokeFor;
+    /// <summary>Blows it has struck, which picks its next stroke without touching the random stream.</summary>
+    public int Strokes;
+    /// <summary>How the last stroke was laid out: tipped down (radians), turned in, the step into it (voxels), and how far along its sweep (0…1) the blade met the body.</summary>
+    public float StrokeAim, StrokeYaw, StrokeLunge, StrokeAt;
+    /// <summary>The last blow was turned by armour or a shield and did not go through: the blade comes back off it.</summary>
+    public bool Glanced;
 
     // the horde: camped at a mine it keeps, or sent to take one of ours; the warband it marches with, and whether it leads it
     public bool Guard;

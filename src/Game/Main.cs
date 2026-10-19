@@ -186,7 +186,7 @@ public partial class Main : Node3D
         World = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         Site = MapGen.Generate(World, mp);
         if (_demo && _pose == "trees") Grove();
-        if (_demo && _pose == "people") ClearGrove();
+        if (_demo && _pose is "people" or "duel") ClearGrove();
         // the field of the traps cleared of trees, so they are to be seen
         if (_demo && _pose == "engines") ClearTrees(Site.KeepX - Site.KeepR - 420, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 20, Site.KeepZ + 140);
         if (_demo && _pose == "drawbridge") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 120);
@@ -230,6 +230,8 @@ public partial class Main : Node3D
         Debris = new Debris();
         AddChild(Debris);
         Debris.Init(World);
+        // what flies hangs where it is while the game is stopped
+        Debris.Held = () => Paused;
 
         Marks = new OrdersView();
         AddChild(Marks);
@@ -1025,7 +1027,7 @@ public partial class Main : Node3D
         Check("Ctrl+= draws the interface larger, Ctrl+0 as it was", Math.Abs(larger - 1.1f) < .01f && Math.Abs(GetTree().Root.ContentScaleFactor - 1) < .01f,
             $"{larger:0.00} → {GetTree().Root.ContentScaleFactor:0.00}");
 
-        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 22 && Sound.Heard.Count >= 4,
+        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 24 && Sound.Heard.Count >= 4,
             $"{Sound.Clips} sounds, {Sound.Played} played: {string.Join(", ", Sound.Heard)}");
 
         var before = Rig.Target;
@@ -1092,6 +1094,31 @@ public partial class Main : Node3D
         Check("I goes into the one chosen and the view is its eyes; it walks where it is told; Esc lets it go and the view goes back over the valley",
             into && strode > 2 && outOf, $"in {into}, walked {strode:0.0} m, out {outOf}");
 
+        // hand to hand, close before the eye: a swordsman and an orc, too tough to fall, fight it out for a few seconds;
+        // the swordsman's blows come many ways, the arms turn every way at the shoulders, and where the blows land
+        // sparks, splinters or blood fly and the blade leaves its smear
+        var ways = new HashSet<StrokeKind>();
+        int landed = 0;
+        var duelist = Sim.Spawn(Kinds.Swordsman, Sim.NearestStand(kx - 140, kz + 150, 2));
+        var orc = Sim.Spawn(Kinds.Orc, Sim.NearestStand((int)duelist.X + 11, (int)duelist.Z, 2));
+        void Watch(Smiting h) { if (h.By == duelist) { ways.Add(h.Stroke); landed++; } }
+        Sim.Smote += Watch;
+        duelist.Hold = true; duelist.Post = duelist.Dest = duelist.Cell;
+        orc.Guard = true; orc.Home = orc.Cell;
+        duelist.Hp = duelist.MaxHp = orc.Hp = orc.MaxHp = 100000;
+        var aim1 = Rig.Aim;
+        // the camera looks at a plane 4 m up: past it by as much as the two stand under it
+        float overD = (World.WY(duelist.Y + 8) - 4) / MathF.Tan(.5f);
+        Rig.Set(World.WX(duelist.X) - MathF.Sin(-.3f) * overD, World.WZ(duelist.Z) - MathF.Cos(-.3f) * overD, -.3f, .5f, 7, snap: true);
+        int twisted0 = Units.Twisted, smears0 = Units.Smears, thrown0 = Debris.Sparked + Debris.Sprayed;
+        for (int i = 0; i < 140; i++) { Advance(.05); await Frames(1); }
+        Sim.Smote -= Watch;
+        Check("hand to hand the blows come many ways, the arms turn every way, and where the blade lands sparks, splinters or blood fly and it leaves its smear",
+            ways.Count >= 3 && Units.Twisted > twisted0 && Units.Smears > smears0 && Debris.Sparked + Debris.Sprayed > thrown0,
+            $"{landed} blows, {ways.Count} ways ({string.Join(", ", ways)}); {Units.Twisted - twisted0} figures turned out of a plain swing, {Units.Smears - smears0} smears, {Debris.Sparked + Debris.Sprayed - thrown0} sparks and bits");
+        duelist.Dead = orc.Dead = true; duelist.DiedAt = orc.DiedAt = -999;
+        Rig.Set(aim1.x, aim1.z, aim1.yaw, aim1.pitch, aim1.zoom, snap: true);
+
         // the citadel's muster: a click on the citadel opens it; a worker taken on is paid for at once and comes out of
         // its door only when made ready. Whoever stands about the citadel's foot by now is sent a little way off first (an
         // envoy come to the walls is taken off), so that the click finds the citadel and not one of them
@@ -1145,6 +1172,7 @@ public partial class Main : Node3D
         if (_pose == "trees") { LookAtGrove(); return; }
         if (_pose == "grass") { Meadow(); return; }
         if (_pose == "people") { People(); return; }
+        if (_pose == "duel") { Duel(); return; }
         if (_pose == "troops") { Troops(); return; }
         if (_pose == "faith") { Faith(); return; }
         if (_pose == "captives") { Captives(); return; }
@@ -2519,6 +2547,89 @@ public partial class Main : Node3D
         float zoom = Math.Clamp(248 / (width / 1.6f + 12), 1.2f, 9);
         Rig.Set(World.WX(cx) - sin * over, World.WZ(cz) - cos * over, yaw, pitch, one ? zoom : 1.6f, snap: true);
         GD.Print($"[voxel-tower] the figures stand round {cx:0},{cz:0}, {gap:0} voxels a row; closer: --cam={cx - sin * over / VoxelWorld.Vox:0},{cz - cos * over / VoxelWorld.Vox:0},-0.3,0.42,6");
+        Hud.Refresh();
+    }
+
+    /// <summary>
+    /// Pairs fighting hand to hand on cleared ground, for a close look at the blows (--pose=duel), each with a stroke of
+    /// its own: a swordsman cutting down at an orc, a knight across at one, a swordsman sweeping at one, a halberd
+    /// chopping, a spear thrust, a shield driven in, an orc's backhand at a swordsman, a knight's rising cut; a troll's
+    /// club, a rider from the saddle, a hound's teeth, a giant's maul. --look=0 they fight (--at=seconds); with the game
+    /// stopped, 1 every striker drawn back for its stroke, 2 the moment the blade meets the body, 3 on through it; 4 and
+    /// on one pair close, at the moment it meets (--at=seconds after the blow, under one, for another moment; below
+    /// nought, so long before it, drawing back).
+    /// </summary>
+    void Duel()
+    {
+        var sim = Sim;
+        sim.Waves.Countdown = 1e9;
+        var pairs = new (UnitType a, UnitType b, StrokeKind k)[]
+        {
+            (Kinds.Swordsman, Kinds.Orc, StrokeKind.Overhead), (Kinds.Knight, Kinds.Orc, StrokeKind.DiagR), (Kinds.Swordsman, Kinds.Orc, StrokeKind.Sweep), (Kinds.Halberdier, Kinds.Orc, StrokeKind.PoleChop),
+            (Kinds.Spearman, Kinds.Orc, StrokeKind.Thrust), (Kinds.Shieldbearer, Kinds.Goblin, StrokeKind.Bash), (Kinds.Orc, Kinds.Swordsman, StrokeKind.DiagL), (Kinds.Knight, Kinds.Goblin, StrokeKind.Rising),
+            (Kinds.Troll, Kinds.Knight, StrokeKind.Smash), (Kinds.Rider, Kinds.Goblin, StrokeKind.Overhead), (Kinds.Hound, Kinds.Goblin, StrokeKind.Bite), (Kinds.Giant, Kinds.Orc, StrokeKind.Sweep),
+        };
+        const float yaw = -.3f, pitch = .42f, apart = 44, gap = 36;
+        float sin = MathF.Sin(yaw), cos = MathF.Cos(yaw);
+        var (gx, gz) = GroveAt;
+        float cx = gx + 150, cz = gz + 110;
+        int close = _look >= 4 && _look < 4 + pairs.Length ? _look - 4 : -1;
+        var strikers = new List<(Unit a, Unit b, StrokeKind k)>();
+        for (int i = 0; i < pairs.Length; i++)
+        {
+            var (ta, tb, k) = pairs[i];
+            // four pairs to a row, the rows going away from the camera; the striker on the right, facing back along the
+            // row, its sword arm toward the camera
+            float along = (i % 4 - 1.5f) * apart, back = (i / 4 - 1) * gap;
+            float d = k == StrokeKind.Bash ? ta.BodyR + tb.BodyR + 3 : ta.Reach + tb.BodyR - 2;
+            Unit Put(UnitType t, float al, float face)
+            {
+                float x = cx + al * cos - back * sin, z = cz - al * sin - back * cos;
+                var u = sim.Spawn(t, sim.NearestStand((int)x, (int)z, t.Move.Height));
+                u.X = x; u.Z = z; u.Y = World.SurfAt((int)x, (int)z);
+                u.Facing = face; u.Look = 0;
+                u.Hp = u.MaxHp = 100000;
+                if (t.Team == Team.Horde) { u.Guard = true; u.Home = u.Cell; } else { u.Hold = true; u.Post = u.Cell; u.Dest = u.Cell; }
+                return u;
+            }
+            var a = Put(ta, along + d / 2, MathF.Atan2(sin, -cos));
+            var b = Put(tb, along - d / 2, MathF.Atan2(-sin, cos));
+            a.Target = b; b.Target = a;
+            strikers.Add((a, b, k));
+        }
+        if (_look <= 0) Advance(_poseSeconds > 0 && _poseSeconds < 6 ? _poseSeconds : 2.5);
+        else
+        {
+            // the game stopped at one moment of every blow (close up, --at=seconds after it, or before it below nought)
+            Paused = true;
+            bool at = close >= 0 && _poseSeconds > -1 && _poseSeconds < 1;
+            float since = at ? (float)_poseSeconds : _look == 3 ? UnitView.StrikeTime + UnitView.FollowTime * .6f : UnitView.StrikeTime;
+            foreach (var (a, b, k) in strikers)
+            {
+                a.State = b.State = UnitState.Fight;
+                a.NextStroke = k; a.StrokeFor = b;
+                b.Cooldown = b.T.AttackTime;
+                if (_look == 1 || since < 0) { a.Cooldown = _look == 1 ? .02f : -since; a.StrokeTime = -99; continue; }
+                sim.Strike(a, b);
+                a.Cooldown = a.T.AttackTime;
+                a.StrokeTime = sim.Time - since;
+            }
+        }
+        if (close >= 0)
+        {
+            var (a, b, _) = strikers[close];
+            float mx = (a.X + b.X) / 2, mz = (a.Z + b.Z) / 2;
+            float over = (World.WY(a.Y + 8) - 4) / MathF.Tan(pitch);
+            Rig.Set(World.WX(mx) - sin * over, World.WZ(mz) - cos * over, yaw, pitch, a.T.BodyH > 18 || b.T.BodyH > 18 ? 6 : 8.5f, snap: true);
+        }
+        else
+        {
+            float over = (World.WY(World.SurfAt((int)cx, (int)cz) + 8) - 4) / MathF.Tan(pitch);
+            Rig.Set(World.WX(cx) - sin * over, World.WZ(cz) - cos * over, yaw, pitch, 2.6f, snap: true);
+        }
+        var told = new List<string>();
+        foreach (var (a, b, k) in strikers) told.Add($"{a.T.Key} {k} at {b.T.Key}");
+        GD.Print($"[voxel-tower] the pairs fight round {cx:0},{cz:0}: {string.Join(", ", told)}");
         Hud.Refresh();
     }
 

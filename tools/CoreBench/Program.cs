@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
+using System.Collections.Generic;
 using VoxelTower.Core;
 
 // Checks the engine-free core against numbers measured in the browser prototype, and times the heavy parts.
@@ -4274,6 +4275,187 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bodies")
     Check("a goblin with its knife hand cut off drags itself back west", !Sim.HasMainHand(gob) && (gob.X < gx0 - 16 || gob.Dead), $"hand {Sim.HasMainHand(gob)}, x {gx0:0} → {gob.X:0}, {gob.State}");
 }
 
+// ---- the strokes: a blow comes one of many ways, chosen ahead by what the striker holds and whom it strikes and never
+// the same twice running; the wound is cut where the blade's own sweep meets the body and along that sweep; one gone
+// into strikes the way the player swung the mouse
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--strokes")
+{
+    Console.WriteLine();
+    var mpK = new MapParams();
+    var wK = new VoxelWorld(mpK.SizeX, mpK.SizeY, mpK.SizeZ);
+    var siteK = MapGen.Generate(wK, mpK);
+    wK.Compact();
+    // a field of level ground west of the citadel, bare of trees
+    int kx0 = (siteK.KeepX - 460) & ~7, kz0 = (siteK.KeepZ - 140) & ~7, kg = wK.SurfAt(kx0 + 160, kz0 + 140);
+    for (int z = kz0; z < kz0 + 280; z++)
+        for (int x = kx0; x < kx0 + 320; x++)
+            for (int y = kg - 4; y < kg + 50; y++) wK.Set(x, y, z, y < kg ? Mat.Soil : Mat.Air);
+    Sim Field()
+    {
+        var s = new Sim(wK, siteK);
+        s.Waves.Countdown = 1e9; s.WildTarget = 0;
+        for (double t = 0; t < .5; t += .05) s.Step(.05f);
+        return s;
+    }
+    var simK = Field();
+    void RunK(double seconds) { for (double t = 0; t < seconds; t += .05) simK.Step(.05f); }
+    var smitten = new List<Smiting>();
+    simK.Smote += h => smitten.Add(h);
+    float row = kz0 + 20;
+    // two set face to face on the field, the struck one held where it stands and hard to kill
+    (Unit a, Unit b) Pair(Sim s, UnitType ta, UnitType tb, float gap = -1)
+    {
+        float x = kx0 + 60, z = row;
+        row += 7; if (row > kz0 + 260) row = kz0 + 20;
+        var a = s.Spawn(ta, s.NearestStand((int)x, (int)z, ta.Move.Height));
+        float d = gap > 0 ? gap : ta.Reach + tb.BodyR - 1;
+        var b = s.Spawn(tb, s.NearestStand((int)(x + d), (int)z, tb.Move.Height));
+        a.X = x; a.Z = z; a.Y = kg; b.X = x + d; b.Z = z; b.Y = kg;
+        a.Look = b.Look = 0;
+        a.Facing = 0; b.Facing = MathF.PI;
+        b.Hp = b.MaxHp = 1e6f;
+        return (a, b);
+    }
+    void Done(params Unit[] us) { foreach (var u in us) { u.Dead = true; u.DiedAt = -999; } }
+    // struck over and over, the body made whole again before each
+    List<Smiting> Rain(Sim s, Unit a, Unit b, int n, StrokeKind? only = null)
+    {
+        var got = new List<Smiting>();
+        void On(Smiting h) => got.Add(h);
+        s.Smote += On;
+        for (int i = 0; i < n; i++)
+        {
+            b.Wounds = null; b.Dead = false; b.State = UnitState.Idle; b.Hp = b.MaxHp; b.Airborne = null;
+            if (only is { } k) { a.NextStroke = k; a.StrokeFor = b; }
+            s.Strike(a, b);
+        }
+        s.Smote -= On;
+        b.Wounds = null; b.Dead = false; b.Hp = b.MaxHp;
+        return got;
+    }
+    string Tally(List<Smiting> hs) => string.Join(" ", hs.GroupBy(h => h.Stroke).OrderBy(g => g.Key).Select(g => $"{g.Key} {g.Count()}"));
+    int Repeats(List<Smiting> hs) { int r = 0; for (int i = 1; i < hs.Count; i++) if (hs[i].Stroke == hs[i - 1].Stroke) r++; return r; }
+
+    // the ways a blow comes, by the weapon: a sword every way, an axe never with the point, a spear mostly with it, a
+    // rider only down from the saddle, a hound with its teeth, a shieldbearer close up with his shield too
+    int met0 = simK.BlowsMet, blows0 = simK.Blows;
+    var (swA, swB) = Pair(simK, Kinds.Swordsman, Kinds.Orc); var swH = Rain(simK, swA, swB, 60);
+    var (axA, axB) = Pair(simK, Kinds.Orc, Kinds.Swordsman); var axH = Rain(simK, axA, axB, 40);
+    var (spA, spB) = Pair(simK, Kinds.Spearman, Kinds.Goblin); var spH = Rain(simK, spA, spB, 40);
+    var (riA, riB) = Pair(simK, Kinds.Rider, Kinds.Goblin); var riH = Rain(simK, riA, riB, 30);
+    var (hoA, hoB) = Pair(simK, Kinds.Hound, Kinds.Goblin); var hoH = Rain(simK, hoA, hoB, 20);
+    var (shA, shB) = Pair(simK, Kinds.Shieldbearer, Kinds.Goblin, 6); var shH = Rain(simK, shA, shB, 40);
+    int kinds = swH.Select(h => h.Stroke).Distinct().Count();
+    float spearThrusts = spH.Count(h => h.Stroke == StrokeKind.Thrust) / (float)spH.Count;
+    bool riderDown = riH.All(h => h.Stroke is StrokeKind.Overhead or StrokeKind.DiagR) && riH.Average(h => h.DY) < -.2f;
+    float met = (simK.BlowsMet - met0) / (float)(simK.Blows - blows0);
+    Check("a blow comes one of many ways by what strikes it, never the same twice running but a spear's thrust: a sword every way, an axe never with the point, a spear mostly with it, a rider down from the saddle, a hound with its teeth, a shield driven in close",
+        kinds >= 6 && Repeats(swH) + Repeats(axH) + Repeats(shH) == 0 && axH.All(h => h.Stroke != StrokeKind.Thrust) && spearThrusts > .6f && riderDown
+        && hoH.All(h => h.Stroke == StrokeKind.Bite) && shH.Any(h => h.Stroke == StrokeKind.Bash) && met > .9f,
+        $"sword: {Tally(swH)}; axe: {Tally(axH)}; spear: {Tally(spH)}; rider: {Tally(riH)}, coming down {riH.Average(h => h.DY):0.00}; hound: {Tally(hoH)}; shield: {Tally(shH)}; " +
+        $"{Repeats(swH) + Repeats(axH) + Repeats(shH)} repeated; {met * 100:0} % met the body along their sweep");
+    Done(swA, swB, axA, axB, spA, spB, riA, riB, hoA, hoB, shA, shB);
+
+    // where it lands is where the blade goes: down on the head from over it, across at the neck, up under the guard
+    var (hA, hB) = Pair(simK, Kinds.Swordsman, Kinds.Orc);
+    float Height(StrokeKind k) => Rain(simK, hA, hB, 12, k).Average(h => (h.Y - hB.Y) / hB.T.BodyH);
+    float hOver = Height(StrokeKind.Overhead), hSweep = Height(StrokeKind.Sweep), hRise = Height(StrokeKind.Rising);
+    // the wound runs the way the blade did: an overhead's taller than it is wide across the body, a sweep's wider
+    (float across, float up) Span(StrokeKind k, int n)
+    {
+        float sx = 0, sy = 0; int cuts = 0;
+        var plan = Bodies.Plan(hB.T, hB.Look);
+        for (int i = 0; i < n; i++)
+        {
+            hB.Wounds = null; hB.Dead = false; hB.Hp = hB.MaxHp;
+            hA.NextStroke = k; hA.StrokeFor = hB;
+            simK.Strike(hA, hB);
+            if (hB.Wounds == null || hB.Wounds.Wounds.Count > 0) continue;
+            int x0 = 999, x1 = -999, y0 = 999, y1 = -999;
+            for (int p = 0; p < BodyPlan.Parts; p++)
+            {
+                var g0 = plan.Grid[p]; var g1 = hB.Wounds.Grid[p];
+                if (g0 == null) continue;
+                for (int q = 0; q < g0.M.Length; q++)
+                {
+                    if (g0.M[q] == 0 || g0.T[q] == (byte)Tissue.Gear || g1 != null && g1.M[q] != 0) continue;
+                    int x = q % g0.SX + g0.X0, y = q / (g0.SX * g0.SZ) + g0.Y0;
+                    x0 = Math.Min(x0, x); x1 = Math.Max(x1, x); y0 = Math.Min(y0, y); y1 = Math.Max(y1, y);
+                }
+            }
+            if (x1 < x0) continue;
+            sx += x1 - x0 + 1; sy += y1 - y0 + 1; cuts++;
+        }
+        return cuts == 0 ? (0, 0) : (sx / cuts, sy / cuts);
+    }
+    var overSpan = Span(StrokeKind.Overhead, 10); var sweepSpan = Span(StrokeKind.Sweep, 10);
+    Check("a blow lands where the blade's sweep meets the body, and cuts along it: down through the head from over it, across the neck, up under the guard; an overhead wound taller than wide, a sweep's wider than tall",
+        hOver > .8f && hOver > hSweep + .1f && hSweep > hRise + .15f && overSpan.up > overSpan.across * 1.4f && sweepSpan.across > sweepSpan.up,
+        $"struck at {hOver:0.00}, {hSweep:0.00}, {hRise:0.00} of an orc's height; an overhead cut {overSpan.across:0.0} across by {overSpan.up:0.0} up, a sweep {sweepSpan.across:0.0} by {sweepSpan.up:0.0} (half-voxels)");
+    Done(hA, hB);
+
+    // a sweep at the neck can take the head off; a cut from over the head splits it instead
+    int heads = 0, split = 0, overHeads = 0;
+    for (int i = 0; i < 12; i++)
+    {
+        var (a, b) = Pair(simK, Kinds.Knight, Kinds.Goblin, Kinds.Knight.Reach + Kinds.Goblin.BodyR - 1 - i % 3 * 1.5f);
+        b.Look = i % Bodies.Looks(b.T);
+        for (int n = 0; n < 5 && !b.Dead; n++) { a.NextStroke = StrokeKind.Sweep; a.StrokeFor = b; simK.Strike(a, b); }
+        if (b.Wounds?.Wounds.Contains("отрублена голова") == true) heads++;
+        var (c, d) = Pair(simK, Kinds.Knight, Kinds.Goblin, Kinds.Knight.Reach + Kinds.Goblin.BodyR - 1 - i % 3 * 1.5f);
+        d.Look = i % Bodies.Looks(d.T);
+        for (int n = 0; n < 5 && !d.Dead; n++) { c.NextStroke = StrokeKind.Overhead; c.StrokeFor = d; simK.Strike(c, d); }
+        if (d.Wounds?.Wounds.Contains("отрублена голова") == true) overHeads++;
+        if (d.Wounds?.Wounds.Contains("разбита голова") == true) split++;
+        Done(a, b, c, d);
+    }
+    Check("a knight's sweep at the neck can take a goblin's head off; his cut from over the head splits it instead", heads >= 1 && overHeads == 0 && split >= 6,
+        $"heads off {heads} of 12 by the sweep, {overHeads} by the overhead, which split {split}");
+
+    // the same valley, the same blows: the strokes are chosen without the dice of the simulation
+    List<(StrokeKind, float)> Bout(Sim s)
+    {
+        var a = s.Spawn(Kinds.Swordsman, s.NearestStand(kx0 + 200, kz0 + 140, 2));
+        var b = s.Spawn(Kinds.Orc, s.NearestStand(kx0 + 210, kz0 + 140, 2));
+        a.X = kx0 + 200; a.Z = kz0 + 140; b.X = kx0 + 210; b.Z = kz0 + 140; a.Y = b.Y = kg; a.Facing = 0; b.Facing = MathF.PI;
+        b.Hp = b.MaxHp = 1e6f;
+        return Rain(s, a, b, 24).Select(h => (h.Stroke, h.Y)).ToList();
+    }
+    var bout1 = Bout(Field()); var bout2 = Bout(Field());
+    Check("the same valley gives the same strokes in the same order, landing in the same spots", bout1.Count == 24 && bout1.SequenceEqual(bout2),
+        $"{string.Join(" ", bout1.Take(8).Select(b => b.Item1))}…; the same {bout1.Zip(bout2).Count(p => p.First == p.Second)} of {bout1.Count}");
+
+    // one gone into strikes the way the player swung the mouse just before: down, from over the head; across to the
+    // left, a sweep; held still, the point; a spearman wishing a cut from over the head thrusts, as a spear does
+    var (pA, pB) = Pair(simK, Kinds.Swordsman, Kinds.Orc);
+    pB.Guard = true; pB.Home = pB.Cell; pB.ChainedUntil = 1e9;
+    simK.Possess(pA);
+    StrokeKind Swung(float right, float down)
+    {
+        simK.WishStrike = false;
+        simK.LookYaw = MathF.Atan2(pB.Z - pA.Z, pB.X - pA.X) - right / 2; simK.LookPitch = down / 2;
+        RunK(1.4);
+        for (int i = 0; i < 4; i++) { simK.LookYaw += right / 4; simK.LookPitch -= down / 4; simK.Step(.05f); }
+        double t0 = pA.StrokeTime;
+        simK.WishStrike = true;
+        simK.Step(.05f);
+        simK.WishStrike = false;
+        return pA.StrokeTime > t0 ? pA.Stroke : (StrokeKind)255;
+    }
+    var down = Swung(0, .3f); var left = Swung(-.35f, 0); var still = Swung(0, 0); var downLeft = Swung(-.25f, .25f);
+    simK.Unpossess(null);
+    var (qA, qB) = Pair(simK, Kinds.Spearman, Kinds.Orc);
+    qB.Guard = true; qB.Home = qB.Cell; qB.ChainedUntil = 1e9;
+    simK.Possess(qA);
+    pA = qA; pB = qB;
+    var spearDown = Swung(0, .3f);
+    simK.Unpossess(null);
+    Check("one gone into strikes the way the mouse swung just before the click: down from over the head, to the left a sweep, still the point, down and to the left the forehand; a spear thrusts whatever the swing",
+        down == StrokeKind.Overhead && left == StrokeKind.Sweep && still == StrokeKind.Thrust && downLeft == StrokeKind.DiagR && spearDown == StrokeKind.Thrust,
+        $"down {down}, left {left}, still {still}, down-left {downLeft}; the spearman down {spearDown}");
+    Done(qA, qB);
+}
+
 // ---- the grass: tufts and flowers handed to the game to draw in blades, not meshed as cubes; turf burnt black by fire
 // and by a blast, and the grass creeping back over it
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--grass")
@@ -4652,7 +4834,9 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troops")
         g.Guard = false; g.Routed = true; g.Hp = g.MaxHp = 5000; g.Home = -1;
         RunT(.5);
         float x0 = r.X, z0 = r.Z;
-        RunT(1.5);
+        // in fine ticks: a walker stops at each cell of its path for the rest of that tick, and at a twentieth of a
+        // second a gallop and one a third faster may both come to four ticks a cell
+        for (int i = 0; i < 150; i++) simT.Step(.01f);
         float d = Metres(r.X, r.Z, x0, z0) / 1.5f;
         Gone(r); Gone(g);
         RunT(.5);
@@ -4702,7 +4886,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troops")
     gobP.Hp = gobP.MaxHp = 50000;
     flown.Clear();
     bool burnt = false;
-    for (int i = 0; i < 900 && !(simT.Pitched > 0 && burnt); i++) { Watch(.05); burnt |= gobP.Burn > 0; }
+    // a dozen throws at the least: a pot is one throw in four, and the first may as well be one
+    for (int i = 0; i < 900 && !(simT.Pitched > 0 && burnt && flown.Count >= 12); i++) { Watch(.05); burnt |= gobP.Burn > 0; }
     int potsP = flown.Count(a => a.Kind == Shot.FirePot), stonesP = flown.Count(a => a.Kind == Shot.Stone);
     Check("with the fire pots a slinger now and then throws a pot of burning pitch: the raider catches fire and so does the ground about it",
         potsP >= 1 && stonesP >= potsP && simT.Pitched > 0 && simT.Burning.Count > 0 && burnt,

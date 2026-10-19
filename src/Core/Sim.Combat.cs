@@ -83,19 +83,33 @@ public sealed partial class Sim
     /// <summary>Close enough to strike, with nothing solid between them: no hitting through walls.</summary>
     public bool InReach(Unit a, Unit b) => Dist(a, b) <= ReachOf(a) + b.T.BodyR && Sight(a, b);
 
+    /// <summary>
+    /// A blow: the stroke the striker drew back for (chosen at its last blow, or now at one it has not struck before)
+    /// is laid out against the one struck, and wounds it where the blade comes to its body, cutting along the edge's
+    /// sweep — down through the head from over it, across the neck from the side — or driving the point, the shield or
+    /// the club in. The next stroke is chosen at once, for the eye to see it drawn back for.
+    /// </summary>
     internal void Strike(Unit a, Unit b)
     {
         a.Swing = 1;
-        // the blow comes from the striker's hand at the height it holds its weapon, at a spot on the body near that height
         var (cut, depth, reach) = WeaponOf(a.T);
-        float sa = a.Leader ? 1.15f : 1, sb = b.Leader ? 1.15f : 1;
-        float hand = a.Y + a.T.BodyH * sa * (a.T.Team == Team.Wild ? .3f : .62f);
-        float aim = Math.Clamp(hand + (float)(Rng.NextDouble() - .45) * b.T.BodyH * sb * .5f, b.Y + 1, b.Y + b.T.BodyH * sb - .5f);
-        float side = (float)(Rng.NextDouble() - .5) * b.T.BodyR * 1.6f;
-        float dx = b.X - a.X, dz = b.Z - a.Z, l = MathF.Max(.01f, MathF.Sqrt(dx * dx + dz * dz));
-        float tx = b.X - dz / l * side, tz = b.Z + dx / l * side;
+        // the same two draws as ever: now how high the stroke comes, and to which side of the middle
+        float up = (float)Rng.NextDouble(), side = (float)Rng.NextDouble();
+        var k = a.StrokeFor == b ? a.NextStroke : Choose(a, b);
+        LayStroke(a, b, k, up, side, out var at, out var dir, out var root, out var edge);
+        (cut, depth, reach) = Strokes.CutOf(k, cut, depth, reach);
         b.HurtBy = a;
-        float share = Kinds.IsEngine(b.T) ? EngineShare(false) : Wound(b, cut, depth, reach, a.X, hand, a.Z, tx - a.X, aim - hand, tz - a.Z);
+        bool engine = Kinds.IsEngine(b.T);
+        // the wound is cut by the whole blade coming on along its way, from a little short of where it met the body
+        var from = root - dir * 4;
+        float share = engine ? EngineShare(false) : Wound(b, cut, depth, reach, from.X, from.Y, from.Z, dir.X, dir.Y, dir.Z, edge.X, edge.Y, edge.Z);
+        a.Glanced = !engine && LastMat != Mat.Air && (LastCut == 0 || LastFlesh == 0 && share < .3f);
+        if (k == StrokeKind.Bash) Staggered(a, b);
+        Smote?.Invoke(new Smiting(a, b, engine || LastMat == Mat.Air ? at : LastAt, dir, engine ? Mat.Board : LastMat, engine ? 0 : LastFlesh, k, a.Glanced));
+        // the next, drawn back for while the arm comes round again
+        a.Strokes++;
+        a.NextStroke = Choose(a, b);
+        a.StrokeFor = b;
         float dmg = a.T.Damage * (.8f + (float)Rng.NextDouble() * .4f) * share * Oath(a) * SergeantArm(a) * TroopArm(a, b, out bool charge) * ShieldWall(b);
         // told to take them alive: the blow that would bring a raider down to a quarter of itself (three fifths in
         // chains), or kill it, fells it instead, to be bound where it lies
