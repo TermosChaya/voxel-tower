@@ -38,7 +38,8 @@ public partial class FirstPerson : Node3D
     public void Init(Main m)
     {
         _m = m;
-        _cam = new Camera3D { Fov = 74, Near = .015f, Far = 170, Current = false };
+        // it sees out over the valley to the far land's rim
+        _cam = new Camera3D { Fov = 74, Near = .015f, Far = 480, Current = false };
         AddChild(_cam);
         _mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/voxel.gdshader") };
         _mat.SetShaderParameter("grid", (float)BodyPlan.Sub);
