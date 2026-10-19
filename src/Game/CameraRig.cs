@@ -85,8 +85,12 @@ public partial class CameraRig : Node3D
     /// <summary>Closer (factor over 1) or further.</summary>
     public void ZoomBy(float factor) => _zoom = Math.Clamp(_zoom * factor, MinZoom, MaxZoom);
 
+    /// <summary>Held: the view is someone's eyes now (first person), and the keys and the mouse do not move it.</summary>
+    public bool Held;
+
     public override void _UnhandledInput(InputEvent e)
     {
+        if (Held) return;
         // a trackpad: pinch, or two fingers up and down
         if (e is InputEventMagnifyGesture mg) { ZoomBy(mg.Factor); return; }
         if (e is InputEventPanGesture pg) { ZoomBy(MathF.Pow(1.07f, -pg.Delta.Y)); return; }
@@ -143,6 +147,7 @@ public partial class CameraRig : Node3D
         float sp = 6f / _zoom * dt;
         float fx = -MathF.Sin(_yaw), fz = -MathF.Cos(_yaw), rx = MathF.Cos(_yaw), rz = -MathF.Sin(_yaw);
         float mx = 0, mz = 0;
+        if (Held) goto settle;
         if (Down(Key.W) || Down(Key.Up)) { mx += fx; mz += fz; }
         if (Down(Key.S) || Down(Key.Down)) { mx -= fx; mz -= fz; }
         if (Down(Key.D) || Down(Key.Right)) { mx += rx; mz += rz; }
@@ -151,6 +156,7 @@ public partial class CameraRig : Node3D
         if (Down(Key.Q)) _yaw += 1.6f * dt;
         if (Down(Key.E)) _yaw -= 1.6f * dt;
 
+        settle:
         float a = 1 - MathF.Exp(-dt * 14f);
         _cx += (_tx - _cx) * a; _cz += (_tz - _cz) * a;
         _cyaw += (_yaw - _cyaw) * a; _cpitch += (_pitch - _cpitch) * a;

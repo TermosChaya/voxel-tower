@@ -373,6 +373,16 @@ public partial class Commander : Node
         return true;
     }
 
+    /// <summary>Into the one chosen, to see with its eyes (only one may be chosen).</summary>
+    public void Possess()
+    {
+        Unit one = null;
+        int n = 0;
+        foreach (var u in _m.Selected) if (!u.Dead) { one = u; n++; }
+        if (n != 1) { _m.Hud.Float("выберите одного из своих", Ornament.Blood); return; }
+        if (!_m.FP.Enter(one)) _m.Hud.Float("в него сейчас не войти", Ornament.Blood);
+    }
+
     /// <summary>The citadel's muster in the console; asked again while it is open, the view goes to the citadel.</summary>
     public void OpenKeep()
     {
@@ -438,6 +448,7 @@ public partial class Commander : Node
             case Key.T: Alarm(); break;
             case Key.J: ToggleTrails(); break;
             case Key.K: OpenKeep(); break;
+            case Key.I: Possess(); break;
             default: return;
         }
         GetViewport().SetInputAsHandled();

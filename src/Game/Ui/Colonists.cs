@@ -50,7 +50,7 @@ public partial class ColonistBar : Control
         float width = Math.Max(0, x - Gap);
         Size = new Vector2(width, _card * 1.22f + 4);
         Position = new Vector2(From + (room - width) / 2, Top);
-        Visible = _pawns.Count > 0;
+        Visible = _pawns.Count > 0 && !_m.Hud.InFirstPerson;
         QueueRedraw();
     }
 

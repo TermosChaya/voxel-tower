@@ -3902,6 +3902,92 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--grace")
         $"cast: {whirl ?? "yes"}; taken up {flungW} of 4; the farthest thrown {movedW:0.0} m; ours {(ours.Airborne != null ? "in the air" : "on the ground")}; whirls left {simG.Whirls.Count}");
 }
 
+// ---- going into one of ours: it goes where it is told, strikes and shoots where it looks, digs and lays
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--possess")
+{
+    Console.WriteLine();
+    var mpQ = new MapParams();
+    var wQ = new VoxelWorld(mpQ.SizeX, mpQ.SizeY, mpQ.SizeZ);
+    var siteQ = MapGen.Generate(wQ, mpQ);
+    wQ.Compact();
+    var simQ = new Sim(wQ, siteQ);
+    simQ.Waves.Countdown = 1e9; simQ.WildTarget = 0;
+    void RunQ(double seconds) { for (double t = 0; t < seconds; t += .05) simQ.Step(.05f); }
+    var (gxQ, _, gzQ) = simQ.Nav.Feet(simQ.Gate);
+    // flat open ground a little west of the citadel's door
+    int ox = (int)gxQ - 120, oz = (int)gzQ + 80;
+    var sword = simQ.Spawn(Kinds.Swordsman, simQ.NearestStand(ox, oz, 2));
+    bool took = simQ.Possess(sword);
+    float x0 = sword.X, z0 = sword.Z;
+    simQ.LookYaw = 0; simQ.WishX = 1; simQ.WishZ = 0;
+    RunQ(2);
+    simQ.WishX = 0;
+    float walked = (sword.X - x0) / VoxelWorld.PerMetre, sideways = MathF.Abs(sword.Z - z0) / VoxelWorld.PerMetre;
+    Check("one gone into goes where it is told and nowhere else: two seconds forward", took && simQ.Possessed == sword && walked > 3 && sideways < .5f && sword.Path == null,
+        $"possessed {took}; went {walked:0.0} m forward, {sideways:0.0} m aside");
+    // a wall across the way stops it; a ledge a metre high it steps up onto
+    int wx = (int)sword.X + 24, wz = (int)sword.Z;
+    int wtop = Shapes.LevelTop(wQ, wx, wz, 24);
+    simQ.InstantLabour = true;
+    simQ.DesignateBuild(Shapes.Line(wQ, siteQ, wx, wz - 40, wx, wz + 40, new Stroke { Mat = Mat.Stone, Width = 8, Height = 24, Level = true }, wtop));
+    simQ.InstantLabour = false;
+    RunQ(.5);
+    simQ.WishX = 1;
+    RunQ(4);
+    simQ.WishX = 0;
+    bool stopped = sword.X < wx - 2;
+    Check("a wall across its way stops one gone into", stopped, $"at x {sword.X:0}, the wall's face at {wx - 4}");
+    // a goblin before it: the blow finds it
+    var gob = simQ.Spawn(Kinds.Goblin, simQ.NearestStand((int)sword.X - 10, (int)sword.Z, 2));
+    gob.Guard = true; gob.Home = gob.Cell;
+    simQ.LookYaw = MathF.PI;
+    simQ.WishStrike = true;
+    RunQ(1.5);
+    simQ.WishStrike = false;
+    Check("one gone into strikes whoever of the horde stands before it", gob.Dead || gob.Hp < gob.MaxHp, $"the goblin {(gob.Dead ? "dead" : $"{gob.Hp:0} of {gob.MaxHp:0}")}");
+    gob.Dead = true; gob.DiedAt = -999;
+    // an archer: the arrow goes along its eyes to the goblin it looks at
+    var bow = simQ.Spawn(Kinds.Archer, simQ.NearestStand(ox, oz + 60, 2));
+    simQ.Possess(bow);
+    bool letGo = simQ.Possessed == bow && sword.Why == "";
+    var mark = simQ.Spawn(Kinds.Goblin, simQ.NearestStand((int)bow.X - 80, (int)bow.Z + 6, 2));
+    mark.Guard = true; mark.Home = mark.Cell;
+    RunQ(.2);
+    float tdx = mark.X - bow.X, tdz = mark.Z - bow.Z, tdy = mark.Y + mark.T.BodyH * .55f - (bow.Y + bow.T.BodyH * .88f);
+    simQ.LookYaw = MathF.Atan2(tdz, tdx); simQ.LookPitch = MathF.Atan2(tdy, MathF.Sqrt(tdx * tdx + tdz * tdz));
+    int shots0 = simQ.Shots;
+    simQ.WishStrike = true;
+    for (int t = 0; t < 60 && !(mark.Dead || mark.Hp < mark.MaxHp); t++) RunQ(.1);
+    simQ.WishStrike = false;
+    var sighted = simQ.Sighted(bow, 200, out float along);
+    Check("an archer gone into looses along its eyes, and the arrow strikes the goblin it looks at; letting go of the swordsman before",
+        letGo && simQ.Shots > shots0 && (mark.Dead || mark.Hp < mark.MaxHp), $"let go {letGo}; {simQ.Shots - shots0} arrows, the goblin {(mark.Dead ? "dead" : $"{mark.Hp:0} of {mark.MaxHp:0}")}; sighted {(sighted == mark ? "the goblin" : sighted?.T.Key ?? "nothing")} {along / VoxelWorld.PerMetre:0.0} m");
+    mark.Dead = true; mark.DiedAt = -999;
+    // a worker: the pick takes out the earth it looks at, the trowel lays stone where it looks
+    var dig = simQ.Spawn(Kinds.Worker, simQ.NearestStand(ox, oz - 60, 2));
+    simQ.Possess(dig);
+    simQ.LookYaw = 0; simQ.LookPitch = -.75f;
+    double earth0 = simQ.Stock[Stockpile.Earth], stone0 = simQ.Stock[Stockpile.Stone];
+    int below0 = wQ.SurfAt((int)dig.X + 10, (int)dig.Z);
+    simQ.WishStrike = true;
+    RunQ(3);
+    simQ.WishStrike = false;
+    double dug = simQ.Stock[Stockpile.Earth] - earth0;
+    simQ.LookPitch = -.6f;
+    simQ.WishLay = true;
+    RunQ(3);
+    simQ.WishLay = false;
+    double laid = stone0 - simQ.Stock[Stockpile.Stone];
+    Check("a worker gone into digs out the earth it looks at with the pick, and lays stone where it looks",
+        dug > 100 && laid > 50, $"earth +{dug:0} voxels, stone laid {laid:0} voxels");
+    // and when it falls, the player is out of it
+    string why = null;
+    simQ.Unpossessed += w => why = w;
+    simQ.Hurt(dig, null, 1000, "test");
+    RunQ(.1);
+    Check("when the one gone into falls, the player is out of it", simQ.Possessed == null && why != null && why.Contains("пал"), $"«{why}»");
+}
+
 // ---- the citadel's muster: taken on for gold, made ready in turn, as many as there are places for
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--muster")
 {

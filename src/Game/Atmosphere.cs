@@ -30,6 +30,8 @@ public partial class Atmosphere : Node3D
     public Godot.Environment Env { get; private set; }
     /// <summary>The embers hang around whatever this camera looks at.</summary>
     public CameraRig Follow;
+    /// <summary>How much nearer the fog begins (Godot units): seen from someone's eyes the valley is near, not eighty units off.</summary>
+    public float FogShift;
     GpuParticles3D _embers, _rain;
     /// <summary>How far the weather has come on, as shown: rain and fog, easing in and out.</summary>
     float _wet, _fog;
@@ -284,8 +286,8 @@ public partial class Atmosphere : Node3D
         _sun.LightEnergy *= 1 - .45f * _wet - .3f * _fog;
         var fogDay = new Color(0.114f, 0.086f, 0.149f).Lerp(new Color(.34f, .35f, .38f), _fog * .8f + _wet * .3f);
         Env.FogLightColor = fogDay.Lerp(new Color(.03f, .035f, .07f), dark);
-        Env.FogDepthBegin = Mathf.Lerp(84, 22, _fog) - 20 * _wet;
-        Env.FogDepthEnd = Mathf.Lerp(170, 80, _fog) - 30 * _wet;
+        Env.FogDepthBegin = Mathf.Lerp(84, 22, _fog) - 20 * _wet + FogShift;
+        Env.FogDepthEnd = Mathf.Lerp(170, 80, _fog) - 30 * _wet + FogShift * .6f;
         Env.FogDensity = Mathf.Lerp(.55f, .82f, Math.Max(_fog, _wet * .5f));
         _skyMat.SetShaderParameter("amb_sky", new Vector3(0.254f, 0.246f, 0.578f).Lerp(new Vector3(.09f, .11f, .3f).Lerp(new Vector3(.42f, .07f, .06f), _blood), dark));
         _skyMat.SetShaderParameter("bg_top", new Vector3(0.027f, 0.017f, 0.040f).Lerp(new Vector3(.006f, .008f, .02f), dark));

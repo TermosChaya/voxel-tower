@@ -369,6 +369,9 @@ public partial class Inspector : Control
         row.AddChild(Btn("За работу", "За работу\nВыбранные снова сами ищут работу по разметке.", () => _m.Command.ReleaseSelected(), 92));
         row.AddChild(Btn("Стоять", "Стоять здесь\nВыбранные остаются на месте; для солдат это место становится постом.", () => _m.Command.HoldSelected(), 70));
         row.AddChild(AlarmButton(70));
+        if (chosen.Count == 1)
+            row.AddChild(Btn("Вселиться · I", "Вселиться (I)\nВы — в нём: видите его глазами и делаете его руками. WASD — идти, мышь — смотреть, ЛКМ — удар, " +
+                "выстрел или кирка, ПКМ — класть (рабочий), Esc — выйти.", () => _m.FP.Enter(chosen[0]), 104));
         var duty = new List<Button>();
         // priests bring nothing in
         bool labour = chosen.Exists(u => !u.T.Prays);

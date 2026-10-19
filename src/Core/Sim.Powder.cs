@@ -220,7 +220,7 @@ public sealed partial class Sim
         // nobody will get there: ours near it walk off
         foreach (var u in Units)
         {
-            if (u.Dead || u.Inside || u.Airborne != null || u.Team != Team.Player || u.Captor != null || u.Shunning == c || u == c.Defuser) continue;
+            if (u.Dead || u.Inside || u.Airborne != null || u == Possessed || u.Team != Team.Player || u.Captor != null || u.Shunning == c || u == c.Defuser) continue;
             if (ToCharge(u.X, u.Y + 4, u.Z, c) > Danger) continue;
             if (u.Defusing != null) { u.Defusing = null; }
             u.Shunning = c;
@@ -244,7 +244,7 @@ public sealed partial class Sim
         var free = new List<Unit>();
         foreach (var u in Units)
         {
-            if (u.Dead || u.Inside || u.Airborne != null || u.Team != Team.Player || u.Captor != null || u.T == Kinds.Risen || u.T.Prays) continue;
+            if (u.Dead || u.Inside || u.Airborne != null || u == Possessed || u.Team != Team.Player || u.Captor != null || u.T == Kinds.Risen || u.T.Prays) continue;
             if (!(u.T.Work < 1 || u.Militia) || u.Mending || u.Defusing != null || u.State == UnitState.Fight || !HasMainHand(u)) continue;
             if (ToCharge(u.X, u.Y + 4, u.Z, c) > 30 * VoxelWorld.PerMetre) continue;
             free.Add(u);

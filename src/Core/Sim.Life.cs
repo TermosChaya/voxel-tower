@@ -123,7 +123,7 @@ public sealed partial class Sim
         float bd = 26 * 26;
         foreach (var v in Units)
         {
-            if (v == u || v.Dead || v.Inside || v.Team != Team.Player || v.State != UnitState.Idle || v.Mate != null) continue;
+            if (v == u || v.Dead || v.Inside || v == Possessed || v.Team != Team.Player || v.State != UnitState.Idle || v.Mate != null) continue;
             if (v.Pastime is Pastime.Stroll or Pastime.Talk or Pastime.Watch || v.Path != null && v.PathI < v.Path.Count) continue;
             float dx = v.X - u.X, dz = v.Z - u.Z, d = dx * dx + dz * dz;
             if (d < bd && MathF.Abs(v.Y - u.Y) < 8) { bd = d; best = v; }

@@ -170,13 +170,15 @@ public sealed partial class Sim
             if (u.Airborne != null) continue;
             u.Cooldown -= dt;
             Settle(u);
-            if (u.Team == Team.Player) PawnTick(u, dt);
+            if (u == Possessed) PossessedTick(u, dt);
+            else if (u.Team == Team.Player) PawnTick(u, dt);
             else if (u.Team == Team.Horde) RaiderTick(u, dt);
             else WildTick(u, dt);
         }
         Separate();
         Unstack();
         TickArrows(dt);
+        KeepPossession();
         TickBleeding(dt);
         Units.RemoveAll(u => u.Dead && Time - u.DiedAt > 30);
         if (KeepHp <= 0 && !Over) { Over = true; Say("Цитадель пала.", 3); }
@@ -320,7 +322,7 @@ public sealed partial class Sim
         _stood.Clear();
         foreach (var u in Units)
         {
-            if (u.Dead || u.Inside || u.Airborne != null || u.State != UnitState.Idle || u.Path != null && u.PathI < u.Path.Count || Nav.Ladder[u.Cell] != 0) continue;
+            if (u.Dead || u.Inside || u.Airborne != null || u == Possessed || u.State != UnitState.Idle || u.Path != null && u.PathI < u.Path.Count || Nav.Ladder[u.Cell] != 0) continue;
             if (u.Team == Team.Player && u.Site >= 0) continue;
             if (_stood.TryAdd(u.Cell, u)) continue;
             int c = FreeBeside(u);
@@ -354,7 +356,7 @@ public sealed partial class Sim
     void Nudge(Unit u, float dx, float dz)
     {
         u.X += dx; u.Z += dz;
-        if (u.Path != null && u.PathI < u.Path.Count) return;
+        if (u.Path != null && u.PathI < u.Path.Count || u == Possessed) return;
         float r = Math.Min(u.T.BodyR, NavGrid.CS / 2f - .5f);
         int x0 = Nav.I(u.Cell) << NavGrid.Shift, z0 = Nav.K(u.Cell) << NavGrid.Shift;
         u.X = Math.Clamp(u.X, x0 + r, x0 + NavGrid.CS - r);

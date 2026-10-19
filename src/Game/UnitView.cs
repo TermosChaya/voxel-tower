@@ -106,9 +106,22 @@ public partial class UnitView : Node3D
         }
     }
 
+    /// <summary>The one whose eyes the view is (first person): not drawn, but posed all the same; and the figures kept fine.</summary>
+    public int HiddenId = -1;
+    public bool ForceNear;
+
+    /// <summary>The body's place and turn this frame of one drawn (or hidden), for the eyes of first person.</summary>
+    public bool TryBody(int id, out Transform3D body)
+    {
+        if (_looks.TryGetValue(id, out var look) && look.Seen) { body = look.Body; return true; }
+        body = Transform3D.Identity;
+        return false;
+    }
+
     /// <summary>How many pixels of the window a voxel takes: under three, the figures go over to whole voxels.</summary>
     void Distance()
     {
+        if (ForceNear) { if (_far) { _far = false; foreach (var k in _kinds.Values) Dress(k); } return; }
         float px = GetTree().Root.Size.Y / Math.Max(.01f, _m.Rig.Cam.Size) * VoxelWorld.Vox;
         bool far = _far ? px < 3.6f : px < 3.2f;
         if (far == _far) return;
@@ -147,7 +160,7 @@ public partial class UnitView : Node3D
         look_xf.Clear();
         foreach (var k in _kinds.Values) k.Count = 0;
         // those in the citadel are not to be seen
-        foreach (var u in sim.Units) if (u.Wounds == null && !u.Inside) KindOf(u).Count++;
+        foreach (var u in sim.Units) if (u.Wounds == null && !u.Inside && u.Id != HiddenId) KindOf(u).Count++;
         foreach (var k in _kinds.Values) { if (k.Count > k.Cap) Grow(k, k.Count); k.Count = 0; }
         _alive.Clear();
         foreach (var u in sim.Units)
@@ -158,6 +171,7 @@ public partial class UnitView : Node3D
             if (!_looks.TryGetValue(u.Id, out var look)) _looks[u.Id] = look = new Look();
             Track(u, look, dt);
             var tint = Pose(u, k.Fig, look);
+            if (u.Id == HiddenId) { if (_own.TryGetValue(u.Id, out var hid)) foreach (var part in hid.Parts) if (part != null) part.Visible = false; continue; }
             if (u.Wounds == null)
             {
                 int o = k.Count++ * 16;

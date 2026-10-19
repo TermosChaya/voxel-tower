@@ -57,6 +57,11 @@ public partial class Main : Node3D
     public OrdersView Marks { get; private set; }
     public ZoneView Areas { get; private set; }
     public Commander Command { get; private set; }
+    /// <summary>First person: the player in one of ours.</summary>
+    public FirstPerson FP { get; private set; }
+    /// <summary>The horde's ways and our archers' cover, drawn over the field: put away in first person.</summary>
+    public Node3D Trails { get; private set; }
+    public Node3D Cover { get; private set; }
     /// <summary>The light of the valley: the sun through the day, the moon at night, the lamps.</summary>
     public Atmosphere Atmos { get; private set; }
 
@@ -180,7 +185,7 @@ public partial class Main : Node3D
         if (_demo && _pose == "shaman") ClearTrees(Site.KeepX - Site.KeepR - 240, Site.KeepZ - 90, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 90);
         if (_demo && _pose == "spells") ClearTrees(Site.KeepX - Site.KeepR - 260, Site.KeepZ - 100, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
         if (_demo && _pose == "traps") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
-        if (_demo && _pose is "blast" or "grip" or "wind" or "hexes" or "sorcerers" or "wonders" or "powder" or "charge" or "stones" or "topple" or "roll" or "crush" or "drops") ClearTrees(Site.KeepX - Site.KeepR - 300, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 140);
+        if (_demo && _pose is "blast" or "grip" or "wind" or "hexes" or "sorcerers" or "wonders" or "fp" or "powder" or "charge" or "stones" or "topple" or "roll" or "crush" or "drops") ClearTrees(Site.KeepX - Site.KeepR - 300, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 140);
         World.Compact();
         save?.Valley(World, Site);
         double genMs = sw.Elapsed.TotalMilliseconds;
@@ -230,10 +235,10 @@ public partial class Main : Node3D
         Units = new UnitView();
         AddChild(Units);
         Units.Init(this);
-        var trails = new TrailView();
+        var trails = new TrailView(); Trails = trails;
         AddChild(trails);
         trails.Init(this);
-        var cover = new CoverView();
+        var cover = new CoverView(); Cover = cover;
         AddChild(cover);
         cover.Init(this);
         var fire = new FireView();
@@ -260,11 +265,15 @@ public partial class Main : Node3D
         Command = new Commander();
         AddChild(Command);
         Command.Init(this);
+        // last, so it hears the keys and the mouse before anything else when the player is in one of ours
+        FP = new FirstPerson();
+        AddChild(FP);
         Tools.Init(this);
         Rig.RightClick += p => { if (Tools.Tool != Tool.None) Tools.Cancel(); else Command.OrderTo(p); };
 
         if (!_selfTest && !_demo) LoadBlueprints();
         Hud.Init(this);
+        FP.Init(this);
 
         Sim.Said += (text, kind, x, z) => Hud.Log(text, (Hud.Kind)Math.Clamp(kind, 0, 3), x, z);
         // the chronicle in the self-test's log, for when something goes wrong
@@ -1013,6 +1022,26 @@ public partial class Main : Node3D
         Check("map click moves the view", Rig.Target.DistanceTo(before) > 1, $"{before} → {Rig.Target}");
         await Frames(10);
         Check("chunks re-meshed", World.DirtyCount == 0, $"{View.Triangles()} triangles");
+        // first person: one of ours chosen (a swordsman if one is about), I goes into it: the view is its eyes, the frame of
+        // the game put away; it walks where it is told, and Esc lets it go, the view back over the valley and it chosen
+        var mine = Sim.Units.Find(u => Sim.CanPossess(u) && u.T == Kinds.Swordsman) ?? Sim.Units.Find(u => Sim.CanPossess(u) && u.T.Work < 1) ?? Sim.Units.Find(Sim.CanPossess);
+        Selected.Clear(); Selected.Add(mine); Hud.OnSelectionChanged();
+        KeyPress(Key.I);
+        bool into = FP.On && FP.Unit == mine && Sim.Possessed == mine && FP.Cam.Current && Hud.InFirstPerson && Rig.Held && Units.HiddenId == mine.Id;
+        float fx0 = mine.X, fz0 = mine.Z;
+        FP.Face(mine.Facing, 0);
+        FP.TestMove = new Vector2(0, 1);
+        await Frames(2);
+        Advance(2);
+        FP.TestMove = Vector2.Zero;
+        await Frames(2);
+        float strode = MathF.Sqrt((mine.X - fx0) * (mine.X - fx0) + (mine.Z - fz0) * (mine.Z - fz0)) / VoxelWorld.PerMetre;
+        FP._Input(new InputEventKey { PhysicalKeycode = Key.Escape, Keycode = Key.Escape, Pressed = true });
+        await Frames(2);
+        bool outOf = !FP.On && Sim.Possessed == null && Rig.Cam.Current && !Hud.InFirstPerson && !Rig.Held && Units.HiddenId < 0 && Selected.Contains(mine);
+        Check("I goes into the one chosen and the view is its eyes; it walks where it is told; Esc lets it go and the view goes back over the valley",
+            into && strode > 2 && outOf, $"in {into}, walked {strode:0.0} m, out {outOf}");
+
         // the citadel's muster: a click on the citadel opens it; a worker taken on is paid for at once and comes out of
         // its door only when made ready
         Sim.Stock.Gold = 500;
@@ -1063,6 +1092,7 @@ public partial class Main : Node3D
         if (_pose == "captives") { Captives(); return; }
         if (_pose == "spells") { Spellwork(); return; }
         if (_pose == "wonders") { Wonders(); return; }
+        if (_pose == "fp") { Eyes(); return; }
         if (_pose == "shaman") { Hexing(); return; }
         if (_pose == "blast") { Blasting(); return; }
         if (_pose == "grip") { Gripping(); return; }
@@ -1478,6 +1508,34 @@ public partial class Main : Node3D
         }
         Paused = true;
         Rig.SetAt(w.WX(cx), w.WY(ground + 8), w.WZ(cz), -.62f, .5f, 1.7f);
+        Hud.Refresh();
+    }
+
+    /// <summary>
+    /// First person: one of ours gone into on the field west of the citadel, a band coming at it — a swordsman with his
+    /// sword up; with --look=1 an archer drawing on a goblin; with --look=2 a worker with the pick at the ground.
+    /// </summary>
+    void Eyes()
+    {
+        var sim = Sim; var w = World;
+        sim.Waves.Countdown = 1e9;
+        int cx = Site.KeepX - Site.KeepR - 150, cz = Site.KeepZ + 10;
+        Unit Raider(UnitType t, int dx, int dz) { var u = sim.Spawn(t, sim.NearestStand(cx + dx, cz + dz, t.Move.Height)); u.Guard = true; u.Home = u.Cell; return u; }
+        var kind = _look == 1 ? Kinds.Archer : _look == 2 ? Kinds.Worker : Kinds.Swordsman;
+        var me = sim.Spawn(kind, sim.NearestStand(cx + 40, cz, 2));
+        foreach (var (t, dx, dz) in _look == 1
+            ? new[] { (Kinds.Goblin, -90, 6), (Kinds.Orc, -110, -20), (Kinds.Goblin, -120, 24), (Kinds.Troll, -150, 0) }
+            : new[] { (Kinds.Goblin, 26, 4), (Kinds.Orc, 12, -12), (Kinds.Goblin, 6, 16), (Kinds.Troll, -14, 2), (Kinds.Goblin, -4, -26) })
+            Raider(t, dx, dz);
+        Advance(.3);
+        FP.Enter(me);
+        var aim = sim.Units.Find(u => u.Team == Team.Horde && !u.Dead && u.T == Kinds.Goblin);
+        float tdx = aim.X - me.X, tdz = aim.Z - me.Z;
+        FP.Face(MathF.Atan2(tdz, tdx), _look == 2 ? -.62f : _look == 1 ? .02f : -.05f);
+        if (_look == 2) { sim.WishStrike = true; Advance(1.2); }
+        else if (_look == 1) { sim.WishStrike = true; Advance(.35); sim.WishStrike = false; Advance(.08); }
+        else { sim.WishStrike = true; Advance(.2); }
+        Paused = true;
         Hud.Refresh();
     }
 

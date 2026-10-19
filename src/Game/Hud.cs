@@ -31,6 +31,7 @@ public partial class Hud : CanvasLayer
         "Лица дружины под верхней балкой: щелчок — выбрать, ещё раз — показать, Shift — добавить. Что с выбранным и какие работы ему велены — посередине внизу.\n" +
         "Вкладки на балке: задачи, летопись, чертежи, работы (кто что делает и в каком порядке, 1 — первым делом), орда.\n" +
         "Пробел — позвать орду раньше (она меньше узнает о вас), P — пауза, Tab — скорость, T — тревога, J — пути орды.\n" +
+        "K или щелчок по цитадели — набор войска. I — вселиться в выбранного: WASD — идти, мышь — смотреть, ЛКМ — удар, выстрел или кирка, ПКМ — класть, Esc — выйти.\n" +
         "Ctrl+1…5 — запомнить выбранных отрядом, Shift+1…5 — выбрать отряд (дважды — показать).\n" +
         "ПКМ тянет карту, колесо — масштаб, СКМ или Q/E — поворот, WASD — сдвиг, Y — вид сверху, H — вернуть вид.\n" +
         "Ctrl и + или − — интерфейс крупнее или мельче, Ctrl+0 — как был (на Mac — ⌘).";
@@ -309,12 +310,30 @@ public partial class Hud : CanvasLayer
         _envoy.Refresh();
     }
 
+    /// <summary>In first person: the frame of the game is put away; the chronicle's toasts, the floats and the menu stay.</summary>
+    public bool InFirstPerson { get; private set; }
+
+    public void FirstPerson(bool on)
+    {
+        InFirstPerson = on;
+        foreach (CanvasItem c in new CanvasItem[] { _overlay, _console, _drop, _beam, _clockPanel, _help, _menuButton, _colonists, _tag, _envoy }) c.Visible = !on;
+        if (on) _drop.Close();
+    }
+
     public override void _Process(double delta)
     {
         if (_stores == null) return;
         _clock += delta;
         _refreshAt -= delta;
         var vp = GetViewport().GetVisibleRect().Size;
+        if (InFirstPerson)
+        {
+            // only the toasts, in the upper corner, out of the sight
+            _toasts.Position = new Vector2(24, 20);
+            _tag.Visible = false;
+            if (_refreshAt <= 0) _refreshAt = .2;
+            return;
+        }
         // the beam's furniture: the tabs at the left, the clock hanging at the right, the stores between
         _clockPanel.Position = new Vector2(vp.X - WaveClock.W - 98, 0);
         _help.Position = new Vector2(vp.X - 50, 1);

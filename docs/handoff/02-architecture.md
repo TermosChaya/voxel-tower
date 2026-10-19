@@ -234,6 +234,17 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   вокруг своей длины (`AX/AZ` вдоль, `Spin`); падает, катится (`BakeLog`).
 - `Sim.Shelter.cs` — тревога и убежища: `Alarm`, `RaiseAlarm`/`StandDown`, `TakeShelter`, `RefugeFor`, `ShelterCells`,
   `Enter`/`Leave`/`Indoors` (`Unit.Inside` — в цитадели, вне мира), `TickShelter` (налётчик у двери).
+- `Sim.Possess.cs` — вселение: `Possessed`, намерения игрока `WishX/WishZ` (вектор в вокселях), `WishRun`,
+  `LookYaw/LookPitch`, `WishStrike` (ЛКМ держится), `WishLay`, `WishClimb` (±1), `LayMat`; `CanPossess`, `Possess` (снимает
+  с работы, цели, обезвреживания; `Why` = «в нём игрок»), `Unpossess(why)` + событие `Unpossessed` (солдату пост — где
+  оставили), `KeepPossession` (в конце `StepWorld`: пал, в цитадели, схвачен). `PossessedTick` вместо `PawnTick` (крючок в
+  цикле `StepWorld`): `StepTo` — шаг в своей клетке или в соседнюю как у `PathFinder` (уровень, вверх до `Climb`, вниз до
+  `Drop`, `StepsOk`, диагональ — только если открыты обе стороны, `Knock` ворот), скольжение вдоль стен (x и z отдельно),
+  `ClimbBy` — лестница (в упор — сама), Y плавно к `Floor`; `Blow` — удар `Strike` по ближнему впереди (конус, `Sight`) или
+  `Loose` — стрела по лучу глаз (`Gaze`; `Sighted` — цилиндры тел, `Raycast` — мир; стрела `Arrow` с `Target` или в точку,
+  огненная — с `At`), `Pick` — укус шаром `Bite` вокселей за `Dig/DigPace` (как `Do`), `Trowel` — кирпич 2×2×2 на сетке
+  двух, `Footed`, из запасов. Исключения: `Unstack`, `Nudge` (не держит в клетке), `TryTalk`, `Runner`/`Tend` пороха.
+  Не сохраняется.
 - `Sim.Wonders.cs` — вершины кругов: `Shake` (Землетрясение: `SiegeWorksIn` — лестницы и настилы кусками по клеткам
   через `Loose` вверх и в стороны; налётчики — `Fling` вверх и вразброс, лёгкие выше; машинам 120; событие `Quaked`),
   `Fallstar` (Падучая звезда: `Hurl` шара `Rock` радиусом `StarRock` с высоты 40 м и 12 м к западу по дуге на цель, а
@@ -415,7 +426,14 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `KeepPane`: места, очередь `RecruitFace`, лица видов `KindTile`; `TileOf(t)` для самотеста; `KeyNow`),
   `HealthBar`, `BodyChart`, `PriorityCell`, `MiniCard`, `KindFace`; `WorkTable.cs` — таблица работ (рисуется
   целиком в `_Draw`, щелчки в `_GuiInput`); `Panels.cs` — `Retinue` (только помощники: что делает, раны, сводка),
-  `HordeInfo`, `UnitOverlay`; `Lore.cs` — `LorePanel` (вкладка «Знания», ширина 960): три страницы
+  `HordeInfo`, `UnitOverlay`; `FirstPerson.cs` — вселение на экране: свой `Camera3D` (перспектива, Fov 74, Near .015), глаза — у головы
+  (сглажены, качаются шагом, трясутся с `Rig.Shaking`), мышь — `_Input` (захват, поворот), WASD опрашивается в
+  `_Process` → намерения `Sim`; рука — части Main/Off фигуры (`Figure.For`, у раненого — его сетки) вдвое меньше у глаз,
+  взмах по `Swing`; `Sights` — прицел (красный — враг в досягаемости, зелёный — что взять киркой) и здоровье; на входе
+  `Rig.Held`, `Hud.FirstPerson(true)`, `Units.HiddenId`/`ForceNear`, `Atmos.FogShift` −62, `Cover` скрыт (пути орды прячет
+  сам `TrailView`, пока `Possessed`), `Rig.Focus` каждый кадр (звук, дождь); выход — Esc или `Sim.Unpossessed`; `Face`,
+  `TestMove` — для сцен и самотеста;
+  `Lore.cs` — `LorePanel` (вкладка «Знания», ширина 960): три страницы
   (`TabPlaque` с `Icons.PageMark`, `ShowPage`, `Page`), на каждой — `RingCanvas` 916×474 как астролябия: кольца ярусов
   (эллипсы, полувысоты `RY`, шире в `Wide` раз), обод с делениями, большой круг у знака каждой ветви, лучи между
   ветвями, луч ветви от середины к первому узлу и от последнего к знаку, линии от опор (цвет ветви, когда изучены обе;
