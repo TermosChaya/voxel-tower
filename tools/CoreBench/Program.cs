@@ -323,6 +323,50 @@ if (args.Length == 0 || args[0] == "--sim")
         Check("ponds and the river lie level inside their banks", open == 0, $"{open} faces of water open to the air");
     }
     Check("cells beside the citadel to batter", sim.Goals.Count > 20, sim.Goals.Count.ToString());
+    // nobody stands up a tree: no cell to stand in rests on a trunk or a bough more than a metre over the ground beneath it,
+    // and an order to a tree's foot (the ground under its trunk, where a click through the trunk lands) keeps to the ground
+    {
+        var nav = sim.Nav;
+        // how high over the ground beneath it the wood is that the feet in a cell rest on (0: not on wood)
+        int OnWood(int c)
+        {
+            int i = nav.I(c), k = nav.K(c), f = nav.Floor[c], most = 0;
+            for (int q = 0; q < 4; q++)
+            {
+                int x = (i << NavGrid.Shift) + 3 + (q & 1), z = (k << NavGrid.Shift) + 3 + (q >> 1), g = f - 1;
+                if (g < 0 || !Mat.IsTrunk(w4.Get(x, g, z))) continue;
+                while (g >= 0 && (w4.Get(x, g, z) == Mat.Air || Mat.Passable[w4.Get(x, g, z)] || Mat.IsTrunk(w4.Get(x, g, z)))) g--;
+                most = Math.Max(most, f - g - 1);
+            }
+            return most;
+        }
+        int stands = 0, up = 0, feet = 0, sent = 0, away = 0;
+        string first = "", firstSent = "", firstAway = "";
+        for (int c = 0; c < nav.Count; c++)
+        {
+            if (!nav.Stand(nav.I(c), nav.Y(c), nav.K(c), 2)) continue;
+            stands++;
+            if (OnWood(c) > NavGrid.CS && up++ == 0) first = $", the first at cell {nav.I(c)},{nav.Y(c)},{nav.K(c)} (feet {nav.Floor[c]})";
+        }
+        var clicked = new System.Collections.Generic.HashSet<int>();
+        for (int z = 1; z < w4.SZ - 1; z += 2)
+            for (int x = 1; x < w4.SX - 1; x += 2)
+            {
+                // a trunk standing on the ground here, once a cell
+                int g = w4.SurfAt(x, z), i = x >> NavGrid.Shift, k = z >> NavGrid.Shift;
+                if (!Mat.IsTrunk(w4.Get(x, g, z)) || !Mat.IsTrunk(w4.Get(x, g + 16, z)) || !clicked.Add(k * nav.NX + i)) continue;
+                feet++;
+                // as the commander's hand picks a cell to stand in there, from a click that went through the trunk to the
+                // ground: on the ground beside the trunk, a few metres off at most and about as high
+                int cell = sim.StandNear(x, g, z, 2);
+                if (cell >= 0 && OnWood(cell) > NavGrid.CS && sent++ == 0) firstSent = $", the first from {x},{z} to feet {nav.Floor[cell]} over ground {g}";
+                var (fx, fy, fz) = cell >= 0 ? nav.Feet(cell) : (0f, 0f, 0f);
+                if ((cell < 0 || Math.Abs(fy - g) > 12 || Math.Max(Math.Abs(fx - x), Math.Abs(fz - z)) > 28) && away++ == 0)
+                    firstAway = $", the first from {x},{z} (ground {g}) to {(cell < 0 ? "nowhere" : $"{fx:0},{fy:0},{fz:0}")}";
+            }
+        Check("nobody stands up a tree, nor is sent up one", up == 0 && sent == 0 && away == 0 && feet > 150,
+            $"{stands} cells to stand in, {up} of them on wood over a metre up{first}; {feet} trees' feet clicked, {sent} sent up the tree{firstSent}, {away} not beside it{firstAway}");
+    }
 
     sim.Stock.Gold = 2000;
     var crew = new System.Collections.Generic.List<Unit>();
@@ -1011,14 +1055,15 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--life")
         mason.Dead = true; mason.DiedAt = -999;
 
         // a plot taken back goes with the felling it had begun to mark; what it marks while the hand is on
-        // something else is not the hand's
+        // something else is not the hand's (a big tree, still being felled twenty seconds on)
         (int x, int z) tree = (-1, -1);
         for (int r = 60; r < 500 && tree.x < 0; r += 8)
             for (int a = 0; a < 360 && tree.x < 0; a += 4)
             {
                 int x = site4.KeepX + (int)(Math.Cos(a * Math.PI / 180) * r), z = site4.KeepZ + (int)(Math.Sin(a * Math.PI / 180) * r);
                 if (x < 40 || z < 40 || x >= w4.SX - 40 || z >= w4.SZ - 40) continue;
-                if (Mat.IsTrunk(w4.Get(x, w4.SurfAt(x, z) + 2, z))) tree = (x, z);
+                int y = w4.SurfAt(x, z) + 2;
+                if (Mat.IsTrunk(w4.Get(x, y, z)) && Shapes.Tree(w4, x, y, z).Count > 6000) tree = (x, z);
             }
         var woodman = sim.Spawn(Kinds.Worker, sim.NearestStand(tree.x + 30, tree.z, 4));
         sim.BeginMarking();
@@ -1530,7 +1575,9 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--fire")
         }
     RunF(.5);
     int wetDeck = deck.FindAll(d => d.wet).Count, dryDeck = deck.Count - wetDeck;
-    bool farLit = simF.Ignite(sx0 + 1, sg + 2, sz0 + 5), wetLit = simF.Ignite(sx0 + 22, sg + 2, sz0 + 5);
+    // the dry part set alight in two places (a fire creeping along one course of logs from a single spark can all but die
+    // down for minutes, as the dice fall), the pool in one
+    bool farLit = simF.Ignite(sx0 + 1, sg + 2, sz0 + 5) && simF.Ignite(sx0 + 10, sg + 2, sz0 + 5), wetLit = simF.Ignite(sx0 + 22, sg + 2, sz0 + 5);
     RunF(240);
     int wetLeft = deck.FindAll(d => d.wet && wF.Get(d.x, sg + 2, d.z) == Mat.Wood).Count, dryLeft = deck.FindAll(d => !d.wet && wF.Get(d.x, sg + 2, d.z) == Mat.Wood).Count;
     Check("a floor of logs over stone and a pool: what lies on the water never catches, the rest burns",
@@ -3191,6 +3238,24 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--physics")
     Check("the rift: the ground sinks, the goblin on it falls in hurt, and the wall standing there comes down", castRift == null && gr0 - gr1 >= 16 && gobR.Hp <= gobR.MaxHp - 15 && woodR0 - woodR1 > 500,
         $"cast: {castRift ?? "yes"}; the ground {gr0} → {gr1}; the goblin {(gobR.Dead ? "dead: " + gobR.KilledBy : $"{gobR.Hp:0} of {gobR.MaxHp:0}")}; logs standing {woodR0} → {woodR1}");
     Gone(gobR);
+
+    // broken stone come down on a bough, far out from its trunk, lies there: shaken over and over (as by a tree burning
+    // beside it, or the ground dug), it does not lift off the bough and come down on it again for ever
+    int bpx = kxY - 120, bpz = kzY + 320, bgB = wY.SurfAt(bpx, bpz);
+    for (int y = bgB; y < bgB + 48; y++) for (int dz = 0; dz < 2; dz++) for (int dx = 0; dx < 2; dx++) wY.Set(bpx + dx, y, bpz + dz, Mat.PineBark);
+    for (int x = bpx + 2; x < bpx + 14; x++) wY.Set(x, bgB + 40, bpz, Mat.PineBark);
+    RunY(1);
+    simY.Hurl(new System.Collections.Generic.List<(sbyte, sbyte, sbyte, byte)> { (0, 0, 0, Mat.Rubble), (1, 0, 0, Mat.Rubble) }, bpx + 10.5f, bgB + 48, bpz + .5f, 0, -4, 0, "обвал");
+    RunY(1.5);
+    int landedB = 0, shakeY = wY.SurfAt(bpx + 10, bpz + 4);
+    Action<float, float, float, int, float> countB = (x, y, z, _, _) => { if (MathF.Abs(x - bpx - 10) < 24 && MathF.Abs(z - bpz) < 24 && MathF.Abs(y - bgB - 41) < 24) landedB++; };
+    simY.Landed += countB;
+    for (int k = 0; k < 16; k++) { wY.Set(bpx + 10, shakeY, bpz + 4, k % 2 == 0 ? Mat.Stone : Mat.Air); RunY(.25); }
+    simY.Landed -= countB;
+    int lyingB = 0;
+    for (int x = bpx + 2; x < bpx + 14; x++) if (wY.Get(x, bgB + 41, bpz) == Mat.Rubble) lyingB++;
+    Check("broken stone come down on a bough lies there, and shaken does not lift off it and come down again", lyingB == 2 && landedB == 0,
+        $"{lyingB} of 2 voxels on the bough; came down there again {landedB} times in 4 s of shaking");
 }
 
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--powder")

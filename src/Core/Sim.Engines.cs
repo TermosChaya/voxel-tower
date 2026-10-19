@@ -97,12 +97,36 @@ public sealed partial class Sim
         {
             if (Time < u.NextSearch) { u.State = UnitState.Idle; return; }
             u.NextSearch = Time + 2;
-            // to the ground right before the face
+            // to the ground right before the face, or failing that wherever is nearest there
             int nx = Math.Sign(-dx) * (Math.Abs(dx) > Math.Abs(dz) ? 1 : 0), nz = Math.Sign(-dz) * (Math.Abs(dz) >= Math.Abs(dx) ? 1 : 0);
-            int spot = NearestStand(wx + nx * 10, wz + nz * 10, u.T.Move.Height);
+            int spot = DockSpot(u, wx, wy, wz, nx, nz);
+            if (spot < 0) spot = NearestStand(wx + nx * 10, wz + nz * 10, u.T.Move.Height);
             if (spot < 0 || !GoTo(u, spot, adjacent: true, budget: 60000)) { u.Path = null; u.AimAt = -1; u.State = UnitState.Idle; return; }
         }
         Walk(u, dt);
+    }
+
+    /// <summary>
+    /// Where a siege tower stands to drop its ladder on a face (packed voxel at its foot) whose outside looks toward
+    /// (nx, nz): the cell on the ground before it nearest the face — not one up a tree or on the wall's top, nor behind
+    /// it. −1 if there is none within a few metres.
+    /// </summary>
+    int DockSpot(Unit u, int wx, int wy, int wz, int nx, int nz)
+    {
+        int h = u.T.Move.Height, ci = wx >> NavGrid.Shift, cy = wy >> NavGrid.Shift, ck = wz >> NavGrid.Shift, best = -1;
+        float most = float.MaxValue;
+        for (int y = cy - 2; y <= cy + 2; y++)
+            for (int k = ck - 3; k <= ck + 3; k++)
+                for (int i = ci - 3; i <= ci + 3; i++)
+                {
+                    if (!Nav.Stand(i, y, k, h)) continue;
+                    int c = Nav.Id(i, y, k);
+                    var (fx, fy, fz) = Nav.Feet(c);
+                    float ox = fx - (wx + .5f), oz = fz - (wz + .5f), d = ox * ox + oz * oz;
+                    if (ox * nx + oz * nz <= 0 || Math.Abs(fy - wy) > NavGrid.CS || d >= most) continue;
+                    most = d; best = c;
+                }
+        return best;
     }
 
     /// <summary>
@@ -140,7 +164,7 @@ public sealed partial class Sim
         // the face itself: the outermost voxel of the wall toward the tower, at the height of its foot
         for (int k = 0; k < 12 && World.Get(fx + nx, wy + 4, fz + nz) is var m && m != Mat.Air && !Mat.Passable[m]; k++) { fx += nx; fz += nz; }
         var hit = new VoxelHit { X = fx, Y = wy + 4, Z = fz, NX = nx, NZ = nz, M = World.Get(fx, wy + 4, fz) };
-        var L = Shapes.LadderAt(World, Site, hit, Mat.TowerLadder);
+        var L = Shapes.LadderAt(World, Site, hit, Mat.TowerLadder, crush: true);
         for (int i = 0; i < L.Count; i++)
         {
             World.Set(L.X(i), L.Y(i), L.Z(i), Mat.TowerLadder);

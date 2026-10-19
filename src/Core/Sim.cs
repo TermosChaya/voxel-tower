@@ -86,6 +86,36 @@ public sealed partial class Sim
         return -1;
     }
 
+    /// <summary>
+    /// A cell for someone h cells tall to stand in at or just around a voxel the player pointed at: the one it is in, a step
+    /// up or down; else the nearest beside it at about that height (the ground by a tree's foot, not the top of a cliff over
+    /// it); else the nearest at all.
+    /// </summary>
+    public int StandNear(int x, int y, int z, int h)
+    {
+        int i = x >> NavGrid.Shift, k = z >> NavGrid.Shift, cy = y >> NavGrid.Shift;
+        for (int dy = 0; dy <= 2; dy++)
+            foreach (int yy in new[] { cy + dy, cy - dy })
+                if (Nav.Stand(i, yy, k, h)) return Nav.Id(i, yy, k);
+        for (int r = 1; r <= 3; r++)
+        {
+            int best = -1;
+            float most = float.MaxValue;
+            for (int dk = -r; dk <= r; dk++)
+                for (int di = -r; di <= r; di++)
+                {
+                    if (Math.Max(Math.Abs(di), Math.Abs(dk)) != r) continue;
+                    for (int dy = -2; dy <= 2; dy++)
+                    {
+                        float d = di * di + dk * dk + dy * dy * 4;
+                        if (d < most && Nav.Stand(i + di, cy + dy, k + dk, h)) { most = d; best = Nav.Id(i + di, cy + dy, k + dk); }
+                    }
+                }
+            if (best >= 0) return best;
+        }
+        return NearestStand(x, z, h);
+    }
+
     public Unit Spawn(UnitType t, int cell)
     {
         var u = new Unit { Id = _nextId++, T = t, Hp = t.Hp, MaxHp = t.Hp, Cell = cell };
@@ -209,9 +239,9 @@ public sealed partial class Sim
             return;
         }
         // a horse or a hound does not hang on a ladder: it comes off it
-        if (Nav.Stand(i, y, k, h) || (y >= 1 && Nav.Solid(i, y - 1, k)) || Nav.Ladder[u.Cell] != 0 && u.T.Move.Ladders) return;
+        if (Nav.Stand(i, y, k, h) || (y >= 1 && Nav.Ground(i, y - 1, k)) || Nav.Ladder[u.Cell] != 0 && u.T.Move.Ladders) return;
         for (int ny = y - 1; ny >= 1; ny--)
-            if (Nav.Solid(i, ny - 1, k))
+            if (Nav.Ground(i, ny - 1, k))
             {
                 int fall = y - ny;
                 u.Cell = Nav.Id(i, ny, k);
@@ -243,7 +273,7 @@ public sealed partial class Sim
         }
         var (tx, ty, tz) = Nav.Feet(next);
         bool climbing = Nav.I(next) == Nav.I(u.Cell) && Nav.K(next) == Nav.K(u.Cell) && next != u.Cell;
-        if (climbing) { tx = u.X; tz = u.Z; ty = (Nav.Y(next) << NavGrid.Shift) + (Nav.Solid(Nav.I(next), Nav.Y(next) - 1, Nav.K(next)) ? Nav.Floor[next] - (Nav.Y(next) << NavGrid.Shift) : 0); }
+        if (climbing) { tx = u.X; tz = u.Z; ty = (Nav.Y(next) << NavGrid.Shift) + (Nav.Ground(Nav.I(next), Nav.Y(next) - 1, Nav.K(next)) ? Nav.Floor[next] - (Nav.Y(next) << NavGrid.Shift) : 0); }
         else { tx += u.OffX; tz += u.OffZ; }
         float speed = u.T.Move.Speed * NavGrid.CS * pace * u.Pace * CartPace(u) * TroopPace(u) * (u.Hp < u.MaxHp * .4f ? .7f : 1) * (Nav.Water[u.Cell] > 0 ? .6f : 1)
             * (Nav.Spikes[u.Cell] > 0 ? .4f : 1) * Gait(u) * (Mires.Count > 0 && InMire(u.X, u.Z) ? .35f : 1)
@@ -281,7 +311,7 @@ public sealed partial class Sim
     {
         int i = Nav.I(c), y = Nav.Y(c), k = Nav.K(c);
         if (Nav.Deep(c)) return false;
-        return u.Team == Team.Horde ? Nav.Solid(i, y - 1, k) || Nav.Ladder[c] != 0 : Nav.CanBe(i, y, k, u.T.Move.Height, ladders: u.T.Move.Ladders);
+        return u.Team == Team.Horde ? Nav.Ground(i, y - 1, k) || Nav.Ladder[c] != 0 : Nav.CanBe(i, y, k, u.T.Move.Height, ladders: u.T.Move.Ladders);
     }
 
     /// <summary>
@@ -374,7 +404,7 @@ public sealed partial class Sim
     }
 
     /// <summary>Whether a unit is hanging on a ladder rather than standing.</summary>
-    public bool Climbing(Unit u) => !u.Dead && Nav.Ladder[u.Cell] != 0 && !Nav.Solid(Nav.I(u.Cell), Nav.Y(u.Cell) - 1, Nav.K(u.Cell));
+    public bool Climbing(Unit u) => !u.Dead && Nav.Ladder[u.Cell] != 0 && !Nav.Ground(Nav.I(u.Cell), Nav.Y(u.Cell) - 1, Nav.K(u.Cell));
 
     float H(int c, int ti, int tk) => PathFinder.Octile(Nav.I(c) - ti, Nav.K(c) - tk) * .95f;
 

@@ -353,7 +353,7 @@ public sealed partial class Sim
         if (works == Works.Ladder)
         {
             // against whatever it leans on, from the feet if it starts on the ground
-            int from = Nav.Ladder[u.Cell] != 0 || !Nav.Solid(Nav.I(u.Cell), Nav.Y(u.Cell) - 1, Nav.K(u.Cell)) ? qy << NavGrid.Shift : Nav.Floor[u.Cell];
+            int from = Nav.Ladder[u.Cell] != 0 || !Nav.Ground(Nav.I(u.Cell), Nav.Y(u.Cell) - 1, Nav.K(u.Cell)) ? qy << NavGrid.Shift : Nav.Floor[u.Cell];
             LadderVoxels(qi, qy, qk, from, (qy + 1) << NavGrid.Shift, Mat.SiegeLadder, u.BuildList);
         }
         else

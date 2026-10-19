@@ -723,11 +723,12 @@ public partial class Main : Node3D
         int r3 = Removals();
         await Drag((641, 441), (646, 558));
         int moat = Removals() - r3;
+        // (a tree the moat cuts into comes down whole, roots and all: its wood is not the line's)
         int gx = kx + (int)Math.Round((641 - kx) / 8.0) * 8, askew = 0, minZ = int.MaxValue, maxZ = 0;
         for (int z = 420; z < 580; z++)
             for (int x = 600; x < 690; x++)
                 for (int y = World.SurfAt(x, z) - 20; y < World.SurfAt(x, z) + 2; y++)
-                    if (Orders.IsRemove(Sim.Orders.At(x, y, z)))
+                    if (Orders.IsRemove(Sim.Orders.At(x, y, z)) && !Mat.IsTrunk(World.Get(x, y, z)) && !Mat.IsLeafy(World.Get(x, y, z)))
                     {
                         if (Math.Abs(x - gx) > 5) askew++;
                         minZ = Math.Min(minZ, z); maxZ = Math.Max(maxZ, z);
@@ -1092,18 +1093,24 @@ public partial class Main : Node3D
             into && strode > 2 && outOf, $"in {into}, walked {strode:0.0} m, out {outOf}");
 
         // the citadel's muster: a click on the citadel opens it; a worker taken on is paid for at once and comes out of
-        // its door only when made ready
+        // its door only when made ready. Whoever stands about the citadel's foot by now is sent a little way off first (an
+        // envoy come to the walls is taken off), so that the click finds the citadel and not one of them
+        if (Sim.Offer?.Envoy is { } envoy) { Sim.Offer = null; envoy.Dead = true; envoy.DiedAt = -999; }
+        var about = Sim.Units.FindAll(u => !u.Dead && !u.Inside && u.Team == Team.Player && Brushes.Dist(u.X - kx, u.Z - kz) < Site.KeepR + 40);
+        if (about.Count > 0) { Sim.Command(about, Sim.NearestStand(kx + 90, kz + 60, 2)); for (int t = 0; t < 40; t++) Advance(.5); }
         Sim.Stock.Gold = 500;
         int w0 = Sim.Count(Kinds.Worker);
         await Look(kx, kz);
         await ClickAt(ScreenAt(kx, Site.KeepBase + 40, kz));
         bool keepOpen = Hud.KeepShown;
+        string instead = Inspected != null ? $" ({Inspected.T.Name} looked at instead)" : "";
+        foreach (var u in Selected) instead = $" ({u.T.Name} chosen instead)";
         Hud.Inspector.TileOf(Kinds.Worker)?.Press();
         bool paidNow = Math.Abs(Sim.Stock.Gold - (500 - Kinds.Worker.Cost)) < .01 && Sim.Recruits.Count == 1 && Sim.Count(Kinds.Worker) == w0;
         Advance(Sim.TrainTime(Kinds.Worker) + 8);
         Check("a click on the citadel opens its muster; a worker taken on is paid for at once and comes out when made ready",
             keepOpen && paidNow && Sim.Count(Kinds.Worker) == w0 + 1 && Sim.Recruits.Count == 0 && Sim.Places == Sim.CitadelPlaces,
-            $"muster {(keepOpen ? "open" : "not open")}, paid at once {paidNow}, {Sim.Stock.Gold:0} gold left, workers {w0} → {Sim.Count(Kinds.Worker)}");
+            $"muster {(keepOpen ? "open" : "not open")}{instead}, paid at once {paidNow}, {Sim.Stock.Gold:0} gold left, workers {w0} → {Sim.Count(Kinds.Worker)}");
         KeyPress(Key.Escape);
         Check("Esc lets the citadel go", !KeepChosen && !Hud.KeepShown);
         // the game written down, and its head read back for the list of saves
@@ -2409,8 +2416,16 @@ public partial class Main : Node3D
         };
         var (gx, gz) = GroveAt;
         ClearGrove();
-        // --look=0..2 plants one row of four for a close look; without it, all of them in two rows
-        if (_look is >= 0 and < 3) for (int i = 0; i < 4; i++) plant[_look * 4 + i](gx + 40 + i * 72, gz + 110);
+        // --look=0..2 plants one row of four for a close look (the log says where to look at each one's foot); without
+        // it, all of them in two rows
+        if (_look is >= 0 and < 3)
+            for (int i = 0; i < 4; i++)
+            {
+                int x = gx + 40 + i * 72, z = gz + 110;
+                plant[_look * 4 + i](x, z);
+                float over = (World.WY(w.SurfAt(x, z) + 6) - 4) / MathF.Tan(.42f) / VoxelWorld.Vox;
+                GD.Print($"[voxel-tower] tree {i + 1} stands at {x},{z}; its foot: --cam={x - MathF.Sin(-.3f) * over:0},{z - MathF.Cos(-.3f) * over:0},-0.3,0.42,6");
+            }
         else for (int i = 0; i < plant.Length; i++) plant[i](gx + i % 6 * 58, gz + i / 6 * 110);
     }
 

@@ -143,8 +143,11 @@ public sealed partial class Sim
         return (0, vox);
     }
 
-    /// <summary>Voxels of timber a tree of the valley gives, on average, for the survey's estimate.</summary>
-    public const double WoodPerTree = 4900;
+    /// <summary>
+    /// Voxels of timber a tree of the valley gives, on average, for the survey's estimate: six of each kind grown as the
+    /// valley grows them and felled by three workers apiece, weighed by how many of each the default valley holds.
+    /// </summary>
+    public const double WoodPerTree = 3500;
 
     /// <summary>A trunk standing on the ground at this column: where a tree can be felled from.</summary>
     bool TreeFoot(int x, int z, out int y)
