@@ -65,6 +65,9 @@ public sealed partial class Sim
     /// <summary>It falls if it is not held: masonry, timber, earth laid by hand, trunks.</summary>
     static bool Holds(byte m) => SpanOf(m) > 0;
 
+    /// <summary>What lies where it came down: broken stone and splinters.</summary>
+    static bool Debris(byte m) => m is Mat.Rubble or Mat.Lumber;
+
     /// <summary>What holds things up from below: the ground itself, the citadel, a solid floor.</summary>
     static bool Ground(byte m) => m != Mat.Air && (Mat.IsAnchor[m] || m == Mat.Ore);
 
@@ -233,8 +236,11 @@ public sealed partial class Sim
                         int x = cx * VoxelWorld.CS + (i & 31), z = cz * VoxelWorld.CS + (i >> 5 & 31), y = cy * VoxelWorld.CS + (i >> 10);
                         if (x < bx0 || x > bx1 || z < bz0 || z > bz1 || y < 1) continue;
                         _built.Add(WaterPlanner.Pack(x, y, z));
-                        // held from the start: on the ground, set into rock aside, at the edge of the patch, or an arch
-                        bool held = Ground(World.Get(x, y - 1, z)) || HoldsAside(m, World.Get(x + 1, y, z)) || HoldsAside(m, World.Get(x - 1, y, z))
+                        // held from the start: on the ground, set into rock aside, at the edge of the patch, or an arch; and
+                        // what came down on a tree's wood, caught in a fork or lying on a bough or a log, as on the ground
+                        byte below = World.Get(x, y - 1, z);
+                        bool held = Ground(below) || Debris(m) && Mat.IsTrunk(below)
+                            || HoldsAside(m, World.Get(x + 1, y, z)) || HoldsAside(m, World.Get(x - 1, y, z))
                             || HoldsAside(m, World.Get(x, y, z + 1)) || HoldsAside(m, World.Get(x, y, z - 1))
                             || x == bx0 || x == bx1 || z == bz0 || z == bz1 || SpanOf(m) == Free || Arched.Get(x, y, z) != 0;
                         if (!held) continue;
@@ -248,12 +254,16 @@ public sealed partial class Sim
             int p = PopFront();
             var (x, y, z) = WaterPlanner.Unpack(p);
             int d = _reach[I(x, y, z)];
+            byte here = World.Get(x, y, z);
             void Try(int nx, int ny, int nz, int cost)
             {
                 if (nx < bx0 || nx > bx1 || nz < bz0 || nz > bz1 || ny < 1 || ny >= sy) return;
                 byte m = World.Get(nx, ny, nz);
                 if (!Holds(m)) return;
-                int i = I(nx, ny, nz), nd = d + cost;
+                // what has come down and lies on something built that holds lies on it as on the ground, however far out
+                // that is held: else, never out far enough to slip off it, it would lift off it and come down on it again
+                // for ever
+                int i = I(nx, ny, nz), nd = cost == 0 && Debris(m) && !Debris(here) ? 0 : d + cost;
                 if (nd >= _reach[i] || nd > SpanOf(m)) return;
                 _reach[i] = nd;
                 if (cost == 0) PushFront(WaterPlanner.Pack(nx, ny, nz)); else PushBack(WaterPlanner.Pack(nx, ny, nz));

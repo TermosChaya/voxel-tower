@@ -304,23 +304,12 @@ public partial class Commander : Node
         }
         if (!Raycast.Cast(w, ox, oy, oz, d.X, d.Y, d.Z, out var hit, skipVeg: true)) return;
         var g = hit.Ground(w);
-        int cell = StandNear(g.x, g.y, g.z);
+        int cell = _m.Sim.StandNear(g.x, g.y, g.z, 2);
         if (cell < 0) { _m.Hud.Float("туда не встать", Ornament.Blood); return; }
         int ok = _m.Sim.Command(_m.Selected, cell);
         if (ok == 0) _m.Hud.Float("туда не дойти", Ornament.Blood);
         else _m.Hud.Float(ok == 1 ? "иду" : $"идут: {ok}", Ornament.EmberGlow);
         _m.Hud.OnSelectionChanged();
-    }
-
-    /// <summary>A cell to stand in at or just around a voxel: the one it is in, a step up or down, then nearby.</summary>
-    int StandNear(int x, int y, int z)
-    {
-        var nav = _m.Sim.Nav;
-        int i = x >> NavGrid.Shift, k = z >> NavGrid.Shift, cy = y >> NavGrid.Shift;
-        for (int dy = 0; dy <= 2; dy++)
-            foreach (int yy in new[] { cy + dy, cy - dy })
-                if (nav.Stand(i, yy, k, 2)) return nav.Id(i, yy, k);
-        return _m.Sim.NearestStand(x, z, 2);
     }
 
     public void ReleaseSelected()

@@ -149,7 +149,7 @@ public sealed partial class Sim
             if (u.Y >= (y + 1) << NavGrid.Shift)
             {
                 u.Cell = Nav.Id(i, y + 1, k);
-                if (Nav.Solid(i, y, k)) u.Y = Nav.Floor[u.Cell];
+                if (Nav.Ground(i, y, k)) u.Y = Nav.Floor[u.Cell];
             }
             return true;
         }

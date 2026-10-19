@@ -94,7 +94,7 @@ public sealed class PathFinder
             if (goal(c)) return Trace(c, start);
             if (++expanded > maxExpand) return null;
             int i = g.I(c), y = g.Y(c), k = g.K(c);
-            bool standing = g.Solid(i, y - 1, k, gates);
+            bool standing = g.Ground(i, y - 1, k, gates);
             for (int dir = 0; dir < 8; dir++)
             {
                 int ni = i + DX[dir], nk = k + DK[dir];
@@ -199,7 +199,7 @@ public sealed class FlowField
                 int ni = i + DX[d], nk = k + DK[d];
                 if (!g.In(ni, y, nk)) continue;
                 int n = g.Id(ni, y, nk);
-                if (g.Keep[n] == 0 && g.Fill[n] < NavGrid.SolidT && g.Solid(ni, y - 1, nk) && !goals.Contains(n)) goals.Add(n);
+                if (g.Keep[n] == 0 && g.Fill[n] < NavGrid.SolidT && g.Ground(ni, y - 1, nk) && !goals.Contains(n)) goals.Add(n);
             }
         }
         return goals;
@@ -256,7 +256,7 @@ public sealed class FlowField
         if (!g.In(i, y, k) || y < 1) return 0;
         int c = g.Id(i, y, k);
         if (g.Water[c] >= NavGrid.DeepT) return 0;
-        if (g.Solid(i, y - 1, k)) return Ground;
+        if (g.Ground(i, y - 1, k)) return Ground;
         for (int d = 0; d < M.Height; d++) if (!g.Open(i, y + d, k)) return 0;
         int kind = g.Ladder[c] != 0 ? OnLadder : 0;
         if (M.Build <= 0) return kind;
@@ -349,7 +349,7 @@ public sealed class FlowField
     public static float Step(NavGrid g, Mover m, int pi, int py, int pk, int qi, int qy, int qk)
     {
         int dy = qy - py;
-        if (dy > m.Climb || -dy > m.Drop || !g.Solid(qi, qy - 1, qk)) return float.PositiveInfinity;
+        if (dy > m.Climb || -dy > m.Drop || !g.Ground(qi, qy - 1, qk)) return float.PositiveInfinity;
         if (!StepsOk(m, Feet(g, pi, py, pk), Feet(g, qi, qy, qk))) return float.PositiveInfinity;
         float t = 0;
         for (int y = qy; y < qy + m.Height; y++)
@@ -417,7 +417,7 @@ public sealed class FlowField
         // nothing downhill at all (a hollow the stale field never knew): the best way there is
         if (best < 0) { best = up; bestWorks = upWorks; }
         works = bestWorks;
-        if (best >= 0 && works == Works.None && g.Solid(g.I(best), g.Y(best) - 1, g.K(best)))
+        if (best >= 0 && works == Works.None && g.Ground(g.I(best), g.Y(best) - 1, g.K(best)))
         {
             int qy = g.Y(best);
             for (int yy = qy; yy < qy + M.Height && yy < g.NY; yy++) carve += M.CarveTime(g, g.Id(g.I(best), yy, g.K(best)));

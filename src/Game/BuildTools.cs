@@ -714,7 +714,7 @@ public partial class BuildTools : Node3D
         else _m.Hud.Float(zones > 0 ? (zone?.Kind switch { Zone.Shelter => "убежище снято", Zone.Sanctum => "святилище снято", Zone.Dwelling => "жилой дом снят", _ => "делянка снята" }) : $"разметка снята: {Fmt.M3(n)} м³", Ornament.BronzeLight);
     }
 
-    /// <summary>"Делянка: деревьев 12, ≈ 115 м³ брёвен" or "Каменоломня: ≈ 9,5 м³ камня до 2 м вглубь".</summary>
+    /// <summary>"Делянка: деревьев 12, ≈ 82,0 м³ брёвен" or "Каменоломня: ≈ 9,5 м³ камня до 2 м вглубь".</summary>
     string SurveyText(int x0, int z0, int x1, int z1, out bool any)
     {
         int kind = GatherKind;

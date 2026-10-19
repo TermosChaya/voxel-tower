@@ -428,9 +428,10 @@ public static class Shapes
 
     /// <summary>
     /// A ladder against the side face that was clicked: two rails and rungs every third voxel, from the ground in front of the
-    /// face to a step above its top. It stands in the first cell clear of the wall, so a body can hang on it.
+    /// face to a step above its top. It stands in the first cell clear of the wall, so a body can hang on it. With
+    /// <paramref name="crush"/> it goes through leaves and grass in its way, as a siege tower's does, breaking them.
     /// </summary>
-    public static VoxelList LadderAt(VoxelWorld w, Site site, VoxelHit hit, byte mat = Mat.Ladder)
+    public static VoxelList LadderAt(VoxelWorld w, Site site, VoxelHit hit, byte mat = Mat.Ladder, bool crush = false)
     {
         var L = new VoxelList();
         if (hit.NY != 0 || (hit.NX == 0 && hit.NZ == 0)) return L;
@@ -459,7 +460,9 @@ public static class Shapes
                 bool rail = t == -2 || t == 3, rung = y % 3 == 0 && y <= top;
                 if (!rail && !rung) continue;
                 int x = fx + tx * t, z = fz + tz * t;
-                if (w.InBounds(x, y, z) && w.Get(x, y, z) == Mat.Air && !site.Forbidden(x, z)) L.Add(x, y, z, mat);
+                byte at = w.Get(x, y, z);
+                bool room = at == Mat.Air || crush && (Mat.IsLeafy(at) || at is Mat.Tuft or Mat.Flower or Mat.Bloom);
+                if (w.InBounds(x, y, z) && room && !site.Forbidden(x, z)) L.Add(x, y, z, mat);
             }
         return L;
     }

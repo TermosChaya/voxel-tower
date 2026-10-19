@@ -45,9 +45,13 @@ public static class Flora
         (_near ??= new Dictionary<long, bool>()).Clear();
     }
 
-    /// <summary>A voxel of the growing tree's wood.</summary>
+    /// <summary>
+    /// A voxel of the growing tree's wood. It grows through leaves, its own or a neighbour's, as through air: a trunk is not
+    /// cut through by the crown it rises into, nor a bough by the twigs it passes.
+    /// </summary>
     static void Wood(VoxelWorld w, int x, int y, int z, byte m)
     {
+        if (w.InBounds(x, y, z) && Mat.IsLeafy(w.Get(x, y, z))) w.SetRaw(x, y, z, Mat.Air);
         if (Put(w, x, y, z, m)) _own.Add(Key(x, y, z));
     }
 
@@ -184,6 +188,7 @@ public static class Flora
         for (int z = (int)Math.Floor(az) - spread; z <= (int)Math.Floor(az) + spread; z++)
             for (int x = (int)Math.Floor(ax) - spread; x <= (int)Math.Floor(ax) + spread; x++)
                 if (Sq(x + .5 - ax) + Sq(z + .5 - az) < spread * spread) low = Math.Min(low, w.SurfAt(x, z));
+        int pix = int.MinValue, piz = 0;
         for (int y = Math.Max(b - 8, low); y < top; y++)
         {
             int up = Math.Max(0, y - b);
@@ -204,25 +209,38 @@ public static class Flora
                     }
                     if (dx * dx + dz * dz < reach * reach) Wood(w, x, y, z, bark(x, y, z));
                 }
+            // drawn to a point it is a voxel a layer, and still holds together face to face where it leans a voxel aside
             int ix = (int)Math.Floor(cx), iz = (int)Math.Floor(cz);
-            if (r < .75) Wood(w, ix, y, iz, bark(ix, y, iz));
+            if (r < .75)
+            {
+                if (pix != int.MinValue && (ix != pix || iz != piz)) { Wood(w, pix, y, piz, bark(pix, y, piz)); Wood(w, ix, y, piz, bark(ix, y, piz)); }
+                Wood(w, ix, y, iz, bark(ix, y, iz));
+            }
+            (pix, piz) = (ix, iz);
         }
     }
 
     /// <summary>
     /// A bough from a point: it runs <paramref name="len"/> voxels along (dx, dy, dz), thinning from r0 to r1, turning up by
     /// <paramref name="rise"/> each half voxel (down when negative: it droops) and crooking a little at random; it stops
-    /// short of another tree's wood, so that the two are not felled as one. Returns where it ends; the points along it go
-    /// into <paramref name="path"/> when one is given.
+    /// short of another tree's wood, so that the two are not felled as one. However thin it gets it holds together face to
+    /// face, so no twig of it hangs by an edge or floats loose, to stay up when the tree is felled. Returns where it ends;
+    /// the points along it go into <paramref name="path"/> when one is given.
     /// </summary>
     static (double x, double y, double z) Limb(VoxelWorld w, Mulberry32 R, double x, double y, double z, double dx, double dy, double dz,
         double len, double r0, double r1, byte bark, double rise = 0, double crook = .08, List<(double x, double y, double z)> path = null)
     {
+        int py = 0, pz = 0;
         for (double s = 0; s < len; s += .5)
         {
             double r = r0 + (r1 - r0) * (s / len);
             if (s > 0 && Foreign(w, x, y, z, r + 2)) break;
             Ball(w, x, y, z, r, bark);
+            // the voxel its line passes through, and the corners it turns from the last one, a step along x and then up
+            int ix = (int)Math.Floor(x), iy = (int)Math.Floor(y), iz = (int)Math.Floor(z);
+            if (s > 0) { Wood(w, ix, py, pz, bark); Wood(w, ix, iy, pz, bark); }
+            Wood(w, ix, iy, iz, bark);
+            (py, pz) = (iy, iz);
             path?.Add((x, y, z));
             dx += (R.Next() - .5) * crook; dz += (R.Next() - .5) * crook; dy += rise + (R.Next() - .5) * crook * .5;
             double n = Math.Sqrt(dx * dx + dy * dy + dz * dz);
@@ -312,8 +330,8 @@ public static class Flora
 
     /// <summary>
     /// A dead tree. The prototype's is a bare post with a few crooked sticks; grown ones are the valley's: a gaunt grey trunk
-    /// leaning off true, its boughs crooked and forking, broken short. False when a grown one has no room (see
-    /// <see cref="Room"/>).
+    /// leaning off true and snapped off short, its top splintered, its boughs crooked and forking, broken short. False when
+    /// a grown one has no room (see <see cref="Room"/>).
     /// </summary>
     public static bool DeadTree(VoxelWorld w, int x0, int z0, bool grown = false, double scale = 1)
     {
@@ -325,12 +343,27 @@ public static class Flora
         var R = new Mulberry32((uint)(x0 * 31 + z0));
         if (grown)
         {
-            double o = Seat(Girth(r0, .55, H, swell, (int)(H * .4)), Girth(r0, .55, H, swell, 10));
+            // a long-dead trunk is all bare, so it thins little: three voxels through at its least, it reads as a trunk
+            // and not as a cross or a pole all the way up to where it broke
+            const double r1 = 1.45;
+            int stem = H - 5, brk = bse + stem;
+            double o = Seat(Girth(r0, r1, stem, swell, (int)(stem * .85)), Girth(r0, r1, stem, swell, 10));
             double ax = x0 + .5 + o, az = z0 + .5 + o, lean = R.Next() * 6.28, ll = 1 + R.Next() * 3, lx = Math.Cos(lean) * ll, lz = Math.Sin(lean) * ll;
-            Stem(w, ax, az, bse, bse + H, r0, .55, lx, lz, swell, flare, (_, _, _) => Mat.Snag);
+            Stem(w, ax, az, bse, brk, r0, r1, lx, lz, swell, flare, (_, _, _) => Mat.Snag);
+            // where it snapped the wood stands in splinters, longest on the side it broke away from
+            double snap = R.Next() * 6.28, tx = ax + lx, tz = az + lz;
+            for (int z = (int)Math.Floor(tz - r1); z <= (int)Math.Floor(tz + r1); z++)
+                for (int x = (int)Math.Floor(tx - r1); x <= (int)Math.Floor(tx + r1); x++)
+                {
+                    double dx = x + .5 - tx, dz = z + .5 - tz;
+                    if (dx * dx + dz * dz >= r1 * r1) continue;
+                    double side = (1 + Math.Cos(Math.Atan2(dz, dx) - snap)) / 2;
+                    int tall = (int)Math.Round(6 * (.25 + .75 * Hash.H3(x, z, 41)) * (.3 + .7 * side));
+                    for (int y = brk; y < brk + tall; y++) Wood(w, x, y, z, Mat.Snag);
+                }
             for (int k = 0; k < 5; k++)
             {
-                double y = bse + H * (.4 + R.Next() * .5), t = (y - bse) / H, a = R.Next() * 6.28, up = .2 + R.Next() * .9, n = Math.Sqrt(1 + up * up);
+                double y = Math.Min(brk - 1, bse + H * (.4 + R.Next() * .5)), t = (y - bse) / stem, a = R.Next() * 6.28, up = .2 + R.Next() * .9, n = Math.Sqrt(1 + up * up);
                 double len = (5 + R.Next() * 7) * scale;
                 var e = Limb(w, R, ax + lx * t * t, y, az + lz * t * t, Math.Cos(a) / n, up / n, Math.Sin(a) / n, len, .95, .5, Mat.Snag, 0, .22);
                 if (R.Next() < .6)

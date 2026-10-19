@@ -7,8 +7,9 @@ namespace VoxelTower.Core;
 /// <summary>
 /// The walkable world on metre cells of 8³ voxels: how full each cell is and of what, and where feet rest in it.
 /// Leaves, bushes, grass, ladders and water don't block; trunks, earth, masonry and rock do once a cell is a quarter full,
-/// and a standing trunk through the middle of a cell does however thin it is: nobody stands inside a tree. A cell with a
-/// ladder in it can be hung on and climbed; a cell more than a third full of water drowns whoever stands there.
+/// and a standing trunk through the middle of a cell does however thin it is: nobody stands inside a tree. Nor on one: a cell
+/// shut by nothing but a tree that still stands is no ground, though a log lying on the ground is. A cell with a ladder in
+/// it can be hung on and climbed; a cell more than a third full of water drowns whoever stands there.
 /// </summary>
 public sealed class NavGrid
 {
@@ -37,6 +38,13 @@ public sealed class NavGrid
     public readonly ushort[] GateFill;
     /// <summary>A cell with this much water in it is too deep to stand in.</summary>
     public const int DeepT = 192;
+    /// <summary>
+    /// The cell is shut by nothing but a tree that still stands: its trunk going on up through the cell, or its trunk or a
+    /// bough a metre and more over the ground. That is no ground: nobody stands on it, up in a crown or on top of a butt.
+    /// </summary>
+    public readonly byte[] Tree;
+    /// <summary>A straight run of trunk this tall stands: no log lies so thick.</summary>
+    const int StandingRun = 12;
 
     readonly bool[] _dirty;
     readonly List<int> _dirtyList = new();
@@ -64,6 +72,7 @@ public sealed class NavGrid
         Fill = new ushort[Count]; Earth = new ushort[Count]; Wood = new ushort[Count]; Stone = new ushort[Count]; Rock = new ushort[Count];
         Hard = new byte[Count]; Keep = new byte[Count]; Floor = new ushort[Count];
         Ladder = new byte[Count]; Water = new ushort[Count]; GateFill = new ushort[Count]; Spikes = new ushort[Count];
+        Tree = new byte[Count];
         _dirty = new bool[Count];
         w.Edited += OnEdit;
     }
@@ -83,6 +92,9 @@ public sealed class NavGrid
         return Fill[c] - (gates ? GateFill[c] : 0) >= SolidT;
     }
 
+    /// <summary>Ground to stand on: blocked, and not by a standing tree. Below the field everything is.</summary>
+    public bool Ground(int i, int y, int k, bool gates = false) => Solid(i, y, k, gates) && (y < 0 || Tree[Id(i, y, k)] == 0);
+
     /// <summary>Free to be in. Outside the field's sides nothing is; above the field the sky is.</summary>
     public bool Open(int i, int y, int k, bool gates = false)
     {
@@ -95,7 +107,7 @@ public sealed class NavGrid
     /// <summary>Someone h cells tall can stand here: ground below, room for the body, no deep water.</summary>
     public bool Stand(int i, int y, int k, int h, bool gates = false)
     {
-        if (!In(i, y, k) || y < 1 || !Solid(i, y - 1, k, gates) || Water[Id(i, y, k)] >= DeepT) return false;
+        if (!In(i, y, k) || y < 1 || !Ground(i, y - 1, k, gates) || Water[Id(i, y, k)] >= DeepT) return false;
         for (int d = 0; d < h; d++) if (!Open(i, y + d, k, gates)) return false;
         return true;
     }
@@ -105,7 +117,7 @@ public sealed class NavGrid
     {
         if (!In(i, y, k) || y < 1) return false;
         int c = Id(i, y, k);
-        if (Water[c] >= DeepT || (!(ladders && Ladder[c] != 0) && !Solid(i, y - 1, k, gates))) return false;
+        if (Water[c] >= DeepT || (!(ladders && Ladder[c] != 0) && !Ground(i, y - 1, k, gates))) return false;
         for (int d = 0; d < h; d++) if (!Open(i, y + d, k, gates)) return false;
         return true;
     }
@@ -149,9 +161,10 @@ public sealed class NavGrid
         foreach (int c in _dirtyList)
         {
             _dirty[c] = false;
-            bool was = Fill[c] >= SolidT, ladder = Ladder[c] != 0, deep = Water[c] >= DeepT, spiked = Spikes[c] != 0;
+            bool was = Fill[c] >= SolidT, ladder = Ladder[c] != 0, deep = Water[c] >= DeepT, spiked = Spikes[c] != 0, tree = Tree[c] != 0;
             Recompute(c);
-            if ((Fill[c] >= SolidT) != was || (Ladder[c] != 0) != ladder || (Water[c] >= DeepT) != deep || (Spikes[c] != 0) != spiked) changed++;
+            if ((Fill[c] >= SolidT) != was || (Ladder[c] != 0) != ladder || (Water[c] >= DeepT) != deep || (Spikes[c] != 0) != spiked
+                || (Tree[c] != 0) != tree) changed++;
         }
         _dirtyList.Clear();
         if (changed > 0) Version++;
@@ -165,7 +178,7 @@ public sealed class NavGrid
         int i = I(c), k = K(c), y = Y(c), x0 = i << Shift, y0 = y << Shift, z0 = k << Shift;
         int ci = World.ChunkIndex(x0 >> VoxelWorld.Shift, y0 >> VoxelWorld.Shift, z0 >> VoxelWorld.Shift);
         var d = World.ChunkData(ci);
-        int fill = 0, e = 0, wd = 0, st = 0, rk = 0, hard = 0, keep = 0, lad = 0, wat = 0, gate = 0, spk = 0;
+        int fill = 0, e = 0, wd = 0, st = 0, rk = 0, hard = 0, keep = 0, lad = 0, wat = 0, gate = 0, spk = 0, tv = 0;
         Span<int> trunk = stackalloc int[4];
         if (d == null)
         {
@@ -188,7 +201,11 @@ public sealed class NavGrid
                             // a leaf voxel shuts twice its share of the cell, but takes no longer to hack
                             if (Mat.IsLeaf(v)) fill++;
                             if (v == Mat.Gate) gate += 2;
-                            if ((uint)(xx - 3) < 2 && (uint)(zz - 3) < 2 && Mat.IsTrunk(v)) trunk[(zz - 3) * 2 + xx - 3]++;
+                            if (Mat.IsTrunk(v))
+                            {
+                                tv++;
+                                if ((uint)(xx - 3) < 2 && (uint)(zz - 3) < 2) trunk[(zz - 3) * 2 + xx - 3]++;
+                            }
                         }
                         // pitch is waded and drowned in like water
                         else if (v == Mat.Water || v == Mat.Pitch) wat++;
@@ -198,7 +215,10 @@ public sealed class NavGrid
                 }
         }
         // a trunk standing up through the middle of the cell (not a root, nor a bough across it)
-        if (Math.Max(Math.Max(trunk[0], trunk[1]), Math.Max(trunk[2], trunk[3])) >= 6) fill = Math.Max(fill, SolidT);
+        bool through = Math.Max(Math.Max(trunk[0], trunk[1]), Math.Max(trunk[2], trunk[3])) >= 6;
+        // shut by nothing but the wood of a tree, and that tree still stands
+        bool tree = tv > 0 && (through || fill >= SolidT) && fill - tv < SolidT && Standing(x0, y0, z0);
+        if (through) fill = Math.Max(fill, SolidT);
         Fill[c] = (ushort)fill; Earth[c] = (ushort)e; Wood[c] = (ushort)wd; Stone[c] = (ushort)st; Rock[c] = (ushort)rk;
         Hard[c] = (byte)(hard > 0 ? 1 : 0);
         Keep[c] = (byte)(keep >= 64 ? 1 : 0);
@@ -206,7 +226,43 @@ public sealed class NavGrid
         Water[c] = (ushort)wat;
         GateFill[c] = (ushort)gate;
         Spikes[c] = (ushort)spk;
+        Tree[c] = (byte)(tree ? 1 : 0);
         Floor[c] = (ushort)FloorIn(x0, y0, z0);
+    }
+
+    /// <summary>
+    /// Whether the wood in a cell is a tree that still stands rather than a log that lies: a trunk going on straight up
+    /// through the cell taller than any log lies thick, or wood a metre and more over the ground beneath the cell's middle
+    /// (a bough, or a trunk that has leaned away from where it rose).
+    /// </summary>
+    bool Standing(int x0, int y0, int z0)
+    {
+        for (int zz = 0; zz < CS; zz++)
+            for (int xx = 0; xx < CS; xx++)
+            {
+                int x = x0 + xx, z = z0 + zz;
+                // a run that tall comes out through the cell's top or its bottom
+                if (Mat.IsTrunk(World.Get(x, y0, z)) && Run(x, y0, z) >= StandingRun) return true;
+                if (Mat.IsTrunk(World.Get(x, y0 + CS - 1, z)) && Run(x, y0 + CS - 1, z) >= StandingRun) return true;
+            }
+        int ground = 0;
+        for (int q = 0; q < 4; q++)
+        {
+            int x = x0 + 3 + (q & 1), z = z0 + 3 + (q >> 1), y = y0 - 1;
+            // down through air, leaves and wood to what the tree grew from
+            while (y >= 0 && (Cls[World.Get(x, y, z)] == 0 || Mat.IsTrunk(World.Get(x, y, z)))) y--;
+            ground = Math.Max(ground, y + 1);
+        }
+        return y0 - ground >= CS;
+    }
+
+    /// <summary>How tall the straight run of trunk through a trunk voxel is, up to a standing one's.</summary>
+    int Run(int x, int y, int z)
+    {
+        int n = 1;
+        for (int yy = y + 1; n < StandingRun && Mat.IsTrunk(World.Get(x, yy, z)); yy++) n++;
+        for (int yy = y - 1; n < StandingRun && yy >= 0 && Mat.IsTrunk(World.Get(x, yy, z)); yy--) n++;
+        return n;
     }
 
     static void Tally(byte cls, int n, ref int fill, ref int e, ref int wd, ref int st, ref int rk, ref int hard, ref int keep)
@@ -226,7 +282,8 @@ public sealed class NavGrid
     /// <summary>
     /// The highest top of solid ground among the cell's middle columns, from half a cell below to near its top.
     /// When the middle is open (the cell below holds only the edge of a wall) the feet rest on that edge instead.
-    /// A standing trunk is no floor: only its top is, a stump's, or a root's.
+    /// Wood is a floor only where it lies on the ground: the top of a log, a stump or a root, not a standing trunk nor a
+    /// bough or a twig in the air.
     /// </summary>
     int FloorIn(int x0, int y0, int z0)
     {
@@ -244,8 +301,37 @@ public sealed class NavGrid
         {
             if (yy < 0) return 0;
             byte m = World.Get(x, yy, z);
-            if (Cls[m] != 0 && !(Mat.IsTrunk(m) && Mat.IsTrunk(World.Get(x, yy + 1, z)))) return yy + 1;
+            if (Cls[m] != 0 && !(Mat.IsTrunk(m) && !Lies(x, yy, z))) return yy + 1;
         }
         return -1;
+    }
+
+    /// <summary>
+    /// The top of wood lying on the ground, or of a root or a stump: no trunk straight over it, solid ground under it before
+    /// a log's thickness, and if it is more than a metre up, no trunk rising on beside it (that is a log's flank, not the
+    /// step of a leaning trunk).
+    /// </summary>
+    bool Lies(int x, int y, int z)
+    {
+        if (Mat.IsTrunk(World.Get(x, y + 1, z))) return false;
+        int n = 1;
+        while (n < StandingRun && Mat.IsTrunk(World.Get(x, y - n, z))) n++;
+        if (n >= StandingRun || Cls[World.Get(x, y - n, z)] == 0) return false;
+        return n <= CS || !Rises(x, y, z, StandingRun - n);
+    }
+
+    static readonly (int dx, int dz)[] Aside = { (0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1) };
+
+    /// <summary>Whether trunk goes on up from a voxel so many voxels more, straight or a voxel aside at each step.</summary>
+    bool Rises(int x, int y, int z, int more)
+    {
+        for (; more > 0; more--, y++)
+        {
+            int q = 0;
+            while (q < Aside.Length && !Mat.IsTrunk(World.Get(x + Aside[q].dx, y + 1, z + Aside[q].dz))) q++;
+            if (q == Aside.Length) return false;
+            x += Aside[q].dx; z += Aside[q].dz;
+        }
+        return true;
     }
 }
