@@ -24,7 +24,8 @@ namespace VoxelTower.Game;
 /// moment it goes, --look=2 a swordsman of ours running for the fuse), --pose=stones: a catapult's stone high on its
 /// arc (--look=1 striking the wall), --pose=topple: a block come down on a narrow post with its weight off it, going
 /// over the post's edge (--look=1 standing on its end beside it after), --pose=roll: a ball of earth torn out by
-/// telekinesis rolling down a slope into a band (--look=1 lying at the foot after, the band knocked about),
+/// telekinesis rolling down a slope into a band (--look=1 lying at the foot after, the band knocked about, --look=2 left
+/// running, its trail of dust),
 /// --pose=crush: a ball of earth let fall on the horde's deck over a ditch, breaking through it with the band on it
 /// (--look=1 after: the hole, the ball and the band down in the ditch), --pose=drops: stones and logs tipped off a wall
 /// on a hill onto the band at its foot, rolling down the slope through the rest of it (--look=1 lying at the bottom after),
@@ -65,10 +66,14 @@ public partial class Main : Node3D
     public Unit Inspected;
     /// <summary>Game seconds per real second: 1, 2 or 3.</summary>
     public int Speed = 1;
+    /// <summary>The game's time slowed for a moment after a great blast or fall (see Spectacle): 1 is as fast as it goes.</summary>
+    public float Slow = 1;
     public bool Paused;
     /// <summary>The valley's sounds.</summary>
     public Sound Sound;
     public MagicView Magic;
+    /// <summary>The great moments made to be felt: the view shaken, the screen flashed, the time slowed a moment.</summary>
+    public Spectacle Spectacle;
     /// <summary>A run driven by a script (a test, a staged scene, a screenshot), not by a hand on the mouse.</summary>
     public bool Scripted => _selfTest || _demo || _shot != null;
 
@@ -238,6 +243,9 @@ public partial class Main : Node3D
         Sound = new Sound();
         AddChild(Sound);
         Sound.Init(this);
+        Spectacle = new Spectacle();
+        AddChild(Spectacle);
+        Spectacle.Init(this);
         if (_soundsTo != null) { Sound.SaveAll(_soundsTo); GD.Print($"[voxel-tower] {Sound.Clips} sounds written to {_soundsTo}"); GetTree().Quit(); }
         // where the warbands will go is shown in play; scripted runs keep the horde's ways to the waves
         Sim.WantTrails = !_selfTest;
@@ -346,7 +354,7 @@ public partial class Main : Node3D
         if (_frames > 5) _slowest = Math.Max(_slowest, delta);
         if (!Paused && !_selfTest)
         {
-            double dt = Math.Min(delta, .1) * Speed;
+            double dt = Math.Min(delta, .1) * Speed * Slow;
             while (dt > 1e-6)
             {
                 float step = (float)Math.Min(dt, .05);
@@ -936,6 +944,19 @@ public partial class Main : Node3D
         Check("powder is a trap the brush lays, and kegs set alight by a fire arrow go up and throw the goblin by them", powderInHand && booms > 0 && kegsLeft == 0 && (nearKegs.Dead || nearKegs.Hp < nearKegs.MaxHp),
             $"in hand {powderInHand}; {booms} blasts, {kegsLeft} of {kegs.Count} kegs left; the goblin {(nearKegs.Dead ? "dead" : $"{nearKegs.Hp:0} hp")}");
         nearKegs.Dead = true; nearKegs.DiedAt = -999;
+
+        // a great blast in the middle of the view: it shakes, the screen flashes and the time slows a moment, and all of
+        // it passes by itself (the shaking and the slowing turned on for this, and off again after)
+        await Look(Site.KeepX, Site.KeepZ);
+        Settings.Feel(1, true);
+        Spectacle.Felt(Site.KeepX, Site.KeepZ, 1.2f, flash: true);
+        await Frames(3);
+        float shook = Rig.Shaking, slowed = Slow, flashed = Spectacle.FlashNow;
+        await Frames(150);
+        Check("a great blast in the middle of the view shakes it, flashes the screen and slows the time a moment, and it all passes",
+            shook > .3f && slowed < .5f && flashed > .05f && Slow == 1 && Rig.Shaking < shook && Spectacle.FlashNow == 0,
+            $"shaking {shook:0.00} → {Rig.Shaking:0.00}, time ×{slowed:0.00} → ×{Slow:0.00}, flash {flashed:0.00} → {Spectacle.FlashNow:0.00}");
+        Settings.Feel(0, false);
 
         // the horde called early: no gold for it, only less known of the defences
         Sim.Waves.Countdown = 200;
@@ -1634,9 +1655,10 @@ public partial class Main : Node3D
         Advance(2.5);
         sim.LetGo();
         // down the slope and among them (or till it lies still)
-        for (int t = 0; t < 600 && ball != null && sim.Fliers.Contains(ball) && (_look == 1 || !ball.Rolling || ball.X < sx + 70); t++) Advance(.05);
+        for (int t = 0; t < 600 && ball != null && sim.Fliers.Contains(ball) && (_look == 1 || !ball.Rolling || ball.X < sx + (_look == 2 ? 40 : 70)); t++) Advance(.05);
         if (_look == 1) Advance(2);
-        Paused = true;
+        // --look=2: left running, to see the dust it raises as it goes (shoot a few dozen frames in)
+        Paused = _look != 2;
         Rig.SetAt(w.WX(sx + 72), w.WY(g + 6), w.WZ(sz), -.75f, .38f, 4f);
         Hud.Refresh();
     }

@@ -13,12 +13,20 @@ namespace VoxelTower.Game;
 /// a green glimmer where the dead get up. And what flies: the pieces of the world broken loose, voxel by voxel as they
 /// stood, tumbling on their arcs and raising dust where they come down; the violet glow of the hand that holds one; the
 /// flash and the cloud of a blast. A stone skin glimmers on our walls, the fog of the dead creeps over the ground,
-/// sickly motes hang over the plague-struck and a drop of blood over those under the oath.
+/// sickly motes hang over the plague-struck and a drop of blood over those under the oath. A blast is a ball of fire
+/// swelling and gone, sparks flung every way and a column of smoke going up; a great piece flying or a ball rolling
+/// leaves a trail of dust, and one coming down hard throws up chips of what it struck.
 /// </summary>
 public partial class MagicView : Node3D
 {
     sealed class Flash { public OmniLight3D Light; public Node3D Thing; public double At; public float Energy, Life; }
     sealed class Ring { public MeshInstance3D Node; public StandardMaterial3D Mat; public double At; public float R; }
+    /// <summary>The ball of fire of a blast: swelling, paling from white through orange to smoke, and gone.</summary>
+    sealed class Fireball { public MeshInstance3D Node; public StandardMaterial3D Mat; public double At; public float R; }
+    readonly List<Fireball> _fireballs = new();
+    /// <summary>When each piece in the air last left a puff of dust behind it, and how many puffs may be made now.</summary>
+    readonly Dictionary<int, double> _trailAt = new();
+    float _trailBudget;
 
     Main _m;
     readonly List<Flash> _flashes = new();
@@ -28,6 +36,8 @@ public partial class MagicView : Node3D
     static readonly Color Hex = new(.45f, .85f, .28f);
     MultiMeshInstance3D _drops, _chains, _marks, _sick, _sworn, _sparks;
     StandardMaterial3D _mote, _bolt, _fogMat;
+    /// <summary>Sparks of a blast: burning bright enough to glow.</summary>
+    StandardMaterial3D _ember;
     /// <summary>The voxels of the pieces in the air, one box each; their buffer, written whole every frame.</summary>
     MultiMeshInstance3D _bits;
     float[] _bitBuf = new float[0];
@@ -52,6 +62,7 @@ public partial class MagicView : Node3D
             Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
         };
         _bolt = new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = new Color(.86f, .9f, 1f) };
+        _ember = new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = new Color(3.2f, 1.6f, .45f) };
         _drops = Multi(new SphereMesh { Radius = .2f, Height = .4f, RadialSegments = 8, Rings = 4 },
             new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = Pitch });
         _chains = Multi(new TorusMesh { InnerRadius = .82f, OuterRadius = 1f, Rings = 18, RingSegments = 5 },
@@ -135,18 +146,18 @@ public partial class MagicView : Node3D
     }
 
     /// <summary>A burst of motes from a spot, rising or falling, in a colour.</summary>
-    CpuParticles3D Motes(Vector3 at, Color c, int n, float up, float spread, float size = .06f)
+    CpuParticles3D Motes(Vector3 at, Color c, int n, float up, float spread, float size = .06f, float life = 2, Material look = null)
     {
         var ramp = new Gradient();
         ramp.SetColor(0, new Color(c, .95f));
         ramp.SetColor(1, new Color(c, 0));
         var p = new CpuParticles3D
         {
-            Position = at, Amount = n, Lifetime = 2, OneShot = true, Explosiveness = .85f, Emitting = true,
+            Position = at, Amount = n, Lifetime = life, OneShot = true, Explosiveness = .85f, Emitting = true,
             EmissionShape = CpuParticles3D.EmissionShapeEnum.Sphere, EmissionSphereRadius = spread,
             Direction = Vector3.Up, Spread = 40, InitialVelocityMin = up * .3f, InitialVelocityMax = up, Gravity = new Vector3(0, up > 0 ? .3f : -6, 0),
             DampingMin = .4f, DampingMax = 1, ScaleAmountMin = .6f, ScaleAmountMax = 1.3f, ColorRamp = ramp,
-            Mesh = new BoxMesh { Size = Vector3.One * size, Material = _mote }, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            Mesh = new BoxMesh { Size = Vector3.One * size, Material = look ?? _mote }, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         };
         AddChild(p);
         return p;
@@ -246,6 +257,22 @@ public partial class MagicView : Node3D
             Motes(at, new Color(.2f, .16f, .13f), (int)(40 + 80 * k), 2.4f + 1.4f * k, reach * .5f, .12f + .05f * k));
         Pass(Motes(at + Vector3.Up * .8f, new Color(.05f, .045f, .04f), (int)(20 + 30 * k), 1.4f, reach * .4f, .22f + .08f * k), 3);
         Spread(at, r * 1.2f, new Color(1f, .7f, .4f));
+        // the ball of fire, swelling out and gone
+        var fire = new StandardMaterial3D
+        {
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = new Color(4f, 3f, 1.8f, .95f),
+            Transparency = BaseMaterial3D.TransparencyEnum.Alpha, CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+        };
+        var ball = new MeshInstance3D { Mesh = new SphereMesh { Radius = 1, Height = 2, RadialSegments = 20, Rings = 10 }, MaterialOverride = fire,
+            Position = at + Vector3.Up * reach * .2f, Scale = Vector3.One * .05f, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        AddChild(ball);
+        _fireballs.Add(new Fireball { Node = ball, Mat = fire, At = _t, R = reach * 1.05f });
+        // sparks flung every way, falling burning
+        var sparks = Motes(at + Vector3.Up * .3f, new Color(1f, .62f, .22f), (int)(50 + 90 * k), 9 + 4 * k, reach * .2f, .045f, 1.4f, _ember);
+        sparks.Spread = 180; sparks.Gravity = new Vector3(0, -9.8f, 0); sparks.DampingMin = .1f; sparks.DampingMax = .4f;
+        Pass(sparks, 2);
+        // and a column of smoke going up after, slow and long
+        Pass(Motes(at + Vector3.Up * reach * .4f, new Color(.1f, .09f, .08f), (int)(14 + 22 * k), .9f + .4f * k, reach * .3f, .35f + .15f * k, 4.5f), 6);
     }
 
     /// <summary>The fuses burning down to powder: sparks spitting where each charge is.</summary>
@@ -293,6 +320,38 @@ public partial class MagicView : Node3D
         var at = At(x, y, z);
         float r = MathF.Cbrt(n) * VoxelWorld.Vox * .5f;
         Pass(Motes(at, new Color(.22f, .19f, .15f), Math.Clamp(n / 24, 6, 50), 1 + Math.Min(2, speed / 120), r, .08f + Math.Min(.1f, n / 9000f)), 2.5);
+        // heavy and hard: chips of what it struck thrown up
+        float mps = speed / VoxelWorld.PerMetre;
+        if (n < 60 || mps < 4) return;
+        var w = _m.World;
+        int gx = Math.Clamp((int)x, 0, w.SX - 1), gz = Math.Clamp((int)z, 0, w.SZ - 1), gy = Math.Clamp((int)(y - r / VoxelWorld.Vox), 1, w.SY - 1);
+        for (int k = 0; k < 4 && w.Get(gx, gy, gz) == Mat.Air && gy > 1; k++) gy--;
+        byte struck = w.Get(gx, gy, gz);
+        if (struck != Mat.Air && struck != Mat.Water) _m.Debris.Spawn(struck, gx, gy, gz, Math.Clamp(n / 40, 3, 14), Math.Min(4.5f, 1.2f + mps * .25f));
+    }
+
+    /// <summary>
+    /// A great piece flying or a ball or log rolling leaves dust behind it as it goes, a puff now and then — no more of
+    /// them in all than the eye can take.
+    /// </summary>
+    void Trails(Sim sim, float dt)
+    {
+        _trailBudget = Math.Min(30, _trailBudget + dt * 30);
+        foreach (var f in sim.Fliers)
+        {
+            if (_trailBudget < 1) break;
+            if (f.Unit != null || f.Voxels.Count < 60 || f.Held) continue;
+            float hs = MathF.Sqrt(f.VX * f.VX + f.VZ * f.VZ) / VoxelWorld.PerMetre, s = MathF.Sqrt(f.VX * f.VX + f.VY * f.VY + f.VZ * f.VZ) / VoxelWorld.PerMetre;
+            bool rolling = f.Rolling && hs > 1.2f, flying = !f.Rolling && !f.Tipping && s > 5;
+            if (!rolling && !flying) continue;
+            if (_trailAt.TryGetValue(f.Id, out double last) && _t - last < (rolling ? .09 : .06)) continue;
+            _trailAt[f.Id] = _t;
+            _trailBudget -= 1;
+            float big = MathF.Cbrt(f.Voxels.Count) * VoxelWorld.Vox;
+            var at = At(f.X, f.Rolling ? f.Y - f.RollR : f.Y, f.Z);
+            Pass(Motes(at, rolling ? new Color(.36f, .31f, .25f) : new Color(.3f, .27f, .23f), rolling ? 5 : 3, rolling ? .6f : .2f, big * .3f, .1f + big * .03f, 1.6f), 2);
+        }
+        if (_trailAt.Count > 256) _trailAt.Clear();
     }
 
     /// <summary>Something that goes by itself after a while (dust, smoke).</summary>
@@ -357,12 +416,25 @@ public partial class MagicView : Node3D
         }
         for (int i = _passing.Count - 1; i >= 0; i--)
             if (_t > _passing[i].until) { _passing[i].node.QueueFree(); _passing.RemoveAt(i); }
+        for (int i = _fireballs.Count - 1; i >= 0; i--)
+        {
+            var b = _fireballs[i];
+            float age = (float)(_t - b.At), k = Math.Clamp(age / .7f, 0, 1);
+            // out fast, then slower; white hot, then orange, then the brown of smoke, thinning to nothing
+            b.Node.Scale = Vector3.One * Math.Max(.05f, b.R * (.25f + .75f * (1 - (1 - k) * (1 - k) * (1 - k))));
+            var c = k < .35f ? new Color(4f, 3f, 1.8f).Lerp(new Color(2.6f, 1.1f, .3f), k / .35f) : new Color(2.6f, 1.1f, .3f).Lerp(new Color(.22f, .16f, .11f), (k - .35f) / .65f);
+            b.Mat.AlbedoColor = new Color(c.R, c.G, c.B, .95f * (1 - k * k));
+            if (k < 1) continue;
+            b.Node.QueueFree();
+            _fireballs.RemoveAt(i);
+        }
         Bogs(sim);
         Curses(sim);
         Drops(sim);
         Chains(sim);
         Marks(sim);
         Pieces(sim);
+        Trails(sim, (float)delta);
         Grip(sim);
         Skins(sim);
         Fogs(sim);

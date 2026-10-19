@@ -5,8 +5,8 @@ namespace VoxelTower.Game;
 
 /// <summary>
 /// The player's own settings, kept between games in user://settings.cfg: how large the interface is drawn, over what
-/// the window's size already gives it (Ctrl and + or − steps it, Ctrl+0 puts it back as it was), and how loud the
-/// sounds are.
+/// the window's size already gives it (Ctrl and + or − steps it, Ctrl+0 puts it back as it was), how loud the sounds
+/// are, how hard a blast shakes the view and whether the game's time slows for a moment after a great one.
 /// </summary>
 public static class Settings
 {
@@ -16,6 +16,11 @@ public static class Settings
     public static float UiScale { get; private set; } = 1;
     /// <summary>How loud the sounds are, from nothing to full, in tenths.</summary>
     public static float Volume { get; private set; } = .8f;
+    /// <summary>How hard a blast or a great fall shakes the view: not at all, a little, fully.</summary>
+    public static float Shake { get; private set; } = 1;
+    public static readonly float[] Shakes = { 0, .5f, 1 };
+    /// <summary>Whether the game's time slows for a moment after a great blast or fall near what the view looks at.</summary>
+    public static bool SlowMo { get; private set; } = true;
     /// <summary>A scripted run (a test, a screenshot) neither reads the player's settings nor keeps its own.</summary>
     static bool _scripted;
 
@@ -26,6 +31,8 @@ public static class Settings
         if (cfg.Load(File) != Error.Ok) return;
         UiScale = Snap(cfg.GetValue("interface", "scale", 1f).AsSingle());
         Volume = Math.Clamp(MathF.Round(cfg.GetValue("sound", "volume", .8f).AsSingle() * 10) / 10, 0, 1);
+        Shake = Math.Clamp(cfg.GetValue("view", "shake", 1f).AsSingle(), 0, 1);
+        SlowMo = cfg.GetValue("view", "slowmo", true).AsBool();
     }
 
     static void Save()
@@ -36,6 +43,8 @@ public static class Settings
         cfg.Load(File);
         cfg.SetValue("interface", "scale", UiScale);
         cfg.SetValue("sound", "volume", Volume);
+        cfg.SetValue("view", "shake", Shake);
+        cfg.SetValue("view", "slowmo", SlowMo);
         cfg.Save(File);
     }
 
@@ -51,8 +60,29 @@ public static class Settings
     {
         _scripted = true;
         UiScale = scale > 0 ? Snap(scale) : 1;
-        // a scripted run makes its sounds, but nobody needs to hear them
+        // a scripted run makes its sounds, but nobody needs to hear them; and it keeps the view and the time steady
         Volume = 0;
+        Shake = 0;
+        SlowMo = false;
+    }
+
+    /// <summary>A scripted run that looks at the shaking and the slowing has them for itself, and nothing kept.</summary>
+    public static void Feel(float shake, bool slowMo) { Shake = shake; SlowMo = slowMo; }
+
+    /// <summary>A step more or less shaking; kept for next time.</summary>
+    public static void StepShake(int dir)
+    {
+        int i = Array.IndexOf(Shakes, Shake);
+        if (i < 0) i = Shakes.Length - 1;
+        Shake = Shakes[Math.Clamp(i + dir, 0, Shakes.Length - 1)];
+        Save();
+    }
+
+    /// <summary>The moment of slowed time after a great blast, on or off; kept for next time.</summary>
+    public static void ToggleSlowMo()
+    {
+        SlowMo = !SlowMo;
+        Save();
     }
 
     /// <summary>Sets how loud everything is heard.</summary>

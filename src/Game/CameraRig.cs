@@ -6,7 +6,7 @@ namespace VoxelTower.Game;
 /// <summary>
 /// The orthographic diorama camera. Wheel, a pinch or two fingers up and down on a trackpad, PageUp/PageDown zoom;
 /// middle button (or Alt + left) orbits, right button drags the map, WASD or arrows pan, Q/E turn,
-/// Y looks straight down and back, H returns home.
+/// Y looks straight down and back, H returns home. A blast or a great fall near what it looks at shakes it.
 /// </summary>
 public partial class CameraRig : Node3D
 {
@@ -37,6 +37,15 @@ public partial class CameraRig : Node3D
         _slant = _pitch;
         _pitch = Overhead;
     }
+
+    /// <summary>How hard the view shakes now, nothing to all; it dies away by itself.</summary>
+    float _trauma, _shakeT;
+
+    /// <summary>Shakes the view, the more the harder; one jolt on another adds up, to a limit.</summary>
+    public void Shake(float amount) { if (amount > 0) _trauma = Math.Min(1, _trauma + amount); }
+
+    /// <summary>How hard the view is shaking now.</summary>
+    public float Shaking => _trauma;
 
     float _tx, _tz, _yaw, _pitch, _zoom;     // where the camera is heading
     float _cx, _cz, _cyaw, _cpitch, _czoom;  // where it is now
@@ -146,8 +155,13 @@ public partial class CameraRig : Node3D
         _cx += (_tx - _cx) * a; _cz += (_tz - _cz) * a;
         _cyaw += (_yaw - _cyaw) * a; _cpitch += (_pitch - _cpitch) * a;
         _czoom += (_zoom - _czoom) * a;
+        _trauma = Math.Max(0, _trauma - dt * 1.3f);
+        _shakeT += dt;
         Apply();
     }
+
+    /// <summary>A shaking, one way of it: three tremors over one another, from a slow sway to a rattle.</summary>
+    static float Wobble(float t, float seed) => MathF.Sin(t * 31 + seed) * .55f + MathF.Sin(t * 47 + seed * 2.3f) * .3f + MathF.Sin(t * 83 + seed * 4.1f) * .15f;
 
     static bool Down(Key k) => Input.IsPhysicalKeyPressed(k) && !Input.IsKeyPressed(Key.Ctrl) && !Input.IsKeyPressed(Key.Meta);
 
@@ -164,6 +178,16 @@ public partial class CameraRig : Node3D
         var up = cp < .02f ? new Vector3(-MathF.Sin(_cyaw), 0, -MathF.Cos(_cyaw)) : Vector3.Up;
         Cam.LookAtFromPosition(pos, target, up);
         Cam.VOffset = -(BottomInset - TopInset) * .5f * Cam.Size / Math.Max(1f, vp.Y);
+        // shaking: the view jolted aside and turned a little, as the square of how hard, so a small jolt stays small
+        float k = _trauma * _trauma * Settings.Shake;
+        if (k > 1e-4f)
+        {
+            float amp = k * .035f * Cam.Size;
+            Cam.HOffset = amp * Wobble(_shakeT, 0);
+            Cam.VOffset += amp * Wobble(_shakeT, 1.7f);
+            Cam.RotateObjectLocal(Vector3.Forward, k * .02f * Wobble(_shakeT, 3.1f));
+        }
+        else Cam.HOffset = 0;
     }
 
     /// <summary>The point of the map the camera is heading for, in world metres (x, z).</summary>

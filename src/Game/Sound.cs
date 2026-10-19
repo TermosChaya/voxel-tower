@@ -60,10 +60,17 @@ public partial class Sound : Node
             if (k != SpellKind.Explosion) Play("spell", x, y, z, .2, 1, far: true);
         };
         // a blast, of the spell or of powder: the bigger, the louder
-        sim.Exploded += (x, y, z, r) => Play("boom", x, y, z, .08, Math.Clamp(.5f + r / (3 * VoxelWorld.PerMetre), .5f, 1.4f), far: true);
+        sim.Exploded += (x, y, z, r) =>
+        {
+            float loud = Math.Clamp(.5f + r / (3 * VoxelWorld.PerMetre), .5f, 1.4f);
+            Play("boom", x, y, z, .08, loud, far: true);
+            // a great one rolls on after, low, as the valley throws it back
+            if (r > 1.5f * VoxelWorld.PerMetre) GetTree().CreateTimer(.3).Timeout += () => Play("rumble", x, y, z, 0, loud * .8f, far: true, pitch: .7f);
+        };
         sim.Planted += c => Play("fuse", c.X, c.Y, c.Z, .5, 1);
         // a piece of the world coming down: the heavier, the louder
-        sim.Landed += (x, y, z, n, speed) => { if (n >= 20) Play("crash", x, y, z, .07, Math.Clamp(.25f + n / 700f, .25f, 1.1f)); };
+        // a piece of the world coming down: the heavier, the louder, and a great one deeper
+        sim.Landed += (x, y, z, n, speed) => { if (n >= 20) Play("crash", x, y, z, .07, Math.Clamp(.25f + n / 700f, .25f, 1.1f), pitch: n >= 600 ? .72f : 0); };
         sim.Struck += (x, y, z) => Play("thunder", x, y, z, .1, 1.3f, far: true);
         sim.RiteDone += (x, y, z) => Play("gong", x, y, z, .5, 1, far: true);
         sim.Healed += (x, y, z) => Play("hex", x, y, z, .6, .5f);
@@ -96,7 +103,7 @@ public partial class Sound : Node
     }
 
     /// <summary>Plays a sound at a spot (voxels), unless the same one was heard just now or it is too far to be heard.</summary>
-    void Play(string clip, float x, float y, float z, double every, float loud, bool far = false)
+    void Play(string clip, float x, float y, float z, double every, float loud, bool far = false, float pitch = 0)
     {
         if (!_clips.TryGetValue(clip, out var wav)) return;
         if (_last.TryGetValue(clip, out double at) && _t - at < every) return;
@@ -108,7 +115,7 @@ public partial class Sound : Node
             _last[clip] = _t;
             p.Stream = wav;
             p.VolumeDb = Mathf.LinearToDb(gain * gain);
-            p.PitchScale = .92f + (float)_rnd.NextDouble() * .16f;
+            p.PitchScale = (pitch > 0 ? pitch : 1) * (.92f + (float)_rnd.NextDouble() * .16f);
             p.Play();
             Played++;
             Heard.Add(clip);

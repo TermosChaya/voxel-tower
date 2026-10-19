@@ -175,6 +175,15 @@ public partial class GameMenu : Control
             "слышно то, что ближе к середине экрана.", () => Settings.Volume <= 0 ? "без звука" : $"{Math.Round(Settings.Volume * 100)} %", d => Settings.StepVolume(d));
         volume.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
         _page.AddChild(volume);
+        var shake = new Stepper("Тряска и вспышки", "Тряска и вспышки\nКак сильно взрыв, обвал или тяжёлое падение рядом встряхивают вид, и вспыхивает ли " +
+            "экран от большого взрыва или молнии: никак, слабо или в полную силу.",
+            () => Settings.Shake <= 0 ? "нет" : Settings.Shake < 1 ? "слабая" : "сильная", d => Settings.StepShake(d));
+        shake.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+        _page.AddChild(shake);
+        var slow = new Stepper("Замедление", "Замедление\nПосле большого взрыва или обвала рядом с серединой вида время на миг замедляется, чтобы разглядеть, " +
+            "как летят обломки, — и возвращается само.", () => Settings.SlowMo ? "да" : "нет", d => Settings.ToggleSlowMo());
+        slow.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+        _page.AddChild(slow);
         _page.AddChild(new Rule(false));
         _page.AddChild(Big("Назад", "", Main_));
     }
