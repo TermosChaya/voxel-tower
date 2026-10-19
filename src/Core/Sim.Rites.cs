@@ -223,7 +223,10 @@ public sealed partial class Sim
                 break;
         }
         if (power) favour *= 1.5;
-        Favour += favour;
+        // the altar of grace: half as much again, and a revelation more
+        favour *= SacrificeMore;
+        if (Knows("altar")) revelations++;
+        GainFavour(favour);
         Revelations += revelations;
         priest.Rite = null; priest.Captive = null; priest.State = UnitState.Idle; priest.NextSearch = 0;
         RiteDone?.Invoke(ax, ay, az);

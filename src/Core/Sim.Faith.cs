@@ -44,7 +44,7 @@ public sealed partial class Sim
     {
         double n = 0;
         foreach (var u in Units)
-            if (!u.Dead && u.T.Prays && u.Pastime == Pastime.Pray && u.Shrine >= 0 && SanctumAt(u.Shrine) is { } z) n += PrayerPerMinute * Hearing(z);
+            if (!u.Dead && u.T.Prays && u.Pastime == Pastime.Pray && u.Shrine >= 0 && SanctumAt(u.Shrine) is { } z) n += PrayerPerMinute * Hearing(z) * PrayerMore;
         return n;
     }
 
@@ -109,7 +109,7 @@ public sealed partial class Sim
         float fx = m != null ? m.Place.X : (z.X0 + z.X1) / 2f, fz = m != null ? m.Place.Z : (z.Z0 + z.Z1) / 2f;
         if (MathF.Abs(fx - u.X) + MathF.Abs(fz - u.Z) > 6) u.Facing = MathF.Atan2(fz - u.Z, fx - u.X);
         double hear = Hearing(z);
-        Favour += PrayerPerMinute / 60 * hear * dt;
+        GainFavour(PrayerPerMinute / 60 * hear * dt * PrayerMore);
         u.Why = hear == 0 ? $"молится, но место осквернено: {m.Name}" : hear > 1 ? $"молится на месте силы: {m.Name}" : "молится в святилище";
     }
 

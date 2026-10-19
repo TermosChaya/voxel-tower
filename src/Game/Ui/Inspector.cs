@@ -48,7 +48,13 @@ public partial class Inspector : Control
         var sel = Chosen();
         if (sel.Count == 0 && _m.KeepChosen) return "keep";
         if (sel.Count == 0 && _m.Inspected is { } look) return "look:" + look.Id;
-        if (sel.Count == 0) return "home";
+        // the household's pane is made anew when a kind comes into it or goes out of it
+        if (sel.Count == 0)
+        {
+            var kinds = new System.Text.StringBuilder("home:");
+            foreach (var t in Kinds.PlayerKinds) kinds.Append(_m.Sim.Count(t) > 0 ? '1' : '0');
+            return kinds.ToString();
+        }
         return (sel.Count == 1 ? "one:" : "many:") + string.Join(",", sel.ConvertAll(u => u.Id));
     }
 
@@ -70,7 +76,7 @@ public partial class Inspector : Control
         foreach (var (side, px) in new[] { ("margin_left", 14), ("margin_right", 12), ("margin_top", 8), ("margin_bottom", 8) }) box.AddThemeConstantOverride(side, px);
         var sel = Chosen();
         box.AddChild(_key == "tool" ? ToolPane() : _key == "keep" ? KeepPane() : _key.StartsWith("spell:") ? SpellPane() : _key.StartsWith("look:") && _m.Inspected != null ? LookPane(_m.Inspected)
-            : sel.Count == 0 ? HomePane() : sel.Count == 1 ? OnePane(sel[0]) : GroupPane(sel));
+            : _key.StartsWith("home") ? HomePane() : sel.Count == 1 ? OnePane(sel[0]) : GroupPane(sel));
         AddChild(box);
         _pane = box;
     }
@@ -287,8 +293,8 @@ public partial class Inspector : Control
                 _ when sp.Radius <= 0 => "щёлкните по полю где угодно",
                 _ => "щёлкните по полю",
             };
-            state.Text = $"{sp.Cost:0} вмешательства (есть {have:0})" + (ready > 0 ? $" · будет готово через {ready:0} с" : " · готово") + $" · {how} · Esc — убрать";
-            state.AddThemeColorOverride("font_color", ready > 0 || have < sp.Cost ? Ornament.Blood.Lightened(.3f) : Ornament.BronzeLight);
+            state.Text = $"{_m.Sim.CostOf(sp):0} вмешательства (есть {have:0})" + (ready > 0 ? $" · будет готово через {ready:0} с" : " · готово") + $" · {how} · Esc — убрать";
+            state.AddThemeColorOverride("font_color", ready > 0 || have < _m.Sim.CostOf(sp) ? Ornament.Blood.Lightened(.3f) : Ornament.BronzeLight);
         });
         return col;
     }

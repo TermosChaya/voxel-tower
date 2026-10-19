@@ -114,6 +114,8 @@ public sealed partial class Sim
         u.Dead = true; u.DiedAt = Time; u.State = UnitState.Dead; u.Hp = 0;
         u.KilledBy = cause ?? by?.T.Name ?? "";
         if (u.Team == Team.Horde && u.T != Kinds.Thrall) Kills++;
+        // the reaping: a raider the spells killed gives intervention back
+        if (u.Team == Team.Horde && cause != null && SpellCauses.Contains(cause) && Knows("reap")) GainFavour(2);
         if (u.T == Kinds.Thief) ThiefFell(u);
         if (u.T == Kinds.SiegeTower) TowerFell(u);
         if (u.Charge) DropCharge(u, cause ?? "");

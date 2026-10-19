@@ -36,6 +36,8 @@ public sealed class Flier
     /// <summary>A catapult's stone: how much it breaks out where it strikes (voxels, as a ball's reach), and the engine that threw it.</summary>
     public int Smash;
     public Unit By;
+    /// <summary>A star brought down by the spell, not come down yet: where it first strikes, the ground goes up.</summary>
+    public bool Star;
     /// <summary>
     /// Tipping over: it came down on too narrow a footing with its weight beyond it, and turns over the edge of that
     /// footing; the edge (a point on it), its middle as it began to turn, since when, and how many times it has tipped.
@@ -478,6 +480,7 @@ public sealed partial class Sim
     {
         float speed = MathF.Sqrt(f.VX * f.VX + f.VY * f.VY + f.VZ * f.VZ);
         if (f.Unit != null) { Alight(f, speed); return true; }
+        if (f.Star) StarStrikes(f);
         int broke = f.Smash > 0 ? StoneLands(f, speed) : 0;
         int ix = Math.Clamp((int)f.X, 2, World.SX - 3), iz = Math.Clamp((int)f.Z, 2, World.SZ - 3), iy = Math.Clamp((int)f.Y, 2, World.SY - 3);
         // a catapult's stone has done its harm already, as stones do; should it roll off what it struck and come down

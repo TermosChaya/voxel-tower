@@ -9,7 +9,7 @@ namespace VoxelTower.Game;
 /// The mysteries, as a panel let down from the beam: the intervention at hand and the revelations, where the priests
 /// pray and how well they are heard, the sacrifices that can be asked for now — a prisoner, a carcass from the hunt,
 /// or one of our own (two clicks: it cannot be taken back) — and the spells in their four circles: one learnt is
-/// taken in hand with a click, one not yet learnt is learnt with a click when there is what it takes.
+/// taken in hand with a click; one not yet learnt opens the lore tree on its page of the intervention, where it is learnt.
 /// </summary>
 public partial class MysteryPanel : VBoxContainer
 {
@@ -47,7 +47,7 @@ public partial class MysteryPanel : VBoxContainer
         _rite = Hud.Text("", Ornament.SerifItalic, 13, Ornament.EmberGlow, wrap: true);
         _rite.CustomMinimumSize = new Vector2(Width - 30, 0);
         AddChild(_rite);
-        AddChild(Hud.CapsLabel("Заклинания · первое в круге — за вмешательство, остальные — за откровения", 9, Ornament.BronzeLight));
+        AddChild(Hud.CapsLabel("Заклинания · постигают их в «Знаниях», на странице «Вмешательство»", 9, Ornament.BronzeLight));
         // a row to each circle: its name, then its spells, as many to a line as there is room for
         var circles = new VBoxContainer();
         circles.AddThemeConstantOverride("separation", 6);
@@ -87,7 +87,7 @@ public partial class MysteryPanel : VBoxContainer
         return b;
     }
 
-    /// <summary>A spell's plaque: one learnt goes into the hand (the panel goes up, out of the way); one not yet, learnt.</summary>
+    /// <summary>A spell's plaque: one learnt goes into the hand (the panel goes up, out of the way); one not yet opens the tree where it is learnt.</summary>
     void SpellPressed(Spell sp)
     {
         var sim = _m.Sim;
@@ -97,9 +97,8 @@ public partial class MysteryPanel : VBoxContainer
             _m.Hud.ClosePanel();
             return;
         }
-        if (!sim.LearnSpell(sp.Kind)) _m.Hud.Float(sp.ByFavour ? $"нужно {sp.Learn} вмешательства" : $"нужно откровений: {sp.Learn}", Ornament.Blood);
-        Refresh();
-        _m.Hud.Refresh();
+        _m.Hud.OpenPanel("lore");
+        _m.Hud.Lore.ShowPage(2);
     }
 
     void Ask(RiteKind kind, Unit victim = null)
@@ -140,7 +139,7 @@ public partial class MysteryPanel : VBoxContainer
         var sim = _m.Sim;
         int priests = 0, praying = 0;
         foreach (var u in sim.Units) if (!u.Dead && u.T.Prays) { priests++; if (u.Pastime == Pastime.Pray) praying++; }
-        _head.Text = $"Вмешательство: {sim.Favour:0} · Откровения: {sim.Revelations} · жрецов {priests}" + (praying > 0 ? $", молятся {praying} (+{sim.PrayerNow():0.#} в минуту)" : "");
+        _head.Text = $"Вмешательство: {sim.Favour:0} из {sim.FavourCap:0} · Откровения: {sim.Revelations} · жрецов {priests}" + (praying > 0 ? $", молятся {praying} (+{sim.PrayerNow():0.#} в минуту)" : "");
         _where.Text = Where(sim);
         int prisoners = sim.Prisoners(), bound = sim.BoundInField();
         _prisoner.Text = $"Пленного · {prisoners}" + (bound > 0 ? $" (и связанных в поле {bound})" : "");
@@ -158,12 +157,14 @@ public partial class MysteryPanel : VBoxContainer
         {
             bool known = sim.Known.Contains(sp.Kind), learnable = sim.CanLearnSpell(sp);
             double ready = sim.ReadyIn(sp.Kind);
-            b.Text = known ? $"{sp.Name} · {sp.Cost:0}" + (ready > 0 ? $" · {ready:0} с" : "") : $"{sp.Name} · {sp.Learn} {(sp.ByFavour ? "вмеш." : "откр.")}";
-            b.Disabled = !known && !learnable;
-            b.Modulate = known ? (ready > 0 || sim.Favour < sp.Cost ? new Color(.85f, .8f, .8f) : new Color(1.1f, 1.02f, 1.2f)) : learnable ? Colors.White : new Color(1, 1, 1, .55f);
-            string what = known ? (ready > 0 ? $"Будет готово через {ready:0} с. " : "") + $"Щелчок — взять в руку: {sp.Cost:0} вмешательства за раз, затем {sp.Cooldown:0} с ждать."
-                : learnable ? $"Щелчок — постичь за {sp.Learn} {(sp.ByFavour ? "вмешательства" : "откровений")}."
-                : sp.ByFavour ? $"Постигается за {sp.Learn} вмешательства." : $"Постигается за откровения ({sp.Learn}): их дают жертвы.";
+            double cost = sim.CostOf(sp);
+            b.Text = known ? $"{sp.Name} · {cost:0}" + (ready > 0 ? $" · {ready:0} с" : "") : $"{sp.Name} · не постигнуто";
+            b.Disabled = false;
+            b.Modulate = known ? (ready > 0 || sim.Favour < cost ? new Color(.85f, .8f, .8f) : new Color(1.1f, 1.02f, 1.2f)) : learnable ? Colors.White : new Color(1, 1, 1, .55f);
+            string price = $"{sp.Learn} {(sp.ByFavour ? "вмешательства" : "откровений")}";
+            string what = known ? (ready > 0 ? $"Будет готово через {ready:0} с. " : "") + $"Щелчок — взять в руку: {cost:0} вмешательства за раз, затем {sim.CooldownOf(sp):0} с ждать."
+                : (learnable ? $"Можно постичь за {price}. " : sim.Opened(Sim.LoreOf(Sim.SpellKey(sp.Kind))) ? $"Постигается за {price}. " : "Сначала нужно постичь то, на чём оно стоит в своём круге. ")
+                  + "Щелчок — открыть древо «Вмешательства».";
             b.TooltipText = $"{sp.Name} · {Sim.Circles[sp.Circle].ToLowerInvariant()}\n{sp.About} {what}";
         }
         _rite.Text = sim.RiteNow is { } r ? RiteText(r) : !day ? "Ночью жрецы в цитадели: жертвы — утром." : !hasPriest ? "Жрецов нет: наберите их в цитадели (щелчок по ней или K)."

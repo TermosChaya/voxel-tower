@@ -15,7 +15,9 @@ namespace VoxelTower.Game;
 /// flash and the cloud of a blast. A stone skin glimmers on our walls, the fog of the dead creeps over the ground,
 /// sickly motes hang over the plague-struck and a drop of blood over those under the oath. A blast is a ball of fire
 /// swelling and gone, sparks flung every way and a column of smoke going up; a great piece flying or a ball rolling
-/// leaves a trail of dust, and one coming down hard throws up chips of what it struck.
+/// leaves a trail of dust, and one coming down hard throws up chips of what it struck. The earth shaken throws up dust
+/// all over its circle; a falling star burns and smokes all the way down; a whirlwind is a funnel of dust and grit
+/// turning on itself, walking the field.
 /// </summary>
 public partial class MagicView : Node3D
 {
@@ -34,7 +36,10 @@ public partial class MagicView : Node3D
     readonly Dictionary<Mire, (MeshInstance3D node, StandardMaterial3D mat)> _mires = new();
     readonly Dictionary<Curse, (MeshInstance3D node, StandardMaterial3D mat)> _curses = new();
     static readonly Color Hex = new(.45f, .85f, .28f);
-    MultiMeshInstance3D _drops, _chains, _marks, _sick, _sworn, _sparks;
+    MultiMeshInstance3D _drops, _chains, _marks, _sick, _sworn, _sparks, _whirls;
+    double _starAt;
+    /// <summary>The fire of a falling star, lighting the field under it as it comes down.</summary>
+    OmniLight3D _starLight;
     StandardMaterial3D _mote, _bolt, _fogMat;
     /// <summary>Sparks of a blast: burning bright enough to glow.</summary>
     StandardMaterial3D _ember;
@@ -75,6 +80,9 @@ public partial class MagicView : Node3D
             new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = new Color(.72f, .05f, .06f) });
         _sparks = Multi(new BoxMesh { Size = Vector3.One * .05f },
             new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = new Color(1f, .78f, .3f) });
+        _whirls = Multi(new BoxMesh { Size = Vector3.One * .22f }, new StandardMaterial3D { AlbedoColor = new Color(.3f, .27f, .24f), Roughness = 1 });
+        _starLight = new OmniLight3D { LightColor = new Color(1f, .55f, .22f), LightEnergy = 0, OmniRange = 18, ShadowEnabled = false, Visible = false };
+        AddChild(_starLight);
         _bits = new MultiMeshInstance3D
         {
             Multimesh = new MultiMesh
@@ -122,6 +130,7 @@ public partial class MagicView : Node3D
         m.Sim.Struck += Bolt;
         m.Sim.Healed += Mended;
         m.Sim.Hexed += Cursed;
+        m.Sim.Quaked += Quake;
     }
 
     MultiMeshInstance3D Multi(Mesh mesh, Material mat)
@@ -245,7 +254,83 @@ public partial class MagicView : Node3D
             case SpellKind.Telekinesis:
                 Flare(At(x, y + 2, z), Violet, 6, 9, 1, Motes(At(x, y, z), Violet, 40, 1.2f, .7f));
                 break;
+            case SpellKind.Meteor:
+                // the sky lights up red over the spot as the star comes in
+                Flare(ground + Vector3.Up * 14, new Color(1f, .45f, .2f), 6, 30, 2.5f);
+                break;
+            case SpellKind.Whirlwind:
+                Spread(ground, sp.Radius * 2, new Color(.25f, .22f, .2f));
+                Flare(ground + Vector3.Up * 3, new Color(.55f, .5f, .62f), 3, 12, 1.5f, Motes(ground, Dust, 60, 2.6f, sp.Radius * VoxelWorld.Vox * .4f, .12f));
+                break;
         }
+    }
+
+    /// <summary>The earth shaken: dust thrown up all over the circle, a ring of it running out, and the ground's own colour flying.</summary>
+    void Quake(float x, float z, float r)
+    {
+        var w = _m.World;
+        var ground = At(x, w.SurfAt(Math.Clamp((int)x, 0, w.SX - 1), Math.Clamp((int)z, 0, w.SZ - 1)), z);
+        Spread(ground, r, new Color(.45f, .36f, .26f));
+        Spread(ground, r * .6f, new Color(.35f, .28f, .2f));
+        float reach = r * VoxelWorld.Vox;
+        Pass(Motes(ground, Dust, 160, 2.2f, reach * .7f, .14f, 2.5f), 3.5);
+        Pass(Motes(ground + Vector3.Up * .4f, new Color(.25f, .21f, .17f), 60, 1.2f, reach * .5f, .26f, 3.5f), 4.5);
+        for (int i = 0; i < 6; i++)
+        {
+            float a = i * MathF.Tau / 6, d = r * (.3f + .1f * i);
+            int gx = Math.Clamp((int)(x + MathF.Cos(a) * d), 0, w.SX - 1), gz = Math.Clamp((int)(z + MathF.Sin(a) * d), 0, w.SZ - 1), gy = w.SurfAt(gx, gz) - 1;
+            byte m = w.Get(gx, gy, gz);
+            if (m != Mat.Air && m != Mat.Water) _m.Debris.Spawn(m, gx, gy, gz, 8, 2.5f);
+        }
+    }
+
+    /// <summary>A falling star burns all the way down: fire streaming off it and smoke behind.</summary>
+    void Stars(Sim sim)
+    {
+        Flier star = sim.Fliers.Find(f => f.Star);
+        _starLight.Visible = star != null;
+        if (star != null) { _starLight.Position = At(star.X, star.Y, star.Z); _starLight.LightEnergy = 9 + 2 * MathF.Sin((float)_t * 40); }
+        if (_t - _starAt < .03) return;
+        _starAt = _t;
+        foreach (var f in sim.Fliers)
+        {
+            if (!f.Star) continue;
+            var at = At(f.X, f.Y, f.Z);
+            float big = f.R * VoxelWorld.Vox;
+            var fire = Motes(at, new Color(1f, .58f, .2f), 10, 1.4f, big * .9f, .09f, .5f, _ember);
+            fire.Spread = 180;
+            Pass(fire, 1);
+            Pass(Motes(at, new Color(.12f, .1f, .09f), 4, .5f, big * .7f, .3f, 2.2f), 3);
+        }
+    }
+
+    /// <summary>The whirlwinds: a funnel of dust and grit, narrow at the foot and wide at the top, turning fast on itself.</summary>
+    void Whirls(Sim sim)
+    {
+        var mm = _whirls.Multimesh;
+        int n = 0;
+        var w = _m.World;
+        foreach (var wh in sim.Whirls)
+        {
+            int gx = Math.Clamp((int)wh.X, 0, w.SX - 1), gz = Math.Clamp((int)wh.Z, 0, w.SZ - 1);
+            float foot = w.SurfAt(gx, gz), left = (float)Math.Clamp(wh.Until - sim.Time, 0, 1);
+            const int Grains = 220;
+            for (int i = 0; i < Grains; i++)
+            {
+                float h = i / (float)Grains, height = h * 12 * VoxelWorld.PerMetre;
+                float rad = (.15f + h * h * .9f + .08f * MathF.Sin(i * 1.7f)) * wh.R * 1.3f * left;
+                float a = i * 2.39996f + (float)_t * (9 - h * 4);
+                if (n >= mm.InstanceCount) mm.InstanceCount *= 2;
+                float s = .6f + h * 1.4f;
+                mm.SetInstanceTransform(n++, new Transform3D(Basis.Identity.Scaled(Vector3.One * s), At(wh.X + MathF.Cos(a) * rad, foot + height, wh.Z + MathF.Sin(a) * rad)));
+            }
+            if (_t - _dustAt > .08)
+            {
+                _dustAt = _t;
+                Pass(Motes(At(wh.X, foot, wh.Z), Dust, 6, 1.8f, wh.R * VoxelWorld.Vox * .4f, .12f, 1.2f), 2);
+            }
+        }
+        mm.VisibleInstanceCount = n;
     }
 
     /// <summary>A blast, of a spell or of powder: the flash, the cloud of dust and smoke, the ring of it running out, all as big as the blast.</summary>
@@ -440,6 +525,8 @@ public partial class MagicView : Node3D
         Fogs(sim);
         Afflicted(sim);
         Fuses(sim);
+        Stars(sim);
+        Whirls(sim);
     }
 
     /// <summary>Voxels of the pieces in the air drawn this frame (the self-test asks).</summary>
@@ -699,5 +786,6 @@ public partial class MagicView : Node3D
         _m.Sim.Doused -= Steam;
         _m.Sim.Darkened -= Smother;
         _m.Sim.Woken -= Wake;
+        _m.Sim.Quaked -= Quake;
     }
 }

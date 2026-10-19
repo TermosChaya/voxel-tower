@@ -7,6 +7,7 @@ public enum SpellKind : byte
 {
     Hand, Rift, Mire, Skin, Fall, FireRain, Thunder, Weather, BloodMoon, BlackWind,
     Dread, DeadFog, Plague, Chains, Raise, Oath, Eye, Recall, Telekinesis, Explosion,
+    Quake, Meteor, Whirlwind,
 }
 
 /// <summary>A spell: what it does, its circle, what learning it takes, what a casting costs, and how far it reaches.</summary>
@@ -37,10 +38,14 @@ public sealed class Drop { public float X, Y, Z; public double At; }
 /// <summary>A place a spell lies on for a while — stone skin on our walls, the fog of the dead — and till when.</summary>
 public sealed class Patch { public float X, Y, Z, R; public double Until; }
 
+/// <summary>A whirlwind walking the field: where it is, which way it goes, how wide it is, and till when it lasts.</summary>
+public sealed class Whirl { public float X, Z, VX, VZ, R; public double Until, Next; }
+
 /// <summary>
 /// Spells: the player's own hand in the fight, paid for in intervention. Four circles — earth, fire and the sky, death,
-/// and the will — the first spell of each learnt for intervention, the rest for revelations. Each costs intervention to
-/// cast and wants a while before it can be cast again.
+/// and the will — learnt on the intervention's page of the lore tree: the first spell of each for intervention, the rest
+/// for revelations, each only once what it rests on is learnt, up to the greatest of the circle at its end. Each costs
+/// intervention to cast and wants a while before it can be cast again; grace makes them cheaper, readier and stronger.
 /// </summary>
 public sealed partial class Sim
 {
@@ -81,16 +86,22 @@ public sealed partial class Sim
             About = "Налётчики в круге в 5 м скованы на 10 секунд: не идут, не рубят и не бьют. Скованного мечник с «Живьём» валит уже при трёх пятых сил." },
         new() { Kind = SpellKind.Raise, Circle = 2, Learn = 3, Name = "Поднять мёртвых", Cost = 45, Cooldown = 90, Radius = 8 * VoxelWorld.PerMetre,
             About = "До шести павших налётчиков в круге в 8 м (тела лежат полминуты) встают мертвецами и минуту бьются за вас, потом рассыпаются." },
-        new() { Kind = SpellKind.Oath, Circle = 2, Learn = 2, Name = "Кровавый обет", Cost = 35, Cooldown = 90, Radius = 6 * VoxelWorld.PerMetre,
+        new() { Kind = SpellKind.Oath, Circle = 3, Learn = 2, Name = "Кровавый обет", Cost = 35, Cooldown = 90, Radius = 6 * VoxelWorld.PerMetre,
             About = "Наши в круге 6 м дают обет крови: раны затягиваются на две пятых, кровь унимается, и минуту они рубят и стреляют в полтора раза сильнее." },
-        new() { Kind = SpellKind.Eye, Circle = 2, Learn = 2, Name = "Око", Cost = 20, Cooldown = 120,
+        new() { Kind = SpellKind.Eye, Circle = 3, Learn = 2, Name = "Око", Cost = 20, Cooldown = 120,
             About = "Две минуты видна вся орда — метка над каждым налётчиком сквозь стены и лес, — и туман не мешает лучникам." },
-        new() { Kind = SpellKind.Recall, Circle = 2, Learn = 1, Name = "Зов", Cost = 15, Cooldown = 30, Radius = 3 * VoxelWorld.PerMetre,
+        new() { Kind = SpellKind.Recall, Circle = 3, Learn = 1, Name = "Зов", Cost = 15, Cooldown = 30, Radius = 3 * VoxelWorld.PerMetre,
             About = "Ближайший к курсору из наших (в круге 3 м) в тот же миг оказывается в цитадели: вырван из рук вора, из боя, из огня. Выйдет, когда уляжется тревога, — или когда пошлёте." },
         new() { Kind = SpellKind.Telekinesis, Circle = 3, ByFavour = true, Learn = 30, Name = "Телекинез", Cost = 30, Cooldown = 25, Radius = VoxelWorld.PerMetre, AtVoxel = true,
             About = "Хватает то, на что наведено, — налётчика, зверя, своего, даже машину, — а если там никого, вырывает шар в 2 м из камня, стены или земли. Пока кнопка зажата (до 8 с), схваченное летит за курсором; отпустите на лету — полетит, куда несло. Брошенный камень давит тех, на кого падает, и пробивает кладку; брошенный налётчик разбивается, а своего, опущенного бережно, рука ставит невредимым." },
         new() { Kind = SpellKind.Explosion, Circle = 3, Learn = 3, Name = "Взрыв", Cost = 40, Cooldown = 60, Radius = 2.5f * VoxelWorld.PerMetre, AtVoxel = true,
             About = "Разносит то, на что наведено, шаром в 5 м: камни, брёвна и комья земли разлетаются по дугам, давят тех, на кого падают, и ложатся грудами, а что держалось на взорванном — рушится. Налётчиков рядом ранит и отбрасывает, машинам — до 200 урона, дерево вокруг загорается. Цитадель и материк не берёт." },
+        new() { Kind = SpellKind.Quake, Circle = 0, Learn = 4, Name = "Землетрясение", Cost = 45, Cooldown = 120, Radius = 8 * VoxelWorld.PerMetre,
+            About = "Земля в круге 8 м вздрагивает и ходит ходуном: налётчиков подбрасывает и валит с ног, лестницы, настилы и мосты орды рассыпаются брёвнами, осадные машины трещат (по 120 урона). Нашу кладку не трогает." },
+        new() { Kind = SpellKind.Meteor, Circle = 1, Learn = 4, Name = "Падучая звезда", Cost = 55, Cooldown = 150, Radius = 3 * VoxelWorld.PerMetre,
+            About = "С неба наискось падает горящая глыба: удар выбивает воронку в 3 м, налётчиков рядом ранит и расшвыривает, машинам — до 300, вокруг всё загорается, а сама глыба катится дальше и давит тех, кто на пути." },
+        new() { Kind = SpellKind.Whirlwind, Circle = 3, Learn = 4, Name = "Смерч", Cost = 50, Cooldown = 120, Radius = 2.5f * VoxelWorld.PerMetre,
+            About = "Смерч шириной 5 м десять секунд гуляет по полю и сам идёт на орду: подхватывает налётчиков, крутит и вышвыривает прочь, срывает их лестницы и настилы. Наших обходит." },
     };
 
     public static Spell SpellOf(SpellKind k) => Spells[(int)k];
@@ -105,7 +116,8 @@ public sealed partial class Sim
     /// <summary>A spell ready again at once (the tests ask).</summary>
     public void ReadyNow(SpellKind k) => _spellReady[(int)k] = 0;
 
-    public bool CanLearnSpell(Spell s) => !Known.Contains(s.Kind) && (s.ByFavour ? Favour >= s.Learn : Revelations >= s.Learn);
+    /// <summary>Whether a spell can be learnt now: not known yet, what it rests on in its circle known, and what it takes at hand.</summary>
+    public bool CanLearnSpell(Spell s) => !Known.Contains(s.Kind) && Opened(LoreOf(SpellKey(s.Kind))) && (s.ByFavour ? Favour >= s.Learn : Revelations >= s.Learn);
 
     /// <summary>Learns a spell for what it takes: intervention for the first of a circle, revelations for the rest.</summary>
     public bool LearnSpell(SpellKind k)
@@ -147,7 +159,7 @@ public sealed partial class Sim
         if (Over) return "осада окончена";
         if (!Known.Contains(k)) return "это заклинание ещё не постигнуто";
         if (Time < _spellReady[(int)k]) return $"ещё не готово: {_spellReady[(int)k] - Time:0} с";
-        if (Favour < s.Cost) return $"мало вмешательства: нужно {s.Cost:0}";
+        if (Favour < CostOf(s)) return $"мало вмешательства: нужно {CostOf(s):0}";
         string why = k switch
         {
             SpellKind.Hand => RaiseBank(x, z, x2, z2),
@@ -169,19 +181,22 @@ public sealed partial class Sim
             SpellKind.Recall => CallHome(x, z, s.Radius),
             SpellKind.Telekinesis => Grab(x, y, z),
             SpellKind.Explosion => Blast((int)x, (int)y, (int)z, s.Radius),
+            SpellKind.Quake => Shake(x, z, s.Radius),
+            SpellKind.Meteor => Fallstar(x, z, s.Radius),
+            SpellKind.Whirlwind => Unleash(x, z, s.Radius),
             _ => Watch(),
         };
         if (why != null) return why;
-        Favour -= s.Cost;
-        _spellReady[(int)k] = Time + s.Cooldown;
+        Favour -= CostOf(s);
+        _spellReady[(int)k] = Time + CooldownOf(s);
         Spelled?.Invoke(k, x, y, z);
         Say($"Заклинание: «{s.Name}».", 1, x, z);
         return null;
     }
 
-    string Moon() { BloodMoonUntil = Time + 90; return null; }
+    string Moon() { BloodMoonUntil = Time + 90 * Might; return null; }
 
-    string Watch() { EyeUntil = Time + 120; return null; }
+    string Watch() { EyeUntil = Time + 120 * Might; return null; }
 
     /// <summary>Whether a spot lies in a bog of the spell.</summary>
     bool InMire(float x, float z)
@@ -238,7 +253,7 @@ public sealed partial class Sim
 
     string BogDown(float x, float z, float r)
     {
-        Mires.Add(new Mire { X = x, Z = z, R = r, Until = Time + 60 });
+        Mires.Add(new Mire { X = x, Z = z, R = r, Until = Time + 60 * Might });
         return null;
     }
 
@@ -264,8 +279,8 @@ public sealed partial class Sim
         {
             if (u.Dead || u.Inside) continue;
             float d = MathF.Sqrt((u.X - x) * (u.X - x) + (u.Y - y) * (u.Y - y) * .5f + (u.Z - z) * (u.Z - z));
-            if (Kinds.IsEngine(u.T) && d < r + 3 * VoxelWorld.PerMetre) Hurt(u, null, 280, "обвал");
-            else if (d < r + 1.5f * VoxelWorld.PerMetre) Hurt(u, null, 45, "обвал");
+            if (Kinds.IsEngine(u.T) && d < r + 3 * VoxelWorld.PerMetre) Hurt(u, null, 280 * Might, "обвал");
+            else if (d < r + 1.5f * VoxelWorld.PerMetre) Hurt(u, null, 45 * Might, "обвал");
         }
         Fall(ball, quiet: false);
         return null;
@@ -309,7 +324,7 @@ public sealed partial class Sim
         foreach (var u in Units)
         {
             if (u.Dead || u.Inside || u.Airborne != null || (u.X - x) * (u.X - x) + (u.Z - z) * (u.Z - z) > r * r) continue;
-            Hurt(u, null, 15, "провал");
+            Hurt(u, null, 15 * Might, "провал");
             StopCarve(u); StopBuild(u); u.Path = null;
         }
         return null;
@@ -325,7 +340,7 @@ public sealed partial class Sim
                 for (int dx = -ri; dx <= ri && !ours; dx += 2)
                     if (dx * dx + dy * dy + dz * dz <= r * r && Mat.IsPlayer[World.Get(x + dx, y + dy, z + dz)]) ours = true;
         if (!ours) return "здесь нет нашей кладки: наведите на стену, сруб или ворота";
-        Skins.Add(new Patch { X = x + .5f, Y = y + .5f, Z = z + .5f, R = r, Until = Time + 180 });
+        Skins.Add(new Patch { X = x + .5f, Y = y + .5f, Z = z + .5f, R = r, Until = Time + 180 * Might });
         return null;
     }
 
@@ -361,7 +376,7 @@ public sealed partial class Sim
     /// <summary>A gobbet of burning pitch comes down and splashes: what burns within a metre of it catches, whoever it falls on burns.</summary>
     void Land(Drop d)
     {
-        float k = Weather == Weather.Rain ? .5f : 1;
+        float k = (Weather == Weather.Rain ? .5f : 1) * Might;
         int x = (int)d.X, z = (int)d.Z, top = World.SurfAt(Math.Clamp(x, 0, World.SX - 1), Math.Clamp(z, 0, World.SZ - 1));
         const int Splatter = VoxelWorld.PerMetre;
         int lit = 0;
@@ -395,7 +410,7 @@ public sealed partial class Sim
             float d = MathF.Sqrt((u.X - x) * (u.X - x) + (u.Z - z) * (u.Z - z));
             if (d < bd) { bd = d; t = u; }
         }
-        float k = Weather == Weather.Rain ? 1.5f : 1;
+        float k = (Weather == Weather.Rain ? 1.5f : 1) * Might;
         if (t != null) { (x, y, z) = (t.X, t.Y, t.Z); }
         foreach (var u in Units)
         {
@@ -501,7 +516,7 @@ public sealed partial class Sim
     {
         var them = HordeIn(x, z, r);
         if (them.Count == 0) return "в круге нет налётчиков";
-        foreach (var u in them) { u.ChainedUntil = Time + 10; u.Path = null; StopCarve(u); StopBuild(u); }
+        foreach (var u in them) { u.ChainedUntil = Time + 10 * Might; u.Path = null; StopCarve(u); StopBuild(u); }
         return null;
     }
 
@@ -523,7 +538,7 @@ public sealed partial class Sim
             int cell = NearestStand((int)c.X, (int)c.Z, Kinds.Risen.Move.Height);
             if (cell < 0) continue;
             var r2 = Spawn(Kinds.Risen, cell);
-            r2.CrumbleAt = Time + 60;
+            r2.CrumbleAt = Time + 60 * Might;
             r2.Facing = c.Facing;
             // the body it rose from is gone from where it lay
             c.DiedAt = -999;
@@ -565,7 +580,7 @@ public sealed partial class Sim
     /// <summary>The fog of the dead on the field, for 45 seconds.</summary>
     string Shroud(float x, float z, float r)
     {
-        DeadFogs.Add(new Patch { X = x, Z = z, R = r, Until = Time + 45 });
+        DeadFogs.Add(new Patch { X = x, Z = z, R = r, Until = Time + 45 * Might });
         return null;
     }
 
@@ -585,7 +600,7 @@ public sealed partial class Sim
         var them = HordeIn(x, z, r);
         them.RemoveAll(Deathless);
         if (them.Count == 0) return "в круге нет налётчиков";
-        foreach (var u in them) u.PlagueUntil = Time + PlagueFor;
+        foreach (var u in them) u.PlagueUntil = Time + PlagueFor * Might;
         return null;
     }
 
@@ -603,7 +618,7 @@ public sealed partial class Sim
             if ((u.X - x) * (u.X - x) + (u.Z - z) * (u.Z - z) > r * r) continue;
             u.Hp = Math.Min(u.MaxHp, u.Hp + u.MaxHp * .4f);
             if (u.Wounds != null) u.Wounds.Bleed = 0;
-            u.OathUntil = Time + 60;
+            u.OathUntil = Time + 60 * Might;
             n++;
         }
         return n == 0 ? "в круге нет наших" : null;
@@ -651,8 +666,8 @@ public sealed partial class Sim
         foreach (var u in Units)
         {
             if (u.Dead || u.Inside || u.Team != Team.Horde || Deathless(u)) continue;
-            if (u.PlagueUntil > Time) { _sick.Add(u); Hurt(u, null, 1, "мор"); }
-            if (fog && !u.Dead && InDeadFog(u.X, u.Z)) Hurt(u, null, 1.5f, "туман мёртвых");
+            if (u.PlagueUntil > Time) { _sick.Add(u); Hurt(u, null, Might, "мор"); }
+            if (fog && !u.Dead && InDeadFog(u.X, u.Z)) Hurt(u, null, 1.5f * Might, "туман мёртвых");
         }
         if (_sick.Count == 0) return;
         // the plague passes to those standing by the sick, a chance in four each half second
@@ -675,7 +690,7 @@ public sealed partial class Sim
 
     /// <summary>The blast of the spell, at the voxel aimed at (see <see cref="Detonate"/>).</summary>
     string Blast(int x, int y, int z, float r) =>
-        Detonate(x + .5f, y + .5f, z + .5f, r, 60, "взрыв") > 0 ? null : "здесь нечему взрываться: наведите на стену, скалу, землю или постройку";
+        Detonate(x + .5f, y + .5f, z + .5f, r, 60 * Might, "взрыв") > 0 ? null : "здесь нечему взрываться: наведите на стену, скалу, землю или постройку";
 
     /// <summary>What the spells keep doing: the earth rising, the pitch coming down, the bogs drying up, the fog and the plague.</summary>
     void TickSpells()
@@ -684,6 +699,7 @@ public sealed partial class Sim
         for (int i = Drops.Count - 1; i >= 0; i--)
             if (Drops[i].At <= Time) { Land(Drops[i]); Drops.RemoveAt(i); }
         if (Mires.Count > 0) Mires.RemoveAll(m => m.Until <= Time);
+        if (Whirls.Count > 0) TickWhirls();
         TickHexes();
     }
 }

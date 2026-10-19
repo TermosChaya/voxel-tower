@@ -6,7 +6,7 @@ namespace VoxelTower.Game;
 
 /// <summary>
 /// The great moments made to be felt. A blast, a great fall, a heavy piece of the world coming down, a bolt out of the
-/// sky shake the view, the harder the greater they are and the nearer to what it looks at; a great blast or bolt near it
+/// sky, the earth shaken by a spell shake the view, the harder the greater they are and the nearer to what it looks at; a great blast or bolt near it
 /// flashes the screen, and the greatest slow the game's time for a moment, to see the pieces go, before it comes back
 /// by itself. The shaking and the flashes, and the slowing, are as the player set them.
 /// </summary>
@@ -35,6 +35,7 @@ public partial class Spectacle : Node
             if (k > .06f) Felt(x, z, Math.Min(.8f, k), flash: false);
         };
         sim.Struck += (x, y, z) => Felt(x, z, .6f, flash: true);
+        sim.Quaked += (x, z, r) => Felt(x, z, .9f, flash: false);
     }
 
     /// <summary>How bright the screen's flash is now, nothing to a third.</summary>

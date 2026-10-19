@@ -91,9 +91,11 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `Done`), `Sacrifice(kind, victim)` (днём, святилище и жрец; возвращает причину отказа), `RiteTick` (из `PriestTick`),
   `Fulfil` (`Worth`, `CarcassWorth`, `OwnFavour`; ×1,5 на удержанном месте силы; `RiteDone` — вспышка),
   `CancelRite`, `AltarFor`; `Revelations`, `Carcasses` (из `Kill` зверя нашими), `MournUntil` (`WorkTick` ×0,75).
-- `Sim.Spells.cs` — заклинания: `SpellKind` (20, по кругам; массив `Sim.Spells` — строго в порядке перечисления,
-  `SpellOf(k) => Spells[(int)k]`), `Spell` (круг, `ByFavour`/`Learn`, `Cost`, `Cooldown`, `Radius`, `Stroke`, `AtVoxel` —
-  наводится на сам воксель, а не на землю), `Circles` (4), `Known`, `LearnSpell`, `ReadyIn`, `ReadyNow` (для тестов),
+- `Sim.Spells.cs` — заклинания: `SpellKind` (23; новые только в конец — `Quake`, `Meteor`, `Whirlwind`; массив
+  `Sim.Spells` — строго в порядке перечисления, `SpellOf(k) => Spells[(int)k]`), `Spell` (круг, `ByFavour`/`Learn`,
+  `Cost`, `Cooldown`, `Radius`, `Stroke`, `AtVoxel` — наводится на сам воксель, а не на землю), `Circles` (4; Обет, Око и
+  Зов теперь в круге воли), `Known`, `CanLearnSpell` (ещё и `Opened` узла заклинания на древе), `LearnSpell`, `ReadyIn`,
+  `ReadyNow` (для тестов); в `Cast` цена и ожидание — `CostOf`/`CooldownOf`, сила и сроки ×`Might`;
   `Cast(kind, x, y, z, x2, z2, variant)` — возвращает причину отказа (`variant` — погода из `Summonable`);
   по заклинанию: `RaiseBank` (Длань: `_rising` по слоям за 3 с, `RiseNow`), `BogDown` (`Mires`, в `Walk` ×0,35),
   `BringDown` (шар → `Fall` из `Sim.Collapse`), `RainFireOn`/`Land` (`Drops`, капли находят налётчиков), `Thunderbolt`
@@ -199,10 +201,19 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `FieldOf`), `ShamanTick` из `RaiderTick` (`Unit.NextHeal` — лечит в 6 м, `NextCurse` — `CurseTarget` → `Curse` в
   `Curses` на 40 с, если не `Warded` — святилище или жрец ближе 20 м), `CurseHack` в `Carve` (×2), `TickCurses`;
   события `Healed`, `Hexed`; в `BestTarget` шаман −110 к очереди; в `PlanWave` — с 4-й волны.
-- `Sim.Research.cs` — награды и знания: `Lore` (`Key`, `Branch`, `Name`, `About`, `Cost`, `Needs` — массив опор,
-  `Tier` 0–3 и `Lane` 0/½/1 — место на древе), `Lores` (30: пять ветвей по шесть — первое, два на нём, по одному на
-  каждом, последнее на обоих; `guild` стоит ещё и на `masons`), `Branches`, `Knowledge`, `Learnt`, `Opened` (все опоры
-  изучены), `CanLearn`, `Learn`, `Reward(wave)` — знаний 2 + n/2 (за осаду 60, всё древо 111). В конце — что даёт
+- `Sim.Research.cs` — награды и знания: `Lore` (`Key`, `Branch`, `Name`, `About`, `Cost`, `Coin` — знания,
+  вмешательство или откровения, `Needs` — массив опор, `Tier` 0–3 и `Lane` 0/½/1 — место на древе, `Page` 0–2, `Spell` —
+  если это постижение заклинания), `Pages`, `PageBranches` (5 / 4 / 5 ветвей; ветви страницы 2 — это `Circles` и
+  «Благодать»), `Branches` (= страница 0), `Lores` — ленивое свойство: `Skills` (30) + `Troops` (24: пехота, стрелки,
+  конница, великаны; ключи видов — `spearmen` … `giants`, их читает `UnitType.Lore`; усиления — `shieldwall`,
+  `longshafts`, `leadshot`, `bodkins`, `firepots`, `hunt`, `charge`, `boulders`, `barracks`, `drillyard`, `bunks`) +
+  `Rites()` (30: узлы заклинаний `spell.<Kind>` — из `Spells`, цена/валюта их же; `reap` за откровения; благодать
+  `rosary`, `vessel`, `altar`, `litany`, `vigil`, `might` за вмешательство); `LoreOf` (словарь), `LoresOn(page)`,
+  `SpellKey(kind)`; `Knows` — для узла заклинания смотрит `Known`, иначе `Learnt`; `Wallet(coin)`, `Opened`, `CanLearn`,
+  `Learn` (узел заклинания → `LearnSpell`); `Reward(wave)` — знаний 3 + n (за осаду 114; умения и войско — 218).
+  Благодать: `FavourCap` (150/300), `GainFavour` (молитва `PrayerMore`, жертва `SacrificeMore` + откровение;
+  `Favour` — простое поле: тесты кладут больше потолка, и тогда прибыли нет), `CostOf`, `CooldownOf`, `Might`,
+  `SpellCauses` (жатва в `Kill`). В конце — что даёт
   изученное, читается на местах: `BowRange` (yew, longbows), `DarkCost` (owleye), `VolleyPace` (volley), `StoneHack`
   (mortar, fortress), `LayPace`/`DigPace` (masons/picks, guild), `KeepGuard` (bastion — `Horde`, `StoneLands`),
   `CartPace` (carts — `Walk`), `HideCatch` (hides — распространение огня), `MailGuard` (mail — `Hurt`),
@@ -223,6 +234,13 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   вокруг своей длины (`AX/AZ` вдоль, `Spin`); падает, катится (`BakeLog`).
 - `Sim.Shelter.cs` — тревога и убежища: `Alarm`, `RaiseAlarm`/`StandDown`, `TakeShelter`, `RefugeFor`, `ShelterCells`,
   `Enter`/`Leave`/`Indoors` (`Unit.Inside` — в цитадели, вне мира), `TickShelter` (налётчик у двери).
+- `Sim.Wonders.cs` — вершины кругов: `Shake` (Землетрясение: `SiegeWorksIn` — лестницы и настилы кусками по клеткам
+  через `Loose` вверх и в стороны; налётчики — `Fling` вверх и вразброс, лёгкие выше; машинам 120; событие `Quaked`),
+  `Fallstar` (Падучая звезда: `Hurl` шара `Rock` радиусом `StarRock` с высоты 40 м и 12 м к западу по дуге на цель, а
+  если `Raycast` упирается в холм — отвесно; `Flier.Star`, `Burning`), `StarStrikes` (из `ComeDown`: `Detonate` в 3 м ×
+  `Might`, машинам 300, поджог вокруг; глыба дальше живёт как камень — катится), `Unleash` + `Whirls` (`Whirl`) +
+  `TickWhirls` (из `TickSpells`: 5 раз в секунду идёт к ближайшему налётчику в 40 м, крутит и вышвыривает тех, кто в
+  нём, рвёт лестницы, машинам по 12; наших не трогает). Вихри не сохраняются; `Flier.Star` сохраняется.
 - `Sim.Muster.cs` — набор войска в цитадели: `Recruit` (`Kind`, `Done`, `Paid`), очередь `Recruits` (до `RecruitsMax`
   = 6; готовится только первая), `Household()` (живые наши, кроме мертвецов, по `UnitType.Room`), `Spoken()` (с
   очередью), `Places` (`CitadelPlaces` = 10, +4 за «barracks», + лежанки домов, ×2 за «bunks»), `TrainTime(t)`
@@ -397,12 +415,18 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `KeepPane`: места, очередь `RecruitFace`, лица видов `KindTile`; `TileOf(t)` для самотеста; `KeyNow`),
   `HealthBar`, `BodyChart`, `PriorityCell`, `MiniCard`, `KindFace`; `WorkTable.cs` — таблица работ (рисуется
   целиком в `_Draw`, щелчки в `_GuiInput`); `Panels.cs` — `Retinue` (только помощники: что делает, раны, сводка),
-  `HordeInfo`, `UnitOverlay`; `Lore.cs` — `LorePanel` (вкладка «Знания», ширина 980): древо — `TreeCanvas`
-  (ветви сверху вниз, ярусы слева направо, `PlaqueRect(lore)`; `_Draw` — значки и имена ветвей, линии от опор с
-  изломом в просвете перед ярусом: обе изучены — мох, опора изучена — бронза, иначе бледно), таблички — `LorePlaque`
-  (кнопки со своей подсказкой-плашкой; рамки по состоянию: изучено, можно, не хватает, закрыто), `PlaqueOf(key)` для
-  самотеста; `Mysteries.cs` — `MysteryPanel` (вкладка
-  «Таинства»: вмешательство, святилища, жертвы, заклинания строками по кругам — изучить или взять в руку); `MagicView.cs`
+  `HordeInfo`, `UnitOverlay`; `Lore.cs` — `LorePanel` (вкладка «Знания», ширина 960): три страницы
+  (`TabPlaque` с `Icons.PageMark`, `ShowPage`, `Page`), на каждой — `RingCanvas` 916×474 как астролябия: кольца ярусов
+  (эллипсы, полувысоты `RY`, шире в `Wide` раз), обод с делениями, большой круг у знака каждой ветви, лучи между
+  ветвями, луч ветви от середины к первому узлу и от последнего к знаку, линии от опор (цвет ветви, когда изучены обе;
+  бронза — опора; иначе бледно), огненные корни наведённого, знаки ветвей (`Icons.BranchMark`, дуга — доля изученного),
+  середина — знак страницы и знания (на третьей — вмешательство и откровения); узлы — `Knot : BaseButton` (круглый
+  `_HasPoint`, значок `Icons.SigilFor(key)`, обод и свечение по состоянию 0–3, «дышит» тот, что можно изучить, цена на
+  бляхе цвета валюты, подсказка — `Tooltip`); место узла — угол ветви ± разлёт по `Lane` на кольцах 1–2;
+  `PlaqueOf(key)` (BaseButton) для самотеста, `Badge()` (знания или ✦); `Sigils.cs` — значки умений (`SigilOf`), их
+  чеканка — те же помощники `Icons`; `Mysteries.cs` — `MysteryPanel` (вкладка
+  «Таинства»: вмешательство из потолка, святилища, жертвы, заклинания строками по кругам — взять в руку, а ещё не
+  постигнутое открывает древо на странице «Вмешательство»); `MagicView.cs`
   (мир) — вспышка над алтарём, капли смолы, молния, трясины, кольца Ужаса и Цепей, метки Ока, пыль и искры; летящие куски
   (`Pieces`: MultiMesh по вокселю, буфер целиком за кадр, `PiecesDrawn`), хватка (`Grip`: свет и кольцо прицела),
   каменная кожа, туман мёртвых (`Fogs`: плоские мягкие клубы своим MultiMesh — частицы Godot давали чёрные пятна),

@@ -180,7 +180,7 @@ public partial class Main : Node3D
         if (_demo && _pose == "shaman") ClearTrees(Site.KeepX - Site.KeepR - 240, Site.KeepZ - 90, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 90);
         if (_demo && _pose == "spells") ClearTrees(Site.KeepX - Site.KeepR - 260, Site.KeepZ - 100, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
         if (_demo && _pose == "traps") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
-        if (_demo && _pose is "blast" or "grip" or "wind" or "hexes" or "sorcerers" or "powder" or "charge" or "stones" or "topple" or "roll" or "crush" or "drops") ClearTrees(Site.KeepX - Site.KeepR - 300, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 140);
+        if (_demo && _pose is "blast" or "grip" or "wind" or "hexes" or "sorcerers" or "wonders" or "powder" or "charge" or "stones" or "topple" or "roll" or "crush" or "drops") ClearTrees(Site.KeepX - Site.KeepR - 300, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 140);
         World.Compact();
         save?.Valley(World, Site);
         double genMs = sw.Elapsed.TotalMilliseconds;
@@ -325,7 +325,12 @@ public partial class Main : Node3D
         if (_lore != null && !_selfTest)
         {
             var parts = _lore.Split(',');
-            foreach (string key in parts[1..]) if (Sim.LoreOf(key) is { } l) { Sim.Knowledge += l.Cost; Sim.Learn(key); }
+            foreach (string key in parts[1..])
+                if (Sim.LoreOf(key) is { } l)
+                {
+                    if (l.Coin == Coin.Favour) Sim.Favour += l.Cost; else if (l.Coin == Coin.Revelations) Sim.Revelations += l.Cost; else Sim.Knowledge += l.Cost;
+                    Sim.Learn(key);
+                }
             Sim.Knowledge = double.TryParse(parts[0], out double k) ? k : 0;
             Hud.Refresh();
         }
@@ -848,22 +853,35 @@ public partial class Main : Node3D
 
         // lore: knowledge to spend, and a plaque in «Знания» learns it
         Hud.OpenPanel("lore");
+        Hud.Lore.ShowPage(0);
         Sim.Knowledge = 2;
         Hud.Refresh();
         var yew = Hud.Lore.PlaqueOf("yew");
         bool could = !yew.Disabled;
         yew.EmitSignal(BaseButton.SignalName.Pressed);
-        Check("a plaque in «Знания» learns its lore for the knowledge it costs", could && Sim.Knows("yew") && Sim.Knowledge == 0 && Hud.Lore.PlaqueOf("barbs").Disabled,
+        Check("a medallion in «Знания» learns its lore for the knowledge it costs", could && Sim.Knows("yew") && Sim.Knowledge == 0 && Hud.Lore.PlaqueOf("barbs").Disabled,
             $"yew learnt {Sim.Knows("yew")}, {Sim.Knowledge} knowledge left");
+        // the troops' page: a kind learnt there is one the citadel will take on
+        Hud.OpenPanel("lore:1");
+        Sim.Knowledge = 3;
+        Hud.Refresh();
+        bool troopsShown = Hud.Lore.Page == 1 && Hud.Lore.PlaqueOf("spearmen").IsVisibleInTree() && !Hud.Lore.PlaqueOf("yew").IsVisibleInTree();
+        Hud.Lore.PlaqueOf("spearmen").EmitSignal(BaseButton.SignalName.Pressed);
+        Check("the troops' page of «Знания» learns a kind of troops for knowledge", troopsShown && Sim.Knows("spearmen") && Sim.Knowledge == 0,
+            $"page {Hud.Lore.Page}, spearmen learnt {Sim.Knows("spearmen")}, {Sim.Knowledge} knowledge left");
         Hud.ClosePanel();
 
-        // a spell: Dread learnt with a click on its plaque in «Таинства», taken in hand with another, and a click on the
-        // field among three goblins puts them to flight
+        // a spell: a click on Dread's plaque in «Таинства» before it is learnt opens the intervention's page of the tree;
+        // there it is learnt with a click on its medallion, taken in hand from «Таинства», and a click on the field among
+        // three goblins puts them to flight
         Sim.Favour += 60;
         Hud.OpenPanel("magic");
         Hud.Refresh();
         Hud.Mysteries.SpellPlaque(SpellKind.Dread).EmitSignal(BaseButton.SignalName.Pressed);
-        bool learnt = Sim.Known.Contains(SpellKind.Dread);
+        bool toTree = Hud.Lore.Page == 2 && Hud.Lore.IsVisibleInTree() && !Sim.Known.Contains(SpellKind.Dread);
+        Hud.Lore.PlaqueOf(Sim.SpellKey(SpellKind.Dread)).EmitSignal(BaseButton.SignalName.Pressed);
+        bool learnt = toTree && Sim.Known.Contains(SpellKind.Dread);
+        Hud.OpenPanel("magic");
         Hud.Refresh();
         Hud.Mysteries.SpellPlaque(SpellKind.Dread).EmitSignal(BaseButton.SignalName.Pressed);
         bool inHand = Tools.Tool == Tool.Spell && Tools.CurrentSpell == SpellKind.Dread;
@@ -878,15 +896,15 @@ public partial class Main : Node3D
         await Look(sx1 + 10, sz1);
         double favourBefore = Sim.Favour;
         await Click(sx1 + 10, sz1);
-        Check("a spell is learnt and taken in hand from «Таинства», and a click on the field casts it: Dread puts the goblins to flight",
+        Check("a spell is learnt in the tree, taken in hand from «Таинства», and a click on the field casts it: Dread puts the goblins to flight",
             learnt && inHand && flock.TrueForAll(g => g.Routed) && Sim.Favour < favourBefore,
             $"learnt {learnt}, in hand {inHand}, running {flock.FindAll(g => g.Routed).Count} of 3, intervention {favourBefore:0} → {Sim.Favour:0}");
         KeyPress(Key.Escape);
         foreach (var g in flock) { g.Dead = true; g.DiedAt = -999; }
 
-        // the spells in their four circles, twenty of them, each with its plaque
-        bool plaques = Array.TrueForAll(Sim.Spells, sp => Hud.Mysteries.SpellPlaque(sp.Kind) != null);
-        Check("«Таинства» hold the spells in four circles, twenty of them, each with its plaque", Sim.Circles.Length == 4 && Sim.Spells.Length == 20 && plaques,
+        // the spells in their four circles, twenty-three of them, each with its plaque and its medallion on the tree
+        bool plaques = Array.TrueForAll(Sim.Spells, sp => Hud.Mysteries.SpellPlaque(sp.Kind) != null && Hud.Lore.PlaqueOf(Sim.SpellKey(sp.Kind)) != null);
+        Check("«Таинства» hold the spells in four circles, twenty-three of them, each with its plaque and its medallion on the tree", Sim.Circles.Length == 4 && Sim.Spells.Length == 23 && plaques,
             $"{Sim.Circles.Length} circles, {Sim.Spells.Length} spells, plaques for all {plaques}");
         Hud.ClosePanel();
 
@@ -1044,6 +1062,7 @@ public partial class Main : Node3D
         if (_pose == "faith") { Faith(); return; }
         if (_pose == "captives") { Captives(); return; }
         if (_pose == "spells") { Spellwork(); return; }
+        if (_pose == "wonders") { Wonders(); return; }
         if (_pose == "shaman") { Hexing(); return; }
         if (_pose == "blast") { Blasting(); return; }
         if (_pose == "grip") { Gripping(); return; }
@@ -1417,6 +1436,48 @@ public partial class Main : Node3D
         sim.Cast(SpellKind.FireRain, cx - 12, w.SurfAt(cx - 12, cz), cz + 6);
         Advance(2.2);
         Rig.SetAt(w.WX(cx + 8), w.WY(w.SurfAt(cx, cz) + 4), w.WZ(cz), -.62f, .55f, 1.5f);
+        Hud.Refresh();
+    }
+
+    /// <summary>
+    /// The greatest spells, each on a band west of the citadel, the game stopped a moment after the casting to see it:
+    /// the earthquake (the raiders thrown up, their ladder coming apart), with --look=1 the falling star coming down on
+    /// them, with --look=2 the whirlwind among them.
+    /// </summary>
+    void Wonders()
+    {
+        var sim = Sim; var w = World;
+        foreach (var s in Sim.Spells) sim.Known.Add(s.Kind);
+        sim.Favour = 600;
+        sim.Waves.Countdown = 1e9;
+        int cx = Site.KeepX - Site.KeepR - 150, cz = Site.KeepZ + 10;
+        Unit Raider(UnitType t, int dx, int dz) { var u = sim.Spawn(t, sim.NearestStand(cx + dx, cz + dz, t.Move.Height)); u.Guard = true; u.Home = u.Cell; return u; }
+        foreach (var (t, dx, dz) in new[] { (Kinds.Orc, -20, 0), (Kinds.Goblin, -10, 14), (Kinds.Goblin, -6, -12), (Kinds.Troll, 6, 4), (Kinds.Goblin, 14, 18),
+            (Kinds.Orc, 20, -8), (Kinds.Goblin, 28, 10), (Kinds.Sapper, -26, 20), (Kinds.Goblin, 36, -20), (Kinds.Orc, 2, -26) })
+            Raider(t, dx, dz);
+        // a siege ladder of theirs standing in the field, a deck laid by it
+        int lg = w.SurfAt(cx + 8, cz - 40);
+        for (int y = lg; y < lg + 28; y++) for (int x = cx + 6; x < cx + 9; x++) w.Set(x, y, cz - 40, Mat.SiegeLadder);
+        for (int z = cz + 30; z < cz + 46; z++) for (int x = cx - 10; x < cx + 10; x++) w.Set(x, w.SurfAt(x, z), z, Mat.Deck);
+        Advance(.5);
+        float ground = w.SurfAt(cx, cz);
+        if (_look == 1)
+        {
+            sim.Cast(SpellKind.Meteor, cx, ground, cz);
+            Advance(1.05);
+        }
+        else if (_look == 2)
+        {
+            sim.Cast(SpellKind.Whirlwind, cx - 60, w.SurfAt(cx - 60, cz), cz);
+            Advance(3.2);
+        }
+        else
+        {
+            sim.Cast(SpellKind.Quake, cx, ground, cz);
+            Advance(.45);
+        }
+        Paused = true;
+        Rig.SetAt(w.WX(cx), w.WY(ground + 8), w.WZ(cz), -.62f, .5f, 1.7f);
         Hud.Refresh();
     }
 

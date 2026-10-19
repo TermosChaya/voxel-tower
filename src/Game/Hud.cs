@@ -238,7 +238,7 @@ public partial class Hud : CanvasLayer
         _horde.Init(m);
         _lore = new LorePanel();
         _lore.Init(m);
-        _loreTab = Tab("lore", Icons.Tome, "Знания", "Знания\nДрево умений крепости. Каждая отбитая волна приносит знания, и на них учатся умениям пяти ветвей — луки, кладка, труд, дружина, ловушки, — по четыре яруса в каждой. На всё древо за осаду знаний не хватит: выбирайте. Цифра на вкладке — сколько знаний ждёт, когда есть чему учиться.", _lore, LorePanel.Width);
+        _loreTab = Tab("lore", Icons.Tome, "Знания", "Знания\nДрево крепости на трёх страницах: «Умения» (луки, кладка, труд, дружина, ловушки), «Войско» (какие воины набираются в цитадели и что их усиливает) и «Вмешательство» (заклинания четырёх кругов и благодать). Умения и войско платятся знаниями — их дают отбитые волны, и на всё их за осаду не хватит: выбирайте. Вмешательство платится тем, что дают старые силы. Цифра на вкладке — сколько знаний ждёт, когда есть чему учиться; ✦ — можно постичь заклинание или благодать.", _lore, LorePanel.Width);
         _mysteries = new MysteryPanel();
         _mysteries.Init(m);
         _magicTab = Tab("magic", Icons.Skull, "Таинства", "Таинства\nВмешательство старых сил и откровения; где молятся жрецы и как их слышат; жертвы — пленного, тушу с охоты или своего. " +
@@ -619,7 +619,12 @@ public partial class Hud : CanvasLayer
     /// <summary>The console's middle (the self-test presses its tiles); whether it shows the citadel's muster.</summary>
     public Inspector Inspector => _inspector;
     public bool KeepShown => _inspector?.KeyNow == "keep";
-    public void OpenPanel(string key) => _drop.Open(key);
+    /// <summary>Lets a panel down; "lore:2" lets down the lore on its page of the intervention.</summary>
+    public void OpenPanel(string key)
+    {
+        if (key.StartsWith("lore:") && int.TryParse(key[5..], out int page)) { _drop.Open("lore"); _lore.ShowPage(page); return; }
+        _drop.Open(key);
+    }
     public void ClosePanel() => _drop.Close();
     public LorePanel Lore => _lore;
     public MysteryPanel Mysteries => _mysteries;

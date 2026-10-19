@@ -3566,7 +3566,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--lore")
     foreach (var u in simK.Units) if (u.Team == Team.Horde && !u.Dead) { u.Dead = true; u.DiedAt = -999; }
     double goldK0 = simK.Stock.Gold;
     RunK(.5);
-    Check("a wave beaten back brings gold and knowledge", !simK.Waves.Active && simK.Stock.Gold >= goldK0 + 40 && simK.Knowledge == 2,
+    Check("a wave beaten back brings gold and knowledge", !simK.Waves.Active && simK.Stock.Gold >= goldK0 + 40 && simK.Knowledge == 4,
         $"gold {goldK0:0} → {simK.Stock.Gold:0}, knowledge {simK.Knowledge}");
 
     // lore is learnt in the order of its branch, and only for the knowledge it costs
@@ -3602,12 +3602,29 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--lore")
     float reachK2 = simK.RangeAt(bowK, bowK.X + 50, bowK.Z);
     bool guildFirst = simK.Learn("picks") && simK.Learn("barrows") && simK.Learn("carts") && simK.Learn("guild");
     bool guildK = simK.Learn("mortar") && simK.Learn("masons") && simK.Learn("guild");
-    int treeCost = 0, siege = 0;
-    foreach (var l in Sim.Lores) treeCost += l.Cost;
-    for (int wave = 1; wave <= Waves.Total; wave++) siege += 2 + wave / 2;
-    Check("the tree is four deep: the last of a branch wants both before it, the masters' guild wants the masons' too, and the whole tree costs more than a siege gives",
-        Sim.Lores.Length == 30 && !longFirst && longK && MathF.Abs(reachK2 / reachK0 - 1.15f * 1.15f) < .01f && !guildFirst && guildK && treeCost > siege * 1.5f,
-        $"{Sim.Lores.Length} lores; longbows on one {longFirst}, on both {longK}, reach ×{reachK2 / reachK0:0.000}; the guild without masons {guildFirst}, with {guildK}; the tree {treeCost}, a siege's knowledge {siege}");
+    int treeCost = 0, siege = 0, skills = 0, troops = 0, rites = 0;
+    foreach (var l in Sim.Lores)
+    {
+        if (l.Coin == Coin.Knowledge) treeCost += l.Cost;
+        if (l.Page == 0) skills++; else if (l.Page == 1) troops++; else rites++;
+    }
+    for (int wave = 1; wave <= Waves.Total; wave++) siege += 3 + wave;
+    Check("the tree is four deep: the last of a branch wants both before it, the masters' guild wants the masons' too, and the skills and the troops together cost more than a siege gives",
+        skills == 30 && troops == 24 && rites == 30 && !longFirst && longK && MathF.Abs(reachK2 / reachK0 - 1.15f * 1.15f) < .01f && !guildFirst && guildK && treeCost > siege * 1.5f,
+        $"{skills} skills, {troops} of the troops, {rites} of the intervention; longbows on one {longFirst}, on both {longK}, reach ×{reachK2 / reachK0:0.000}; the guild without masons {guildFirst}, with {guildK}; skills and troops {treeCost}, a siege's knowledge {siege}");
+    // every page's branches are its own, each branch a tier 0 to a tier 3, every root on its own page
+    bool shaped = true;
+    for (int pg = 0; pg < 3; pg++)
+        foreach (string br in Sim.PageBranches[pg])
+        {
+            var tiers = new System.Collections.Generic.List<int>();
+            foreach (var l in Sim.LoresOn(pg)) if (l.Branch == br) tiers.Add(l.Tier);
+            if (tiers.Count != 6 || !tiers.Contains(0) || !tiers.Contains(3)) shaped = false;
+        }
+    foreach (var l in Sim.Lores) foreach (string nd in l.Needs) if (Sim.LoreOf(nd) is not { } r || r.Page != l.Page) shaped = false;
+    Check("every branch of every page is six lores from a first to a last, every lore resting on its own page; the circles are the spells' own",
+        shaped && Sim.Circles[0] == Sim.PageBranches[2][0] && Sim.Circles[3] == Sim.PageBranches[2][3] && Sim.Spells.Length == 23,
+        $"shaped {shaped}, {Sim.Spells.Length} spells");
 
     // mail takes a fifth off a blow to a soldier of ours; tracks and barrows have workers walk a fifth faster
     float hpK0 = swordK.Hp;
@@ -3758,6 +3775,131 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
     float far1 = simL.Units.FindAll(u => !u.Dead && u.Team == Team.Horde && !u.Guard).ConvertAll(u => MathF.Abs(u.X - kxS) + MathF.Abs(u.Z - kzS)).DefaultIfEmpty(0).Average();
     Check("…and the game read back plays on: the horde comes on, the fire burns on", burning0 > 0 && simL.Burning.Count != burning0 && (far1 < far0 || simL.Kills > simS.Kills),
         $"burning {burning0} → {simL.Burning.Count}; the horde on average {far0 / VoxelWorld.PerMetre:0} → {far1 / VoxelWorld.PerMetre:0} m from the citadel, {simL.Kills - simS.Kills} more killed");
+}
+
+// ---- grace and the greatest spells: what the intervention's page does
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--grace")
+{
+    Console.WriteLine();
+    var mpG = new MapParams();
+    var wG = new VoxelWorld(mpG.SizeX, mpG.SizeY, mpG.SizeZ);
+    var siteG = MapGen.Generate(wG, mpG);
+    wG.Compact();
+    var simG = new Sim(wG, siteG);
+    simG.Waves.Countdown = 1e9; simG.WildTarget = 0;
+    void RunG(double seconds) { for (double t = 0; t < seconds; t += .05) simG.Step(.05f); }
+    int kxG = siteG.KeepX, kzG = siteG.KeepZ;
+    Unit RaiderG(UnitType t, int x, int z) { var u = simG.Spawn(t, simG.NearestStand(x, z, t.Move.Height)); u.Guard = true; u.Home = u.Cell; return u; }
+    void GoneG(Unit u) { u.Dead = true; u.DiedAt = -999; }
+
+    // the intervention held has a ceiling, raised by the vessel; prayer with the rosary brings more
+    simG.Favour = 140;
+    simG.GainFavour(30);
+    double capped = simG.Favour;
+    simG.Learnt.Add("vessel");
+    simG.GainFavour(30);
+    Check("intervention is held up to 150, up to 300 with the vessel", capped == 150 && simG.Favour == 180 && simG.FavourCap == 300, $"140 + 30 → {capped}; with the vessel +30 → {simG.Favour}");
+    // the circles are learnt in order up to their greatest; litanies make casting cheaper, the vigil readier
+    simG.Favour = 200; simG.Revelations = 30;
+    bool meteorFirst = simG.Learn(Sim.SpellKey(SpellKind.Meteor));
+    bool meteorK = simG.Learn(Sim.SpellKey(SpellKind.FireRain)) && simG.Learn(Sim.SpellKey(SpellKind.Thunder)) && simG.Learn(Sim.SpellKey(SpellKind.Weather))
+        && simG.Learn(Sim.SpellKey(SpellKind.BlackWind)) && simG.Learn(Sim.SpellKey(SpellKind.BloodMoon)) && simG.Learn(Sim.SpellKey(SpellKind.Meteor));
+    var thunder = Sim.SpellOf(SpellKind.Thunder);
+    double cost0 = simG.CostOf(thunder), cd0 = simG.CooldownOf(thunder);
+    simG.Learnt.Add("litany"); simG.Learnt.Add("vigil");
+    Check("a circle is learnt in order to its greatest spell at its end; litanies take a fifth off a casting, the vigil a third off the wait",
+        !meteorFirst && meteorK && simG.Known.Contains(SpellKind.Meteor) && Math.Abs(simG.CostOf(thunder) - cost0 * .8) < 1e-9 && Math.Abs(simG.CooldownOf(thunder) - cd0 * .7) < 1e-9,
+        $"the falling star first {meteorFirst}, after its circle {meteorK}; the bolt {cost0} → {simG.CostOf(thunder)} intervention, {cd0} → {simG.CooldownOf(thunder)} s");
+    foreach (var sp in Sim.Spells) simG.Known.Add(sp.Kind);
+    simG.Favour = 5000;
+
+    // the strength of faith: a bolt strikes a troll a third harder
+    var trollG = RaiderG(Kinds.Troll, kxG - 300, kzG + 200);
+    simG.Cast(SpellKind.Thunder, trollG.X, trollG.Y, trollG.Z);
+    float plainBolt = trollG.MaxHp - trollG.Hp;
+    trollG.Hp = trollG.MaxHp;
+    simG.ReadyNow(SpellKind.Thunder);
+    simG.Learnt.Add("might");
+    simG.Cast(SpellKind.Thunder, trollG.X, trollG.Y, trollG.Z);
+    float mightyBolt = trollG.MaxHp - trollG.Hp;
+    GoneG(trollG);
+    // the reaping: a raider the spells kill gives intervention back
+    simG.Learnt.Add("reap");
+    var gobReap = RaiderG(Kinds.Goblin, kxG - 300, kzG + 260);
+    simG.ReadyNow(SpellKind.Thunder);
+    simG.Favour = 100;
+    double fav0 = simG.Favour;
+    simG.Cast(SpellKind.Thunder, gobReap.X, gobReap.Y, gobReap.Z);
+    double back = simG.Favour - (fav0 - simG.CostOf(thunder));
+    Check("with the strength of faith spells strike a third harder; with the reaping a raider they kill gives two intervention back",
+        MathF.Abs(mightyBolt / plainBolt - 1.3f) < .02f && gobReap.Dead && Math.Abs(back - 2) < 1e-6,
+        $"a bolt into a troll {plainBolt:0} → {mightyBolt:0}; the goblin {(gobReap.Dead ? "killed" : "alive")}, intervention back {back:0.##}");
+    GoneG(gobReap);
+    simG.Favour = 5000;
+
+    // the earthquake: the raiders in the circle are thrown up, the horde's ladder is shaken apart, our wall stands
+    int qx = kxG - 260, qz = kzG - 160;
+    var shaken = new System.Collections.Generic.List<Unit>();
+    for (int i = 0; i < 5; i++) shaken.Add(RaiderG(Kinds.Goblin, qx - 16 + i * 8, qz + (i % 2) * 10));
+    int lg = wG.SurfAt(qx + 30, qz);
+    for (int y = lg; y < lg + 24; y++) for (int x = qx + 30; x < qx + 32; x++) wG.Set(x, y, qz, Mat.SiegeLadder);
+    int ourWall = 0, wg = wG.SurfAt(qx, qz + 30);
+    for (int y = wg; y < wg + 16; y++) for (int x = qx - 8; x < qx + 8; x++) { wG.Set(x, y, qz + 30, Mat.Stone); ourWall++; }
+    RunG(.2);
+    string quake = simG.Cast(SpellKind.Quake, qx, wG.SurfAt(qx, qz), qz);
+    int thrownQ = shaken.FindAll(u => u.Airborne != null).Count;
+    RunG(3);
+    int ladderLeft = 0, wallLeft = 0;
+    for (int y = lg; y < lg + 24; y++) for (int x = qx + 30; x < qx + 32; x++) if (wG.Get(x, y, qz) == Mat.SiegeLadder) ladderLeft++;
+    for (int y = wg; y < wg + 16; y++) for (int x = qx - 8; x < qx + 8; x++) if (Mat.IsMasonry(wG.Get(x, y, qz + 30))) wallLeft++;
+    Check("the earthquake throws the raiders in it up off their feet and shakes the horde's ladder apart, and leaves our wall standing",
+        quake == null && thrownQ == 5 && ladderLeft == 0 && wallLeft == ourWall, $"cast: {quake ?? "yes"}; thrown {thrownQ} of 5; ladder voxels left {ladderLeft} of 48; our wall {wallLeft} of {ourWall}");
+    foreach (var u in shaken) GoneG(u);
+
+    // the falling star: it comes down out of the sky on the spot, blows a crater and the goblins about it away, sets the
+    // grass alight, and its rock rolls on
+    int sx = kxG - 330, sz = kzG + 60;
+    int sg0 = wG.SurfAt(sx, sz);
+    var struck = new System.Collections.Generic.List<Unit>();
+    for (int i = 0; i < 3; i++) struck.Add(RaiderG(Kinds.Goblin, sx - 12 + i * 12, sz + 8));
+    int blasts = 0;
+    float bxS = 0, bzS = 0;
+    Action<float, float, float, float> countBlast = (bx, _, bz, _) => { if (blasts++ == 0) { bxS = bx; bzS = bz; } };
+    simG.Exploded += countBlast;
+    string star = simG.Cast(SpellKind.Meteor, sx, sg0, sz);
+    bool flying = simG.Fliers.Exists(f => f.Star);
+    RunG(3);
+    simG.Exploded -= countBlast;
+    int sg1 = wG.SurfAt(sx, sz);
+    // the crater: columns about where it struck hollowed out under the ground as it was
+    int crater = 0;
+    for (int dz = -16; dz <= 16; dz += 2) for (int dx = -16; dx <= 16; dx += 2) if (wG.Get((int)bxS + dx, sg0 - 3, (int)bzS + dz) == Mat.Air) crater++;
+    float offS = MathF.Sqrt((bxS - sx) * (bxS - sx) + (bzS - sz) * (bzS - sz)) / VoxelWorld.PerMetre;
+    int hurtS = struck.FindAll(u => u.Dead || u.Hp < u.MaxHp).Count;
+    bool rockLies = false;
+    for (int z = sz - 160; z <= sz + 160 && !rockLies; z += 2) for (int x = sx - 40; x <= sx + 220 && !rockLies; x += 2) for (int y = sg1 - 30; y < sg1 + 30 && !rockLies; y++) if (wG.Get(x, y, z) == Mat.Rock && Math.Abs(wG.SurfAt(x, z) - 1 - y) < 2 && Mat.IsNatural[wG.Get(x, y - 1, z)] == false) rockLies = true;
+    bool rocks = rockLies || simG.Fliers.Exists(f => f.Unit == null && f.Rolling);
+    Check("the falling star comes down on the spot: a blast, a crater, the goblins about it struck, and its rock still there after",
+        star == null && flying && blasts >= 1 && offS < 2 && crater > 20 && hurtS == 3 && simG.Fliers.TrueForAll(f => !f.Star),
+        $"cast: {star ?? "yes"}; in the air {flying}; blasts {blasts}, {offS:0.0} m from the spot; a crater of {crater} columns; struck {hurtS} of 3; the rock {(rocks ? "lies or rolls" : "not found")}");
+    foreach (var u in struck) GoneG(u);
+
+    // the whirlwind: let loose by a band, it goes to them and throws them about; ours it goes round
+    int wx = kxG - 240, wz = kzG + 220;
+    var band = new System.Collections.Generic.List<Unit>();
+    for (int i = 0; i < 4; i++) band.Add(RaiderG(Kinds.Goblin, wx + 48 + i * 6, wz + (i % 2) * 8));
+    var ours = simG.Spawn(Kinds.Worker, simG.NearestStand(wx, wz + 24, 2));
+    ours.Hold = true;
+    string whirl = simG.Cast(SpellKind.Whirlwind, wx, wG.SurfAt(wx, wz), wz);
+    var bx0 = band.ConvertAll(u => (u.X, u.Z));
+    int flungW = 0;
+    for (int t = 0; t < 80; t++) { RunG(.1); foreach (var u in band) if (u.Airborne != null) { } flungW = band.FindAll(u => u.Airborne != null || u.Dead).Count; if (flungW >= 3) break; }
+    RunG(14);
+    float movedW = 0;
+    for (int i = 0; i < band.Count; i++) movedW = MathF.Max(movedW, MathF.Sqrt((band[i].X - bx0[i].X) * (band[i].X - bx0[i].X) + (band[i].Z - bx0[i].Z) * (band[i].Z - bx0[i].Z)) / VoxelWorld.PerMetre);
+    Check("the whirlwind goes to the band and throws them about, and leaves ours alone; and it blows itself out",
+        whirl == null && flungW >= 3 && movedW > 3 && ours.Airborne == null && !ours.Dead && simG.Whirls.Count == 0,
+        $"cast: {whirl ?? "yes"}; taken up {flungW} of 4; the farthest thrown {movedW:0.0} m; ours {(ours.Airborne != null ? "in the air" : "on the ground")}; whirls left {simG.Whirls.Count}");
 }
 
 // ---- the citadel's muster: taken on for gold, made ready in turn, as many as there are places for

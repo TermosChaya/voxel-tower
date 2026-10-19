@@ -1141,9 +1141,9 @@ public partial class BuildTools : Node3D
             var sp = Sim.SpellOf(CurrentSpell);
             double ready = _m.Sim.ReadyIn(sp.Kind), have = _m.Sim.Favour;
             string pick = sp.Kind == SpellKind.Weather ? $" · {Sim.WeatherName(Sim.Summonable[WeatherPick])}" : "";
-            PlanText = $"«{sp.Name}»{pick} · {sp.Cost:0} вмешательства" + (ready > 0 ? $" · через {ready:0} с" : "") + (have < sp.Cost ? $" — есть {have:0}" : "")
+            PlanText = $"«{sp.Name}»{pick} · {_m.Sim.CostOf(sp):0} вмешательства" + (ready > 0 ? $" · через {ready:0} с" : "") + (have < _m.Sim.CostOf(sp) ? $" — есть {have:0}" : "")
                 + (_holding && _m.Sim.HeldNow is { } held ? $" · держит ещё {Math.Max(0, held.HeldUntil - _m.Sim.Time):0.0} с" : "");
-            PlanAffordable = ready <= 0 && have >= sp.Cost;
+            PlanAffordable = ready <= 0 && have >= _m.Sim.CostOf(sp);
             PlanIsDig = false;
             _planKey = "~";
             return;
