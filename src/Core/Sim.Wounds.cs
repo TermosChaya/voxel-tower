@@ -59,7 +59,7 @@ public sealed partial class Sim
     public readonly List<Remnant> Remnants = new();
     /// <summary>A piece came off a body.</summary>
     public event Action<Remnant> Severed;
-    /// <summary>A blow drew blood: where (world voxels) and how much (half-voxels of flesh cut).</summary>
+    /// <summary>A blow drew blood: where (world voxels) and how much (half-voxels of flesh cut). Not for a blade's blow laid out along its stroke: <see cref="Smote"/> tells of that.</summary>
     public Action<float, float, float, int> Splashed;
 
     /// <summary>How a weapon cuts: a sweep through a plane, a deep narrow chop, a thrust, a crushing blow, an arrow.</summary>
@@ -145,30 +145,118 @@ public sealed partial class Sim
     /// the share of the blow that got to the flesh.
     /// </summary>
     public float Wound(Unit b, Cut cut, float depth, float reach, float ox, float oy, float oz, float dx, float dy, float dz)
+        => Wound(b, cut, depth, reach, ox, oy, oz, dx, dy, dz, float.NaN, 0, 0);
+
+    /// <summary>What the last blow struck first, where (world voxels), and how much flesh it cut (half-voxels); air for a blow that met nothing.</summary>
+    public byte LastMat { get; private set; }
+    public Vec LastAt { get; private set; }
+    public int LastFlesh { get; private set; }
+
+    /// <summary>
+    /// A blow whose blade is known: (ox…oz) is now its root and (ex…ez) runs from there to its point (world voxels), and
+    /// the whole of it goes along the way of the blow; it strikes where any of it first meets the body. The sweep follows
+    /// the edge — the cut lies in the plane of the way the blade goes and the line of its edge, give or take a little —
+    /// instead of a tilt at random; and a blade that passes the body by close is taken on in to it. Without a blade (NaN)
+    /// it is the plain blow from a point.
+    /// </summary>
+    public float Wound(Unit b, Cut cut, float depth, float reach, float ox, float oy, float oz, float dx, float dy, float dz, float ex, float ey, float ez)
     {
+        LastMat = Mat.Air; LastFlesh = 0;
         if (b.Dead) return 0;
         var body = b.Wounds ??= new BodyState(Bodies.Plan(b.T, b.Look));
         float len = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
         if (len < 1e-4f) return 1;
+        bool edged = !float.IsNaN(ex);
         var (px, py, pz) = ToBody(b, ox, oy, oz);
         var (lx, ly, lz) = DirToBody(b, dx / len, dy / len, dz / len);
         // where it strikes: the first voxel on its way
         int ix = 0, iy = 0, iz = 0;
         bool hit = false;
-        for (float t = 0; t < 140; t += .5f)
+        if (edged)
         {
-            float x = px + lx * t, y = py + ly * t, z = pz + lz * t;
-            ix = (int)MathF.Floor(x); iy = (int)MathF.Floor(y); iz = (int)MathF.Floor(z);
-            if (body.Mat(ix, iy, iz, out _) != 0) { hit = true; break; }
+            // the blade's length, root to point, each spot of it on along the way: whichever meets the body first
+            float el = MathF.Sqrt(ex * ex + ey * ey + ez * ez), span = el * BodyPlan.Sub / ScaleOf(b);
+            var (ux, uy, uz) = el < 1e-4f ? (0f, 0f, 0f) : DirToBody(b, ex / el, ey / el, ez / el);
+            int n = Math.Clamp((int)(span / 1.5f) + 1, 1, 14);
+            float first = 140;
+            // the body's box, a half-voxel over all round: no spot of the way outside it strikes anything
+            float bx0 = float.MaxValue, by0 = float.MaxValue, bz0 = float.MaxValue, bx1 = float.MinValue, by1 = float.MinValue, bz1 = float.MinValue;
+            foreach (var g in body.Grid)
+            {
+                if (g == null) continue;
+                bx0 = Math.Min(bx0, g.X0 - 1); by0 = Math.Min(by0, g.Y0 - 1); bz0 = Math.Min(bz0, g.Z0 - 1);
+                bx1 = Math.Max(bx1, g.X0 + g.SX + 1); by1 = Math.Max(by1, g.Y0 + g.SY + 1); bz1 = Math.Max(bz1, g.Z0 + g.SZ + 1);
+            }
+            // how far along the way from q it is in the box
+            bool Through(float q, float l, float lo, float hi, ref float tin, ref float tout)
+            {
+                if (MathF.Abs(l) < 1e-6f) return q >= lo && q <= hi;
+                float t0 = (lo - q) / l, t1 = (hi - q) / l;
+                if (t0 > t1) (t0, t1) = (t1, t0);
+                tin = Math.Max(tin, t0); tout = Math.Min(tout, t1);
+                return tin <= tout;
+            }
+            for (int j = 0; j < n; j++)
+            {
+                float o = n == 1 ? 0 : span * j / (n - 1), qx = px + ux * o, qy = py + uy * o, qz = pz + uz * o;
+                float tin = 0, tout = first;
+                if (!Through(qx, lx, bx0, bx1, ref tin, ref tout) || !Through(qy, ly, by0, by1, ref tin, ref tout) || !Through(qz, lz, bz0, bz1, ref tin, ref tout)) continue;
+                for (float t = MathF.Floor(tin * 2) / 2; t < first && t <= tout; t += .5f)
+                {
+                    int x = (int)MathF.Floor(qx + lx * t), y = (int)MathF.Floor(qy + ly * t), z = (int)MathF.Floor(qz + lz * t);
+                    if (body.Mat(x, y, z, out _) == 0) continue;
+                    first = t; ix = x; iy = y; iz = z; hit = true;
+                    break;
+                }
+            }
+            if (!hit) { px += ux * span * .7f; py += uy * span * .7f; pz += uz * span * .7f; }
         }
-        if (!hit) { LastCut = 0; return .5f; }
+        else
+            for (float t = 0; t < 140; t += .5f)
+            {
+                float x = px + lx * t, y = py + ly * t, z = pz + lz * t;
+                ix = (int)MathF.Floor(x); iy = (int)MathF.Floor(y); iz = (int)MathF.Floor(z);
+                if (body.Mat(ix, iy, iz, out _) != 0) { hit = true; break; }
+            }
+        // a stroke that came to the body's round beside it goes on in toward its middle, from where it came nearest
+        if (edged && !hit)
+        {
+            float hl2 = lx * lx + lz * lz, tq = hl2 > 1e-4f ? MathF.Max(0, -(px * lx + pz * lz) / hl2) : 0;
+            float qx = px + lx * tq, qy = py + ly * tq, qz = pz + lz * tq, ql = MathF.Max(1e-3f, MathF.Sqrt(qx * qx + qz * qz));
+            if (body.Plan.Grid[0] is { } trunk) qy = Math.Clamp(qy, trunk.Y0 + 1, trunk.Y0 + trunk.SY - 2);
+            for (float t = 0; t < ql + 4 && !hit; t += .5f)
+            {
+                ix = (int)MathF.Floor(qx - qx / ql * t); iy = (int)MathF.Floor(qy); iz = (int)MathF.Floor(qz - qz / ql * t);
+                if (body.Mat(ix, iy, iz, out _) != 0) hit = true;
+            }
+        }
+        if (!hit) { LastCut = 0; LastFlesh = 0; LastMat = Mat.Air; return .5f; }
+        LastMat = body.Mat(ix, iy, iz, out _);
         float cx = ix + .5f, cy = iy + .5f, cz = iz + .5f;
-        // the sweep of a blade: across the way it comes, tilted anywhere from flat to steep
-        float tilt = (float)(Rng.NextDouble() - .5) * 1.8f;
-        float hx = -lz, hz = lx, hl = MathF.Sqrt(hx * hx + hz * hz);
-        if (hl < 1e-3f) { hx = 1; hz = 0; hl = 1; }
-        hx /= hl; hz /= hl;
-        float sx = hx * MathF.Cos(tilt), sy = MathF.Sin(tilt), sz = hz * MathF.Cos(tilt);
+        float sx, sy, sz;
+        if (edged)
+        {
+            // the sweep of this blade: along its edge, square to the way it goes in, turned a little either way
+            var (ax, ay, az) = DirToBody(b, ex, ey, ez);
+            float along = ax * lx + ay * ly + az * lz;
+            ax -= lx * along; ay -= ly * along; az -= lz * along;
+            float al = MathF.Sqrt(ax * ax + ay * ay + az * az);
+            if (al < 1e-3f) { ax = -lz; ay = 0; az = lx; al = MathF.Max(1e-3f, MathF.Sqrt(ax * ax + az * az)); }
+            ax /= al; ay /= al; az /= al;
+            float turn = (float)(Rng.NextDouble() - .5) * .3f, c = MathF.Cos(turn), s = MathF.Sin(turn);
+            // turned about the way in: a·cos + (l×a)·sin
+            float qx = ly * az - lz * ay, qy = lz * ax - lx * az, qz = lx * ay - ly * ax;
+            sx = ax * c + qx * s; sy = ay * c + qy * s; sz = az * c + qz * s;
+        }
+        else
+        {
+            // the sweep of a blade: across the way it comes, tilted anywhere from flat to steep
+            float tilt = (float)(Rng.NextDouble() - .5) * 1.8f;
+            float hx = -lz, hz = lx, hl = MathF.Sqrt(hx * hx + hz * hz);
+            if (hl < 1e-3f) { hx = 1; hz = 0; hl = 1; }
+            hx /= hl; hz /= hl;
+            sx = hx * MathF.Cos(tilt); sy = MathF.Sin(tilt); sz = hz * MathF.Cos(tilt);
+        }
         // the plane's normal: across both the way in and the sweep
         float nx = ly * sz - lz * sy, ny = lz * sx - lx * sz, nz = lx * sy - ly * sx;
         // the voxels it can reach, by how deep they lie along the blow
@@ -228,6 +316,9 @@ public sealed partial class Sim
         }
         foreach (var (p, x, y, z) in removed) body.Grid[p].Clear(x, y, z);
         LastCut = removed.Count;
+        LastFlesh = flesh;
+        float wk = ScaleOf(b) / BodyPlan.Sub, wsin = MathF.Sin(b.Facing), wcos = MathF.Cos(b.Facing);
+        LastAt = new Vec(b.X + (cx * wsin + cz * wcos) * wk, b.Y + cy * wk, b.Z + (-cx * wcos + cz * wsin) * wk);
         // blood on the skin round the wound
         foreach (var (p, x, y, z) in removed)
             foreach (var (ax, ay, az) in Around)
@@ -238,7 +329,8 @@ public sealed partial class Sim
                 int q = g.Index(qx, qy, qz);
                 if (g.M[q] != 0 && g.T[q] == (byte)Tissue.Skin && Hash.H3(qx * 3 + qy, qz, b.Id) < .3) g.M[q] = Mat.Blood;
             }
-        if (flesh > 0 && Splashed != null)
+        // (a blade's blood is thrown by the eye along the way it went, as it is seen to get there)
+        if (flesh > 0 && Splashed != null && !edged)
         {
             // back from the body's half-voxels to the world
             float k = ScaleOf(b) / BodyPlan.Sub, sin = MathF.Sin(b.Facing), cos = MathF.Cos(b.Facing);

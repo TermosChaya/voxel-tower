@@ -108,6 +108,7 @@ public partial class UnitView : Node3D
         var keg = new BoxMesh { Size = new Vector3(.36f, .42f, .36f), Material = new StandardMaterial3D { AlbedoColor = new Color("6a3322"), Roughness = .85f } };
         _kegs = Multi(keg, null, false);
         m.Sim.Severed += Fall;
+        StrokesInit(m.Sim);
         var ring = new TorusMesh { InnerRadius = .82f, OuterRadius = 1f, Rings = 32, RingSegments = 4 };
         var ringMat = new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, VertexColorUseAsAlbedo = true, AlbedoColor = Colors.White };
         _rings = Multi(ring, ringMat, true);
@@ -272,6 +273,7 @@ public partial class UnitView : Node3D
         foreach (var u in sim.Units) if (!u.Inside && u.Id != HiddenId) KindOf(u).Count++;
         foreach (var k in _kinds.Values) { if (k.Count > k.Cap) Grow(k, k.Count); k.Count = 0; }
         _alive.Clear();
+        StrokesBegin(sim);
         foreach (var u in sim.Units)
         {
             if (u.Inside) continue;
@@ -297,6 +299,7 @@ public partial class UnitView : Node3D
                 Write(k.DressBufs[d], o, hurt != null && hurt[on] ? Folded : _xf[on] * Wrist(u, k.Fig, d), tint);
             }
         }
+        StrokesEnd();
         foreach (var k in _kinds.Values) Upload(k);
         _gone.Clear();
         foreach (int id in _looks.Keys) if (!_alive.Contains(id)) _gone.Add(id);
@@ -493,15 +496,18 @@ public partial class UnitView : Node3D
             root *= f.Beast || f.Mounted
                 ? new Transform3D(new Basis(Vector3.Back, MathF.PI / 2 * fall), new Vector3(0, fall * (u.T.BodyR * .7f), 0))
                 : new Transform3D(new Basis(Vector3.Right, -MathF.PI / 2 * fall), new Vector3(0, fall * (u.T.BodyR + .5f), 0));
-        var body = root * Swing(f, Part.Body, lean);
+        // a blow: the arms turned every way at the shoulders, the trunk twisted, the step taken (UnitView.Strokes.cs)
+        var turns = StrokeTurns(u, f, look, main, off, lean, ref legR, ref legL, root);
+        var hips = turns.Step == Vector3.Zero ? root : root * new Transform3D(Basis.Identity, turns.Step);
+        var body = hips * TurnAt(f, Part.Body, turns.Body);
         look.Body = body;
         var tint = Tint(u);
         // a horse's legs go with its body as it rocks
-        var arms = f.Beast ? root : body;
-        var legs = f.Mounted ? body : root;
+        var arms = f.Beast ? hips : body;
+        var legs = f.Mounted ? body : hips;
         _xf[(int)Part.Body] = body;
-        _xf[(int)Part.Main] = arms * Swing(f, Part.Main, main);
-        _xf[(int)Part.Off] = arms * Swing(f, Part.Off, off);
+        _xf[(int)Part.Main] = arms * TurnAt(f, Part.Main, turns.Main);
+        _xf[(int)Part.Off] = arms * TurnAt(f, Part.Off, turns.Off);
         _xf[(int)Part.LegR] = legs * Swing(f, Part.LegR, legR);
         _xf[(int)Part.LegL] = legs * Swing(f, Part.LegL, legL);
         return tint;

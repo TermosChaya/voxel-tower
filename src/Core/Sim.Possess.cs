@@ -48,6 +48,7 @@ public sealed partial class Sim
         Possessed = u;
         LookYaw = u.Facing; LookPitch = 0;
         WishX = WishZ = 0; WishRun = WishStrike = WishLay = false; WishClimb = 0;
+        _swingRight = _swingDown = 0; _lookYaw0 = float.NaN;
         return true;
     }
 
@@ -83,6 +84,14 @@ public sealed partial class Sim
         // a rider at the gallop, a troll's flesh knitting: as under its own wits
         if (u.T.Mounted || u.T == Kinds.TameTroll) TroopTick(u, dt);
         u.Facing = LookYaw;
+        // the eyes' swing of the last fifth of a second or so: the way the blade goes in the blow struck now
+        if (!float.IsNaN(_lookYaw0))
+        {
+            float fade = MathF.Exp(-dt / .2f);
+            _swingRight = _swingRight * fade + MathF.IEEERemainder(LookYaw - _lookYaw0, MathF.Tau);
+            _swingDown = _swingDown * fade - (LookPitch - _lookPitch0);
+        }
+        _lookYaw0 = LookYaw; _lookPitch0 = LookPitch;
         float wl = MathF.Sqrt(WishX * WishX + WishZ * WishZ);
         bool moving = wl > .05f;
         float speed = u.T.Move.Speed * NavGrid.CS * u.Pace * CartPace(u) * (WishRun ? 1.6f : 1) * (u.Hp < u.MaxHp * .4f ? .7f : 1)
@@ -213,7 +222,13 @@ public sealed partial class Sim
         return hx * hx + hy * hy + hz * hz <= reach * reach;
     }
 
-    /// <summary>The blow of one gone into: a shot along its eyes for a bowman, else a stroke at whoever is before it.</summary>
+    /// <summary>How far the eyes have swung of late, right and down (radians), fading as they rest; and where they were the tick before.</summary>
+    float _swingRight, _swingDown, _lookYaw0 = float.NaN, _lookPitch0;
+
+    /// <summary>
+    /// The blow of one gone into: a shot along its eyes for a bowman, else a stroke at whoever is before it — the stroke
+    /// the player swung for (the way the mouse went just before), or the nearest the weapon makes of it.
+    /// </summary>
     void Blow(Unit u)
     {
         if (!Armed(u)) return;
@@ -232,13 +247,23 @@ public sealed partial class Sim
             if (score < bs && Sight(u, t)) { bs = score; best = t; }
         }
         u.Cooldown = u.T.AttackTime * (.95f + (float)Rng.NextDouble() * .1f);
+        var wish = WishStroke ?? StrokeOfSwing(_swingRight, _swingDown, LookPitch);
         if (best == null)
         {
             // a stroke at the air — or, for one who can work, at the voxel before it
-            if (u.T.Work <= 0) u.Swing = 1;
+            if (u.T.Work <= 0)
+            {
+                u.Swing = 1;
+                var k = Fit(u, null, wish);
+                var g = Strokes.GripOf(Bodies.Plan(u.T, u.Look), u.T);
+                u.Stroke = k; u.StrokeTime = Time; u.StrokeAt = Strokes.Contact(k);
+                u.StrokeAim = Math.Clamp(-LookPitch * .6f, -.5f, .6f); u.StrokeYaw = 0; u.Glanced = false;
+                u.StrokeLunge = Strokes.Straight(k) ? 0 : Math.Min(Strokes.MaxStep(u, g), Strokes.StepOf(k) * u.T.BodyH / 15) * .5f;
+            }
             return;
         }
         u.State = UnitState.Fight;
+        u.NextStroke = Fit(u, best, wish); u.StrokeFor = best;
         Strike(u, best);
     }
 

@@ -3529,12 +3529,13 @@ public static class Bodies
             // the tuft in strands, ragged
             if (look % 2 == 0 && look != 6)
                 for (int x = -2; x < 2; x++) for (int z = -2; z < 2; z++) if (Dice(x, z, look, 83) < .4f) s.FDel(Body, x, b.Crown * 2 + 3, z);
-            // a string of finger bones round the neck
+            // a string of finger bones round the neck, worn on the skin and cut with it like the shirt: were it carried
+            // gear, it would stop a blade at the throat as a haft does and, never cut, hold the head on
             for (int x = -W + 1; x < W - 1; x += 2)
             {
                 int y = neck - 2 - (int)(MathF.Abs(x + .5f) < 3 ? 1 : 0);
-                s.FSet(Body, x, y, z1, Mat.Bone, Tissue.Gear); s.FSet(Body, x, y - 1, z1, Mat.Bone, Tissue.Gear);
-                s.FSet(Body, x + 1, y, z1, Mat.Linen, Tissue.Gear);
+                s.FSet(Body, x, y, z1, Mat.Bone); s.FSet(Body, x, y - 1, z1, Mat.Bone);
+                s.FSet(Body, x + 1, y, z1, Mat.Linen);
             }
             // the ribs of one that goes bare
             if (look % 4 == 3)
@@ -4002,15 +4003,15 @@ public static class Bodies
         int hy0 = b.Neck, F = b.HZ1 * 2 - 1, E = (hy0 + 3) * 2, W = b.HeadW * 2;
         byte skin = b.Skin;
         s.FPattern(Body, -W, hy0 * 2, F - 2, W, b.Crown * 2, F + 3, (x, y, z) => s.FMat(Body, x, y, z) == skin ? (y >= E - 1 ? Mat.Hair : Shade(skin)) : (byte)0);
-        // the mantle of bones over the shoulders
+        // the mantle of bones over the shoulders, worn and cut like the robe (as carried gear it would hold the head on)
         int ny = (b.Neck - 1) * 2, cz0 = b.Z0 * 2 - 1, cz1 = b.Z1 * 2;
         for (int x = -b.Chest * 2 - 1; x <= b.Chest * 2; x++)
             for (int z = cz0; z <= cz1; z++)
             {
                 bool rim = x == -b.Chest * 2 - 1 || x == b.Chest * 2 || z == cz0 || z == cz1;
                 if (!rim || ((x + z) & 1) == 1) continue;
-                s.FSet(Body, x, ny, z, Mat.Bone, Tissue.Gear);
-                if (((x + z) & 3) == 0) s.FSet(Body, x, ny - 1, z, Mat.Bone, Tissue.Gear);
+                s.FSet(Body, x, ny, z, Mat.Bone);
+                if (((x + z) & 3) == 0) s.FSet(Body, x, ny - 1, z, Mat.Bone);
             }
         // runes burning down the front and round the hem
         var glyphs = new[] { new[] { (0, 0), (0, 1), (0, 2), (0, 3), (1, 2), (1, 1) }, new[] { (0, 0), (0, 1), (0, 2), (0, 3), (-1, 3), (1, 3) }, new[] { (0, 0), (1, 1), (0, 2), (1, 3), (0, 1) } };
