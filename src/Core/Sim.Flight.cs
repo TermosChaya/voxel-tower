@@ -12,8 +12,9 @@ public sealed class Flier
     public int Id;
     /// <summary>Its middle and how fast it goes, in voxels and voxels a second.</summary>
     public float X, Y, Z, VX, VY, VZ;
-    /// <summary>How it tumbles, for the eye: the level axis it turns about, how far it has turned, how fast.</summary>
-    public float AX = 1, AZ, Turn, Spin;
+    /// <summary>How it tumbles: the axis it turns about (level as it flies, any way once it rolls), how far it has
+    /// turned, how fast.</summary>
+    public float AX = 1, AY, AZ, Turn, Spin;
     /// <summary>The voxels it is made of, about its middle, and what each is; none for one thrown bodily.</summary>
     public readonly List<(sbyte dx, sbyte dy, sbyte dz, byte m)> Voxels = new();
     /// <summary>One thrown bodily, or null.</summary>
@@ -43,13 +44,22 @@ public sealed class Flier
     public float PX, PY, PZ, CX0, CY0, CZ0;
     public double TipFrom;
     public int Tipped;
+    /// <summary>
+    /// Rolling, as a ball does once it is down: along the ground and down whatever slope there is, till it stops; since
+    /// when, and how far it reaches from its middle, as a ball's radius.
+    /// </summary>
+    public bool Rolling;
+    public double RollFrom;
+    public float RollR;
+    /// <summary>How long it has rolled no way at all, held where it is, seconds.</summary>
+    public float Still;
 }
 
 /// <summary>
 /// The air: what flies through it, and what becomes of it. A piece of the world broken loose — by a blast, by the
 /// hand of telekinesis — goes up as one body and comes down as one, and where it comes down it strikes whoever is
-/// there, knocks a little out of what it hits if it comes heavy and hard, and lies there in a heap of what it was made
-/// of, broken. One thrown bodily flies the same way and is hurt as hard as it lands. Held in the grip of telekinesis, a
+/// there, knocks a little out of what it hits if it comes heavy and hard, and lies there whole, of what it was made of,
+/// broken — or, round, rolls on (Sim.Rolling). One thrown bodily flies the same way and is hurt as hard as it lands. Held in the grip of telekinesis, a
 /// piece or a body goes where the player's hand goes, and flies off the way it was swung when it is let go.
 /// </summary>
 public sealed partial class Sim
@@ -206,7 +216,7 @@ public sealed partial class Sim
             if (f.Unit is { Team: Team.Player } && s < 4 * VoxelWorld.PerMetre) { f.Gentle = true; f.VX *= .3f; f.VY = 0; f.VZ *= .3f; continue; }
             f.VX *= 1.25f; f.VY = f.VY * 1.25f + 10; f.VZ *= 1.25f;
             float h = MathF.Sqrt(f.VX * f.VX + f.VZ * f.VZ);
-            if (h > .1f) { f.AX = -f.VZ / h; f.AZ = f.VX / h; }
+            if (h > .1f) { f.AX = -f.VZ / h; f.AY = 0; f.AZ = f.VX / h; }
         }
     }
 
@@ -233,6 +243,8 @@ public sealed partial class Sim
             const int R = VoxelWorld.PerMetre;
             var ball = new List<(int, int, int)>();
             int ix = (int)x, iy = (int)y, iz = (int)z;
+            // on the face of the ground, a whole ball out of it, not a bowl of its top
+            if (World.InBounds(ix, iy + 1, iz) && World.Get(ix, iy + 1, iz) is var above && (above == Mat.Air || Mat.Passable[above] && above != Mat.Water)) iy -= R - 2;
             for (int dy = -R; dy <= R; dy++)
                 for (int dz = -R; dz <= R; dz++)
                     for (int dx = -R; dx <= R; dx++)
@@ -263,6 +275,9 @@ public sealed partial class Sim
         if (Time > f.HeldUntil) { f.Held = false; return; }
         float k = Lightness(f), pull = 6 * k, max = 30 * VoxelWorld.PerMetre * k;
         float vx = (_handX - f.X) * pull, vy = (_handY - f.Y) * pull, vz = (_handZ - f.Z) * pull;
+        // just torn out: the hand draws it straight up out of its socket before it carries it anywhere
+        bool rising = f.Unit == null && Time - f.Since < .5;
+        if (rising) { vx = vz = 0; vy = MathF.Max(vy, 4 * VoxelWorld.PerMetre); }
         float s = MathF.Sqrt(vx * vx + vy * vy + vz * vz);
         if (s > max) { vx *= max / s; vy *= max / s; vz *= max / s; s = max; }
         // it eases into the new way rather than turning on the spot
@@ -273,7 +288,7 @@ public sealed partial class Sim
         for (int i = 0; i < steps; i++)
         {
             // still in what it was torn out of, or pressed into something: it comes out of it any way it is pulled
-            if (Blocked(f, f.X, f.Y, f.Z)) { f.X += f.VX * h; f.Y += f.VY * h; f.Z += f.VZ * h; continue; }
+            if (rising || Blocked(f, f.X, f.Y, f.Z)) { f.X += f.VX * h; f.Y += f.VY * h; f.Z += f.VZ * h; continue; }
             // along each way in turn, so it slides along a wall instead of sticking to it
             if (!Blocked(f, f.X + f.VX * h, f.Y, f.Z)) f.X += f.VX * h; else f.VX = 0;
             if (!Blocked(f, f.X, f.Y + f.VY * h, f.Z)) f.Y += f.VY * h; else f.VY = 0;
@@ -365,20 +380,31 @@ public sealed partial class Sim
         return false;
     }
 
+    /// <summary>The axis a flying thing is turned about, of length one (east and west, when it has none).</summary>
+    static (float x, float y, float z) AxisOf(Flier f)
+    {
+        float al = MathF.Sqrt(f.AX * f.AX + f.AY * f.AY + f.AZ * f.AZ);
+        return al > 1e-4f ? (f.AX / al, f.AY / al, f.AZ / al) : (1, 0, 0);
+    }
+
+    /// <summary>A vector turned about an axis of length one, given the cosine and sine of the angle, the right hand's way.</summary>
+    static (float x, float y, float z) Turned(float vx, float vy, float vz, float ax, float ay, float az, float c, float s)
+    {
+        float dot = (ax * vx + ay * vy + az * vz) * (1 - c);
+        return (vx * c + (ay * vz - az * vy) * s + ax * dot, vy * c + (az * vx - ax * vz) * s + ay * dot, vz * c + (ax * vy - ay * vx) * s + az * dot);
+    }
+
     /// <summary>Whether a piece, turned as it is now, is in something solid or in water: any voxel of it (of a great one, every few).</summary>
     bool Embedded(Flier f, bool water = true)
     {
-        float al = MathF.Sqrt(f.AX * f.AX + f.AZ * f.AZ);
-        float ax = al > 1e-4f ? f.AX / al : 1, az = al > 1e-4f ? f.AZ / al : 0, c = MathF.Cos(f.Turn), s = MathF.Sin(f.Turn);
+        var (ax, ay, az) = AxisOf(f);
+        float c = MathF.Cos(f.Turn), s = MathF.Sin(f.Turn);
         int stride = Math.Max(1, f.Voxels.Count / 400);
         for (int i = 0; i < f.Voxels.Count; i += stride)
         {
             var (dx, dy, dz, _) = f.Voxels[i];
-            float dot = ax * dx + az * dz;
-            float px = f.X + dx * c - az * dy * s + ax * dot * (1 - c);
-            float py = f.Y + dy * c + (az * dx - ax * dz) * s;
-            float pz = f.Z + dz * c + ax * dy * s + az * dot * (1 - c);
-            if (Stops(px, py, pz, water)) return true;
+            var (px, py, pz) = Turned(dx, dy, dz, ax, ay, az, c, s);
+            if (Stops(f.X + px, f.Y + py, f.Z + pz, water)) return true;
         }
         return false;
     }
@@ -386,17 +412,15 @@ public sealed partial class Sim
     /// <summary>Whether any voxel of a piece, turned as it is now, is within a margin (voxels) of a body.</summary>
     static bool Touches(Flier f, Unit u, float margin)
     {
-        float al = MathF.Sqrt(f.AX * f.AX + f.AZ * f.AZ);
-        float ax = al > 1e-4f ? f.AX / al : 1, az = al > 1e-4f ? f.AZ / al : 0, c = MathF.Cos(f.Turn), s = MathF.Sin(f.Turn);
+        var (ax, ay, az) = AxisOf(f);
+        float c = MathF.Cos(f.Turn), s = MathF.Sin(f.Turn);
         float r = u.T.BodyR + margin, x0 = u.X - r, x1 = u.X + r, z0 = u.Z - r, z1 = u.Z + r, y0 = u.Y - margin, y1 = u.Y + u.T.BodyH + margin;
         foreach (var (dx, dy, dz, _) in f.Voxels)
         {
-            float dot = ax * dx + az * dz;
-            float px = f.X + dx * c - az * dy * s + ax * dot * (1 - c);
-            if (px < x0 || px > x1) continue;
-            float pz = f.Z + dz * c + ax * dy * s + az * dot * (1 - c);
-            if (pz < z0 || pz > z1) continue;
-            float py = f.Y + dy * c + (az * dx - ax * dz) * s;
+            var (px, py, pz) = Turned(dx, dy, dz, ax, ay, az, c, s);
+            px += f.X; pz += f.Z;
+            if (px < x0 || px > x1 || pz < z0 || pz > z1) continue;
+            py += f.Y;
             if (py > y0 && py < y1) return true;
         }
         return false;
@@ -412,6 +436,7 @@ public sealed partial class Sim
             var f = Fliers[i];
             if (f.Held && (f.Unit is { Dead: true } || f.Unit is { Inside: true })) f.Held = false;
             if (f.Held) { Hold(f, dt); continue; }
+            if (f.Rolling) { if (Roll(f, dt)) Fliers.Remove(f); continue; }
             if (f.Tipping) { TipOver(f); continue; }
             f.Turn += f.Spin * dt;
             float speed = MathF.Sqrt(f.VX * f.VX + f.VY * f.VY + f.VZ * f.VZ);
@@ -443,7 +468,7 @@ public sealed partial class Sim
     {
         float speed = MathF.Sqrt(f.VX * f.VX + f.VY * f.VY + f.VZ * f.VZ);
         if (f.Unit != null) { Alight(f, speed); return true; }
-        if (f.Smash > 0) StoneLands(f, speed);
+        int broke = f.Smash > 0 ? StoneLands(f, speed) : 0;
         int ix = Math.Clamp((int)f.X, 2, World.SX - 3), iz = Math.Clamp((int)f.Z, 2, World.SZ - 3), iy = Math.Clamp((int)f.Y, 2, World.SY - 3);
         // a catapult's stone has done its harm already, as stones do; should it roll off what it struck and come down
         // again, it is a rock like any, and strikes only whoever it comes down on
@@ -490,6 +515,14 @@ public sealed partial class Sim
             }
         }
         Landed?.Invoke(f.X, f.Y, f.Z, f.Voxels.Count, speed);
+        // a ball rolls on from where it struck, with the more of its going the more it came down aslant — and none of it
+        // if it spent it breaking out what it struck
+        if (IsRound(f, out float round))
+        {
+            float aslant = speed > .01f ? (f.VX * f.VX + f.VZ * f.VZ) / (speed * speed) : 0;
+            StartRoll(f, round, broke >= 10 ? 0 : .35f * aslant);
+            return false;
+        }
         // it lies where it came down, whole, as it lay when it struck — or tips over, and lies down after
         return Lay(f, ix, iy, iz);
     }
@@ -500,15 +533,9 @@ public sealed partial class Sim
     /// </summary>
     static ((int x, int y, int z) ex, (int x, int y, int z) ey, (int x, int y, int z) ez) Snapped(Flier f)
     {
-        float al = MathF.Sqrt(f.AX * f.AX + f.AZ * f.AZ);
-        float ax = al > 1e-4f ? f.AX / al : 1, az = al > 1e-4f ? f.AZ / al : 0, c = MathF.Cos(f.Turn), sn = MathF.Sin(f.Turn);
-        // a vector turned about the level axis (ax, 0, az)
-        (float, float, float) Turn(float vx, float vy, float vz)
-        {
-            float dot = ax * vx + az * vz;
-            float cxv = -az * vy, cyv = az * vx - ax * vz, czv = ax * vy;
-            return (vx * c + cxv * sn + ax * dot * (1 - c), vy * c + cyv * sn, vz * c + czv * sn + az * dot * (1 - c));
-        }
+        var (ax, ay, az) = AxisOf(f);
+        float c = MathF.Cos(f.Turn), sn = MathF.Sin(f.Turn);
+        (float, float, float) Turn(float vx, float vy, float vz) => Turned(vx, vy, vz, ax, ay, az, c, sn);
         static (int, int, int) Axis((float x, float y, float z) v, int not)
         {
             float best = -1; int k = 0;
@@ -559,8 +586,9 @@ public sealed partial class Sim
         int ay = iy;
         for (int k = 0; k < 48 && Clash(ix, ay, iz); k++) ay++;
         for (int k = 0; k < 120 && ay > 4 && !Clash(ix, ay - 1, iz); k++) ay--;
-        // its weight beyond the footing it came down on: it tips over the edge of it, and comes down again after
-        if (f.Tipped < 2 && cells.Count >= 24 && Tips(cells, ix, ay, iz, floats, out int dir, out int edge, out int py))
+        // its weight beyond the footing it came down on: it tips over the edge of it, and comes down again after (a ball
+        // has rolled off any such edge already)
+        if (f.RollR == 0 && f.Tipped < 2 && cells.Count >= 24 && Tips(cells, ix, ay, iz, floats, out int dir, out int edge, out int py))
         {
             var turned = new List<(sbyte, sbyte, sbyte, byte)>(f.Voxels.Count);
             foreach (var (dx, dy, dz, m) in f.Voxels)
@@ -570,6 +598,7 @@ public sealed partial class Sim
             f.Turn = 0; f.Spin = 0; f.VX = f.VY = f.VZ = 0;
             // over the edge toward its weight: the top goes that way
             (f.AX, f.AZ) = dir switch { 0 => (0f, -1f), 1 => (0f, 1f), 2 => (1f, 0f), _ => (-1f, 0f) };
+            f.AY = 0;
             if (dir < 2) { f.PX = edge; f.PZ = f.Z; } else { f.PX = f.X; f.PZ = edge; }
             f.PY = py;
             f.Tipping = true; f.TipFrom = Time; f.Tipped++;
@@ -623,13 +652,6 @@ public sealed partial class Sim
         return true;
     }
 
-    /// <summary>A vector turned about a level axis (ax, 0, az) by an angle, the right hand's way.</summary>
-    static (float x, float y, float z) Rotate(float vx, float vy, float vz, float ax, float az, float th)
-    {
-        float c = MathF.Cos(th), s = MathF.Sin(th), dot = ax * vx + az * vz;
-        return (vx * c - az * vy * s + ax * dot * (1 - c), vy * c + (az * vx - ax * vz) * s, vz * c + ax * vy * s + az * dot * (1 - c));
-    }
-
     /// <summary>How long a piece takes to go over, in seconds.</summary>
     const double TipFor = .55;
 
@@ -642,7 +664,7 @@ public sealed partial class Sim
     {
         double k = Math.Min(1, (Time - f.TipFrom) / TipFor);
         float th = (float)(Math.PI / 2 * k * k), x0 = f.X, y0 = f.Y, z0 = f.Z, th0 = f.Turn;
-        var (rx, ry, rz) = Rotate(f.CX0 - f.PX, f.CY0 - f.PY, f.CZ0 - f.PZ, f.AX, f.AZ, th);
+        var (rx, ry, rz) = Turned(f.CX0 - f.PX, f.CY0 - f.PY, f.CZ0 - f.PZ, f.AX, 0, f.AZ, MathF.Cos(th), MathF.Sin(th));
         f.X = f.PX + rx; f.Y = f.PY + ry; f.Z = f.PZ + rz;
         f.Turn = th;
         // turned so far it would go into what held it: it goes no farther over, and slides off from there as it is

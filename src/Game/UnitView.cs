@@ -319,7 +319,7 @@ public partial class UnitView : Node3D
         // a leader stands a little taller than its kind
         var root = new Transform3D(new Basis(Vector3.Up, MathF.PI / 2 - look.Face).Scaled(Vector3.One * VoxelWorld.Vox * (u.Leader ? 1.15f : 1)), at);
         // thrown through the air, it tumbles about its middle as it flies
-        if (u.Airborne is { } fl && new Vector3(fl.AX, 0, fl.AZ) is var axis && axis.LengthSquared() > 1e-4f)
+        if (u.Airborne is { } fl && new Vector3(fl.AX, fl.AY, fl.AZ) is var axis && axis.LengthSquared() > 1e-4f)
         {
             var mid = at + Vector3.Up * u.T.BodyH * .5f * VoxelWorld.Vox;
             var spin = new Basis(axis.Normalized(), fl.Turn);

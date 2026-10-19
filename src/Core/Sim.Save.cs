@@ -15,7 +15,7 @@ namespace VoxelTower.Core;
 /// </summary>
 public sealed partial class Sim
 {
-    public const int SaveVersion = 14;
+    public const int SaveVersion = 15;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -113,6 +113,22 @@ public sealed partial class Sim
         {
             w.Write(c.X); w.Write(c.Y); w.Write(c.Z); w.Write(c.BlowAt); w.Write(c.Planted); w.Write(c.Cutting); w.Write(c.Cause);
             w.Write(c.Voxels.Count); foreach (int p in c.Voxels) w.Write(p);
+        }
+        // pieces of the world in the air, going over or rolling, each on its way as it was (one thrown bodily is kept as
+        // itself, standing where it was, and comes down from there)
+        int pieces = 0;
+        foreach (var f in Fliers) if (f.Unit == null) pieces++;
+        w.Write(pieces);
+        foreach (var f in Fliers)
+        {
+            if (f.Unit != null) continue;
+            w.Write(f.X); w.Write(f.Y); w.Write(f.Z); w.Write(f.VX); w.Write(f.VY); w.Write(f.VZ);
+            w.Write(f.AX); w.Write(f.AY); w.Write(f.AZ); w.Write(f.Turn); w.Write(f.Spin); w.Write(f.R); w.Write(f.Since);
+            w.Write(f.Cause); w.Write(f.Burning); w.Write(f.Smash);
+            w.Write(f.Tipping); w.Write(f.PX); w.Write(f.PY); w.Write(f.PZ); w.Write(f.CX0); w.Write(f.CY0); w.Write(f.CZ0); w.Write(f.TipFrom); w.Write(f.Tipped);
+            w.Write(f.Rolling); w.Write(f.RollFrom); w.Write(f.RollR); w.Write(f.Still);
+            w.Write(f.Voxels.Count);
+            foreach (var (dx, dy, dz, m) in f.Voxels) { w.Write(dx); w.Write(dy); w.Write(dz); w.Write(m); }
         }
         w.Write(Knowledge); w.Write(Learnt.Count);
         foreach (string k in Learnt) w.Write(k);
@@ -351,8 +367,22 @@ public sealed partial class Sim
             for (int k = r.ReadInt32(); k > 0; k--) { int p = r.ReadInt32(); c.Voxels.Add(p); _fused[p] = c; }
             Charges.Add(c);
         }
-        // what was in the air is not kept: what was thrown stands where the save found it, and comes down from there
+        // pieces in the air on their way as they were; one thrown bodily stands where the save found it, and comes down from there
         Fliers.Clear();
+        for (int i = r.ReadInt32(); i > 0; i--)
+        {
+            var f = new Flier
+            {
+                Id = _nextFlier++, X = r.ReadSingle(), Y = r.ReadSingle(), Z = r.ReadSingle(), VX = r.ReadSingle(), VY = r.ReadSingle(), VZ = r.ReadSingle(),
+                AX = r.ReadSingle(), AY = r.ReadSingle(), AZ = r.ReadSingle(), Turn = r.ReadSingle(), Spin = r.ReadSingle(), R = r.ReadSingle(), Since = r.ReadDouble(),
+                Cause = r.ReadString(), Burning = r.ReadInt32(), Smash = r.ReadInt32(),
+                Tipping = r.ReadBoolean(), PX = r.ReadSingle(), PY = r.ReadSingle(), PZ = r.ReadSingle(), CX0 = r.ReadSingle(), CY0 = r.ReadSingle(), CZ0 = r.ReadSingle(),
+                TipFrom = r.ReadDouble(), Tipped = r.ReadInt32(),
+                Rolling = r.ReadBoolean(), RollFrom = r.ReadDouble(), RollR = r.ReadSingle(), Still = r.ReadSingle(),
+            };
+            for (int k = r.ReadInt32(); k > 0; k--) f.Voxels.Add((r.ReadSByte(), r.ReadSByte(), r.ReadSByte(), r.ReadByte()));
+            Fliers.Add(f);
+        }
         Knowledge = r.ReadDouble();
         Learnt.Clear();
         for (int i = r.ReadInt32(); i > 0; i--) Learnt.Add(r.ReadString());

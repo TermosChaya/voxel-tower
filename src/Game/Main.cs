@@ -23,7 +23,8 @@ namespace VoxelTower.Game;
 /// burning across the field), --pose=charge: a sapper's charge against our ring of stone, its fuse burning (--look=1 the
 /// moment it goes, --look=2 a swordsman of ours running for the fuse), --pose=stones: a catapult's stone high on its
 /// arc (--look=1 striking the wall), --pose=topple: a block come down on a narrow post with its weight off it, going
-/// over the post's edge (--look=1 standing on its end beside it after),
+/// over the post's edge (--look=1 standing on its end beside it after), --pose=roll: a ball of earth torn out by
+/// telekinesis rolling down a slope into a band (--look=1 lying at the foot after, the band knocked about),
 /// --pose=trees: the valley's trees in a row, --look=0..2 choosing which; --pose=people: every figure in every look,
 /// --look=0..4 choosing a row),
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
@@ -169,7 +170,7 @@ public partial class Main : Node3D
         if (_demo && _pose == "shaman") ClearTrees(Site.KeepX - Site.KeepR - 240, Site.KeepZ - 90, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 90);
         if (_demo && _pose == "spells") ClearTrees(Site.KeepX - Site.KeepR - 260, Site.KeepZ - 100, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
         if (_demo && _pose == "traps") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
-        if (_demo && _pose is "blast" or "grip" or "wind" or "hexes" or "sorcerers" or "powder" or "charge" or "stones" or "topple") ClearTrees(Site.KeepX - Site.KeepR - 300, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 140);
+        if (_demo && _pose is "blast" or "grip" or "wind" or "hexes" or "sorcerers" or "powder" or "charge" or "stones" or "topple" or "roll") ClearTrees(Site.KeepX - Site.KeepR - 300, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 140);
         World.Compact();
         save?.Valley(World, Site);
         double genMs = sw.Elapsed.TotalMilliseconds;
@@ -1004,6 +1005,7 @@ public partial class Main : Node3D
         if (_pose == "charge") { Sapped(); return; }
         if (_pose == "stones") { Stones(); return; }
         if (_pose == "topple") { Topple(); return; }
+        if (_pose == "roll") { RollDown(); return; }
         var w = World; var s = Site; var sim = Sim;
         sim.Waves.Countdown = Waves.Prep;
         sim.Stock.Gold = 140;
@@ -1593,6 +1595,44 @@ public partial class Main : Node3D
         Advance(_look == 1 ? 3 : .38);
         Paused = true;
         Rig.SetAt(w.WX(px + 4), w.WY(g + 8), w.WZ(pz + 1), -.75f, .35f, 4.5f);
+        Hud.Refresh();
+    }
+
+    /// <summary>
+    /// A ball of earth the hand tore out of a hilltop, let go over the slope: rolling down it into a band of the horde at
+    /// the foot (--look=1: lying still at the foot after, the band knocked about).
+    /// </summary>
+    void RollDown()
+    {
+        var sim = Sim; var w = World;
+        Sorcerous();
+        int sx = Site.KeepX - Site.KeepR - 200, sz = Site.KeepZ + 40, g = w.SurfAt(sx, sz);
+        // a hill of earth falling away eastward, three metres down over six, into a hollow that rises gently again beyond;
+        // its sides going down into the ground about it
+        int Top(int x) => x < sx + 24 ? g + 24 : x < sx + 72 ? g + 24 - (x - sx - 24) / 2 : x < sx + 122 ? g + (x - sx - 72) / 5 : g + 10;
+        var ground = new int[148, 80];
+        for (int z = 0; z < 80; z++) for (int x = 0; x < 148; x++) ground[x, z] = w.SurfAt(sx - 8 + x, sz - 40 + z);
+        for (int z = sz - 40; z < sz + 40; z++)
+            for (int x = sx - 8; x < sx + 140; x++)
+            {
+                float side = Math.Clamp((Math.Abs(z - sz) - 18) / 22f, 0, 1);
+                int was = ground[x - sx + 8, z - sz + 40], top = (int)MathF.Round(Top(x) * (1 - side) + was * side);
+                for (int y = Math.Min(top, was) - 4; y < Math.Max(top, was) + 40; y++) w.Set(x, y, z, y < top - 1 ? Mat.Soil : y == top - 1 ? Mat.Grass : Mat.Air);
+            }
+        // our fighters off the field, so the band stands where it is
+        foreach (var u in sim.Units) if (u.Team == Team.Player && u.T.Work < 1) { u.Dead = true; u.DiedAt = -999; }
+        foreach (var (t, dx, dz) in new[] { (Kinds.Goblin, 80, -3), (Kinds.Orc, 88, 5), (Kinds.Goblin, 84, 10), (Kinds.Goblin, 94, -8), (Kinds.Orc, 98, 2), (Kinds.Goblin, 76, 6) })
+            Camp(t, sx + dx, sz + dz);
+        sim.Cast(SpellKind.Telekinesis, sx + 10.5f, g + 23.5f, sz + .5f);
+        var ball = sim.HeldNow;
+        sim.HoldAt(sx + 28, g + 44, sz + .5f);
+        Advance(2.5);
+        sim.LetGo();
+        // down the slope and among them (or till it lies still)
+        for (int t = 0; t < 600 && ball != null && sim.Fliers.Contains(ball) && (_look == 1 || !ball.Rolling || ball.X < sx + 70); t++) Advance(.05);
+        if (_look == 1) Advance(2);
+        Paused = true;
+        Rig.SetAt(w.WX(sx + 72), w.WY(g + 6), w.WZ(sz), -.75f, .38f, 4f);
         Hud.Refresh();
     }
 

@@ -390,7 +390,7 @@ public partial class MagicView : Node3D
         foreach (var f in sim.Fliers)
         {
             if (f.Voxels.Count == 0) continue;
-            var axis = new Vector3(f.AX, 0, f.AZ);
+            var axis = new Vector3(f.AX, f.AY, f.AZ);
             var b = axis.LengthSquared() > 1e-4f ? new Basis(axis.Normalized(), f.Turn) : Basis.Identity;
             var c = At(f.X, f.Y, f.Z);
             foreach (var (dx, dy, dz, m) in f.Voxels)

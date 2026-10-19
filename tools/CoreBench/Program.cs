@@ -2928,7 +2928,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--physics")
     var stone = simY.Hurl(Sim.Ball(2.6f, Mat.Rock), spx + 3.5f, spg + 30.5f, spz + 1.5f, 0, 0, 0, "камень из камнемёта");
     stone.Smash = 5;
     bool rolled = false;
-    for (int t = 0; t < 80; t++) { RunY(.05); rolled |= stone.Tipping; }
+    for (int t = 0; t < 80; t++) { RunY(.05); rolled |= stone.Tipping || stone.Rolling; }
     RunY(3);
     int stoneOn = 0, stoneOff = 0, stoneX = 0;
     for (int z = spz - 8; z < spz + 10; z++)
@@ -2939,6 +2939,51 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--physics")
         rolled && simY.Fliers.Count == 0 && stoneOn == 0 && stoneOff >= 70 && !gobS.Dead && gobS.Hp >= gs0,
         $"rolled {rolled}; {stoneOff} voxels of it at the foot (out to {stoneX} from the crag), {stoneOn} left on top; the goblin {gobS.Hp:0} of {gs0:0}, {Far(gobS, spx + 10, spz + 1) :0.0} m from where it fell");
     Gone(gobS);
+
+    // a ball of earth the hand tears out of the face of the ground is a whole ball: let go over a slope, it rolls down it,
+    // runs over the goblin standing on it, is turned back off the wall at the foot and lies whole before it
+    int rx0 = kxY - 450, rz = kzY - 190, rg = wY.SurfAt(rx0, rz);
+    int SlopeTop(int x) => x < rx0 + 40 ? rg + 24 : x < rx0 + 88 ? rg + 24 - (x - rx0 - 40) / 2 : rg;
+    for (int z = rz - 24; z < rz + 24; z++)
+        for (int x = rx0 - 4; x < rx0 + 130; x++)
+        {
+            int top = SlopeTop(x);
+            for (int y = rg - 4; y < rg + 70; y++) wY.Set(x, y, z, y < top - 1 ? Mat.Soil : y == top - 1 ? Mat.Grass : Mat.Air);
+            if (x >= rx0 + 110 && x < rx0 + 114) for (int y = rg; y < rg + 16; y++) wY.Set(x, y, z, Mat.Stone);
+        }
+    int WallR() { int n = 0; for (int z = rz - 24; z < rz + 24; z++) for (int x = rx0 + 110; x < rx0 + 114; x++) for (int y = rg; y < rg + 16; y++) if (wY.Get(x, y, z) == Mat.Stone) n++; return n; }
+    int wall0 = WallR();
+    var gobL = Stand(Kinds.Goblin, rx0 + 70, rz);
+    float gl0 = gobL.Hp;
+    simY.ReadyNow(SpellKind.Telekinesis);
+    string castR = simY.Cast(SpellKind.Telekinesis, rx0 + 20.5f, rg + 23.5f, rz + .5f);
+    var ballR = simY.HeldNow;
+    int ballRN = ballR?.Voxels.Count ?? 0;
+    simY.HoldAt(rx0 + 46, rg + 44, rz + .5f);
+    RunY(2.5);
+    simY.LetGo();
+    bool rollR = false; float rollFast = 0;
+    for (int t = 0; t < 400 && ballR != null && simY.Fliers.Contains(ballR); t++)
+    {
+        RunY(.05);
+        rollR |= ballR.Rolling;
+        if (ballR.Rolling) rollFast = MathF.Max(rollFast, MathF.Sqrt(ballR.VX * ballR.VX + ballR.VZ * ballR.VZ) / VoxelWorld.PerMetre);
+    }
+    int footN = 0, pastN = 0, fx0 = int.MaxValue, fx1 = int.MinValue, fy1 = int.MinValue, fz0 = int.MaxValue, fz1 = int.MinValue;
+    for (int z = rz - 24; z < rz + 24; z++)
+        for (int x = rx0 + 88; x < rx0 + 130; x++)
+            for (int y = rg; y < rg + 24; y++)
+            {
+                byte m = wY.Get(x, y, z);
+                if (m != Mat.Soil && m != Mat.Grass) continue;
+                if (x >= rx0 + 114) { pastN++; continue; }
+                footN++; fx0 = Math.Min(fx0, x); fx1 = Math.Max(fx1, x); fy1 = Math.Max(fy1, y); fz0 = Math.Min(fz0, z); fz1 = Math.Max(fz1, z);
+            }
+    int wideR = Math.Max(fx1 - fx0, fz1 - fz0) + 1, tallR = fy1 - rg + 1;
+    Check("a ball of earth torn from the face of the ground is a whole ball: let go over a slope it rolls down, runs over the goblin on it, is turned back by the wall at the foot and lies whole before it",
+        castR == null && ballRN > 1500 && rollR && (gobL.Dead || gobL.Hp < gl0 - 15) && footN > ballRN * .8f && pastN == 0 && WallR() == wall0 && wideR <= 18 && tallR >= 13,
+        $"cast: {castR ?? "yes"}; {ballRN} voxels lifted; rolled {rollR}, at most {rollFast:0.0} m/s; the goblin {(gobL.Dead ? "dead: " + gobL.KilledBy : $"{gobL.Hp:0} of {gl0:0}")}; {footN} voxels of it at the foot, {wideR} wide and {tallR} high, {pastN} past the wall; the wall {wall0} → {WallR()}");
+    Gone(gobL);
 
     // what telekinesis holds does not go through a wall: pulled at one from behind it, it stays on its side
     int qx = kxY - 330, qz0 = kzY + 40;
@@ -3434,6 +3479,11 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
     simS.Learn("mortar");
     simS.Revelations = 2; simS.Carcasses.Add(Kinds.Boar); simS.Favour = 17;
     simS.Known.Add(SpellKind.Hand); simS.Known.Add(SpellKind.Eye);
+    // a ball of rock rolling, and a stone high in the air
+    int rxS = kxS - 200, rzS = kzS - 100;
+    simS.Hurl(Sim.Ball(3.6f, Mat.Rock), rxS + .5f, wS.SurfAt(rxS, rzS) + 4.5f, rzS + .5f, 3 * VoxelWorld.PerMetre, 0, 0, "test");
+    simS.Hurl(Sim.Ball(2f, Mat.Stone), rxS - 20.5f, wS.SurfAt(rxS - 20, rzS) + 80, rzS + .5f, 0, 0, 0, "test");
+    RunS(.5);
     var ms = new System.IO.MemoryStream();
     var watch = System.Diagnostics.Stopwatch.StartNew();
     simS.Save(ms, SeedS, "Волна 1", "the screen's own");
@@ -3483,10 +3533,21 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
         && simL.Knowledge == 2 && simL.Knows("mortar") && simL.Learnt.Count == 1
         && simL.Revelations == 2 && simL.Carcasses.Count == 1 && simL.Carcasses[0] == Kinds.Boar && Math.Abs(simL.Favour - simS.Favour) < 1e-9
         && simL.Known.SetEquals(simS.Known);
+    // and what was in the air, or rolling, goes on its way as it was
+    var piecesS = simS.Fliers.FindAll(f => f.Unit == null);
+    var piecesL = simL.Fliers.FindAll(f => f.Unit == null);
+    bool fliersSame = piecesS.Count >= 2 && piecesS.Exists(f => f.Rolling) && piecesS.Exists(f => !f.Rolling) && piecesL.Count == piecesS.Count;
+    for (int i = 0; fliersSame && i < piecesS.Count; i++)
+    {
+        var (a, b) = (piecesS[i], piecesL[i]);
+        fliersSame = a.X == b.X && a.Y == b.Y && a.Z == b.Z && a.VX == b.VX && a.VY == b.VY && a.Turn == b.Turn && a.AY == b.AY && a.Rolling == b.Rolling
+            && a.RollR == b.RollR && a.Voxels.Count == b.Voxels.Count && a.Voxels.SequenceEqual(b.Voxels);
+    }
+    sameSiege &= fliersSame;
     Check("a game saved and read back is the same: the valley as play changed it, the household and the horde, the siege",
         chunksOff == 0 && designOff == 0 && unitsOff == 0 && livingS.Count == simL.Units.Count && sameSiege && simS.Burning.Count > 0 && simS.Bands.Count > 0,
         $"{bytes / 1024} KB, written in {saveMs} ms, read in {loadMs} ms (the valley made again); {chunksOff} chunks and {designOff} of the design differ; " +
-        $"{livingS.Count} living, {unitsOff} differ; {simS.Bands.Count} bands, {simS.Burning.Count} burning, wave {simS.Waves.Number} ({simS.Waves.Coming} still to come); same siege {sameSiege}");
+        $"{livingS.Count} living, {unitsOff} differ; {simS.Bands.Count} bands, {simS.Burning.Count} burning, wave {simS.Waves.Number} ({simS.Waves.Coming} still to come); {piecesS.Count} pieces in the air or rolling, the same {fliersSame}; same siege {sameSiege}");
     // and it plays on: the horde still comes on, the fire still burns
     simL.ComputeFields();
     int burning0 = simL.Burning.Count;

@@ -255,12 +255,12 @@ public sealed partial class Sim
     /// little of the ground), hurts the citadel if it is the citadel, and those it comes down on and beside; then it lies
     /// there, broken, with what it broke. Powder it falls on goes up.
     /// </summary>
-    void StoneLands(Flier f, float speed)
+    int StoneLands(Flier f, float speed)
     {
         // where it touched: its leading edge
         float s = MathF.Max(1, speed);
         int x = (int)(f.X + f.VX / s * f.R * .8f), y = (int)(f.Y + f.VY / s * f.R * .8f), z = (int)(f.Z + f.VZ / s * f.R * .8f);
-        if (!World.InBounds(x, y, z)) return;
+        if (!World.InBounds(x, y, z)) return 0;
         int broken = 0, r = f.Smash;
         for (int dy = -r; dy <= r; dy++)
             for (int dz = -r; dz <= r; dz++)
@@ -297,6 +297,7 @@ public sealed partial class Sim
             _stoneSaid = Time;
             Say("Камнемёт бьёт по стенам: выбивает кладку. Сожгите его огненными стрелами или выйдите на него.", 3, x, z);
         }
+        return broken;
     }
 
     /// <summary>A raider keeping by an engine: by it, and at whoever of ours comes near it; with the engine gone, a raider like any.</summary>
