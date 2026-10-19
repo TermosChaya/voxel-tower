@@ -313,7 +313,7 @@ public sealed partial class Sim
         if (onGround && BallBreaks(f, hs1, 0)) return false;
         if (hs1 > VoxelWorld.PerMetre)
             foreach (var u in Units)
-                if (!u.Dead && !u.Inside && u.Airborne == null && Time - u.LastHurt >= .5 && Against(f, u)) RunOver(f, u, hs1);
+                if (!u.Dead && !u.Inside && u.Airborne == null && Time - u.LastHurt >= .5 && !Spares(f, u) && Against(f, u)) RunOver(f, u, hs1);
         // all but still, on the level or as near it as holds it there, or held where it is against something: it lies
         // where it stopped
         f.Still = moved < .02f ? f.Still + dt : 0;
@@ -348,7 +348,7 @@ public sealed partial class Sim
         float blow = Blow(f, hard);
         if (blow > 3)
             foreach (var u in Units)
-                if (!u.Dead && !u.Inside && u.Airborne == null && Time - u.LastHurt >= .5 && Against(f, u))
+                if (!u.Dead && !u.Inside && u.Airborne == null && Time - u.LastHurt >= .5 && !Spares(f, u) && Against(f, u))
                     Hurt(u, null, blow * (Kinds.IsEngine(u.T) ? 1.5f : 1), f.Cause);
         Landed?.Invoke(f.X, f.Y, f.Z, f.Voxels.Count, hard);
     }

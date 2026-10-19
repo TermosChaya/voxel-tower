@@ -234,6 +234,16 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   вокруг своей длины (`AX/AZ` вдоль, `Spin`); падает, катится (`BakeLog`).
 - `Sim.Shelter.cs` — тревога и убежища: `Alarm`, `RaiseAlarm`/`StandDown`, `TakeShelter`, `RefugeFor`, `ShelterCells`,
   `Enter`/`Leave`/`Indoors` (`Unit.Inside` — в цитадели, вне мира), `TickShelter` (налётчик у двери).
+- `Sim.Troops.cs` — тринадцать новых родов войск (делал отдельный агент): ключи знаний в `UnitType.Lore`; `Mover.Ladders`
+  (кони и псы — нет: путь, `CanBe`, `Passable`, `Settle`), `UnitType.Mounted`/`NoHands`; стена щитов (`ShieldWall`),
+  древки, ядра (отброс), бронебойные болты (второй налётчик за первым, 70 %), огненные горшки, травля (бегущие ≤ 25 м),
+  натиск (`GallopUntil`, удар в 0,8 с после скачки ×2 и бросок), глыбы (`NextHurl`, камень из земли перед собой или
+  сотворённый; `BoulderCause` — свои его не ранят), горшок бомбардира (`Spares` — наша кладка цела), бросок от удара
+  великана и тролля; `Arrow.Kind`/`Arc` и `Shot` — камень, болт, горшок; новые орудия в `WeaponOf`. Тела: `Bodies` —
+  у конного в туловище конь и всадник, Main/Off — руки всадника, LegR — обе передние ноги, LegL — обе задние
+  (`BodyPlan.Mounted`, `Guard`), `Build.FaceUp`; материалы 114–121 (масти коней, сукно стёганки, глина, белое сукно).
+  Таймеры родов не сохраняются. Значки страниц «Войско» и «Вмешательство» — `Sigils.Troops.cs`, `Sigils.Rites.cs`
+  (`SigilFor`, `BranchMark`, `PageMark`), их галерея — `SigilGallery.cs` (`--pose=sigils`).
 - `Sim.Possess.cs` — вселение: `Possessed`, намерения игрока `WishX/WishZ` (вектор в вокселях), `WishRun`,
   `LookYaw/LookPitch`, `WishStrike` (ЛКМ держится), `WishLay`, `WishClimb` (±1), `LayMat`; `CanPossess`, `Possess` (снимает
   с работы, цели, обезвреживания; `Why` = «в нём игрок»), `Unpossess(why)` + событие `Unpossessed` (солдату пост — где

@@ -3,7 +3,10 @@ using System.Collections.Generic;
 
 namespace VoxelTower.Core;
 
-/// <summary>An arrow in flight, from bow to where the target was expected to be.</summary>
+/// <summary>What flies at the horde: an arrow, a crossbow's bolt, a sling's stone, a pot of powder, a pot of burning pitch.</summary>
+public enum Shot : byte { Arrow, Bolt, Stone, Pot, FirePot }
+
+/// <summary>An arrow (or a bolt, a stone, a pot) in flight, from bow to where the target was expected to be.</summary>
 public sealed class Arrow
 {
     public float X0, Y0, Z0, X1, Y1, Z1, T, Dur;
@@ -13,6 +16,11 @@ public sealed class Arrow
     /// <summary>A fire arrow; and the voxel (packed) it was loosed at to set alight, or −1 when it was loosed at someone.</summary>
     public bool Fire;
     public int At = -1;
+    public Shot Kind;
+    /// <summary>How high it rises over its flight, as a share of how far it goes: an arrow a tenth, a pot lobbed a third.</summary>
+    public float Arc = .1f;
+    /// <summary>A bodkin bolt gone through one raider into the next: it goes through no more.</summary>
+    public bool Through;
 }
 
 public sealed partial class Sim
@@ -23,6 +31,12 @@ public sealed partial class Sim
     /// <summary>Raiders killed since the start.</summary>
     public int Kills;
     const float ArrowSpeed = 15 * 16;   // voxels a second
+    /// <summary>How fast the rest fly: a bolt faster than an arrow, a sling stone a little slower, a pot lobbed slow.</summary>
+    const float BoltSpeed = 20 * 16, StoneSpeed = 13 * 16, PotSpeed = 8 * 16;
+    static float SpeedOf(Shot s) => s switch { Shot.Bolt => BoltSpeed, Shot.Stone => StoneSpeed, Shot.Pot or Shot.FirePot => PotSpeed, _ => ArrowSpeed };
+    static float ArcOf(Shot s) => s switch { Shot.Bolt => .04f, Shot.Stone => .08f, Shot.Pot or Shot.FirePot => .32f, _ => .1f };
+    /// <summary>What a shot that kills is put down as, for the chronicle.</summary>
+    static string CauseOf(Shot s) => s switch { Shot.Bolt => "арбалетный болт", Shot.Stone => "камень из пращи", _ => "стрела" };
 
     public bool AnyRaider()
     {
@@ -67,9 +81,9 @@ public sealed partial class Sim
     }
 
     /// <summary>Close enough to strike, with nothing solid between them: no hitting through walls.</summary>
-    public bool InReach(Unit a, Unit b) => Dist(a, b) <= a.T.Reach + b.T.BodyR && Sight(a, b);
+    public bool InReach(Unit a, Unit b) => Dist(a, b) <= ReachOf(a) + b.T.BodyR && Sight(a, b);
 
-    void Strike(Unit a, Unit b)
+    internal void Strike(Unit a, Unit b)
     {
         a.Swing = 1;
         // the blow comes from the striker's hand at the height it holds its weapon, at a spot on the body near that height
@@ -82,7 +96,7 @@ public sealed partial class Sim
         float tx = b.X - dz / l * side, tz = b.Z + dx / l * side;
         b.HurtBy = a;
         float share = Kinds.IsEngine(b.T) ? EngineShare(false) : Wound(b, cut, depth, reach, a.X, hand, a.Z, tx - a.X, aim - hand, tz - a.Z);
-        float dmg = a.T.Damage * (.8f + (float)Rng.NextDouble() * .4f) * share * Oath(a) * SergeantArm(a);
+        float dmg = a.T.Damage * (.8f + (float)Rng.NextDouble() * .4f) * share * Oath(a) * SergeantArm(a) * TroopArm(a, b, out bool charge) * ShieldWall(b);
         // told to take them alive: the blow that would bring a raider down to a quarter of itself (three fifths in
         // chains), or kill it, fells it instead, to be bound where it lies
         if (a.TakeAlive && !b.Dead && Takeable(b) && b.Hp - dmg <= TakeAt(b))
@@ -93,6 +107,7 @@ public sealed partial class Sim
             return;
         }
         Hurt(b, a, dmg);
+        TroopBlow(a, b, charge);
     }
 
     public void Hurt(Unit b, Unit by, float dmg, string cause = null)
@@ -203,11 +218,13 @@ public sealed partial class Sim
                 u.NextSearch = Time + .4;
             }
             if (t == null) return KindleShot(u, dt);
+            // a bombardier holds his pot while one of ours is by the raider
+            if (u.T.Tool == "bombard" && !PotSafe(t)) { u.Target = null; u.NextSearch = Time + .3; u.Cooldown = Math.Max(u.Cooldown, .3f); }
             // sent somewhere and not there yet: shoot on the way, but keep going
             bool marching = u.Hold && u.Dest >= 0 && CellsApart(u.Cell, u.Dest) > 1 && u.Path != null && u.PathI < u.Path.Count;
             if (!marching) { u.State = UnitState.Fight; u.Path = null; u.Facing = MathF.Atan2(t.Z - u.Z, t.X - u.X); }
             // a fire arrow takes a moment to light
-            if (u.Cooldown <= 0) { Shoot(u, t); u.Cooldown = u.T.AttackTime * VolleyPace(u) * (u.FireArrows ? Knows("soaked") ? 1.1f : 1.35f : 1) * (.9f + (float)Rng.NextDouble() * .2f); }
+            if (u.Cooldown <= 0) { Shoot(u, t); u.Cooldown = u.T.AttackTime * ShotPace(u) * (u.FireArrows ? Knows("soaked") ? 1.1f : 1.35f : 1) * (.9f + (float)Rng.NextDouble() * .2f); }
             return !marching;
         }
         // swordsmen hold the ground round themselves or their post
@@ -234,8 +251,13 @@ public sealed partial class Sim
                 if (d < best) { best = d; foe = o; }
             }
         }
+        // hounds and riders run down a raider that flees, unless one is at them already
+        if (Hunter(u.T) && (foe == null || !InReach(u, foe)) && Quarry(u) is { } quarry) foe = quarry;
+        // a giant or a tame troll hurls a stone at one out of its reach
+        if ((foe == null || !InReach(u, foe)) && HurlBoulder(u)) { ReleaseSite(u); return true; }
         if (foe == null) return false;
         u.State = UnitState.Fight;
+        u.Target = foe;
         ReleaseSite(u);
         if (InReach(u, foe))
         {
@@ -296,10 +318,10 @@ public sealed partial class Sim
     public bool Lit(float x, float z) => Time < BloodMoonUntil || _lit.Contains(LitKey((int)Math.Clamp(x, 0, World.SX - 1), (int)Math.Clamp(z, 0, World.SZ - 1)));
 
     /// <summary>How far a bow carries into the dark now: all the way by day, little more than half at night.</summary>
-    public float DarkRange(Unit a) => BowRange(a) * FogRange * (1 - .45f * Waves.Darkness * DarkCost(a));
+    public float DarkRange(Unit a) => ShotRange(a) * FogRange * (1 - .45f * Waves.Darkness * ShotDark(a));
 
     /// <summary>How far a bow carries to a spot: all the way by day or where it is light, little more than half in the dark.</summary>
-    public float RangeAt(Unit a, float x, float z) => Waves.Darkness <= 0 || Lit(x, z) ? BowRange(a) * FogRange : DarkRange(a);
+    public float RangeAt(Unit a, float x, float z) => Waves.Darkness <= 0 || Lit(x, z) ? ShotRange(a) * FogRange : DarkRange(a);
 
     /// <summary>A raider in range and in sight; the ones hacking walls or battering the citadel come first.</summary>
     Unit BestTarget(Unit u)
@@ -310,6 +332,8 @@ public sealed partial class Sim
             if (o.Dead || o.Team != Team.Horde || o.Envoy || o.Bound || o.Inside) continue;
             float d = Dist(u, o);
             if (d > RangeAt(u, o.X, o.Z)) continue;
+            // a pot is not thrown where one of ours is by the raider
+            if (u.T.Tool == "bombard" && !PotSafe(o)) continue;
             // those cutting down one of ours come first, then those hacking the walls, battering the citadel, raising
             // ladders or climbing them
             bool hurting = o.State == UnitState.Fight && o.Target is { Dead: false, Team: Team.Player };
@@ -317,7 +341,8 @@ public sealed partial class Sim
             // a thief making off with what it took, or with one of ours, before anything; a sapper with a charge next
             bool making = o.Loot > 0 || o.Captive != null, charged = o.Charge;
             // an engine: hardly worth a plain arrow, the first mark for a fire arrow; a sorcerer before anyone
-            float engine = Kinds.IsEngine(o.T) ? (u.FireArrows ? -96 : 96) : Kinds.IsCaster(o.T) ? -110 : 0;
+            // (a pot of powder breaks an engine up as well as fire does)
+            float engine = Kinds.IsEngine(o.T) ? (u.FireArrows || u.T.Tool == "bombard" ? -96 : 96) : Kinds.IsCaster(o.T) ? -110 : 0;
             // with fire arrows, those standing on a deck, a ladder or pitch: one arrow sets it all alight under them
             float pri = d - (making ? 96 : charged ? 80 : hurting ? 64 : busy ? 48 : 0) - (u.FireArrows && OnTinder(o) ? 40 : 0) + engine;
             if (pri >= bd || !Sight(u, o)) continue;
@@ -345,20 +370,28 @@ public sealed partial class Sim
         // a mantlet before the one aimed at takes the arrow
         t = Cover(u, t) ?? t;
         float d = Dist(u, t);
-        float chance = Math.Clamp(.9f - d / BowRange(u) * .45f + (u.Y - t.Y > 16 ? .08f : 0), .35f, .92f);
+        float chance = Math.Clamp(.9f - d / ShotRange(u) * .45f + (u.Y - t.Y > 16 ? .08f : 0), .35f, .92f);
         // a shape in the dark is harder to hit than one in the light; rain and wind spoil aim
-        if (!Lit(t.X, t.Z)) chance *= 1 - .2f * Waves.Darkness * DarkCost(u);
+        if (!Lit(t.X, t.Z)) chance *= 1 - .2f * Waves.Darkness * ShotDark(u);
         chance *= WeatherAim;
         u.Swing = 1;
         Shots++;
+        // a stone of lead strikes a third harder; now and then a slinger with the fire pots throws one of burning pitch
+        var kind = ShotOf(u.T);
+        float harm = kind == Shot.Stone && Knows("leadshot") ? 1.33f : 1;
+        if (kind == Shot.Stone && Knows("firepots") && Rng.NextDouble() < FirePotShare && PotSafe(t)) kind = Shot.FirePot;
+        float scatter = kind is Shot.Pot or Shot.FirePot ? 10 : 4;
         Arrows.Add(new Arrow
         {
             X0 = u.X, Y0 = u.Y + u.T.BodyH * .85f, Z0 = u.Z,
-            X1 = t.X + (float)(Rng.NextDouble() - .5) * 4, Y1 = t.Y + t.T.BodyH * .55f, Z1 = t.Z + (float)(Rng.NextDouble() - .5) * 4,
-            Dur = Math.Max(.08f, d / ArrowSpeed), Target = t, From = u, Hits = Rng.NextDouble() < chance,
-            Damage = u.T.Damage * (.8f + (float)Rng.NextDouble() * .5f) * (u.Team == Team.Player ? ArrowHarm : 1) * Oath(u), Fire = u.FireArrows,
+            X1 = t.X + (float)(Rng.NextDouble() - .5) * scatter, Y1 = t.Y + t.T.BodyH * .55f, Z1 = t.Z + (float)(Rng.NextDouble() - .5) * scatter,
+            Dur = Math.Max(.08f, d / SpeedOf(kind)), Target = t, From = u, Hits = Rng.NextDouble() < chance,
+            Damage = u.T.Damage * (.8f + (float)Rng.NextDouble() * .5f) * ShotHarm(u) * harm * Oath(u), Fire = u.FireArrows && Kindles(u.T), Kind = kind, Arc = ArcOf(kind),
         });
     }
+
+    /// <summary>How many of a slinger's throws are pots of burning pitch, with the fire pots.</summary>
+    const double FirePotShare = .25;
 
     void TickArrows(float dt)
     {
@@ -367,6 +400,9 @@ public sealed partial class Sim
             a.T += dt;
             if (a.T < a.Dur || a.Done) continue;
             a.Done = true;
+            // a pot bursts, or breaks and burns, wherever it comes down, on the raider or by it
+            if (a.Kind == Shot.Pot) { if (a.Hits) ShotHits++; var (px, py, pz) = PotDown(a); PotBurst(px, py, pz, a.Damage, a.From); continue; }
+            if (a.Kind == Shot.FirePot) { if (a.Hits) ShotHits++; PitchLands(a); continue; }
             if (a.Hits && a.Target != null && !a.Target.Dead)
             {
                 ShotHits++;
@@ -379,13 +415,18 @@ public sealed partial class Sim
                 float side = (float)(Rng.NextDouble() - .5) * t.T.BodyR * 1.4f, l = MathF.Max(.01f, MathF.Sqrt(dx * dx + dz * dz));
                 float tx = t.X - dz / l * side, tz = t.Z + dx / l * side;
                 float dl = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
-                var (cut, depth, _) = WeaponOf(a.From?.T ?? Kinds.Archer);
+                var (cut, depth, reach) = WeaponOf(a.From?.T ?? Kinds.Archer);
                 if (a.From != null) t.HurtBy = a.From;
-                float share = Kinds.IsEngine(t.T) ? EngineShare(true) : Wound(t, cut, depth, 0, tx - dx / dl * 30, hy - dy / dl * 30, tz - dz / dl * 30, dx, dy, dz);
-                Hurt(t, a.From, a.Damage * share, "стрела");
+                // a shaft goes in along a narrow channel; a stone strikes a little round, and does not stay in
+                float share = Kinds.IsEngine(t.T) ? EngineShare(true) : Wound(t, cut, depth, cut == Cut.Arrow ? 0 : reach, tx - dx / dl * 30, hy - dy / dl * 30, tz - dz / dl * 30, dx, dy, dz);
+                Hurt(t, a.From, a.Damage * share, CauseOf(a.Kind));
+                if (a.Kind == Shot.Stone) StoneStrikes(a, t);
+                if (a.Kind == Shot.Bolt && !Kinds.IsEngine(t.T)) Pierce(a, t);
             }
             if (a.Fire) FireArrowLands(a);
         }
+        // a bodkin's bolt on into the next one behind
+        if (_through.Count > 0) { Arrows.AddRange(_through); _through.Clear(); }
         Arrows.RemoveAll(a => a.Done && a.T > a.Dur + 1.5f);
     }
 }

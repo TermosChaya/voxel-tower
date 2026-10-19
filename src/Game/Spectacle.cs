@@ -26,7 +26,13 @@ public partial class Spectacle : Node
         _flash.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         layer.AddChild(_flash);
         var sim = m.Sim;
-        sim.Exploded += (x, y, z, r) => Felt(x, z, Math.Clamp(r / (2.5f * VoxelWorld.PerMetre), .35f, 1.3f), flash: true);
+        // a bombardier's pot is a small thing beside a keg: a jolt, no flash
+        sim.Exploded += (x, y, z, r) =>
+        {
+            float k = r / (2.5f * VoxelWorld.PerMetre);
+            if (r <= Sim.PotReach) Felt(x, z, k * .35f, flash: false);
+            else Felt(x, z, Math.Clamp(k, .35f, 1.3f), flash: true);
+        };
         sim.Collapsed += (n, x, y, z) => { if (n >= 200) Felt(x, z, Math.Clamp(n / 2500f, .08f, 1f), flash: false); };
         sim.Landed += (x, y, z, n, speed) =>
         {

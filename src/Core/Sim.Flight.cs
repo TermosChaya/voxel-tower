@@ -383,7 +383,7 @@ public sealed partial class Sim
         if (f.Voxels.Count < 24) return false;
         foreach (var u in Units)
         {
-            if (u.Dead || u.Inside || u.Airborne != null || u == f.By) continue;
+            if (u.Dead || u.Inside || u.Airborne != null || u == f.By || Spares(f, u)) continue;
             float dx = u.X - f.X, dz = u.Z - f.Z, dy = u.Y + u.T.BodyH * .5f - f.Y, reach = f.R + u.T.BodyR;
             if (dx * dx + dz * dz < reach * reach && MathF.Abs(dy) < u.T.BodyH * .5f + f.R && Touches(f, u, .5f)) return true;
         }
@@ -490,7 +490,7 @@ public sealed partial class Sim
         if (blow > 3)
             foreach (var u in Units)
             {
-                if (u.Dead || u.Inside || u.Airborne != null) continue;
+                if (u.Dead || u.Inside || u.Airborne != null || Spares(f, u)) continue;
                 float dx = u.X - f.X, dz = u.Z - f.Z, dy = u.Y + u.T.BodyH * .5f - f.Y, d = MathF.Sqrt(dx * dx + dz * dz + dy * dy * .5f);
                 // those it comes down on: not those its middle is near
                 if (d < reach && Touches(f, u, 1)) Hurt(u, null, blow * (1 - .5f * d / reach) * (Kinds.IsEngine(u.T) ? 1.5f : 1), f.Cause);

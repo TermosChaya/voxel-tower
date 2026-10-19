@@ -30,7 +30,8 @@ namespace VoxelTower.Game;
 /// (--look=1 after: the hole, the ball and the band down in the ditch), --pose=drops: stones and logs tipped off a wall
 /// on a hill onto the band at its foot, rolling down the slope through the rest of it (--look=1 lying at the bottom after),
 /// --pose=trees: the valley's trees in a row, --look=0..2 choosing which; --pose=people: every figure in every look,
-/// --look=0..4 choosing a row),
+/// --look=0..9 choosing a row), --pose=troops: the troops the lore opens out before the walls meeting a band (--at=
+/// seconds into it, --look=1 closer),
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
 /// --top looks straight down, --look=N at the Nth named place of the valley, --seed=N makes another valley; --select[=N]
 /// chooses our pawns (or the first N), --tab=key lets a panel down from the beam, --tool=N takes up the Nth tool,
@@ -185,7 +186,7 @@ public partial class Main : Node3D
         if (_demo && _pose == "shaman") ClearTrees(Site.KeepX - Site.KeepR - 240, Site.KeepZ - 90, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 90);
         if (_demo && _pose == "spells") ClearTrees(Site.KeepX - Site.KeepR - 260, Site.KeepZ - 100, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
         if (_demo && _pose == "traps") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
-        if (_demo && _pose is "blast" or "grip" or "wind" or "hexes" or "sorcerers" or "wonders" or "fp" or "powder" or "charge" or "stones" or "topple" or "roll" or "crush" or "drops") ClearTrees(Site.KeepX - Site.KeepR - 300, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 140);
+        if (_demo && _pose is "blast" or "grip" or "wind" or "hexes" or "sorcerers" or "wonders" or "fp" or "powder" or "charge" or "stones" or "topple" or "roll" or "crush" or "drops" or "troops") ClearTrees(Site.KeepX - Site.KeepR - 300, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 140);
         World.Compact();
         save?.Valley(World, Site);
         double genMs = sw.Elapsed.TotalMilliseconds;
@@ -1088,6 +1089,7 @@ public partial class Main : Node3D
         if (_pose == "flood") { Flood(); return; }
         if (_pose == "trees") { LookAtGrove(); return; }
         if (_pose == "people") { People(); return; }
+        if (_pose == "troops") { Troops(); return; }
         if (_pose == "faith") { Faith(); return; }
         if (_pose == "captives") { Captives(); return; }
         if (_pose == "spells") { Spellwork(); return; }
@@ -2326,7 +2328,9 @@ public partial class Main : Node3D
     /// <summary>
     /// Everyone in every look in rows on cleared ground, facing the camera, for a close look at the figures (--pose=people):
     /// the workers, one swinging his pick; archers and swordsmen, every other swordsman with his shield up; goblins and
-    /// sappers; orcs and miners; trolls and the beasts. --look=0..4 frames one row.
+    /// sappers; orcs and miners; trolls and the beasts; the engines; and the troops the lore opens, every other one as it
+    /// fights: spearmen, shieldbearers, halberdiers and knights; slingers, crossbowmen, bombardiers and hounds; the
+    /// riders; a tame troll and the giants. --look=0..9 frames one row.
     /// </summary>
     void People()
     {
@@ -2338,6 +2342,9 @@ public partial class Main : Node3D
         {
             new[] { Kinds.Worker, Kinds.Priest }, new[] { Kinds.Archer, Kinds.Swordsman, Kinds.Risen, Kinds.Thrall }, new[] { Kinds.Goblin, Kinds.Sapper, Kinds.Thief, Kinds.Shaman, Kinds.Witch },
             new[] { Kinds.Orc, Kinds.Miner, Kinds.Necromancer }, new[] { Kinds.Troll, Kinds.Deer, Kinds.Boar, Kinds.Hare, Kinds.Bear, Kinds.WhiteStag }, new[] { Kinds.Ram, Kinds.Catapult, Kinds.Mantlet, Kinds.SiegeTower },
+            // the troops the lore opens: men on foot; men who throw and shoot, and the hounds; the riders; the great ones
+            new[] { Kinds.Spearman, Kinds.Shieldbearer, Kinds.Halberdier, Kinds.Knight }, new[] { Kinds.Slinger, Kinds.Crossbowman, Kinds.Bombardier, Kinds.Hound },
+            new[] { Kinds.Rider, Kinds.HorseArcher, Kinds.Lancer }, new[] { Kinds.TameTroll, Kinds.Giant },
         };
         const float yaw = -.3f, pitch = .42f, gap = 34;
         float sin = MathF.Sin(yaw), cos = MathF.Cos(yaw);
@@ -2363,17 +2370,75 @@ public partial class Main : Node3D
                     u.Facing = MathF.Atan2(cos, sin);
                     u.Hold = true;
                     if (t == Kinds.Swordsman && l % 2 == 1) { u.State = UnitState.Fight; u.Cooldown = 1; }
+                    // the troops turned three-quarters, so that a spear or a lance shows, and every other one as it
+                    // fights: a shield up, a crossbow levelled, a sling whirling
+                    if (Array.IndexOf(Kinds.Troops, t) >= 0)
+                    {
+                        u.Facing -= .95f;
+                        if (l % 2 == 1) { u.State = UnitState.Fight; u.Cooldown = .5f; }
+                    }
                     if (t == Kinds.Worker && l == 3) u.State = UnitState.Work;
                     along += Spacing(t) / 2;
                 }
         }
-        static float Spacing(UnitType t) => Kinds.IsEngine(t) ? 34 : t == Kinds.Troll ? 20 : t == Kinds.Deer || t == Kinds.WhiteStag ? 14 : t == Kinds.Bear ? 18 : t == Kinds.Hare ? 6 : t.BodyH <= 10 ? 9 : 11;
+        static float Spacing(UnitType t) => Kinds.IsEngine(t) ? 34 : t.BodyH >= 24 ? 20 : t.Mounted ? 16 : t == Kinds.Shieldbearer ? 13 : t == Kinds.Deer || t == Kinds.WhiteStag ? 14 : t == Kinds.Bear ? 18 : t == Kinds.Hare ? 6 : t.BodyH <= 10 ? 9 : 11;
         // the camera looks at a plane 4 m up: the figures' middles are higher, so look past it by as much
         float over = (World.WY(World.SurfAt((int)cx, (int)cz) + 8) - 4) / MathF.Tan(pitch);
         float zoom = Math.Clamp(248 / (width / 1.6f + 12), 1.2f, 9);
         Rig.Set(World.WX(cx) - sin * over, World.WZ(cz) - cos * over, yaw, pitch, one ? zoom : 1.6f, snap: true);
-        GD.Print($"[voxel-tower] the figures stand round {cx:0},{cz:0}, {gap:0} voxels a row");
+        GD.Print($"[voxel-tower] the figures stand round {cx:0},{cz:0}, {gap:0} voxels a row; closer: --cam={cx - sin * over / VoxelWorld.Vox:0},{cz - cos * over / VoxelWorld.Vox:0},-0.3,0.42,6");
         Hud.Refresh();
+    }
+
+    /// <summary>
+    /// The troops the lore opens, out before the walls to meet a band (--pose=troops, --at=seconds into the fight): a line
+    /// of spearmen, shieldbearers, halberdiers and knights, slingers, crossbowmen and bombardiers behind it, a giant and a
+    /// tame troll behind them, the hounds on one wing and the riders, horse archers and lancers on the other; all their
+    /// lore learnt. Goblins, orcs, sappers, a troll and a ram come at them from the west. --look=1 frames the line close.
+    /// </summary>
+    void Troops()
+    {
+        var w = World; var s = Site; var sim = Sim;
+        sim.Waves.Countdown = 1e9;
+        foreach (string k in new[] { "shieldwall", "longshafts", "leadshot", "bodkins", "firepots", "hunt", "charge", "boulders" }) sim.Learnt.Add(k);
+        int kx = s.KeepX, kz = s.KeepZ, line = kx - s.KeepR - 70;
+        sim.InstantLabour = true;
+        int top = Shapes.LevelTop(w, kx - 64, kz, 40);
+        sim.DesignateBuild(Shapes.Circle(w, s, kx, kz, s.KeepR + 44, new Stroke { Mat = Mat.Stone, Width = 10, Height = 40, Level = true, Hollow = true }, top));
+        sim.InstantLabour = false;
+        void Stand(UnitType t, int x, int z)
+        {
+            int c = sim.NearestStand(x, z, t.Move.Height);
+            if (c < 0) return;
+            var u = sim.Spawn(t, c);
+            sim.Command(new[] { u }, c);
+            u.Facing = MathF.PI;
+        }
+        var foot = new[] { Kinds.Spearman, Kinds.Shieldbearer, Kinds.Halberdier, Kinds.Knight, Kinds.Spearman, Kinds.Shieldbearer, Kinds.Knight, Kinds.Halberdier, Kinds.Spearman };
+        for (int i = 0; i < foot.Length; i++) Stand(foot[i], line, kz - 36 + i * 9);
+        var missiles = new[] { Kinds.Slinger, Kinds.Crossbowman, Kinds.Bombardier, Kinds.Slinger, Kinds.Crossbowman, Kinds.Bombardier, Kinds.Slinger };
+        for (int i = 0; i < missiles.Length; i++) Stand(missiles[i], line + 16, kz - 30 + i * 10);
+        Stand(Kinds.Giant, line + 30, kz - 8);
+        Stand(Kinds.TameTroll, line + 30, kz + 14);
+        foreach (int dz in new[] { -58, -66, -74 }) Stand(Kinds.Hound, line - 4, kz + dz);
+        foreach (var (t, dx, dz) in new[] { (Kinds.Rider, 0, 56), (Kinds.Rider, 8, 66), (Kinds.Lancer, -6, 76), (Kinds.HorseArcher, 18, 58), (Kinds.HorseArcher, 18, 72) })
+            Stand(t, line + dx, kz + dz);
+        // a band come by day, ahead of its wave, so the fight is seen in the light
+        Advance(1);
+        sim.HordeStock[Stockpile.Wood] = 24 * VoxelWorld.PerM3;
+        foreach (var (t, dx, dz) in new[] { (Kinds.Goblin, -80, -20), (Kinds.Goblin, -84, 6), (Kinds.Goblin, -78, 26), (Kinds.Goblin, -90, -40), (Kinds.Orc, -94, -8),
+            (Kinds.Orc, -96, 14), (Kinds.Orc, -100, 36), (Kinds.Troll, -110, 0), (Kinds.Sapper, -104, -26), (Kinds.Sapper, -106, 48), (Kinds.Goblin, -88, 60),
+            (Kinds.Orc, -98, -56), (Kinds.Ram, -150, 10) })
+        {
+            int c = sim.NearestStand(line + dx, kz + dz, t.Move.Height);
+            if (c >= 0) sim.Spawn(t, c);
+        }
+        sim.ComputeFields();
+        Advance(_poseSeconds);
+        if (_look == 1) Rig.Set(World.WX(line - 20), World.WZ(kz + 4), -.75f, .5f, 3.2f, snap: true);
+        else Rig.Set(World.WX(line - 34), World.WZ(kz + 10), -.75f, .55f, 1.7f, snap: true);
+        Hud.Refresh();
+        Marks.Flush();
     }
 
     void LookAtGrove()
@@ -2419,7 +2484,7 @@ public partial class Main : Node3D
             for (int i = 1; i <= 6; i++) Tools._UnhandledInput(new InputEventMouseMotion { Position = a.Lerp(b, i / 6f) });
             return;
         }
-        if (_pose is "battle" or "close" or "flood") return;
+        if (_pose is "battle" or "close" or "flood" or "troops") return;
         int x = 720, z = 640;
         Tools.PointAt(new Vector3(World.WX(x), World.WY(World.SurfAt(x, z)), World.WZ(z)));
     }

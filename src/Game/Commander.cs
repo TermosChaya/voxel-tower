@@ -94,8 +94,8 @@ public partial class Commander : Node
     public void FireArrowsSelected()
     {
         bool any = false, all = true;
-        foreach (var u in _m.Selected) if (u.T.Ranged) { any = true; all &= u.FireArrows; }
-        if (!any) { _m.Hud.Float("огнём стреляют лучники", Ornament.Aged); return; }
+        foreach (var u in _m.Selected) if (Sim.Kindles(u.T)) { any = true; all &= u.FireArrows; }
+        if (!any) { _m.Hud.Float("огнём стреляют лучники и арбалетчики", Ornament.Aged); return; }
         _m.Sim.SetFireArrows(_m.Selected, !all);
         _m.Hud.Float(all ? "простые стрелы" : "огненные стрелы: ПКМ по деревянному — поджечь", Ornament.BronzeLight);
         _m.Hud.Refresh();

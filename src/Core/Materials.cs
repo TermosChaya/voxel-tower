@@ -83,7 +83,12 @@ public static class Mat
     /// a banner, the builders lay them as they lay anything, and they burn.
     /// </summary>
     public const byte Bunk = 110, Bedding = 111, Table = 112, Bench = 113;
-    public const int Count = 114;
+    /// <summary>
+    /// For the figures of our troops: the coats of horses (bay, black, dapple grey, chestnut), a mastiff's fawn, the
+    /// quilted cloth of a gambeson, the fired clay of a bombardier's pots, the white of a knight's surcoat.
+    /// </summary>
+    public const byte HorseBay = 114, HorseBlack = 115, HorseGrey = 116, HorseChestnut = 117, Fawn = 118, Gambeson = 119, Clay = 120, ClothWhite = 121;
+    public const int Count = 122;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
     public static readonly bool[] IsVeg = new bool[Count], IsPlayer = new bool[Count], IsEarthy = new bool[Count],
@@ -214,6 +219,10 @@ public static class Mat
         D(ClothGreen, "сукно", 0x344a2e, .14f, MatGroup.Hard, 0); D(ClothBrown, "сукно", 0x5c4430, .14f, MatGroup.Hard, 0);
         D(ClothOchre, "сукно", 0x8c6a2a, .14f, MatGroup.Hard, 0); D(Straw, "солома", 0xab9352, .2f, MatGroup.Hard, 0);
         D(Board, "доски", 0x80603d, .16f, MatGroup.Hard, 0); D(BoardDark, "доски", 0x6a4c30, .16f, MatGroup.Hard, 0);
+        D(HorseBay, "шерсть", 0x5e3520, .12f, MatGroup.Hard, 0); D(HorseBlack, "шерсть", 0x221d1c, .1f, MatGroup.Hard, 0);
+        D(HorseGrey, "шерсть", 0x9b968e, .2f, MatGroup.Hard, 0); D(HorseChestnut, "шерсть", 0x7d4524, .12f, MatGroup.Hard, 0);
+        D(Fawn, "шерсть", 0x9a7a52, .14f, MatGroup.Hard, 0); D(Gambeson, "стёганка", 0x9a8b68, .16f, MatGroup.Hard, 0);
+        D(Clay, "глина", 0x8e5634, .14f, MatGroup.Hard, 0); D(ClothWhite, "сукно", 0xb9b2a3, .1f, MatGroup.Hard, 0);
 
         foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage, Flower, Bloom, Birch, NeedleLight, FoliageLight, FoliageGold, PineBark, Snag }) IsVeg[m] = true;
         foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame, Stakes, Pitch, TowerLadder }) Passable[m] = true;

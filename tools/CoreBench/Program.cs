@@ -4203,6 +4203,425 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bodies")
     Check("a goblin with its knife hand cut off drags itself back west", !Sim.HasMainHand(gob) && (gob.X < gx0 - 16 || gob.Dead), $"hand {Sim.HasMainHand(gob)}, x {gx0:0} → {gob.X:0}, {gob.State}");
 }
 
+// ---- the troops the lore opens: their data, their bodies, the ladders they will not take, what each one's lore does
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troops")
+{
+    Console.WriteLine();
+    // thirteen kinds after the first four, in the citadel's order, each waiting on its lore, with its time and its places
+    string[] loresT = { "spearmen", "shieldmen", "halberds", "knights", "slingers", "crossbows", "bombards", "hounds", "riders", "horsearchers", "lancers", "trolls", "giants" };
+    var wrongT = new System.Collections.Generic.List<string>();
+    for (int i = 0; i < Kinds.Troops.Length; i++)
+    {
+        var t = Kinds.Troops[i];
+        if (t.Team != Team.Player || !(t.Work < 1) || t.Lore != loresT[i] || t.Train <= 0 || t.Room < 1 || t.Cost <= 0 || Bodies.Looks(t) < 2
+            || Bodies.Plan(t, 0) == Bodies.Plan(Kinds.Worker, 0)) wrongT.Add(t.Key);
+    }
+    bool orderT = Kinds.PlayerKinds.Length == 17 && Kinds.Troops.Length == 13 && Kinds.Troops.SequenceEqual(Kinds.PlayerKinds.Skip(4));
+    Check("thirteen new kinds of ours in the citadel's order, each waiting on its lore, with its time to make ready and the places it fills, each in a body of its own",
+        orderT && wrongT.Count == 0,
+        $"{Kinds.PlayerKinds.Length} kinds of ours; wrong: {string.Join(", ", wrongT)}; " + string.Join(", ", Kinds.Troops.Select(t => $"{t.Key} {t.Lore} {t.Train:0} s ×{t.Room}")));
+
+    // every piece of every body hangs together with its part by a face (else the first wound would knock it off), and
+    // nothing of the inside shows; a man's chest in each, but the horse's neck has no heart in it
+    int looseT = 0, showingT = 0, looksT = 0;
+    var looseAt = new System.Collections.Generic.List<string>();
+    foreach (var t in Kinds.Troops)
+        for (int l = 0; l < Bodies.Looks(t); l++)
+        {
+            var plan = Bodies.Plan(t, l);
+            looksT++;
+            for (int p = 0; p < BodyPlan.Parts; p++)
+            {
+                var g = plan.Grid[p];
+                if (g == null) continue;
+                float jx = plan.JX[p] * BodyPlan.Sub, jy = plan.JY[p] * BodyPlan.Sub, jz = plan.JZ[p] * BodyPlan.Sub;
+                int seed = -1; float best = float.MaxValue;
+                for (int i = 0; i < g.M.Length; i++)
+                {
+                    if (g.M[i] == 0 || g.T[i] == (byte)Tissue.Gear) continue;
+                    float x = i % g.SX + g.X0 + .5f - jx, z = i / g.SX % g.SZ + g.Z0 + .5f - jz, y = i / (g.SX * g.SZ) + g.Y0 + .5f - jy;
+                    if (x * x + y * y + z * z < best) { best = x * x + y * y + z * z; seed = i; }
+                }
+                var kept = new bool[g.M.Length];
+                var q = new System.Collections.Generic.Queue<int>();
+                if (seed >= 0) { q.Enqueue(seed); kept[seed] = true; }
+                while (q.Count > 0)
+                {
+                    int i = q.Dequeue(), x = i % g.SX, z = i / g.SX % g.SZ, y = i / (g.SX * g.SZ);
+                    foreach (var (ax, ay, az) in new[] { (1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1) })
+                    {
+                        int nx = x + ax, ny = y + ay, nz = z + az;
+                        if (nx < 0 || ny < 0 || nz < 0 || nx >= g.SX || ny >= g.SY || nz >= g.SZ) continue;
+                        int n = (ny * g.SZ + nz) * g.SX + nx;
+                        if (g.M[n] == 0 || kept[n]) continue;
+                        kept[n] = true; q.Enqueue(n);
+                    }
+                }
+                int off = 0;
+                string first = "";
+                for (int i = 0; i < g.M.Length; i++)
+                {
+                    if (g.M[i] != 0 && !kept[i] && off++ == 0) first = $" at {i % g.SX + g.X0},{i / (g.SX * g.SZ) + g.Y0},{i / g.SX % g.SZ + g.Z0} ({Mat.NameOf(g.M[i])})";
+                    if (g.T[i] is not ((byte)Tissue.Flesh or (byte)Tissue.Bone or (byte)Tissue.Brain or (byte)Tissue.Heart)) continue;
+                    int x = i % g.SX + g.X0, z = i / g.SX % g.SZ + g.Z0, y = i / (g.SX * g.SZ) + g.Y0;
+                    if (g.Mat(x + 1, y, z) == 0 || g.Mat(x - 1, y, z) == 0 || g.Mat(x, y + 1, z) == 0 || g.Mat(x, y - 1, z) == 0 || g.Mat(x, y, z + 1) == 0 || g.Mat(x, y, z - 1) == 0) showingT++;
+                }
+                if (off > 0) { looseT += off; looseAt.Add($"{t.Key}{l}:{(BodyPart)p} {off}{first}"); }
+            }
+        }
+    var riderPlan = Bodies.Plan(Kinds.Rider, 0); var houndPlan = Bodies.Plan(Kinds.Hound, 0); var giantPlan = Bodies.Plan(Kinds.Giant, 0); var manPlan = Bodies.Plan(Kinds.Worker, 0);
+    Check("the troops' bodies hold together, gear and all, by their faces, none of the inside shows; riders sit horses, the hound goes on four legs, a giant stands three metres and a rider under the gate",
+        looseT == 0 && showingT == 0 && riderPlan.Mounted && !riderPlan.Beast && houndPlan.Beast && giantPlan.Top >= 23 && giantPlan.Top <= 25
+        && riderPlan.Top <= 24 && riderPlan.Top >= 20 && riderPlan.Heart > 4 && riderPlan.Heart <= manPlan.Heart * 2 && riderPlan.Brain > 20 && houndPlan.Top <= 10,
+        $"{looksT} looks; {looseT} half-voxels hanging loose {string.Join(" ", looseAt.Take(6))}; {showingT} inner on the surface; rider: top {riderPlan.Top}, heart {riderPlan.Heart} (a man's {manPlan.Heart}), brain {riderPlan.Brain}; hound top {houndPlan.Top}; giant top {giantPlan.Top}");
+
+    var mpT = new MapParams();
+    var wT = new VoxelWorld(mpT.SizeX, mpT.SizeY, mpT.SizeZ);
+    var siteT = MapGen.Generate(wT, mpT);
+    wT.Compact();
+    var simT = new Sim(wT, siteT);
+    simT.Waves.Countdown = 1e9; simT.WildTarget = 0;
+    void RunT(double seconds) { for (double t = 0; t < seconds; t += .05) simT.Step(.05f); }
+    void Gone(Unit u) { u.Dead = true; u.DiedAt = -999; }
+    float Metres(float a, float b, float c, float d) => MathF.Sqrt((a - c) * (a - c) + (b - d) * (b - d)) / VoxelWorld.PerMetre;
+    // a field of level ground west of the citadel, bare of trees, and a stone pillar on it with a ladder of ours up its side
+    int fx0 = (siteT.KeepX - 460) & ~7, fz0 = (siteT.KeepZ - 140) & ~7, fg = wT.SurfAt(fx0 + 160, fz0 + 140);
+    for (int z = fz0; z < fz0 + 280; z++)
+        for (int x = fx0; x < fx0 + 320; x++)
+            for (int y = fg - 4; y < fg + 50; y++) wT.Set(x, y, z, y < fg ? Mat.Soil : Mat.Air);
+    int px0 = fx0 + 40, pz0 = fz0 + 200;
+    for (int z = pz0; z < pz0 + 32; z++)
+        for (int x = px0; x < px0 + 32; x++)
+            for (int y = fg; y < fg + 24; y++) wT.Set(x, y, z, Mat.Stone);
+    for (int z = pz0 + 12; z < pz0 + 20; z++)
+        for (int y = fg; y < fg + 24; y++) wT.Set(px0 - 1, y, z, Mat.Ladder);
+    RunT(.5);
+    // a soldier on foot climbs it; a rider and a hound find no way up, and one set on the ladder comes down off it
+    int foot = simT.NearestStand(px0 - 12, pz0 + 16, 3), atop = simT.NearestStand(px0 + 16, pz0 + 16, 2);
+    int ti0 = simT.Nav.I(atop), tk0 = simT.Nav.K(atop);
+    bool Up(UnitType t) => simT.Paths.Find(foot, c => c == atop, c => PathFinder.Octile(simT.Nav.I(c) - ti0, simT.Nav.K(c) - tk0), t.Move, 20000) != null;
+    bool spearUp = Up(Kinds.Spearman), riderUp = Up(Kinds.Rider), houndUp = Up(Kinds.Hound), lancerUp = Up(Kinds.Lancer);
+    int rung = simT.Nav.CellOf(px0 - 1, fg + 13, pz0 + 16);
+    var hanging = simT.Spawn(Kinds.Rider, rung);
+    var climber = simT.Spawn(Kinds.Spearman, rung);
+    float hang0 = hanging.Y;
+    RunT(.2);
+    Check("horses and hounds take no ladder: a spearman finds his way up a ladder onto a pillar, a rider, a lancer and a hound none, and a horse set on the rungs comes down off them",
+        spearUp && !riderUp && !houndUp && !lancerUp && Kinds.Troops.All(t => t.Move.Ladders == !(t.Mounted || t.NoHands)) && hanging.Y < hang0 - 4 && simT.Nav.Ladder[climber.Cell] != 0,
+        $"spearman up {spearUp}, rider {riderUp}, lancer {lancerUp}, hound {houndUp}; the horse on the rungs {hang0 - fg:0} → {hanging.Y - fg:0} voxels up, the spearman still on them {simT.Nav.Ladder[climber.Cell] != 0}");
+    Gone(hanging); Gone(climber);
+
+    // the hounds and the riders do no work: their labour is all set to none; the rest of the troops work as soldiers do
+    var houndW = simT.Spawn(Kinds.Hound, simT.NearestStand(fx0 + 200, fz0 + 40, 1));
+    var riderW = simT.Spawn(Kinds.Rider, simT.NearestStand(fx0 + 220, fz0 + 40, 3));
+    var giantW = simT.Spawn(Kinds.Giant, simT.NearestStand(fx0 + 240, fz0 + 40, 3));
+    Check("hounds and riders do no work (their priorities are all none); a giant and a tame troll work as soldiers do",
+        houndW.Priority.All(p => p == 0) && riderW.Priority.All(p => p == 0) && giantW.Priority.Any(p => p > 0) && Kinds.TameTroll.Work > 0,
+        $"hound {string.Join("", houndW.Priority)}, rider {string.Join("", riderW.Priority)}, giant {string.Join("", giantW.Priority)}");
+    Gone(houndW); Gone(riderW); Gone(giantW);
+
+    // one standing where it was put on the level field: ours held there, a raider guarding the spot (or held fast in
+    // chains, so as to stand and be shot at)
+    Unit Put(UnitType t, int ci, int ck, bool chained = false)
+    {
+        int c = simT.NearestStand(fx0 + ci * 8 + 4, fz0 + ck * 8 + 4, t.Move.Height);
+        var u = simT.Spawn(t, c);
+        (u.X, u.Y, u.Z) = simT.Nav.Feet(c);
+        if (t.Team == Team.Horde) { u.Guard = true; u.Home = u.Cell; if (chained) u.ChainedUntil = 1e9; }
+        else { u.Hold = true; u.Dest = u.Cell; u.Post = u.Cell; }
+        return u;
+    }
+    void Face(Unit a, Unit b) { a.Facing = MathF.Atan2(b.Z - a.Z, b.X - a.X); b.Facing = MathF.Atan2(a.Z - b.Z, a.X - b.X); }
+
+    // a spear reaches past a sword: a goblin two metres off is within a spearman's reach and not a swordsman's; a
+    // little further, only with the long shafts
+    var spearR = Put(Kinds.Spearman, 4, 4); var swordR = Put(Kinds.Swordsman, 4, 8); var halbR = Put(Kinds.Halberdier, 4, 12);
+    var gobR1 = Put(Kinds.Goblin, 6, 4); var gobR2 = Put(Kinds.Goblin, 6, 8); var gobR3 = Put(Kinds.Goblin, 6, 13);
+    var gobR4 = Put(Kinds.Goblin, 6, 5);
+    bool spearIn = simT.InReach(spearR, gobR1), swordIn = simT.InReach(swordR, gobR2), spearFar0 = simT.InReach(spearR, gobR4), halbFar0 = simT.InReach(halbR, gobR3);
+    simT.Learnt.Add("longshafts");
+    bool spearFar1 = simT.InReach(spearR, gobR4), halbFar1 = simT.InReach(halbR, gobR3);
+    simT.Learnt.Remove("longshafts");
+    Check("a spear reaches past a sword: at two metres a spearman strikes and a swordsman does not; with the long shafts a spear and a halberd strike from a quarter further",
+        spearIn && !swordIn && !spearFar0 && spearFar1 && !halbFar0 && halbFar1,
+        $"spear {Kinds.Spearman.Reach / 8:0.00} m, sword {Kinds.Swordsman.Reach / 8:0.00} m: at {Sim.Dist(spearR, gobR1) / 8:0.00} m the spear {spearIn}, the sword {swordIn}; " +
+        $"at {Sim.Dist(spearR, gobR4) / 8:0.00} m the spear {spearFar0} → {spearFar1}, the halberd at {Sim.Dist(halbR, gobR3) / 8:0.00} m {halbFar0} → {halbFar1}");
+    foreach (var u in new[] { spearR, swordR, halbR, gobR1, gobR2, gobR3, gobR4 }) Gone(u);
+
+    // blows taken over and over, the body made whole again before each: what they take on the whole
+    float Blows(Unit a, Unit b, int n, bool gallop = false)
+    {
+        float sum = 0;
+        int counted = 0;
+        for (int i = 0; i < n; i++)
+        {
+            b.Wounds = null; b.Dead = false; b.State = UnitState.Idle; b.Hp = b.MaxHp = 10000; b.Airborne = null;
+            a.Cooldown = 0; a.GallopUntil = gallop ? simT.Time + 1 : -1;
+            simT.Strike(a, b);
+            float d = 10000 - b.Hp;
+            // a blow that split the head or pierced the heart is death, not a blow's worth
+            if (b.Dead || d > 2000) continue;
+            sum += d; counted++;
+        }
+        b.Dead = false; b.State = UnitState.Idle; b.Hp = b.MaxHp = b.T.Hp; b.Wounds = null; b.Airborne = null;
+        return counted > 0 ? sum / counted : 0;
+    }
+
+    // the shield wall: a swordsman beside a shieldbearer takes a quarter less from a goblin's blows
+    var shieldW = Put(Kinds.Shieldbearer, 12, 4); var coveredW = Put(Kinds.Swordsman, 14, 4); var aloneW = Put(Kinds.Swordsman, 30, 4);
+    coveredW.Look = aloneW.Look = 0;
+    var gobW = Put(Kinds.Goblin, 16, 4); var gobW2 = Put(Kinds.Goblin, 32, 4);
+    Face(gobW, coveredW); Face(gobW2, aloneW);
+    float coveredOff = Blows(gobW, coveredW, 160), aloneOff = Blows(gobW2, aloneW, 160);
+    simT.Learnt.Add("shieldwall");
+    float coveredOn = Blows(gobW, coveredW, 160), aloneOn = Blows(gobW2, aloneW, 160);
+    Check("the shield wall: within three metres of a shieldbearer a swordsman takes a quarter less from a goblin's blows",
+        simT.ShieldWall(coveredW) == .75f && simT.ShieldWall(aloneW) == 1 && coveredOn / aloneOn < .86f && coveredOn / aloneOn > .64f && coveredOff / aloneOff > .86f,
+        $"a blow on the whole, without the lore: beside {coveredOff:0.0}, alone {aloneOff:0.0}; with it: beside {coveredOn:0.0}, alone {aloneOn:0.0} (×{coveredOn / aloneOn:0.00})");
+    foreach (var u in new[] { shieldW, coveredW, aloneW, gobW, gobW2 }) Gone(u);
+
+    // a giant's blow sends an orc flying; a tame troll's too
+    var giantF = Put(Kinds.Giant, 20, 12); var orcF = Put(Kinds.Orc, 22, 12);
+    Face(giantF, orcF);
+    float of0x = orcF.X, of0z = orcF.Z;
+    orcF.Hp = orcF.MaxHp = 2000;
+    simT.Strike(giantF, orcF);
+    bool flungF = orcF.Airborne != null;
+    for (int i = 0; i < 80 && orcF.Airborne != null; i++) RunT(.05);
+    float flewF = Metres(orcF.X, orcF.Z, of0x, of0z);
+    var trollF = Put(Kinds.TameTroll, 20, 20); var gobF = Put(Kinds.Goblin, 22, 20);
+    Face(trollF, gobF);
+    gobF.Hp = gobF.MaxHp = 2000;
+    simT.Strike(trollF, gobF);
+    bool flungF2 = gobF.Airborne != null;
+    Check("a giant's blow sends an orc flying through the air, and a tame troll's a goblin",
+        flungF && flewF > 2 && flungF2 && orcF.Airborne == null,
+        $"the orc thrown {flungF}, landed {flewF:0.0} m off; the goblin thrown {flungF2}");
+    foreach (var u in new[] { giantF, orcF, trollF, gobF }) Gone(u);
+    RunT(3);
+
+    // a tame troll mends two hit points a second out of a fight
+    var trollM = Put(Kinds.TameTroll, 26, 20);
+    trollM.Hp = 300; trollM.LastHurt = -99;
+    RunT(5);
+    // two a second of its own, over what any of ours mends out of a fight (the more by the citadel)
+    bool homeM = Metres(trollM.X, trollM.Z, siteT.KeepX, siteT.KeepZ) < 40;
+    float anyM = trollM.MaxHp * (homeM ? .0035f : .0012f) * 5;
+    Check("a tame troll mends as trolls do: two hit points a second out of a fight, over what any of ours mends", MathF.Abs(trollM.Hp - 300 - anyM - 10) < 1.2f,
+        $"300 → {trollM.Hp:0.0} in five seconds, {anyM:0.0} of it as any of ours mends");
+    Gone(trollM);
+
+    // the charge: a lancer's blow straight from the gallop strikes twice as hard and throws a goblin off its feet; a
+    // rider's only with the charge learnt; at a stand, neither
+    // (measured on a mantlet: it takes a blow as it comes, and stands)
+    var lancerC = Put(Kinds.Lancer, 12, 24); var riderC = Put(Kinds.Rider, 12, 32); var mantC = Put(Kinds.Mantlet, 15, 24, chained: true);
+    var gobC = Put(Kinds.Goblin, 14, 30);
+    Face(lancerC, mantC);
+    float standL = Blows(lancerC, mantC, 60), gallopL = Blows(lancerC, mantC, 60, gallop: true);
+    Face(riderC, gobC);
+    gobC.Hp = gobC.MaxHp = 2000;
+    riderC.GallopUntil = simT.Time + 1;
+    simT.Strike(riderC, gobC);
+    bool riderThrows0 = gobC.Airborne != null;
+    RunT(3);
+    simT.Learnt.Add("charge");
+    gobC.Hp = 2000;
+    Face(riderC, gobC);
+    riderC.GallopUntil = simT.Time + 1;
+    simT.Strike(riderC, gobC);
+    bool riderThrows1 = gobC.Airborne != null;
+    RunT(3);
+    gobC.Hp = 2000;
+    Face(riderC, gobC);
+    riderC.GallopUntil = -1;
+    simT.Strike(riderC, gobC);
+    bool standThrows = gobC.Airborne != null;
+    simT.Learnt.Remove("charge");
+    Check("a lancer from the gallop strikes twice as hard and throws a goblin off its feet; a rider does so only with the charge, and nobody at a stand",
+        gallopL / standL > 1.75f && gallopL / standL < 2.3f && !riderThrows0 && riderThrows1 && !standThrows,
+        $"a lancer's blow standing {standL:0.0}, from the gallop {gallopL:0.0} (×{gallopL / standL:0.00}); a rider throws from the gallop {riderThrows0}, with the charge {riderThrows1}, standing {standThrows}");
+    foreach (var u in new[] { lancerC, riderC, mantC, gobC }) Gone(u);
+    RunT(3);
+
+    // a rider rides up and charges by himself: the goblin it comes upon is thrown
+    var lancerG = Put(Kinds.Lancer, 4, 22); var gobG = Put(Kinds.Goblin, 9, 22);
+    gobG.Hp = gobG.MaxHp = 2000;
+    float lg0x = lancerG.X;
+    bool thrownG = false;
+    for (int i = 0; i < 100 && !thrownG; i++) { RunT(.05); thrownG |= gobG.Airborne != null; }
+    Check("a lancer that sees a goblin near its post rides at it and the goblin is thrown by the charge", thrownG, $"the lancer rode {Metres(lancerG.X, 0, lg0x, 0):0.0} m; thrown {thrownG}");
+    foreach (var u in new[] { lancerG, gobG }) Gone(u);
+    RunT(3);
+
+    // the hunt: hounds and riders run a third faster after one that flees, and bite and strike it twice as hard
+    var houndH = Put(Kinds.Hound, 30, 16); var mantH = Put(Kinds.Mantlet, 33, 16, chained: true);
+    Face(houndH, mantH);
+    mantH.Routed = true;
+    float biteOff = Blows(houndH, mantH, 60);
+    simT.Learnt.Add("hunt");
+    float biteOn = Blows(houndH, mantH, 60);
+    mantH.Routed = false;
+    float biteSteady = Blows(houndH, mantH, 60);
+    simT.Learnt.Remove("hunt");
+    Gone(mantH);
+    float Chase(bool hunt)
+    {
+        if (hunt) simT.Learnt.Add("hunt"); else simT.Learnt.Remove("hunt");
+        var r = Put(Kinds.Rider, 34, 32);
+        var g = Put(Kinds.Goblin, 12, 32);
+        r.Pace = 1;
+        g.Guard = false; g.Routed = true; g.Hp = g.MaxHp = 5000; g.Home = -1;
+        RunT(.5);
+        float x0 = r.X, z0 = r.Z;
+        RunT(1.5);
+        float d = Metres(r.X, r.Z, x0, z0) / 1.5f;
+        Gone(r); Gone(g);
+        RunT(.5);
+        return d;
+    }
+    float chase0 = Chase(false), chase1 = Chase(true);
+    simT.Learnt.Remove("hunt");
+    Check("the hunt: a rider runs a third faster after a raider that flees, and a hound bites one twice as hard",
+        biteOn / biteOff > 1.75f && biteOn / biteOff < 2.3f && biteSteady / biteOff < 1.2f && chase1 / chase0 > 1.2f && chase0 > 2.5f,
+        $"a hound's bite at one fleeing {biteOff:0.0}, with the hunt {biteOn:0.0}, at one standing {biteSteady:0.0}; a rider after one fleeing {chase0:0.0} m/s, with the hunt {chase1:0.0} m/s");
+    Gone(houndH);
+    RunT(1);
+
+    // shots, counted as they are let fly: what flies and how hard
+    var seen = new System.Collections.Generic.HashSet<Arrow>();
+    var flown = new System.Collections.Generic.List<Arrow>();
+    void Watch(double seconds) { for (double t = 0; t < seconds; t += .05) { simT.Step(.05f); foreach (var a in simT.Arrows) if (seen.Add(a)) flown.Add(a); } }
+
+    // a sling stone: a stone, not an arrow, it does not stay in the body; of lead it strikes a third harder and knocks the raider back a step
+    var slingL = Put(Kinds.Slinger, 4, 2); var trollL = Put(Kinds.Troll, 14, 2, chained: true);
+    trollL.Hp = trollL.MaxHp = 50000;
+    flown.Clear();
+    Watch(12);
+    var stones0 = flown.FindAll(a => a.From == slingL);
+    float plainL = stones0.Count > 0 ? stones0.Average(a => a.Damage) : 0;
+    int stuckL = trollL.Wounds?.Arrows.Count ?? 0;
+    simT.Learnt.Add("leadshot");
+    flown.Clear();
+    // (sixteen metres off: further than a guard goes after one of ours)
+    var gobL = Put(Kinds.Goblin, 20, 2);
+    gobL.Hp = gobL.MaxHp = 50000;
+    Gone(trollL);
+    bool knocked = false;
+    float gl0x = gobL.X, gl0z = gobL.Z;
+    for (int i = 0; i < 240; i++) { Watch(.05); knocked |= gobL.Airborne != null; }
+    var stones1 = flown.FindAll(a => a.From == slingL);
+    float leadL = stones1.Count > 0 ? stones1.Average(a => a.Damage) : 0;
+    Check("a slinger throws stones that do not stay in the body; with lead shot they strike a third harder and knock the raider back a step",
+        stones0.Count >= 6 && stones0.All(a => a.Kind == Shot.Stone) && stuckL == 0 && leadL / plainL > 1.2f && leadL / plainL < 1.47f && knocked,
+        $"{stones0.Count} stones in 12 s, a stone {plainL:0.0}, of lead {leadL:0.0} (×{leadL / plainL:0.00}); stuck in the troll {stuckL}; the goblin knocked off its feet {knocked}, {Metres(gobL.X, gobL.Z, gl0x, gl0z):0.0} m from where it stood");
+    simT.Learnt.Remove("leadshot");
+    Gone(gobL);
+
+    // the fire pots: now and then a slinger throws a pot of burning pitch, and the raider and the ground by it burn
+    simT.Learnt.Add("firepots");
+    var gobP = Put(Kinds.Orc, 14, 2, chained: true);
+    gobP.Hp = gobP.MaxHp = 50000;
+    flown.Clear();
+    bool burnt = false;
+    for (int i = 0; i < 900 && !(simT.Pitched > 0 && burnt); i++) { Watch(.05); burnt |= gobP.Burn > 0; }
+    int potsP = flown.Count(a => a.Kind == Shot.FirePot), stonesP = flown.Count(a => a.Kind == Shot.Stone);
+    Check("with the fire pots a slinger now and then throws a pot of burning pitch: the raider catches fire and so does the ground about it",
+        potsP >= 1 && stonesP >= potsP && simT.Pitched > 0 && simT.Burning.Count > 0 && burnt,
+        $"{stonesP} stones and {potsP} fire pots; the ground set alight {simT.Pitched} times, {simT.Burning.Count} voxels burning; the orc burnt {burnt}");
+    simT.Learnt.Remove("firepots");
+    Gone(gobP); Gone(slingL);
+    RunT(1);
+
+    // the bodkins: a crossbow bolt goes through the first raider into the one behind it
+    var xbow = Put(Kinds.Crossbowman, 4, 33); var trollB = Put(Kinds.Troll, 16, 33, chained: true); var gobB = Put(Kinds.Goblin, 19, 33, chained: true);
+    trollB.Hp = trollB.MaxHp = 50000; gobB.Hp = gobB.MaxHp = 50000;
+    flown.Clear();
+    Watch(9);
+    bool behind0 = gobB.Hp < gobB.MaxHp;
+    int bolts0 = flown.Count(a => a.From == xbow && a.Kind == Shot.Bolt);
+    simT.Learnt.Add("bodkins");
+    Watch(12);
+    bool behind1 = gobB.Hp < gobB.MaxHp;
+    Check("a crossbowman shoots bolts; with bodkin heads a bolt goes through the troll it strikes into the goblin behind",
+        bolts0 >= 2 && !behind0 && behind1 && simT.Pierced > 0,
+        $"{bolts0} bolts in 9 s, the goblin behind hurt {behind0}; with bodkins {simT.Pierced} through, the goblin {gobB.Hp:0} of {gobB.MaxHp:0}");
+    simT.Learnt.Remove("bodkins");
+
+    // the lore of bows is the bows': with yew a crossbow does not carry further, a horse archer's bow does
+    var hArch = Put(Kinds.HorseArcher, 8, 18);
+    float xr0 = simT.ShotRange(xbow), hr0 = simT.ShotRange(hArch);
+    simT.Learnt.Add("yew");
+    float xr1 = simT.ShotRange(xbow), hr1 = simT.ShotRange(hArch);
+    simT.Learnt.Remove("yew");
+    Check("the bows' lore stays with bows: with yew a horse archer shoots 15 % further, a crossbowman no further",
+        xr1 == xr0 && MathF.Abs(hr1 / hr0 - 1.15f) < .01f, $"crossbow {xr0 / 8:0.0} → {xr1 / 8:0.0} m, horse archer's bow {hr0 / 8:0.0} → {hr1 / 8:0.0} m");
+    foreach (var u in new[] { xbow, trollB, gobB, hArch }) Gone(u);
+    RunT(1);
+
+    // a pot of powder: its burst breaks a siege ladder against our wall and hurts and throws the goblin at its foot,
+    // and leaves our masonry be
+    int wx = fx0 + 280, wz = fz0 + 60;
+    for (int z = wz - 12; z < wz + 12; z++)
+        for (int x = wx; x < wx + 6; x++)
+            for (int y = fg; y < fg + 32; y++) wT.Set(x, y, z, Mat.Stone);
+    for (int z = wz - 1; z < wz + 1; z++)
+        for (int y = fg; y < fg + 32; y++) wT.Set(wx - 1, y, z, Mat.SiegeLadder);
+    RunT(.2);
+    int StoneW() { int n = 0; for (int z = wz - 12; z < wz + 12; z++) for (int x = wx; x < wx + 6; x++) for (int y = fg; y < fg + 32; y++) if (wT.Get(x, y, z) == Mat.Stone) n++; return n; }
+    int LadderW() { int n = 0; for (int z = wz - 2; z < wz + 2; z++) for (int y = fg; y < fg + 40; y++) if (wT.Get(wx - 1, y, z) == Mat.SiegeLadder) n++; return n; }
+    var gobK = simT.Spawn(Kinds.Goblin, simT.NearestStand(wx - 6, wz + 4, 2));
+    gobK.Guard = true; gobK.Home = gobK.Cell;
+    int stoneK0 = StoneW(), ladderK0 = LadderW();
+    float gk0 = gobK.Hp;
+    int struck = simT.PotBurst(wx - 4, fg + 3, wz, Kinds.Bombardier.Damage, null);
+    bool thrownK = gobK.Airborne != null;
+    RunT(3);
+    int stoneK1 = StoneW(), ladderK1 = LadderW();
+    Check("a pot of powder bursting at the foot of our wall breaks the horde's siege ladder up it and hurts and throws the goblin by it, and our stone stands",
+        ladderK0 >= 60 && ladderK1 == 0 && stoneK1 == stoneK0 && (gobK.Dead || gobK.Hp < gk0 - 10) && thrownK && struck > 0,
+        $"ladder {ladderK0} → {ladderK1}, our stone {stoneK0} → {stoneK1}; the goblin {(gobK.Dead ? "dead: " + gobK.KilledBy : $"{gobK.Hp:0} of {gk0:0}")}, thrown {thrownK}");
+    Gone(gobK);
+
+    // a bombardier throws his pot at a raider, but not while one of ours stands by it
+    var bomb = Put(Kinds.Bombardier, 4, 10); var gobT = Put(Kinds.Orc, 15, 10, chained: true); var ours = Put(Kinds.Spearman, 15, 12);
+    gobT.Hp = gobT.MaxHp = 50000; ours.Hp = ours.MaxHp = 5000;
+    int bursts0 = simT.Bursts;
+    flown.Clear();
+    Watch(7);
+    int heldPots = flown.Count(a => a.Kind == Shot.Pot);
+    Gone(ours);
+    Watch(7);
+    int thrownPots = flown.Count(a => a.Kind == Shot.Pot);
+    Check("a bombardier holds his pot while one of ours stands within two metres of the raider, and throws it once he is gone",
+        heldPots == 0 && thrownPots >= 1 && simT.Bursts > bursts0 && gobT.Hp < gobT.MaxHp,
+        $"pots with ours by the orc {heldPots}, after {thrownPots}; bursts {simT.Bursts - bursts0}; the orc {gobT.Hp:0} of {gobT.MaxHp:0}");
+    foreach (var u in new[] { bomb, gobT }) Gone(u);
+    RunT(1);
+
+    // the boulders: a giant tears a stone out of the ground and hurls it at a raider out of its reach; it comes down
+    // and rolls on; a spearman of ours by the raider is not struck by it
+    // (a mantlet left by its band: it stands where it is and strikes nobody)
+    var giantB = Put(Kinds.Giant, 6, 16); var gobS = Put(Kinds.Mantlet, 22, 17); var oursS = Put(Kinds.Spearman, 23, 14);
+    gobS.Hp = gobS.MaxHp = 5000; oursS.Hp = oursS.MaxHp = 5000;
+    RunT(3);
+    int hurled0 = simT.Hurled;
+    simT.Learnt.Add("boulders");
+    Flier boulder = null;
+    bool rolled = false;
+    for (int i = 0; i < 400 && !rolled; i++)
+    {
+        RunT(.05);
+        boulder ??= simT.Fliers.Find(f => f.Cause == Sim.BoulderCause);
+        if (boulder != null && boulder.Rolling) rolled = true;
+    }
+    float rollFrom = boulder?.X ?? 0, rollFromZ = boulder?.Z ?? 0;
+    RunT(4);
+    Check("with the boulders a giant hurls a stone at a mantlet out of its reach; it comes down and rolls on, and passes our spearman by beside it",
+        hurled0 == 0 && simT.Hurled > 0 && rolled && oursS.Hp == oursS.MaxHp,
+        $"stones hurled {simT.Hurled}; rolling {rolled}, rolled {(boulder != null ? Metres(boulder.X, boulder.Z, rollFrom, rollFromZ) : 0):0.0} m on; the mantlet {gobS.Hp:0} of {gobS.MaxHp:0}, our spearman {oursS.Hp:0} of {oursS.MaxHp:0}");
+    simT.Learnt.Remove("boulders");
+}
+
 // voxels of water in the whole valley
 static long WaterIn(VoxelWorld w)
 {

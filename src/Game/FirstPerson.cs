@@ -230,8 +230,10 @@ public partial class FirstPerson : Node3D
         else { main = Mathf.Lerp(-1.1f, -2.5f, swing * swing) + (1 - swing) * .1f; off = _fig.Shield ? -1.1f : -.5f; }
         Place(_main, Part.Main, main, new Vector3(.1f, -.1f, -.13f));
         Place(_off, Part.Off, off, new Vector3(-.1f, -.1f, -.13f));
-        _main.Visible = _main.Mesh != null;
-        _off.Visible = _off.Mesh != null && (u.T.Ranged || _fig.Shield);
+        // a beast's "arms" are its forelegs, and a rider's are drawn on the horse's frame: neither is held before the eyes
+        bool hands = !_fig.Beast && !_fig.Mounted;
+        _main.Visible = hands && _main.Mesh != null;
+        _off.Visible = hands && _off.Mesh != null && (u.T.Ranged || _fig.Shield);
     }
 
     /// <summary>A part of the figure hung from its joint at a spot before the eyes, swung about the joint.</summary>

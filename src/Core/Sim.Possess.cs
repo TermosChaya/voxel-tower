@@ -136,6 +136,8 @@ public sealed partial class Sim
     /// <summary>Up (or down) the ladder it is at, by so many voxels; false if there is no ladder there or no room.</summary>
     bool ClimbBy(Unit u, float dy)
     {
+        // a horse or a hound takes no ladder
+        if (!u.T.Move.Ladders) return false;
         int i = Nav.I(u.Cell), y = Nav.Y(u.Cell), k = Nav.K(u.Cell), h = u.T.Move.Height;
         if (dy > 0)
         {

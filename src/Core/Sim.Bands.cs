@@ -176,7 +176,8 @@ public sealed partial class Sim
             float dx = x - Site.KeepX, dz = z - Site.KeepZ;
             if (dx * dx + dz * dz > 60 * 60 * VoxelWorld.PerMetre * VoxelWorld.PerMetre) continue;
             int side = ((int)MathF.Round(MathF.Atan2(dz, dx) / (MathF.PI / 4)) % Sides + Sides) % Sides;
-            float w = (u.T.Ranged ? 1.5f : u.T.Work < 1 ? 1 : .6f) * Math.Clamp(u.Hp / u.MaxHp, .2f, 1);
+            // a rider or a giant counts for as many as the places it fills
+            float w = (u.T.Ranged ? 1.5f : u.T.Work < 1 ? 1 : .6f) * u.T.Room * Math.Clamp(u.Hp / u.MaxHp, .2f, 1);
             SideKeep[side] += w;
             // an archer's reach covers the sides beside too
             SideKeep[(side + 1) % Sides] += w * .4f;

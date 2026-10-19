@@ -73,6 +73,7 @@ public sealed partial class Sim
     {
         // one of the dead raised: it goes for the horde, and does nothing else
         if (u.T == Kinds.Risen) { RisenTick(u, dt); return; }
+        TroopTick(u, dt);
         // bound and led off by a thief: it goes where it is led till it is freed
         if (u.Captor != null) { Led(u, dt); return; }
         // standing in the flames: out of them before anything
@@ -84,8 +85,10 @@ public sealed partial class Sim
         if (FallBack(u, dt)) { Busy(u); return; }
         // one that has lost the hand it fights with (or, with a bow, either hand) runs like a worker
         bool soldier = u.T.Work < 1, fighter = (soldier || u.Militia) && Armed(u);
+        // a hound or a rider does none of what is done on foot with the hands: no ladder thrown down, no wound bound, no fire put out
+        bool handy = !u.T.NoHands && !u.T.Mounted;
         // a swordsman beside a siege ladder throws it down before anything else, climbers and all
-        if (soldier && !u.T.Ranged && HasMainHand(u) && PushLadders(u, dt)) { Busy(u); return; }
+        if (soldier && handy && !u.T.Ranged && HasMainHand(u) && PushLadders(u, dt)) { Busy(u); return; }
         if (fighter && Fight(u, dt)) { Busy(u); ReleaseSite(u); return; }
         if (!fighter && Flee(u, dt)) { Busy(u); return; }
         // the alarm is up: to shelter (one the player sent somewhere goes where it was sent)
@@ -94,12 +97,12 @@ public sealed partial class Sim
         // a priest prays by day and shelters by night, and does nothing else (unless the player sent it somewhere)
         if (u.T.Prays && !u.Hold) { PriestTick(u, dt); return; }
         // a comrade bleeding close by comes before any work (soldiers keep to their posts while the horde is here)
-        if (!u.T.Prays && (!soldier || !Waves.Active) && Bandage(u, dt)) { Busy(u); return; }
+        if (!u.T.Prays && handy && (!soldier || !Waves.Active) && Bandage(u, dt)) { Busy(u); return; }
         // a fire in what we built or round the citadel, if putting it out comes before the work at hand
-        if (!u.T.Prays && (!soldier || !Waves.Active) && FightFire(u, dt)) { Busy(u); return; }
+        if (!u.T.Prays && handy && (!soldier || !Waves.Active) && FightFire(u, dt)) { Busy(u); return; }
         // a raider bound out in the field: a free worker goes for it and leads it into the citadel
         if (!soldier && !u.T.Prays && FetchCaptive(u, dt)) { Busy(u); return; }
-        if (soldier && HasMainHand(u) && PushLadders(u, dt)) { Busy(u); return; }
+        if (soldier && handy && HasMainHand(u) && PushLadders(u, dt)) { Busy(u); return; }
         if (u.Path != null && u.PathI < u.Path.Count && (u.Hold || u.Site < 0) && u.Pastime != Pastime.Stroll) { Walk(u, dt); return; }
         if (u.Hold)
         {
@@ -121,6 +124,8 @@ public sealed partial class Sim
             if (u.Path != null && u.Pastime != Pastime.Stroll) Walk(u, dt); else Idle(u, dt, stay: true);
             return;
         }
+        // a hound or a rider has no work of the pawns': between waves it idles about its post
+        if (u.T.Work <= 0) { ReleaseSite(u); u.Why = ""; Idle(u, dt, stay: false); return; }
         WorkTick(u, dt);
     }
 
@@ -537,7 +542,13 @@ public sealed partial class Sim
     }
 
     /// <summary>"рабочего", "лучника", "мечника".</summary>
-    static string Whom(UnitType t) => t.Key switch { "worker" => "рабочего", "archer" => "лучника", "sword" => "мечника", _ => t.Name.ToLowerInvariant() };
+    static string Whom(UnitType t) => t.Key switch
+    {
+        "worker" => "рабочего", "archer" => "лучника", "sword" => "мечника", "spear" => "копейщика", "shield" => "щитоносца", "halberd" => "алебардщика",
+        "knight" => "рыцаря", "sling" => "пращника", "crossbow" => "арбалетчика", "bombard" => "бомбардира", "hound" => "боевого пса", "rider" => "всадника",
+        "horsearcher" => "конного лучника", "lancer" => "конного рыцаря", "tametroll" => "ручного тролля", "giant" => "великана",
+        _ => t.Name.ToLowerInvariant(),
+    };
 
     /// <summary>
     /// Workers run for the nearest shelter when a raider comes close — not one the raider is nearer to — and into the

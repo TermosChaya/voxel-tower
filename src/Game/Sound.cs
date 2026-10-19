@@ -169,7 +169,7 @@ public partial class Sound : Node
                 Play("lay", u.X, u.Y, u.Z, .08, .55f);
         }
         foreach (var a in sim.Arrows)
-            if (a.Done && a.Hits && _landed.Add(a) && a.Target != null) Play("arrow", a.X1, a.Y1, a.Z1, .06, .7f);
+            if (a.Done && a.Hits && a.Kind is not (Shot.Pot or Shot.FirePot) && _landed.Add(a) && a.Target != null) Play(a.Kind == Shot.Stone ? "blunt" : "arrow", a.X1, a.Y1, a.Z1, .06, .7f);
         if (_landed.Count > 400) _landed.RemoveWhere(a => !sim.Arrows.Contains(a));
         if (_dead.Count > 2000) _dead.Clear();
         // the fire, by how much of it burns near the middle of the view; the rain, while it rains

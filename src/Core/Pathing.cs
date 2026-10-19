@@ -14,6 +14,8 @@ public sealed class Mover
     public float[] Carve;
     /// <summary>How fast it raises siege works (ladders, bridges, fills) next to a sapper's 1; 0 if it never builds them.</summary>
     public float Build;
+    /// <summary>Whether it goes up and down ladders and hangs on them: a horse or a hound does neither.</summary>
+    public bool Ladders = true;
 
     /// <summary>Seconds to hack a blocked cell open, or infinity.</summary>
     public float CarveTime(NavGrid g, int c)
@@ -111,7 +113,7 @@ public sealed class PathFinder
                 {
                     int dy = s <= m.Climb ? s : m.Climb - s;
                     int ny = y + dy;
-                    if (!g.CanBe(ni, ny, nk, m.Height, gates)) continue;
+                    if (!g.CanBe(ni, ny, nk, m.Height, gates, m.Ladders)) continue;
                     if (!FlowField.StepsOk(m, g.Floor[c], g.Floor[g.Id(ni, ny, nk)])) continue;
                     if (dy > 0 && !OpenColumn(i, k, y + m.Height, y + m.Height + dy - 1)) continue;
                     if (dy < 0 && !OpenColumn(ni, nk, ny + m.Height, y + m.Height - 1)) continue;
@@ -120,7 +122,8 @@ public sealed class PathFinder
                     break;
                 }
             }
-            // up and down a ladder
+            // up and down a ladder, for those that take one
+            if (!m.Ladders) continue;
             if (y + 1 < g.NY && (g.Ladder[c] != 0 || g.Ladder[c + g.Layer] != 0) && g.CanBe(i, y + 1, k, m.Height, gates))
                 Relax(c, c + g.Layer, 1.8f, heuristic);
             if (y >= 2 && (g.Ladder[c] != 0 || g.Ladder[c - g.Layer] != 0) && g.CanBe(i, y - 1, k, m.Height, gates))

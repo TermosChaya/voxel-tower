@@ -78,6 +78,19 @@ public sealed partial class Sim
         "pick" => (Cut.Stab, 4, 1),
         "mallet" => (Cut.Crush, 2.5f, 2),
         "bow" => (Cut.Arrow, 4.5f, 0),
+        // the troops': a spear and a lance thrust deep and narrow, a halberd chops deeper than an axe, a mace and a maul
+        // crush, a long sword sweeps wider than a short one; a bolt goes in deeper than an arrow, a sling stone bruises
+        // a little round and stays out; a hound's teeth go in narrow
+        "spear" => (Cut.Stab, 5, 1),
+        "lance" => (Cut.Stab, 6, 1.2f),
+        "halberd" => (Cut.Chop, 6, 3),
+        "mace" => (Cut.Crush, 4, 2.5f),
+        "maul" => (Cut.Crush, 7, 4.5f),
+        "longsword" => (Cut.Slash, 4, 4.5f),
+        "crossbow" => (Cut.Arrow, 6, 0),
+        "sling" => (Cut.Crush, 2, 1.5f),
+        "bombard" => (Cut.Crush, 2, 1.5f),
+        "bite" => (Cut.Stab, 3.5f, 1.2f),
         _ => (Cut.Stab, 3, 1),
     };
 
@@ -342,6 +355,9 @@ public sealed partial class Sim
             {
                 (int)BodyPart.Main => plan.Beast ? "отрублена передняя нога" : "отрублена правая рука",
                 (int)BodyPart.Off => plan.Beast ? "отрублена передняя нога" : "отрублена левая рука",
+                // a horse's legs are a pair to a part: forelegs and hind legs
+                (int)BodyPart.LegR when plan.Mounted => "коню перерублена передняя нога",
+                _ when plan.Mounted => "коню перерублена задняя нога",
                 _ => "отрублена нога",
             });
         }
