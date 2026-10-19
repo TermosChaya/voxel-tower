@@ -166,6 +166,8 @@ public partial class Main : Node3D
         // scripted runs draw the interface at its usual size, unless told otherwise, and leave the player's settings be
         if (_selfTest || _demo || _shot != null || _uiScale > 0) Settings.Scripted(_uiScale);
         else Settings.Load();
+        // the self-test and the screenshots play out of the player's sight (--show keeps the window up)
+        if ((_selfTest || _shot != null) && !OS.GetCmdlineUserArgs().Contains("--show")) Backstage.Withdraw();
         Settings.Apply(GetTree().Root);
         Settings.ApplyVolume();
         if (_lines) Settings.ScriptLines(true);
