@@ -6,8 +6,8 @@ namespace VoxelTower.Game;
 
 /// <summary>
 /// First person: the player gone into one of ours, seeing with its eyes. A camera of its own at the height of its eyes,
-/// bobbing as it walks and shaken as the view is shaken; its arm with what it holds before the eyes, swinging as it
-/// strikes and works, and for a bowman the bow in the other hand; a mark in the middle of the sight, red over one of
+/// dipping and swaying in step with its feet and shaken as the view is shaken; its hands with what they hold before the
+/// eyes at their true size (<see cref="ViewModel"/>), striking the strokes it strikes, drawing the bow, swinging the pick; a mark in the middle of the sight, red over one of
 /// the horde in reach, green over what the pick can take; its name and health at the foot, and the keys. The mouse is
 /// held and turns the head; the keys walk it; Esc lets it go and the view goes back over the valley above it. The
 /// frame of the game is put away meanwhile, all but the chronicle's toasts.
@@ -20,9 +20,10 @@ public partial class FirstPerson : Node3D
     float _yaw, _pitch;
     Vector3 _eye;
     bool _eyeSet;
-    MeshInstance3D _main, _off;
+    ViewModel _vm;
     Figure _fig;
-    int _rev = -1;
+    // how hard it walks (1 a walk, more a run), smoothed; the look the frame before, for the hands to lag behind
+    float _walk, _yawWas, _pitchWas;
     CanvasLayer _layer;
     Sights _sights;
     Label _name, _hint, _aim;
@@ -40,11 +41,9 @@ public partial class FirstPerson : Node3D
         // it sees out over the valley to the far land's rim
         _cam = new Camera3D { Fov = 74, Near = .015f, Far = 480, Current = false };
         AddChild(_cam);
-        // the arms are drawn in their finest cells, what they hold finer still: each surface brings its own material
-        _main = new MeshInstance3D { CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Visible = false };
-        _off = new MeshInstance3D { CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Visible = false };
-        _cam.AddChild(_main);
-        _cam.AddChild(_off);
+        _vm = new ViewModel { Visible = false };
+        _cam.AddChild(_vm);
+        _vm.Init();
         _layer = new CanvasLayer { Layer = 30, Visible = false };
         AddChild(_layer);
         var root = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
@@ -78,7 +77,8 @@ public partial class FirstPerson : Node3D
         _m.Atmos.FogShift = -62;
         _m.Cover.Visible = false;
         _fig = Figure.For(u.T, u.Look);
-        _rev = -1;
+        _vm.Reset(u, _m.Sim);
+        _yawWas = _yaw; _pitchWas = _pitch; _walk = 0;
         _cam.MakeCurrent();
         _layer.Visible = true;
         if (!_m.Scripted) Input.MouseMode = Input.MouseModeEnum.Captured;
@@ -111,7 +111,7 @@ public partial class FirstPerson : Node3D
         _m.Atmos.FogShift = 0;
         _m.Cover.Visible = true;
         _layer.Visible = false;
-        _main.Visible = _off.Visible = false;
+        _vm.Visible = false;
         Input.MouseMode = Input.MouseModeEnum.Visible;
         TestMove = Vector2.Zero;
         if (why != null) _m.Hud.Log($"Вы вышли: {why}.", Hud.Kind.Warn);
@@ -186,9 +186,13 @@ public partial class FirstPerson : Node3D
         sim.WishRun = Down(Key.Shift);
         sim.WishClimb = Down(Key.Space) ? 1 : Down(Key.C) || Down(Key.Ctrl) ? -1 : 0;
         sim.LookYaw = _yaw; sim.LookPitch = _pitch;
-        // the eyes: at the height of its head, the steps and the sim's ticks smoothed out, bobbing as it walks
-        float bob = u.State == UnitState.Walk ? MathF.Sin(u.Stride * .55f) * .55f : 0;
-        var eye = new Vector3(w.WX(u.X), w.WY(u.Y + u.T.BodyH * .88f + bob), w.WZ(u.Z));
+        // the eyes: at the height of its head, the steps and the sim's ticks smoothed out; walking, they dip at each
+        // footfall and sway from foot to foot, harder at a run
+        _walk = dt <= 0 ? 0 : _walk + ((u.State == UnitState.Walk ? sim.WishRun ? 1.6f : 1 : 0) - _walk) * (1 - MathF.Exp(-dt * 8));
+        float steps = u.Stride / Math.Max(1, _fig.Stride / 2);
+        float dip = .03f * VoxelWorld.PerMetre * _walk * (1 - MathF.Cos(MathF.Tau * steps)) / 2;
+        float sway = .015f * VoxelWorld.PerMetre * VoxelWorld.Vox * _walk * MathF.Sin(MathF.PI * steps);
+        var eye = new Vector3(w.WX(u.X), w.WY(u.Y + u.T.BodyH * .88f - dip), w.WZ(u.Z));
         if (!_eyeSet || dt <= 0) { _eye = eye; _eyeSet = true; }
         else _eye = _eye.Lerp(eye, 1 - MathF.Exp(-dt * 22));
         var dir = new Vector3(fx * MathF.Cos(_pitch), MathF.Sin(_pitch), fz * MathF.Cos(_pitch));
@@ -200,49 +204,13 @@ public partial class FirstPerson : Node3D
             float a = k * k * Settings.Shake * .045f, t = Time.GetTicksMsec() / 1000f;
             basis = basis * new Basis(Vector3.Right, a * MathF.Sin(t * 37)) * new Basis(Vector3.Up, a * MathF.Sin(t * 29 + 1.3f));
         }
-        _cam.GlobalTransform = new Transform3D(basis, _eye + dir * .02f);
+        _cam.GlobalTransform = new Transform3D(basis, _eye + dir * .02f + basis.X * sway);
         // the sounds, the rain and the embers follow it
         _m.Rig.Focus(w.WX(u.X), w.WZ(u.Z));
-        Hands(u);
+        _vm.Show(u, _fig, sim, dt, MathF.IEEERemainder(_yaw - _yawWas, MathF.Tau), _pitch - _pitchWas, _walk, steps, _sights.Foe);
+        _yawWas = _yaw; _pitchWas = _pitch;
         Words(u, sim);
         _sights.QueueRedraw();
-    }
-
-    /// <summary>Its arms before the eyes: the one with what it holds (and the bow arm), swinging as it strikes or works.</summary>
-    void Hands(Unit u)
-    {
-        if (u.Wounds != null && u.Wounds.Rev != _rev)
-        {
-            _rev = u.Wounds.Rev;
-            _main.Mesh = Figure.Whole(u.Wounds.Plan, (int)Part.Main, u.Wounds.Grid[(int)Part.Main]);
-            _off.Mesh = Figure.Whole(u.Wounds.Plan, (int)Part.Off, u.Wounds.Grid[(int)Part.Off]);
-        }
-        else if (u.Wounds == null && _rev != 0)
-        {
-            _rev = 0;
-            _main.Mesh = Figure.Whole(_fig.Plan, (int)Part.Main, _fig.Plan.Grid[(int)Part.Main]);
-            _off.Mesh = Figure.Whole(_fig.Plan, (int)Part.Off, _fig.Plan.Grid[(int)Part.Off]);
-        }
-        float swing = u.Swing, main, off;
-        if (u.T.Ranged) { main = -1.42f + swing * .3f; off = -1.5f; }
-        else if (u.State == UnitState.Work) { main = Mathf.Lerp(-.9f, -2.3f, swing); off = -.5f; }
-        else { main = Mathf.Lerp(-1.1f, -2.5f, swing * swing) + (1 - swing) * .1f; off = _fig.Shield ? -1.1f : -.5f; }
-        Place(_main, Part.Main, main, new Vector3(.1f, -.1f, -.13f));
-        Place(_off, Part.Off, off, new Vector3(-.1f, -.1f, -.13f));
-        // a beast's "arms" are its forelegs, and a rider's are drawn on the horse's frame: neither is held before the eyes
-        bool hands = !_fig.Beast && !_fig.Mounted;
-        _main.Visible = hands && _main.Mesh != null;
-        _off.Visible = hands && _off.Mesh != null && (u.T.Ranged || _fig.Shield);
-    }
-
-    /// <summary>A part of the figure hung from its joint at a spot before the eyes, swung about the joint.</summary>
-    void Place(MeshInstance3D mi, Part p, float angle, Vector3 shoulder)
-    {
-        var j = _fig.Joint[(int)p];
-        // drawn at half its size and near: the figures' arms are thick, and seen from the eye they would fill the sight
-        var turn = new Basis(Vector3.Up, MathF.PI).Scaled(Vector3.One * VoxelWorld.Vox * .5f);
-        var swing = new Transform3D(Basis.Identity, j) * new Transform3D(new Basis(Vector3.Right, angle), Vector3.Zero) * new Transform3D(Basis.Identity, -j);
-        mi.Transform = new Transform3D(turn, shoulder - turn * j) * swing;
     }
 
     /// <summary>The words at the foot: its name and health, what the mark rests on, and the keys.</summary>

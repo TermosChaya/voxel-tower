@@ -157,6 +157,12 @@ float scorch(vec2 p, float px) {
 }
 
 void vertex() {
+#ifdef VIEW_MODEL
+	// what one gone into holds before its eyes (ViewModel.cs defines this): drawn as if almost at the eye, its depth
+	// squeezed into the nearest sliver before the world's, so that a blade held out never sinks into a wall
+	POSITION = PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
+	POSITION.z = mix(POSITION.z, POSITION.w, 0.85);
+#endif
 	COLOR.rgb *= tint.rgb;
 	v_vox = VERTEX * grid;
 	v_nrm = NORMAL;

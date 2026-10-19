@@ -109,11 +109,14 @@ public sealed class Figure
     public static MeshBuffers NearOf(BodyPlan plan, int part, PartGrid now, out int quads)
         => Masked(plan.Fine[part], BodyPlan.K, now, plan.Grid[part], BodyPlan.FineSub, out quads);
 
-    /// <summary>A piece of dress near, in its own fine cells, as much of it as the half-voxels it fills of its part still hold.</summary>
-    public static MeshBuffers DressOf(BodyPlan plan, int d, PartGrid now, out int quads)
+    /// <summary>
+    /// A piece of dress near, in its own fine cells, as much of it as the half-voxels it fills of its part still hold —
+    /// leaving out the cells of <paramref name="without"/> if given (a bow's string, drawn apart before the eyes).
+    /// </summary>
+    public static MeshBuffers DressOf(BodyPlan plan, int d, PartGrid now, out int quads, byte without = 0)
     {
         var dress = plan.Dress[d];
-        return Masked(dress.Grid, dress.Sub / BodyPlan.Sub, now, plan.Grid[(int)dress.On], dress.Sub, out quads);
+        return Masked(dress.Grid, dress.Sub / BodyPlan.Sub, now, plan.Grid[(int)dress.On], dress.Sub, out quads, without);
     }
 
     /// <summary>
@@ -154,7 +157,7 @@ public sealed class Figure
     /// <paramref name="now"/>. Where a wound has changed that half-voxel — blood on the skin — the cells take its colour;
     /// where it has opened one of flesh, bone, brain or heart to the air, they show that.
     /// </summary>
-    static MeshBuffers Masked(PartGrid fine, int per, PartGrid now, PartGrid was, int toVoxel, out int quads)
+    static MeshBuffers Masked(PartGrid fine, int per, PartGrid now, PartGrid was, int toVoxel, out int quads, byte without = 0)
     {
         quads = 0;
         if (fine == null || now == null || now.Count == 0 || was == null || now.M.Length != was.M.Length) return null;
@@ -173,7 +176,7 @@ public sealed class Figure
                 for (int x = 0; x < fine.SX; x++)
                 {
                     byte m = fine.M[(y * fine.SZ + z) * fine.SX + x];
-                    if (m == 0) continue;
+                    if (m == 0 || m == without) continue;
                     int cx = Down(fine.X0 + x, per);
                     if (!now.In(cx, cy, cz)) continue;
                     int ci = now.Index(cx, cy, cz);
