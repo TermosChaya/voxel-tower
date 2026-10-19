@@ -1108,6 +1108,15 @@ public partial class Main : Node3D
         if (_pose == "roll") { RollDown(); return; }
         if (_pose == "crush") { CrushDeck(); return; }
         if (_pose == "drops") { Drops(); return; }
+        if (_pose == "sigils")
+        {
+            var layer = new CanvasLayer { Layer = 100 };
+            var gallery = new SigilGallery { Page = Math.Max(0, _look) };
+            gallery.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+            layer.AddChild(gallery);
+            AddChild(layer);
+            return;
+        }
         var w = World; var s = Site; var sim = Sim;
         sim.Waves.Countdown = Waves.Prep;
         sim.Stock.Gold = 140;
