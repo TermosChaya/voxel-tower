@@ -74,7 +74,18 @@ public static class Portraits
             return 0;
         }
         var colour = new Color[size * size];
-        var centre = new Vector3(0, cy, 0);
+        // on the head, wherever it is: a man's over his feet, a hound's or a troll's out before its body
+        float cz = 0;
+        if (parts[(int)BodyPart.Body] is { } body)
+        {
+            double sum = 0; int n = 0;
+            for (int y = Math.Max(plan.HeadY0, body.Y0); y < Math.Min(plan.HeadY1, body.Y0 + body.SY); y++)
+                for (int z = body.Z0; z < body.Z0 + body.SZ; z++)
+                    for (int x = body.X0; x < body.X0 + body.SX; x++)
+                        if (body.Mat(x, y, z) != 0) { sum += z + .5; n++; }
+            if (n > 0) cz = (float)(sum / n);
+        }
+        var centre = new Vector3(0, cy, cz);
         for (int j = 0; j < size; j++)
             for (int i = 0; i < size; i++)
             {
