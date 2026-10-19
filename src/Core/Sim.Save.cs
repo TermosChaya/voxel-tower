@@ -15,7 +15,7 @@ namespace VoxelTower.Core;
 /// </summary>
 public sealed partial class Sim
 {
-    public const int SaveVersion = 13;
+    public const int SaveVersion = 14;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -107,6 +107,13 @@ public sealed partial class Sim
             w.Write(list.Count);
             foreach (var p in list) { w.Write(p.X); w.Write(p.Y); w.Write(p.Z); w.Write(p.R); w.Write(p.Until); }
         }
+        // powder about to go up, and the sappers' fuses burning down
+        w.Write(Charges.Count);
+        foreach (var c in Charges)
+        {
+            w.Write(c.X); w.Write(c.Y); w.Write(c.Z); w.Write(c.BlowAt); w.Write(c.Planted); w.Write(c.Cutting); w.Write(c.Cause);
+            w.Write(c.Voxels.Count); foreach (int p in c.Voxels) w.Write(p);
+        }
         w.Write(Knowledge); w.Write(Learnt.Count);
         foreach (string k in Learnt) w.Write(k);
         w.Write(Waves._lastBand?.Id ?? -1);
@@ -158,7 +165,7 @@ public sealed partial class Sim
         w.Write(u.Docked.Count); foreach (int p in u.Docked) w.Write(p);
         w.Write(u.Envoy);
         w.Write(u.TakeAlive); w.Write(u.Bound); w.Write(u.BoundAt); w.Write(u.Unguarded); w.Write(u.ChainedUntil); w.Write(u.CrumbleAt);
-        w.Write(u.PlagueUntil); w.Write(u.OathUntil); w.Write(u.NextHeal); w.Write(u.NextCurse);
+        w.Write(u.PlagueUntil); w.Write(u.OathUntil); w.Write(u.NextHeal); w.Write(u.NextCurse); w.Write(u.Charge);
         // a sacrifice under way
         w.Write(u.Rite != null);
         if (u.Rite is { } rite)
@@ -337,6 +344,13 @@ public sealed partial class Sim
             list.Clear();
             for (int i = r.ReadInt32(); i > 0; i--) list.Add(new Patch { X = r.ReadSingle(), Y = r.ReadSingle(), Z = r.ReadSingle(), R = r.ReadSingle(), Until = r.ReadDouble() });
         }
+        Charges.Clear(); _fused.Clear();
+        for (int i = r.ReadInt32(); i > 0; i--)
+        {
+            var c = new Charge { X = r.ReadSingle(), Y = r.ReadSingle(), Z = r.ReadSingle(), BlowAt = r.ReadDouble(), Planted = r.ReadBoolean(), Cutting = r.ReadDouble(), Cause = r.ReadString() };
+            for (int k = r.ReadInt32(); k > 0; k--) { int p = r.ReadInt32(); c.Voxels.Add(p); _fused[p] = c; }
+            Charges.Add(c);
+        }
         // what was in the air is not kept: what was thrown stands where the save found it, and comes down from there
         Fliers.Clear();
         Knowledge = r.ReadDouble();
@@ -383,7 +397,7 @@ public sealed partial class Sim
         int nd = r.ReadInt32(); for (int k = 0; k < nd; k++) u.Docked.Add(r.ReadInt32());
         u.Envoy = r.ReadBoolean();
         u.TakeAlive = r.ReadBoolean(); u.Bound = r.ReadBoolean(); u.BoundAt = r.ReadDouble(); u.Unguarded = r.ReadDouble(); u.ChainedUntil = r.ReadDouble(); u.CrumbleAt = r.ReadDouble();
-        u.PlagueUntil = r.ReadDouble(); u.OathUntil = r.ReadDouble(); u.NextHeal = r.ReadDouble(); u.NextCurse = r.ReadDouble();
+        u.PlagueUntil = r.ReadDouble(); u.OathUntil = r.ReadDouble(); u.NextHeal = r.ReadDouble(); u.NextCurse = r.ReadDouble(); u.Charge = r.ReadBoolean();
         if (r.ReadBoolean())
         {
             var rite = new Rite { Kind = (RiteKind)r.ReadByte() };

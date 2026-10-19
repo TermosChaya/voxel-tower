@@ -39,8 +39,8 @@ public partial class UnitView : Node3D
     readonly Dictionary<int, Look> _looks = new();
     readonly HashSet<int> _alive = new();
     readonly List<int> _gone = new();
-    MultiMeshInstance3D _arrows, _rings, _standards, _stuck, _stones;
-    float[] _stoneBuf = Array.Empty<float>();
+    MultiMeshInstance3D _arrows, _rings, _standards, _stuck, _kegs;
+    float[] _kegBuf = Array.Empty<float>();
     float[] _arrowBuf = Array.Empty<float>(), _ringBuf = Array.Empty<float>(), _standardBuf = Array.Empty<float>(), _stuckBuf = Array.Empty<float>();
     readonly Dictionary<int, Own> _own = new();
     readonly List<Fallen> _fallen = new();
@@ -64,9 +64,9 @@ public partial class UnitView : Node3D
         var shaft = new BoxMesh { Size = new Vector3(.022f, .022f, .35f), Material = new StandardMaterial3D { AlbedoColor = new Color("4a3424"), Roughness = .9f } };
         _arrows = Multi(shaft, null, false);
         _stuck = Multi(shaft, null, false);
-        // a catapult's stone, half a metre of it
-        var stone = new BoxMesh { Size = Vector3.One * .55f, Material = new StandardMaterial3D { AlbedoColor = new Color("7d776f"), Roughness = .95f } };
-        _stones = Multi(stone, null, false);
+        // a sapper's charge: a keg of powder, a little under half a metre
+        var keg = new BoxMesh { Size = new Vector3(.36f, .42f, .36f), Material = new StandardMaterial3D { AlbedoColor = new Color("6a3322"), Roughness = .85f } };
+        _kegs = Multi(keg, null, false);
         m.Sim.Severed += Fall;
         var ring = new TorusMesh { InnerRadius = .82f, OuterRadius = 1f, Rings = 32, RingSegments = 4 };
         var ringMat = new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, VertexColorUseAsAlbedo = true, AlbedoColor = Colors.White };
@@ -559,14 +559,14 @@ public partial class UnitView : Node3D
     {
         var mm = _arrows.Multimesh;
         int n = 0;
-        DrawStones(sim);
-        foreach (var a in sim.Arrows) if (!(a.Done && a.Hits) && !a.Stone) n++;
+        DrawKegs(sim);
+        foreach (var a in sim.Arrows) if (!(a.Done && a.Hits)) n++;
         if (n == 0) { mm.VisibleInstanceCount = 0; return; }
         if (mm.InstanceCount < n) { mm.InstanceCount = Math.Max(32, n * 2); _arrowBuf = new float[mm.InstanceCount * 12]; }
         int i = 0;
         foreach (var a in sim.Arrows)
         {
-            if (a.Done && a.Hits || a.Stone) continue;
+            if (a.Done && a.Hits) continue;
             float s = Math.Clamp(a.T / Math.Max(a.Dur, 1e-3f), 0, 1);
             var p0 = new Vector3(a.X0, a.Y0, a.Z0); var p1 = new Vector3(a.X1, a.Y1, a.Z1);
             float h = p0.DistanceTo(p1) * .1f;
@@ -587,29 +587,27 @@ public partial class UnitView : Node3D
         mm.VisibleInstanceCount = n;
     }
 
-    /// <summary>Stones in flight from the catapults: high over, turning as they go.</summary>
-    void DrawStones(Sim sim)
+    /// <summary>The charges the horde's sappers carry: a keg of powder on each one's back.</summary>
+    void DrawKegs(Sim sim)
     {
-        var mm = _stones.Multimesh;
+        var mm = _kegs.Multimesh;
         int n = 0;
-        foreach (var a in sim.Arrows) if (a.Stone && !a.Done) n++;
+        foreach (var u in sim.Units) if (u.Charge && !u.Dead && !u.Inside) n++;
         if (n == 0) { mm.VisibleInstanceCount = 0; return; }
-        if (mm.InstanceCount < n) { mm.InstanceCount = Math.Max(8, n * 2); _stoneBuf = new float[mm.InstanceCount * 12]; }
+        if (mm.InstanceCount < n) { mm.InstanceCount = Math.Max(8, n * 2); _kegBuf = new float[mm.InstanceCount * 12]; }
         int i = 0;
-        foreach (var a in sim.Arrows)
+        foreach (var u in sim.Units)
         {
-            if (!a.Stone || a.Done) continue;
-            float s = Math.Clamp(a.T / Math.Max(a.Dur, 1e-3f), 0, 1);
-            var p0 = new Vector3(a.X0, a.Y0, a.Z0); var p1 = new Vector3(a.X1, a.Y1, a.Z1);
-            var p = p0.Lerp(p1, s) + Vector3.Up * 4 * (p0.DistanceTo(p1) * .35f) * s * (1 - s);
-            var at = new Vector3(_w.WX(p.X), _w.WY(p.Y), _w.WZ(p.Z));
-            var b = new Basis(new Vector3(1, .6f, .3f).Normalized(), a.T * 5);
+            if (!u.Charge || u.Dead || u.Inside) continue;
+            float fx = MathF.Cos(u.Facing), fz = MathF.Sin(u.Facing);
+            var at = new Vector3(_w.WX(u.X - fx * (u.T.BodyR + 1.2f)), _w.WY(u.Y + u.T.BodyH * .55f), _w.WZ(u.Z - fz * (u.T.BodyR + 1.2f)));
+            var b = new Basis(Vector3.Up, MathF.PI / 2 - u.Facing);
             int o = i++ * 12;
-            _stoneBuf[o] = b.X.X; _stoneBuf[o + 1] = b.Y.X; _stoneBuf[o + 2] = b.Z.X; _stoneBuf[o + 3] = at.X;
-            _stoneBuf[o + 4] = b.X.Y; _stoneBuf[o + 5] = b.Y.Y; _stoneBuf[o + 6] = b.Z.Y; _stoneBuf[o + 7] = at.Y;
-            _stoneBuf[o + 8] = b.X.Z; _stoneBuf[o + 9] = b.Y.Z; _stoneBuf[o + 10] = b.Z.Z; _stoneBuf[o + 11] = at.Z;
+            _kegBuf[o] = b.X.X; _kegBuf[o + 1] = b.Y.X; _kegBuf[o + 2] = b.Z.X; _kegBuf[o + 3] = at.X;
+            _kegBuf[o + 4] = b.X.Y; _kegBuf[o + 5] = b.Y.Y; _kegBuf[o + 6] = b.Z.Y; _kegBuf[o + 7] = at.Y;
+            _kegBuf[o + 8] = b.X.Z; _kegBuf[o + 9] = b.Y.Z; _kegBuf[o + 10] = b.Z.Z; _kegBuf[o + 11] = at.Z;
         }
-        RenderingServer.MultimeshSetBuffer(mm.GetRid(), _stoneBuf);
+        RenderingServer.MultimeshSetBuffer(mm.GetRid(), _kegBuf);
         mm.VisibleInstanceCount = n;
     }
 

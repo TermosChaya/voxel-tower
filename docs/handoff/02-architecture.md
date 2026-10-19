@@ -110,6 +110,20 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   низ, тела; первые 0,15 с — только середина; тело: ноги, а о стену — удар и сползание), `ComeDown` (`Blow` — урон по
   весу и скорости, тяжёлый выбивает немного, груда `Shattered` через `Landing`; событие `Landed`), `Alight` (тело на
   `StandBelow`, урон от скорости). Летящее не сохраняется.
+- `Sim.Powder.cs` — порох (`Mat.Powder`, материал кисти из запаса земли; `Mat.Catch` 4): `Charge` (воксели, середина,
+  `BlowAt`, `Planted` — заряд сапёра, `Cutting`, `Cause`), `Charges`, `_fused` (воксель → заряд). `Fuse(x, y, z, delay,
+  cause, planted)` — из `Light` (огонь), из `Detonate` (соседний порох), из камня камнемёта: обход связного пороха
+  (26 соседей), отрезки по 12 шагов пути огня → заряды, каждый связный кусок отрезка — свой, срок — задержка + путь /
+  `TrailRun` (6 м/с). `TickCharges` (в `StepWorld` после огня): не больше `BlastsAtOnce` за шаг, сила `BlastReach(n)`
+  (∛n · ½ м, от ½ до 3½ м), урон 24·R(м); `CutFuse` — наш ближе 1,6 м полторы секунды режет фитиль. `Detonate(x, y, z,
+  r, harm, cause)` — общий подрыв (им же Взрыв-заклинание): порох в 1,5 r + 1 м — `Fuse`, сердцевина в пыль, оболочка
+  кусками через `Loose`, тела — `Fling`, машинам ×3,3, поджог, событие `Exploded`. Сапёры: `Unit.Charge` (в `Spawn` по
+  `Hash` с 5-й волны), `PlantCharge` из `March` вместо `StartCarve`, если впереди наша кладка (`SetKegs` 4³ у подножия,
+  `Fuse(…, SapperFuse 6 с, planted)`, сапёр — `Routed`, событие `Planted`), `DropCharge` из `Kill` (горящий — рвётся);
+  в `BestTarget` −80.
+- Камни камнемёта — летящие куски: `Throw` (`Sim.Engines`) решает дугу на заданное время полёта и бросает `Hurl(Ball(2,6,
+  Rock))` с `Flier.Smash = StoneR` и `Flier.By`; разброс — вбок и по высоте. Удар — `StoneLands(Flier)` из `ComeDown`
+  (выбивает построенное шаром, бьёт тех, кто рядом, цитадель −10), потом камень ложится щебнем. `Arrow.Stone` больше нет.
 - `Sim.Sorcery.cs` — ворожея и некромант: `WitchTick` (`Douse` раз в 2 с — `Burning` и горящие налётчики в 10 м;
   раз в 15 с — `Quench` наших факелов в 16 м на минуту: `Fixture.DarkUntil`, пламя → бра, `Relight` в `TickDecor`,
   `Whole` это терпит, `TickLight` не светит), `NecromancerTick` (раз в 20 с — до трёх павших в 10 м → `Kinds.Thrall`,

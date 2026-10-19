@@ -64,6 +64,8 @@ public static class Labour
         // the traps come apart as what they are made of
         D(Mat.Stakes, 1, Stockpile.Wood, .5f); D(Mat.TrapDeck, 1, Stockpile.Wood, .5f); D(Mat.DropStone, 1.2f, Stockpile.Stone, 1);
         D(Mat.DrawDeck, 2.5f, Stockpile.Wood, .75f); D(Mat.TowerLadder, 1, Stockpile.Wood, .75f);
+        // kegs of powder are carried off whole: half the earth they were leached from comes back
+        D(Mat.Powder, 1, Stockpile.Earth, .5f);
         LayCost[Mat.Rammed] = 1; LayCost[Mat.Wood] = 1.5f;
         foreach (var m in new[] { Mat.Stone, Mat.Mortar, Mat.StoneDark, Mat.StoneLight, Mat.StoneWarm, Mat.StoneCool }) LayCost[m] = 2;
         // a ladder is joinery: rails and rungs take longer than the logs they are made of; a gate more so
@@ -75,6 +77,8 @@ public static class Labour
         LayCost[Mat.Stakes] = 2.5f; LayCost[Mat.TrapDeck] = 2.5f; LayCost[Mat.DropStone] = 1.2f;
         // a drawbridge is joinery like a gate
         LayCost[Mat.DrawDeck] = 4;
+        // powder is saltpetre leached out of earth, ground with charcoal and packed into kegs: slow work
+        LayCost[Mat.Powder] = 3;
     }
 
     /// <summary>Pawns can take this out of the world (bedrock and the citadel they cannot).</summary>
@@ -89,7 +93,7 @@ public static class Labour
     {
         Mat.Stone or Mat.Mortar or Mat.StoneDark or Mat.StoneLight or Mat.StoneWarm or Mat.StoneCool or Mat.DropStone => Stockpile.Stone,
         Mat.Wood or Mat.Ladder or Mat.Gate or Mat.GateShut or Mat.GateOpen or Mat.Pitch or Mat.Stakes or Mat.TrapDeck or Mat.DrawDeck => Stockpile.Wood,
-        Mat.Rammed => Stockpile.Earth,
+        Mat.Rammed or Mat.Powder => Stockpile.Earth,
         _ => Stockpile.None,
     };
 

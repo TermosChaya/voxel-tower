@@ -223,41 +223,55 @@ public sealed partial class Sim
         return WaterPlanner.Pack(kx, Math.Max(1, World.SurfAt(kx, kz) - 10), kz);
     }
 
-    /// <summary>A stone away: high over, down on its mark, give or take a metre or two the farther it goes.</summary>
+    /// <summary>The stones a catapult throws: rock reaching this many voxels from the middle (two thirds of a metre across).</summary>
+    const float StoneBall = 2.6f;
+
+    /// <summary>
+    /// A stone away: a ball of rock off the end of the arm, high over on its arc and down on its mark, give or take a metre
+    /// or two the farther it goes. It flies as anything thrown does, and strikes whatever is in its way.
+    /// </summary>
     void Throw(Unit u, int ax, int ay, int az, float d)
     {
         u.Swing = 1;
-        float spread = VoxelWorld.PerMetre * (.6f + d / ThrowFar * 1.4f);
-        Arrows.Add(new Arrow
-        {
-            Stone = true, From = u,
-            X0 = u.X, Y0 = u.Y + u.T.BodyH * .8f, Z0 = u.Z,
-            X1 = ax + (float)(Rng.NextDouble() - .5) * 2 * spread, Y1 = ay, Z1 = az + (float)(Rng.NextDouble() - .5) * 2 * spread,
-            Dur = 1.6f + d / (30 * VoxelWorld.PerMetre), Hits = true,
-        });
+        // it goes astray to the sides and high or low, the farther the more; a stone that flies short or long only strikes
+        // the face lower or higher
+        float spread = VoxelWorld.PerMetre * (.6f + d / ThrowFar * 1.4f), side = (float)(Rng.NextDouble() - .5) * 2 * spread;
+        float lx = d > 1 ? (ax - u.X) / d : 1, lz = d > 1 ? (az - u.Z) / d : 0;
+        float tx = ax + .5f - lz * side, ty = ay + .5f + (float)(Rng.NextDouble() - .5) * 1.4f * spread, tz = az + .5f + lx * side;
+        // off the end of the arm, over the engine's head toward its mark
+        float fx = MathF.Cos(u.Facing), fz = MathF.Sin(u.Facing);
+        float x0 = u.X + fx * 4, y0 = u.Y + u.T.BodyH + 4, z0 = u.Z + fz * 4;
+        // so long in the air that it comes down where it was meant to
+        float t = 1.6f + d / (30 * VoxelWorld.PerMetre);
+        float vx = (tx - x0) / t, vz = (tz - z0) / t, vy = (ty - y0 + .5f * Gravity * t * t) / t;
+        var f = Hurl(Ball(StoneBall, Mat.Rock), x0, y0, z0, vx, vy, vz, "камень из камнемёта");
+        if (f == null) return;
+        f.Smash = StoneR;
+        f.By = u;
     }
 
     /// <summary>
-    /// A stone comes down: on whatever is solid at its mark or under it. It breaks out what is built in a ball round
-    /// where it strikes (and a little of the ground), hurts the citadel if it is the citadel, and those it comes down
-    /// on and beside.
+    /// A stone comes down: on whatever it struck. It breaks out what is built in a ball round where it strikes (and a
+    /// little of the ground), hurts the citadel if it is the citadel, and those it comes down on and beside; then it lies
+    /// there, broken, with what it broke. Powder it falls on goes up.
     /// </summary>
-    void StoneLands(Arrow a)
+    void StoneLands(Flier f, float speed)
     {
-        int x = (int)a.X1, y = (int)a.Y1, z = (int)a.Z1;
+        // where it touched: its leading edge
+        float s = MathF.Max(1, speed);
+        int x = (int)(f.X + f.VX / s * f.R * .8f), y = (int)(f.Y + f.VY / s * f.R * .8f), z = (int)(f.Z + f.VZ / s * f.R * .8f);
         if (!World.InBounds(x, y, z)) return;
-        // down to whatever it strikes
-        for (int k = 0; k < 96 && y > 1 && World.Get(x, y, z) is var m && (m == Mat.Air || Mat.Passable[m]); k++) y--;
-        int broken = 0;
-        for (int dy = -StoneR; dy <= StoneR; dy++)
-            for (int dz = -StoneR; dz <= StoneR; dz++)
-                for (int dx = -StoneR; dx <= StoneR; dx++)
+        int broken = 0, r = f.Smash;
+        for (int dy = -r; dy <= r; dy++)
+            for (int dz = -r; dz <= r; dz++)
+                for (int dx = -r; dx <= r; dx++)
                 {
                     int r2 = dx * dx + dy * dy + dz * dz;
-                    if (r2 > StoneR * StoneR) continue;
+                    if (r2 > r * r) continue;
                     int px = x + dx, py = y + dy, pz = z + dz;
                     byte m = World.Get(px, py, pz);
                     if (m == Mat.Air || m == Mat.Water || m == Mat.Pitch) continue;
+                    if (m == Mat.Powder) { Fuse(px, py, pz, .2, "порох"); continue; }
                     bool built = Mat.IsPlayer[m] || m is Mat.Rubble or Mat.Lumber or Mat.Ruin || Mat.Swings(m) || Mat.IsDecor[m];
                     bool ground = Mat.IsEarthy[m] && r2 <= 6;
                     if (!built && !ground) continue;
@@ -272,10 +286,10 @@ public sealed partial class Sim
         if (kd < Site.KeepR + 6) KeepHp -= 10;
         foreach (var o in Units)
         {
-            if (o.Dead || o.Inside || o == a.From) continue;
+            if (o.Dead || o.Inside || o == f.By || o.Airborne != null) continue;
             float ddx = o.X - x, ddz = o.Z - z, dd = MathF.Sqrt(ddx * ddx + ddz * ddz);
             if (dd > 14 || MathF.Abs(o.Y - y) > 16) continue;
-            Hurt(o, a.From, 38 * (1 - dd / 18) * (Kinds.IsEngine(o.T) ? .5f : 1), "камень из камнемёта");
+            Hurt(o, f.By, 38 * (1 - dd / 18) * (Kinds.IsEngine(o.T) ? .5f : 1), "камень из камнемёта");
         }
         Collapsed?.Invoke(Math.Max(broken, 30), x, y, z);
         if (broken > 0 && kd >= Site.KeepR + 6 && Time - _stoneSaid > 20)

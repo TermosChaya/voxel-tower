@@ -12,8 +12,6 @@ public sealed class Arrow
     public float Damage;
     /// <summary>A fire arrow; and the voxel (packed) it was loosed at to set alight, or −1 when it was loosed at someone.</summary>
     public bool Fire;
-    /// <summary>A catapult's stone, not an arrow: it breaks out what it comes down on.</summary>
-    public bool Stone;
     public int At = -1;
 }
 
@@ -117,6 +115,7 @@ public sealed partial class Sim
         if (u.Team == Team.Horde && u.T != Kinds.Thrall) Kills++;
         if (u.T == Kinds.Thief) ThiefFell(u);
         if (u.T == Kinds.SiegeTower) TowerFell(u);
+        if (u.Charge) DropCharge(u, cause ?? "");
         if (u.Captor != null) { u.Captor.Captive = null; u.Captor = null; }
         // whoever it was leading goes free (a prisoner it led lies bound where it is)
         if (u.Captive != null) { u.Captive.Captor = null; u.Captive = null; }
@@ -312,12 +311,12 @@ public sealed partial class Sim
             // ladders or climbing them
             bool hurting = o.State == UnitState.Fight && o.Target is { Dead: false, Team: Team.Player };
             bool busy = o.State is UnitState.Carve or UnitState.Siege or UnitState.Work || Climbing(o);
-            // a thief making off with what it took, or with one of ours, before anything
-            bool making = o.Loot > 0 || o.Captive != null;
+            // a thief making off with what it took, or with one of ours, before anything; a sapper with a charge next
+            bool making = o.Loot > 0 || o.Captive != null, charged = o.Charge;
             // an engine: hardly worth a plain arrow, the first mark for a fire arrow; a sorcerer before anyone
             float engine = Kinds.IsEngine(o.T) ? (u.FireArrows ? -96 : 96) : Kinds.IsCaster(o.T) ? -110 : 0;
             // with fire arrows, those standing on a deck, a ladder or pitch: one arrow sets it all alight under them
-            float pri = d - (making ? 96 : hurting ? 64 : busy ? 48 : 0) - (u.FireArrows && OnTinder(o) ? 40 : 0) + engine;
+            float pri = d - (making ? 96 : charged ? 80 : hurting ? 64 : busy ? 48 : 0) - (u.FireArrows && OnTinder(o) ? 40 : 0) + engine;
             if (pri >= bd || !Sight(u, o)) continue;
             bd = pri; best = o;
         }
@@ -365,7 +364,6 @@ public sealed partial class Sim
             a.T += dt;
             if (a.T < a.Dur || a.Done) continue;
             a.Done = true;
-            if (a.Stone) { StoneLands(a); continue; }
             if (a.Hits && a.Target != null && !a.Target.Dead)
             {
                 ShotHits++;

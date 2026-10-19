@@ -26,7 +26,7 @@ public partial class MagicView : Node3D
     readonly Dictionary<Mire, (MeshInstance3D node, StandardMaterial3D mat)> _mires = new();
     readonly Dictionary<Curse, (MeshInstance3D node, StandardMaterial3D mat)> _curses = new();
     static readonly Color Hex = new(.45f, .85f, .28f);
-    MultiMeshInstance3D _drops, _chains, _marks, _sick, _sworn;
+    MultiMeshInstance3D _drops, _chains, _marks, _sick, _sworn, _sparks;
     StandardMaterial3D _mote, _bolt, _fogMat;
     /// <summary>The voxels of the pieces in the air, one box each; their buffer, written whole every frame.</summary>
     MultiMeshInstance3D _bits;
@@ -62,6 +62,8 @@ public partial class MagicView : Node3D
             new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = new Color(.78f, .84f, .26f) });
         _sworn = Multi(new SphereMesh { Radius = .07f, Height = .2f, RadialSegments = 8, Rings = 4 },
             new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = new Color(.72f, .05f, .06f) });
+        _sparks = Multi(new BoxMesh { Size = Vector3.One * .05f },
+            new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = new Color(1f, .78f, .3f) });
         _bits = new MultiMeshInstance3D
         {
             Multimesh = new MultiMesh
@@ -100,6 +102,7 @@ public partial class MagicView : Node3D
         };
         AddChild(_fog);
         m.Sim.Landed += Landed;
+        m.Sim.Exploded += Boom;
         m.Sim.Doused += Steam;
         m.Sim.Darkened += Smother;
         m.Sim.Woken += Wake;
@@ -197,15 +200,6 @@ public partial class MagicView : Node3D
             case SpellKind.FireRain:
                 Flare(ground + Vector3.Up * 8, Pitch, 3, 16, 4);
                 break;
-            case SpellKind.Explosion:
-            {
-                // the flash, the cloud of dust and smoke, the ring of the blast running out, and chips of what was there
-                var at = At(x, y, z);
-                Flare(at + Vector3.Up * .5f, new Color(1f, .78f, .5f), 18, 30, 1.6f, Motes(at, new Color(.2f, .16f, .13f), 120, 3.6f, sp.Radius * VoxelWorld.Vox * .5f, .16f));
-                Pass(Motes(at + Vector3.Up * .8f, new Color(.05f, .045f, .04f), 50, 1.4f, sp.Radius * VoxelWorld.Vox * .4f, .3f), 3);
-                Spread(At(x, y, z), sp.Radius * 3, new Color(1f, .7f, .4f));
-                break;
-            }
             case SpellKind.Rift:
                 Flare(ground + Vector3.Up * 2, new Color(.7f, .55f, .4f), 3, 10, 2.5f, Motes(ground, Dust, 110, 1.5f, sp.Radius * VoxelWorld.Vox * .6f, .14f));
                 break;
@@ -241,6 +235,36 @@ public partial class MagicView : Node3D
                 Flare(At(x, y + 2, z), Violet, 6, 9, 1, Motes(At(x, y, z), Violet, 40, 1.2f, .7f));
                 break;
         }
+    }
+
+    /// <summary>A blast, of a spell or of powder: the flash, the cloud of dust and smoke, the ring of it running out, all as big as the blast.</summary>
+    void Boom(float x, float y, float z, float r)
+    {
+        var at = At(x, y, z);
+        float k = r / (2.5f * VoxelWorld.PerMetre), reach = r * VoxelWorld.Vox;
+        Flare(at + Vector3.Up * .5f, new Color(1f, .78f, .5f), 8 + 10 * k, 12 + 18 * k, 1.2f + .5f * k,
+            Motes(at, new Color(.2f, .16f, .13f), (int)(40 + 80 * k), 2.4f + 1.4f * k, reach * .5f, .12f + .05f * k));
+        Pass(Motes(at + Vector3.Up * .8f, new Color(.05f, .045f, .04f), (int)(20 + 30 * k), 1.4f, reach * .4f, .22f + .08f * k), 3);
+        Spread(at, r * 1.2f, new Color(1f, .7f, .4f));
+    }
+
+    /// <summary>The fuses burning down to powder: sparks spitting where each charge is.</summary>
+    void Fuses(Sim sim)
+    {
+        var mm = _sparks.Multimesh;
+        int n = 0;
+        float t = (float)_t;
+        foreach (var c in sim.Charges)
+        {
+            if (c.BlowAt <= sim.Time) continue;
+            for (int j = 0; j < (c.Planted ? 6 : 3); j++)
+            {
+                if (n >= mm.InstanceCount) mm.InstanceCount *= 2;
+                float a = t * 23 + j * 2.4f + c.X, h = (t * 3.1f + j * .37f) % 1;
+                mm.SetInstanceTransform(n++, new Transform3D(Basis.Identity, At(c.X + MathF.Cos(a) * (1 + h * 2), c.Y + 3 + h * 5, c.Z + MathF.Sin(a) * (1 + h * 2))));
+            }
+        }
+        mm.VisibleInstanceCount = n;
     }
 
     /// <summary>A witch puts fires out about her: a puff of grey steam where she stands.</summary>
@@ -343,6 +367,7 @@ public partial class MagicView : Node3D
         Skins(sim);
         Fogs(sim);
         Afflicted(sim);
+        Fuses(sim);
     }
 
     /// <summary>Voxels of the pieces in the air drawn this frame (the self-test asks).</summary>
@@ -598,6 +623,7 @@ public partial class MagicView : Node3D
         _m.Sim.Healed -= Mended;
         _m.Sim.Hexed -= Cursed;
         _m.Sim.Landed -= Landed;
+        _m.Sim.Exploded -= Boom;
         _m.Sim.Doused -= Steam;
         _m.Sim.Darkened -= Smother;
         _m.Sim.Woken -= Wake;

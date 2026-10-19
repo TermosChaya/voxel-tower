@@ -67,7 +67,12 @@ public static class Mat
     public const byte Menhir = 104;
     /// <summary>For the figures: the priests' robes, dark as old blood, and their tarnished trim; the pale fire in a dead man's eyes.</summary>
     public const byte Robe = 105, RobeTrim = 106, SoulFire = 107;
-    public const int Count = 108;
+    /// <summary>
+    /// Kegs of black powder, stacked as the brush lays them: fire sets them off — the first spark, a burning neighbour, a
+    /// fire arrow, a torch — and they go up with everything about them, each keg setting off the next.
+    /// </summary>
+    public const byte Powder = 108;
+    public const int Count = 109;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
     public static readonly bool[] IsVeg = new bool[Count], IsPlayer = new bool[Count], IsEarthy = new bool[Count],
@@ -167,6 +172,7 @@ public static class Mat
         D(DrawDeck, "Подъёмный мост", 0x6e4b2b, .16f, MatGroup.Wood, Player);
         D(TowerLadder, "Лестница башни", 0x5a3d24, .2f, MatGroup.Wood, 0);
         D(Menhir, "Чёрный камень", 0x1d1a22, .1f, MatGroup.Hard, Natural);
+        D(Powder, "Бочки с порохом", 0x6a3322, .3f, MatGroup.Wood, Player);
         D(Robe, "ряса", 0x3e1518, .14f, MatGroup.Hard, 0); D(RobeTrim, "кайма", 0x7a6236, .12f, MatGroup.Hard, 0);
         D(SoulFire, "мертвенный огонь", 0x9ef2c4, .08f, MatGroup.Hard, Glows);
 
@@ -223,6 +229,8 @@ public static class Mat
         F(.03f, 40, .35f, DrawDeck);
         F(3, 50, 0, Pitch);
         Heat[Pitch] = 2;
+        // powder takes fire from anything at once; what it does then is not burning
+        F(4, 2, 0, Powder);
     }
 
     /// <summary>It can catch fire.</summary>

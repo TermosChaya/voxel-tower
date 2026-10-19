@@ -74,6 +74,7 @@ public static class Retinue
         if (u.T == Kinds.Mantlet) return "прикрывает ватагу от стрел";
         if (u.T == Kinds.SiegeTower) return u.Docked.Count > 0 ? "стоит у стены: по ней лезут наверх" : "катится к стене";
         if (u.T == Kinds.Thrall) return $"костяк орды: рассыплется через {Math.Max(0, u.CrumbleAt - sim.Time):0} с" + (u.State == UnitState.Fight ? ", бьётся" : "");
+        if (u.Charge) return u.State == UnitState.Fight ? "несёт заряд пороха, отбивается" : "несёт заряд пороха к стене";
         if (u.Team == Team.Horde)
             return u.State switch
             {

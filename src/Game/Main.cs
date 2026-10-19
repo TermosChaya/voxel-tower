@@ -19,6 +19,9 @@ namespace VoxelTower.Game;
 /// down, --look=2 what is left), --pose=grip: a ball of earth held by telekinesis over a band, --pose=wind: the black wind
 /// throwing a band off our wall with its ladders, --pose=hexes: the fog of the dead, the plague, the blood oath and a stone
 /// skin at night, --pose=sorcerers: a witch with our torches put out and a necromancer with his thralls, at night,
+/// --pose=powder: kegs of powder before our wall going up one after another under a band (--look=1 a trail of it
+/// burning across the field), --pose=charge: a sapper's charge against our ring of stone, its fuse burning (--look=1 the
+/// moment it goes), --pose=stones: a catapult's stone high on its arc (--look=1 striking the wall),
 /// --pose=trees: the valley's trees in a row, --look=0..2 choosing which; --pose=people: every figure in every look,
 /// --look=0..4 choosing a row),
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
@@ -164,7 +167,7 @@ public partial class Main : Node3D
         if (_demo && _pose == "shaman") ClearTrees(Site.KeepX - Site.KeepR - 240, Site.KeepZ - 90, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 90);
         if (_demo && _pose == "spells") ClearTrees(Site.KeepX - Site.KeepR - 260, Site.KeepZ - 100, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
         if (_demo && _pose == "traps") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
-        if (_demo && _pose is "blast" or "grip" or "wind" or "hexes" or "sorcerers") ClearTrees(Site.KeepX - Site.KeepR - 300, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 140);
+        if (_demo && _pose is "blast" or "grip" or "wind" or "hexes" or "sorcerers" or "powder" or "charge" or "stones") ClearTrees(Site.KeepX - Site.KeepR - 300, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 140);
         World.Compact();
         save?.Valley(World, Site);
         double genMs = sw.Elapsed.TotalMilliseconds;
@@ -901,6 +904,33 @@ public partial class Main : Node3D
         KeyPress(Key.Escape);
         lifted.Dead = true; lifted.DiedAt = -999;
 
+        // powder: the brush lays it as a trap, and an archer told to set the kegs alight with a fire arrow blows them up
+        Tools.SetTool(Tool.Line);
+        Tools.SetMaterial(Mat.Powder);
+        bool powderInHand = Tools.Opt.Material == Mat.Powder && !Tools.Opt.Dig;
+        KeyPress(Key.Escape);
+        int px1 = kx - 190, pz1 = kz + 40;
+        var kegs = new List<(int x, int y, int z)>();
+        for (int z = pz1; z < pz1 + 4; z++)
+            for (int x = px1; x < px1 + 4; x++)
+                for (int y = World.SurfAt(x, z), y1 = y + 4; y < y1; y++) { World.Set(x, y, z, Mat.Powder); kegs.Add((x, y, z)); }
+        var nearKegs = Sim.Spawn(Kinds.Goblin, Sim.NearestStand(px1 - 12, pz1 + 2, 2));
+        nearKegs.Guard = true; nearKegs.Home = nearKegs.Cell;
+        int booms = 0;
+        Action<float, float, float, float> heard = (_, _, _, _) => booms++;
+        Sim.Exploded += heard;
+        Sim.SetFireArrows(new[] { archer }, true);
+        var (kgx, kgy, kgz) = kegs[^1];
+        Sim.KindleOrder(new[] { archer }, kgx, kgy, kgz);
+        for (int t = 0; t < 80 && booms == 0; t++) Advance(.5);
+        Advance(1);
+        Sim.Exploded -= heard;
+        Sim.SetFireArrows(new[] { archer }, false);
+        int kegsLeft = kegs.FindAll(k => World.Get(k.x, k.y, k.z) == Mat.Powder).Count;
+        Check("powder is a trap the brush lays, and kegs set alight by a fire arrow go up and throw the goblin by them", powderInHand && booms > 0 && kegsLeft == 0 && (nearKegs.Dead || nearKegs.Hp < nearKegs.MaxHp),
+            $"in hand {powderInHand}; {booms} blasts, {kegsLeft} of {kegs.Count} kegs left; the goblin {(nearKegs.Dead ? "dead" : $"{nearKegs.Hp:0} hp")}");
+        nearKegs.Dead = true; nearKegs.DiedAt = -999;
+
         // the horde called early: no gold for it, only less known of the defences
         Sim.Waves.Countdown = 200;
         double gold0 = Sim.Stock.Gold;
@@ -920,7 +950,7 @@ public partial class Main : Node3D
         Check("Ctrl+= draws the interface larger, Ctrl+0 as it was", Math.Abs(larger - 1.1f) < .01f && Math.Abs(GetTree().Root.ContentScaleFactor - 1) < .01f,
             $"{larger:0.00} → {GetTree().Root.ContentScaleFactor:0.00}");
 
-        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 21 && Sound.Heard.Count >= 4,
+        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 22 && Sound.Heard.Count >= 4,
             $"{Sound.Clips} sounds, {Sound.Played} played: {string.Join(", ", Sound.Heard)}");
 
         var before = Rig.Target;
@@ -968,6 +998,9 @@ public partial class Main : Node3D
         if (_pose == "wind") { Gale(); return; }
         if (_pose == "hexes") { Hexes(); return; }
         if (_pose == "sorcerers") { Sorcerers(); return; }
+        if (_pose == "powder") { Kegs(); return; }
+        if (_pose == "charge") { Sapped(); return; }
+        if (_pose == "stones") { Stones(); return; }
         var w = World; var s = Site; var sim = Sim;
         sim.Waves.Countdown = Waves.Prep;
         sim.Stock.Gold = 140;
@@ -1464,6 +1497,95 @@ public partial class Main : Node3D
         Advance(1.2);
         // from inside the wall along it: its far end lit, the near one dark, the witch and the necromancer beyond it
         Rig.SetAt(w.WX(wx - 20), w.WY(top - 24), w.WZ(kz - 40), _look == 1 ? -.75f : 2.39f, .5f, 2.6f);
+        Hud.Refresh();
+    }
+
+    /// <summary>Kegs of powder stacked on the ground: a cube this many voxels a side (a box of x by z, as high as the side, given them).</summary>
+    void Stack(int x0, int z0, int size, int sx = 0, int sz = 0)
+    {
+        for (int z = z0; z < z0 + (sz > 0 ? sz : size); z++)
+            for (int x = x0; x < x0 + (sx > 0 ? sx : size); x++)
+                for (int y = World.SurfAt(x, z), y1 = y + size; y < y1; y++) if (World.Get(x, y, z) == Mat.Air) World.Set(x, y, z, Mat.Powder);
+    }
+
+    /// <summary>Kegs of powder before a wall of ours going up one after another under a band of the horde (--look=1: a trail of it burning across the field).</summary>
+    void Kegs()
+    {
+        var sim = Sim; var w = World;
+        Sorcerous();
+        int wx = Site.KeepX - Site.KeepR - 100, kz = Site.KeepZ, top = WallWest(-100, 32, 64);
+        if (_look == 1)
+        {
+            // a trail of powder across the way, a voxel wide, lit at its south end
+            Stack(wx - 40, kz - 60, 1, sx: 1, sz: 120);
+            foreach (var (t, dx, dz) in new[] { (Kinds.Goblin, -44, -20), (Kinds.Orc, -36, 4), (Kinds.Goblin, -46, 26), (Kinds.Goblin, -38, 44), (Kinds.Orc, -48, -40) })
+                Camp(t, wx + dx, kz + dz);
+            Advance(.3);
+            // the top of the powder there
+            int g = w.SurfAt(wx - 40, kz - 60) - 1;
+            sim.Ignite(wx - 40, g, kz - 60);
+            Advance(1.6);
+            Paused = true;
+            Rig.SetAt(w.WX(wx - 40), w.WY(g + 4), w.WZ(kz), -.75f, .45f, 2.2f);
+            Hud.Refresh();
+            return;
+        }
+        // four stacks of kegs before the wall, a band among them
+        foreach (int dz in new[] { -36, -12, 12, 36 }) Stack(wx - 26, kz + dz, 3);
+        foreach (var (t, dx, dz) in new[] { (Kinds.Goblin, -32, -24), (Kinds.Orc, -36, 0), (Kinds.Goblin, -30, 22), (Kinds.Goblin, -40, 40), (Kinds.Troll, -44, -6), (Kinds.Orc, -34, -44) })
+            Camp(t, wx + dx, kz + dz);
+        Advance(.3);
+        int sg = w.SurfAt(wx - 25, kz - 35) - 1;
+        sim.Ignite(wx - 25, sg, kz - 35);
+        Advance(1.25);
+        Paused = true;
+        Rig.SetAt(w.WX(wx - 30), w.WY(top - 22), w.WZ(kz), -.75f, .45f, 2.4f);
+        Hud.Refresh();
+    }
+
+    /// <summary>A sapper's charge against our ring of stone round the citadel, its fuse burning, the sapper running (--look=1: the moment it goes).</summary>
+    void Sapped()
+    {
+        var sim = Sim; var w = World;
+        Sorcerous();
+        int r = Site.KeepR + 44;
+        sim.InstantLabour = true;
+        sim.DesignateBuild(Shapes.Circle(w, Site, Site.KeepX, Site.KeepZ, r, new Stroke { Mat = Mat.Stone, Width = 8, Height = 32, Hollow = true }, 0));
+        sim.InstantLabour = false;
+        sim.HordeStock[Stockpile.Wood] = sim.HordeStock[Stockpile.Earth] = 0;
+        sim.ComputeFields();
+        var sap = sim.Spawn(Kinds.Sapper, sim.NearestStand(Site.KeepX - r - 60, Site.KeepZ, 2));
+        sap.Charge = true;
+        foreach (var (t, dx, dz) in new[] { (Kinds.Goblin, -80, -16), (Kinds.Orc, -88, 10), (Kinds.Goblin, -84, 30) }) Camp(t, Site.KeepX - r + dx, Site.KeepZ + dz);
+        Charge laid = null;
+        for (int t = 0; t < 240 && laid == null; t++) { Advance(.25); laid = sim.Charges.Find(c => c.Planted); }
+        if (laid == null) { Hud.Refresh(); return; }
+        Advance(_look == 1 ? 6.3 : 1.5);
+        Paused = true;
+        // from outside the ring: the kegs at the foot of its face, the sapper making off
+        Rig.SetAt(w.WX(laid.X - 6), w.WY(laid.Y + 4), w.WZ(laid.Z), 2.39f, .42f, _look == 1 ? 2.2f : 3f);
+        Hud.Refresh();
+    }
+
+    /// <summary>A catapult throwing at a wall of ours: its stone high on its arc (--look=1: striking the wall).</summary>
+    void Stones()
+    {
+        var sim = Sim; var w = World;
+        Sorcerous();
+        int wx = Site.KeepX - Site.KeepR - 60, kz = Site.KeepZ, top = WallWest(-60, 32, 60);
+        var cat = sim.Spawn(Kinds.Catapult, sim.NearestStand(wx - 240, kz, 3));
+        int face = wx - 8; while (face < wx + 8 && !Mat.IsMasonry(w.Get(face, top - 6, kz))) face++;
+        cat.AimAt = WaterPlanner.Pack(face, top - 6, kz); cat.NextLook = 1e9;
+        Flier stone = null;
+        for (int t = 0; t < 200 && stone == null; t++) { Advance(.1); stone = sim.Fliers.Find(f => f.Smash > 0); }
+        if (stone != null)
+        {
+            if (_look == 1) for (int t = 0; t < 120 && sim.Fliers.Contains(stone); t++) Advance(.05);
+            else for (int t = 0; t < 120 && stone.VY > 0; t++) Advance(.05);
+        }
+        Paused = true;
+        if (_look == 1) Rig.SetAt(w.WX(wx - 20), w.WY(top - 16), w.WZ(kz), -.75f, .45f, 2.6f);
+        else Rig.SetAt(w.WX(stone?.X ?? wx - 120), w.WY(stone?.Y ?? top), w.WZ(stone?.Z ?? kz), -.75f, .4f, 3.2f);
         Hud.Refresh();
     }
 

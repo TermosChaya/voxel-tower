@@ -2940,6 +2940,173 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--physics")
     Gone(gobR);
 }
 
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--powder")
+{
+    Console.WriteLine();
+    var mpX = new MapParams();
+    var wX = new VoxelWorld(mpX.SizeX, mpX.SizeY, mpX.SizeZ);
+    var siteX = MapGen.Generate(wX, mpX);
+    wX.Compact();
+    var simX = new Sim(wX, siteX);
+    simX.Waves.Countdown = 1e9; simX.WildTarget = 0;
+    simX.HordeStock[Stockpile.Wood] = simX.HordeStock[Stockpile.Earth] = 0;
+    foreach (var u in simX.Units) if (u.Team == Team.Player) { u.Dead = true; u.DiedAt = -999; }
+    void RunX(double seconds) { for (double t = 0; t < seconds; t += .05) simX.Step(.05f); }
+    int kxX = siteX.KeepX, kzX = siteX.KeepZ;
+    Unit Camp(UnitType t, int x, int z) { var u = simX.Spawn(t, simX.NearestStand(x, z, t.Move.Height)); u.Guard = true; u.Home = u.Cell; return u; }
+    void Gone(Unit u) { u.Dead = true; u.DiedAt = -999; }
+    float Apart(float ax, float az, float bx, float bz) => MathF.Sqrt((ax - bx) * (ax - bx) + (az - bz) * (az - bz)) / VoxelWorld.PerMetre;
+    // no trees in the way of what flies
+    for (int z = kzX - 400; z < kzX + 400; z++)
+        for (int x = kxX - 480; x < kxX - 40; x++)
+            for (int y = wX.SurfAt(x, z), top = wX.ColTop(x, z); y < top; y++)
+                if (Mat.IsVeg[wX.Get(x, y, z)]) wX.Set(x, y, z, Mat.Air);
+    int CountX(int x0, int z0, int x1, int z1, Func<byte, bool> what)
+    {
+        int n = 0;
+        for (int z = z0; z <= z1; z++) for (int x = x0; x <= x1; x++) for (int y = 4; y < wX.SY - 1; y++) if (what(wX.Get(x, y, z))) n++;
+        return n;
+    }
+    // kegs stacked on the ground: a cube this many voxels a side
+    System.Collections.Generic.List<(int x, int y, int z)> Kegs(int x0, int z0, int size, int sx = -1, int sz = -1)
+    {
+        var laid = new System.Collections.Generic.List<(int, int, int)>();
+        for (int z = z0; z < z0 + (sz < 0 ? size : sz); z++)
+            for (int x = x0; x < x0 + (sx < 0 ? size : sx); x++)
+            {
+                int g = wX.SurfAt(x, z);
+                for (int y = g; y < g + size; y++) if (wX.Get(x, y, z) == Mat.Air) { wX.Set(x, y, z, Mat.Powder); laid.Add((x, y, z)); }
+            }
+        return laid;
+    }
+    var blasts = new System.Collections.Generic.List<(double t, float x, float z, float r)>();
+    simX.Exploded += (x, y, z, r) => blasts.Add((simX.Time, x, z, r));
+
+    // kegs set alight go up a moment after: the log wall beside them is breached, the goblin by them hurt and thrown
+    int lx = kxX - 220, lz = kzX + 160;
+    int ltop = Shapes.LevelTop(wX, lx, lz, 32);
+    simX.InstantLabour = true;
+    simX.DesignateBuild(Shapes.Line(wX, siteX, lx, lz - 32, lx, lz + 32, new Stroke { Mat = Mat.Wood, Width = 8, Height = 32, Level = true }, ltop));
+    simX.InstantLabour = false;
+    int logs0 = CountX(lx - 6, lz - 36, lx + 6, lz + 36, m => m == Mat.Wood);
+    var k1 = Kegs(lx - 10, lz - 2, 4);
+    var gobK = Camp(Kinds.Goblin, lx - 26, lz);
+    float gk0 = gobK.Hp, gkx = gobK.X, gkz = gobK.Z;
+    blasts.Clear();
+    double litAt = simX.Time;
+    var (ix, iy, iz) = k1[^1];
+    bool caught = simX.Ignite(ix, iy, iz);
+    RunX(3);
+    int logs1 = CountX(lx - 6, lz - 36, lx + 6, lz + 36, m => m == Mat.Wood);
+    Check("kegs of powder set alight go up a moment after: the log wall by them is breached, the goblin by them hurt and thrown",
+        caught && blasts.Count >= 1 && blasts[0].t - litAt < 1 && logs0 - logs1 > 150 && (gobK.Dead || gobK.Hp < gk0 - 10) && Apart(gobK.X, gobK.Z, gkx, gkz) > 1,
+        $"caught {caught}; {blasts.Count} blasts, the first {(blasts.Count > 0 ? $"{blasts[0].t - litAt:0.00} s after, {blasts[0].r / VoxelWorld.PerMetre:0.0} m" : "none")}; logs {logs0} → {logs1}; the goblin {(gobK.Dead ? "dead: " + gobK.KilledBy : $"{gobK.Hp:0} of {gk0:0}")}, {Apart(gobK.X, gobK.Z, gkx, gkz):0.0} m from where it stood");
+    Gone(gobK);
+
+    // three stacks of kegs a few paces apart: the first set alight sets off the next, and that the last
+    int cx = kxX - 320, cz = kzX - 220;
+    var stacks = new[] { Kegs(cx, cz, 3), Kegs(cx, cz + 20, 3), Kegs(cx, cz + 40, 3) };
+    blasts.Clear();
+    var (sx0, sy0, sz0) = stacks[0][^1];
+    simX.Ignite(sx0, sy0, sz0);
+    RunX(3);
+    int leftC = CountX(cx - 4, cz - 4, cx + 8, cz + 48, m => m == Mat.Powder);
+    bool inTurn = blasts.Count == 3 && blasts[0].z < blasts[1].z && blasts[1].z < blasts[2].z && blasts[0].t < blasts[2].t;
+    Check("stacks of powder set each other off, one after another", inTurn && leftC == 0,
+        $"{blasts.Count} blasts{(blasts.Count > 0 ? ": " + string.Join(", ", blasts.ConvertAll(b => $"{b.t - blasts[0].t:0.00} s at z {b.z - cz:0}")) : "")}; {leftC} voxels of powder left");
+
+    // a trail of powder: the fire runs along it, and it goes up as it comes, the far end last
+    int tx = kxX - 420, tz = kzX + 280;
+    Kegs(tx, tz, 1, sx: 96, sz: 1);
+    blasts.Clear();
+    simX.Ignite(tx, wX.SurfAt(tx, tz) - 0, tz);
+    if (blasts.Count == 0 && wX.Get(tx, wX.SurfAt(tx, tz) - 1, tz) == Mat.Powder) simX.Ignite(tx, wX.SurfAt(tx, tz) - 1, tz);
+    RunX(4);
+    bool runs = blasts.Count >= 8 && blasts[^1].t - blasts[0].t >= 1 && blasts[^1].x > blasts[0].x + 60;
+    Check("a trail of powder burns along, going up as the fire comes to it, the far end last", runs,
+        $"{blasts.Count} blasts over {(blasts.Count > 0 ? blasts[^1].t - blasts[0].t : 0):0.00} s, from x {(blasts.Count > 0 ? blasts[0].x - tx : 0):0} to {(blasts.Count > 0 ? blasts[^1].x - tx : 0):0}");
+
+    // a ring of stone round the citadel: the horde has to go through it somewhere
+    simX.InstantLabour = true;
+    simX.DesignateBuild(Shapes.Circle(wX, siteX, kxX, kzX, siteX.KeepR + 44, new Stroke { Mat = Mat.Stone, Width = 8, Height = 32, Hollow = true }, 0));
+    simX.InstantLabour = false;
+    simX.ComputeFields();
+    int ringR = siteX.KeepR + 44;
+    int RingStone() => CountX(kxX - ringR - 8, kzX - ringR - 8, kxX + ringR + 8, kzX + ringR + 8, Mat.IsMasonry);
+    Charge LaidBy(Unit s, int seconds)
+    {
+        for (int t = 0; t < seconds * 2; t++) { RunX(.5); var c = simX.Charges.Find(c => c.Planted); if (c != null) return c; }
+        return null;
+    }
+
+    // one of ours at a sapper's burning fuse cuts it: no blast, and the powder lies there for us
+    var sap2 = simX.Spawn(Kinds.Sapper, simX.NearestStand(kxX - ringR - 60, kzX + 60, 2));
+    sap2.Charge = true;
+    var laid2 = LaidBy(sap2, 90);
+    Unit cutter = null;
+    if (laid2 != null) { cutter = simX.Spawn(Kinds.Swordsman, simX.NearestStand((int)laid2.X, (int)laid2.Z, 2)); cutter.Hold = true; }
+    blasts.Clear();
+    RunX(8);
+    int keptPowder = laid2 == null ? 0 : CountX((int)laid2.X - 8, (int)laid2.Z - 8, (int)laid2.X + 8, (int)laid2.Z + 8, m => m == Mat.Powder);
+    Check("one of ours at a sapper's fuse cuts it: no blast, and the powder lies there for us",
+        laid2 != null && cutter != null && !simX.Charges.Contains(laid2) && blasts.Count == 0 && keptPowder >= 12,
+        $"{(laid2 != null ? "laid" : "not laid")}, {(cutter != null ? $"a swordsman {Apart(cutter.X, cutter.Z, laid2.X, laid2.Z):0.0} m from it" : "nobody")}; {blasts.Count} blasts; {keptPowder} voxels of powder lie there");
+    Gone(sap2); if (cutter != null) Gone(cutter);
+
+    // a sapper with a charge before the ring lays it against the wall instead of hacking through, lights it and runs; the wall goes
+    int ring0 = RingStone();
+    var sap = simX.Spawn(Kinds.Sapper, simX.NearestStand(kxX - ringR - 60, kzX - 60, 2));
+    sap.Charge = true;
+    var laidC = LaidBy(sap, 90);
+    bool fled = sap.Routed && !sap.Charge;
+    float toRing = laidC == null ? 0 : MathF.Abs(MathF.Sqrt((laidC.X - kxX) * (laidC.X - kxX) + (laidC.Z - kzX) * (laidC.Z - kzX)) - ringR) / VoxelWorld.PerMetre;
+    blasts.Clear();
+    RunX(8);
+    int ring1 = RingStone();
+    Check("a sapper with a charge lays it against our wall instead of hacking through, lights it and runs; the wall is breached",
+        laidC != null && toRing < 2 && fled && blasts.Count >= 1 && ring0 - ring1 > 300,
+        $"{(laidC != null ? $"laid {toRing:0.0} m from the ring's line" : "not laid")}, the sapper {(fled ? "running" : sap.State.ToString())}; {blasts.Count} blasts; masonry {ring0} → {ring1}");
+    Gone(sap);
+
+    // a sapper cut down while burning goes up with its charge where it falls; one cut down cold leaves its kegs lying
+    var hot = Camp(Kinds.Sapper, kxX - 380, kzX - 60);
+    var cold = Camp(Kinds.Sapper, kxX - 380, kzX + 60);
+    hot.Charge = cold.Charge = true;
+    hot.Burn = 5; hot.BurnHeat = 1;
+    blasts.Clear();
+    simX.Hurt(hot, null, 1000, "огонь");
+    simX.Hurt(cold, null, 1000, "стрела");
+    RunX(1.5);
+    int coldKegs = CountX((int)cold.X - 6, (int)cold.Z - 6, (int)cold.X + 6, (int)cold.Z + 6, m => m == Mat.Powder);
+    bool hotWent = blasts.Exists(b => Apart(b.x, b.z, hot.X, hot.Z) < 3);
+    Check("a sapper cut down burning goes up with its charge where it falls; one cut down cold leaves its kegs lying",
+        hotWent && blasts.TrueForAll(b => Apart(b.x, b.z, cold.X, cold.Z) > 6) && coldKegs >= 9,
+        $"the burning one {(hotWent ? "went up" : "did not")}; the cold one left {coldKegs} voxels of powder");
+
+    // a catapult's stone is a ball of rock in flight, high on its arc; it breaks the masonry it strikes and lies there broken
+    // clear of the long wall's end, so nothing else of ours stands on the stone's way
+    int qx = kxX - siteX.KeepR - 40, qz = kzX - 360;
+    int qtop = Shapes.LevelTop(wX, qx, qz, 32);
+    simX.InstantLabour = true;
+    simX.DesignateBuild(Shapes.Line(wX, siteX, qx, qz - 40, qx, qz + 40, new Stroke { Mat = Mat.Stone, Width = 8, Height = 32, Level = true }, qtop));
+    simX.InstantLabour = false;
+    int q0 = CountX(qx - 6, qz - 44, qx + 6, qz + 44, Mat.IsMasonry);
+    // thirty metres out, throwing at the wall's face before it
+    var cat = simX.Spawn(Kinds.Catapult, simX.NearestStand(qx - 240, qz, 3));
+    int face = qx - 8; while (face < qx + 8 && !Mat.IsMasonry(wX.Get(face, qtop - 6, qz))) face++;
+    cat.AimAt = WaterPlanner.Pack(face, qtop - 6, qz); cat.NextLook = 1e9;
+    Flier stone = null; float apex = 0, from = 0;
+    for (int t = 0; t < 600 && stone == null; t++) { RunX(.1); stone = simX.Fliers.Find(f => f.Smash > 0); }
+    if (stone != null) from = stone.Y;
+    for (int t = 0; t < 100 && stone != null && simX.Fliers.Contains(stone); t++) { RunX(.05); apex = MathF.Max(apex, stone.Y); }
+    int q1 = CountX(qx - 6, qz - 44, qx + 6, qz + 44, Mat.IsMasonry);
+    float landX = stone?.X ?? 0;
+    Check("a catapult's stone flies as a ball of rock high on its arc, breaks the masonry it strikes and lies there",
+        stone != null && stone.Voxels.Count > 40 && apex - from > 24 && q0 - q1 > 40 && MathF.Abs(landX - qx) < 4 * VoxelWorld.PerMetre,
+        $"{(stone != null ? $"{stone.Voxels.Count} voxels of rock, {(apex - from) / VoxelWorld.PerMetre:0.0} m over where it was let go, down {MathF.Abs(landX - qx) / VoxelWorld.PerMetre:0.0} m from the wall" : "no stone")}; masonry {q0} → {q1}");
+    Gone(cat);
+}
+
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--shaman")
 {
     Console.WriteLine();

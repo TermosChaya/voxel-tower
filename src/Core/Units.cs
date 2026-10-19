@@ -383,6 +383,8 @@ public sealed class Unit
     public Flier Airborne;
     /// <summary>A raider: till when the plague is on it. One of ours: till when the blood oath holds.</summary>
     public double PlagueUntil = -1, OathUntil = -1;
+    /// <summary>A sapper of the horde with a charge of powder on its back, to lay against a wall of ours.</summary>
+    public bool Charge;
 
     // beasts, and pawns with nothing to do
     /// <summary>Where it grazes and wanders round; for a pawn, where it idles round.</summary>

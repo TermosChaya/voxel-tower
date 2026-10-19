@@ -56,10 +56,12 @@ public partial class Sound : Node
         sim.Collapsed += (n, x, y, z) => Play("rumble", x, y, z, .4, Math.Clamp(.4f + n / 2000f, .4f, 1.3f));
         sim.Spelled += (k, x, y, z) =>
         {
-            if (k == SpellKind.Explosion) Play("boom", x, y, z, .1, 1.3f, far: true);
-            else if (k == SpellKind.BlackWind) Play("wind", x, y, z, .2, 1.1f, far: true);
+            if (k == SpellKind.BlackWind) Play("wind", x, y, z, .2, 1.1f, far: true);
             if (k != SpellKind.Explosion) Play("spell", x, y, z, .2, 1, far: true);
         };
+        // a blast, of the spell or of powder: the bigger, the louder
+        sim.Exploded += (x, y, z, r) => Play("boom", x, y, z, .08, Math.Clamp(.5f + r / (3 * VoxelWorld.PerMetre), .5f, 1.4f), far: true);
+        sim.Planted += c => Play("fuse", c.X, c.Y, c.Z, .5, 1);
         // a piece of the world coming down: the heavier, the louder
         sim.Landed += (x, y, z, n, speed) => { if (n >= 20) Play("crash", x, y, z, .07, Math.Clamp(.25f + n / 700f, .25f, 1.1f)); };
         sim.Struck += (x, y, z) => Play("thunder", x, y, z, .1, 1.3f, far: true);
@@ -160,7 +162,7 @@ public partial class Sound : Node
                 Play("lay", u.X, u.Y, u.Z, .08, .55f);
         }
         foreach (var a in sim.Arrows)
-            if (a.Done && a.Hits && _landed.Add(a) && a.Target != null && !a.Stone) Play("arrow", a.X1, a.Y1, a.Z1, .06, .7f);
+            if (a.Done && a.Hits && _landed.Add(a) && a.Target != null) Play("arrow", a.X1, a.Y1, a.Z1, .06, .7f);
         if (_landed.Count > 400) _landed.RemoveWhere(a => !sim.Arrows.Contains(a));
         if (_dead.Count > 2000) _dead.Clear();
         // the fire, by how much of it burns near the middle of the view; the rain, while it rains
@@ -197,6 +199,7 @@ public partial class Sound : Node
         Add("boom", Boom());
         Add("crash", Crash());
         Add("wind", Gust());
+        Add("fuse", Hiss());
         Add("fire", Crackle(), loop: true);
         Add("rain", RainLoop(), loop: true);
         Add("hum", Hum(), loop: true);
@@ -494,6 +497,21 @@ public partial class Sound : Node
             s[i] = (y * .7f + lo.Step(Noise()) * 1.4f) * MathF.Sin(MathF.PI * t / 2.2f);
         }
         Normalise(s, .7f);
+        return s;
+    }
+
+    /// <summary>A fuse lit: a fizzing hiss, spitting now and then.</summary>
+    float[] Hiss()
+    {
+        var s = Buf(1.4f);
+        var lo = new Low(5200); var hi = new Low(1500);
+        for (int i = 0; i < s.Length; i++)
+        {
+            float t = i / (float)Rate, n = lo.Step(Noise());
+            float spit = _rnd.NextDouble() < .004 ? Noise() * 2 : 0;
+            s[i] = ((n - hi.Step(n)) * (.7f + .3f * MathF.Sin(MathF.Tau * 13 * t)) + spit) * Math.Min(1, t / .03f) * Math.Min(1, (1.4f - t) / .2f);
+        }
+        Normalise(s, .45f);
         return s;
     }
 

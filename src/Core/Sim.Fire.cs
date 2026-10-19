@@ -57,6 +57,8 @@ public sealed partial class Sim
         if (Burning.ContainsKey(p) || Wet(x, y, z)) return false;
         Burning[p] = Mat.Fuel[m] * (.75f + (float)Rng.NextDouble() * .5f) * (m == Mat.Pitch ? PitchBurn : 1);
         Caught?.Invoke(x, y, z, m);
+        // powder caught: the kegs it is part of go up a moment later
+        if (m == Mat.Powder) Fuse(x, y, z, PowderFuse, "порох");
         return true;
     }
 
@@ -87,10 +89,10 @@ public sealed partial class Sim
     public bool IsBurning(int x, int y, int z) => Burning.ContainsKey(WaterPlanner.Pack(x, y, z));
 
     /// <summary>A fire there is ours to put out: in something we built, in the dressing of it, or round the citadel. Pitch
-    /// is laid to burn: nobody puts it out.</summary>
+    /// is laid to burn and powder to blow: nobody puts either out.</summary>
     bool Ours(int x, int y, int z, byte m)
     {
-        if (m == Mat.Pitch) return false;
+        if (m is Mat.Pitch or Mat.Powder) return false;
         if (Mat.IsPlayer[m] || Mat.IsDecor[m] || MeantAt(x, y, z) != 0) return true;
         float dx = x - Site.KeepX, dz = z - Site.KeepZ;
         return dx * dx + dz * dz < HomeRange * HomeRange;

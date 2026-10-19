@@ -32,6 +32,9 @@ public sealed class Flier
     public int Burning;
     /// <summary>When it last struck someone while held and swung.</summary>
     public double LastBlow = -99;
+    /// <summary>A catapult's stone: how much it breaks out where it strikes (voxels, as a ball's reach), and the engine that threw it.</summary>
+    public int Smash;
+    public Unit By;
 }
 
 /// <summary>
@@ -109,6 +112,33 @@ public sealed partial class Sim
         f.Spin = (2 + f.Id % 7 * .7f) / MathF.Max(1, f.R / 4);
         Fliers.Add(f);
         return f;
+    }
+
+    /// <summary>A thing thrown into the air that was not part of the world: its voxels about its middle, as given.</summary>
+    public Flier Hurl(List<(sbyte dx, sbyte dy, sbyte dz, byte m)> voxels, float x, float y, float z, float vx, float vy, float vz, string cause)
+    {
+        if (voxels.Count == 0 || Aloft + voxels.Count > MaxAloft) return null;
+        var f = new Flier { Id = _nextFlier++, X = x, Y = y, Z = z, VX = vx, VY = vy, VZ = vz, Since = Time, Cause = cause };
+        float r2 = 0;
+        foreach (var v in voxels) { f.Voxels.Add(v); r2 = Math.Max(r2, v.dx * v.dx + v.dy * v.dy + v.dz * v.dz); }
+        f.R = MathF.Sqrt(r2) + .7f;
+        float h = MathF.Sqrt(vx * vx + vz * vz);
+        if (h > .1f) { f.AX = -vz / h; f.AZ = vx / h; } else f.AX = 1;
+        f.Spin = 2 + f.Id % 5 * .6f;
+        Fliers.Add(f);
+        return f;
+    }
+
+    /// <summary>A ball of a material reaching this many voxels from its middle.</summary>
+    public static List<(sbyte dx, sbyte dy, sbyte dz, byte m)> Ball(float r, byte m)
+    {
+        var list = new List<(sbyte, sbyte, sbyte, byte)>();
+        int ri = (int)MathF.Ceiling(r);
+        for (int dy = -ri; dy <= ri; dy++)
+            for (int dz = -ri; dz <= ri; dz++)
+                for (int dx = -ri; dx <= ri; dx++)
+                    if (dx * dx + dy * dy + dz * dz <= r * r) list.Add(((sbyte)dx, (sbyte)dy, (sbyte)dz, m));
+        return list;
     }
 
     /// <summary>
@@ -320,7 +350,7 @@ public sealed partial class Sim
         if (f.Voxels.Count < 24) return false;
         foreach (var u in Units)
         {
-            if (u.Dead || u.Inside || u.Airborne != null) continue;
+            if (u.Dead || u.Inside || u.Airborne != null || u == f.By) continue;
             float dx = u.X - f.X, dz = u.Z - f.Z, dy = u.Y + u.T.BodyH * .5f - f.Y, reach = f.R * .8f + u.T.BodyR;
             if (dx * dx + dz * dz < reach * reach && MathF.Abs(dy) < u.T.BodyH * .5f + f.R * .8f) return true;
         }
@@ -367,8 +397,10 @@ public sealed partial class Sim
     {
         float speed = MathF.Sqrt(f.VX * f.VX + f.VY * f.VY + f.VZ * f.VZ);
         if (f.Unit != null) { Alight(f, speed); return; }
+        if (f.Smash > 0) StoneLands(f, speed);
         int ix = Math.Clamp((int)f.X, 2, World.SX - 3), iz = Math.Clamp((int)f.Z, 2, World.SZ - 3), iy = Math.Clamp((int)f.Y, 2, World.SY - 3);
-        float blow = Blow(f, speed), reach = f.R + 1.2f * VoxelWorld.PerMetre;
+        // a catapult's stone has done its harm already, as stones do
+        float blow = f.Smash > 0 ? 0 : Blow(f, speed), reach = f.R + 1.2f * VoxelWorld.PerMetre;
         if (blow > 3)
             foreach (var u in Units)
             {

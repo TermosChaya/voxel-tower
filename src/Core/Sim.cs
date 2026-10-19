@@ -101,6 +101,8 @@ public sealed partial class Sim
         if (t.Prays) Array.Fill(u.Priority, (byte)0);
         // some of the horde come with torches, picked by the raider (not by the dice, which the rest of the valley shares)
         u.Torch = t.TorchShare > 0 && Hash.H3(u.Id, 11, 7) < t.TorchShare;
+        // from the fifth wave some of the sappers come with a charge of powder on their backs, half of them from the ninth
+        u.Charge = t == Kinds.Sapper && Waves.Number >= 5 && Hash.H3(u.Id, 23, 5) < (Waves.Number >= 9 ? .5f : .3f);
         Units.Add(u);
         return u;
     }
@@ -133,6 +135,7 @@ public sealed partial class Sim
         Time += dt;
         TickWater(dt);
         TickFire(dt);
+        TickCharges(dt);
         TickLight();
         TickSpells();
         TickCurses();

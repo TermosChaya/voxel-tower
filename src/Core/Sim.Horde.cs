@@ -178,6 +178,8 @@ public sealed partial class Sim
             }
             return;
         }
+        // a sapper with a charge does not hack through a wall of ours: it blows it
+        if (carve > 0 && u.Charge && PlantCharge(u, next)) return;
         if (carve > 0) { StartCarve(u, next); return; }
         u.Path ??= new List<int>();
         u.Path.Clear(); u.Path.Add(next); u.PathI = 0;
