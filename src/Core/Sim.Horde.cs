@@ -154,7 +154,7 @@ public sealed partial class Sim
         {
             u.State = UnitState.Siege;
             u.Facing = MathF.Atan2(Site.KeepZ - u.Z, Site.KeepX - u.X);
-            if (u.Cooldown <= 0) { KeepHp -= u.T.KeepDamage; u.Swing = 1; u.Cooldown = u.T.AttackTime; }
+            if (u.Cooldown <= 0) { KeepHp -= u.T.KeepDamage * KeepGuard; u.Swing = 1; u.Cooldown = u.T.AttackTime; }
             return;
         }
         if (u.CarveCell >= 0) { Carve(u, dt); return; }

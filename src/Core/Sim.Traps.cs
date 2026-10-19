@@ -76,7 +76,7 @@ public sealed partial class Sim
     void AmongStakes(Unit u, float dt)
     {
         Hurt(u, null, StakeHurt * StakeHarm * dt, "колья");
-        if (Rng.NextDouble() >= StakeTrample * dt) return;
+        if (Rng.NextDouble() >= StakeTrample * StakeHold * dt) return;
         // the stake nearest it goes down, the whole of it
         int bx = -1, bz = -1; float bd = float.MaxValue;
         int x0 = Nav.I(u.Cell) << NavGrid.Shift, y0 = Nav.Y(u.Cell) << NavGrid.Shift, z0 = Nav.K(u.Cell) << NavGrid.Shift;
@@ -146,7 +146,7 @@ public sealed partial class Sim
         {
             if (o.Dead || o.Inside || o.Bound || o.Team != Team.Horde || Math.Abs(o.X - x) > Reach || Math.Abs(o.Z - z) > Reach || Math.Abs(o.Y - (y + 1)) > 3) continue;
             // a long fall is the fall's to hurt (see Settle); into a pit it is the trap's
-            if (drop >= 1 && drop < 4) Hurt(o, null, 9 * drop, "волчья яма");
+            if (drop >= 1 && drop < 4) Hurt(o, null, 9 * drop * PitHarm, "волчья яма");
             o.Path = null;
         }
         Nav.Flush();

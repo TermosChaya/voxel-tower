@@ -452,7 +452,7 @@ public sealed partial class Sim
         float bleed = u.Wounds?.Bleed ?? 0;
         if (!u.Mending)
         {
-            if (u.Hp >= u.MaxHp * (u.Hold ? .2f : .35f) && bleed <= 1.2f) return false;
+            if (u.Hp >= u.MaxHp * Steadfast(u.Hold) && bleed <= 1.2f) return false;
             u.Mending = true;
             ReleaseSite(u);
             u.Prey = null; u.Path = null; u.NextSearch = 0; u.Patient = null;

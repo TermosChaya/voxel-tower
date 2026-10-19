@@ -138,14 +138,14 @@ public sealed partial class Sim
                     int nx = x + dx, ny = y + dy, nz = z + dz;
                     byte n = World.Get(nx, ny, nz);
                     // fire runs over what the air gets at; into the heart of a beam it eats only slowly
-                    if (Mat.Burns(n) && Rng.NextDouble() < Mat.Catch[n] * k * step * RainFire * (Open(nx, ny, nz) ? 1 : .12f)) Ignite(nx, ny, nz);
+                    if (Mat.Burns(n) && Rng.NextDouble() < Mat.Catch[n] * HideCatch(n) * k * step * RainFire * (Open(nx, ny, nz) ? 1 : .12f)) Ignite(nx, ny, nz);
                 }
                 // a spark lands a little way off, mostly upward
                 if (Rng.NextDouble() < .01 * step)
                 {
                     int sx = x + Rng.Next(-5, 6), sy = y + Rng.Next(-2, 7), sz = z + Rng.Next(-5, 6);
                     byte n = World.Get(sx, sy, sz);
-                    if (Mat.Burns(n) && Rng.NextDouble() < Mat.Catch[n] * 2) Ignite(sx, sy, sz);
+                    if (Mat.Burns(n) && Rng.NextDouble() < Mat.Catch[n] * HideCatch(n) * 2) Ignite(sx, sy, sz);
                 }
             }
         }
@@ -428,7 +428,7 @@ public sealed partial class Sim
         // between waves the horde's leftovers are timber to take apart, not to burn
         if (target < 0 && (Waves.Active || AnyRaider()))
         {
-            float bd = u.T.Range;
+            float bd = BowRange(u);
             foreach (int c in _works)
             {
                 var (fx, fy, fz) = Nav.Feet(c);
@@ -464,7 +464,7 @@ public sealed partial class Sim
         {
             u.Swing = 1;
             Shots++;
-            float chance = Math.Clamp(.95f - dist / u.T.Range * .4f, .45f, .95f);
+            float chance = Math.Clamp(.95f - dist / BowRange(u) * .4f, .45f, .95f);
             bool hits = Rng.NextDouble() < chance;
             // a miss comes down a little way off
             if (!hits) { tx += (float)(Rng.NextDouble() - .5) * 8; tz += (float)(Rng.NextDouble() - .5) * 8; }
@@ -473,7 +473,7 @@ public sealed partial class Sim
                 X0 = u.X, Y0 = u.Y + u.T.BodyH * .85f, Z0 = u.Z, X1 = tx, Y1 = ty, Z1 = tz,
                 Dur = Math.Max(.08f, dist / ArrowSpeed), From = u, Hits = hits, Fire = true, At = target,
             });
-            u.Cooldown = u.T.AttackTime * 1.35f * (.9f + (float)Rng.NextDouble() * .2f);
+            u.Cooldown = u.T.AttackTime * VolleyPace(u) * (Knows("soaked") ? 1.1f : 1.35f) * (.9f + (float)Rng.NextDouble() * .2f);
         }
         return true;
     }
@@ -490,8 +490,9 @@ public sealed partial class Sim
         if (a.Hits && a.Target is { Dead: false } t)
         {
             // an engine is dry timber: it goes on burning
-            t.Burn = Math.Max(t.Burn, Kinds.IsEngine(t.T) ? 15 : 2.5f);
-            if (Rng.NextDouble() < .5) Ignite((int)t.X, (int)MathF.Floor(t.Y) - 1, (int)t.Z);
+            bool storm = Knows("firestorm");
+            t.Burn = Math.Max(t.Burn, Kinds.IsEngine(t.T) ? 15 : storm ? 5 : 2.5f);
+            if (Rng.NextDouble() < (storm ? .8 : .5)) Ignite((int)t.X, (int)MathF.Floor(t.Y) - 1, (int)t.Z);
             return;
         }
         // a miss: down where it fell, on whatever is there

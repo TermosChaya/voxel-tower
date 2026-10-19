@@ -157,7 +157,7 @@ public sealed partial class Sim
             }
             // dug out or blown away before it went: nothing left to go up
             if (n == 0) continue;
-            float r = BlastReach(n);
+            float r = BlastReach(n) * (Knows("naphtha") ? 1.33f : 1);
             Detonate(c.X, c.Y, c.Z, r, 24 * r / VoxelWorld.PerMetre, c.Cause, always: true);
             blasts++;
         }

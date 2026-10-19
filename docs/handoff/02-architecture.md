@@ -199,8 +199,16 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `FieldOf`), `ShamanTick` из `RaiderTick` (`Unit.NextHeal` — лечит в 6 м, `NextCurse` — `CurseTarget` → `Curse` в
   `Curses` на 40 с, если не `Warded` — святилище или жрец ближе 20 м), `CurseHack` в `Carve` (×2), `TickCurses`;
   события `Healed`, `Hexed`; в `BestTarget` шаман −110 к очереди; в `PlanWave` — с 4-й волны.
-- `Sim.Research.cs` — награды и знания: `Lore`, `Lores`, `Branches`, `Knowledge`, `Learnt`, `Learn`, `Reward(wave)`;
-  в конце — что даёт изученное (`BowRange`, `HireCost`, `StoneHack`, `LayPace` и др.), их читают на местах.
+- `Sim.Research.cs` — награды и знания: `Lore` (`Key`, `Branch`, `Name`, `About`, `Cost`, `Needs` — массив опор,
+  `Tier` 0–3 и `Lane` 0/½/1 — место на древе), `Lores` (30: пять ветвей по шесть — первое, два на нём, по одному на
+  каждом, последнее на обоих; `guild` стоит ещё и на `masons`), `Branches`, `Knowledge`, `Learnt`, `Opened` (все опоры
+  изучены), `CanLearn`, `Learn`, `Reward(wave)` — знаний 2 + n/2 (за осаду 60, всё древо 111). В конце — что даёт
+  изученное, читается на местах: `BowRange` (yew, longbows), `DarkCost` (owleye), `VolleyPace` (volley), `StoneHack`
+  (mortar, fortress), `LayPace`/`DigPace` (masons/picks, guild), `KeepGuard` (bastion — `Horde`, `StoneLands`),
+  `CartPace` (carts — `Walk`), `HideCatch` (hides — распространение огня), `MailGuard` (mail — `Hurt`),
+  `SergeantArm` (sergeants — `Strike`), `Steadfast` (veterans — `FallBack`), `StakeHarm`/`StakeHold`/`PitHarm`
+  (spikes, deathtraps), `granite` — радиус `StoneLands` −1, `naphtha` — взрыв бочек ×1,33, `firestorm` — огненная
+  стрела в налётчика; `Soldier(u)` — наш лучник или мечник (не рабочий, не жрец, не поднятый мертвец).
 - `Sim.Engines.cs` — осадные машины: `EngineTick`, `CatapultTick`/`AimFor`/`Throw`/`StoneLands`, `MantletTick`/`Cover`,
   `TowerTick`/`DockFor`/`Dock`/`TowerFell`, `KeepEscort`, `SpawnCatapult`.
 - `Sim.Thieves.cs` — грабители: `ThiefTick`, `LonePrey`, `Steal`, `Bind`/`Led`, `ThiefFell`/`ThiefGone`.
@@ -368,7 +376,11 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `Colonists.cs` — полоса лиц под балкой; `Inspector.cs` — середина консоли (кисть / одна пешка / группа / дружина),
   `HealthBar`, `BodyChart`, `PriorityCell`, `MiniCard`, `KindFace`; `WorkTable.cs` — таблица работ (рисуется
   целиком в `_Draw`, щелчки в `_GuiInput`); `Panels.cs` — `Retinue` (только помощники: что делает, раны, сводка),
-  `HordeInfo`, `UnitOverlay`; `Lore.cs` — `LorePanel` (вкладка «Знания»); `Mysteries.cs` — `MysteryPanel` (вкладка
+  `HordeInfo`, `UnitOverlay`; `Lore.cs` — `LorePanel` (вкладка «Знания», ширина 980): древо — `TreeCanvas`
+  (ветви сверху вниз, ярусы слева направо, `PlaqueRect(lore)`; `_Draw` — значки и имена ветвей, линии от опор с
+  изломом в просвете перед ярусом: обе изучены — мох, опора изучена — бронза, иначе бледно), таблички — `LorePlaque`
+  (кнопки со своей подсказкой-плашкой; рамки по состоянию: изучено, можно, не хватает, закрыто), `PlaqueOf(key)` для
+  самотеста; `Mysteries.cs` — `MysteryPanel` (вкладка
   «Таинства»: вмешательство, святилища, жертвы, заклинания строками по кругам — изучить или взять в руку); `MagicView.cs`
   (мир) — вспышка над алтарём, капли смолы, молния, трясины, кольца Ужаса и Цепей, метки Ока, пыль и искры; летящие куски
   (`Pieces`: MultiMesh по вокселю, буфер целиком за кадр, `PiecesDrawn`), хватка (`Grip`: свет и кольцо прицела),

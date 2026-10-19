@@ -82,7 +82,7 @@ public sealed partial class Sim
         float tx = b.X - dz / l * side, tz = b.Z + dx / l * side;
         b.HurtBy = a;
         float share = Kinds.IsEngine(b.T) ? EngineShare(false) : Wound(b, cut, depth, reach, a.X, hand, a.Z, tx - a.X, aim - hand, tz - a.Z);
-        float dmg = a.T.Damage * (.8f + (float)Rng.NextDouble() * .4f) * share * Oath(a);
+        float dmg = a.T.Damage * (.8f + (float)Rng.NextDouble() * .4f) * share * Oath(a) * SergeantArm(a);
         // told to take them alive: the blow that would bring a raider down to a quarter of itself (three fifths in
         // chains), or kill it, fells it instead, to be bound where it lies
         if (a.TakeAlive && !b.Dead && Takeable(b) && b.Hp - dmg <= TakeAt(b))
@@ -98,6 +98,7 @@ public sealed partial class Sim
     public void Hurt(Unit b, Unit by, float dmg, string cause = null)
     {
         if (b.Dead) return;
+        dmg *= MailGuard(b);
         b.Hp -= dmg;
         b.LastHurt = Time;
         if (by != null) b.HurtBy = by;
@@ -204,7 +205,7 @@ public sealed partial class Sim
             bool marching = u.Hold && u.Dest >= 0 && CellsApart(u.Cell, u.Dest) > 1 && u.Path != null && u.PathI < u.Path.Count;
             if (!marching) { u.State = UnitState.Fight; u.Path = null; u.Facing = MathF.Atan2(t.Z - u.Z, t.X - u.X); }
             // a fire arrow takes a moment to light
-            if (u.Cooldown <= 0) { Shoot(u, t); u.Cooldown = u.T.AttackTime * (u.FireArrows ? Knows("soaked") ? 1.1f : 1.35f : 1) * (.9f + (float)Rng.NextDouble() * .2f); }
+            if (u.Cooldown <= 0) { Shoot(u, t); u.Cooldown = u.T.AttackTime * VolleyPace(u) * (u.FireArrows ? Knows("soaked") ? 1.1f : 1.35f : 1) * (.9f + (float)Rng.NextDouble() * .2f); }
             return !marching;
         }
         // swordsmen hold the ground round themselves or their post
@@ -293,7 +294,7 @@ public sealed partial class Sim
     public bool Lit(float x, float z) => Time < BloodMoonUntil || _lit.Contains(LitKey((int)Math.Clamp(x, 0, World.SX - 1), (int)Math.Clamp(z, 0, World.SZ - 1)));
 
     /// <summary>How far a bow carries into the dark now: all the way by day, little more than half at night.</summary>
-    public float DarkRange(Unit a) => BowRange(a) * FogRange * (1 - .45f * Waves.Darkness);
+    public float DarkRange(Unit a) => BowRange(a) * FogRange * (1 - .45f * Waves.Darkness * DarkCost(a));
 
     /// <summary>How far a bow carries to a spot: all the way by day or where it is light, little more than half in the dark.</summary>
     public float RangeAt(Unit a, float x, float z) => Waves.Darkness <= 0 || Lit(x, z) ? BowRange(a) * FogRange : DarkRange(a);
@@ -344,7 +345,7 @@ public sealed partial class Sim
         float d = Dist(u, t);
         float chance = Math.Clamp(.9f - d / BowRange(u) * .45f + (u.Y - t.Y > 16 ? .08f : 0), .35f, .92f);
         // a shape in the dark is harder to hit than one in the light; rain and wind spoil aim
-        if (!Lit(t.X, t.Z)) chance *= 1 - .2f * Waves.Darkness;
+        if (!Lit(t.X, t.Z)) chance *= 1 - .2f * Waves.Darkness * DarkCost(u);
         chance *= WeatherAim;
         u.Swing = 1;
         Shots++;

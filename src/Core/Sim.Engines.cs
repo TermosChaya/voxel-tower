@@ -261,7 +261,8 @@ public sealed partial class Sim
         float s = MathF.Max(1, speed);
         int x = (int)(f.X + f.VX / s * f.R * .8f), y = (int)(f.Y + f.VY / s * f.R * .8f), z = (int)(f.Z + f.VZ / s * f.R * .8f);
         if (!World.InBounds(x, y, z)) return 0;
-        int broken = 0, r = f.Smash;
+        // dressed stone gives up less to it
+        int broken = 0, r = Knows("granite") ? Math.Max(2, f.Smash - 1) : f.Smash;
         for (int dy = -r; dy <= r; dy++)
             for (int dz = -r; dz <= r; dz++)
                 for (int dx = -r; dx <= r; dx++)
@@ -283,7 +284,7 @@ public sealed partial class Sim
                 }
         // the citadel takes it on its own stone
         float kd = MathF.Sqrt((x - Site.KeepX) * (x - Site.KeepX) + (z - Site.KeepZ) * (z - Site.KeepZ));
-        if (kd < Site.KeepR + 6) KeepHp -= 10;
+        if (kd < Site.KeepR + 6) KeepHp -= 10 * KeepGuard;
         foreach (var o in Units)
         {
             if (o.Dead || o.Inside || o == f.By || o.Airborne != null) continue;

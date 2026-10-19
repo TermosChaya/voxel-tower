@@ -3593,6 +3593,50 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--lore")
         && MathF.Abs(swordK.MaxHp - Kinds.Swordsman.Hp * 1.2f) < .01f && swordK.Hp == swordK.MaxHp,
         $"reach {reachK0 / VoxelWorld.PerMetre:0.0} → {reachK1 / VoxelWorld.PerMetre:0.0} m; a swordsman {costK0} → {costK1} gold, paid {1000 - simK.Stock.Gold:0}; " +
         $"his life {swordK?.MaxHp:0} of {Kinds.Swordsman.Hp:0}");
+
+    // the tree goes deeper: the last of a branch rests on both before it, one rests on another branch besides its own,
+    // and there is more of it than a siege gives knowledge for
+    simK.Knowledge = 100;
+    bool longFirst = simK.Learn("barbs") && simK.Learn("volley") && simK.Learn("longbows");
+    bool longK = simK.Learn("braziers") && simK.Learn("owleye") && simK.Learn("longbows");
+    float reachK2 = simK.RangeAt(bowK, bowK.X + 50, bowK.Z);
+    bool guildFirst = simK.Learn("picks") && simK.Learn("barrows") && simK.Learn("carts") && simK.Learn("guild");
+    bool guildK = simK.Learn("mortar") && simK.Learn("masons") && simK.Learn("guild");
+    int treeCost = 0, siege = 0;
+    foreach (var l in Sim.Lores) treeCost += l.Cost;
+    for (int wave = 1; wave <= Waves.Total; wave++) siege += 2 + wave / 2;
+    Check("the tree is four deep: the last of a branch wants both before it, the masters' guild wants the masons' too, and the whole tree costs more than a siege gives",
+        Sim.Lores.Length == 30 && !longFirst && longK && MathF.Abs(reachK2 / reachK0 - 1.15f * 1.15f) < .01f && !guildFirst && guildK && treeCost > siege * 1.5f,
+        $"{Sim.Lores.Length} lores; longbows on one {longFirst}, on both {longK}, reach ×{reachK2 / reachK0:0.000}; the guild without masons {guildFirst}, with {guildK}; the tree {treeCost}, a siege's knowledge {siege}");
+
+    // mail takes a fifth off a blow to a soldier of ours; tracks and barrows have workers walk a fifth faster
+    float hpK0 = swordK.Hp;
+    simK.Hurt(swordK, null, 10);
+    float mailOff = hpK0 - swordK.Hp;
+    simK.Learn("drill"); simK.Learn("mail");
+    hpK0 = swordK.Hp;
+    simK.Hurt(swordK, null, 10);
+    float mailOn = hpK0 - swordK.Hp;
+    var walkerK = simK.Spawn(Kinds.Worker, simK.NearestStand(siteK.KeepX - 120, siteK.KeepZ, 2));
+    int farK = simK.NearestStand(siteK.KeepX - 220, siteK.KeepZ, 2);
+    float WalkFor(double seconds)
+    {
+        float x0 = walkerK.X, z0 = walkerK.Z;
+        walkerK.Path = null;
+        simK.Command(new[] { walkerK }, farK);
+        RunK(seconds);
+        float d = MathF.Sqrt((walkerK.X - x0) * (walkerK.X - x0) + (walkerK.Z - z0) * (walkerK.Z - z0));
+        simK.Command(new[] { walkerK }, simK.NearestStand(siteK.KeepX - 120, siteK.KeepZ, 2));
+        RunK(30);
+        return d;
+    }
+    simK.Learnt.Remove("carts");
+    float plainK = WalkFor(2);
+    simK.Learnt.Add("carts");
+    float cartsK = WalkFor(2);
+    Check("mail takes a fifth off the blows a soldier of ours takes; tracks and stretchers have workers walk a fifth faster",
+        MathF.Abs(mailOff - 10) < .01f && MathF.Abs(mailOn - 8) < .01f && cartsK > plainK * 1.12f,
+        $"a blow of 10 takes {mailOff:0.0}, in mail {mailOn:0.0}; a worker walks {plainK / VoxelWorld.PerMetre:0.0} m in two seconds, with tracks {cartsK / VoxelWorld.PerMetre:0.0} m");
 }
 
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
