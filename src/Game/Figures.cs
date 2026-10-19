@@ -33,6 +33,10 @@ public sealed class Figure
     public bool Shield;
     /// <summary>Four legs: the arms are front legs.</summary>
     public bool Beast;
+    /// <summary>A rider on his horse: the arms are the rider's, the legs the horse's forelegs and hind legs.</summary>
+    public bool Mounted;
+    /// <summary>How far the off arm comes up in a fight (radians, negative is up).</summary>
+    public float Guard = -1.05f;
     public BodyPlan Plan;
 
     static readonly Dictionary<BodyPlan, Figure> Cache = new();
@@ -43,7 +47,7 @@ public sealed class Figure
     public static Figure For(BodyPlan plan)
     {
         if (Cache.TryGetValue(plan, out var f)) return f;
-        f = new Figure { Plan = plan, Stride = plan.Stride, Chop = plan.Chop, Carry = plan.Carry, Shield = plan.Shield, Beast = plan.Beast };
+        f = new Figure { Plan = plan, Stride = plan.Stride, Chop = plan.Chop, Carry = plan.Carry, Shield = plan.Shield, Beast = plan.Beast, Mounted = plan.Mounted, Guard = plan.Guard };
         for (int p = 0; p < Parts; p++)
         {
             f.Joint[p] = new Vector3(plan.JX[p], plan.JY[p], plan.JZ[p]);

@@ -99,12 +99,12 @@ public sealed class NavGrid
         return true;
     }
 
-    /// <summary>Someone h cells tall can be here: standing on the ground or hanging on a ladder.</summary>
-    public bool CanBe(int i, int y, int k, int h, bool gates = false)
+    /// <summary>Someone h cells tall can be here: standing on the ground or (if it takes ladders) hanging on a ladder.</summary>
+    public bool CanBe(int i, int y, int k, int h, bool gates = false, bool ladders = true)
     {
         if (!In(i, y, k) || y < 1) return false;
         int c = Id(i, y, k);
-        if (Water[c] >= DeepT || (Ladder[c] == 0 && !Solid(i, y - 1, k, gates))) return false;
+        if (Water[c] >= DeepT || (!(ladders && Ladder[c] != 0) && !Solid(i, y - 1, k, gates))) return false;
         for (int d = 0; d < h; d++) if (!Open(i, y + d, k, gates)) return false;
         return true;
     }

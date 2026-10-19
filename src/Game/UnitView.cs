@@ -39,9 +39,11 @@ public partial class UnitView : Node3D
     readonly Dictionary<int, Look> _looks = new();
     readonly HashSet<int> _alive = new();
     readonly List<int> _gone = new();
-    MultiMeshInstance3D _arrows, _rings, _standards, _stuck, _kegs;
+    MultiMeshInstance3D _arrows, _rings, _standards, _stuck, _kegs, _bolts, _stones, _pots, _firePots;
     float[] _kegBuf = Array.Empty<float>();
-    float[] _arrowBuf = Array.Empty<float>(), _ringBuf = Array.Empty<float>(), _standardBuf = Array.Empty<float>(), _stuckBuf = Array.Empty<float>();
+    float[] _ringBuf = Array.Empty<float>(), _standardBuf = Array.Empty<float>(), _stuckBuf = Array.Empty<float>();
+    /// <summary>A buffer for each of what flies, by <see cref="Shot"/>.</summary>
+    readonly float[][] _shotBufs = { Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>() };
     readonly Dictionary<int, Own> _own = new();
     readonly List<Fallen> _fallen = new();
     readonly Transform3D[] _xf = new Transform3D[Figure.Parts];
@@ -64,6 +66,16 @@ public partial class UnitView : Node3D
         var shaft = new BoxMesh { Size = new Vector3(.022f, .022f, .35f), Material = new StandardMaterial3D { AlbedoColor = new Color("4a3424"), Roughness = .9f } };
         _arrows = Multi(shaft, null, false);
         _stuck = Multi(shaft, null, false);
+        // a crossbow's bolt shorter and thicker, with a steel head; a sling's stone; a pot of powder, or of burning pitch
+        var bolt = new BoxMesh { Size = new Vector3(.032f, .032f, .22f), Material = new StandardMaterial3D { AlbedoColor = new Color("3b2e24"), Roughness = .8f, Metallic = .3f } };
+        _bolts = Multi(bolt, null, false);
+        var stone = new SphereMesh { Radius = .045f, Height = .09f, RadialSegments = 6, Rings = 3, Material = new StandardMaterial3D { AlbedoColor = new Color("5f5b58"), Roughness = 1 } };
+        _stones = Multi(stone, null, false);
+        var pot = new SphereMesh { Radius = .1f, Height = .18f, RadialSegments = 8, Rings = 4, Material = new StandardMaterial3D { AlbedoColor = new Color("8e5634"), Roughness = .9f } };
+        _pots = Multi(pot, null, false);
+        var firePot = new SphereMesh { Radius = .1f, Height = .18f, RadialSegments = 8, Rings = 4,
+            Material = new StandardMaterial3D { AlbedoColor = new Color("8e3a1c"), EmissionEnabled = true, Emission = new Color(1f, .45f, .12f), EmissionEnergyMultiplier = 2.5f } };
+        _firePots = Multi(firePot, null, false);
         // a sapper's charge: a keg of powder, a little under half a metre
         var keg = new BoxMesh { Size = new Vector3(.36f, .42f, .36f), Material = new StandardMaterial3D { AlbedoColor = new Color("6a3322"), Roughness = .85f } };
         _kegs = Multi(keg, null, false);
@@ -228,6 +240,8 @@ public partial class UnitView : Node3D
             sink = Math.Max(0, since - 18) * 1.4f;
             main = f.Beast ? .5f : -.4f; off = f.Beast ? .4f : f.Shield ? -.2f : .3f;
             if (f.Beast) { legR = -.4f; legL = -.3f; }
+            // a horse down on its side, its legs stretched out stiff
+            if (f.Mounted) { legR = -.5f; legL = .45f; main = -.9f; off = -.6f; }
         }
         else if (u.Airborne != null)
         {
@@ -251,6 +265,26 @@ public partial class UnitView : Node3D
                 lean = graze * graze * .38f;
             }
             if (u.State == UnitState.Fight) lean = -.08f + u.Swing * .3f;
+        }
+        else if (f.Mounted)
+        {
+            // a horse: at a walk its legs swing a little; at the gallop the forelegs reach out together and the hind legs
+            // drive under, and the body rocks and rises with every bound. The rider has the reins in his left hand
+            float phase = u.Stride / f.Stride * MathF.Tau, a = look.Move, gallop = Math.Clamp((a - .45f) / .35f, 0, 1);
+            float sw = MathF.Sin(phase) * (.3f + .42f * gallop) * a;
+            legR = sw; legL = -sw;
+            bob = MathF.Abs(MathF.Sin(phase)) * a * (.15f + .75f * gallop);
+            lean = MathF.Cos(phase) * .05f * gallop * a;
+            off = f.Shield ? -.45f : -.6f;
+            if (a < .05f)
+            {
+                // standing: it breathes, and now and then shifts its weight
+                float breath = MathF.Sin((float)_t * 1.3f + seed);
+                bob = breath * .08f;
+                legL = MathF.Max(0, MathF.Sin((float)_t * .4f + seed * 2)) * .12f;
+            }
+            if (u.State == UnitState.Fight) { float l = 0; FightArms(u, f, seed, ref main, ref off, ref l); lean += l * .3f; }
+            else if (u.State is UnitState.Work) { Chop(f.Chop / u.Pace, (float)_t + seed * f.Chop, out main, out _); }
         }
         else if (_m.Sim.Climbing(u))
         {
@@ -291,16 +325,8 @@ public partial class UnitView : Node3D
                     Chop(f.Chop / u.Pace, (float)_t + seed * f.Chop, out main, out lean);
                     off = -.35f;
                     break;
-                case UnitState.Fight when u.T.Ranged:
-                    off = -1.5f;
-                    main = -1.42f + u.Swing * .3f;
-                    break;
                 case UnitState.Fight:
-                    float raise = u.Cooldown < .45f ? Math.Clamp(1 - u.Cooldown / .45f, 0, 1) : 0;
-                    main = Mathf.Lerp(-.65f, -2.7f, raise);
-                    main = Mathf.Lerp(main, .15f, u.Swing);
-                    lean = u.Swing * .14f - raise * .05f;
-                    off = f.Shield ? -1.05f : -.45f;
+                    FightArms(u, f, seed, ref main, ref off, ref lean);
                     break;
                 default:
                     if (a < .05f)
@@ -325,21 +351,76 @@ public partial class UnitView : Node3D
             var spin = new Basis(axis.Normalized(), fl.Turn);
             root = new Transform3D(spin, mid - spin * mid) * root;
         }
-        // the fallen lie down: on the back, or a beast on its side
+        // the fallen lie down: on the back, or a beast (and a horse with its rider) on its side
         if (fall > 0)
-            root *= f.Beast
+            root *= f.Beast || f.Mounted
                 ? new Transform3D(new Basis(Vector3.Back, MathF.PI / 2 * fall), new Vector3(0, fall * (u.T.BodyR * .7f), 0))
                 : new Transform3D(new Basis(Vector3.Right, -MathF.PI / 2 * fall), new Vector3(0, fall * (u.T.BodyR + .5f), 0));
         var body = root * Swing(f, Part.Body, lean);
         look.Body = body;
         var tint = Tint(u);
+        // a horse's legs go with its body as it rocks
         var arms = f.Beast ? root : body;
+        var legs = f.Mounted ? body : root;
         _xf[(int)Part.Body] = body;
         _xf[(int)Part.Main] = arms * Swing(f, Part.Main, main);
         _xf[(int)Part.Off] = arms * Swing(f, Part.Off, off);
-        _xf[(int)Part.LegR] = root * Swing(f, Part.LegR, legR);
-        _xf[(int)Part.LegL] = root * Swing(f, Part.LegL, legL);
+        _xf[(int)Part.LegR] = legs * Swing(f, Part.LegR, legR);
+        _xf[(int)Part.LegL] = legs * Swing(f, Part.LegL, legL);
         return tint;
+    }
+
+    /// <summary>
+    /// The arms in a fight, by what is in them: a bow drawn; a crossbow spanned with its nose to the ground, then
+    /// levelled at the shoulder and kicking as it looses; a sling whirled over the head and let fly; a pot drawn back
+    /// over the shoulder and lobbed; a spear or a lance drawn back and thrust home; anything else raised and brought down.
+    /// </summary>
+    void FightArms(Unit u, Figure f, float seed, ref float main, ref float off, ref float lean)
+    {
+        string tool = u.T.Tool;
+        if (u.T.Ranged && tool == "crossbow")
+        {
+            float k = u.Cooldown / Math.Max(.1f, u.T.AttackTime), span = Math.Clamp((k - .35f) / .2f, 0, 1);
+            main = Mathf.Lerp(-1.42f + u.Swing * .25f, -.2f, span);
+            off = Mathf.Lerp(-1.3f, -.45f, span);
+            lean = span * .18f;
+        }
+        else if (u.T.Ranged && tool == "sling")
+        {
+            float whirl = MathF.Sin((float)_t * 14 + seed);
+            main = u.Swing > .05f ? Mathf.Lerp(-2.6f, -1.1f, u.Swing) : -2.75f + whirl * .35f;
+            off = -.9f;
+            lean = u.Swing * .12f;
+        }
+        else if (u.T.Ranged && tool == "bombard")
+        {
+            float k = 1 - Math.Clamp(u.Cooldown / 1.2f, 0, 1);
+            main = Mathf.Lerp(-.5f, -2.8f, k * k);
+            main = Mathf.Lerp(main, -1.3f, u.Swing);
+            off = -.6f;
+            lean = u.Swing * .12f - k * .05f;
+        }
+        else if (u.T.Ranged)
+        {
+            off = -1.5f;
+            main = -1.42f + u.Swing * .3f;
+        }
+        else if (tool is "spear" or "lance")
+        {
+            float draw = u.Cooldown < .45f ? Math.Clamp(1 - u.Cooldown / .45f, 0, 1) : 0;
+            main = Mathf.Lerp(f.Carry, f.Carry + .3f, draw);
+            main = Mathf.Lerp(main, f.Carry - .2f, u.Swing);
+            if (!f.Mounted) off = -.75f - u.Swing * .15f;
+            lean = u.Swing * .22f - draw * .08f;
+        }
+        else
+        {
+            float raise = u.Cooldown < .45f ? Math.Clamp(1 - u.Cooldown / .45f, 0, 1) : 0;
+            main = Mathf.Lerp(-.65f, -2.7f, raise);
+            main = Mathf.Lerp(main, .15f, u.Swing);
+            lean = u.Swing * .14f - raise * .05f;
+            off = f.Shield ? f.Guard : -.45f;
+        }
     }
 
     /// <summary>A hurt body: what is left of each part, meshed again whenever it is wounded, posed like any other.</summary>
@@ -555,37 +636,58 @@ public partial class UnitView : Node3D
 
     // ---------------------------------------------------------------- arrows and rings
 
+    /// <summary>
+    /// What flies at the horde, each on its arc: arrows and bolts point along their flight (and a miss lies where it
+    /// came down), a stone and a pot tumble; a stone or a pot that has come down is gone — the pot burst, the stone among
+    /// the others on the ground.
+    /// </summary>
     void DrawArrows(Sim sim)
     {
-        var mm = _arrows.Multimesh;
-        int n = 0;
         DrawKegs(sim);
-        foreach (var a in sim.Arrows) if (!(a.Done && a.Hits)) n++;
-        if (n == 0) { mm.VisibleInstanceCount = 0; return; }
-        if (mm.InstanceCount < n) { mm.InstanceCount = Math.Max(32, n * 2); _arrowBuf = new float[mm.InstanceCount * 12]; }
-        int i = 0;
+        var meshes = new[] { _arrows, _bolts, _stones, _pots, _firePots };
+        Span<int> counts = stackalloc int[meshes.Length];
+        foreach (var a in sim.Arrows) if (Flying(a)) counts[(int)a.Kind]++;
+        for (int k = 0; k < meshes.Length; k++)
+        {
+            var mm = meshes[k].Multimesh;
+            if (counts[k] == 0) { mm.VisibleInstanceCount = 0; continue; }
+            if (mm.InstanceCount < counts[k]) { mm.InstanceCount = Math.Max(32, counts[k] * 2); _shotBufs[k] = new float[mm.InstanceCount * 12]; }
+        }
+        counts.Clear();
         foreach (var a in sim.Arrows)
         {
-            if (a.Done && a.Hits) continue;
+            if (!Flying(a)) continue;
+            int k = (int)a.Kind;
             float s = Math.Clamp(a.T / Math.Max(a.Dur, 1e-3f), 0, 1);
             var p0 = new Vector3(a.X0, a.Y0, a.Z0); var p1 = new Vector3(a.X1, a.Y1, a.Z1);
-            float h = p0.DistanceTo(p1) * .1f;
+            float h = p0.DistanceTo(p1) * a.Arc;
             var p = p0.Lerp(p1, s) + Vector3.Up * 4 * h * s * (1 - s);
             var dir = (p1 - p0) + Vector3.Up * 4 * h * (1 - 2 * s);
             if (a.Done) { p = p1 + dir.Normalized() * 3; }
             var at = new Vector3(_w.WX(p.X), _w.WY(p.Y), _w.WZ(p.Z));
             var z = dir.Normalized();
+            // a stone or a pot turns over and over as it goes
+            if (a.Kind is Shot.Stone or Shot.Pot or Shot.FirePot) z = new Basis(Vector3.Up, a.T * 9) * (new Basis(Vector3.Right, a.T * 13) * Vector3.Back);
             var x = Vector3.Up.Cross(z);
             x = x.LengthSquared() < 1e-6f ? Vector3.Right : x.Normalized();
             var y = z.Cross(x);
-            int o = i++ * 12;
-            _arrowBuf[o] = x.X; _arrowBuf[o + 1] = y.X; _arrowBuf[o + 2] = z.X; _arrowBuf[o + 3] = at.X;
-            _arrowBuf[o + 4] = x.Y; _arrowBuf[o + 5] = y.Y; _arrowBuf[o + 6] = z.Y; _arrowBuf[o + 7] = at.Y;
-            _arrowBuf[o + 8] = x.Z; _arrowBuf[o + 9] = y.Z; _arrowBuf[o + 10] = z.Z; _arrowBuf[o + 11] = at.Z;
+            var buf = _shotBufs[k];
+            int o = counts[k]++ * 12;
+            buf[o] = x.X; buf[o + 1] = y.X; buf[o + 2] = z.X; buf[o + 3] = at.X;
+            buf[o + 4] = x.Y; buf[o + 5] = y.Y; buf[o + 6] = z.Y; buf[o + 7] = at.Y;
+            buf[o + 8] = x.Z; buf[o + 9] = y.Z; buf[o + 10] = z.Z; buf[o + 11] = at.Z;
         }
-        RenderingServer.MultimeshSetBuffer(mm.GetRid(), _arrowBuf);
-        mm.VisibleInstanceCount = n;
+        for (int k = 0; k < meshes.Length; k++)
+        {
+            if (counts[k] == 0) continue;
+            var mm = meshes[k].Multimesh;
+            RenderingServer.MultimeshSetBuffer(mm.GetRid(), _shotBufs[k]);
+            mm.VisibleInstanceCount = counts[k];
+        }
     }
+
+    /// <summary>Whether a shot is drawn flying (or lying, an arrow or a bolt that missed).</summary>
+    static bool Flying(Arrow a) => !a.Done || !a.Hits && a.Kind is Shot.Arrow or Shot.Bolt;
 
     /// <summary>The charges the horde's sappers carry: a keg of powder on each one's back.</summary>
     void DrawKegs(Sim sim)

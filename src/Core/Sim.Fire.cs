@@ -428,7 +428,7 @@ public sealed partial class Sim
         // between waves the horde's leftovers are timber to take apart, not to burn
         if (target < 0 && (Waves.Active || AnyRaider()))
         {
-            float bd = BowRange(u);
+            float bd = ShotRange(u);
             foreach (int c in _works)
             {
                 var (fx, fy, fz) = Nav.Feet(c);
@@ -464,16 +464,16 @@ public sealed partial class Sim
         {
             u.Swing = 1;
             Shots++;
-            float chance = Math.Clamp(.95f - dist / BowRange(u) * .4f, .45f, .95f);
+            float chance = Math.Clamp(.95f - dist / ShotRange(u) * .4f, .45f, .95f);
             bool hits = Rng.NextDouble() < chance;
             // a miss comes down a little way off
             if (!hits) { tx += (float)(Rng.NextDouble() - .5) * 8; tz += (float)(Rng.NextDouble() - .5) * 8; }
             Arrows.Add(new Arrow
             {
                 X0 = u.X, Y0 = u.Y + u.T.BodyH * .85f, Z0 = u.Z, X1 = tx, Y1 = ty, Z1 = tz,
-                Dur = Math.Max(.08f, dist / ArrowSpeed), From = u, Hits = hits, Fire = true, At = target,
+                Dur = Math.Max(.08f, dist / SpeedOf(ShotOf(u.T))), From = u, Hits = hits, Fire = true, At = target, Kind = ShotOf(u.T), Arc = ArcOf(ShotOf(u.T)),
             });
-            u.Cooldown = u.T.AttackTime * VolleyPace(u) * (Knows("soaked") ? 1.1f : 1.35f) * (.9f + (float)Rng.NextDouble() * .2f);
+            u.Cooldown = u.T.AttackTime * ShotPace(u) * (Knows("soaked") ? 1.1f : 1.35f) * (.9f + (float)Rng.NextDouble() * .2f);
         }
         return true;
     }
@@ -509,7 +509,7 @@ public sealed partial class Sim
     /// <summary>The player's pick for archers: shoot fire arrows, or plain ones.</summary>
     public void SetFireArrows(IEnumerable<Unit> who, bool on)
     {
-        foreach (var u in who) if (!u.Dead && u.T.Ranged && u.Team == Team.Player) { u.FireArrows = on; if (!on) u.KindleAt = -1; }
+        foreach (var u in who) if (!u.Dead && Kindles(u.T) && u.Team == Team.Player) { u.FireArrows = on; if (!on) u.KindleAt = -1; }
     }
 
     /// <summary>Archers with fire arrows told to set something alight; returns how many took the order.</summary>
@@ -519,7 +519,7 @@ public sealed partial class Sim
         int n = 0;
         foreach (var u in who)
         {
-            if (u.Dead || !u.T.Ranged || !u.FireArrows || u.Team != Team.Player) continue;
+            if (u.Dead || !Kindles(u.T) || !u.FireArrows || u.Team != Team.Player) continue;
             u.KindleAt = WaterPlanner.Pack(x, y, z);
             u.Hold = false; u.Prey = null; u.Path = null; u.NextSearch = 0;
             n++;

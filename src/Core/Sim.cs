@@ -97,8 +97,8 @@ public sealed partial class Sim
         u.X += u.OffX; u.Z += u.OffZ;
         u.Facing = (float)(Rng.NextDouble() * Math.PI * 2);
         if (t.Team == Team.Player && t.Work < 1) u.Post = cell;
-        // a priest does no work of the pawns'
-        if (t.Prays) Array.Fill(u.Priority, (byte)0);
+        // a priest does no work of the pawns', nor a hound or a rider
+        if (t.Prays || t.Work <= 0) Array.Fill(u.Priority, (byte)0);
         // some of the horde come with torches, picked by the raider (not by the dice, which the rest of the valley shares)
         u.Torch = t.TorchShare > 0 && Hash.H3(u.Id, 11, 7) < t.TorchShare;
         // from the fifth wave some of the sappers come with a charge of powder on their backs, half of them from the ninth
@@ -205,7 +205,8 @@ public sealed partial class Sim
             if (c >= 0) { u.Cell = c; (u.X, u.Y, u.Z) = Nav.Feet(c); u.Path = null; StopCarve(u); StopBuild(u); }
             return;
         }
-        if (Nav.Stand(i, y, k, h) || (y >= 1 && Nav.Solid(i, y - 1, k)) || Nav.Ladder[u.Cell] != 0) return;
+        // a horse or a hound does not hang on a ladder: it comes off it
+        if (Nav.Stand(i, y, k, h) || (y >= 1 && Nav.Solid(i, y - 1, k)) || Nav.Ladder[u.Cell] != 0 && u.T.Move.Ladders) return;
         for (int ny = y - 1; ny >= 1; ny--)
             if (Nav.Solid(i, ny - 1, k))
             {
@@ -241,7 +242,7 @@ public sealed partial class Sim
         bool climbing = Nav.I(next) == Nav.I(u.Cell) && Nav.K(next) == Nav.K(u.Cell) && next != u.Cell;
         if (climbing) { tx = u.X; tz = u.Z; ty = (Nav.Y(next) << NavGrid.Shift) + (Nav.Solid(Nav.I(next), Nav.Y(next) - 1, Nav.K(next)) ? Nav.Floor[next] - (Nav.Y(next) << NavGrid.Shift) : 0); }
         else { tx += u.OffX; tz += u.OffZ; }
-        float speed = u.T.Move.Speed * NavGrid.CS * pace * u.Pace * CartPace(u) * (u.Hp < u.MaxHp * .4f ? .7f : 1) * (Nav.Water[u.Cell] > 0 ? .6f : 1)
+        float speed = u.T.Move.Speed * NavGrid.CS * pace * u.Pace * CartPace(u) * TroopPace(u) * (u.Hp < u.MaxHp * .4f ? .7f : 1) * (Nav.Water[u.Cell] > 0 ? .6f : 1)
             * (Nav.Spikes[u.Cell] > 0 ? .4f : 1) * Gait(u) * (Mires.Count > 0 && InMire(u.X, u.Z) ? .35f : 1)
             * (DeadFogs.Count > 0 && u.Team == Team.Horde && !Deathless(u) && InDeadFog(u.X, u.Z) ? .5f : 1);
         float step = speed * dt * (climbing ? .5f : 1);
@@ -277,7 +278,7 @@ public sealed partial class Sim
     {
         int i = Nav.I(c), y = Nav.Y(c), k = Nav.K(c);
         if (Nav.Deep(c)) return false;
-        return u.Team == Team.Horde ? Nav.Solid(i, y - 1, k) || Nav.Ladder[c] != 0 : Nav.CanBe(i, y, k, u.T.Move.Height);
+        return u.Team == Team.Horde ? Nav.Solid(i, y - 1, k) || Nav.Ladder[c] != 0 : Nav.CanBe(i, y, k, u.T.Move.Height, ladders: u.T.Move.Ladders);
     }
 
     /// <summary>
