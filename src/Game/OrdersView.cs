@@ -98,6 +98,8 @@ public partial class OrdersView : Node3D
                 // the red wash keeps a hint of what is under it
                 int x = i % P - 1, z = i / P % P - 1, y = i / (P * P) - 1;
                 byte m = w.Get(ox + x, oy + y, oz + z);
+                // grass and flowers are drawn in blades: the wash shows the turf they stand in, not cubes of them
+                if (Mat.IsSprig(m)) continue;
                 _d[i] = m != 0 && m < Mat.Count ? m : Mat.Soil;
                 anyD = true;
             }

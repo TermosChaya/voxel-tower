@@ -190,7 +190,7 @@ public sealed partial class Sim
     static bool Takes(int kind, byte m) => kind switch
     {
         Stockpile.Stone => m is Mat.Rock or Mat.Moss or Mat.Ore or Mat.Ruin,
-        Stockpile.Earth => m is Mat.Soil or Mat.Path || Mat.IsGrass(m),
+        Stockpile.Earth => m is Mat.Soil or Mat.Path or Mat.Scorch || Mat.IsGrass(m),
         _ => false,
     };
 
@@ -309,7 +309,7 @@ public sealed partial class Sim
                         int cx = x + dx, cz = z + dz, top = World.SurfAt(cx, cz);
                         byte m = World.Get(cx, top - 1, cz);
                         if (Site.Forbidden(cx, cz) || Mat.IsPlayer[m] || m == Mat.Ruin || WaterNear(cx, cz, top - 16)) bad = true;
-                        if (Mat.IsGrass(m) || m == Mat.Soil) grass++;
+                        if (Mat.IsGrass(m) || m is Mat.Soil or Mat.Scorch) grass++;
                         lo = Math.Min(lo, top); hi = Math.Max(hi, top);
                     }
                 if (bad || hi - lo > 6) continue;

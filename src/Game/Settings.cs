@@ -6,7 +6,8 @@ namespace VoxelTower.Game;
 /// <summary>
 /// The player's own settings, kept between games in user://settings.cfg: how large the interface is drawn, over what
 /// the window's size already gives it (Ctrl and + or − steps it, Ctrl+0 puts it back as it was), how loud the sounds
-/// are, how hard a blast shakes the view and whether the game's time slows for a moment after a great one.
+/// are, how hard a blast shakes the view, whether the game's time slows for a moment after a great one and whether the
+/// voxels are drawn each with a thin line round it.
 /// </summary>
 public static class Settings
 {
@@ -21,6 +22,10 @@ public static class Settings
     public static readonly float[] Shakes = { 0, .5f, 1 };
     /// <summary>Whether the game's time slows for a moment after a great blast or fall near what the view looks at.</summary>
     public static bool SlowMo { get; private set; } = true;
+    /// <summary>Whether every voxel is drawn with a thin dark line round its edge, where it is big enough on screen to read.</summary>
+    public static bool Lines { get; private set; }
+    /// <summary>What the player chose for the lines, kept apart from a run that draws them for itself (--lines).</summary>
+    static bool _keptLines;
     /// <summary>A scripted run (a test, a screenshot) neither reads the player's settings nor keeps its own.</summary>
     static bool _scripted;
 
@@ -33,6 +38,7 @@ public static class Settings
         Volume = Math.Clamp(MathF.Round(cfg.GetValue("sound", "volume", .8f).AsSingle() * 10) / 10, 0, 1);
         Shake = Math.Clamp(cfg.GetValue("view", "shake", 1f).AsSingle(), 0, 1);
         SlowMo = cfg.GetValue("view", "slowmo", true).AsBool();
+        Lines = _keptLines = cfg.GetValue("view", "lines", false).AsBool();
     }
 
     static void Save()
@@ -45,6 +51,7 @@ public static class Settings
         cfg.SetValue("sound", "volume", Volume);
         cfg.SetValue("view", "shake", Shake);
         cfg.SetValue("view", "slowmo", SlowMo);
+        cfg.SetValue("view", "lines", _keptLines);
         cfg.Save(File);
     }
 
@@ -84,6 +91,20 @@ public static class Settings
         SlowMo = !SlowMo;
         Save();
     }
+
+    /// <summary>The lines round the voxels, on or off; kept for next time.</summary>
+    public static void ToggleLines()
+    {
+        Lines = _keptLines = !Lines;
+        ApplyLines();
+        Save();
+    }
+
+    /// <summary>A scripted run that looks at the lines round the voxels draws them, or not, for itself.</summary>
+    public static void ScriptLines(bool on) { Lines = on; ApplyLines(); }
+
+    /// <summary>Tells every voxel the shader draws whether to draw its lines.</summary>
+    public static void ApplyLines() => RenderingServer.GlobalShaderParameterSet("voxel_lines", Lines ? 1f : 0f);
 
     /// <summary>Sets how loud everything is heard.</summary>
     public static void ApplyVolume()

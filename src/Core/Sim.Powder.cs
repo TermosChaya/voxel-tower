@@ -402,7 +402,12 @@ public sealed partial class Sim
                     if (Rng.NextDouble() < .3 && Ignite(vx, vy, vz)) lit++;
                 }
         if (done > 0) InvalidateFields();
-        if (done > 0 || always) Exploded?.Invoke(fx, fy, fz, r);
+        if (done > 0 || always)
+        {
+            // the heat of it sears the turf round the crater
+            SearRound(fx, fy, fz, r * 1.5f);
+            Exploded?.Invoke(fx, fy, fz, r);
+        }
         return done;
     }
 

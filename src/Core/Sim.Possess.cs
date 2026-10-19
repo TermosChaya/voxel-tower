@@ -208,7 +208,7 @@ public sealed partial class Sim
     public bool LookedAt(Unit u, float reach, out VoxelHit hit)
     {
         var (ox, oy, oz, dx, dy, dz) = Gaze(u);
-        if (!Raycast.Cast(World, ox, oy, oz, dx, dy, dz, out hit, skipVeg: false)) return false;
+        if (!Raycast.Cast(World, ox, oy, oz, dx, dy, dz, out hit, skipGrass: true)) return false;
         float hx = hit.X + .5f - ox, hy = hit.Y + .5f - oy, hz = hit.Z + .5f - oz;
         return hx * hx + hy * hy + hz * hz <= reach * reach;
     }

@@ -160,6 +160,11 @@ public sealed partial class Sim
         byte left = Rng.NextDouble() < Mat.CharShare[m] ? Mat.Char : Mat.Air;
         World.Set(x, y, z, left);
         if (left == Mat.Air && Orders.At(x, y, z) != 0) Orders.Clear(x, y, z);
+        // the turf it stood on is left black; grass burning spreads the scorch a little round it
+        Sear(x, y - 1, z);
+        if (Mat.IsSprig(m))
+            foreach (var (ox, oz) in TurfSides)
+                if (Hash.H3(x + ox, y, z + oz) < .4 && World.Get(x + ox, y, z + oz) == Mat.Air) Sear(x + ox, y - 1, z + oz);
         Burnt?.Invoke(x, y, z, m);
     }
 

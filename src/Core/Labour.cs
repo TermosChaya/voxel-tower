@@ -40,7 +40,7 @@ public static class Labour
     static Labour()
     {
         void D(byte m, float dig, int kind, float share) { DigCost[m] = dig; Kind[m] = (byte)kind; Share[m] = share; }
-        foreach (var m in new[] { Mat.Soil, Mat.Grass, Mat.GrassDry, Mat.GrassLush, Mat.Path, Mat.Tuft, Mat.Flower, Mat.Bloom }) D(m, 1, Stockpile.Earth, 1);
+        foreach (var m in new[] { Mat.Soil, Mat.Grass, Mat.GrassDry, Mat.GrassLush, Mat.Scorch, Mat.Path, Mat.Tuft, Mat.Flower, Mat.Bloom }) D(m, 1, Stockpile.Earth, 1);
         D(Mat.Rammed, 1, Stockpile.Earth, 1);
         D(Mat.Rock, 4, Stockpile.Stone, 1); D(Mat.Moss, 4, Stockpile.Stone, 1);
         foreach (var m in new[] { Mat.Stone, Mat.Mortar, Mat.StoneDark, Mat.StoneLight, Mat.StoneWarm, Mat.StoneCool }) D(m, 2.5f, Stockpile.Stone, .75f);

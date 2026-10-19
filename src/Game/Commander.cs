@@ -297,7 +297,7 @@ public partial class Commander : Node
         // archers with fire arrows, a click on something that burns (not the grass underfoot): set it alight
         bool fire = false;
         foreach (var u in _m.Selected) fire |= u.FireArrows && !u.Dead;
-        if (fire && Raycast.Cast(w, ox, oy, oz, d.X, d.Y, d.Z, out var lit, skipVeg: false) && Mat.Burns(lit.M) && lit.M is not (Mat.Tuft or Mat.Flower or Mat.Bloom))
+        if (fire && Raycast.Cast(w, ox, oy, oz, d.X, d.Y, d.Z, out var lit, skipGrass: true) && Mat.Burns(lit.M))
         {
             int n = _m.Sim.KindleOrder(_m.Selected, lit.X, lit.Y, lit.Z);
             if (n > 0) { _m.Hud.Float("поджечь: " + Mat.NameOf(lit.M).ToLowerInvariant(), Ornament.EmberGlow); _m.Hud.OnSelectionChanged(); return; }

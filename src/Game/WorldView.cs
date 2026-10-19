@@ -21,6 +21,8 @@ public partial class WorldView : Node3D
     readonly List<int> _batch = new();
 
     public double LastFullMeshMs { get; private set; }
+    /// <summary>The tufts, the flowers and the sward, drawn in blades over the chunks.</summary>
+    public GrassView Grass { get; private set; }
 
     public void Init(VoxelWorld w)
     {
@@ -31,12 +33,15 @@ public partial class WorldView : Node3D
         _waterMat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/water.gdshader") };
         _inst = new MeshInstance3D[w.ChunkCount];
         _water = new MeshInstance3D[w.ChunkCount];
+        Grass = new GrassView();
+        AddChild(Grass);
+        Grass.Init(w);
 
         var sw = Stopwatch.StartNew();
-        var results = new (MeshBuffers solid, MeshBuffers water)[w.ChunkCount];
+        var results = new (MeshBuffers solid, MeshBuffers water, Sward sward)[w.ChunkCount];
         Parallel.For(0, w.ChunkCount, () => (new GreedyMesher(), new byte[34 * 34 * 34], new byte[34 * 34 * 34]), (ci, _, loc) =>
         {
-            results[ci].solid = loc.Item1.MeshChunk(w, ci, loc.Item2, loc.Item3, out results[ci].water);
+            results[ci].solid = loc.Item1.MeshChunk(w, ci, loc.Item2, loc.Item3, out results[ci].water, out results[ci].sward);
             return loc;
         }, _ => { });
         for (int ci = 0; ci < w.ChunkCount; ci++) Apply(ci, results[ci]);
@@ -52,23 +57,24 @@ public partial class WorldView : Node3D
         if (_w.DirtyCount == 0) return 0;
         _batch.Clear();
         _w.TakeDirty(_batch, maxChunks);
-        var results = new (MeshBuffers solid, MeshBuffers water)[_batch.Count];
+        var results = new (MeshBuffers solid, MeshBuffers water, Sward sward)[_batch.Count];
         if (_batch.Count <= 2)
-            for (int i = 0; i < _batch.Count; i++) results[i].solid = _mesher.MeshChunk(_w, _batch[i], _pad, _wet, out results[i].water);
+            for (int i = 0; i < _batch.Count; i++) results[i].solid = _mesher.MeshChunk(_w, _batch[i], _pad, _wet, out results[i].water, out results[i].sward);
         else
             Parallel.For(0, _batch.Count, () => (new GreedyMesher(), new byte[34 * 34 * 34], new byte[34 * 34 * 34]), (i, _, loc) =>
             {
-                results[i].solid = loc.Item1.MeshChunk(_w, _batch[i], loc.Item2, loc.Item3, out results[i].water);
+                results[i].solid = loc.Item1.MeshChunk(_w, _batch[i], loc.Item2, loc.Item3, out results[i].water, out results[i].sward);
                 return loc;
             }, _ => { });
         for (int i = 0; i < _batch.Count; i++) Apply(_batch[i], results[i]);
         return _batch.Count;
     }
 
-    void Apply(int ci, (MeshBuffers solid, MeshBuffers water) mb)
+    void Apply(int ci, (MeshBuffers solid, MeshBuffers water, Sward sward) mb)
     {
         Put(_inst, ci, mb.solid, _mat, true);
         Put(_water, ci, mb.water, _waterMat, false);
+        Grass.Take(ci, mb.sward);
     }
 
     void Put(MeshInstance3D[] slots, int ci, MeshBuffers mb, Material mat, bool shadows)

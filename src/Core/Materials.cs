@@ -88,7 +88,9 @@ public static class Mat
     /// quilted cloth of a gambeson, the fired clay of a bombardier's pots, the white of a knight's surcoat.
     /// </summary>
     public const byte HorseBay = 114, HorseBlack = 115, HorseGrey = 116, HorseChestnut = 117, Fawn = 118, Gambeson = 119, Clay = 120, ClothWhite = 121;
-    public const int Count = 122;
+    /// <summary>Turf a fire has gone over, or a blast seared: black, until the grass creeps back over it.</summary>
+    public const byte Scorch = 122;
+    public const int Count = 123;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
     public static readonly bool[] IsVeg = new bool[Count], IsPlayer = new bool[Count], IsEarthy = new bool[Count],
@@ -103,6 +105,13 @@ public static class Mat
     public static readonly bool[] Smooth = new bool[Count];
     /// <summary>Bright metal on the figures — steel, mail, brass: it catches the light instead of drinking it.</summary>
     public static readonly bool[] Metal = new bool[Count];
+    /// <summary>
+    /// What the voxel shader draws on a face finer than its voxels: 0 nothing, 1 dressed stone, 2 metal, 3 turf (blades on
+    /// its top, a fringe of them over the earth down its sides), 4 leaves (each voxel a few of them, lit and shaded), 5 bark
+    /// (furrows up the trunk), 6 birch bark (dark dashes across the white), 7 needles (short strokes every way), 8 burnt
+    /// turf (ash and charred stubble).
+    /// </summary>
+    public static readonly byte[] Skin = new byte[Count];
     /// <summary>A body passes through it: leaves, grass, ladders and water. Nothing is hacked out of the way for these.</summary>
     public static readonly bool[] Passable = new bool[Count];
     /// <summary>Ladders: bodies hang on them and climb.</summary>
@@ -223,6 +232,7 @@ public static class Mat
         D(HorseGrey, "шерсть", 0x9b968e, .2f, MatGroup.Hard, 0); D(HorseChestnut, "шерсть", 0x7d4524, .12f, MatGroup.Hard, 0);
         D(Fawn, "шерсть", 0x9a7a52, .14f, MatGroup.Hard, 0); D(Gambeson, "стёганка", 0x9a8b68, .16f, MatGroup.Hard, 0);
         D(Clay, "глина", 0x8e5634, .14f, MatGroup.Hard, 0); D(ClothWhite, "сукно", 0xb9b2a3, .1f, MatGroup.Hard, 0);
+        D(Scorch, "Гарь", 0x2e2822, .26f, MatGroup.Earth, Natural | Earthy);
 
         foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage, Flower, Bloom, Birch, NeedleLight, FoliageLight, FoliageGold, PineBark, Snag }) IsVeg[m] = true;
         foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame, Stakes, Pitch, TowerLadder }) Passable[m] = true;
@@ -231,8 +241,11 @@ public static class Mat
         foreach (var m in new[] { Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold }) SwayKind[m] = 2;
         foreach (var m in new[] { Stone, StoneDark, StoneLight, StoneWarm, StoneCool, Mortar, Keep, KeepShade, KeepDark }) Smooth[m] = true;
         foreach (var m in new[] { Steel, Mail, Brass, Pitch }) Metal[m] = true;
+        for (int m = 0; m < Count; m++)
+            Skin[m] = Smooth[m] ? (byte)1 : Metal[m] ? (byte)2 : IsGrass((byte)m) ? (byte)3 : m is Leaf or NeedleLight ? (byte)7
+                : IsLeafy((byte)m) ? (byte)4 : m == Birch ? (byte)6 : IsTrunk((byte)m) ? (byte)5 : m == Scorch ? (byte)8 : (byte)0;
         // what holds the world up: loose pieces resting on these never fall
-        foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank, Menhir }) IsAnchor[m] = true;
+        foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Scorch, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank, Menhir }) IsAnchor[m] = true;
 
         // what burns: needles and leaves flare up and are gone in seconds, grass and flowers in a moment; timber
         // catches slowly and burns long, and some of it stands charred after; a living trunk and oak bound with iron
@@ -291,6 +304,9 @@ public static class Mat
     public static bool IsTrunk(byte m) => m is Trunk or Birch or PineBark or Snag;
     /// <summary>Needles and leaves, in any of their shades.</summary>
     public static bool IsLeafy(byte m) => m is Leaf or Foliage or NeedleLight or FoliageLight or FoliageGold;
+
+    /// <summary>A tuft of grass or a flower: the game draws it in blades and petals, not as a cube.</summary>
+    public static bool IsSprig(byte m) => m is Tuft or Flower or Bloom;
 
     /// <summary>Turf of any shade.</summary>
     public static bool IsGrass(byte m) => m is Grass or GrassDry or GrassLush;

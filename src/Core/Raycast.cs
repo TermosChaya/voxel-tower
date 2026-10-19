@@ -22,9 +22,11 @@ public static class Raycast
 {
     /// <summary>
     /// Walks the voxel grid along a ray (origin in voxel units) and stops at the first solid voxel.
-    /// With skipVeg the ray passes through leaves, branches and grass, so tools reach the ground under trees.
+    /// With skipVeg the ray passes through leaves, branches and grass, so tools reach the ground under trees; with
+    /// skipGrass only through the tufts and the flowers, which are drawn as blades and stems a hand or an eye goes past.
     /// </summary>
-    public static bool Cast(VoxelWorld w, double ox, double oy, double oz, double dx, double dy, double dz, out VoxelHit hit, bool skipVeg = false)
+    public static bool Cast(VoxelWorld w, double ox, double oy, double oz, double dx, double dy, double dz, out VoxelHit hit, bool skipVeg = false,
+        bool skipGrass = false)
     {
         hit = default;
         Span<double> O = stackalloc double[] { ox, oy, oz };
@@ -53,7 +55,7 @@ public static class Raycast
         for (int s = 0; s < limit; s++)
         {
             byte m = w.Get(x, y, z);
-            if (m != 0 && !(skipVeg && (Mat.IsVeg[m] || Mat.IsDecor[m])))
+            if (m != 0 && !(skipVeg && (Mat.IsVeg[m] || Mat.IsDecor[m])) && !(skipGrass && Mat.IsSprig(m)))
             {
                 hit = new VoxelHit { X = x, Y = y, Z = z, NX = nx, NY = ny, NZ = nz, M = m };
                 return true;
