@@ -18,6 +18,9 @@ public partial class BladeTrail : MeshInstance3D
     public int Drawn { get; private set; }
     public int Ever { get; private set; }
 
+    /// <summary>Ribbons drawn so far this frame.</summary>
+    public int Now => _drawn;
+
     public void Init()
     {
         _mesh = new ImmediateMesh();

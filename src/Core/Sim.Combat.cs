@@ -91,10 +91,16 @@ public sealed partial class Sim
     /// </summary>
     internal void Strike(Unit a, Unit b)
     {
-        a.Swing = 1;
-        var (cut, depth, reach) = WeaponOf(a.T);
         // the same two draws as ever: now how high the stroke comes, and to which side of the middle
         float up = (float)Rng.NextDouble(), side = (float)Rng.NextDouble();
+        Strike(a, b, up, side);
+    }
+
+    /// <summary>A blow whose height and side (0…1) are given rather than drawn: the bench aims one at the neck so.</summary>
+    internal void Strike(Unit a, Unit b, float up, float side)
+    {
+        a.Swing = 1;
+        var (cut, depth, reach) = WeaponOf(a.T);
         var k = a.StrokeFor == b ? a.NextStroke : Choose(a, b);
         LayStroke(a, b, k, up, side, out var at, out var dir, out var root, out var edge);
         (cut, depth, reach) = Strokes.CutOf(k, cut, depth, reach);

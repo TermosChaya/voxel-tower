@@ -59,7 +59,7 @@ public sealed partial class Sim
     public readonly List<Remnant> Remnants = new();
     /// <summary>A piece came off a body.</summary>
     public event Action<Remnant> Severed;
-    /// <summary>A blow drew blood: where (world voxels) and how much (half-voxels of flesh cut).</summary>
+    /// <summary>A blow drew blood: where (world voxels) and how much (half-voxels of flesh cut). Not for a blade's blow laid out along its stroke: <see cref="Smote"/> tells of that.</summary>
     public Action<float, float, float, int> Splashed;
 
     /// <summary>How a weapon cuts: a sweep through a plane, a deep narrow chop, a thrust, a crushing blow, an arrow.</summary>
@@ -179,10 +179,29 @@ public sealed partial class Sim
             var (ux, uy, uz) = el < 1e-4f ? (0f, 0f, 0f) : DirToBody(b, ex / el, ey / el, ez / el);
             int n = Math.Clamp((int)(span / 1.5f) + 1, 1, 14);
             float first = 140;
+            // the body's box, a half-voxel over all round: no spot of the way outside it strikes anything
+            float bx0 = float.MaxValue, by0 = float.MaxValue, bz0 = float.MaxValue, bx1 = float.MinValue, by1 = float.MinValue, bz1 = float.MinValue;
+            foreach (var g in body.Grid)
+            {
+                if (g == null) continue;
+                bx0 = Math.Min(bx0, g.X0 - 1); by0 = Math.Min(by0, g.Y0 - 1); bz0 = Math.Min(bz0, g.Z0 - 1);
+                bx1 = Math.Max(bx1, g.X0 + g.SX + 1); by1 = Math.Max(by1, g.Y0 + g.SY + 1); bz1 = Math.Max(bz1, g.Z0 + g.SZ + 1);
+            }
+            // how far along the way from q it is in the box
+            bool Through(float q, float l, float lo, float hi, ref float tin, ref float tout)
+            {
+                if (MathF.Abs(l) < 1e-6f) return q >= lo && q <= hi;
+                float t0 = (lo - q) / l, t1 = (hi - q) / l;
+                if (t0 > t1) (t0, t1) = (t1, t0);
+                tin = Math.Max(tin, t0); tout = Math.Min(tout, t1);
+                return tin <= tout;
+            }
             for (int j = 0; j < n; j++)
             {
                 float o = n == 1 ? 0 : span * j / (n - 1), qx = px + ux * o, qy = py + uy * o, qz = pz + uz * o;
-                for (float t = 0; t < first; t += .5f)
+                float tin = 0, tout = first;
+                if (!Through(qx, lx, bx0, bx1, ref tin, ref tout) || !Through(qy, ly, by0, by1, ref tin, ref tout) || !Through(qz, lz, bz0, bz1, ref tin, ref tout)) continue;
+                for (float t = MathF.Floor(tin * 2) / 2; t < first && t <= tout; t += .5f)
                 {
                     int x = (int)MathF.Floor(qx + lx * t), y = (int)MathF.Floor(qy + ly * t), z = (int)MathF.Floor(qz + lz * t);
                     if (body.Mat(x, y, z, out _) == 0) continue;
@@ -310,7 +329,8 @@ public sealed partial class Sim
                 int q = g.Index(qx, qy, qz);
                 if (g.M[q] != 0 && g.T[q] == (byte)Tissue.Skin && Hash.H3(qx * 3 + qy, qz, b.Id) < .3) g.M[q] = Mat.Blood;
             }
-        if (flesh > 0 && Splashed != null)
+        // (a blade's blood is thrown by the eye along the way it went, as it is seen to get there)
+        if (flesh > 0 && Splashed != null && !edged)
         {
             // back from the body's half-voxels to the world
             float k = ScaleOf(b) / BodyPlan.Sub, sin = MathF.Sin(b.Facing), cos = MathF.Cos(b.Facing);

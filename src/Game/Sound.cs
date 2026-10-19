@@ -70,8 +70,10 @@ public partial class Sound : Node
         };
         sim.Planted += c => Play("fuse", c.X, c.Y, c.Z, .5, 1);
         // a blow heard where it lands, as the blade is seen to get there: steel rings on steel and mail, a shield's
-        // boards knock, flesh takes a blade wetly and a club with a thud
-        sim.Smote += h => GetTree().CreateTimer(.075).Timeout += () => Landed(h);
+        // boards knock, flesh takes a blade wetly and a club with a thud; and the blade through the air as it is seen
+        // to start down
+        m.Units.Landed += Landed;
+        m.Units.Swung += Swish;
         // a piece of the world coming down: the heavier, the louder
         // a piece of the world coming down: the heavier, the louder, and a great one deeper
         sim.Landed += (x, y, z, n, speed) => { if (n >= 20) Play("crash", x, y, z, .07, Math.Clamp(.25f + n / 700f, .25f, 1.1f), pitch: n >= 600 ? .72f : 0); };
@@ -81,6 +83,15 @@ public partial class Sound : Node
         sim.Hexed += (x, y, z) => Play("hex", x, y, z, .6, 1);
         sim.Darkened += (x, y, z) => Play("hex", x, y, z, .6, .9f);
         sim.Woken += (x, y, z) => Play("gong", x, y, z, 1, .6f);
+    }
+
+    /// <summary>A blade, a club or a beast's jaws starting down at someone: the swish of it through the air, or a beast's lunge.</summary>
+    void Swish(Unit u)
+    {
+        if (_m.Paused || u.Inside) return;
+        var (cut, _, _) = Sim.WeaponOf(u.T);
+        if (u.T.NoHands) Play("blunt", u.X, u.Y, u.Z, .09, .6f);
+        else Play("swish", u.X, u.Y, u.Z, .05, cut is Sim.Cut.Crush ? .55f : .7f, pitch: cut is Sim.Cut.Crush ? .7f : u.T.BodyH > 18 ? .8f : 0);
     }
 
     /// <summary>A blow landing: on steel, iron or mail a ring (higher off one turned aside), on boards a knock, into flesh a blade's bite or a club's thud.</summary>
@@ -175,13 +186,10 @@ public partial class Sound : Node
             float was = _swing.GetValueOrDefault(u.Id);
             _swing[u.Id] = u.Swing;
             if (u.Swing < .99f || was > .6f || u.Inside) continue;
+            // (a blow hand to hand is heard as the eye sees it: Swish, Landed)
             if (u.State == UnitState.Fight)
             {
-                if (u.T.Ranged) { Play("bow", u.X, u.Y, u.Z, .08, .7f); continue; }
-                // the blow through the air; where it lands is heard as it lands
-                var (cut, _, _) = Sim.WeaponOf(u.T);
-                if (u.T.NoHands) Play("blunt", u.X, u.Y, u.Z, .09, .6f);
-                else Play("swish", u.X, u.Y, u.Z, .05, cut is Sim.Cut.Crush ? .55f : .7f, pitch: cut is Sim.Cut.Crush ? .7f : u.T.BodyH > 18 ? .8f : 0);
+                if (u.T.Ranged) Play("bow", u.X, u.Y, u.Z, .08, .7f);
             }
             else if (u.State == UnitState.Work && u.Team == Team.Player && u.JobI > 0 && u.JobI <= u.Jobs.Count && !Orders.IsRemove(u.Jobs[u.JobI - 1].m))
                 Play("lay", u.X, u.Y, u.Z, .08, .55f);

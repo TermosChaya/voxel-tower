@@ -1110,12 +1110,15 @@ public partial class Main : Node3D
         // the camera looks at a plane 4 m up: past it by as much as the two stand under it
         float overD = (World.WY(duelist.Y + 8) - 4) / MathF.Tan(.5f);
         Rig.Set(World.WX(duelist.X) - MathF.Sin(-.3f) * overD, World.WZ(duelist.Z) - MathF.Cos(-.3f) * overD, -.3f, .5f, 7, snap: true);
-        int twisted0 = Units.Twisted, smears0 = Units.Smears, thrown0 = Debris.Sparked + Debris.Sprayed;
+        int twisted0 = Units.Twisted, smears0 = Units.Smears, thrown0 = Debris.Sparked + Debris.Sprayed, blows0 = Units.Blows, coming0 = Units.BlowsSeenComing;
         for (int i = 0; i < 140; i++) { Advance(.05); await Frames(1); }
         Sim.Smote -= Watch;
-        Check("hand to hand the blows come many ways, the arms turn every way, and where the blade lands sparks, splinters or blood fly and it leaves its smear",
-            ways.Count >= 3 && Units.Twisted > twisted0 && Units.Smears > smears0 && Debris.Sparked + Debris.Sprayed > thrown0,
-            $"{landed} blows, {ways.Count} ways ({string.Join(", ", ways)}); {Units.Twisted - twisted0} figures turned out of a plain swing, {Units.Smears - smears0} smears, {Debris.Sparked + Debris.Sprayed - thrown0} sparks and bits");
+        // the blade is seen brought down to the body by the moment the blow is struck, so that the wound opens as it gets
+        // there: all but the first, struck as the two came into reach
+        int blowsH = Units.Blows - blows0, comingH = Units.BlowsSeenComing - coming0;
+        Check("hand to hand the blows come many ways, the arms turn every way, the blade gets to the body as the blow is struck, and where it lands sparks, splinters or blood fly and it leaves its smear",
+            ways.Count >= 3 && Units.Twisted > twisted0 && Units.Smears > smears0 && Debris.Sparked + Debris.Sprayed > thrown0 && blowsH >= 4 && comingH * 3 >= blowsH * 2,
+            $"{landed} blows, {ways.Count} ways ({string.Join(", ", ways)}); {comingH} of {blowsH} blows of the two brought down to the body by the time they were struck; {Units.Twisted - twisted0} figures turned out of a plain swing, {Units.Smears - smears0} smears, {Debris.Sparked + Debris.Sprayed - thrown0} sparks and bits");
         duelist.Dead = orc.Dead = true; duelist.DiedAt = orc.DiedAt = -999;
         Rig.Set(aim1.x, aim1.z, aim1.yaw, aim1.pitch, aim1.zoom, snap: true);
 
@@ -2557,7 +2560,7 @@ public partial class Main : Node3D
     /// club, a rider from the saddle, a hound's teeth, a giant's maul. --look=0 they fight (--at=seconds); with the game
     /// stopped, 1 every striker drawn back for its stroke, 2 the moment the blade meets the body, 3 on through it; 4 and
     /// on one pair close, at the moment it meets (--at=seconds after the blow, under one, for another moment; below
-    /// nought, so long before it, drawing back).
+    /// nought, so long before it: the blade coming down in the last 0.085 s, drawing back before that).
     /// </summary>
     void Duel()
     {
@@ -2578,9 +2581,10 @@ public partial class Main : Node3D
         for (int i = 0; i < pairs.Length; i++)
         {
             var (ta, tb, k) = pairs[i];
-            // four pairs to a row, the rows going away from the camera; the striker on the right, facing back along the
-            // row, its sword arm toward the camera
-            float along = (i % 4 - 1.5f) * apart, back = (i / 4 - 1) * gap;
+            // four pairs to a row, the rows going away from the camera; the striker on the left, facing on along the row
+            // to the right, so that its sword arm is toward the camera and its shield away from it — but one driving
+            // its shield in, on the right with its shield toward the camera
+            float along = (i % 4 - 1.5f) * apart, back = (i / 4 - 1) * gap, side = k == StrokeKind.Bash ? -1 : 1;
             float d = k == StrokeKind.Bash ? ta.BodyR + tb.BodyR + 3 : ta.Reach + tb.BodyR - 2;
             Unit Put(UnitType t, float al, float face)
             {
@@ -2592,8 +2596,8 @@ public partial class Main : Node3D
                 if (t.Team == Team.Horde) { u.Guard = true; u.Home = u.Cell; } else { u.Hold = true; u.Post = u.Cell; u.Dest = u.Cell; }
                 return u;
             }
-            var a = Put(ta, along + d / 2, MathF.Atan2(sin, -cos));
-            var b = Put(tb, along - d / 2, MathF.Atan2(-sin, cos));
+            var a = Put(ta, along - side * d / 2, MathF.Atan2(-sin * side, cos * side));
+            var b = Put(tb, along + side * d / 2, MathF.Atan2(sin * side, -cos * side));
             a.Target = b; b.Target = a;
             strikers.Add((a, b, k));
         }
@@ -2603,13 +2607,14 @@ public partial class Main : Node3D
             // the game stopped at one moment of every blow (close up, --at=seconds after it, or before it below nought)
             Paused = true;
             bool at = close >= 0 && _poseSeconds > -1 && _poseSeconds < 1;
-            float since = at ? (float)_poseSeconds : _look == 3 ? UnitView.StrikeTime + UnitView.FollowTime * .6f : UnitView.StrikeTime;
+            float since = at ? (float)_poseSeconds : _look == 3 ? UnitView.FollowTime * .6f : 0;
             foreach (var (a, b, k) in strikers)
             {
                 a.State = b.State = UnitState.Fight;
                 a.NextStroke = k; a.StrokeFor = b;
                 b.Cooldown = b.T.AttackTime;
-                if (_look == 1 || since < 0) { a.Cooldown = _look == 1 ? .02f : -since; a.StrokeTime = -99; continue; }
+                // drawn back all the way, the blade about to start down; or so long before the blow
+                if (_look == 1 || since < 0) { a.Cooldown = _look == 1 ? UnitView.StrikeTime : -since; a.StrokeTime = -99; continue; }
                 sim.Strike(a, b);
                 a.Cooldown = a.T.AttackTime;
                 a.StrokeTime = sim.Time - since;

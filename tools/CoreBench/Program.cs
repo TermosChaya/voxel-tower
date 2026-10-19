@@ -4394,23 +4394,26 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--strokes")
         $"struck at {hOver:0.00}, {hSweep:0.00}, {hRise:0.00} of an orc's height; an overhead cut {overSpan.across:0.0} across by {overSpan.up:0.0} up, a sweep {sweepSpan.across:0.0} by {sweepSpan.up:0.0} (half-voxels)");
     Done(hA, hB);
 
-    // a sweep at the neck can take the head off; a cut from over the head splits it instead
+    // a sweep at the neck can take the head off; a cut from over the head splits it instead. The height and the side
+    // of each blow are given, not drawn — the sweep's at the neck, the overhead's about the middle — so that what the
+    // checks before this one strike does not decide it
     int heads = 0, split = 0, overHeads = 0;
     for (int i = 0; i < 12; i++)
     {
         var (a, b) = Pair(simK, Kinds.Knight, Kinds.Goblin, Kinds.Knight.Reach + Kinds.Goblin.BodyR - 1 - i % 3 * 1.5f);
         b.Look = i % Bodies.Looks(b.T);
-        for (int n = 0; n < 5 && !b.Dead; n++) { a.NextStroke = StrokeKind.Sweep; a.StrokeFor = b; simK.Strike(a, b); }
+        float Spread(int j, float golden) => j * golden % 1;
+        for (int n = 0; n < 5 && !b.Dead; n++) { a.NextStroke = StrokeKind.Sweep; a.StrokeFor = b; simK.Strike(a, b, .6f + .3f * Spread(i * 5 + n, .618f), .3f + .4f * Spread(i * 7 + n * 3, .382f)); }
         if (b.Wounds?.Wounds.Contains("отрублена голова") == true) heads++;
         var (c, d) = Pair(simK, Kinds.Knight, Kinds.Goblin, Kinds.Knight.Reach + Kinds.Goblin.BodyR - 1 - i % 3 * 1.5f);
         d.Look = i % Bodies.Looks(d.T);
-        for (int n = 0; n < 5 && !d.Dead; n++) { c.NextStroke = StrokeKind.Overhead; c.StrokeFor = d; simK.Strike(c, d); }
+        for (int n = 0; n < 5 && !d.Dead; n++) { c.NextStroke = StrokeKind.Overhead; c.StrokeFor = d; simK.Strike(c, d, .3f + .3f * Spread(i * 5 + n, .618f), .3f + .4f * Spread(i * 7 + n * 3, .382f)); }
         if (d.Wounds?.Wounds.Contains("отрублена голова") == true) overHeads++;
         if (d.Wounds?.Wounds.Contains("разбита голова") == true) split++;
         Done(a, b, c, d);
     }
-    Check("a knight's sweep at the neck can take a goblin's head off; his cut from over the head splits it instead", heads >= 1 && overHeads == 0 && split >= 6,
-        $"heads off {heads} of 12 by the sweep, {overHeads} by the overhead, which split {split}");
+    Check("a knight's sweep at the neck takes a goblin's head off; his cut from over the head splits it instead", heads >= 8 && overHeads == 0 && split >= 7,
+        $"heads off {heads} of 12 by the sweep at the neck, {overHeads} by the overhead, which split {split}");
 
     // the same valley, the same blows: the strokes are chosen without the dice of the simulation
     List<(StrokeKind, float)> Bout(Sim s)

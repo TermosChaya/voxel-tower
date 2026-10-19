@@ -135,6 +135,9 @@ public sealed class Grip
     public bool Shield, Beast, Mounted, TwoHands;
     /// <summary>The figure's height, for scaling the step.</summary>
     public float Height;
+    /// <summary>How it stands between blows (see <see cref="Strokes.Guard"/>), worked out once.</summary>
+    internal StrokePose Rest;
+    internal bool Rested;
 }
 
 /// <summary>A blow as it landed, for the eye and the ear: nothing in the simulation hangs on it.</summary>
@@ -355,6 +358,8 @@ public static class Strokes
             }
             g.Snout = new Vec(n > 0 ? sx / n / S : 0, n > 0 ? sy / n / S : t.BodyH * .6f, (front + 1) / S);
         }
+        g.Rest = MakeGuard(g, t);
+        g.Rested = true;
         return g;
     }
 
@@ -363,7 +368,9 @@ public static class Strokes
     static float Keys(float s, float sc, float a, float b, float c) => s <= sc ? a + (b - a) * Math.Clamp(s / Math.Max(sc, 1e-3f), 0, 1) : b + (c - b) * Math.Clamp((s - sc) / Math.Max(1 - sc, 1e-3f), 0, 1);
 
     /// <summary>How a figure holds itself when it is between blows, by what it fights with: its blade up before it, a spear levelled, a club on the shoulder.</summary>
-    public static StrokePose Guard(Grip g, UnitType t)
+    public static StrokePose Guard(Grip g, UnitType t) => g.Rested ? g.Rest : MakeGuard(g, t);
+
+    static StrokePose MakeGuard(Grip g, UnitType t)
     {
         var p = new StrokePose { Off = Turn.About(Vec.Left, -.45f) };
         switch (t.Tool)
@@ -405,7 +412,6 @@ public static class Strokes
         p.Lunge = Keys(s, sc, (sh.Way == Way.Arc ? 0 : lunge) - sh.Back * kk, lunge, lunge + sh.Over * kk);
         p.Drop = Drop(g, p.Lunge);
         var tilt = Turn.About(Vec.Up, yaw) * Turn.About(Vec.Left, aim);
-        var guard = Guard(g, t);
         switch (sh.Way)
         {
             case Way.Arc:
@@ -422,7 +428,7 @@ public static class Strokes
                 p.Main = tilt * Turn.Arm(V(-.42f, -.9f, 0), Vec.Forward);
                 break;
             case Way.Shield:
-                p.Main = guard.Main;
+                p.Main = Guard(g, t).Main;
                 p.Off = tilt * Turn.About(Vec.Left, Keys(s, sc, sh.O0, sh.Oc, sh.O1));
                 break;
             case Way.Jaws:
@@ -433,7 +439,7 @@ public static class Strokes
         // a rider does not twist his horse round, nor lean it into the blow
         if (g.Mounted) { p.Twist = 0; p.Lean *= .25f; }
         if (sh.Way is Way.Arc or Way.Line)
-            p.Off = g.TwoHands ? OffGrip(g, p.Main, guard.Off)
+            p.Off = g.TwoHands ? OffGrip(g, p.Main, Guard(g, t).Off)
                 // a shield kept up before the body, swung out of the blade's way as it comes across
                 : g.Shield ? Turn.About(Vec.Up, Keys(s, sc, 0, sh.Open, sh.Open * .8f)) * Turn.About(Vec.Left, -1.05f + Keys(s, sc, .15f, -.1f, .1f))
                 : Turn.About(Vec.Left, Keys(s, sc, -.6f, -.2f, .35f));
@@ -527,6 +533,94 @@ public static class Strokes
                 return OnTrunk(g, p, g.Snout + new Vec(0, (along - .5f) * g.Height * .15f, 0));
             default:
                 return OnMain(g, p, Blade(g, along));
+        }
+    }
+
+    /// <summary>
+    /// One stroke laid out, to be followed along its sweep over and over — where it first meets the body is looked for
+    /// so, at every blow: what stays the same all along it is worked out once, and of each moment only the two ends of
+    /// the striking part, which runs straight between them (the blade, the shield's face, the jaws). The same places as
+    /// <see cref="Pose"/> and <see cref="Striking"/> give, without the arm that does not strike.
+    /// </summary>
+    internal readonly struct Sweep
+    {
+        readonly Grip _g;
+        readonly Shape _sh;
+        readonly float _sc, _lunge, _aim, _kk, _a1;
+        readonly Turn _tilt, _line;
+        /// <summary>The joint the striking part turns about, and its two ends at rest.</summary>
+        readonly Vec _pivot, _v0, _v1;
+
+        public Sweep(Grip g, StrokeKind k, float aim, float yaw, float lunge)
+        {
+            _g = g; _sh = Shapes[(int)k]; _sc = Contact(k); _lunge = lunge; _aim = aim; _kk = g.Height / 15;
+            _a1 = _sh.A1 + (g.Mounted ? D(50) : 0);
+            _tilt = Turn.About(Vec.Up, yaw) * Turn.About(Vec.Left, aim);
+            _line = _tilt * Turn.Arm(V(-.42f, -.9f, 0), Vec.Forward);
+            switch (_sh.Way)
+            {
+                case Way.Shield:
+                    _pivot = g.OffShoulder; _v0 = g.Boss + new Vec(0, -.5f * g.Height * .2f, 0); _v1 = g.Boss + new Vec(0, .5f * g.Height * .2f, 0);
+                    break;
+                case Way.Jaws:
+                    _pivot = g.Hip; _v0 = g.Snout + new Vec(0, -.5f * g.Height * .15f, 0); _v1 = g.Snout + new Vec(0, .5f * g.Height * .15f, 0);
+                    break;
+                default:
+                    _pivot = g.Shoulder; _v0 = Blade(g, 0); _v1 = Blade(g, 1);
+                    break;
+            }
+        }
+
+        public Grip Grip => _g;
+
+        /// <summary>Where along it (0 drawn back … 1 spent) the stroke is drawn to meet the body.</summary>
+        public float Met => _sc;
+
+        /// <summary>
+        /// How much of a longer step a moment of the stroke goes on with: an arc's drawn-back end stays where the man
+        /// stood and the step comes in as the blade comes round to the body; a thrust, a bash, a bite go in whole.
+        /// </summary>
+        public float StepShare(float s) => _sh.Way == Way.Arc && s < _sc ? s / Math.Max(_sc, 1e-3f) : 1;
+
+        /// <summary>The striking part's two ends at a moment of the stroke (0 drawn back … 1 spent), in the figure's frame.</summary>
+        public void Ends(float s, out Vec root, out Vec tip)
+        {
+            Frame(s, out var trunk, out var shift, out var arm);
+            root = _g.Hip + trunk.Apply(_pivot + arm.Apply(_v0 - _pivot) - _g.Hip) + shift;
+            tip = _g.Hip + trunk.Apply(_pivot + arm.Apply(_v1 - _pivot) - _g.Hip) + shift;
+        }
+
+        /// <summary>The joint the striking part turns about (the shoulder, or the hip for the jaws) at a moment of the stroke.</summary>
+        public Vec Joint(float s)
+        {
+            Frame(s, out var trunk, out var shift, out _);
+            return _g.Hip + trunk.Apply(_pivot - _g.Hip) + shift;
+        }
+
+        /// <summary>The trunk's turn at the hips and the step at a moment of the stroke, and the striking arm's turn at its joint.</summary>
+        void Frame(float s, out Turn trunk, out Vec shift, out Turn arm)
+        {
+            var sh = _sh;
+            float twist = Keys(s, _sc, sh.T0, sh.Tc, sh.T1), lean = Keys(s, _sc, sh.L0, sh.Lc, sh.L1);
+            float lunge = Keys(s, _sc, (sh.Way == Way.Arc ? 0 : _lunge) - sh.Back * _kk, _lunge, _lunge + sh.Over * _kk);
+            float drop = Drop(_g, lunge);
+            switch (sh.Way)
+            {
+                case Way.Arc:
+                {
+                    float a = Keys(s, _sc, sh.A0, sh.Ac, _a1), ca = MathF.Cos(a), sa = MathF.Sin(a);
+                    arm = _tilt * Turn.Arm(sh.U * -sa + sh.V * ca, sh.U * ca + sh.V * sa);
+                    break;
+                }
+                case Way.Line: arm = _line; break;
+                case Way.Shield: arm = _tilt * Turn.About(Vec.Left, Keys(s, _sc, sh.O0, sh.Oc, sh.O1)); break;
+                default: arm = Turn.None; lean += _aim; break;
+            }
+            if (_g.Mounted) { twist = 0; lean *= .25f; }
+            // twisted about the upright and leant about the shoulders' line: the two turns at once
+            float sy = MathF.Sin(twist / 2), cy = MathF.Cos(twist / 2), sl = MathF.Sin(lean / 2), cl = MathF.Cos(lean / 2);
+            trunk = new Turn(cy * sl, sy * cl, -sy * sl, cy * cl);
+            shift = new Vec(0, -drop, lunge);
         }
     }
 
@@ -682,11 +776,29 @@ public sealed partial class Sim
     }
 
     /// <summary>The stroke a striker is drawing back for now, at whoever it is set on.</summary>
-    public StrokeKind Upcoming(Unit a)
+    public StrokeKind Upcoming(Unit a) => Upcoming(a, a.Target ?? a.StrokeFor);
+
+    /// <summary>The stroke a striker would bring down on this one next.</summary>
+    public StrokeKind Upcoming(Unit a, Unit b) => b == null || b == a.StrokeFor ? a.NextStroke : Choose(a, b);
+
+    /// <summary>
+    /// The one a fighter's next blow falls on as soon as its arm comes round — one it is set on and has in reach now —
+    /// or null: for the eye, which brings the blade down a moment before the blow so that it gets there with it.
+    /// </summary>
+    public Unit Poised(Unit a)
     {
-        var b = a.Target ?? a.StrokeFor;
-        return b == null || b == a.StrokeFor ? a.NextStroke : Choose(a, b);
+        if (a.Dead || a.State != UnitState.Fight || a.T.Ranged || Kinds.IsEngine(a.T)) return null;
+        var b = a.Target ?? a.Prey;
+        return b is { Dead: false } && InReach(a, b) ? b : null;
     }
+
+    /// <summary>
+    /// How the stroke a striker means would be laid out against the one it means it for, with the draws at their
+    /// middle, and where along it (0 drawn back … 1 spent) it would come to the body: for the eye, which draws it back
+    /// for that stroke and brings the blade along it to the body just ahead of the blow. Nothing is marked on anyone.
+    /// </summary>
+    public void Foresee(Unit a, Unit b, StrokeKind k, out float aim, out float yaw, out float lunge, out float sAt)
+        => Lay(a, b, k, .45f, .5f, out aim, out yaw, out lunge, out sAt, out _, out _, out _, out _);
 
     /// <summary>A stroke the player wished for, or the nearest the weapon can make of it (an axe does not thrust, a spear only does).</summary>
     StrokeKind Fit(Unit a, Unit b, StrokeKind wish)
@@ -711,33 +823,19 @@ public sealed partial class Sim
     }
 
     /// <summary>
-    /// A stroke laid out against the one it is struck at: aimed, and then the sweep followed from drawn back to spent
-    /// until the striking part first comes inside the body (a standing cylinder): there, the spot it meets, the way it is
-    /// going and the line of its edge. Most often the step is the least that brings the blade there; one out of reach of
-    /// any step is met where the sweep comes nearest.
+    /// A stroke laid out against the one it is struck at, and marked on the striker for the eye: aimed, and then the
+    /// sweep followed from drawn back to spent until the striking part first comes inside the body (a standing
+    /// cylinder): there, the spot it meets, the way it is going and the line of its edge. One out of reach of any step is
+    /// met where the sweep comes nearest, taken in to the body's round.
     /// </summary>
     void LayStroke(Unit a, Unit b, StrokeKind k, float jitterUp, float jitterSide, out Vec at, out Vec dir, out Vec root, out Vec edge)
     {
-        var g = Strokes.GripOf(Bodies.Plan(a.T, a.Look), a.T);
-        float sb = b.Leader ? 1.15f : 1, br = b.T.BodyR * sb + .25f, bh = b.T.BodyH * sb;
-        Aim(a, b, k, jitterUp, jitterSide, out float aim, out float yaw, out float lunge);
-        float step = Strokes.MaxStep(a, g);
-        // the least step that brings it to the body: from half a stride on, longer till it does
-        float s0 = 0;
-        Vec c = default, t = default, r0 = default, e = default;
-        bool met = false;
-        if (!Strokes.Straight(k)) lunge *= .5f;
-        for (int tries = 0; tries < 8 && !met; tries++)
-        {
-            met = Meet(a, g, k, aim, yaw, lunge, b, br, bh, out s0, out c, out t, out r0, out e);
-            if (!met) { if (lunge >= step) break; lunge = Math.Min(step, lunge + 1); }
-        }
+        bool met = Lay(a, b, k, jitterUp, jitterSide, out float aim, out float yaw, out float lunge, out float s0, out var c, out var t, out var r0, out var e);
         Blows++;
         if (met) BlowsMet++;
         else
         {
-            // out of reach of any step: where the sweep comes nearest, taken in to the body's round
-            Nearest(a, g, k, aim, yaw, lunge, b, bh, out s0, out c, out t, out r0, out e);
+            float sb = b.Leader ? 1.15f : 1, br = b.T.BodyR * sb + .25f, bh = b.T.BodyH * sb;
             float dx = c.X - b.X, dz = c.Z - b.Z, d = MathF.Sqrt(dx * dx + dz * dz);
             var moved = c;
             if (d > br) { moved.X = b.X + dx / d * br; moved.Z = b.Z + dz / d * br; }
@@ -747,6 +845,38 @@ public sealed partial class Sim
         }
         a.Stroke = k; a.StrokeAim = aim; a.StrokeYaw = yaw; a.StrokeLunge = lunge; a.StrokeAt = s0; a.StrokeTime = Time;
         at = c; dir = t; root = r0; edge = e;
+    }
+
+    /// <summary>
+    /// A stroke laid out against the one it is struck at, touching nothing: true when it comes to the body. Most often
+    /// the step is the least that brings the blade there, from half a stride on by whole voxels; the steps that the
+    /// nearest any of the blade came show to fall short are passed over without being tried. One out of reach of any
+    /// step gives where its sweep comes nearest the body.
+    /// </summary>
+    bool Lay(Unit a, Unit b, StrokeKind k, float jitterUp, float jitterSide, out float aim, out float yaw, out float lunge, out float s0, out Vec at, out Vec dir, out Vec root, out Vec edge)
+    {
+        var g = Strokes.GripOf(Bodies.Plan(a.T, a.Look), a.T);
+        float sb = b.Leader ? 1.15f : 1, br = b.T.BodyR * sb + .25f, bh = b.T.BodyH * sb;
+        Aim(a, b, k, jitterUp, jitterSide, out aim, out yaw, out lunge);
+        float step = Strokes.MaxStep(a, g), l0 = Strokes.Straight(k) ? lunge : lunge * .5f;
+        // the try that takes the step to the full
+        int full = l0 >= step ? 0 : (int)MathF.Ceiling(step - l0);
+        for (int n = 0; ;)
+        {
+            // (a shield is driven in as far as it needs, even past a stride)
+            lunge = n == 0 ? l0 : Math.Min(step, l0 + n);
+            if (Meet(a, new Strokes.Sweep(g, k, aim, yaw, lunge), b, br, bh, out s0, out at, out dir, out root, out edge, out float need)) return true;
+            if (lunge >= step) break;
+            // on by whole voxels, past those too short for any of the blade to reach the body's round — the full step
+            // tried last if it is long enough
+            int next = n + (need > 16 ? 16 : Math.Max(1, (int)MathF.Ceiling(need - 1e-3f)));
+            if (next >= full) next = full > n && step - lunge >= need - 1e-3f ? full : 99;
+            if (next > 7) break;
+            n = next;
+        }
+        lunge = l0 >= step ? l0 : Math.Min(step, l0 + 8);
+        Nearest(a, new Strokes.Sweep(g, k, aim, yaw, lunge), b, bh, out s0, out at, out dir, out root, out edge);
+        return false;
     }
 
     /// <summary>
@@ -803,7 +933,8 @@ public sealed partial class Sim
         // a thrust, a bash, a bite: the step that brings the point (the shield, the jaws) a little into the body as the stroke meets
         float Reach(float aim, float yaw)
         {
-            float tip = Strokes.Striking(g, k, Strokes.Pose(g, a.T, k, sc, aim, yaw, 0), k == StrokeKind.Thrust ? 1 : .5f).Z;
+            new Strokes.Sweep(g, k, aim, yaw, 0).Ends(sc, out var r0, out var r1);
+            float tip = (k == StrokeKind.Thrust ? r1 : r0 + (r1 - r0) * .5f).Z;
             return Math.Clamp(dist - br * ka + (k == StrokeKind.Thrust ? 1.5f : .6f) - tip, -2 * a.T.BodyH / 15, k == StrokeKind.Bash ? step * 1.6f : step);
         }
         if (Strokes.Straight(k)) lunge = Reach(aim, yaw);
@@ -814,10 +945,11 @@ public sealed partial class Sim
             float front = dist - br * ka, tx = bl.X + (jitterSide - .5f) * br * ka * .8f;
             for (int i = 0; i < 3; i++)
             {
-                var pz = Strokes.Pose(g, a.T, k, sc, aim, yaw, lunge);
-                var at = Strokes.Striking(g, k, pz, 1);
-                for (int j = 0; j <= 12; j++) { var q = Strokes.Striking(g, k, pz, j / 12f); if (q.Z >= front) { at = q; break; } }
-                var piv = Strokes.OnTrunk(g, pz, g.Shoulder);
+                var sw = new Strokes.Sweep(g, k, aim, yaw, lunge);
+                sw.Ends(sc, out var r0, out var r1);
+                var at = r1;
+                for (int j = 0; j <= 12; j++) { var q = r0 + (r1 - r0) * (j / 12f); if (q.Z >= front) { at = q; break; } }
+                var piv = sw.Joint(sc);
                 float rz = Math.Max(1, at.Z - piv.Z);
                 aim = Math.Clamp(aim + MathF.Atan2(at.Y - piv.Y, rz) - MathF.Atan2(ty - piv.Y, rz), -.9f, g.Mounted ? 1.3f : .9f);
                 yaw += MathF.Atan2(tx - piv.X, rz) - MathF.Atan2(at.X - piv.X, rz);
@@ -826,26 +958,42 @@ public sealed partial class Sim
         }
     }
 
-    /// <summary>Follows a stroke from drawn back to spent: the first moment any of its striking part is inside the body.</summary>
-    static bool Meet(Unit a, Grip g, StrokeKind k, float aim, float yaw, float lunge, Unit b, float br, float bh, out float sAt, out Vec at, out Vec dir, out Vec root, out Vec edge)
+    /// <summary>
+    /// Follows a stroke from drawn back to spent: the first moment any of its striking part is inside the body. One that
+    /// does not get there tells how much further in (voxels of the striker's step) would at the least bring some of it to
+    /// the body's round — a step any shorter would not.
+    /// </summary>
+    static bool Meet(Unit a, in Strokes.Sweep sw, Unit b, float br, float bh, out float sAt, out Vec at, out Vec dir, out Vec root, out Vec edge, out float need)
     {
         const int Steps = 28, Along = 7;
+        float m = a.Leader ? 1.15f : 1, sin = MathF.Sin(a.Facing), cos = MathF.Cos(a.Facing);
+        Vec W(Vec v) => new(a.X + (v.X * sin + v.Z * cos) * m, a.Y + v.Y * m, a.Z + (-v.X * cos + v.Z * sin) * m);
+        // a longer step can sink the hips (or raise them out of a step back) by as much as this
+        float sink = Strokes.Drop(sw.Grip, 1e4f) * m;
         Span<Vec> prev = stackalloc Vec[Along], now = stackalloc Vec[Along];
+        need = float.MaxValue;
         for (int i = 0; i <= Steps; i++)
         {
             float s = i / (float)Steps;
-            var p = Strokes.Pose(g, a.T, k, s, aim, yaw, lunge);
+            sw.Ends(s, out var r, out var t);
+            Vec w0 = W(r), span = W(t) - w0;
+            // a longer step moves this moment of the stroke on by so much of it, no more
+            float share = Math.Max(1e-3f, sw.StepShare(s));
             int best = -1;
             float bestK = 9;
             for (int j = 0; j < Along; j++)
             {
                 float kk = .1f + .9f * j / (Along - 1);
-                var w = now[j] = Strokes.ToWorld(a, Strokes.Striking(g, k, p, kk));
+                var w = now[j] = w0 + span * kk;
                 if (i == 0) continue;
                 float dx = w.X - b.X, dz = w.Z - b.Z;
                 bool inside = dx * dx + dz * dz <= br * br && w.Y >= b.Y - .5f && w.Y <= b.Y + bh + .5f;
                 // of what is inside, the part of the blade that strikes best, two thirds of the way out
                 if (inside && MathF.Abs(kk - .7f) < bestK) { bestK = MathF.Abs(kk - .7f); best = j; }
+                if (best >= 0 || w.Y < b.Y - .5f - sink || w.Y > b.Y + bh + .5f + sink) continue;
+                // how far on along the way the striker faces would bring this spot into the body's round
+                float on = dx * cos + dz * sin, c = dx * dx + dz * dz - br * br, disc = on * on - c;
+                if (disc >= 0 && -on + MathF.Sqrt(disc) >= 0) need = Math.Min(need, Math.Max(0, -on - MathF.Sqrt(disc)) / (m * share));
             }
             if (best >= 0)
             {
@@ -854,35 +1002,37 @@ public sealed partial class Sim
                 dir = d.Length < 1e-3f ? (new Vec(b.X, at.Y, b.Z) - at).Unit : d.Unit;
                 // the blade from its root to its point as it meets the body
                 root = now[0]; edge = now[Along - 1] - now[0];
-                sAt = s;
+                sAt = s; need = 0;
                 return true;
             }
             now.CopyTo(prev);
         }
-        sAt = Strokes.Contact(k); at = default; dir = default; root = default; edge = default;
+        sAt = sw.Met; at = default; dir = default; root = default; edge = default;
         return false;
     }
 
     /// <summary>Where a stroke that meets nothing comes nearest the body's axis, and how it is going there.</summary>
-    static void Nearest(Unit a, Grip g, StrokeKind k, float aim, float yaw, float lunge, Unit b, float bh, out float sAt, out Vec at, out Vec dir, out Vec root, out Vec edge)
+    static void Nearest(Unit a, in Strokes.Sweep sw, Unit b, float bh, out float sAt, out Vec at, out Vec dir, out Vec root, out Vec edge)
     {
         const int Steps = 28;
+        float m = a.Leader ? 1.15f : 1, sin = MathF.Sin(a.Facing), cos = MathF.Cos(a.Facing);
+        Vec W(Vec v) => new(a.X + (v.X * sin + v.Z * cos) * m, a.Y + v.Y * m, a.Z + (-v.X * cos + v.Z * sin) * m);
         float best = float.MaxValue;
-        sAt = Strokes.Contact(k); at = new Vec(b.X, b.Y + bh * .6f, b.Z); dir = (at - new Vec(a.X, at.Y, a.Z)).Unit; root = at; edge = default;
+        sAt = sw.Met; at = new Vec(b.X, b.Y + bh * .6f, b.Z); dir = (at - new Vec(a.X, at.Y, a.Z)).Unit; root = at; edge = default;
         Vec last = default;
         for (int i = 0; i <= Steps; i++)
         {
             float s = i / (float)Steps;
-            var p = Strokes.Pose(g, a.T, k, s, aim, yaw, lunge);
-            var w = Strokes.ToWorld(a, Strokes.Striking(g, k, p, 1));
+            sw.Ends(s, out var r, out var t);
+            var w = W(t);
             float dx = w.X - b.X, dz = w.Z - b.Z, dy = Math.Max(0, Math.Max(b.Y - w.Y, w.Y - b.Y - bh));
             float d = dx * dx + dz * dz + dy * dy;
             if (i > 0 && d < best)
             {
                 best = d; sAt = s; at = w;
-                var m = w - last;
-                if (m.Length > 1e-3f) dir = m.Unit;
-                root = Strokes.ToWorld(a, Strokes.Striking(g, k, p, .1f));
+                var mv = w - last;
+                if (mv.Length > 1e-3f) dir = mv.Unit;
+                root = W(r + (t - r) * .1f);
                 edge = w - root;
             }
             last = w;
