@@ -135,6 +135,11 @@ public sealed class NavGrid
         int i = x >> Shift, cy = y >> Shift, k = z >> Shift;
         Mark(Id(i, cy, k));
         if (cy + 1 < NY) Mark(Id(i, cy + 1, k));
+        // whether a cell holds a tree that still stands hangs on the trunk running on through the cells above and below
+        // it, and on the ground under it: a trunk cut or a stump dug changes the cells that far round too
+        if (Mat.IsTrunk(World.Get(x, y, z)) || Mat.IsTrunk(World.Get(x, y + 1, z)) || Mat.IsTrunk(World.Get(x, y - 1, z)))
+            for (int d = -2; d <= 2; d++)
+                if (d is < 0 or > 1 && cy + d >= 0 && cy + d < NY) Mark(Id(i, cy + d, k));
     }
 
     void Mark(int c)
