@@ -1010,14 +1010,15 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--life")
         mason.Dead = true; mason.DiedAt = -999;
 
         // a plot taken back goes with the felling it had begun to mark; what it marks while the hand is on
-        // something else is not the hand's
+        // something else is not the hand's (a big tree, still being felled twenty seconds on)
         (int x, int z) tree = (-1, -1);
         for (int r = 60; r < 500 && tree.x < 0; r += 8)
             for (int a = 0; a < 360 && tree.x < 0; a += 4)
             {
                 int x = site4.KeepX + (int)(Math.Cos(a * Math.PI / 180) * r), z = site4.KeepZ + (int)(Math.Sin(a * Math.PI / 180) * r);
                 if (x < 40 || z < 40 || x >= w4.SX - 40 || z >= w4.SZ - 40) continue;
-                if (Mat.IsTrunk(w4.Get(x, w4.SurfAt(x, z) + 2, z))) tree = (x, z);
+                int y = w4.SurfAt(x, z) + 2;
+                if (Mat.IsTrunk(w4.Get(x, y, z)) && Shapes.Tree(w4, x, y, z).Count > 6000) tree = (x, z);
             }
         var woodman = sim.Spawn(Kinds.Worker, sim.NearestStand(tree.x + 30, tree.z, 4));
         sim.BeginMarking();
@@ -1529,7 +1530,9 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--fire")
         }
     RunF(.5);
     int wetDeck = deck.FindAll(d => d.wet).Count, dryDeck = deck.Count - wetDeck;
-    bool farLit = simF.Ignite(sx0 + 1, sg + 2, sz0 + 5), wetLit = simF.Ignite(sx0 + 22, sg + 2, sz0 + 5);
+    // the dry part set alight in two places (a fire creeping along one course of logs from a single spark can all but die
+    // down for minutes, as the dice fall), the pool in one
+    bool farLit = simF.Ignite(sx0 + 1, sg + 2, sz0 + 5) && simF.Ignite(sx0 + 10, sg + 2, sz0 + 5), wetLit = simF.Ignite(sx0 + 22, sg + 2, sz0 + 5);
     RunF(240);
     int wetLeft = deck.FindAll(d => d.wet && wF.Get(d.x, sg + 2, d.z) == Mat.Wood).Count, dryLeft = deck.FindAll(d => !d.wet && wF.Get(d.x, sg + 2, d.z) == Mat.Wood).Count;
     Check("a floor of logs over stone and a pool: what lies on the water never catches, the rest burns",

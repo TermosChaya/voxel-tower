@@ -6,8 +6,9 @@ namespace VoxelTower.Core;
 
 /// <summary>
 /// The walkable world on metre cells of 8³ voxels: how full each cell is and of what, and where feet rest in it.
-/// Leaves, bushes, grass, ladders and water don't block; trunks, earth, masonry and rock do once a cell is a quarter full.
-/// A cell with a ladder in it can be hung on and climbed; a cell more than a third full of water drowns whoever stands there.
+/// Leaves, bushes, grass, ladders and water don't block; trunks, earth, masonry and rock do once a cell is a quarter full,
+/// and a standing trunk through the middle of a cell does however thin it is: nobody stands inside a tree. A cell with a
+/// ladder in it can be hung on and climbed; a cell more than a third full of water drowns whoever stands there.
 /// </summary>
 public sealed class NavGrid
 {
@@ -165,6 +166,7 @@ public sealed class NavGrid
         int ci = World.ChunkIndex(x0 >> VoxelWorld.Shift, y0 >> VoxelWorld.Shift, z0 >> VoxelWorld.Shift);
         var d = World.ChunkData(ci);
         int fill = 0, e = 0, wd = 0, st = 0, rk = 0, hard = 0, keep = 0, lad = 0, wat = 0, gate = 0, spk = 0;
+        Span<int> trunk = stackalloc int[4];
         if (d == null)
         {
             byte u = World.ChunkUniform(ci), cls = Cls[u];
@@ -186,6 +188,7 @@ public sealed class NavGrid
                             // a leaf voxel shuts twice its share of the cell, but takes no longer to hack
                             if (Mat.IsLeaf(v)) fill++;
                             if (v == Mat.Gate) gate += 2;
+                            if ((uint)(xx - 3) < 2 && (uint)(zz - 3) < 2 && Mat.IsTrunk(v)) trunk[(zz - 3) * 2 + xx - 3]++;
                         }
                         // pitch is waded and drowned in like water
                         else if (v == Mat.Water || v == Mat.Pitch) wat++;
@@ -194,6 +197,8 @@ public sealed class NavGrid
                     }
                 }
         }
+        // a trunk standing up through the middle of the cell (not a root, nor a bough across it)
+        if (Math.Max(Math.Max(trunk[0], trunk[1]), Math.Max(trunk[2], trunk[3])) >= 6) fill = Math.Max(fill, SolidT);
         Fill[c] = (ushort)fill; Earth[c] = (ushort)e; Wood[c] = (ushort)wd; Stone[c] = (ushort)st; Rock[c] = (ushort)rk;
         Hard[c] = (byte)(hard > 0 ? 1 : 0);
         Keep[c] = (byte)(keep >= 64 ? 1 : 0);
@@ -221,6 +226,7 @@ public sealed class NavGrid
     /// <summary>
     /// The highest top of solid ground among the cell's middle columns, from half a cell below to near its top.
     /// When the middle is open (the cell below holds only the edge of a wall) the feet rest on that edge instead.
+    /// A standing trunk is no floor: only its top is, a stump's, or a root's.
     /// </summary>
     int FloorIn(int x0, int y0, int z0)
     {
@@ -237,7 +243,8 @@ public sealed class NavGrid
         for (int yy = y0 + 5; yy >= y0 - 8 && yy > best - 1; yy--)
         {
             if (yy < 0) return 0;
-            if (Cls[World.Get(x, yy, z)] != 0) return yy + 1;
+            byte m = World.Get(x, yy, z);
+            if (Cls[m] != 0 && !(Mat.IsTrunk(m) && Mat.IsTrunk(World.Get(x, yy + 1, z)))) return yy + 1;
         }
         return -1;
     }

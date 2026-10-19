@@ -335,45 +335,39 @@ public static class MapGen
             }
 
         // forests in patches, a few lone trees between them: firs and pines in some stretches, oaks and birches in
-        // others, cypresses and birches on the plateau; the trees stand tall, 6 to 13 m
+        // others, cypresses and birches on the plateau; the trees stand tall, 6 to 13 m. A tree keeps its roots clear of
+        // the others' (Flora), and one with no room where it would come up tries once more elsewhere in its square.
         for (int gz = 0; gz < SZ; gz += 20)
             for (int gx = 0; gx < SX; gx += 20)
-            {
-                int x = gx + (int)(Hash.H3(gx, gz, 201) * 16), z = gz + (int)(Hash.H3(gx, gz, 202) * 16);
-                if (x >= SX || z >= SZ || !Clear(x, z) || !Mat.IsGrass(w.Get(x, w.SurfAt(x, z) - 1, z))) continue;
-                double f = nForest.Sample(x * .006, z * .006);
-                double density = f > .58 ? .72 : f > .48 ? .28 : .04;
-                bool plateau = kind[z * SX + x] == Plateau;
-                // the plateau is where the player builds: a clearing round the citadel, thin woods beyond
-                if (plateau) density = NearKeep(x, z, 160) ? 0 : density * .3;
-                if (Hash.H3(gx, gz, 203) > density * p.TreeDensity) continue;
-                double r = Hash.H3(gx, gz, 204), size = Hash.H3(gx, gz, 205), biome = nBiome.Sample(x * .004, z * .004);
-                if (r > .94) { Flora.DeadTree(w, x, z, grown: true, scale: 1.45); continue; }
-                if (r > .86) { Flora.Bush(w, x, z, 3 + (int)(size * 4)); continue; }
-                if (plateau)
-                {
-                    if (r < .45) Flora.Cypress(w, x, z, 42 + (int)(size * 26), grain: 1, grown: true);
-                    else if (r < .7) Flora.Birch(w, x, z, 48 + (int)(size * 26));
-                    else Flora.Pine(w, x, z, 66 + (int)(size * 34));
-                }
-                else if (biome < .45)
-                {
-                    if (r < .55) Flora.Spruce(w, x, z, 56 + (int)(size * 40), size > .5 ? 3 : 2);
-                    else Flora.Pine(w, x, z, 68 + (int)(size * 36));
-                }
-                else if (biome > .58)
-                {
-                    if (r < .5) Flora.Oak(w, x, z, 60 + (int)(size * 28), 4);
-                    else Flora.Birch(w, x, z, 46 + (int)(size * 26));
-                }
-                else
-                {
-                    if (r < .3) Flora.Spruce(w, x, z, 56 + (int)(size * 40), size > .5 ? 3 : 2);
-                    else if (r < .55) Flora.Oak(w, x, z, 60 + (int)(size * 28), 4);
-                    else if (r < .72) Flora.Cypress(w, x, z, 42 + (int)(size * 26), grain: 1, grown: true);
-                    else Flora.Birch(w, x, z, 46 + (int)(size * 26));
-                }
-            }
+                if (Grow(gx, gz, 0) == false) Grow(gx, gz, 1);
+
+        // the tree of a square: null when none is to grow at the spot, false when it had no room there
+        bool? Grow(int gx, int gz, int again)
+        {
+            int x = gx + (int)(Hash.H3(gx, gz, 201 + again * 10) * 16), z = gz + (int)(Hash.H3(gx, gz, 202 + again * 10) * 16);
+            if (x >= SX || z >= SZ || !Clear(x, z) || !Mat.IsGrass(w.Get(x, w.SurfAt(x, z) - 1, z))) return null;
+            double f = nForest.Sample(x * .006, z * .006);
+            double density = f > .58 ? .72 : f > .48 ? .28 : .04;
+            bool plateau = kind[z * SX + x] == Plateau;
+            // the plateau is where the player builds: a clearing round the citadel, thin woods beyond
+            if (plateau) density = NearKeep(x, z, 160) ? 0 : density * .3;
+            if (Hash.H3(gx, gz, 203) > density * p.TreeDensity) return null;
+            double r = Hash.H3(gx, gz, 204), size = Hash.H3(gx, gz, 205), biome = nBiome.Sample(x * .004, z * .004);
+            if (r > .94) return Flora.DeadTree(w, x, z, grown: true, scale: 1.45);
+            if (r > .86) { Flora.Bush(w, x, z, 3 + (int)(size * 4)); return true; }
+            if (plateau)
+                return r < .45 ? Flora.Cypress(w, x, z, 42 + (int)(size * 26), grain: 1, grown: true)
+                    : r < .7 ? Flora.Birch(w, x, z, 48 + (int)(size * 26))
+                    : Flora.Pine(w, x, z, 66 + (int)(size * 34));
+            if (biome < .45)
+                return r < .55 ? Flora.Spruce(w, x, z, 56 + (int)(size * 40), size > .5 ? 3 : 2) : Flora.Pine(w, x, z, 68 + (int)(size * 36));
+            if (biome > .58)
+                return r < .5 ? Flora.Oak(w, x, z, 60 + (int)(size * 28), 4) : Flora.Birch(w, x, z, 46 + (int)(size * 26));
+            return r < .3 ? Flora.Spruce(w, x, z, 56 + (int)(size * 40), size > .5 ? 3 : 2)
+                : r < .55 ? Flora.Oak(w, x, z, 60 + (int)(size * 28), 4)
+                : r < .72 ? Flora.Cypress(w, x, z, 42 + (int)(size * 26), grain: 1, grown: true)
+                : Flora.Birch(w, x, z, 46 + (int)(size * 26));
+        }
 
         site.RiverMid = new float[SZ]; site.RiverHalfWidth = new float[SZ];
         for (int z = 0; z < SZ; z++) { site.RiverMid[z] = (float)RiverX(z); site.RiverHalfWidth[z] = (float)RiverHalf(z); }

@@ -44,9 +44,9 @@ public static class Labour
         D(Mat.Rammed, 1, Stockpile.Earth, 1);
         D(Mat.Rock, 4, Stockpile.Stone, 1); D(Mat.Moss, 4, Stockpile.Stone, 1);
         foreach (var m in new[] { Mat.Stone, Mat.Mortar, Mat.StoneDark, Mat.StoneLight, Mat.StoneWarm, Mat.StoneCool }) D(m, 2.5f, Stockpile.Stone, .75f);
-        // the voxel trunks are drawn thinner than real ones: a voxel of trunk stands for six of timber,
-        // and needles and leaves give a little brushwood
-        foreach (var m in new[] { Mat.Trunk, Mat.Birch, Mat.PineBark, Mat.Snag }) D(m, 2, Stockpile.Wood, 6);
+        // a voxel tree holds less wood than a real one of its height (its crown is leaves round a few boughs): a voxel of
+        // trunk stands for four of timber, and needles and leaves give a little brushwood
+        foreach (var m in new[] { Mat.Trunk, Mat.Birch, Mat.PineBark, Mat.Snag }) D(m, 2, Stockpile.Wood, 4);
         D(Mat.Wood, 2, Stockpile.Wood, .75f);
         foreach (var m in new[] { Mat.Leaf, Mat.Foliage, Mat.NeedleLight, Mat.FoliageLight, Mat.FoliageGold }) D(m, .25f, Stockpile.Wood, .15f);
         // ladders come apart quickly, and what the horde leaves behind is timber too
