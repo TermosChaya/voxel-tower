@@ -111,8 +111,9 @@ public sealed partial class Sim
         }
     }
 
-    /// <summary>The trap floor gives way: what of it is joined to the spot, within three metres, breaks and falls in.</summary>
-    public int Spring(int x, int y, int z)
+    /// <summary>The trap floor gives way: what of it is joined to the spot, within three metres, breaks and falls in
+    /// (and the chronicle says so, as it is told).</summary>
+    public int Spring(int x, int y, int z, string said = "Ловчий настил провалился под ордой.")
     {
         const int Reach = 3 * VoxelWorld.PerMetre;
         var queue = new Queue<(int x, int y, int z)>();
@@ -150,7 +151,7 @@ public sealed partial class Sim
         }
         Nav.Flush();
         Collapsed?.Invoke(n, x, y, z);
-        if (Time - _trapSaid > 6) { _trapSaid = Time; Say("Ловчий настил провалился под ордой.", 1, x, z); }
+        if (Time - _trapSaid > 6) { _trapSaid = Time; Say(said, 1, x, z); }
         return n;
     }
 

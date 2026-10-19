@@ -25,6 +25,8 @@ namespace VoxelTower.Game;
 /// arc (--look=1 striking the wall), --pose=topple: a block come down on a narrow post with its weight off it, going
 /// over the post's edge (--look=1 standing on its end beside it after), --pose=roll: a ball of earth torn out by
 /// telekinesis rolling down a slope into a band (--look=1 lying at the foot after, the band knocked about),
+/// --pose=crush: a ball of earth let fall on the horde's deck over a ditch, breaking through it with the band on it
+/// (--look=1 after: the hole, the ball and the band down in the ditch),
 /// --pose=trees: the valley's trees in a row, --look=0..2 choosing which; --pose=people: every figure in every look,
 /// --look=0..4 choosing a row),
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
@@ -170,7 +172,7 @@ public partial class Main : Node3D
         if (_demo && _pose == "shaman") ClearTrees(Site.KeepX - Site.KeepR - 240, Site.KeepZ - 90, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 90);
         if (_demo && _pose == "spells") ClearTrees(Site.KeepX - Site.KeepR - 260, Site.KeepZ - 100, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
         if (_demo && _pose == "traps") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
-        if (_demo && _pose is "blast" or "grip" or "wind" or "hexes" or "sorcerers" or "powder" or "charge" or "stones" or "topple" or "roll") ClearTrees(Site.KeepX - Site.KeepR - 300, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 140);
+        if (_demo && _pose is "blast" or "grip" or "wind" or "hexes" or "sorcerers" or "powder" or "charge" or "stones" or "topple" or "roll" or "crush") ClearTrees(Site.KeepX - Site.KeepR - 300, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 140);
         World.Compact();
         save?.Valley(World, Site);
         double genMs = sw.Elapsed.TotalMilliseconds;
@@ -1006,6 +1008,7 @@ public partial class Main : Node3D
         if (_pose == "stones") { Stones(); return; }
         if (_pose == "topple") { Topple(); return; }
         if (_pose == "roll") { RollDown(); return; }
+        if (_pose == "crush") { CrushDeck(); return; }
         var w = World; var s = Site; var sim = Sim;
         sim.Waves.Countdown = Waves.Prep;
         sim.Stock.Gold = 140;
@@ -1633,6 +1636,41 @@ public partial class Main : Node3D
         if (_look == 1) Advance(2);
         Paused = true;
         Rig.SetAt(w.WX(sx + 72), w.WY(g + 6), w.WZ(sz), -.75f, .38f, 4f);
+        Hud.Refresh();
+    }
+
+    /// <summary>
+    /// The horde's deck over a ditch, a band on it, and a ball of earth the hand tore out let fall on them: it breaks
+    /// through the planks in splinters, and the band goes down with it (--look=1: after, the hole and the ditch).
+    /// </summary>
+    void CrushDeck()
+    {
+        var sim = Sim; var w = World;
+        Sorcerous();
+        foreach (var u in sim.Units) if (u.Team == Team.Player && u.T.Work < 1) { u.Dead = true; u.DiedAt = -999; }
+        int sx = Site.KeepX - Site.KeepR - 180, sz = Site.KeepZ, g = w.SurfAt(sx, sz);
+        // a ditch three metres deep and three and a half across, and the horde's deck over it, two metres wide
+        for (int z = sz - 40; z < sz + 40; z++)
+            for (int x = sx - 40; x < sx + 60; x++)
+                for (int y = g - 30; y < g + 40; y++)
+                {
+                    bool ditch = x >= sx && x < sx + 28 && Math.Abs(z - sz) < 30 && y >= g - 24;
+                    bool deck = y >= g - 2 && y < g && x >= sx - 4 && x < sx + 32 && Math.Abs(z - sz) < 8;
+                    w.Set(x, y, z, deck ? Mat.Deck : ditch || y >= g ? Mat.Air : y == g - 1 ? Mat.Grass : Mat.Soil);
+                }
+        Advance(.5);
+        foreach (var (t, dx, dz) in new[] { (Kinds.Goblin, 8, -3), (Kinds.Orc, 14, 2), (Kinds.Goblin, 20, -2), (Kinds.Goblin, 11, 4), (Kinds.Orc, 18, -5) })
+            Camp(t, sx + dx, sz + dz);
+        sim.Cast(SpellKind.Telekinesis, sx - 30.5f, g - .5f, sz + 30.5f);
+        var ball = sim.HeldNow;
+        sim.HoldAt(sx + 14, g + 52, sz + .5f);
+        Advance(3);
+        sim.LetGo();
+        // till it is going through the planks (or, --look=1, lying in the ditch after)
+        for (int t = 0; t < 200 && ball != null && sim.Fliers.Contains(ball) && ball.Y > g + 6; t++) Advance(.05);
+        Advance(_look == 1 ? 5 : .15);
+        Paused = true;
+        Rig.SetAt(w.WX(sx + 14), w.WY(g - 6), w.WZ(sz), -.75f, .42f, 3.6f);
         Hud.Refresh();
     }
 

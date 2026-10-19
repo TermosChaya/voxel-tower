@@ -451,6 +451,8 @@ public sealed partial class Sim
                 if (f.X < 2 || f.Z < 2 || f.X >= World.SX - 2 || f.Z >= World.SZ - 2 || f.Y < 2) { down = true; break; }
                 // nothing goes up out of the world: it stops there and falls back
                 if (f.Y > World.SY - 4) { f.Y = World.SY - 4; f.VY = Math.Min(0, f.VY); }
+                // a ladder in its way is torn off where it strikes it
+                if (f.Unit == null) TearLadders(f, speed);
                 down = Hits(f);
             }
             if (f.Unit != null) Carry(f);
@@ -521,10 +523,12 @@ public sealed partial class Sim
         {
             float aslant = speed > .01f ? (f.VX * f.VX + f.VZ * f.VZ) / (speed * speed) : 0;
             StartRoll(f, round, broke >= 10 ? 0 : .35f * aslant);
+            // come down hard on timber too weak for it, it goes on through it
+            if (speed > 2 * VoxelWorld.PerMetre) BallBreaks(f, 0, speed);
             return false;
         }
-        // it lies where it came down, whole, as it lay when it struck — or tips over, and lies down after
-        return Lay(f, ix, iy, iz);
+        // it lies where it came down, whole, as it lay when it struck — or breaks through, or tips over, and lies down after
+        return Lay(f, ix, iy, iz, speed);
     }
 
     /// <summary>
@@ -554,9 +558,10 @@ public sealed partial class Sim
     /// <summary>
     /// A piece lies down whole: turned as it came down, to the nearest right angle; out of whatever it struck into,
     /// then down till it rests on something; each voxel what it is once broken. Whatever burned of it sets alight what
-    /// it lies on.
+    /// it lies on. False if it does not lie down yet: it breaks through what it came down on (as fast as it came), or
+    /// goes over the edge of it.
     /// </summary>
-    bool Lay(Flier f, int ix, int iy, int iz)
+    bool Lay(Flier f, int ix, int iy, int iz, float speed = 0)
     {
         var (ex, ey, ez) = Snapped(f);
         var cells = new List<(int ox, int oy, int oz, byte m)>(f.Voxels.Count);
@@ -586,6 +591,8 @@ public sealed partial class Sim
         int ay = iy;
         for (int k = 0; k < 48 && Clash(ix, ay, iz); k++) ay++;
         for (int k = 0; k < 120 && ay > 4 && !Clash(ix, ay - 1, iz); k++) ay--;
+        // timber over a gap too weak for it: it breaks through, and falls on
+        if (BreaksThrough(f, cells, ix, ay, iz, speed)) return false;
         // its weight beyond the footing it came down on: it tips over the edge of it, and comes down again after (a ball
         // has rolled off any such edge already)
         if (f.RollR == 0 && f.Tipped < 2 && cells.Count >= 24 && Tips(cells, ix, ay, iz, floats, out int dir, out int edge, out int py))

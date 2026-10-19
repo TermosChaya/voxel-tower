@@ -2985,6 +2985,83 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--physics")
         $"cast: {castR ?? "yes"}; {ballRN} voxels lifted; rolled {rollR}, at most {rollFast:0.0} m/s; the goblin {(gobL.Dead ? "dead: " + gobL.KilledBy : $"{gobL.Hp:0} of {gl0:0}")}; {footN} voxels of it at the foot, {wideR} wide and {tallR} high, {pastN} past the wall; the wall {wall0} → {WallR()}");
     Gone(gobL);
 
+    // a stone falling six metres onto the horde's deck over a ditch breaks through it and lies at the bottom; a block of
+    // a hand's breadth let down on the same deck from a metre lies on it; the goblin standing on the deck a little way
+    // off stays standing
+    int dx0 = kxY - 460, dz0 = kzY - 130, dg = wY.SurfAt(dx0, dz0);
+    for (int z = dz0 - 20; z < dz0 + 20; z++)
+        for (int x = dx0 - 10; x < dx0 + 50; x++)
+            for (int y = dg - 30; y < dg + 60; y++)
+                wY.Set(x, y, z, y >= dg ? Mat.Air : x >= dx0 + 8 && x < dx0 + 32 && y >= dg - 24 ? (y >= dg - 2 && x >= dx0 + 4 && x < dx0 + 36 && Math.Abs(z - dz0) < 12 ? Mat.Deck : Mat.Air)
+                    : y >= dg - 2 && x >= dx0 + 4 && x < dx0 + 36 && Math.Abs(z - dz0) < 12 ? Mat.Deck : Mat.Soil);
+    int DeckN() { int n = 0; for (int z = dz0 - 12; z < dz0 + 12; z++) for (int x = dx0 + 4; x < dx0 + 36; x++) for (int y = dg - 2; y < dg; y++) if (wY.Get(x, y, z) == Mat.Deck) n++; return n; }
+    int deck0 = DeckN();
+    RunY(.5);
+    var gobD = Stand(Kinds.Goblin, dx0 + 20, dz0 + 18);
+    float gd0 = gobD.Hp, gdy = gobD.Y;
+    simY.Hurl(Sim.Ball(2.6f, Mat.Rock), dx0 + 20.5f, dg + 48.5f, dz0 + .5f, 0, 0, 0, "test");
+    var block3 = new System.Collections.Generic.List<(sbyte, sbyte, sbyte, byte)>();
+    for (int dz = -1; dz <= 1; dz++) for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) block3.Add(((sbyte)dx, (sbyte)dy, (sbyte)dz, Mat.Rock));
+    simY.Hurl(block3, dx0 + 13.5f, dg + 9.5f, dz0 - 5.5f, 0, 0, 0, "test");
+    RunY(5);
+    int bottomN = 0, onDeckN = 0, holeN = 0;
+    for (int z = dz0 - 20; z < dz0 + 20; z++)
+        for (int x = dx0 + 8; x < dx0 + 32; x++)
+            for (int y = dg - 24; y < dg + 8; y++)
+            {
+                byte m = wY.Get(x, y, z);
+                if (m == Mat.Rubble) { if (y < dg - 2) bottomN++; else if (y >= dg && Math.Abs(x - dx0 - 13) <= 3 && Math.Abs(z - dz0 + 6) <= 3) onDeckN++; }
+            }
+    for (int z = dz0 - 1; z <= dz0 + 1; z++) for (int x = dx0 + 19; x <= dx0 + 21; x++) for (int y = dg - 2; y < dg; y++) if (wY.Get(x, y, z) == Mat.Deck) holeN++;
+    int deck1 = DeckN();
+    Check("a stone falling six metres onto the horde's deck over a ditch breaks through it and lies at the bottom; a little block let down on it from a metre lies on it; the goblin on the deck a little way off stands",
+        bottomN >= 70 && holeN == 0 && deck1 > deck0 * .8f && deck1 < deck0 && onDeckN >= 20 && !gobD.Dead && gobD.Y >= gdy - 1,
+        $"{bottomN} voxels of the stone at the bottom, {holeN} of the deck left where it struck; the deck {deck0} → {deck1}; {onDeckN} of the block lying on it; the goblin {(gobD.Dead ? "dead" : $"{gobD.Hp:0} of {gd0:0}")}, {(gobD.Y - gdy) / VoxelWorld.PerMetre:0.0} m from where it stood");
+    Gone(gobD);
+
+    // a floor of logs over a room holds a stone lying on it; one falling onto it from eight metres goes through it
+    int wx0 = kxY - 460, wz0 = kzY - 80, wg = wY.SurfAt(wx0, wz0);
+    for (int z = wz0 - 16; z < wz0 + 16; z++)
+        for (int x = wx0 - 10; x < wx0 + 40; x++)
+            for (int y = wg - 24; y < wg + 80; y++)
+            {
+                bool floor = y >= wg - 2 && y < wg && x >= wx0 + 2 && x < wx0 + 30 && Math.Abs(z - wz0) < 14;
+                bool room = y >= wg - 18 && y < wg && x >= wx0 + 6 && x < wx0 + 26 && Math.Abs(z - wz0) < 10;
+                wY.Set(x, y, z, floor ? Mat.Wood : room || y >= wg ? Mat.Air : Mat.Soil);
+            }
+    int FloorN() { int n = 0; for (int z = wz0 - 14; z < wz0 + 14; z++) for (int x = wx0 + 2; x < wx0 + 30; x++) for (int y = wg - 2; y < wg; y++) if (wY.Get(x, y, z) == Mat.Wood) n++; return n; }
+    int floor0 = FloorN();
+    RunY(.5);
+    simY.Hurl(Sim.Ball(2.6f, Mat.Rock), wx0 + 11.5f, wg + 3.5f, wz0 + .5f, 0, 0, 0, "test");
+    simY.Hurl(Sim.Ball(2.6f, Mat.Rock), wx0 + 20.5f, wg + 66.5f, wz0 + .5f, 0, 0, 0, "test");
+    RunY(5);
+    int lyingN = 0, belowN = 0;
+    for (int z = wz0 - 12; z < wz0 + 12; z++)
+        for (int x = wx0 + 2; x < wx0 + 30; x++)
+            for (int y = wg - 18; y < wg + 8; y++)
+                if (wY.Get(x, y, z) == Mat.Rubble) { if (y >= wg) lyingN++; else if (y < wg - 2) belowN++; }
+    int floor1 = FloorN();
+    Check("a floor of logs over a room holds a stone lying on it, and one falling onto it from eight metres goes through it into the room",
+        lyingN >= 70 && belowN >= 70 && floor1 < floor0 && floor1 > floor0 * .9f,
+        $"{lyingN} voxels of stone lying on the floor, {belowN} gone through it into the room; the floor {floor0} → {floor1}");
+
+    // a stone thrown hard at a siege ladder against a wall tears it off where it strikes it; the wall stands
+    int ldx = kxY - 380, ldz = kzY - 125, ldg = wY.SurfAt(ldx, ldz);
+    for (int z = ldz - 10; z < ldz + 10; z++)
+        for (int x = ldx - 34; x < ldx + 12; x++)
+            for (int y = ldg - 4; y < ldg + 48; y++)
+                wY.Set(x, y, z, y < ldg ? Mat.Soil : x >= ldx && x < ldx + 4 && y < ldg + 32 ? Mat.Stone : x == ldx - 1 && Math.Abs(z - ldz + .5f) < 1 && y < ldg + 32 ? Mat.SiegeLadder : Mat.Air);
+    int RungsL(int y0, int y1) { int n = 0; for (int z = ldz - 2; z < ldz + 2; z++) for (int y = y0; y < y1; y++) if (wY.Get(ldx - 1, y, z) == Mat.SiegeLadder) n++; return n; }
+    int WallL() { int n = 0; for (int z = ldz - 10; z < ldz + 10; z++) for (int x = ldx; x < ldx + 4; x++) for (int y = ldg; y < ldg + 32; y++) if (wY.Get(x, y, z) == Mat.Stone) n++; return n; }
+    int rungsL0 = RungsL(ldg, ldg + 32), midL0 = RungsL(ldg + 13, ldg + 19), wallL0 = WallL();
+    RunY(.5);
+    simY.Hurl(Sim.Ball(2.6f, Mat.Rock), ldx - 24.5f, ldg + 16.5f, ldz + .5f, 12 * VoxelWorld.PerMetre, VoxelWorld.PerMetre, 0, "test");
+    RunY(3);
+    int rungsL1 = RungsL(ldg, ldg + 32), midL1 = RungsL(ldg + 13, ldg + 19);
+    Check("a stone thrown hard at a siege ladder against a wall tears the ladder off where it strikes it; the wall stands",
+        midL0 > 10 && midL1 == 0 && rungsL1 < rungsL0 && WallL() == wallL0,
+        $"the ladder {rungsL0} → {rungsL1} rungs, where it was struck {midL0} → {midL1}; the wall {wallL0} → {WallL()}");
+
     // what telekinesis holds does not go through a wall: pulled at one from behind it, it stays on its side
     int qx = kxY - 330, qz0 = kzY + 40;
     int qtop = Shapes.LevelTop(wY, qx, qz0 + 24, 48);

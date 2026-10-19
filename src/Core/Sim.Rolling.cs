@@ -138,7 +138,7 @@ public sealed partial class Sim
         float hx = f.VX * keep, hz = f.VZ * keep, hs = MathF.Sqrt(hx * hx + hz * hz), cap = RollOnAt * VoxelWorld.PerMetre;
         if (hs > cap) { hx *= cap / hs; hz *= cap / hs; }
         f.VX = hx; f.VY = 0; f.VZ = hz;
-        f.Spin = 0;
+        f.Spin = 0; f.Still = 0;
         f.Rolling = true; f.RollFrom = Time; f.RollR = r;
     }
 
@@ -210,6 +210,8 @@ public sealed partial class Sim
                 {
                     float hard = -f.VY;
                     f.Y = g1;
+                    // down hard on timber too weak for it: through it, and on down
+                    if (hard > 2 * VoxelWorld.PerMetre && BallBreaks(f, 0, hard)) continue;
                     if (hard > 2 * VoxelWorld.PerMetre) { Pound(f, hard); f.VX *= .8f; f.VZ *= .8f; }
                     f.VY = hard > 4 * VoxelWorld.PerMetre ? hard * .15f : 0;
                 }
@@ -219,8 +221,10 @@ public sealed partial class Sim
         // turned as a ball turns, as far as it went
         float moved = MathF.Sqrt(mx * mx + mz * mz);
         if (moved > 1e-3f) TurnMore(f, mz / moved, 0, -mx / moved, moved / r);
-        // whoever it runs into
+        // whoever it runs into, any ladder in its way, and the timber it rolls onto if that is too weak for it
         float hs1 = MathF.Sqrt(f.VX * f.VX + f.VZ * f.VZ);
+        TearLadders(f, hs1);
+        if (onGround && BallBreaks(f, hs1, 0)) return false;
         if (hs1 > VoxelWorld.PerMetre)
             foreach (var u in Units)
                 if (!u.Dead && !u.Inside && u.Airborne == null && Time - u.LastHurt >= .5 && Against(f, u)) RunOver(f, u, hs1);
