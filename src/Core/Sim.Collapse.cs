@@ -41,7 +41,7 @@ public sealed partial class Sim
         if (m == Mat.Air || Mat.Passable[m] || Mat.IsAnchor[m] || m == Mat.Water || Mat.IsDecor[m] || Mat.Swings(m) || m == Mat.Ore) return 0;
         if (Mat.IsMasonry(m) || m == Mat.Keep) return 10;
         if (Mat.IsTrunk(m)) return 30;
-        return m switch { Mat.Wood or Mat.Deck or Mat.TrapDeck => 16, Mat.Rammed => 4, Mat.Char or Mat.Rubble or Mat.DropStone => 2, Mat.Lumber => 4, Mat.Pitch => 1, Mat.Ruin => Free, _ => 8 };
+        return m switch { Mat.Wood or Mat.Deck or Mat.TrapDeck => 16, Mat.Rammed => 4, Mat.Char or Mat.Rubble or Mat.DropStone or Mat.DropLog => 2, Mat.Lumber => 4, Mat.Pitch => 1, Mat.Ruin => Free, _ => 8 };
     }
 
     /// <summary>
@@ -362,10 +362,45 @@ public sealed partial class Sim
     }
 
     /// <summary>
+    /// A felled trunk lying across a slope steep enough to start a log rolling goes rolling down it, still marked to be
+    /// cut up if it was; one lying along the slope, or on the level, stays where it lies.
+    /// </summary>
+    void RollFelled(List<(int x, int y, int z)> cells, int fx, int fz)
+    {
+        int nx = -fz, nz = fx;
+        int lo = int.MaxValue, hi = int.MinValue;
+        var along = new HashSet<int>();
+        float mid = 0;
+        foreach (var (x, _, z) in cells)
+        {
+            int across = x * nx + z * nz;
+            lo = Math.Min(lo, across); hi = Math.Max(hi, across); mid += across;
+            along.Add(x * fx + z * fz);
+        }
+        mid /= cells.Count;
+        // the ground on either side of it, along its length
+        float off = (hi - lo + 1) * .5f + 2, rise = 0;
+        int n = 0;
+        foreach (int a in along)
+        {
+            int px = (int)MathF.Round(a * fx + (mid + off) * nx), pz = (int)MathF.Round(a * fz + (mid + off) * nz);
+            int qx = (int)MathF.Round(a * fx + (mid - off) * nx), qz = (int)MathF.Round(a * fz + (mid - off) * nz);
+            if (!World.InBounds(px, 2, pz) || !World.InBounds(qx, 2, qz)) continue;
+            rise += World.SurfAt(px, pz) - World.SurfAt(qx, qz); n++;
+        }
+        if (n == 0) return;
+        float slope = rise / n / (2 * off), push = 2f / 3 * MathF.Abs(slope) / (1 + slope * slope);
+        if (push < .14f) return;
+        var f = Loose(cells, 0, 0, 0, "бревно");
+        if (f != null) f.Intact = true;
+        if (f != null && BakeLog(f, out float r, out float half, out float ax, out float az)) StartRoll(f, r, 0, half, ax, az);
+    }
+
+    /// <summary>
     /// What is no longer held comes down: taken out of where it stood, and laid again lower, column by column, each
     /// voxel running off its heap to a lower neighbour as loose stone does. A tree falls over instead, away from whoever
-    /// is beside it, and lies as a log. Leaves and twigs that fall are lost. Whoever it comes down on is crushed; what was
-    /// marked to be taken out is marked again where it lies.
+    /// is beside it, and lies as a log — and rolls on, if it lies across a slope. Leaves and twigs that fall are lost.
+    /// Whoever it comes down on is crushed; what was marked to be taken out is marked again where it lies.
     /// </summary>
     void Fall(HashSet<int> falling, bool quiet)
     {
@@ -431,6 +466,7 @@ public sealed partial class Sim
         int ax0 = int.MaxValue, az0 = int.MaxValue, ax1 = int.MinValue, az1 = int.MinValue;
         foreach (var (x, _, z, _, _) in pieces) { ax0 = Math.Min(ax0, x); az0 = Math.Min(az0, z); ax1 = Math.Max(ax1, x); az1 = Math.Max(az1, z); }
         var marked = new VoxelList();
+        var logCells = new List<(int x, int y, int z)>();
         var under = quiet ? new List<Unit>() : Units.FindAll(u => !u.Dead && !u.Inside && u.X > ax0 - 16 && u.X < ax1 + 16 && u.Z > az0 - 16 && u.Z < az1 + 16);
         foreach (var (x, y, z, m, order) in pieces)
         {
@@ -438,11 +474,12 @@ public sealed partial class Sim
             bool log = Mat.IsTrunk(m);
             int sx = log ? x + fx * (y - baseY) : x, sz = log ? z + fz * (y - baseY) : z, sy = log ? baseY + 6 : y;
             if (!World.InBounds(sx, sy, sz)) continue;
-            var (lx, ly, lz) = Landing(sx, sy, sz, log || m is Mat.Wood or Mat.Deck or Mat.Char || Mat.IsLeaf(m));
+            var (lx, ly, lz) = Landing(sx, sy, sz, log || m is Mat.Wood or Mat.Deck or Mat.Char || Mat.IsLeaf(m), runs: !log);
             if (ly < 0) continue;
             World.Set(lx, ly, lz, Broken(m));
             if (Orders.At(lx, ly, lz) != 0) Orders.Clear(lx, ly, lz);
             if (Orders.IsRemove(order)) marked.Add(lx, ly, lz, Mat.Air);
+            if (log) logCells.Add((lx, ly, lz));
             cx += lx; cy += ly; cz += lz; laid++;
             if (Mat.IsMasonry(m) || m == Mat.Ruin) stone++; else if (m is Mat.Wood or Mat.Deck || Mat.IsTrunk(m)) wood++;
             // a falling tree comes down away from those beside it
@@ -456,6 +493,8 @@ public sealed partial class Sim
         _settling = false;
         if (marked.Count > 0) Orders.PlanRemove(marked);
         foreach (var (u, n) in crushed) Hurt(u, null, 30 + Math.Min(90, n * 2), "обвал");
+        // a felled trunk lying across a slope steep enough to start it goes rolling down it
+        if (!quiet && logCells.Count >= 24) RollFelled(logCells, fx, fz);
         if (quiet || laid == 0) return;
         cx /= laid; cy /= laid; cz /= laid;
         Collapsed?.Invoke(laid, cx, cy, cz);
@@ -545,13 +584,13 @@ public sealed partial class Sim
     /// trees lie as logs, and the rest as it was.</summary>
     static byte Broken(byte m) =>
         Mat.IsMasonry(m) || m is Mat.Ruin or Mat.Keep or Mat.DropStone ? Mat.Rubble
-        : m is Mat.Wood or Mat.Deck or Mat.Plank or Mat.TrapDeck or Mat.Stakes || Mat.Swings(m) ? Mat.Lumber
+        : m is Mat.Wood or Mat.Deck or Mat.Plank or Mat.TrapDeck or Mat.Stakes or Mat.DropLog || Mat.Swings(m) ? Mat.Lumber
         : m == Mat.Rammed ? Mat.Soil : m;
 
     /// <summary>Where a falling voxel comes to rest: down its column onto whatever is solid, then off its heap down to a
     /// lower neighbour while there is one two voxels lower (or one lower, half the time), as loose stone runs; (−1, −1, −1)
     /// if it drops out of the world.</summary>
-    (int x, int y, int z) Landing(int x, int y, int z, bool floats)
+    (int x, int y, int z) Landing(int x, int y, int z, bool floats, bool runs = true)
     {
         // timber floats: it comes to rest on water as on ground; stone sinks through it
         int Rest(int cx, int cz, int from)
@@ -566,7 +605,8 @@ public sealed partial class Sim
             return yy;
         }
         int ly = Rest(x, z, y);
-        for (int step = 0; step < 48; step++)
+        // what is rigid, as a log, comes down its column and stays there
+        for (int step = 0; runs && step < 48; step++)
         {
             int bestX = x, bestZ = z, bestY = ly;
             int start = Rng.Next(4);

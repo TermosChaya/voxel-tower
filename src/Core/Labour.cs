@@ -63,6 +63,7 @@ public static class Labour
         D(Mat.Rubble, 1.5f, Stockpile.Stone, .75f); D(Mat.Lumber, 1, Stockpile.Wood, .5f);
         // the traps come apart as what they are made of
         D(Mat.Stakes, 1, Stockpile.Wood, .5f); D(Mat.TrapDeck, 1, Stockpile.Wood, .5f); D(Mat.DropStone, 1.2f, Stockpile.Stone, 1);
+        D(Mat.DropLog, 1.2f, Stockpile.Wood, 1);
         D(Mat.DrawDeck, 2.5f, Stockpile.Wood, .75f); D(Mat.TowerLadder, 1, Stockpile.Wood, .75f);
         // kegs of powder are carried off whole: half the earth they were leached from comes back
         D(Mat.Powder, 1, Stockpile.Earth, .5f);
@@ -74,7 +75,7 @@ public static class Labour
         // pitch is boiled out of pine and poured: slower than logs
         LayCost[Mat.Pitch] = 2.5f;
         // stakes are cut and sharpened one by one, a trap floor is poles and turf over them; stones are only heaped up
-        LayCost[Mat.Stakes] = 2.5f; LayCost[Mat.TrapDeck] = 2.5f; LayCost[Mat.DropStone] = 1.2f;
+        LayCost[Mat.Stakes] = 2.5f; LayCost[Mat.TrapDeck] = 2.5f; LayCost[Mat.DropStone] = 1.2f; LayCost[Mat.DropLog] = 1.2f;
         // a drawbridge is joinery like a gate
         LayCost[Mat.DrawDeck] = 4;
         // powder is saltpetre leached out of earth, ground with charcoal and packed into kegs: slow work
@@ -92,7 +93,7 @@ public static class Labour
     public static int CostKind(byte m) => m switch
     {
         Mat.Stone or Mat.Mortar or Mat.StoneDark or Mat.StoneLight or Mat.StoneWarm or Mat.StoneCool or Mat.DropStone => Stockpile.Stone,
-        Mat.Wood or Mat.Ladder or Mat.Gate or Mat.GateShut or Mat.GateOpen or Mat.Pitch or Mat.Stakes or Mat.TrapDeck or Mat.DrawDeck => Stockpile.Wood,
+        Mat.Wood or Mat.Ladder or Mat.Gate or Mat.GateShut or Mat.GateOpen or Mat.Pitch or Mat.Stakes or Mat.TrapDeck or Mat.DrawDeck or Mat.DropLog => Stockpile.Wood,
         Mat.Rammed or Mat.Powder => Stockpile.Earth,
         _ => Stockpile.None,
     };

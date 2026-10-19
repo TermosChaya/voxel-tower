@@ -1,11 +1,14 @@
 using System;
+using System.Collections.Generic;
 
 namespace VoxelTower.Core;
 
 /// <summary>
 /// What is round rolls. A ball that comes down — a catapult's stone, a ball of earth or stone the hand of telekinesis tore
-/// out — does not stop where it struck: it rolls on the way it was going and down whatever slope there is, the steeper
-/// the faster, held back all the while by what it rolls on (grass and earth more than stone or planks). A step it comes
+/// out, stones tipped off the battlements — does not stop where it struck: it rolls on the way it was going and down
+/// whatever slope there is, the steeper the faster, held back all the while by what it rolls on (grass and earth more
+/// than stone or planks). A log rolls too, but only across itself: a felled trunk lying across a slope, logs tipped off
+/// the wall. A step it comes
 /// at fast enough it climbs; off a wall it is turned back; over an edge it goes and falls, and comes down on whatever is
 /// below. Whoever it runs over is struck, the heavier and faster the harder, and knocked aside. Where it stops, on the
 /// level or nearly, it lies whole, as anything that flew lies.
@@ -108,11 +111,82 @@ public sealed partial class Sim
     }
 
     /// <summary>
-    /// A ball come down rolls on: turning about the middle of its round, out of what it went into (back the way it came),
-    /// with what the blow left of its going along the ground (a share of it) and none of it up or down.
+    /// Whether a piece is a log — no thicker than three quarters of a metre, three times as long one way along the ground
+    /// as it is thick, and about as thick up as across — and if so, laid as it came down (turned to the nearest right angle): how thick its round is, how far its
+    /// length reaches from its middle beyond its round, and the way it lies.
     /// </summary>
-    void StartRoll(Flier f, float r, float keep)
+    static bool BakeLog(Flier f, out float r, out float half, out float ax, out float az)
     {
+        r = half = ax = az = 0;
+        int n = f.Voxels.Count;
+        if (n < 24 || f.Unit != null) return false;
+        var (ex, ey, ez) = Snapped(f);
+        var laid = new List<(sbyte, sbyte, sbyte, byte)>(n);
+        int x0 = int.MaxValue, x1 = int.MinValue, y0 = int.MaxValue, y1 = int.MinValue, z0 = int.MaxValue, z1 = int.MinValue;
+        foreach (var (dx, dy, dz, m) in f.Voxels)
+        {
+            int wx = dx * ex.x + dy * ey.x + dz * ez.x, wy = dx * ex.y + dy * ey.y + dz * ez.y, wz = dx * ex.z + dy * ey.z + dz * ez.z;
+            laid.Add(((sbyte)wx, (sbyte)wy, (sbyte)wz, m));
+            x0 = Math.Min(x0, wx); x1 = Math.Max(x1, wx); y0 = Math.Min(y0, wy); y1 = Math.Max(y1, wy); z0 = Math.Min(z0, wz); z1 = Math.Max(z1, wz);
+        }
+        int lx = x1 - x0 + 1, ly = y1 - y0 + 1, lz = z1 - z0 + 1;
+        bool alongX = lx >= lz;
+        int len = alongX ? lx : lz, wide = alongX ? lz : lx, thick = Math.Max(wide, ly), thin = Math.Min(wide, ly);
+        if (thin < 2 || thick > 6 || len < 3 * thick || thick > thin * 1.6f || n < .5f * len * wide * ly) return false;
+        f.Voxels.Clear(); f.Voxels.AddRange(laid);
+        f.Turn = 0; f.AX = 1; f.AY = 0; f.AZ = 0;
+        r = (wide + ly) * .25f;
+        half = MathF.Max(0, len * .5f - r);
+        (ax, az) = alongX ? (1f, 0f) : (0f, 1f);
+        return true;
+    }
+
+    /// <summary>Points along a log's length a little closer than its round, from end to end; one for a ball.</summary>
+    static int Along(Flier f) => f.RollH <= 0 ? 1 : (int)MathF.Ceiling(2 * f.RollH / MathF.Max(.75f, f.RollR * .8f)) + 1;
+
+    /// <summary>A point along a log's length (the middle, for a ball): the i-th of so many.</summary>
+    static (float x, float z) AlongAt(Flier f, float x, float z, int i, int count)
+    {
+        if (count <= 1) return (x, z);
+        float t = -f.RollH + 2 * f.RollH * i / (count - 1);
+        return (x + f.RollAX * t, z + f.RollAZ * t);
+    }
+
+    /// <summary>How high the middle of a ball or log comes to rest over a spot: a log on the highest of what is under any
+    /// part of it.</summary>
+    float RestAt(Flier f, float x, float z, float y)
+    {
+        int count = Along(f);
+        if (count == 1) return RestOver(x, z, y, f.RollR);
+        float best = float.NegativeInfinity;
+        for (int i = 0; i < count; i++)
+        {
+            var (px, pz) = AlongAt(f, x, z, i, count);
+            best = MathF.Max(best, RestOver(px, pz, y, f.RollR));
+        }
+        return best;
+    }
+
+    /// <summary>Whether a ball or log about a point is clear of anything solid.</summary>
+    bool RollFree(Flier f, float x, float y, float z)
+    {
+        int count = Along(f);
+        for (int i = 0; i < count; i++)
+        {
+            var (px, pz) = AlongAt(f, x, z, i, count);
+            if (!BallFree(px, y, pz, f.RollR)) return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// A ball or a log come down rolls on: turning about the middle of its round, out of what it went into (back the way
+    /// it came), with what the blow left of its going along the ground (a share of it; a log, only across itself) and
+    /// none of it up or down.
+    /// </summary>
+    void StartRoll(Flier f, float r, float keep, float half = 0, float ax = 0, float az = 0)
+    {
+        f.RollR = r; f.RollH = half; f.RollAX = ax; f.RollAZ = az;
         int x0 = int.MaxValue, x1 = int.MinValue, y0 = int.MaxValue, y1 = int.MinValue, z0 = int.MaxValue, z1 = int.MinValue;
         foreach (var (dx, dy, dz, _) in f.Voxels)
         {
@@ -127,19 +201,23 @@ public sealed partial class Sim
                 f.Voxels[i] = ((sbyte)(dx - sx), (sbyte)(dy - sy), (sbyte)(dz - sz), m);
             }
             // its middle moves to the middle of its round, the voxels staying where they are
-            var (ax, ay, az) = AxisOf(f);
-            var (wx, wy, wz) = Turned(sx, sy, sz, ax, ay, az, MathF.Cos(f.Turn), MathF.Sin(f.Turn));
+            var (tx, ty, tz) = AxisOf(f);
+            var (wx, wy, wz) = Turned(sx, sy, sz, tx, ty, tz, MathF.Cos(f.Turn), MathF.Sin(f.Turn));
             f.X += wx; f.Y += wy; f.Z += wz;
         }
         float s = MathF.Sqrt(f.VX * f.VX + f.VY * f.VY + f.VZ * f.VZ);
         float ux = s > .01f ? f.VX / s : 0, uy = s > .01f ? f.VY / s : -1, uz = s > .01f ? f.VZ / s : 0;
-        for (int k = 0; k < r * 3 + 6 && !BallFree(f.X, f.Y, f.Z, r); k++) { f.X -= ux * .35f; f.Y -= uy * .35f; f.Z -= uz * .35f; }
-        for (int k = 0; k < r * 2 + 6 && !BallFree(f.X, f.Y, f.Z, r); k++) f.Y += .5f;
-        float hx = f.VX * keep, hz = f.VZ * keep, hs = MathF.Sqrt(hx * hx + hz * hz), cap = RollOnAt * VoxelWorld.PerMetre;
+        for (int k = 0; k < r * 3 + 6 && !RollFree(f, f.X, f.Y, f.Z); k++) { f.X -= ux * .35f; f.Y -= uy * .35f; f.Z -= uz * .35f; }
+        for (int k = 0; k < r * 2 + 6 && !RollFree(f, f.X, f.Y, f.Z); k++) f.Y += .5f;
+        float hx = f.VX * keep, hz = f.VZ * keep, cap = RollOnAt * VoxelWorld.PerMetre;
+        // a log goes only across itself
+        float along = hx * ax + hz * az;
+        hx -= along * ax; hz -= along * az;
+        float hs = MathF.Sqrt(hx * hx + hz * hz);
         if (hs > cap) { hx *= cap / hs; hz *= cap / hs; }
         f.VX = hx; f.VY = 0; f.VZ = hz;
         f.Spin = 0; f.Still = 0;
-        f.Rolling = true; f.RollFrom = Time; f.RollR = r;
+        f.Rolling = true; f.RollFrom = Time;
     }
 
     /// <summary>How much what a ball rolls on holds it back, as a share of its weight: heaps of rubble most, then earth and
@@ -155,31 +233,37 @@ public sealed partial class Sim
     }
 
     /// <summary>
-    /// A ball rolling, a tick of it: down the slope under it, held back by what it rolls on; up a step it comes at fast
-    /// enough, back off what it cannot climb; off an edge it falls, and comes down on whatever is below. Whoever it runs
-    /// over is struck and knocked aside. True once it has stopped and lies there (or is gone out of the world).
+    /// A ball or a log rolling, a tick of it: down the slope under it (a log, only across itself), held back by what it
+    /// rolls on; up a step it comes at fast enough, back off what it cannot climb; off an edge it falls, and comes down on
+    /// whatever is below. Whoever it runs over is struck and knocked aside. True once it has stopped and lies there (or
+    /// is gone out of the world).
     /// </summary>
     bool Roll(Flier f, float dt)
     {
         float r = f.RollR;
+        bool log = f.RollH > 0;
         float speed = MathF.Sqrt(f.VX * f.VX + f.VY * f.VY + f.VZ * f.VZ);
         int steps = Math.Clamp((int)MathF.Ceiling(speed * dt / .5f), 1, 40);
         float h = dt / steps, e = MathF.Max(.75f, r * .3f), push = 0, mx = 0, mz = 0;
+        // a ball goes down a slope with five sevenths of what would drag a thing sliding without hold, a log with two thirds
+        float roll = log ? 2f / 3 : 5f / 7;
         bool onGround = false;
-        float Ground(float x, float z) { float g = RestOver(x, z, f.Y, r); return float.IsNegativeInfinity(g) ? f.Y - r - 3 : MathF.Min(g, f.Y + r); }
+        float Ground(float x, float z) { float g = RestAt(f, x, z, f.Y); return float.IsNegativeInfinity(g) ? f.Y - r - 3 : MathF.Min(g, f.Y + r); }
         for (int i = 0; i < steps; i++)
         {
             int cx = (int)MathF.Floor(f.X), cy = (int)MathF.Floor(f.Y), cz = (int)MathF.Floor(f.Z);
             bool wet = World.InBounds(cx, cy, cz) && World.Get(cx, cy, cz) == Mat.Water;
-            onGround = f.Y <= RestOver(f.X, f.Z, f.Y, r) + .05f;
+            onGround = f.Y <= RestAt(f, f.X, f.Z, f.Y) + .05f;
             if (onGround)
             {
                 f.VY = 0;
-                // down the slope under it: the steeper the faster, as a ball goes down a slope
+                // down the slope under it: the steeper the faster, as a ball goes down a slope; a log feels only the
+                // slope across it
                 float gx = (Ground(f.X + e, f.Z) - Ground(f.X - e, f.Z)) / (2 * e), gz = (Ground(f.X, f.Z + e) - Ground(f.X, f.Z - e)) / (2 * e);
-                float q = 1 + gx * gx + gz * gz, k = 5f / 7 * Gravity / q;
+                if (log) { float ga = gx * f.RollAX + gz * f.RollAZ; gx -= ga * f.RollAX; gz -= ga * f.RollAZ; }
+                float q = 1 + gx * gx + gz * gz, k = roll * Gravity / q;
                 f.VX -= k * gx * h; f.VZ -= k * gz * h;
-                push = 5f / 7 * MathF.Sqrt(gx * gx + gz * gz) / q;
+                push = roll * MathF.Sqrt(gx * gx + gz * gz) / q;
                 float hs = MathF.Sqrt(f.VX * f.VX + f.VZ * f.VZ), drag = Grip(f) * Gravity * h * (wet ? 6 : 1);
                 if (hs <= drag) f.VX = f.VZ = 0;
                 else { f.VX *= 1 - drag / hs; f.VZ *= 1 - drag / hs; }
@@ -190,16 +274,18 @@ public sealed partial class Sim
                 // water holds it back: it sinks slowly
                 if (wet) { f.VY = MathF.Max(f.VY, -2 * VoxelWorld.PerMetre); f.VX *= .9f; f.VZ *= .9f; }
             }
+            // a log does not go along itself
+            if (log) { float va = f.VX * f.RollAX + f.VZ * f.RollAZ; f.VX -= va * f.RollAX; f.VZ -= va * f.RollAZ; }
             // along each way in turn: up what it can climb, turned back off what it cannot
             float px = f.X, pz = f.Z;
             float nx = f.X + f.VX * h;
-            if (RestOver(nx, f.Z, f.Y, r) > f.Y + MathF.Max(.4f, 3 * MathF.Abs(f.VX * h))) f.VX = -f.VX * Rebound; else f.X = nx;
+            if (RestAt(f, nx, f.Z, f.Y) > f.Y + MathF.Max(.4f, 3 * MathF.Abs(f.VX * h))) f.VX = -f.VX * Rebound; else f.X = nx;
             float nz = f.Z + f.VZ * h;
-            if (RestOver(f.X, nz, f.Y, r) > f.Y + MathF.Max(.4f, 3 * MathF.Abs(f.VZ * h))) f.VZ = -f.VZ * Rebound; else f.Z = nz;
+            if (RestAt(f, f.X, nz, f.Y) > f.Y + MathF.Max(.4f, 3 * MathF.Abs(f.VZ * h))) f.VZ = -f.VZ * Rebound; else f.Z = nz;
             mx += f.X - px; mz += f.Z - pz;
             if (f.X < 3 || f.Z < 3 || f.X >= World.SX - 3 || f.Z >= World.SZ - 3) return true;
             // and up or down: along the ground, or falling till it comes down on something
-            float g1 = RestOver(f.X, f.Z, f.Y, r);
+            float g1 = RestAt(f, f.X, f.Z, f.Y);
             if (float.IsPositiveInfinity(g1)) g1 = f.Y;
             if (onGround && g1 >= f.Y - .6f) f.Y = g1;
             else
@@ -218,7 +304,7 @@ public sealed partial class Sim
             }
             if (f.Y < 2) return true;
         }
-        // turned as a ball turns, as far as it went
+        // turned as a ball turns, as far as it went (a log, about itself)
         float moved = MathF.Sqrt(mx * mx + mz * mz);
         if (moved > 1e-3f) TurnMore(f, mz / moved, 0, -mx / moved, moved / r);
         // whoever it runs into, any ladder in its way, and the timber it rolls onto if that is too weak for it
@@ -240,10 +326,17 @@ public sealed partial class Sim
         return false;
     }
 
-    /// <summary>Whether a ball is against a body: its round within a hand of it.</summary>
+    /// <summary>Whether a ball or log is against a body: its round within a hand of it.</summary>
     static bool Against(Flier f, Unit u)
     {
-        float reach = f.RollR + u.T.BodyR * .8f + .5f, dx = u.X - f.X, dz = u.Z - f.Z, d2 = dx * dx + dz * dz;
+        float reach = f.RollR + u.T.BodyR * .8f + .5f, dx = u.X - f.X, dz = u.Z - f.Z;
+        // a log: from the nearest point along its length
+        if (f.RollH > 0)
+        {
+            float t = Math.Clamp(dx * f.RollAX + dz * f.RollAZ, -f.RollH, f.RollH);
+            dx -= f.RollAX * t; dz -= f.RollAZ * t;
+        }
+        float d2 = dx * dx + dz * dz;
         if (d2 > reach * reach) return false;
         float dy = f.Y - Math.Clamp(f.Y, u.Y, u.Y + u.T.BodyH);
         return d2 + dy * dy <= reach * reach;

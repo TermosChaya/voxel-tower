@@ -15,7 +15,7 @@ namespace VoxelTower.Core;
 /// </summary>
 public sealed partial class Sim
 {
-    public const int SaveVersion = 15;
+    public const int SaveVersion = 16;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -127,6 +127,7 @@ public sealed partial class Sim
             w.Write(f.Cause); w.Write(f.Burning); w.Write(f.Smash);
             w.Write(f.Tipping); w.Write(f.PX); w.Write(f.PY); w.Write(f.PZ); w.Write(f.CX0); w.Write(f.CY0); w.Write(f.CZ0); w.Write(f.TipFrom); w.Write(f.Tipped);
             w.Write(f.Rolling); w.Write(f.RollFrom); w.Write(f.RollR); w.Write(f.Still);
+            w.Write(f.RollAX); w.Write(f.RollAZ); w.Write(f.RollH); w.Write(f.Marked); w.Write(f.Intact);
             w.Write(f.Voxels.Count);
             foreach (var (dx, dy, dz, m) in f.Voxels) { w.Write(dx); w.Write(dy); w.Write(dz); w.Write(m); }
         }
@@ -379,6 +380,7 @@ public sealed partial class Sim
                 Tipping = r.ReadBoolean(), PX = r.ReadSingle(), PY = r.ReadSingle(), PZ = r.ReadSingle(), CX0 = r.ReadSingle(), CY0 = r.ReadSingle(), CZ0 = r.ReadSingle(),
                 TipFrom = r.ReadDouble(), Tipped = r.ReadInt32(),
                 Rolling = r.ReadBoolean(), RollFrom = r.ReadDouble(), RollR = r.ReadSingle(), Still = r.ReadSingle(),
+                RollAX = r.ReadSingle(), RollAZ = r.ReadSingle(), RollH = r.ReadSingle(), Marked = r.ReadBoolean(), Intact = r.ReadBoolean(),
             };
             for (int k = r.ReadInt32(); k > 0; k--) f.Voxels.Add((r.ReadSByte(), r.ReadSByte(), r.ReadSByte(), r.ReadByte()));
             Fliers.Add(f);

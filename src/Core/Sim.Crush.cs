@@ -141,18 +141,20 @@ public sealed partial class Sim
     }
 
     /// <summary>
-    /// A ball on whatever is under the bottom of its round: if that is timber too weak for it — rolling onto it, the
-    /// faster the heavier; coming down on it, the harder the heavier — it breaks through. True if it did.
+    /// A ball or log on whatever is under the bottom of its round: if that is timber too weak for it — rolling onto it,
+    /// the faster the heavier; coming down on it, the harder the heavier — it breaks through. True if it did.
     /// </summary>
     bool BallBreaks(Flier f, float speed, float hard)
     {
-        float r = f.RollR, rr = MathF.Max(1, r * .5f);
+        float r = f.RollR, rr = MathF.Max(1, r * .5f), lx = MathF.Abs(f.RollAX) * f.RollH, lz = MathF.Abs(f.RollAZ) * f.RollH;
         int row = (int)MathF.Floor(f.Y - r - .5f);
         var under = new List<(int x, int y, int z)>();
-        for (int z = (int)MathF.Floor(f.Z - rr); z <= (int)MathF.Floor(f.Z + rr); z++)
-            for (int x = (int)MathF.Floor(f.X - rr); x <= (int)MathF.Floor(f.X + rr); x++)
+        for (int z = (int)MathF.Floor(f.Z - rr - lz); z <= (int)MathF.Floor(f.Z + rr + lz); z++)
+            for (int x = (int)MathF.Floor(f.X - rr - lx); x <= (int)MathF.Floor(f.X + rr + lx); x++)
             {
-                float dx = x + .5f - f.X, dz = z + .5f - f.Z;
+                // under a log: under any part of its length
+                float dx = x + .5f - f.X, dz = z + .5f - f.Z, t = Math.Clamp(dx * f.RollAX + dz * f.RollAZ, -f.RollH, f.RollH);
+                dx -= f.RollAX * t; dz -= f.RollAZ * t;
                 if (dx * dx + dz * dz <= rr * rr && SolidAt(x, row, z)) under.Add((x, row, z));
             }
         float roll = speed / (6 * VoxelWorld.PerMetre), drop = hard / (2 * VoxelWorld.PerMetre);

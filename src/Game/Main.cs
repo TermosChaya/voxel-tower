@@ -26,7 +26,8 @@ namespace VoxelTower.Game;
 /// over the post's edge (--look=1 standing on its end beside it after), --pose=roll: a ball of earth torn out by
 /// telekinesis rolling down a slope into a band (--look=1 lying at the foot after, the band knocked about),
 /// --pose=crush: a ball of earth let fall on the horde's deck over a ditch, breaking through it with the band on it
-/// (--look=1 after: the hole, the ball and the band down in the ditch),
+/// (--look=1 after: the hole, the ball and the band down in the ditch), --pose=drops: stones and logs tipped off a wall
+/// on a hill onto the band at its foot, rolling down the slope through the rest of it (--look=1 lying at the bottom after),
 /// --pose=trees: the valley's trees in a row, --look=0..2 choosing which; --pose=people: every figure in every look,
 /// --look=0..4 choosing a row),
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
@@ -172,7 +173,7 @@ public partial class Main : Node3D
         if (_demo && _pose == "shaman") ClearTrees(Site.KeepX - Site.KeepR - 240, Site.KeepZ - 90, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 90);
         if (_demo && _pose == "spells") ClearTrees(Site.KeepX - Site.KeepR - 260, Site.KeepZ - 100, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
         if (_demo && _pose == "traps") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
-        if (_demo && _pose is "blast" or "grip" or "wind" or "hexes" or "sorcerers" or "powder" or "charge" or "stones" or "topple" or "roll" or "crush") ClearTrees(Site.KeepX - Site.KeepR - 300, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 140);
+        if (_demo && _pose is "blast" or "grip" or "wind" or "hexes" or "sorcerers" or "powder" or "charge" or "stones" or "topple" or "roll" or "crush" or "drops") ClearTrees(Site.KeepX - Site.KeepR - 300, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 140);
         World.Compact();
         save?.Valley(World, Site);
         double genMs = sw.Elapsed.TotalMilliseconds;
@@ -1009,6 +1010,7 @@ public partial class Main : Node3D
         if (_pose == "topple") { Topple(); return; }
         if (_pose == "roll") { RollDown(); return; }
         if (_pose == "crush") { CrushDeck(); return; }
+        if (_pose == "drops") { Drops(); return; }
         var w = World; var s = Site; var sim = Sim;
         sim.Waves.Countdown = Waves.Prep;
         sim.Stock.Gold = 140;
@@ -1671,6 +1673,59 @@ public partial class Main : Node3D
         Advance(_look == 1 ? 5 : .15);
         Paused = true;
         Rig.SetAt(w.WX(sx + 14), w.WY(g - 6), w.WZ(sz), -.75f, .42f, 3.6f);
+        Hud.Refresh();
+    }
+
+    /// <summary>
+    /// A wall of ours on a hilltop, stones and logs laid along its outer edge and archers by them; the band at its foot
+    /// and on the slope below: the stones and logs go over onto those at the foot and roll on down the slope through the
+    /// rest (--look=1: lying at the bottom after).
+    /// </summary>
+    void Drops()
+    {
+        var sim = Sim; var w = World; var s = Site;
+        sim.Waves.Countdown = 1e9;
+        foreach (var u in sim.Units) if (u.Team == Team.Player && u.T.Work < 1) { u.Dead = true; u.DiedAt = -999; }
+        int sx = s.KeepX - s.KeepR - 200, sz = s.KeepZ + 40, g = w.SurfAt(sx, sz);
+        // a hill falling away eastward, three metres down over six, its sides going down into the ground about it
+        int Top(int x) => x < sx + 24 ? g + 24 : x < sx + 72 ? g + 24 - (x - sx - 24) / 2 : g;
+        var ground = new int[160, 96];
+        for (int z = 0; z < 96; z++) for (int x = 0; x < 160; x++) ground[x, z] = w.SurfAt(sx - 20 + x, sz - 48 + z);
+        for (int z = sz - 48; z < sz + 48; z++)
+            for (int x = sx - 20; x < sx + 140; x++)
+            {
+                float side = Math.Clamp((Math.Abs(z - sz) - 28) / 20f, 0, 1);
+                int was = ground[x - sx + 20, z - sz + 48], top = (int)MathF.Round(Top(x) * (1 - side) + was * side);
+                for (int y = Math.Min(top, was) - 4; y < Math.Max(top, was) + 48; y++) w.Set(x, y, z, y < top - 1 ? Mat.Soil : y == top - 1 ? Mat.Grass : Mat.Air);
+            }
+        // the wall on the hilltop, three metres high, and along its outer edge stones and logs to throw down
+        sim.InstantLabour = true;
+        int top2 = Shapes.LevelTop(w, sx + 12, sz, 24), edge = sx + 20;
+        sim.DesignateBuild(Shapes.Line(w, s, sx + 12, sz - 30, sx + 12, sz + 30, new Stroke { Mat = Mat.Stone, Width = 8, Height = 24, Level = true }, top2));
+        while (edge > sx && w.Get(edge, top2 - 1, sz) == Mat.Air) edge--;
+        var heaps = new VoxelList();
+        for (int z = sz - 22; z < sz - 6; z++) for (int y = top2; y < top2 + 3; y++) { heaps.Add(edge, y, z, Mat.DropStone); heaps.Add(edge - 1, y, z, Mat.DropStone); }
+        for (int z = sz + 6; z < sz + 22; z++) for (int y = top2; y < top2 + 2; y++) { heaps.Add(edge, y, z, Mat.DropLog); heaps.Add(edge - 1, y, z, Mat.DropLog); }
+        sim.DesignateBuild(heaps);
+        sim.InstantLabour = false;
+        Advance(.5);
+        foreach (int dz in new[] { -14, 14 })
+        {
+            int c = sim.NearestStand(edge - 5, sz + dz, 4);
+            var a = sim.Spawn(Kinds.Archer, c);
+            sim.Command(new[] { a }, c);
+        }
+        // the band: two at the foot of the wall under the heaps (in the first metre of ground clear of it), the rest on the
+        // slope below
+        int foot = ((edge >> NavGrid.Shift) + 1 << NavGrid.Shift) + NavGrid.CS / 2;
+        foreach (var (t, dx, dz) in new[] { (Kinds.Goblin, 0, -14), (Kinds.Orc, 0, 14), (Kinds.Goblin, 16, -8), (Kinds.Goblin, 24, 6), (Kinds.Orc, 32, -2), (Kinds.Goblin, 20, 18), (Kinds.Goblin, 28, -16) })
+            Camp(t, foot + dx, sz + dz);
+        // till both heaps are over (or, --look=1, all lying still after)
+        int Heaped() { int n = 0; for (int z = sz - 24; z < sz + 24; z++) for (int x = edge - 2; x <= edge; x++) for (int y = top2; y < top2 + 3; y++) if (w.Get(x, y, z) is Mat.DropStone or Mat.DropLog) n++; return n; }
+        for (int t = 0; t < 200 && Heaped() > 16; t++) Advance(.05);
+        Advance(_look == 1 ? 6 : .9);
+        Paused = true;
+        Rig.SetAt(w.WX(sx + 52), w.WY(g + 8), w.WZ(sz), 1.57f, .72f, 1.6f);
         Hud.Refresh();
     }
 

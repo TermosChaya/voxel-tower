@@ -2020,6 +2020,23 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--traps")
     Check("stones on a wall are tipped onto a goblin at its foot by an archer of ours beside them",
         dropped0 >= 100 && Math.Abs(onWall) < 4 && dropped1 < dropped0 && (footGob.Dead || fhp0 - footGob.Hp >= 25),
         $"{dropped0} stones on the wall, the archer {onWall:0} voxels from its top; {dropped1} left; the goblin {fhp0:0} → {(footGob.Dead ? "dead" : $"{footGob.Hp:0} hp")}");
+
+    // logs laid along the same wall's edge a little farther on: the archer rolls them down onto a goblin at its foot, and
+    // they roll on across themselves
+    for (int z = wz0 + 58; z < wz0 + 74; z++)
+        for (int y = wallTop; y < wallTop + 2; y++) { wT.Set(edge, y, z, Mat.DropLog); wT.Set(edge + 1, y, z, Mat.DropLog); }
+    simT.Nav.Flush();
+    int logsUp0 = Count(Mat.DropLog, wx0 - 4, wz0 + 56, wx0 + 12, wz0 + 76);
+    var logGob = simT.Spawn(Kinds.Goblin, simT.NearestStand(edge - 5, wz0 + 66, 2));
+    logGob.Raid = null; logGob.Guard = true; logGob.Home = logGob.Cell;
+    float lhp0 = logGob.Hp;
+    bool logsRolled = false;
+    for (int t = 0; t < 60; t++) { RunT(.05); logsRolled |= simT.Fliers.Exists(f => f.Cause == "брёвна со стены" && f.Rolling && f.RollH > 0); }
+    RunT(3);
+    int logsUp1 = Count(Mat.DropLog, wx0 - 4, wz0 + 56, wx0 + 12, wz0 + 76);
+    Check("logs on a wall are rolled down onto a goblin at its foot by the archer beside them, and roll on across themselves",
+        logsUp0 >= 60 && logsUp1 == 0 && logsRolled && (logGob.Dead || lhp0 - logGob.Hp >= 15),
+        $"{logsUp0} voxels of logs on the wall, {logsUp1} left; rolled {logsRolled}; the goblin {lhp0:0} → {(logGob.Dead ? "dead" : $"{logGob.Hp:0} hp")}");
 }
 
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--mechanisms")
@@ -2984,6 +3001,64 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--physics")
         castR == null && ballRN > 1500 && rollR && (gobL.Dead || gobL.Hp < gl0 - 15) && footN > ballRN * .8f && pastN == 0 && WallR() == wall0 && wideR <= 18 && tallR >= 13,
         $"cast: {castR ?? "yes"}; {ballRN} voxels lifted; rolled {rollR}, at most {rollFast:0.0} m/s; the goblin {(gobL.Dead ? "dead: " + gobL.KilledBy : $"{gobL.Hp:0} of {gl0:0}")}; {footN} voxels of it at the foot, {wideR} wide and {tallR} high, {pastN} past the wall; the wall {wall0} → {WallR()}");
     Gone(gobL);
+
+    // a log lying across a slope rolls down it across itself, runs over the goblin on it and lies whole at the foot
+    int hx0 = kxY - 450, hz0 = kzY + 140, hg = wY.SurfAt(hx0, hz0);
+    int HillTop(int x) => x < hx0 + 40 ? hg + 24 : x < hx0 + 88 ? hg + 24 - (x - hx0 - 40) / 2 : hg;
+    void Hill(int half = 24)
+    {
+        for (int z = hz0 - half; z < hz0 + half; z++)
+            for (int x = hx0 - 4; x < hx0 + 130; x++)
+            {
+                int top = HillTop(x);
+                for (int y = hg - 4; y < hg + 80; y++) wY.Set(x, y, z, y < top - 1 ? Mat.Soil : y == top - 1 ? Mat.Grass : Mat.Air);
+                if (x >= hx0 + 110 && x < hx0 + 114) for (int y = hg; y < hg + 16; y++) wY.Set(x, y, z, Mat.Stone);
+            }
+    }
+    Hill();
+    RunY(.5);
+    var logL = new System.Collections.Generic.List<(sbyte, sbyte, sbyte, byte)>();
+    for (int dz = -12; dz < 12; dz++) for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) logL.Add(((sbyte)dx, (sbyte)dy, (sbyte)dz, Mat.Trunk));
+    var gobG = Stand(Kinds.Goblin, hx0 + 70, hz0);
+    float gg0 = gobG.Hp;
+    var logF = simY.Hurl(logL, hx0 + 46.5f, HillTop(hx0 + 46) + 3.5f, hz0 + .5f, 0, 0, 0, "test");
+    bool logRolled = false;
+    for (int t = 0; t < 400 && logF != null && simY.Fliers.Contains(logF); t++) { RunY(.05); logRolled |= logF.Rolling && logF.RollH > 0; }
+    int logFoot = 0, lgx0 = int.MaxValue, lgx1 = int.MinValue, lgz0 = int.MaxValue, lgz1 = int.MinValue;
+    for (int z = hz0 - 24; z < hz0 + 24; z++)
+        for (int x = hx0 + 80; x < hx0 + 110; x++)
+            for (int y = hg; y < hg + 12; y++)
+                if (wY.Get(x, y, z) == Mat.Lumber) { logFoot++; lgx0 = Math.Min(lgx0, x); lgx1 = Math.Max(lgx1, x); lgz0 = Math.Min(lgz0, z); lgz1 = Math.Max(lgz1, z); }
+    Check("a log lying across a slope rolls down it across itself, runs over the goblin on it and lies whole at the foot, along the way it lay",
+        logRolled && (gobG.Dead || gobG.Hp < gg0 - 10) && logFoot >= 180 && lgz1 - lgz0 >= 20 && lgx1 - lgx0 <= 5,
+        $"rolled {logRolled}; the goblin {(gobG.Dead ? "dead: " + gobG.KilledBy : $"{gobG.Hp:0} of {gg0:0}")}; {logFoot} of 216 voxels of it at the foot, {lgx1 - lgx0 + 1} across and {lgz1 - lgz0 + 1} along");
+    Gone(gobG);
+
+    // a tree marked to be felled, cut through at the foot on the same slope, falls across the slope and rolls down to
+    // the foot, still marked to be cut up
+    Hill(48);
+    int tx2 = hx0 + 52, tbase = HillTop(tx2 + 1);
+    var trunkMark = new VoxelList();
+    for (int y = tbase; y < tbase + 40; y++) for (int z = hz0; z < hz0 + 2; z++) for (int x = tx2; x < tx2 + 2; x++) { wY.Set(x, y, z, Mat.Trunk); trunkMark.Add(x, y, z, Mat.Air); }
+    for (int z = hz0; z < hz0 + 2; z++) for (int x = tx2; x < tx2 + 2; x++) for (int y = HillTop(x); y < tbase; y++) wY.Set(x, y, z, Mat.Trunk);
+    simY.Orders.PlanRemove(trunkMark);
+    var gobH = Stand(Kinds.Goblin, tx2, hz0 + 40);
+    RunY(.5);
+    for (int z = hz0; z < hz0 + 2; z++) for (int x = tx2; x < tx2 + 2; x++) for (int y = HillTop(x); y < tbase + 2; y++) wY.Set(x, y, z, Mat.Air);
+    bool felledRolled = false;
+    for (int t = 0; t < 400; t++) { RunY(.05); felledRolled |= simY.Fliers.Exists(f => f.Rolling && f.RollH > 0 && f.Cause == "бревно"); if (t > 40 && !simY.Fliers.Exists(f => f.Cause == "бревно")) break; }
+    int trunkFoot = 0, trunkMarked = 0, trunkUp = 0;
+    for (int z = hz0 - 48; z < hz0 + 48; z++)
+        for (int x = hx0; x < hx0 + 110; x++)
+            for (int y = hg; y < hg + 40; y++)
+            {
+                if (!Mat.IsTrunk(wY.Get(x, y, z))) continue;
+                if (x >= hx0 + 80) { trunkFoot++; if (Orders.IsRemove(simY.Orders.At(x, y, z))) trunkMarked++; } else trunkUp++;
+            }
+    Check("a tree marked to be felled, cut through at the foot on a slope, falls across the slope, rolls down to the foot and is still marked to be cut up there",
+        felledRolled && trunkFoot >= 120 && trunkMarked >= trunkFoot * .9f,
+        $"rolled {felledRolled}; {trunkFoot} voxels of the trunk at the foot ({trunkMarked} marked), {trunkUp} left up the slope");
+    Gone(gobH);
 
     // a stone falling six metres onto the horde's deck over a ditch breaks through it and lies at the bottom; a block of
     // a hand's breadth let down on the same deck from a metre lies on it; the goblin standing on the deck a little way

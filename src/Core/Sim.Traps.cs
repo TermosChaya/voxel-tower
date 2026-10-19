@@ -7,14 +7,14 @@ namespace VoxelTower.Core;
 /// The traps the brushes lay. Stakes: whoever is among them goes slowly and is torn, and treads one down now and then.
 /// A trap floor: thin poles under turf laid flush over a pit; it holds our people, who know where to tread, and gives
 /// way under the horde, which goes down into the pit onto whatever waits at its bottom. Stones on the battlements: when
-/// a raider comes to the foot of the wall under them and one of ours stands by them, he tips them over onto it, and
-/// they hit whoever is under them on the way down.
+/// a raider comes to the foot of the wall under them and one of ours stands by them, he tips them over onto it: they go
+/// over the face as round stones, strike whoever they come down on and roll on down the slope before the wall.
 /// </summary>
 public sealed partial class Sim
 {
     double _nextTrapLook;
     double _trapSaid = -99;
-    /// <summary>Stones laid to be thrown down, by metre column (i | k &lt;&lt; 10): the voxels of them in it, packed.</summary>
+    /// <summary>Stones and logs laid to be thrown down, by metre column (i | k &lt;&lt; 10): the voxels of them in it, packed.</summary>
     readonly Dictionary<int, HashSet<int>> _dropStones = new();
 
     /// <summary>What a second among stakes costs whoever is in them, and the chance of treading one down in it.</summary>
@@ -24,24 +24,24 @@ public sealed partial class Sim
 
     static int StoneColumn(int x, int z) => (x >> NavGrid.Shift) | (z >> NavGrid.Shift) << 10;
 
-    /// <summary>Keeps the stones to throw down in mind as they are laid and taken away.</summary>
+    /// <summary>Keeps the stones and logs to throw down in mind as they are laid and taken away.</summary>
     void OnTrapEdit(int x, int y, int z, byte old)
     {
         byte now = World.Get(x, y, z);
         if (old == now) return;
-        if (old == Mat.DropStone && _dropStones.TryGetValue(StoneColumn(x, z), out var set))
+        if (old is Mat.DropStone or Mat.DropLog && _dropStones.TryGetValue(StoneColumn(x, z), out var set))
         {
             set.Remove(WaterPlanner.Pack(x, y, z));
             if (set.Count == 0) _dropStones.Remove(StoneColumn(x, z));
         }
-        if (now == Mat.DropStone)
+        if (now is Mat.DropStone or Mat.DropLog)
         {
             if (!_dropStones.TryGetValue(StoneColumn(x, z), out set)) _dropStones[StoneColumn(x, z)] = set = new HashSet<int>();
             set.Add(WaterPlanner.Pack(x, y, z));
         }
     }
 
-    /// <summary>After a game is read back: the stones to throw down found again in what play changed of the valley.</summary>
+    /// <summary>After a game is read back: the stones and logs to throw down found again in what play changed of the valley.</summary>
     void FindDropStones()
     {
         _dropStones.Clear();
@@ -52,7 +52,7 @@ public sealed partial class Sim
             if (d == null) continue;
             World.ChunkCoords(ci, out int cx, out int cy, out int cz);
             for (int i = 0; i < d.Length; i++)
-                if (d[i] == Mat.DropStone)
+                if (d[i] is Mat.DropStone or Mat.DropLog)
                     OnTrapEdit((cx << VoxelWorld.Shift) + (i & 31), (cy << VoxelWorld.Shift) + (i >> 10), (cz << VoxelWorld.Shift) + ((i >> 5) & 31), Mat.Air);
         }
     }
@@ -156,8 +156,8 @@ public sealed partial class Sim
     }
 
     /// <summary>
-    /// A raider at the foot of a wall under stones laid on it to be thrown down, and one of ours up there by them: he
-    /// tips them over onto it.
+    /// A raider at the foot of a wall under stones or logs laid on it to be thrown down, and one of ours up there by them:
+    /// he tips them over onto it.
     /// </summary>
     void ThrowStones()
     {
@@ -198,48 +198,125 @@ public sealed partial class Sim
         }
     }
 
+    /// <summary>How many voxels of the heap go to each stone tipped over the wall: a ball of about two thirds of a metre.</summary>
+    const int DropLump = 60;
+
     /// <summary>
-    /// Stones tipped over a wall onto a raider: each goes out over the face toward it and down its column, striking
-    /// whoever is in the way, and lies at the foot as broken stone. One that the wall stands in the way of stays.
+    /// Stones and logs tipped over a wall onto a raider, by one of ours up there: each goes as it goes (see TipStones,
+    /// TipLogs).
     /// </summary>
     void Tip(List<int> stones, Unit at, Unit hand)
     {
-        float cx = 0, cz = 0;
-        foreach (int p in stones) { var (x, _, z) = WaterPlanner.Unpack(p); cx += x; cz += z; }
-        cx /= stones.Count; cz /= stones.Count;
-        int ox = (int)MathF.Round(at.X - cx), oz = (int)MathF.Round(at.Z - cz);
-        var under = Units.FindAll(o => !o.Dead && !o.Inside && MathF.Abs(o.X - at.X) < 32 && MathF.Abs(o.Z - at.Z) < 32);
-        var hits = new Dictionary<Unit, int>();
-        // the lowest first, so those above come down on them
-        var order = new List<(int x, int y, int z)>();
-        foreach (int p in stones) order.Add(WaterPlanner.Unpack(p));
-        order.Sort((a, b) => a.y.CompareTo(b.y));
-        int fell = 0; float ly0 = 0;
-        _settling = true;
-        foreach (var (x, y, z) in order)
+        var heap = new List<(int x, int y, int z)>(stones.Count);
+        var logs = new List<(int x, int y, int z)>();
+        foreach (int p in stones)
         {
-            int tx = x + ox, tz = z + oz;
-            if (!World.InBounds(tx, y, tz) || (tx != x || tz != z) && !Brushes.Free(World.Get(tx, y, tz))) continue;
-            World.Set(x, y, z, Mat.Air);
-            if (Orders.At(x, y, z) != 0) Orders.Clear(x, y, z);
-            var (lx, ly, lz) = Landing(tx, y, tz, false);
-            if (ly < 0) continue;
-            World.Set(lx, ly, lz, Mat.Rubble);
-            fell++; ly0 += ly;
-            if (Rng.NextDouble() < .3) Fell?.Invoke(lx, ly, lz, Mat.DropStone);
-            foreach (var o in under)
-            {
-                if (o.Dead || MathF.Abs(o.X - tx - .5f) > o.T.BodyR + 1 || MathF.Abs(o.Z - tz - .5f) > o.T.BodyR + 1) continue;
-                if (o.Y + o.T.BodyH < ly || o.Y > y) continue;
-                hits[o] = hits.GetValueOrDefault(o) + 1;
-            }
+            var v = WaterPlanner.Unpack(p);
+            (World.Get(v.x, v.y, v.z) == Mat.DropLog ? logs : heap).Add(v);
         }
-        _settling = false;
-        if (fell == 0) return;
+        int stonesGone = TipStones(heap, at, hand), logsGone = TipLogs(logs, at, hand);
+        if (stonesGone + logsGone == 0) return;
         hand.Swing = 1;
         hand.Facing = MathF.Atan2(at.Z - hand.Z, at.X - hand.X);
-        foreach (var (o, n) in hits) Hurt(o, hand, 25 + Math.Min(95, n * 3), "камни со стены");
-        Collapsed?.Invoke(fell, at.X, ly0 / fell, at.Z);
-        if (Time - _trapSaid > 6) { _trapSaid = Time; Say("Камни со стены — на головы орде.", 1, at.X, at.Z); }
+        if (Time - _trapSaid > 6)
+        {
+            _trapSaid = Time;
+            Say(logsGone == 0 ? "Камни со стены — на головы орде." : stonesGone == 0 ? "Брёвна со стены — на головы орде." : "Камни и брёвна со стены — на головы орде.", 1, at.X, at.Z);
+        }
+    }
+
+    /// <summary>
+    /// Stones tipped over a wall onto a raider: the heap goes over the face as round stones, a lump of it to each, out
+    /// toward the raider and down onto it; they strike whoever they come down on and roll on down whatever slope is
+    /// before the wall, through whoever is in their way. A stone the wall stands in the way of stays where it is.
+    /// </summary>
+    int TipStones(List<(int x, int y, int z)> heap, Unit at, Unit hand)
+    {
+        if (heap.Count == 0) return 0;
+        // along the heap's length, a lump to a stone
+        int x0 = int.MaxValue, x1 = int.MinValue, z0 = int.MaxValue, z1 = int.MinValue;
+        foreach (var (x, _, z) in heap) { x0 = Math.Min(x0, x); x1 = Math.Max(x1, x); z0 = Math.Min(z0, z); z1 = Math.Max(z1, z); }
+        bool alongX = x1 - x0 >= z1 - z0;
+        heap.Sort((a, b) => alongX ? a.x.CompareTo(b.x) : a.z.CompareTo(b.z));
+        int lumps = Math.Max(1, (int)MathF.Round(heap.Count / (float)DropLump)), thrown = 0;
+        for (int i = 0; i < lumps; i++)
+        {
+            int from = heap.Count * i / lumps, to = heap.Count * (i + 1) / lumps, n = to - from;
+            if (n <= 0) continue;
+            float cx = 0, cy = 0, cz = 0;
+            for (int j = from; j < to; j++) { var (x, y, z) = heap[j]; cx += x + .5f; cy += y + .5f; cz += z + .5f; }
+            cx /= n; cy /= n; cz /= n;
+            float r = MathF.Max(1.6f, MathF.Cbrt(3 * n / (4 * MathF.PI)));
+            var ball = Ball(r, Mat.DropStone);
+            // out over the face (across the heap, on the raider's side), and on toward the raider, so as to come down on it
+            float dx = at.X - cx, dz = at.Z - cz, bx = cx, bz = cz, by = cy + r * .5f;
+            if (alongX) bz = (dz < 0 ? z0 : z1 + 1) + MathF.Sign(dz == 0 ? 1 : dz) * (r + .5f);
+            else bx = (dx < 0 ? x0 : x1 + 1) + MathF.Sign(dx == 0 ? 1 : dx) * (r + .5f);
+            float fall = MathF.Max(VoxelWorld.PerMetre, by - at.Y - at.T.BodyH * .5f), t = MathF.Sqrt(2 * fall / Gravity);
+            float ox = at.X - bx, oz = at.Z - bz, od = MathF.Max(.01f, MathF.Sqrt(ox * ox + oz * oz));
+            float out_ = Math.Clamp(od / t, VoxelWorld.PerMetre, 4 * VoxelWorld.PerMetre), ux = ox / od, uz = oz / od;
+            if (Aloft + ball.Count > MaxAloft) continue;
+            for (int j = from; j < to; j++)
+            {
+                var (x, y, z) = heap[j];
+                World.Set(x, y, z, Mat.Air);
+                if (Orders.At(x, y, z) != 0) Orders.Clear(x, y, z);
+            }
+            // the wall in its way: this one stays
+            if (!BallFree(bx, by, bz, r))
+            {
+                for (int j = from; j < to; j++) { var (x, y, z) = heap[j]; World.Set(x, y, z, Mat.DropStone); }
+                continue;
+            }
+            var f = Hurl(ball, bx, by, bz, ux * out_, .5f * VoxelWorld.PerMetre, uz * out_, "камни со стены");
+            if (f != null) { f.By = hand; thrown++; }
+        }
+        return thrown;
+    }
+
+    /// <summary>
+    /// Logs tipped over a wall onto a raider: the heap goes over the face in logs two voxels thick and up to four metres
+    /// long, lying along the wall, pushed out just so far as to come down on the raider; they roll on down the slope
+    /// across themselves through whoever is on it.
+    /// </summary>
+    int TipLogs(List<(int x, int y, int z)> heap, Unit at, Unit hand)
+    {
+        if (heap.Count == 0) return 0;
+        int x0 = int.MaxValue, x1 = int.MinValue, y0 = int.MaxValue, z0 = int.MaxValue, z1 = int.MinValue;
+        foreach (var (x, y, z) in heap) { x0 = Math.Min(x0, x); x1 = Math.Max(x1, x); y0 = Math.Min(y0, y); z0 = Math.Min(z0, z); z1 = Math.Max(z1, z); }
+        bool alongX = x1 - x0 >= z1 - z0;
+        float heapMid = alongX ? (z0 + z1 + 1) * .5f : (x0 + x1 + 1) * .5f;
+        // into logs: two voxels up and across, four metres at most along the wall
+        var logs = new Dictionary<(int, int, int), List<(int x, int y, int z)>>();
+        foreach (var v in heap)
+        {
+            int along = alongX ? v.x - x0 : v.z - z0, across = alongX ? v.z - z0 : v.x - x0;
+            var key = ((v.y - y0) / 2, across / 2, along / (4 * VoxelWorld.PerMetre));
+            if (!logs.TryGetValue(key, out var list)) logs[key] = list = new List<(int x, int y, int z)>();
+            list.Add(v);
+        }
+        int thrown = 0;
+        foreach (var log in logs.Values)
+        {
+            if (Aloft + log.Count > MaxAloft) continue;
+            float cx = 0, cy = 0, cz = 0;
+            foreach (var (x, y, z) in log) { cx += x + .5f; cy += y + .5f; cz += z + .5f; }
+            cx /= log.Count; cy /= log.Count; cz /= log.Count;
+            // over the edge on the raider's side, and out as far as it is to the raider by the time it is down to it
+            float side = (alongX ? at.Z : at.X) < heapMid ? -1 : 1, face = side < 0 ? (alongX ? z0 : x0) : (alongX ? z1 : x1) + 1;
+            var f = Loose(log, 0, 0, 0, "брёвна со стены");
+            if (f == null) continue;
+            if (alongX) f.Z = face + side * 1.5f; else f.X = face + side * 1.5f;
+            float across = alongX ? at.Z - f.Z : at.X - f.X;
+            float fall = MathF.Max(VoxelWorld.PerMetre, cy - at.Y - at.T.BodyH * .5f), t = MathF.Sqrt(2 * fall / Gravity);
+            float out_ = side * Math.Clamp(MathF.Abs(across) / t, .3f * VoxelWorld.PerMetre, 3 * VoxelWorld.PerMetre);
+            if (alongX) f.VZ = out_; else f.VX = out_;
+            f.VY = .5f * VoxelWorld.PerMetre;
+            // turning over about its own length as it goes, the way it was rolled off
+            (f.AX, f.AY, f.AZ) = alongX ? (side, 0f, 0f) : (0f, 0f, -side);
+            f.Spin = MathF.Abs(out_) + VoxelWorld.PerMetre;
+            f.By = hand; thrown++;
+        }
+        return thrown;
     }
 }

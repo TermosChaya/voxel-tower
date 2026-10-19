@@ -72,7 +72,12 @@ public static class Mat
     /// fire arrow, a torch — and they go up with everything about them, each keg setting off the next.
     /// </summary>
     public const byte Powder = 108;
-    public const int Count = 109;
+    /// <summary>
+    /// Logs laid on the battlements to be rolled down: when a raider comes to the foot of the wall under them and one of
+    /// ours stands by them, he tips them over, and they come down on it and roll on down the slope before the wall.
+    /// </summary>
+    public const byte DropLog = 109;
+    public const int Count = 110;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
     public static readonly bool[] IsVeg = new bool[Count], IsPlayer = new bool[Count], IsEarthy = new bool[Count],
@@ -173,6 +178,7 @@ public static class Mat
         D(TowerLadder, "Лестница башни", 0x5a3d24, .2f, MatGroup.Wood, 0);
         D(Menhir, "Чёрный камень", 0x1d1a22, .1f, MatGroup.Hard, Natural);
         D(Powder, "Бочки с порохом", 0x6a3322, .3f, MatGroup.Wood, Player);
+        D(DropLog, "Брёвна на сброс", 0x5e4128, .2f, MatGroup.Wood, Player);
         D(Robe, "ряса", 0x3e1518, .14f, MatGroup.Hard, 0); D(RobeTrim, "кайма", 0x7a6236, .12f, MatGroup.Hard, 0);
         D(SoulFire, "мертвенный огонь", 0x9ef2c4, .08f, MatGroup.Hard, Glows);
 
@@ -216,7 +222,7 @@ public static class Mat
         F(.35f, 1.5f, 0, Tuft, Flower, Bloom);
         F(.03f, 40, .6f, Trunk, Birch, PineBark);
         F(.1f, 30, .6f, Snag);
-        F(.04f, 35, .35f, Wood);
+        F(.04f, 35, .35f, Wood, DropLog);
         F(.03f, 30, .35f, Plank);
         F(.12f, 15, 0, Ladder, SiegeLadder);
         F(.1f, 20, .2f, Deck);

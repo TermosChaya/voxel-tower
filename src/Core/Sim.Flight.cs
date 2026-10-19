@@ -51,8 +51,15 @@ public sealed class Flier
     public bool Rolling;
     public double RollFrom;
     public float RollR;
+    /// <summary>A log: the way it lies along the ground, and how far its length reaches from its middle beyond its round
+    /// (none for a ball). It rolls only across itself.</summary>
+    public float RollAX, RollAZ, RollH;
     /// <summary>How long it has rolled no way at all, held where it is, seconds.</summary>
     public float Still;
+    /// <summary>What it was broken from was marked to be taken out: it is marked again where it lies.</summary>
+    public bool Marked;
+    /// <summary>Not broken, only rolled away, as a felled trunk: it lies as what it is, not in pieces.</summary>
+    public bool Intact;
 }
 
 /// <summary>
@@ -118,7 +125,8 @@ public sealed partial class Sim
             f.Voxels.Add(((sbyte)dx, (sbyte)dy, (sbyte)dz, m));
             r2 = Math.Max(r2, dx * dx + dy * dy + dz * dz);
             World.Set(x, y, z, Mat.Air);
-            if (Orders.At(x, y, z) != 0) Orders.Clear(x, y, z);
+            byte order = Orders.At(x, y, z);
+            if (order != 0) { f.Marked |= Orders.IsRemove(order); Orders.Clear(x, y, z); }
             if (Burning.Remove(WaterPlanner.Pack(x, y, z))) f.Burning++;
         }
         if (f.Voxels.Count == 0) return null;
@@ -519,10 +527,13 @@ public sealed partial class Sim
         Landed?.Invoke(f.X, f.Y, f.Z, f.Voxels.Count, speed);
         // a ball rolls on from where it struck, with the more of its going the more it came down aslant — and none of it
         // if it spent it breaking out what it struck
-        if (IsRound(f, out float round))
+        float aslant = speed > .01f ? (f.VX * f.VX + f.VZ * f.VZ) / (speed * speed) : 0, keep = broke >= 10 ? 0 : .35f * aslant;
+        // and a log across itself
+        float half = 0, lx = 0, lz = 0;
+        bool ball = IsRound(f, out float round);
+        if (ball || BakeLog(f, out round, out half, out lx, out lz))
         {
-            float aslant = speed > .01f ? (f.VX * f.VX + f.VZ * f.VZ) / (speed * speed) : 0;
-            StartRoll(f, round, broke >= 10 ? 0 : .35f * aslant);
+            if (ball) StartRoll(f, round, keep); else StartRoll(f, round, keep, half, lx, lz);
             // come down hard on timber too weak for it, it goes on through it
             if (speed > 2 * VoxelWorld.PerMetre) BallBreaks(f, 0, speed);
             return false;
@@ -567,7 +578,7 @@ public sealed partial class Sim
         var cells = new List<(int ox, int oy, int oz, byte m)>(f.Voxels.Count);
         foreach (var (dx, dy, dz, m) in f.Voxels)
         {
-            byte b = Shattered(m);
+            byte b = f.Intact ? m : Shattered(m);
             if (b == 0) continue;
             cells.Add((dx * ex.x + dy * ey.x + dz * ez.x, dx * ex.y + dy * ey.y + dz * ez.y, dx * ex.z + dy * ey.z + dz * ez.z, b));
         }
@@ -613,6 +624,7 @@ public sealed partial class Sim
         }
         _settling = true;
         int lit = 0;
+        var marked = f.Marked ? new VoxelList() : null;
         foreach (var (ox, oy, oz, b) in cells)
         {
             int x = ix + ox, y = ay + oy, z = iz + oz;
@@ -621,9 +633,12 @@ public sealed partial class Sim
             if (at != Mat.Air && at != Mat.Water && !Mat.Passable[at]) continue;
             World.Set(x, y, z, b);
             if (Orders.At(x, y, z) != 0) Orders.Clear(x, y, z);
+            marked?.Add(x, y, z, Mat.Air);
             if (f.Burning > 0 && lit < Math.Min(4, f.Burning) && Mat.Burns(b) && Ignite(x, y, z)) lit++;
         }
         _settling = false;
+        // marked to be taken out where it was, marked again where it lies
+        if (marked is { Count: > 0 }) Orders.PlanRemove(marked);
         return true;
     }
 
