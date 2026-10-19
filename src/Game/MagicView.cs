@@ -537,7 +537,8 @@ public partial class MagicView : Node3D
     {
         var mm = _bits.Multimesh;
         int total = 0;
-        foreach (var f in sim.Fliers) total += f.Voxels.Count;
+        // a tuft or a flower carried off is drawn as nothing: it is blades, not a cube, and is gone where it comes down
+        foreach (var f in sim.Fliers) foreach (var (_, _, _, m) in f.Voxels) if (!Mat.IsSprig(m)) total++;
         if (total == 0) { if (mm.VisibleInstanceCount != 0) mm.VisibleInstanceCount = 0; return; }
         if (total > mm.InstanceCount)
         {
@@ -554,6 +555,7 @@ public partial class MagicView : Node3D
             var c = At(f.X, f.Y, f.Z);
             foreach (var (dx, dy, dz, m) in f.Voxels)
             {
+                if (Mat.IsSprig(m)) continue;
                 var p = c + b * new Vector3(dx * v, dy * v, dz * v);
                 // each voxel a little lighter or darker, as in the world
                 uint h = (uint)(dx * 73856093 ^ dy * 19349663 ^ dz * 83492791 ^ f.Id * 2654435761);

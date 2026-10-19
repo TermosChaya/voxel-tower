@@ -101,7 +101,7 @@ public sealed partial class Sim
         if (Mat.IsTrunk(m) || Mat.IsDecor[m]) return Mat.Lumber;
         if (Mat.IsVeg[m] || m == Mat.Tuft) return 0;
         if (m is Mat.Rock or Mat.Moss or Mat.Ruin) return Mat.Rubble;
-        if (m is Mat.Grass or Mat.GrassDry or Mat.GrassLush or Mat.Flower or Mat.Bloom or Mat.Path) return Mat.Soil;
+        if (m is Mat.Grass or Mat.GrassDry or Mat.GrassLush or Mat.Scorch or Mat.Path) return Mat.Soil;
         return Broken(m);
     }
 

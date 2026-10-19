@@ -418,6 +418,7 @@ public sealed partial class Sim
         _fieldVersion = -1;
         SidesRev++;
         FindDropStones();
+        FindScorched();
         return extra;
     }
 

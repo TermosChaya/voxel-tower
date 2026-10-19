@@ -12,11 +12,30 @@ public sealed class MeshBuffers
     public float[] Col;
     /// <summary>Corner shade (0..1) and glow strength.</summary>
     public float[] Uv;
-    /// <summary>How much the vertex sways in the wind (grass tips, leaves), and 1 for dressed stone drawn without the voxel grid.</summary>
+    /// <summary>How much the vertex sways in the wind (grass tips, leaves), and what is drawn finer than the voxels (<see cref="Mat.Skin"/>).</summary>
     public float[] Uv2;
     public int[] Idx;
     public int Quads;
     public int Vertices => Quads * 4;
+}
+
+/// <summary>
+/// What grows on a chunk's ground, which the game draws in blades finer than the voxels instead of as cubes of them:
+/// the tufts of grass and the flowers standing in it, and the open tops of its turf. Entries are packed: x | y &lt;&lt; 5 |
+/// z &lt;&lt; 10 in the chunk, the material &lt;&lt; 15 and, for a tuft or a flower, how many voxels tall it stands &lt;&lt; 23.
+/// </summary>
+public sealed class Sward
+{
+    /// <summary>A tuft or a flower, once where it stands on something else, however tall it grows.</summary>
+    public int[] Sprigs;
+    /// <summary>Turf with nothing over it but air, a tuft or a flower.</summary>
+    public int[] Turf;
+
+    public static int X(int e) => e & 31;
+    public static int Y(int e) => (e >> 5) & 31;
+    public static int Z(int e) => (e >> 10) & 31;
+    public static byte Mat(int e) => (byte)(e >> 15);
+    public static int Tall(int e) => (e >> 23) & 7;
 }
 
 /// <summary>
@@ -31,6 +50,7 @@ public sealed class GreedyMesher
     float[] _pos = Array.Empty<float>(), _nrm = Array.Empty<float>(), _col = Array.Empty<float>(), _uv = Array.Empty<float>(), _uv2 = Array.Empty<float>();
     int[] _idx = Array.Empty<int>();
     int _q, _capQ;
+    readonly System.Collections.Generic.List<int> _sprigs = new(), _turf = new();
 
     public GreedyMesher() { Grow(2048); }
 
@@ -52,11 +72,19 @@ public sealed class GreedyMesher
     /// A world chunk in two parts: the solid voxels, meshed as if the water were not there so the bottom shows through it,
     /// and the water's own surface where it meets the air (null when the chunk holds no water).
     /// </summary>
-    public MeshBuffers MeshChunk(VoxelWorld w, int ci, byte[] pad, byte[] wet, out MeshBuffers water)
+    public MeshBuffers MeshChunk(VoxelWorld w, int ci, byte[] pad, byte[] wet, out MeshBuffers water) => MeshChunk(w, ci, pad, wet, out water, out _);
+
+    /// <summary>
+    /// A world chunk as above, and what grows on its ground (null when nothing does). The tufts and the flowers are not
+    /// meshed: they hide no face of the turf under them and shade none of its corners, for the game draws them in blades.
+    /// </summary>
+    public MeshBuffers MeshChunk(VoxelWorld w, int ci, byte[] pad, byte[] wet, out MeshBuffers water, out Sward sward)
     {
         water = null;
+        sward = null;
         if (w.IsEmpty(ci) || w.IsBuried(ci)) return null;
         w.CopyPadded(ci, pad);
+        sward = Gather(pad, out bool sprigs);
         w.ChunkCoords(ci, out int cx, out int cy, out int cz);
         int ox = cx * VoxelWorld.CS, oy = cy * VoxelWorld.CS, oz = cz * VoxelWorld.CS;
         if (wet != null && Array.IndexOf(pad, Mat.Water) >= 0)
@@ -70,8 +98,49 @@ public sealed class GreedyMesher
             var wm = Mesh(wet, VoxelWorld.CS, VoxelWorld.CS, VoxelWorld.CS, ox, oy, oz, Blocker);
             water = wm.Quads > 0 ? wm : null;
         }
+        // the water stops at a tuft, as it does in the world; then the tufts and flowers go from the block (its padding
+        // too), so nothing is meshed of them and they hide no face of what they stand on
+        if (sprigs)
+            for (int i = 0; i < pad.Length; i++) if (Mat.IsSprig(pad[i])) pad[i] = Mat.Air;
         var mb = Mesh(pad, VoxelWorld.CS, VoxelWorld.CS, VoxelWorld.CS, ox, oy, oz);
         return mb.Quads > 0 ? mb : null;
+    }
+
+    /// <summary>
+    /// Finds the tufts and flowers of a padded chunk and the turf open above (water over turf is not open), and says
+    /// whether there are tufts or flowers anywhere in the block, its padding too.
+    /// </summary>
+    Sward Gather(byte[] pad, out bool sprigs)
+    {
+        const int P = VoxelWorld.CS + 2, Row = P * P;
+        sprigs = Array.IndexOf(pad, Mat.Tuft) >= 0 || Array.IndexOf(pad, Mat.Flower) >= 0 || Array.IndexOf(pad, Mat.Bloom) >= 0;
+        if (!sprigs && Array.IndexOf(pad, Mat.Grass) < 0 && Array.IndexOf(pad, Mat.GrassDry) < 0 && Array.IndexOf(pad, Mat.GrassLush) < 0)
+            return null;
+        _sprigs.Clear();
+        _turf.Clear();
+        for (int y = 0; y < VoxelWorld.CS; y++)
+            for (int z = 0; z < VoxelWorld.CS; z++)
+            {
+                int idx = ((y + 1) * P + z + 1) * P + 1;
+                for (int x = 0; x < VoxelWorld.CS; x++, idx++)
+                {
+                    byte m = pad[idx];
+                    if (Mat.IsSprig(m))
+                    {
+                        if (Mat.IsSprig(pad[idx - Row])) continue;
+                        int tall = 1;
+                        while (tall < 7 && y + tall <= VoxelWorld.CS && pad[idx + tall * Row] == m) tall++;
+                        _sprigs.Add(x | y << 5 | z << 10 | m << 15 | tall << 23);
+                    }
+                    else if (Mat.IsGrass(m))
+                    {
+                        byte up = pad[idx + Row];
+                        if (up == Mat.Air || Mat.IsSprig(up)) _turf.Add(x | y << 5 | z << 10 | m << 15);
+                    }
+                }
+            }
+        if (_sprigs.Count == 0 && _turf.Count == 0) return null;
+        return new Sward { Sprigs = _sprigs.Count > 0 ? _sprigs.ToArray() : null, Turf = _turf.Count > 0 ? _turf.ToArray() : null };
     }
 
     /// <summary>Stands in for anything solid when meshing water: it hides water faces but has none of its own.</summary>
@@ -186,7 +255,7 @@ public sealed class GreedyMesher
                 sway = d == 1 ? (s > 0 ? 1 : 0) : y >= top ? 1 : 0;
             }
             else if (Mat.SwayKind[m] == 2) sway = .55f;
-            _uv2[t] = sway; _uv2[t + 1] = Mat.Smooth[m] ? 1 : Mat.Metal[m] ? 2 : 0;
+            _uv2[t] = sway; _uv2[t + 1] = Mat.Skin[m];
         }
         // Godot treats clockwise triangles as front faces; the diagonal follows the darker corners
         bool flip = ao[0] + ao[2] > ao[1] + ao[3];

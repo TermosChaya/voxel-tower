@@ -1,12 +1,14 @@
 shader_type spatial;
 render_mode blend_mix, depth_draw_never, cull_back, diffuse_burley, specular_schlick_ggx, shadows_disabled;
 
-// Water under the dusk sky: dark where the bottom drops away and clearer over the shallows, ripples in the light, and a
-// faint voxel grid on the surface so it sits in the diorama like everything else. It runs where it runs: a flow map
+// Water under the dusk sky: dark where the bottom drops away and clearer over the shallows, ripples in the light, and,
+// when the player has the voxels drawn with their lines, a faint voxel grid on the surface as on everything else. It runs where it runs: a flow map
 // over the valley carries the ripples and a glint across each voxel of the surface along the river's bed, and along
 // the way water let out of a pond went; it frets white in the shallows where it runs, and falls white over an edge.
 // Vertices are in whole voxels of the valley.
 
+// the lines round the voxels: 1 drawn, 0 not (a setting of the player's)
+global uniform float voxel_lines;
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
 uniform sampler2D flow_tex : filter_linear, repeat_disable;
 uniform vec2 map_size = vec2(1024.0, 1024.0);
@@ -55,11 +57,11 @@ void fragment() {
 	vec3 col = mix(shallow_color, deep_color, k);
 	float alpha = mix(0.5, 0.93, k);
 
-	// a faint grid on the top faces, like the bevel on solid voxels
+	// a faint grid on the top faces, like the bevel on solid voxels, when the player has those drawn
 	vec2 fv = fract(v_vox.xz);
 	float ed = min(min(fv.x, 1.0 - fv.x), min(fv.y, 1.0 - fv.y));
 	float px = length(fwidth(v_vox));
-	float line = (1.0 - smoothstep(0.0, max(0.12, px), ed)) * (1.0 - smoothstep(0.35, 0.7, px)) * step(0.5, v_nrm.y);
+	float line = (1.0 - smoothstep(0.0, max(0.12, px), ed)) * (1.0 - smoothstep(0.35, 0.7, px)) * step(0.5, v_nrm.y) * voxel_lines;
 	col *= 1.0 - 0.18 * line;
 
 	if (v_nrm.y > 0.5) {

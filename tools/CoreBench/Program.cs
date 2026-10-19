@@ -83,8 +83,9 @@ sw.Restart();
 long quads = 0; int meshed = 0;
 for (int ci = 0; ci < w.ChunkCount; ci++) { var mb = mesher.MeshChunk(w, ci, pad); if (mb != null) { quads += mb.Quads; meshed++; } }
 long oneMs = sw.ElapsedMilliseconds;
-// the prototype had 232642; its citadel of neat brick is rough masonry now
-Check("triangles as counted", quads * 2 == 234006, $"{quads * 2} triangles in {meshed} chunks, 234006 expected (the prototype's 232642 with a brick citadel)");
+// the prototype had 232642; its citadel of neat brick is rough masonry now (234006), and its tufts of grass are drawn
+// in blades by the game instead of meshed as cubes
+Check("triangles as counted", quads * 2 == 145454, $"{quads * 2} triangles in {meshed} chunks, 145454 expected (the prototype's 232642 with a brick citadel and its tufts as cubes)");
 Console.WriteLine($"     mesh, 1 thread: {oneMs} ms");
 
 // meshing, all cores
@@ -4206,6 +4207,96 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bodies")
     float gx0 = gob.X;
     RunB(12);
     Check("a goblin with its knife hand cut off drags itself back west", !Sim.HasMainHand(gob) && (gob.X < gx0 - 16 || gob.Dead), $"hand {Sim.HasMainHand(gob)}, x {gx0:0} → {gob.X:0}, {gob.State}");
+}
+
+// ---- the grass: tufts and flowers handed to the game to draw in blades, not meshed as cubes; turf burnt black by fire
+// and by a blast, and the grass creeping back over it
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--grass")
+{
+    Console.WriteLine();
+    var mpG = new MapParams();
+    var wG = new VoxelWorld(mpG.SizeX, mpG.SizeY, mpG.SizeZ);
+    var siteG = MapGen.Generate(wG, mpG);
+    wG.Compact();
+    // open, level turf in the middle of a chunk, with nothing on it but grass, west of the citadel; its tufts and
+    // flowers are taken off it so the test has the turf to itself
+    bool Open(int x, int z, int r)
+    {
+        int s0 = wG.SurfAt(x, z);
+        for (int dz = -r; dz <= r; dz++)
+            for (int dx = -r; dx <= r; dx++)
+            {
+                byte up = wG.Get(x + dx, s0, z + dz);
+                if (wG.SurfAt(x + dx, z + dz) != s0 || !Mat.IsGrass(wG.Get(x + dx, s0 - 1, z + dz)) || (up != Mat.Air && !Mat.IsSprig(up))) return false;
+            }
+        return true;
+    }
+    int gx = -1, gz = -1;
+    for (int z = 48; z < wG.SZ - 48 && gx < 0; z += 32)
+        for (int x = siteG.SpawnStrip + 48; x < siteG.KeepX - 60 && gx < 0; x += 32)
+        {
+            int cx0 = (x & ~31) + 16, cz0 = (z & ~31) + 16, s0 = wG.SurfAt(cx0, cz0);
+            if ((s0 & 31) > 2 && (s0 & 31) < 29 && Open(cx0, cz0, 12)) { gx = cx0; gz = cz0; }
+        }
+    int gs = wG.SurfAt(gx, gz);
+    for (int dz = -12; dz <= 12; dz++) for (int dx = -12; dx <= 12; dx++) for (int y = gs; y < gs + 3; y++) if (Mat.IsSprig(wG.Get(gx + dx, y, gz + dz))) wG.Set(gx + dx, y, gz + dz, Mat.Air);
+    int gci = wG.ChunkIndex(gx >> 5, gs >> 5, gz >> 5);
+    var gm = new GreedyMesher();
+    var gpad = new byte[34 * 34 * 34];
+    var bare = gm.MeshChunk(wG, gci, gpad, null, out _, out var swardBare);
+    float[] bareUv = bare.Uv;
+    int bareQuads = bare.Quads;
+    wG.Set(gx, gs, gz, Mat.Tuft); wG.Set(gx, gs + 1, gz, Mat.Tuft);
+    wG.Set(gx + 3, gs, gz, Mat.Flower);
+    var grown = gm.MeshChunk(wG, gci, gpad, null, out _, out var sward);
+    int lx = gx & 31, ly = gs & 31, lz = gz & 31;
+    int tuft = Array.Find(sward?.Sprigs ?? Array.Empty<int>(), e => Sward.X(e) == lx && Sward.Y(e) == ly && Sward.Z(e) == lz);
+    int flower = Array.Find(sward?.Sprigs ?? Array.Empty<int>(), e => Sward.X(e) == lx + 3 && Sward.Y(e) == ly && Sward.Z(e) == lz);
+    bool turfUnder = Array.Exists(sward?.Turf ?? Array.Empty<int>(), e => Sward.X(e) == lx && Sward.Y(e) == ly - 1 && Sward.Z(e) == lz);
+    Check("a tuft and a flower are handed over to be drawn in blades and leave the chunk's mesh, faces and shading, as it was",
+        sward != null && sward.Sprigs.Length == (swardBare.Sprigs?.Length ?? 0) + 2 && Sward.Mat(tuft) == Mat.Tuft && Sward.Tall(tuft) == 2 && Sward.Mat(flower) == Mat.Flower && Sward.Tall(flower) == 1
+            && turfUnder && grown.Quads == bareQuads && grown.Uv.AsSpan().SequenceEqual(bareUv) && swardBare.Turf.Length == sward.Turf.Length,
+        $"{sward?.Sprigs?.Length ?? 0} sprigs (tuft {Sward.Tall(tuft)} tall), {sward?.Turf?.Length ?? 0} open turf; {grown.Quads} quads with them, {bareQuads} without");
+
+    // fire: a tuft burnt leaves the turf under it black, and the grass creeps back over it in the rain
+    var simG = new Sim(wG, siteG);
+    simG.Waves.Countdown = 1e9; simG.WildTarget = 0;
+    void RunG(double seconds) { for (double t = 0; t < seconds; t += .05) simG.Step(.05f); }
+    simG.Ignite(gx, gs + 1, gz);
+    simG.Ignite(gx, gs, gz);
+    RunG(8);
+    bool black = wG.Get(gx, gs - 1, gz) == Mat.Scorch && wG.Get(gx, gs, gz) == Mat.Air;
+    int scorched = simG.Scorched;
+    // a patch seared beside it stays black a good while, and heals from its edges in the rain
+    int patch = simG.SearRound(gx + 8, gs, gz, 4);
+    RunG(20);
+    int left20 = simG.Scorched;
+    simG.Weather = Weather.Rain; simG.WeatherLeft = 600;
+    RunG(300);
+    Check("a tuft burnt leaves the turf under it black; burnt turf stays black a while, and the grass grows back over it from the turf beside it",
+        black && scorched > 0 && patch > 20 && left20 > (patch + scorched) * .6 && simG.Scorched == 0 && Mat.IsGrass(wG.Get(gx, gs - 1, gz)),
+        $"under the tuft: {(black ? "black" : Mat.NameOf(wG.Get(gx, gs - 1, gz)))}, {scorched} scorched; a patch of {patch} seared beside it, {left20} of all still black 20 s on; after five rainy minutes {simG.Scorched} left, {Mat.NameOf(wG.Get(gx, gs - 1, gz))} under the tuft");
+
+    // a blast sears the open turf round its crater; the bare earth of the crater itself is not turf
+    simG.Detonate(gx, gs, gz, 6, 0, "", always: true);
+    int seared = 0;
+    for (int dz = -12; dz <= 12; dz++) for (int dx = -12; dx <= 12; dx++) if (wG.Get(gx + dx, wG.SurfAt(gx + dx, gz + dz) - 1, gz + dz) == Mat.Scorch) seared++;
+    Check("a blast sears the turf round its crater black", seared > 40 && simG.Scorched >= seared, $"{seared} voxels of turf seared within 1.5 m, {simG.Scorched} on the list");
+    // the burnt turf is found again in a game read back
+    var bufG = new System.IO.MemoryStream();
+    simG.Save(bufG, mpG.Seed, "grass", "");
+    var wG2 = new VoxelWorld(mpG.SizeX, mpG.SizeY, mpG.SizeZ);
+    bufG.Position = 0;
+    Sim simG2;
+    using (var saveG = new SaveReader(bufG))
+    {
+        var siteG2 = MapGen.Generate(wG2, new MapParams { Seed = saveG.Seed });
+        wG2.Compact();
+        saveG.Valley(wG2, siteG2);
+        simG2 = new Sim(wG2, siteG2);
+        simG2.Load(saveG);
+    }
+    Check("burnt turf is still waiting to green again in a game read back", simG2.Scorched == simG.Scorched, $"{simG.Scorched} saved, {simG2.Scorched} read back");
 }
 
 // ---- the troops the lore opens: their data, their bodies, the ladders they will not take, what each one's lore does

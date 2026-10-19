@@ -84,6 +84,8 @@ public sealed partial class Sim
         // the leaves of a gate turning, water running, grass and the dressing come and go without shaking anything
         if (Mat.Swings(old) || Mat.Swings(now)) return;
         if (!Bound(old) && !Ground(old) && !Holds(now)) return;
+        // turf burnt black, or grown green again, holds up just what it held
+        if ((Mat.IsGrass(old) || old == Mat.Scorch) && (Mat.IsGrass(now) || now == Mat.Scorch)) return;
         _shaken.Add(WaterPlanner.Pack(x, y, z));
     }
 

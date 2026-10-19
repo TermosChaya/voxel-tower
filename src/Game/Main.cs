@@ -29,7 +29,9 @@ namespace VoxelTower.Game;
 /// --pose=crush: a ball of earth let fall on the horde's deck over a ditch, breaking through it with the band on it
 /// (--look=1 after: the hole, the ball and the band down in the ditch), --pose=drops: stones and logs tipped off a wall
 /// on a hill onto the band at its foot, rolling down the slope through the rest of it (--look=1 lying at the bottom after),
-/// --pose=trees: the valley's trees in a row, --look=0..2 choosing which; --pose=people: every figure in every look,
+/// --pose=trees: the valley's trees in a row, --look=0..2 choosing which; --pose=grass: a meadow, --look=0..3 from the
+/// usual view to as close as it goes, 4 through a swordsman's eyes with a band wading through it, 5 a blast's wave
+/// running out over it, 6 a whirlwind crossing it, 7 and 8 those two close; --pose=people: every figure in every look,
 /// --look=0..9 choosing a row), --pose=troops: the troops the lore opens out before the walls meeting a band (--at=
 /// seconds into it, --look=1 closer),
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
@@ -126,6 +128,8 @@ public partial class Main : Node3D
     double _poseSeconds = 14;
     /// <summary>--ui-scale=S: the interface drawn at this size for this run, whatever the player set.</summary>
     float _uiScale;
+    /// <summary>--lines: the voxels drawn with their lines round them, whatever the player set.</summary>
+    bool _lines;
 
     public override void _Ready()
     {
@@ -157,12 +161,15 @@ public partial class Main : Node3D
             else if (a.StartsWith("--pose=")) _pose = a["--pose=".Length..];
             else if (a.StartsWith("--at=") && double.TryParse(a["--at=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double at)) _poseSeconds = at;
             else if (a.StartsWith("--ui-scale=") && float.TryParse(a["--ui-scale=".Length..], System.Globalization.CultureInfo.InvariantCulture, out float us)) _uiScale = us;
+            else if (a == "--lines") _lines = true;
         }
         // scripted runs draw the interface at its usual size, unless told otherwise, and leave the player's settings be
         if (_selfTest || _demo || _shot != null || _uiScale > 0) Settings.Scripted(_uiScale);
         else Settings.Load();
         Settings.Apply(GetTree().Root);
         Settings.ApplyVolume();
+        if (_lines) Settings.ScriptLines(true);
+        else Settings.ApplyLines();
 
         // a saved game: its valley is made again from its seed, and what play changed of it laid over
         SaveReader save = null;
@@ -271,6 +278,7 @@ public partial class Main : Node3D
         Input.MouseMode = Input.MouseModeEnum.Visible;
         FP = new FirstPerson();
         AddChild(FP);
+        View.Grass.Bind(this);
         Tools.Init(this);
         Rig.RightClick += p => { if (Tools.Tool != Tool.None) Tools.Cancel(); else Command.OrderTo(p); };
 
@@ -1025,6 +1033,44 @@ public partial class Main : Node3D
         Check("map click moves the view", Rig.Target.DistanceTo(before) > 1, $"{before} → {Rig.Target}");
         await Frames(10);
         Check("chunks re-meshed", World.DirtyCount == 0, $"{View.Triangles()} triangles");
+        // the grass in blades: tufts and flowers drawn all over the valley; a sward on the turf only once the view is close
+        var (tufts, flowers, swardFar) = View.Grass.Drawn();
+        var aim0 = Rig.Aim;
+        Rig.SetAt(World.WX(Site.KeepX - 120), World.WY(World.SurfAt(Site.KeepX - 120, Site.KeepZ)), World.WZ(Site.KeepZ), aim0.yaw, .5f, 6f);
+        await Frames(12);
+        int swardNear = View.Grass.Drawn().sward;
+        Rig.Set(aim0.x, aim0.z, aim0.yaw, aim0.pitch, aim0.zoom, snap: true);
+        await Frames(4);
+        int swardBack = View.Grass.Drawn().sward;
+        Check("tufts and flowers are drawn in blades; the turf grows a sward of them when the view comes close, and loses it going back",
+            tufts > 1000 && flowers > 100 && swardFar == 0 && swardNear > 2000 && swardBack == 0,
+            $"{tufts} tufts, {flowers} flowers; sward {swardFar} from afar, {swardNear} close, {swardBack} back again");
+        // the lines round the voxels: off unless the player turns them on in the settings, and seen at once when they are:
+        // they darken the picture, where the wind in the grass from one frame to the next only stirs it
+        // not so close that the sward is still growing in over the turf, which darkens it by itself
+        Rig.SetAt(World.WX(Site.KeepX - 120), World.WY(World.SurfAt(Site.KeepX - 120, Site.KeepZ)), World.WZ(Site.KeepZ), aim0.yaw, .6f, 2.2f);
+        await Frames(20);
+        bool linesOff = !Settings.Lines;
+        var shot0 = GetViewport().GetTexture().GetImage();
+        await Frames(2);
+        var shot1 = GetViewport().GetTexture().GetImage();
+        Settings.ScriptLines(true);
+        await Frames(2);
+        var shot2 = GetViewport().GetTexture().GetImage();
+        Settings.ScriptLines(false);
+        // how much darker the second picture is than the first, on average, in steps of 255
+        float Darker(Image a, Image b)
+        {
+            double d = 0; int n = 0;
+            for (int y = a.GetHeight() / 5; y < a.GetHeight() * 4 / 5; y += 5)
+                for (int x = a.GetWidth() / 5; x < a.GetWidth() * 4 / 5; x += 5, n++)
+                    d += a.GetPixel(x, y).Luminance - b.GetPixel(x, y).Luminance;
+            return (float)(d / Math.Max(1, n) * 255);
+        }
+        float idle = Darker(shot0, shot1), lined = Darker(shot1, shot2);
+        Rig.Set(aim0.x, aim0.z, aim0.yaw, aim0.pitch, aim0.zoom, snap: true);
+        Check("the lines round the voxels are off by default, and turned on in the settings they are drawn at once",
+            linesOff && lined > .6f && lined > Math.Abs(idle) * 3, $"the picture {lined:0.00} darker with the lines, {idle:0.00} by itself");
         // first person: one of ours chosen (a swordsman if one is about), I goes into it: the view is its eyes, the frame of
         // the game put away; it walks where it is told, and Esc lets it go, the view back over the valley and it chosen
         var mine = Sim.Units.Find(u => Sim.CanPossess(u) && u.T == Kinds.Swordsman) ?? Sim.Units.Find(u => Sim.CanPossess(u) && u.T.Work < 1) ?? Sim.Units.Find(Sim.CanPossess);
@@ -1090,6 +1136,7 @@ public partial class Main : Node3D
         if (_pose == "wounds") { Wounded(); return; }
         if (_pose == "flood") { Flood(); return; }
         if (_pose == "trees") { LookAtGrove(); return; }
+        if (_pose == "grass") { Meadow(); return; }
         if (_pose == "people") { People(); return; }
         if (_pose == "troops") { Troops(); return; }
         if (_pose == "faith") { Faith(); return; }
@@ -1521,6 +1568,65 @@ public partial class Main : Node3D
         }
         Paused = true;
         Rig.SetAt(w.WX(cx), w.WY(ground + 8), w.WZ(cz), -.62f, .5f, 1.7f);
+        Hud.Refresh();
+    }
+
+    /// <summary>
+    /// A meadow, the most flowered and tufted patch of open turf near the citadel: --look=0 as the view first opens on
+    /// it, 1 closer, where the sward grows in, 2 close, 3 as close as the view goes; 4 through a swordsman's eyes, a band
+    /// wading through the grass at him; 5 a keg's blast in it, its wave running out; 6 a whirlwind crossing it; 7 and 8
+    /// the blast and the whirlwind as close as the view goes.
+    /// </summary>
+    void Meadow()
+    {
+        var sim = Sim; var w = World;
+        sim.Waves.Countdown = 1e9;
+        int bx = Site.KeepX, bz = Site.KeepZ, best = -1, cx = bx - 200, cz = bz;
+        for (int z = Math.Max(40, bz - 420); z < Math.Min(w.SZ - 40, bz + 420); z += 16)
+            for (int x = Math.Max(Site.SpawnStrip + 40, bx - 420); x < Math.Min(w.SX - 40, bx + 420); x += 16)
+            {
+                if ((x - bx) * (x - bx) + (z - bz) * (z - bz) < (Site.KeepR + 60) * (Site.KeepR + 60)) continue;
+                int score = 0, h0 = w.SurfAt(x, z);
+                for (int dz = -24; dz <= 24; dz += 2)
+                    for (int dx = -24; dx <= 24; dx += 2)
+                    {
+                        int s = w.SurfAt(x + dx, z + dz);
+                        byte top = w.Get(x + dx, s, z + dz), under = w.Get(x + dx, s - 1, z + dz);
+                        if (Math.Abs(s - h0) > 6 || !Mat.IsGrass(under)) { score -= 3; continue; }
+                        if (Mat.IsSprig(top)) score += top == Mat.Tuft ? 4 : 6;
+                        else if (top != Mat.Air) score -= 4;
+                        else score++;
+                    }
+                if (score > best) { best = score; cx = x; cz = z; }
+            }
+        float ground = w.SurfAt(cx, cz);
+        GD.Print($"[voxel-tower] the meadow at {cx},{cz}");
+        if (_look == 4)
+        {
+            var me = sim.Spawn(Kinds.Swordsman, sim.NearestStand(cx + 30, cz, 2));
+            foreach (var (t, dx, dz) in new[] { (Kinds.Goblin, -2, 3), (Kinds.Orc, -12, -9), (Kinds.Goblin, -16, 12), (Kinds.Goblin, -26, -2) })
+            {
+                var u = sim.Spawn(t, sim.NearestStand(cx + dx, cz + dz, t.Move.Height));
+                u.Guard = true; u.Home = u.Cell;
+            }
+            Advance(.3);
+            FP.Enter(me);
+            FP.Face(MathF.PI, -.2f);
+            Paused = true;
+            Hud.Refresh();
+            return;
+        }
+        if (_look is 5 or 7) { sim.Detonate(cx, ground, cz, 9, 0, "", always: true); Advance(.3); Paused = true; }
+        if (_look is 6 or 8)
+        {
+            foreach (var s in Sim.Spells) sim.Known.Add(s.Kind);
+            sim.Favour = 600;
+            sim.Cast(SpellKind.Whirlwind, cx - 30, w.SurfAt(cx - 30, cz), cz);
+            Advance(2.2);
+            Paused = true;
+        }
+        float zoom = _look switch { 1 => 2.6f, 2 => 4.2f, 3 or 7 or 8 => 8f, 5 or 6 => 4.5f, _ => 1f };
+        Rig.SetAt(w.WX(cx), w.WY(ground), w.WZ(cz), -.62f, .5f, zoom);
         Hud.Refresh();
     }
 

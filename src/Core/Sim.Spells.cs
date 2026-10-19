@@ -379,6 +379,7 @@ public sealed partial class Sim
         float k = (Weather == Weather.Rain ? .5f : 1) * Might;
         int x = (int)d.X, z = (int)d.Z, top = World.SurfAt(Math.Clamp(x, 0, World.SX - 1), Math.Clamp(z, 0, World.SZ - 1));
         const int Splatter = VoxelWorld.PerMetre;
+        SearRound(d.X, top, d.Z, Splatter * .6f);
         int lit = 0;
         for (int dz = -Splatter; dz <= Splatter && lit < 3; dz += 2)
             for (int dx = -Splatter; dx <= Splatter && lit < 3; dx += 2)
@@ -424,6 +425,7 @@ public sealed partial class Sim
         }
         int ix = (int)x, iz = (int)z, top = World.SurfAt(Math.Clamp(ix, 0, World.SX - 1), Math.Clamp(iz, 0, World.SZ - 1));
         if (Mat.Burns(World.Get(ix, top - 1, iz))) Ignite(ix, top - 1, iz);
+        SearRound(x, t != null ? y : top, z, 3.5f);
         Struck?.Invoke(x, t != null ? y : top, z);
         return null;
     }

@@ -153,6 +153,7 @@ public sealed partial class Sim
         TickBands();
         TickTrails();
         TendWildlife();
+        TendTurf();
         TickShelter();
         TickMuster(dt);
         TickDwellings();

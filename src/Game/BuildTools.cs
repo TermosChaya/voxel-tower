@@ -942,7 +942,7 @@ public partial class BuildTools : Node3D
         double ox = (o.X - w.OriginX) / VoxelWorld.Vox, oy = o.Y / VoxelWorld.Vox, oz = (o.Z - w.OriginZ) / VoxelWorld.Vox;
         _hasHover = Raycast.Cast(w, ox, oy, oz, d.X, d.Y, d.Z, out _hover, skipVeg: true);
         _hasTree = false;
-        if (DigNow && Raycast.Cast(w, ox, oy, oz, d.X, d.Y, d.Z, out var veg) && (Mat.IsTrunk(veg.M) || Mat.IsLeafy(veg.M)))
+        if (DigNow && Raycast.Cast(w, ox, oy, oz, d.X, d.Y, d.Z, out var veg, skipGrass: true) && (Mat.IsTrunk(veg.M) || Mat.IsLeafy(veg.M)))
         {
             _tree = veg;
             _hasTree = true;
@@ -1293,7 +1293,8 @@ public partial class BuildTools : Node3D
         {
             int x = L.X(i), y = L.Y(i), z = L.Z(i);
             byte m = dig ? w.Get(x, y, z) : L.M(i);
-            if (m == 0 || (dig && !Labour.Diggable(m))) continue;
+            // grass and flowers are drawn in blades: the ghost of a dig shows the turf they stand in, not cubes of them
+            if (m == 0 || (dig && (!Labour.Diggable(m) || Mat.IsSprig(m)))) continue;
             _grid[((y - y0 + 1) * pz + (z - z0 + 1)) * px + (x - x0 + 1)] = m;
         }
         return GodotMesh.From(_mesher.Mesh(_grid, dx, dy, dz, x0, y0, z0));
