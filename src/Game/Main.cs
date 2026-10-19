@@ -22,7 +22,8 @@ namespace VoxelTower.Game;
 /// --pose=powder: kegs of powder before our wall going up one after another under a band (--look=1 a trail of it
 /// burning across the field), --pose=charge: a sapper's charge against our ring of stone, its fuse burning (--look=1 the
 /// moment it goes, --look=2 a swordsman of ours running for the fuse), --pose=stones: a catapult's stone high on its
-/// arc (--look=1 striking the wall),
+/// arc (--look=1 striking the wall), --pose=topple: a block come down on a narrow post with its weight off it, going
+/// over the post's edge (--look=1 standing on its end beside it after),
 /// --pose=trees: the valley's trees in a row, --look=0..2 choosing which; --pose=people: every figure in every look,
 /// --look=0..4 choosing a row),
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
@@ -168,7 +169,7 @@ public partial class Main : Node3D
         if (_demo && _pose == "shaman") ClearTrees(Site.KeepX - Site.KeepR - 240, Site.KeepZ - 90, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 90);
         if (_demo && _pose == "spells") ClearTrees(Site.KeepX - Site.KeepR - 260, Site.KeepZ - 100, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
         if (_demo && _pose == "traps") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
-        if (_demo && _pose is "blast" or "grip" or "wind" or "hexes" or "sorcerers" or "powder" or "charge" or "stones") ClearTrees(Site.KeepX - Site.KeepR - 300, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 140);
+        if (_demo && _pose is "blast" or "grip" or "wind" or "hexes" or "sorcerers" or "powder" or "charge" or "stones" or "topple") ClearTrees(Site.KeepX - Site.KeepR - 300, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 140);
         World.Compact();
         save?.Valley(World, Site);
         double genMs = sw.Elapsed.TotalMilliseconds;
@@ -1002,6 +1003,7 @@ public partial class Main : Node3D
         if (_pose == "powder") { Kegs(); return; }
         if (_pose == "charge") { Sapped(); return; }
         if (_pose == "stones") { Stones(); return; }
+        if (_pose == "topple") { Topple(); return; }
         var w = World; var s = Site; var sim = Sim;
         sim.Waves.Countdown = Waves.Prep;
         sim.Stock.Gold = 140;
@@ -1567,6 +1569,30 @@ public partial class Main : Node3D
         Paused = true;
         // from outside the ring: the kegs at the foot of its face, the sapper making off
         Rig.SetAt(w.WX(laid.X - 6), w.WY(laid.Y + 4), w.WZ(laid.Z), 2.39f, .42f, _look == 1 ? 2.2f : 3f);
+        Hud.Refresh();
+    }
+
+    /// <summary>A long block of rock let fall on a narrow post with its weight off it, going over the post's edge (--look=1: after, on its end beside it).</summary>
+    void Topple()
+    {
+        var sim = Sim; var w = World;
+        sim.Waves.Countdown = 1e9;
+        int px = Site.KeepX - Site.KeepR - 90, pz = Site.KeepZ, g = w.SurfAt(px, pz);
+        for (int z = pz - 16; z < pz + 16; z++)
+            for (int x = px - 16; x < px + 40; x++)
+            {
+                for (int y = g; y < g + 48; y++) w.Set(x, y, z, Mat.Air);
+                for (int y = g - 3; y < g; y++) if (w.Get(x, y, z) == Mat.Air || Mat.IsVeg[w.Get(x, y, z)]) w.Set(x, y, z, Mat.Soil);
+            }
+        // a post of stone, a quarter of a metre square and a metre and a half high
+        for (int z = pz; z < pz + 2; z++) for (int x = px; x < px + 2; x++) for (int y = g; y < g + 12; y++) w.Set(x, y, z, Mat.Stone);
+        var slab = new List<(sbyte, sbyte, sbyte, byte)>();
+        for (int dz = -3; dz < 3; dz++) for (int dy = -3; dy < 3; dy++) for (int dx = -8; dx < 8; dx++) slab.Add(((sbyte)dx, (sbyte)dy, (sbyte)dz, Mat.Rock));
+        var block = sim.Hurl(slab, px + 7.5f, g + 26.5f, pz + 1, 0, 0, 0, "обвал");
+        for (int t = 0; t < 80 && block != null && !block.Tipping; t++) Advance(.05);
+        Advance(_look == 1 ? 3 : .38);
+        Paused = true;
+        Rig.SetAt(w.WX(px + 4), w.WY(g + 8), w.WZ(pz + 1), -.75f, .35f, 4.5f);
         Hud.Refresh();
     }
 

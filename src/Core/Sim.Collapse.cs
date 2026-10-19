@@ -471,9 +471,10 @@ public sealed partial class Sim
     }
 
     /// <summary>
-    /// What is no longer held comes down whole: each block of it that hangs together falls as one, a great one broken
-    /// into blocks of a cubic metre or so, through the air as anything falls, and lies where it lands in its shape.
-    /// Trees fall over their own way, and what there is no room for in the air comes down as before (false then).
+    /// What is no longer held comes down whole: each block of it that hangs together falls as one body, through the air
+    /// as anything falls, and lies where it lands in its shape — or, come down on too narrow a footing, goes over on its
+    /// side, a wall falling as a wall falls. Trees fall over their own way, and what there is no room for in the air
+    /// comes down as before (false then).
     /// </summary>
     bool FallWhole(HashSet<int> falling)
     {
@@ -520,13 +521,12 @@ public sealed partial class Sim
             // for the chips and dust at its broken edges
             Fell?.Invoke(x, y, z, m);
         }
-        // each block beginning to fall, turning a little as it goes
+        // each block beginning to fall as one, turning a little as it goes
         foreach (var block in blocks)
-            foreach (var piece in block.Count > 1200 ? Split(block, 700) : new List<List<(int x, int y, int z)>> { block })
-            {
-                var f = Loose(piece, 0, -8, 0, "обвал");
-                if (f != null) f.Spin = .3f + f.Id % 5 * .15f;
-            }
+        {
+            var f = Loose(block, 0, -8, 0, "обвал");
+            if (f != null) f.Spin = .3f + f.Id % 5 * .15f;
+        }
         cx /= laid; cy /= laid; cz /= laid;
         Collapsed?.Invoke(laid, cx, cy, cz);
         if (laid > 120 && Time - _collapseSaid > 8)

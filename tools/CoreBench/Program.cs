@@ -1763,6 +1763,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--collapse")
         $"sapped {sapped}, {collapses} falls, {fallen} voxels of masonry came down, the miner {(miner.Dead ? "dead, " + miner.KilledBy : miner.State.ToString())}");
     GoneC(miner);
     simC.Fell = null;
+    // what fell lies down before the mending: blocks still in the air would come down on the new masonry
+    RunC(4);
     var meant = simC.MeantIn(kxC - 120, kzC - 120, kxC + 120, kzC + 120);
     var lay = new VoxelList(); var clear = new VoxelList();
     simC.MendPlan(meant, lay, clear);
@@ -2896,6 +2898,47 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--physics")
     Check("a ball of earth that fell lies in its shape: as the ball it was, not spilled out flat", ballNow.Count > 600 && wide <= 18 && tall >= 8,
         $"{ballNow.Count} voxels of it lying {wide} wide and {tall} high (the ball was 17 across)");
     Gone(gobB);
+
+    // a block that comes down on a narrow post with its weight off the post tips over the post's edge, and stands on its end beside it
+    int tpx = kxY - 420, tpz = kzY - 300, tpg = wY.SurfAt(tpx, tpz);
+    for (int z = tpz - 12; z < tpz + 12; z++) for (int x = tpx - 12; x < tpx + 30; x++) { for (int y = tpg; y < tpg + 40; y++) wY.Set(x, y, z, Mat.Air); for (int y = tpg - 3; y < tpg; y++) wY.Set(x, y, z, Mat.Soil); }
+    for (int z = tpz; z < tpz + 2; z++) for (int x = tpx; x < tpx + 2; x++) for (int y = tpg; y < tpg + 12; y++) wY.Set(x, y, z, Mat.Stone);
+    var slab = new System.Collections.Generic.List<(sbyte, sbyte, sbyte, byte)>();
+    for (int dz = -3; dz < 3; dz++) for (int dy = -3; dy < 3; dy++) for (int dx = -8; dx < 8; dx++) slab.Add(((sbyte)dx, (sbyte)dy, (sbyte)dz, Mat.Rock));
+    var block = simY.Hurl(slab, tpx + 7.5f, tpg + 22.5f, tpz + 1, 0, 0, 0, "test");
+    bool tipped = false;
+    for (int t = 0; t < 80; t++) { RunY(.05); tipped |= block.Tipping; }
+    RunY(3);
+    int beside = 0, stoodUp = int.MinValue, onPost = 0;
+    for (int z = tpz - 4; z < tpz + 6; z++)
+        for (int x = tpx + 2; x < tpx + 12; x++)
+            for (int y = tpg; y < tpg + 24; y++) if (wY.Get(x, y, z) == Mat.Rubble) { beside++; stoodUp = Math.Max(stoodUp, y - tpg + 1); }
+    for (int z = tpz - 4; z < tpz + 6; z++) for (int x = tpx - 4; x < tpx + 2; x++) for (int y = tpg + 12; y < tpg + 24; y++) if (wY.Get(x, y, z) == Mat.Rubble) onPost++;
+    Check("a block that comes down on a narrow post with its weight off it tips over the post's edge and stands on its end beside it",
+        tipped && simY.Fliers.Count == 0 && beside >= 500 && stoodUp >= 14 && onPost == 0,
+        $"tipped {tipped}; {beside} voxels of it beside the post, {stoodUp} high (it was 6 high lying, 16 long); {onPost} left on the post");
+
+    // a catapult's stone come down on the edge of a crag rolls off it and lies at its foot; it strikes as a shot only
+    // where it first struck, and after is a stone like any: the goblin standing by where it comes down again is not hurt
+    int spx = kxY - 420, spz = kzY - 250, spg = wY.SurfAt(spx, spz);
+    for (int z = spz - 18; z < spz + 12; z++) for (int x = spx - 12; x < spx + 30; x++) { for (int y = spg; y < spg + 50; y++) wY.Set(x, y, z, Mat.Air); for (int y = spg - 3; y < spg; y++) wY.Set(x, y, z, Mat.Soil); }
+    for (int z = spz; z < spz + 2; z++) for (int x = spx; x < spx + 2; x++) for (int y = spg; y < spg + 20; y++) wY.Set(x, y, z, Mat.Rock);
+    var gobS = Stand(Kinds.Goblin, spx + 12, spz - 10);
+    float gs0 = gobS.Hp;
+    var stone = simY.Hurl(Sim.Ball(2.6f, Mat.Rock), spx + 3.5f, spg + 30.5f, spz + 1.5f, 0, 0, 0, "камень из камнемёта");
+    stone.Smash = 5;
+    bool rolled = false;
+    for (int t = 0; t < 80; t++) { RunY(.05); rolled |= stone.Tipping; }
+    RunY(3);
+    int stoneOn = 0, stoneOff = 0, stoneX = 0;
+    for (int z = spz - 8; z < spz + 10; z++)
+        for (int x = spx - 6; x < spx + 26; x++)
+            for (int y = spg; y < spg + 30; y++)
+                if (wY.Get(x, y, z) == Mat.Rubble) { if (y >= spg + 20) stoneOn++; else { stoneOff++; stoneX = Math.Max(stoneX, x - spx); } }
+    Check("a catapult's stone come down on the edge of a crag rolls off it and lies at its foot, and strikes as a shot only where it first struck: the goblin by where it comes down again is not hurt",
+        rolled && simY.Fliers.Count == 0 && stoneOn == 0 && stoneOff >= 70 && !gobS.Dead && gobS.Hp >= gs0,
+        $"rolled {rolled}; {stoneOff} voxels of it at the foot (out to {stoneX} from the crag), {stoneOn} left on top; the goblin {gobS.Hp:0} of {gs0:0}, {Far(gobS, spx + 10, spz + 1) :0.0} m from where it fell");
+    Gone(gobS);
 
     // what telekinesis holds does not go through a wall: pulled at one from behind it, it stays on its side
     int qx = kxY - 330, qz0 = kzY + 40;
