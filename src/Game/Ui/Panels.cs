@@ -50,6 +50,8 @@ public static class Retinue
     {
         if (u.Dead) return u.Team == Team.Wild ? "добыт" : "пал";
         if (u.Airborne is { } flying) return flying.Held ? "в хватке телекинеза" : "летит по воздуху";
+        if (u.Defusing != null) return u.Why.Length > 0 ? u.Why : "бежит резать фитиль";
+        if (u.Shunning != null) return u.Why.Length > 0 ? u.Why : "уходит от заряда";
         if (u.PushCell >= 0) return "сбрасывает лестницу";
         if (sim.Climbing(u)) return "лезет по лестнице";
         if (u.Burn > 0 && u.State == UnitState.Flee && u.Team != Team.Horde) return "выбегает из огня";

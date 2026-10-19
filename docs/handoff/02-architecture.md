@@ -120,7 +120,12 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   кусками через `Loose`, тела — `Fling`, машинам ×3,3, поджог, событие `Exploded`. Сапёры: `Unit.Charge` (в `Spawn` по
   `Hash` с 5-й волны), `PlantCharge` из `March` вместо `StartCarve`, если впереди наша кладка (`SetKegs` 4³ у подножия,
   `Fuse(…, SapperFuse 6 с, planted)`, сапёр — `Routed`, событие `Planted`), `DropCharge` из `Kill` (горящий — рвётся);
-  в `BestTarget` −80.
+  в `BestTarget` −80. Наши у фитиля: `Tend` раз в 0,5 с для каждого заряда сапёра — `Charge.Defuser`: `Runner` (ближайшие
+  до четырёх свободных бойцов ближе 30 м, путь `Paths.Find` до клетки у заряда, успевает, если клеток пути / (скорость ·
+  1,2) + 1,5 с резать + 0,3 < осталось), `InTime` — перепроверка по оставшемуся пути; нет такого — `Charge.Abandoned`,
+  и все наши ближе `Danger` (12 м) получают `Unit.Shunning`. В `PawnTick` сразу после `EscapeFire`: `Defuse` (`Unit.
+  Defusing` — бежит, не отвлекаясь на орду, и стоит у фитиля, пока `CutFuse` не перережет) и `KeepClear` (уходит на
+  `SafeOff`, 15 м, и ждёт взрыва). Не сохраняются: после загрузки `Tend` назначает заново.
 - Камни камнемёта — летящие куски: `Throw` (`Sim.Engines`) решает дугу на заданное время полёта и бросает `Hurl(Ball(2,6,
   Rock))` с `Flier.Smash = StoneR` и `Flier.By`; разброс — вбок и по высоте. Удар — `StoneLands(Flier)` из `ComeDown`
   (выбивает построенное шаром, бьёт тех, кто рядом, цитадель −10), потом камень ложится щебнем. `Arrow.Stone` больше нет.

@@ -16,6 +16,9 @@ public sealed class Charge
     public bool Planted;
     public double Cutting;
     public string Cause = "";
+    /// <summary>The one of ours running to cut its fuse; nobody can get there in time, and ours keep clear of it.</summary>
+    public Unit Defuser;
+    public bool Abandoned;
 }
 
 /// <summary>
@@ -25,7 +28,9 @@ public sealed class Charge
 /// turn. A trail of it burns along at a run, a cell at a time, each going up as the fire reaches it; a great stack goes
 /// up as several. The horde's sappers carry charges of it: where the horde would have to hack through a wall of ours,
 /// a sapper lays its charge against the wall instead, lights the fuse and runs. One of ours who gets to the fuse in
-/// time cuts it, and the powder is ours; a sapper cut down while burning goes up with its charge where it falls.
+/// time cuts it, and the powder is ours: the nearest free fighter runs for it by itself if it can be there in time,
+/// and if nobody can, ours near it get away from the wall before it goes. A sapper cut down while burning goes up with
+/// its charge where it falls.
 /// </summary>
 public sealed partial class Sim
 {
@@ -40,7 +45,12 @@ public sealed partial class Sim
     const int SapperKeg = 4;
     /// <summary>The most blasts that go off at one step: the rest a step later.</summary>
     const int BlastsAtOnce = 3;
-    double _plantSaid = -99, _cutSaid = -99;
+    double _plantSaid = -99, _cutSaid = -99, _runSaid = -99, _clearSaid = -99, _tendAt;
+    /// <summary>How near a sapper's charge ours are got away from (voxels), and how far they go: past where its pieces fall.</summary>
+    const float Danger = 12 * VoxelWorld.PerMetre, SafeOff = 15 * VoxelWorld.PerMetre;
+    /// <summary>How long cutting a fuse takes, and how far off it one must stand to cut it.</summary>
+    const double CutFor = 1.5;
+    const float CutReach = 1.6f * VoxelWorld.PerMetre;
 
     /// <summary>A blast went off: where, and how far it reached (voxels).</summary>
     public event Action<float, float, float, float> Exploded;
@@ -120,6 +130,12 @@ public sealed partial class Sim
     void TickCharges(float dt)
     {
         if (Charges.Count == 0) return;
+        // twice a second: who runs for the fuses, and who gets away from them
+        if (Time - _tendAt >= .5)
+        {
+            _tendAt = Time;
+            foreach (var c in Charges) if (c.Planted && c.BlowAt > Time) Tend(c);
+        }
         int blasts = 0;
         for (int i = Charges.Count - 1; i >= 0; i--)
         {
@@ -150,16 +166,14 @@ public sealed partial class Sim
     /// <summary>One of ours at a sapper's burning fuse cuts it in a second and a half; true when it is cut. The powder is ours then.</summary>
     bool CutFuse(Charge c, float dt)
     {
-        const float Near = 1.6f * VoxelWorld.PerMetre;
         Unit by = null;
         foreach (var u in Units)
         {
             if (u.Dead || u.Inside || u.Airborne != null || u.Team != Team.Player || u.T == Kinds.Risen) continue;
-            float dx = u.X - c.X, dz = u.Z - c.Z, dy = u.Y + 4 - c.Y;
-            if (dx * dx + dz * dz + dy * dy < Near * Near) { by = u; break; }
+            if (ToCharge(u.X, u.Y + 4, u.Z, c) < CutReach) { by = u; break; }
         }
         c.Cutting = by != null ? c.Cutting + dt : Math.Max(0, c.Cutting - dt);
-        if (c.Cutting < 1.5) return false;
+        if (c.Cutting < CutFor) return false;
         Charges.Remove(c);
         foreach (int p in c.Voxels) { _fused.Remove(p); Burning.Remove(p); }
         if (Time - _cutSaid > 10)
@@ -167,6 +181,130 @@ public sealed partial class Sim
             _cutSaid = Time;
             Say($"{by?.T.Name ?? "Наш"} перерезал фитиль: заряд сапёра не взорвётся, а порох теперь наш.", 1, c.X, c.Z);
         }
+        return true;
+    }
+
+    static float ToCharge(float x, float y, float z, Charge c) => MathF.Sqrt((x - c.X) * (x - c.X) + (y - c.Y) * (y - c.Y) + (z - c.Z) * (z - c.Z));
+
+    /// <summary>
+    /// A sapper's fuse burning down: the nearest free fighter of ours runs to cut it if it can be there in time, and
+    /// gives it up when it no longer can; if nobody can, ours near it get away from the wall.
+    /// </summary>
+    void Tend(Charge c)
+    {
+        double left = c.BlowAt - Time;
+        if (c.Defuser is { } d && (d.Dead || d.Inside || d.Airborne != null || d.Captor != null || d.Defusing != c || !InTime(d, c, left)))
+        {
+            if (d.Defusing == c) { d.Defusing = null; d.Path = null; }
+            c.Defuser = null;
+            c.Abandoned = true;
+        }
+        // one may still come by in time, even when nobody could before: it runs for it, and the rest keep clear anyway
+        if (c.Defuser == null)
+        {
+            var runner = Runner(c, left);
+            if (runner != null)
+            {
+                c.Defuser = runner; runner.Defusing = c; runner.Shunning = null;
+                ReleaseSite(runner); StopBuild(runner);
+                runner.Target = null; runner.Prey = null;
+                if (Time - _runSaid > 10) { _runSaid = Time; Say($"{runner.T.Name} бежит к фитилю заряда — резать, пока не рвануло.", 1, c.X, c.Z); }
+            }
+            else if (!c.Abandoned)
+            {
+                c.Abandoned = true;
+                if (Time - _clearSaid > 10) { _clearSaid = Time; Say("К фитилю заряда не успеть: наши уходят от стены.", 3, c.X, c.Z); }
+            }
+        }
+        if (!c.Abandoned) return;
+        // nobody will get there: ours near it walk off
+        foreach (var u in Units)
+        {
+            if (u.Dead || u.Inside || u.Airborne != null || u.Team != Team.Player || u.Captor != null || u.Shunning == c || u == c.Defuser) continue;
+            if (ToCharge(u.X, u.Y + 4, u.Z, c) > Danger) continue;
+            if (u.Defusing != null) { u.Defusing = null; }
+            u.Shunning = c;
+            u.Path = null;
+            ReleaseSite(u); StopBuild(u);
+        }
+    }
+
+    /// <summary>Whether one running for a fuse can be there and cut it before it goes: by the way left to it.</summary>
+    bool InTime(Unit u, Charge c, double left)
+    {
+        if (ToCharge(u.X, u.Y + 4, u.Z, c) < CutReach) return left > CutFor - c.Cutting + .1;
+        int cells = u.Path == null ? int.MaxValue : u.Path.Count - u.PathI;
+        if (cells == int.MaxValue) return false;
+        return cells / (u.T.Move.Speed * u.Pace * 1.2) + CutFor + .3 < left;
+    }
+
+    /// <summary>The nearest free fighter of ours that can get to a fuse and cut it in time, with its way planned there; or nobody.</summary>
+    Unit Runner(Charge c, double left)
+    {
+        var free = new List<Unit>();
+        foreach (var u in Units)
+        {
+            if (u.Dead || u.Inside || u.Airborne != null || u.Team != Team.Player || u.Captor != null || u.T == Kinds.Risen || u.T.Prays) continue;
+            if (!(u.T.Work < 1 || u.Militia) || u.Mending || u.Defusing != null || u.State == UnitState.Fight || !HasMainHand(u)) continue;
+            if (ToCharge(u.X, u.Y + 4, u.Z, c) > 30 * VoxelWorld.PerMetre) continue;
+            free.Add(u);
+        }
+        free.Sort((a, b) => ToCharge(a.X, a.Y, a.Z, c).CompareTo(ToCharge(b.X, b.Y, b.Z, c)));
+        int target = Nav.CellOf(c.X, c.Y, c.Z), ti = Nav.I(target), tk = Nav.K(target), ty = Nav.Y(target);
+        for (int n = 0; n < Math.Min(4, free.Count); n++)
+        {
+            var u = free[n];
+            if (ToCharge(u.X, u.Y + 4, u.Z, c) < CutReach) { u.Path = null; return u; }
+            var path = Paths.Find(u.Cell, x => Math.Abs(Nav.I(x) - ti) <= 1 && Math.Abs(Nav.K(x) - tk) <= 1 && Math.Abs(Nav.Y(x) - ty) <= 2,
+                x => H(x, ti, tk), u.T.Move, 6000, gates: true);
+            if (path == null || path.Count / (u.T.Move.Speed * u.Pace * 1.2) + CutFor + .3 >= left) continue;
+            u.Path = path; u.PathI = 0;
+            return u;
+        }
+        return null;
+    }
+
+    /// <summary>One of ours running for a fuse: to it, past whatever is in the way, and at it till it is cut. False when it is over.</summary>
+    bool Defuse(Unit u, float dt)
+    {
+        var c = u.Defusing;
+        if (!Charges.Contains(c) || c.Defuser != u) { u.Defusing = null; return false; }
+        if (ToCharge(u.X, u.Y + 4, u.Z, c) < CutReach)
+        {
+            u.Path = null;
+            u.State = UnitState.Work;
+            u.Facing = MathF.Atan2(c.Z - u.Z, c.X - u.X);
+            u.Why = "режет фитиль заряда";
+            return true;
+        }
+        if (u.Path == null || u.PathI >= u.Path.Count)
+        {
+            if (!GoTo(u, Nav.CellOf(c.X, c.Y, c.Z), adjacent: true, budget: 6000)) { u.Defusing = null; c.Defuser = null; return false; }
+            // standing by it already, and still not near enough: closer, inside the cell
+            if (u.Path == null) { u.Path = new List<int> { Nav.CellOf(c.X, c.Y, c.Z) }; u.PathI = 0; }
+        }
+        Walk(u, dt, 1.2f);
+        u.Why = "бежит резать фитиль";
+        return true;
+    }
+
+    /// <summary>One of ours keeping clear of a charge nobody can get to: off to well away from it, and there till it goes. False when it is over.</summary>
+    bool KeepClear(Unit u, float dt)
+    {
+        var c = u.Shunning;
+        if (!Charges.Contains(c)) { u.Shunning = null; return false; }
+        if (ToCharge(u.X, u.Y + 4, u.Z, c) >= SafeOff) { u.Path = null; u.State = UnitState.Idle; u.Why = "переждать взрыв"; return true; }
+        if (u.Path == null || u.PathI >= u.Path.Count)
+        {
+            if (Time < u.NextSearch) { u.State = UnitState.Idle; return true; }
+            u.NextSearch = Time + .5;
+            var path = Paths.Find(u.Cell, x => { var (fx, fy, fz) = Nav.Feet(x); return ToCharge(fx, fy + 4, fz, c) >= SafeOff; }, x => 0, u.T.Move, 2500, gates: true);
+            if (path == null) { u.State = UnitState.Idle; return true; }
+            u.Path = path; u.PathI = 0;
+        }
+        Walk(u, dt, 1.2f);
+        u.State = UnitState.Flee;
+        u.Why = "уходит от заряда";
         return true;
     }
 
@@ -240,7 +378,7 @@ public sealed partial class Sim
                 float od = MathF.Max(.5f, MathF.Sqrt(cx * cx + cy * cy + cz * cz));
                 // out from the heart and up: what lay under it goes up too
                 float hx = cx / od, hz = cz / od, up = MathF.Max(0, cy / od) * .8f + .6f, hl = MathF.Sqrt(hx * hx + up * up + hz * hz);
-                float speed = (14 - 6 * MathF.Min(1, od / r)) * VoxelWorld.PerMetre * kick * (.8f + (float)Rng.NextDouble() * .4f);
+                float speed = (11 - 4 * MathF.Min(1, od / r)) * VoxelWorld.PerMetre * kick * (.8f + (float)Rng.NextDouble() * .4f);
                 var f = piece.Count <= room ? Loose(piece, hx / hl * speed, up / hl * speed, hz / hl * speed, cause, room) : null;
                 if (f != null) { room -= f.Voxels.Count; continue; }
                 // no room in the air for it: dust

@@ -385,6 +385,8 @@ public sealed class Unit
     public double PlagueUntil = -1, OathUntil = -1;
     /// <summary>A sapper of the horde with a charge of powder on its back, to lay against a wall of ours.</summary>
     public bool Charge;
+    /// <summary>One of ours running to cut the fuse of a sapper's charge; one keeping clear of a charge nobody can get to in time.</summary>
+    public Charge Defusing, Shunning;
 
     // beasts, and pawns with nothing to do
     /// <summary>Where it grazes and wanders round; for a pawn, where it idles round.</summary>

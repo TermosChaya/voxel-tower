@@ -77,6 +77,9 @@ public sealed partial class Sim
         if (u.Captor != null) { Led(u, dt); return; }
         // standing in the flames: out of them before anything
         if (EscapeFire(u, dt)) { Busy(u); return; }
+        // a sapper's fuse burning down: one runs to cut it, the rest near it get away from the wall
+        if (u.Defusing != null && Defuse(u, dt)) { Busy(u); return; }
+        if (u.Shunning != null && KeepClear(u, dt)) { Busy(u); return; }
         // badly hurt: out of the fight to mend by the citadel
         if (FallBack(u, dt)) { Busy(u); return; }
         // one that has lost the hand it fights with (or, with a bow, either hand) runs like a worker

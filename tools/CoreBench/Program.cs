@@ -3022,9 +3022,11 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--powder")
     simX.Ignite(tx, wX.SurfAt(tx, tz) - 0, tz);
     if (blasts.Count == 0 && wX.Get(tx, wX.SurfAt(tx, tz) - 1, tz) == Mat.Powder) simX.Ignite(tx, wX.SurfAt(tx, tz) - 1, tz);
     RunX(4);
-    bool runs = blasts.Count >= 8 && blasts[^1].t - blasts[0].t >= 1 && blasts[^1].x > blasts[0].x + 60;
+    // the far end goes up a good while after the near one
+    var farEnd = blasts.Count > 0 ? blasts.MaxBy(bl => bl.x) : default;
+    bool runs = blasts.Count >= 8 && farEnd.x > blasts[0].x + 60 && farEnd.t - blasts[0].t >= 1;
     Check("a trail of powder burns along, going up as the fire comes to it, the far end last", runs,
-        $"{blasts.Count} blasts over {(blasts.Count > 0 ? blasts[^1].t - blasts[0].t : 0):0.00} s, from x {(blasts.Count > 0 ? blasts[0].x - tx : 0):0} to {(blasts.Count > 0 ? blasts[^1].x - tx : 0):0}");
+        $"{blasts.Count} blasts; the near end at x {(blasts.Count > 0 ? blasts[0].x - tx : 0):0}, the far end at x {farEnd.x - tx:0} {farEnd.t - (blasts.Count > 0 ? blasts[0].t : 0):0.00} s later");
 
     // a ring of stone round the citadel: the horde has to go through it somewhere
     simX.InstantLabour = true;
@@ -3053,19 +3055,57 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--powder")
         $"{(laid2 != null ? "laid" : "not laid")}, {(cutter != null ? $"a swordsman {Apart(cutter.X, cutter.Z, laid2.X, laid2.Z):0.0} m from it" : "nobody")}; {blasts.Count} blasts; {keptPowder} voxels of powder lie there");
     Gone(sap2); if (cutter != null) Gone(cutter);
 
-    // a sapper with a charge before the ring lays it against the wall instead of hacking through, lights it and runs; the wall goes
+    // the nearest free fighter of ours runs to a sapper's burning fuse by itself, and cuts it in time
+    var sap3 = simX.Spawn(Kinds.Sapper, simX.NearestStand(kxX - ringR - 60, kzX + 200, 2));
+    sap3.Charge = true;
+    var laid3 = LaidBy(sap3, 90);
+    Gone(sap3);
+    Unit runner = null; float runFrom = 0;
+    if (laid3 != null)
+    {
+        runner = simX.Spawn(Kinds.Swordsman, simX.NearestStand((int)laid3.X - 44, (int)laid3.Z + 24, 2));
+        runFrom = Apart(runner.X, runner.Z, laid3.X, laid3.Z);
+    }
+    blasts.Clear();
+    bool ranFor = false;
+    for (int t = 0; t < 20; t++) { RunX(.5); ranFor |= runner != null && runner.Defusing == laid3; }
+    int kept3 = laid3 == null ? 0 : CountX((int)laid3.X - 8, (int)laid3.Z - 8, (int)laid3.X + 8, (int)laid3.Z + 8, m => m == Mat.Powder);
+    Check("the nearest free fighter runs to a sapper's burning fuse by itself and cuts it in time",
+        laid3 != null && ranFor && !simX.Charges.Contains(laid3) && blasts.Count == 0 && kept3 >= 12,
+        $"{(laid3 != null ? $"laid; a swordsman {runFrom:0.0} m off ran for it: {ranFor}" : "not laid")}; {blasts.Count} blasts; {kept3} voxels of powder left");
+    if (runner != null) Gone(runner);
+
+    // a sapper with a charge before the ring lays it against the wall instead of hacking through, lights it and runs; the wall goes;
+    // nobody of ours can get to the fuse in time, and the workers by the wall walk off before it goes
     int ring0 = RingStone();
     var sap = simX.Spawn(Kinds.Sapper, simX.NearestStand(kxX - ringR - 60, kzX - 60, 2));
     sap.Charge = true;
     var laidC = LaidBy(sap, 90);
     bool fled = sap.Routed && !sap.Charge;
+    // the sapper is off and away: it strikes nobody on its way out
+    Gone(sap);
+    var byWall = new System.Collections.Generic.List<Unit>();
+    if (laidC != null)
+        foreach (var (dx, dz) in new[] { (-20, 0), (-16, 18), (-14, -18) })
+        {
+            var wk = simX.Spawn(Kinds.Worker, simX.NearestStand((int)laidC.X + dx, (int)laidC.Z + dz, 2));
+            wk.Hold = true; byWall.Add(wk);
+        }
     float toRing = laidC == null ? 0 : MathF.Abs(MathF.Sqrt((laidC.X - kxX) * (laidC.X - kxX) + (laidC.Z - kzX) * (laidC.Z - kzX)) - ringR) / VoxelWorld.PerMetre;
     blasts.Clear();
-    RunX(8);
+    // the nearest of them as it goes up
+    float nearest = float.MaxValue;
+    for (int t = 0; t < 160 && blasts.Count == 0; t++) RunX(.05);
+    foreach (var wk in byWall) nearest = MathF.Min(nearest, Apart(wk.X, wk.Z, laidC?.X ?? 0, laidC?.Z ?? 0));
+    RunX(2);
     int ring1 = RingStone();
     Check("a sapper with a charge lays it against our wall instead of hacking through, lights it and runs; the wall is breached",
         laidC != null && toRing < 2 && fled && blasts.Count >= 1 && ring0 - ring1 > 300,
         $"{(laidC != null ? $"laid {toRing:0.0} m from the ring's line" : "not laid")}, the sapper {(fled ? "running" : sap.State.ToString())}; {blasts.Count} blasts; masonry {ring0} → {ring1}");
+    Check("with nobody able to get to the fuse in time, ours by the wall walk off and the blast does not touch them",
+        byWall.Count == 3 && byWall.TrueForAll(wk => !wk.Dead && wk.Hp >= wk.MaxHp) && nearest >= 12,
+        $"{byWall.Count} workers 2–3 m from the charge; when it went the nearest was {nearest:0.0} m off; {byWall.FindAll(wk => !wk.Dead && wk.Hp >= wk.MaxHp).Count} unhurt after it" + string.Join("", byWall.ConvertAll(wk => wk.Hp < wk.MaxHp ? $"; one {wk.Hp:0} hp at {Apart(wk.X, wk.Z, laidC?.X ?? 0, laidC?.Z ?? 0):0.0} m, hurt by {wk.HurtBy?.T.Name ?? "nobody"}, wounds: {string.Join(",", wk.Wounds?.Wounds ?? new System.Collections.Generic.List<string>())}" : "")));
+    foreach (var wk in byWall) Gone(wk);
     Gone(sap);
 
     // a sapper cut down while burning goes up with its charge where it falls; one cut down cold leaves its kegs lying

@@ -21,7 +21,8 @@ namespace VoxelTower.Game;
 /// skin at night, --pose=sorcerers: a witch with our torches put out and a necromancer with his thralls, at night,
 /// --pose=powder: kegs of powder before our wall going up one after another under a band (--look=1 a trail of it
 /// burning across the field), --pose=charge: a sapper's charge against our ring of stone, its fuse burning (--look=1 the
-/// moment it goes), --pose=stones: a catapult's stone high on its arc (--look=1 striking the wall),
+/// moment it goes, --look=2 a swordsman of ours running for the fuse), --pose=stones: a catapult's stone high on its
+/// arc (--look=1 striking the wall),
 /// --pose=trees: the valley's trees in a row, --look=0..2 choosing which; --pose=people: every figure in every look,
 /// --look=0..4 choosing a row),
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
@@ -1543,7 +1544,7 @@ public partial class Main : Node3D
         Hud.Refresh();
     }
 
-    /// <summary>A sapper's charge against our ring of stone round the citadel, its fuse burning, the sapper running (--look=1: the moment it goes).</summary>
+    /// <summary>A sapper's charge against our ring of stone round the citadel, its fuse burning, the sapper running (--look=1: the moment it goes; --look=2: a swordsman of ours running for the fuse).</summary>
     void Sapped()
     {
         var sim = Sim; var w = World;
@@ -1560,7 +1561,9 @@ public partial class Main : Node3D
         Charge laid = null;
         for (int t = 0; t < 240 && laid == null; t++) { Advance(.25); laid = sim.Charges.Find(c => c.Planted); }
         if (laid == null) { Hud.Refresh(); return; }
-        Advance(_look == 1 ? 6.3 : 1.5);
+        // --look=2: a swordsman of ours a few paces off runs for the fuse
+        if (_look == 2) { sap.Dead = true; sap.DiedAt = -999; sim.Spawn(Kinds.Swordsman, sim.NearestStand((int)laid.X - 40, (int)laid.Z + 20, 2)); }
+        Advance(_look == 1 ? 6.3 : _look == 2 ? 2.2 : 1.5);
         Paused = true;
         // from outside the ring: the kegs at the foot of its face, the sapper making off
         Rig.SetAt(w.WX(laid.X - 6), w.WY(laid.Y + 4), w.WZ(laid.Z), 2.39f, .42f, _look == 1 ? 2.2f : 3f);

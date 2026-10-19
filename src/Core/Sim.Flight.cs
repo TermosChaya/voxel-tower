@@ -423,6 +423,8 @@ public sealed partial class Sim
                         if (dx * dx + dy * dy + dz * dz > cr * cr || !World.InBounds(x, y, z) || y < 4) continue;
                         byte m = World.Get(x, y, z);
                         if (!Breakable(m)) continue;
+                        // powder it falls on is not knocked aside: it goes up
+                        if (m == Mat.Powder) { Fuse(x, y, z, .2, "порох"); continue; }
                         World.Set(x, y, z, Mat.Air);
                         if (Orders.At(x, y, z) != 0) Orders.Clear(x, y, z);
                         Burning.Remove(WaterPlanner.Pack(x, y, z));
