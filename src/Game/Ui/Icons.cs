@@ -9,7 +9,7 @@ namespace VoxelTower.Game;
 /// Engraved icons for the tool belt, drawn as bronze strokes with a dark under-cut so they read as chased metal.
 /// Coordinates are fractions of the icon's square.
 /// </summary>
-public static class Icons
+public static partial class Icons
 {
     public delegate void Painter(CanvasItem c, Rect2 r, Color ink);
 

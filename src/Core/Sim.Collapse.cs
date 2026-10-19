@@ -50,7 +50,7 @@ public sealed partial class Sim
     /// </summary>
     public bool Footed(int x, int y, int z)
     {
-        static bool Solid(byte m) => m != Mat.Air && m != Mat.Water && (!Mat.Passable[m] || Mat.IsLadder[m] || m == Mat.Stakes);
+        static bool Solid(byte m) => m != Mat.Air && m != Mat.Water && (!Mat.Passable[m] || Mat.IsLadder[m] || m == Mat.Stakes || Mat.IsFurniture[m]);
         if (Solid(World.Get(x, y - 1, z)) || Solid(World.Get(x + 1, y, z)) || Solid(World.Get(x - 1, y, z))
             || Solid(World.Get(x, y, z + 1)) || Solid(World.Get(x, y, z - 1))) return true;
         // the curved members of an arch touch at their corners

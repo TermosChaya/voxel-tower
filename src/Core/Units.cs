@@ -34,6 +34,12 @@ public sealed class UnitType
     public float TorchShare;
     /// <summary>A priest: it prays in a sanctuary by day and does no other work.</summary>
     public bool Prays;
+    /// <summary>Ours: seconds the citadel takes to make one ready, from the day it is enlisted to the day it walks out.</summary>
+    public float Train = 30;
+    /// <summary>Ours: the lore that must be learnt before the citadel will take this kind on; none for those it always takes.</summary>
+    public string Lore = "";
+    /// <summary>Ours: how many of the household's places it takes — a man one, a horse and its rider two, a giant four.</summary>
+    public int Room = 1;
 }
 
 public static class Kinds
@@ -43,27 +49,27 @@ public static class Kinds
         Key = "worker", Name = "Рабочий", Team = Team.Player,
         // pawns scramble up a ledge a head higher than themselves: out of a two-metre pit, onto a low wall
         Move = new Mover { Height = 2, Climb = 2, Speed = 2.8f },
-        Work = 1, Yield = 1, Hp = 60, Damage = 6, AttackTime = 1.1f, Cost = 25,
+        Work = 1, Yield = 1, Hp = 60, Damage = 6, AttackTime = 1.1f, Cost = 25, Train = 20,
         Tool = "pick",
     };
     public static readonly UnitType Archer = new()
     {
         Key = "archer", Name = "Лучник", Team = Team.Player,
         Move = new Mover { Height = 2, Climb = 2, Speed = 2.6f },
-        Work = .4f, Yield = .6f, Hp = 70, Damage = 18, AttackTime = 1.3f, Ranged = true, Range = 24 * VoxelWorld.PerMetre, Cost = 40, Tool = "bow",
+        Work = .4f, Yield = .6f, Hp = 70, Damage = 18, AttackTime = 1.3f, Ranged = true, Range = 24 * VoxelWorld.PerMetre, Cost = 40, Train = 30, Tool = "bow",
     };
     public static readonly UnitType Swordsman = new()
     {
         Key = "sword", Name = "Мечник", Team = Team.Player,
         Move = new Mover { Height = 2, Climb = 2, Speed = 2.4f },
-        Work = .4f, Yield = .6f, Hp = 140, Damage = 16, AttackTime = 1f, Cost = 35, Tool = "sword", BodyR = 2.5f, Reach = 11,
+        Work = .4f, Yield = .6f, Hp = 140, Damage = 16, AttackTime = 1f, Cost = 35, Train = 30, Tool = "sword", BodyR = 2.5f, Reach = 11,
     };
     /// <summary>A priest of the old powers: in a dark robe and hood, with a staff; it prays, and fights only for its life.</summary>
     public static readonly UnitType Priest = new()
     {
         Key = "priest", Name = "Жрец", Team = Team.Player,
         Move = new Mover { Height = 2, Climb = 2, Speed = 2.5f },
-        Work = 1, Yield = 0, Hp = 50, Damage = 4, AttackTime = 1.3f, Cost = 50, Tool = "staff", Prays = true,
+        Work = 1, Yield = 0, Hp = 50, Damage = 4, AttackTime = 1.3f, Cost = 50, Train = 40, Tool = "staff", Prays = true,
     };
     public static readonly UnitType Goblin = new()
     {

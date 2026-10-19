@@ -77,13 +77,21 @@ public static class Mat
     /// ours stands by them, he tips them over, and they come down on it and roll on down the slope before the wall.
     /// </summary>
     public const byte DropLog = 109;
-    public const int Count = 110;
+    /// <summary>
+    /// The furnishing of a dwelling, which the workers knock together of timber once the room is closed and has its door:
+    /// the frame of a bunk, the straw and linen of its bedding, a table and a bench. A body walks through them as through
+    /// a banner, the builders lay them as they lay anything, and they burn.
+    /// </summary>
+    public const byte Bunk = 110, Bedding = 111, Table = 112, Bench = 113;
+    public const int Count = 114;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
     public static readonly bool[] IsVeg = new bool[Count], IsPlayer = new bool[Count], IsEarthy = new bool[Count],
         IsNatural = new bool[Count], IsAnchor = new bool[Count];
     /// <summary>The dressing of the buildings: whatever is built or laid where it stands simply takes its place.</summary>
     public static readonly bool[] IsDecor = new bool[Count];
+    /// <summary>A dwelling's furnishing: walked through, but built on as on anything solid.</summary>
+    public static readonly bool[] IsFurniture = new bool[Count];
     /// <summary>How it moves in the wind: 0 not at all, 1 at its tips (grass, flowers), 2 as a mass (leaves).</summary>
     public static readonly byte[] SwayKind = new byte[Count];
     /// <summary>Dressed stone: each stone drawn whole, without the grid of its voxels.</summary>
@@ -179,6 +187,9 @@ public static class Mat
         D(Menhir, "Чёрный камень", 0x1d1a22, .1f, MatGroup.Hard, Natural);
         D(Powder, "Бочки с порохом", 0x6a3322, .3f, MatGroup.Wood, Player);
         D(DropLog, "Брёвна на сброс", 0x5e4128, .2f, MatGroup.Wood, Player);
+        D(Bunk, "Лежанка", 0x6e5034, .16f, MatGroup.Wood, Player); D(Bedding, "Постель", 0x9c8a5e, .18f, MatGroup.Wood, Player);
+        D(Table, "Стол", 0x7d5c39, .14f, MatGroup.Wood, Player); D(Bench, "Скамья", 0x684a2f, .14f, MatGroup.Wood, Player);
+        foreach (var m in new[] { Bunk, Bedding, Table, Bench }) IsFurniture[m] = Passable[m] = true;
         D(Robe, "ряса", 0x3e1518, .14f, MatGroup.Hard, 0); D(RobeTrim, "кайма", 0x7a6236, .12f, MatGroup.Hard, 0);
         D(SoulFire, "мертвенный огонь", 0x9ef2c4, .08f, MatGroup.Hard, Glows);
 
@@ -230,6 +241,8 @@ public static class Mat
         F(.3f, 6, 0, Banner, BannerTrim, Sack);
         F(.08f, 20, .3f, Cask, Crate, CrateEdge);
         F(.06f, 25, .3f, Lumber);
+        F(.06f, 20, .3f, Bunk, Table, Bench);
+        F(.3f, 6, 0, Bedding);
         F(.05f, 25, .35f, Stakes);
         F(.06f, 18, .3f, TrapDeck);
         F(.03f, 40, .35f, DrawDeck);
