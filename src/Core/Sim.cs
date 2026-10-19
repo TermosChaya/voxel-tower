@@ -107,15 +107,17 @@ public sealed partial class Sim
         return u;
     }
 
-    /// <summary>Takes on a pawn at the citadel's gate if the treasury allows.</summary>
+    /// <summary>
+    /// Takes on a pawn at the citadel's gate at once, if the treasury allows: for the tests and the scripted scenes. The
+    /// player takes them on through the citadel's line (<see cref="Enlist"/>), which takes time and wants places.
+    /// </summary>
     public Unit Hire(UnitType t)
     {
         int cost = HireCost(t);
         if (Stock.Gold < cost || Gate < 0) return null;
         Stock.Gold -= cost;
         var u = Spawn(t, Gate);
-        // in quilted coats
-        if (t.Work < 1 && Knows("gambesons")) { u.MaxHp *= 1.2f; u.Hp = u.MaxHp; }
+        Outfit(u);
         Say($"{t.Name} пришёл к воротам.");
         return u;
     }
@@ -152,6 +154,8 @@ public sealed partial class Sim
         TickTrails();
         TendWildlife();
         TickShelter();
+        TickMuster(dt);
+        TickDwellings();
         TickTraps();
         TickEventsHalf(Time);
         CountBodies();

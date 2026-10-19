@@ -166,7 +166,7 @@ public partial class MysteryPanel : VBoxContainer
                 : sp.ByFavour ? $"Постигается за {sp.Learn} вмешательства." : $"Постигается за откровения ({sp.Learn}): их дают жертвы.";
             b.TooltipText = $"{sp.Name} · {Sim.Circles[sp.Circle].ToLowerInvariant()}\n{sp.About} {what}";
         }
-        _rite.Text = sim.RiteNow is { } r ? RiteText(r) : !day ? "Ночью жрецы в цитадели: жертвы — утром." : !hasPriest ? "Жрецов нет: наймите их в консоли, когда никто не выбран."
+        _rite.Text = sim.RiteNow is { } r ? RiteText(r) : !day ? "Ночью жрецы в цитадели: жертвы — утром." : !hasPriest ? "Жрецов нет: наберите их в цитадели (щелчок по ней или K)."
             : !hasSanctum ? "Святилища нет: отметьте его делянкой (8), выбрав в консоли «святилище»." : sim.Time < sim.MournUntil ? $"Дружина скорбит ещё {sim.MournUntil - sim.Time:0} с: работа идёт медленнее." : "";
     }
 

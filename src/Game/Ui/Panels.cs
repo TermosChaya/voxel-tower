@@ -23,6 +23,16 @@ public static class Retinue
 
     public static string Tip(UnitType t) => Array.Find(Defs, d => d.t == t).tip ?? t.Name;
 
+    /// <summary>What a kind does, without its name or the word on clicking it.</summary>
+    public static string About(UnitType t)
+    {
+        string tip = Tip(t);
+        int nl = tip.IndexOf('\n');
+        string body = nl >= 0 ? tip[(nl + 1)..] : "";
+        int click = body.IndexOf(" Щелчок", StringComparison.Ordinal);
+        return click >= 0 ? body[..click] : body;
+    }
+
     /// <summary>What a pawn (or anyone) is doing, in a few words.</summary>
     public static string Doing(Unit u, Sim sim)
     {

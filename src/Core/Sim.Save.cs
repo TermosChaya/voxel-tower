@@ -15,7 +15,7 @@ namespace VoxelTower.Core;
 /// </summary>
 public sealed partial class Sim
 {
-    public const int SaveVersion = 16;
+    public const int SaveVersion = 17;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -138,6 +138,8 @@ public sealed partial class Sim
         foreach (var (kind, band, back) in Waves._queue) { w.Write(kind.Key); w.Write(band?.Id ?? -1); WriteSurvivor(w, back); }
         w.Write(Escaped.Count);
         foreach (var s in Escaped) WriteSurvivor(w, s);
+        w.Write(Recruits.Count);
+        foreach (var m in Recruits) { w.Write(m.Kind.Key); w.Write(m.Done); w.Write(m.Paid); }
         w.Write(extra ?? "");
     }
 
@@ -400,6 +402,12 @@ public sealed partial class Sim
         Escaped.Clear();
         int ne = r.ReadInt32();
         for (int i = 0; i < ne; i++) { var s = ReadSurvivor(r); if (s != null) Escaped.Add(s); }
+        Recruits.Clear();
+        for (int i = r.ReadInt32(); i > 0; i--)
+        {
+            var kind = KindOf(r.ReadString()); float done = r.ReadSingle(); int paid = r.ReadInt32();
+            if (kind != null) Recruits.Add(new Recruit { Kind = kind, Done = done, Paid = paid });
+        }
         string extra = r.ReadString();
         // the ways of the horde are worked out again for the valley as it now is, and the stones to throw down found again
         _fieldVersion = -1;

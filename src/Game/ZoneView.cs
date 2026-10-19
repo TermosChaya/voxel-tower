@@ -7,7 +7,8 @@ namespace VoxelTower.Game;
 
 /// <summary>
 /// The areas set aside for gathering, drawn as a coloured ribbon along their edges, laid over the ground,
-/// with a little post at each corner: green for a grove, grey for a quarry, brown for an earth cut, pale blue for a shelter.
+/// with a little post at each corner: green for a grove, grey for a quarry, brown for an earth cut, pale blue for a shelter,
+/// violet for a sanctuary, warm straw for a dwelling.
 /// Redrawn when an area is set or used up, and now and then as the ground under the ribbon is dug away.
 /// </summary>
 public partial class ZoneView : Node3D
@@ -25,6 +26,7 @@ public partial class ZoneView : Node3D
         Stockpile.Earth => new Color(.85f, .58f, .32f, alpha),
         Zone.Shelter => new Color(.5f, .68f, .98f, alpha),
         Zone.Sanctum => new Color(.7f, .42f, .92f, alpha),
+        Zone.Dwelling => new Color(.96f, .78f, .4f, alpha),
         _ => new Color(.78f, .78f, .84f, alpha),
     };
 
@@ -34,7 +36,7 @@ public partial class ZoneView : Node3D
         _w = sim.World;
         Position = new Vector3(_w.OriginX, 0, _w.OriginZ);
         Scale = Vector3.One * VoxelWorld.Vox;
-        foreach (int kind in new[] { Stockpile.Wood, Stockpile.Stone, Stockpile.Earth, Zone.Shelter, Zone.Sanctum })
+        foreach (int kind in new[] { Stockpile.Wood, Stockpile.Stone, Stockpile.Earth, Zone.Shelter, Zone.Sanctum, Zone.Dwelling })
             _mats[kind] = new StandardMaterial3D
             {
                 ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,

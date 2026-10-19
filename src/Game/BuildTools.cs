@@ -138,6 +138,8 @@ public partial class BuildTools : Node3D
     public Drawbridge HoverBridge { get; private set; }
     /// <summary>The named place (a mine, a ruin) the cursor is over.</summary>
     public Landmark HoverPlace { get; private set; }
+    /// <summary>The citadel is under the cursor: a click opens its muster.</summary>
+    public bool HoverKeep { get; private set; }
     GatePlan _gatePlan;
 
     /// <summary>"брёвна 3,4 м³ · проём: камень +4,0 м³ · 6 мин работы одного".</summary>
@@ -250,14 +252,17 @@ public partial class BuildTools : Node3D
     Vector2 _mouse;
 
     /// <summary>A material to lay; puts the pick away.</summary>
-    public void SetMaterial(byte m) { Opt.Material = m; Opt.Dig = false; Shelter = Sanctum = false; Changed(); }
+    public void SetMaterial(byte m) { Opt.Material = m; Opt.Dig = false; Shelter = Sanctum = Dwelling = false; Changed(); }
 
     /// <summary>The area tool sets aside a shelter, not a resource to take.</summary>
     public bool Shelter;
-    public void SetShelter(bool on) { Shelter = on; if (on) Sanctum = false; Changed(); }
+    public void SetShelter(bool on) { Shelter = on; if (on) Sanctum = Dwelling = false; Changed(); }
     /// <summary>The area tool sets aside a sanctuary, where the priests pray.</summary>
     public bool Sanctum;
-    public void SetSanctum(bool on) { Sanctum = on; if (on) Shelter = false; Changed(); }
+    public void SetSanctum(bool on) { Sanctum = on; if (on) Shelter = Dwelling = false; Changed(); }
+    /// <summary>The area tool calls a room a dwelling, where the household sleeps.</summary>
+    public bool Dwelling;
+    public void SetDwelling(bool on) { Dwelling = on; if (on) Shelter = Sanctum = false; Changed(); }
 
     /// <summary>Takes up the pick (or puts it away): the brushes then mark digging instead of laying.</summary>
     public void SetDig(bool dig)
@@ -331,7 +336,7 @@ public partial class BuildTools : Node3D
     (int x, int y, int z) HoverGround() => Snap(_hover.Ground(_m.World));
 
     /// <summary>What a gathering area takes: the material in hand says which; or a shelter.</summary>
-    public int GatherKind => Shelter ? Zone.Shelter : Sanctum ? Zone.Sanctum : Opt.Material switch { Mat.Wood => Stockpile.Wood, Mat.Rammed => Stockpile.Earth, _ => Stockpile.Stone };
+    public int GatherKind => Shelter ? Zone.Shelter : Sanctum ? Zone.Sanctum : Dwelling ? Zone.Dwelling : Opt.Material switch { Mat.Wood => Stockpile.Wood, Mat.Rammed => Stockpile.Earth, _ => Stockpile.Stone };
 
     /// <summary>The pick is in hand, or Shift turns the brush into one for this stroke.</summary>
     bool DigNow => Opt.Dig || (Tool == Tool.Brush && (_lmb ? _shift : Input.IsKeyPressed(global::Godot.Key.Shift)));
@@ -392,7 +397,7 @@ public partial class BuildTools : Node3D
                 // a brush in hand is put down, the chosen let go; with nothing of that, the menu
                 if (_m.Hud.MenuOpen) _m.Hud.MenuBack();
                 else if (Tool != Tool.None) SetTool(Tool.None);
-                else if (_m.Selected.Count > 0 || _m.Inspected != null) { _m.Command.ClearSelection(); _m.Inspected = null; }
+                else if (_m.Selected.Count > 0 || _m.Inspected != null || _m.KeepChosen) { _m.Command.ClearSelection(); _m.Inspected = null; _m.KeepChosen = false; _m.Hud.OnSelectionChanged(); }
                 else _m.Hud.OpenMenu();
                 return true;
             case global::Godot.Key.Z: SetMaterial(Mat.Stone); return true;
@@ -706,7 +711,7 @@ public partial class BuildTools : Node3D
         var zone = _m.Sim.ZoneAt(_hover.X, _hover.Z);
         int zones = _m.Sim.RemoveZones(_hover.X, _hover.Z, _hover.X, _hover.Z);
         if (n == 0 && zones == 0) Refuse("здесь нет разметки");
-        else _m.Hud.Float(zones > 0 ? (zone?.Kind switch { Zone.Shelter => "убежище снято", Zone.Sanctum => "святилище снято", _ => "делянка снята" }) : $"разметка снята: {Fmt.M3(n)} м³", Ornament.BronzeLight);
+        else _m.Hud.Float(zones > 0 ? (zone?.Kind switch { Zone.Shelter => "убежище снято", Zone.Sanctum => "святилище снято", Zone.Dwelling => "жилой дом снят", _ => "делянка снята" }) : $"разметка снята: {Fmt.M3(n)} м³", Ornament.BronzeLight);
     }
 
     /// <summary>"Делянка: деревьев 12, ≈ 115 м³ брёвен" or "Каменоломня: ≈ 9,5 м³ камня до 2 м вглубь".</summary>
@@ -719,6 +724,14 @@ public partial class BuildTools : Node3D
             int places = _m.Sim.ShelterRoom(x0, z0, x1, z1);
             any = places > 0;
             return places == 0 ? "Убежище: здесь негде встать" : $"Убежище: {places} {PlaceWord(places)} — сюда по тревоге уходят мирные";
+        }
+        if (kind == Zone.Dwelling)
+        {
+            // whether the room in the frame is closed, roofed and has its door, and how many bunks it takes
+            var room = _m.Sim.CheckDwelling(x0, z0, x1, z1);
+            any = room.Ok || room.Area > 0 || room.Why.StartsWith("нет") || room.Why.StartsWith("стены");
+            return room.Ok ? $"Жилой дом: {Fmt.One(room.Area)} м² пола, дверь есть — рабочие поставят лежанок: {room.Bunks}, это +{room.Bunks} {PlaceWord(room.Bunks)} в войске"
+                : $"Жилой дом: {room.Why}";
         }
         if (kind == Zone.Sanctum)
         {
@@ -760,7 +773,9 @@ public partial class BuildTools : Node3D
         _m.Hud.Log(text + (GatherKind switch
         {
             Zone.Shelter => ". Тревога — T.",
-            Zone.Sanctum => ". Днём здесь молятся жрецы: их нанимают в консоли, когда никто не выбран.",
+            Zone.Sanctum => ". Днём здесь молятся жрецы: их набирают в цитадели (щелчок по ней или K).",
+            Zone.Dwelling => text.Contains("лежанок") ? ". Рабочие обставят его из запаса брёвен; каждая готовая лежанка — место в войске."
+                : ". Отметка подождёт: когда дом закроют — стены, крыша, ворота (9) — рабочие обставят его.",
             _ => ". Свободные рабочие возьмутся за неё сами.",
         }));
     }
@@ -957,6 +972,8 @@ public partial class BuildTools : Node3D
         }
         HoverGate = _hasHover && Mat.IsLeaf(_hover.M) ? _m.Sim.GateAt(_hover.X, _hover.Y, _hover.Z) : null;
         HoverBridge = _hasHover && _hover.M == Mat.DrawDeck ? _m.Sim.DrawbridgeAt(_hover.X, _hover.Y, _hover.Z) : null;
+        var site = _m.Site;
+        HoverKeep = _hasHover && Brushes.Dist(_hover.X - site.KeepX + .5, _hover.Z - site.KeepZ + .5) <= site.KeepR + .5 && _hover.Y >= site.KeepBase - 2;
         HoverPlace = null;
         if (_hasHover)
             foreach (var l in _m.Site.Landmarks)

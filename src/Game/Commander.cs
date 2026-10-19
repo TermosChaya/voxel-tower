@@ -39,12 +39,15 @@ public partial class Commander : Node
             if (!add) _m.Selected.Clear();
             foreach (var u in _m.Sim.Units)
                 if (!u.Dead && !u.Inside && u.Team == Team.Player && u.T != Kinds.Risen && r.HasPoint(Screen(u, .5f))) _m.Selected.Add(u);
+            _m.KeepChosen = false;
             _m.Hud.OnSelectionChanged();
             return;
         }
         var hit = UnitAt(mb.Position);
         if (hit == null && _m.Tools.HoverGate is { } gate) { Toggle(gate); return; }
         if (hit == null && _m.Tools.HoverBridge is { } draw) { Toggle(draw); return; }
+        if (hit == null && _m.Tools.HoverKeep && !add) { OpenKeep(); return; }
+        _m.KeepChosen = false;
         if (!add) _m.Selected.Clear();
         // one of ours is picked; a raider, a beast or one of the risen is only looked at
         bool ours = hit != null && hit.Team == Team.Player && hit.T != Kinds.Risen;
@@ -267,6 +270,7 @@ public partial class Commander : Node
     {
         if (_m.Selected.RemoveWhere(u => u.Dead) > 0) _m.Hud.OnSelectionChanged();
         if (_m.Inspected != null && (_m.Selected.Count > 0 || !_m.Sim.Units.Contains(_m.Inspected))) { _m.Inspected = null; _m.Hud.OnSelectionChanged(); }
+        if (_m.KeepChosen && _m.Selected.Count > 0) { _m.KeepChosen = false; _m.Hud.OnSelectionChanged(); }
     }
 
     // ---------------------------------------------------------------- orders
@@ -349,12 +353,34 @@ public partial class Commander : Node
         "после отбитой волны отбой трубят сами. Рабочие и без тревоги бегут в убежище, когда враг подходит ближе 9 м.";
     public const string StandDownTip = "Отбой (T)\nМирные выходят из убежищ и возвращаются к работе, солдаты — к своим делам.";
 
+    /// <summary>Takes one on at once (scripted scenes).</summary>
     public Unit Hire(UnitType t)
     {
         var u = _m.Sim.Hire(t);
         if (u == null) _m.Hud.Float($"нужно {_m.Sim.HireCost(t)} золота", Ornament.Blood);
         _m.Hud.Refresh();
         return u;
+    }
+
+    /// <summary>Puts one of a kind in the citadel's line, or says why it cannot be.</summary>
+    public bool Enlist(UnitType t)
+    {
+        string why = _m.Sim.CantEnlist(t);
+        if (why != null) { _m.Hud.Float(why, Ornament.Blood); return false; }
+        _m.Sim.Enlist(t);
+        _m.Hud.Float($"{t.Name}: в очереди цитадели", Ornament.EmberGlow);
+        _m.Hud.Refresh();
+        return true;
+    }
+
+    /// <summary>The citadel's muster in the console; asked again while it is open, the view goes to the citadel.</summary>
+    public void OpenKeep()
+    {
+        if (_m.KeepChosen && _m.Selected.Count == 0) { _m.Rig.Focus(_m.World.WX(_m.Site.KeepX), _m.World.WZ(_m.Site.KeepZ)); return; }
+        _m.Selected.Clear();
+        _m.Inspected = null;
+        _m.KeepChosen = true;
+        _m.Hud.OnSelectionChanged();
     }
 
     /// <summary>Calls the horde before the time is up: no reward, but it comes knowing less of the defences.</summary>
@@ -411,6 +437,7 @@ public partial class Commander : Node
             case Key.Tab: CycleSpeed(); break;
             case Key.T: Alarm(); break;
             case Key.J: ToggleTrails(); break;
+            case Key.K: OpenKeep(); break;
             default: return;
         }
         GetViewport().SetInputAsHandled();

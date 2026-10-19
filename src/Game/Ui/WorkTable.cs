@@ -164,7 +164,7 @@ public partial class WorkTable : Control
             DrawString(Ornament.SerifItalic, new Vector2(DoingX + 4, y + 19), doing, HorizontalAlignment.Left, w - DoingX - 8, 12, hurt ? Ornament.Blood : u.Why != "" ? Ornament.BronzeLight : Ornament.Aged);
         }
         float foot = Head + Math.Max(1, _rows.Count) * Row + 8;
-        if (_rows.Count == 0) DrawString(Ornament.SerifItalic, new Vector2(6, Head + 20), "Никого нет. Наймите людей у ворот.", HorizontalAlignment.Left, -1, 13, Ornament.Aged);
+        if (_rows.Count == 0) DrawString(Ornament.SerifItalic, new Vector2(6, Head + 20), "Никого нет. Наберите людей в цитадели (щелчок по ней или K).", HorizontalAlignment.Left, -1, 13, Ornament.Aged);
         DrawString(Ornament.SerifItalic, new Vector2(6, foot + 14),
             "Пешка идёт к ближайшей работе с высшим приоритетом (1 — первым делом); пусто — эту работу не берёт никогда. Делянки и добыча тоже по этим работам.",
             HorizontalAlignment.Left, w - 12, 12, Ornament.Faded);

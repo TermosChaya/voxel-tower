@@ -341,21 +341,26 @@ public partial class WaveClock : Control
     public override GodotObject _MakeCustomTooltip(string forText) => Tooltip.Make(forText);
 }
 
-/// <summary>The stores on the beam: gold, then stone, logs and earth in cubic metres; what a stroke lacks shows in blood.</summary>
+/// <summary>
+/// The stores on the beam: gold, then stone, logs and earth in cubic metres, the intervention, and the household against
+/// its places; what a stroke lacks shows in blood, and so does a household with no place left.
+/// </summary>
 public partial class Stores : Control
 {
-    public readonly string[] Values = { "0", "0", "0", "0", "0" };
-    public readonly bool[] Short = new bool[5];
-    public const float W = 520, MinW = 370;
+    public readonly string[] Values = { "0", "0", "0", "0", "0", "0" };
+    public readonly bool[] Short = new bool[6];
+    public const float W = 610, MinW = 440;
 
     static readonly (Icons.Painter icon, string tip)[] Groups =
     {
-        (Icons.Coin, "Казна\nЗолото идёт на наём. Его дают рудники, убитые налётчики и охота."),
+        (Icons.Coin, "Казна\nЗолото идёт на набор войска в цитадели. Его дают рудники, убитые налётчики, охота и отбитые волны."),
         (Icons.Material(Mat.Stone), "Камень, м³\nЕго ломают в скалах, валунах и руинах (кирка или делянка с Z); разобранная кладка возвращает три четверти. Из него кладут стены."),
         (Icons.Material(Mat.Wood), "Брёвна, м³\nРубят в лесу. Из них — деревянные стены, лестницы, мосты и ворота."),
         (Icons.Earth, "Земля, м³\nЕё даёт любой ров и котлован. Насыпь кладётся быстрее всего."),
         (Icons.Eye, "Вмешательство\nЭзотерическое вмешательство — то, на что старые силы готовы ради долины. Его копят жрецы молитвой в святилище " +
             "(на месте силы, пока оно ваше, — втрое больше) и жертвами; тратят на заклинания."),
+        (Icons.Helm, "Войско: сколько мест занято из скольких\nМеста даёт цитадель (10, с «Казармами» 14) и жилые дома — по месту на лежанку. " +
+            "Пока мест нет, цитадель никого не набирает. Набор — щелчок по цитадели или K."),
     };
 
     public Stores()

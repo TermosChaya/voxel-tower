@@ -85,7 +85,7 @@ public sealed partial class Sim
             if (u.Pastime == Pastime.Pray) d -= 100000;
             if (d < bd) { bd = d; priest = u; }
         }
-        if (priest == null) return "нет жреца: наймите его";
+        if (priest == null) return "нет жреца: наберите его в цитадели";
         var r = new Rite { Kind = kind };
         switch (kind)
         {

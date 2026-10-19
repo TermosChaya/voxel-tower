@@ -123,13 +123,16 @@ public sealed class GatePlan
         // the leaves hang flush on the inner face; the gateway is snapped to the cells, so open leaves clear it
         int p = face;
         var plan = new GatePlan { AlongX = alongX, In = inward, U0 = u0, P = p };
-        // the threshold: the ground of the yard where the leaves will hang
+        // the threshold: the ground of the yard where the leaves will hang, under the click (not the roof of a house
+        // whose door it is)
         int y0 = 0;
         for (int u = u0; u < u0 + Gateway.Width; u++)
             for (int t = 0; t < Gateway.Thick; t++)
             {
                 int a = p + (inward > 0 ? t : -1 - t);
-                y0 = Math.Max(y0, alongX ? w.SurfAt(u, a) : w.SurfAt(a, u));
+                int y = hit.Y;
+                while (y > 0 && !Blocking(Get(u, y - 1, a))) y--;
+                y0 = Math.Max(y0, y);
             }
         if (y0 <= 0 || y0 + Gateway.Height >= w.SY) return null;
         plan.Y = y0;

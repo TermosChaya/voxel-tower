@@ -223,6 +223,26 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   вокруг своей длины (`AX/AZ` вдоль, `Spin`); падает, катится (`BakeLog`).
 - `Sim.Shelter.cs` — тревога и убежища: `Alarm`, `RaiseAlarm`/`StandDown`, `TakeShelter`, `RefugeFor`, `ShelterCells`,
   `Enter`/`Leave`/`Indoors` (`Unit.Inside` — в цитадели, вне мира), `TickShelter` (налётчик у двери).
+- `Sim.Muster.cs` — набор войска в цитадели: `Recruit` (`Kind`, `Done`, `Paid`), очередь `Recruits` (до `RecruitsMax`
+  = 6; готовится только первая), `Household()` (живые наши, кроме мертвецов, по `UnitType.Room`), `Spoken()` (с
+  очередью), `Places` (`CitadelPlaces` = 10, +4 за «barracks», + лежанки домов, ×2 за «bunks»), `TrainTime(t)`
+  (`UnitType.Train`, ×0,7 за «drillyard»), `Unlocked(t)` (`UnitType.Lore`), `CantEnlist(t)` — причина отказа строкой,
+  `Enlist` (платит сразу), `Dismiss(i)` (возвращает `Paid`), `TickMuster` (готовый `Arrive`: `Spawn` у `Gate`,
+  `Outfit` — стёганки, `Enter` — выходит сам через `Indoors`; если мест не стало — ждёт). `Hire` остался мгновенным —
+  только для стенда и сцен. Сохраняется (версия 17): очередь по `Key` с `Done` и `Paid`.
+- `Sim.Dwellings.cs` — жилые дома: `Zone.Dwelling = 11` (поля зоны `Closed`, `Beds`, `Planned`, `Area`, `Why`,
+  `NextLook` не сохраняются — пересчитываются). `CheckDwelling(рамка)` → `DwellingCheck` (`Ok`, `Why`, `Area`, `Bunks`):
+  заливка по вокселям от пола внутри рамки (сиды — открытые воксели над твёрдым от `GroundTop` вверх, ближние к
+  середине первыми), стена — всё непроходимое (`Walled`), клетки ворот (`Gateway.Cells`, кроме выломанных) — стена и
+  «дверь найдена»; выход за рамку+3 м вбок или на 8 м вверх — «открыто» (причина по столбцу над сидом: «нет крыши» или
+  «стены не сомкнуты»); пространство, упёршееся в уже вытекшее, тоже открыто. Пол — воксели над твёрдым с 2 м
+  высоты над ними. `Furnish` раскладывает по столбцам (высота пола столбца; «карманы» кладки выше медианы+2
+  отбрасываются; неровность до 2 вокселей — ножки до пола): лежанки 8×16 головой к стене (стена может быть на камень
+  глубже), с проходом, затем стол со скамьями ближе к середине. `TickDwellings` раз в 2 с, дом — раз в ~4 с:
+  `LookOver` — проверка, план мебели (кэш `_furnishing` по id), заказ недостающего через `DesignateBuild` (кладут
+  рабочие из брёвен), счёт целых лежанок (≥ 90 % вокселей). `DwellingBeds()` идёт в `Places`. Мебель — `Mat.Bunk`,
+  `Bedding`, `Table`, `Bench` (110–113): проходимы (`Passable`), но опора для кладки (`IsFurniture` в `Footed`), горят,
+  разбираются в брёвна.
 - `Sim.Save.cs` — сохранение: `Sim.Save(stream, seed, label, extra)` пишет через gzip заголовок («SVAL», версия
   `SaveVersion`, зерно, подпись, время), чанки мира, изменённые с начала игры (`VoxelWorld.TrackEdits` включается
   в конструкторе `Sim`, `Changed(ci)`), слои `Design`, `Arched`, `Orders.Layer` целиком, затем состояние: стены
@@ -373,7 +393,8 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   постаменты 250 px по краям: мышь ловят только `Base`, `Left`, `Right`, поле между ними свободно), `MapRing`
   (миникарта, обрезанная кругом через `ClipChildren`, кольцо со сторонами света, кнопки), `PortraitFrame`
   (портрет или герб); `Portraits.cs` — портреты лучами по полувокселям тела (кэш по облику, у раненых — по `Rev`);
-  `Colonists.cs` — полоса лиц под балкой; `Inspector.cs` — середина консоли (кисть / одна пешка / группа / дружина),
+  `Colonists.cs` — полоса лиц под балкой; `Inspector.cs` — середина консоли (кисть / одна пешка / группа / дружина / набор цитадели
+  `KeepPane`: места, очередь `RecruitFace`, лица видов `KindTile`; `TileOf(t)` для самотеста; `KeyNow`),
   `HealthBar`, `BodyChart`, `PriorityCell`, `MiniCard`, `KindFace`; `WorkTable.cs` — таблица работ (рисуется
   целиком в `_Draw`, щелчки в `_GuiInput`); `Panels.cs` — `Retinue` (только помощники: что делает, раны, сводка),
   `HordeInfo`, `UnitOverlay`; `Lore.cs` — `LorePanel` (вкладка «Знания», ширина 980): древо — `TreeCanvas`

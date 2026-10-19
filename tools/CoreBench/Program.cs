@@ -3675,6 +3675,10 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
     simS.Learn("mortar");
     simS.Revelations = 2; simS.Carcasses.Add(Kinds.Boar); simS.Favour = 17;
     simS.Known.Add(SpellKind.Hand); simS.Known.Add(SpellKind.Eye);
+    // two taken on at the citadel, one of them half made ready
+    simS.Stock.Gold += 200;
+    simS.Enlist(Kinds.Archer); simS.Enlist(Kinds.Worker);
+    simS.Recruits[0].Done = 11.5f;
     // a ball of rock rolling, and a stone high in the air
     int rxS = kxS - 200, rzS = kzS - 100;
     simS.Hurl(Sim.Ball(3.6f, Mat.Rock), rxS + .5f, wS.SurfAt(rxS, rzS) + 4.5f, rzS + .5f, 3 * VoxelWorld.PerMetre, 0, 0, "test");
@@ -3728,7 +3732,9 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
         && simL.Waves.Coming == simS.Waves.Coming && simL.Mines.TrueForAll(m => m.Holder == simS.Mines[simL.Mines.IndexOf(m)].Holder) && extra == "the screen's own"
         && simL.Knowledge == 2 && simL.Knows("mortar") && simL.Learnt.Count == 1
         && simL.Revelations == 2 && simL.Carcasses.Count == 1 && simL.Carcasses[0] == Kinds.Boar && Math.Abs(simL.Favour - simS.Favour) < 1e-9
-        && simL.Known.SetEquals(simS.Known);
+        && simL.Known.SetEquals(simS.Known)
+        && simL.Recruits.Count == 2 && simL.Recruits[0].Kind == Kinds.Archer && simL.Recruits[1].Kind == Kinds.Worker
+        && simL.Recruits[0].Done == simS.Recruits[0].Done && simL.Recruits[1].Paid == simS.Recruits[1].Paid;
     // and what was in the air, or rolling, goes on its way as it was
     var piecesS = simS.Fliers.FindAll(f => f.Unit == null);
     var piecesL = simL.Fliers.FindAll(f => f.Unit == null);
@@ -3752,6 +3758,136 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
     float far1 = simL.Units.FindAll(u => !u.Dead && u.Team == Team.Horde && !u.Guard).ConvertAll(u => MathF.Abs(u.X - kxS) + MathF.Abs(u.Z - kzS)).DefaultIfEmpty(0).Average();
     Check("…and the game read back plays on: the horde comes on, the fire burns on", burning0 > 0 && simL.Burning.Count != burning0 && (far1 < far0 || simL.Kills > simS.Kills),
         $"burning {burning0} → {simL.Burning.Count}; the horde on average {far0 / VoxelWorld.PerMetre:0} → {far1 / VoxelWorld.PerMetre:0} m from the citadel, {simL.Kills - simS.Kills} more killed");
+}
+
+// ---- the citadel's muster: taken on for gold, made ready in turn, as many as there are places for
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--muster")
+{
+    Console.WriteLine();
+    var mpM = new MapParams();
+    var wM = new VoxelWorld(mpM.SizeX, mpM.SizeY, mpM.SizeZ);
+    var siteM = MapGen.Generate(wM, mpM);
+    wM.Compact();
+    var simM = new Sim(wM, siteM);
+    simM.Waves.Countdown = 1e9; simM.WildTarget = 0;
+    void RunM(double seconds) { for (double t = 0; t < seconds; t += .05) simM.Step(.05f); }
+    int Ours() => simM.Units.FindAll(u => !u.Dead && u.Team == Team.Player).Count;
+    simM.Stock.Gold = 1000;
+    // a worker enlisted: paid at once, out of the door only when its time is up
+    bool took = simM.Enlist(Kinds.Worker);
+    double paid = 1000 - simM.Stock.Gold;
+    float train = simM.TrainTime(Kinds.Worker);
+    RunM(train - 1);
+    int before = Ours();
+    RunM(2);
+    var fresh = simM.Units.Find(u => !u.Dead && u.T == Kinds.Worker);
+    RunM(4);
+    Check("one enlisted at the citadel is paid for at once and comes out of its door when its time is up, not before",
+        took && paid == Kinds.Worker.Cost && before == 0 && fresh != null && simM.Recruits.Count == 0 && !fresh.Inside,
+        $"paid {paid}, {train} s to make ready; ours a second before {before}, after: {(fresh == null ? "none" : fresh.Inside ? "inside" : "out of the door")}");
+    // only the first in the line is made ready; the one sent away gets its gold back
+    simM.Enlist(Kinds.Archer); simM.Enlist(Kinds.Swordsman);
+    RunM(10);
+    float second = simM.Recruits[1].Done;
+    double gold0 = simM.Stock.Gold;
+    bool sent = simM.Dismiss(1);
+    Check("only the first in the citadel's line is made ready; one sent away from the line gets its gold back whole",
+        simM.Recruits.Count == 1 && simM.Recruits[0].Done >= 9.9f && second == 0 && sent && simM.Stock.Gold == gold0 + Kinds.Swordsman.Cost,
+        $"first {simM.Recruits[0].Done:0.0} s along, second {second} s; gold {gold0} → {simM.Stock.Gold}");
+    simM.Dismiss(0);
+    // the places: the citadel's ten, and no more taken on past them
+    for (int i = Ours(); i < Sim.CitadelPlaces - 1; i++) simM.Spawn(Kinds.Worker, simM.Gate);
+    bool lastOne = simM.Enlist(Kinds.Worker);
+    string full = simM.CantEnlist(Kinds.Worker);
+    var giant = new UnitType { Key = "testgiant", Name = "Великан", Team = Team.Player, Move = Kinds.Worker.Move, Hp = 600, Cost = 10, Train = 5, Room = 4 };
+    var locked = new UnitType { Key = "testknight", Name = "Рыцарь", Team = Team.Player, Move = Kinds.Worker.Move, Hp = 200, Cost = 10, Train = 5, Lore = "knights" };
+    string shut = simM.CantEnlist(locked);
+    simM.Learnt.Add("knights");
+    string open = simM.CantEnlist(locked);
+    simM.Learnt.Add("barracks");
+    string roomy = simM.CantEnlist(giant);
+    Check("the citadel takes on no more than it has places for, counting the line; a kind waits for its lore; barracks make room, a giant takes four",
+        lastOne && full != null && full.Contains("мест") && shut != null && shut.Contains("изучите") && open != null && open.Contains("мест") && roomy == null && simM.Places == Sim.CitadelPlaces + 4,
+        $"household {simM.Household()} + line {simM.Recruits.Count} of {Sim.CitadelPlaces}: «{full}»; locked: «{shut}», then «{open}»; with barracks {simM.Places} places, the giant: «{roomy ?? "taken"}»");
+    // the drill yard makes them ready sooner
+    float plain = simM.TrainTime(Kinds.Archer);
+    simM.Learnt.Add("drillyard");
+    Check("a drill yard makes the citadel's recruits ready sooner", simM.TrainTime(Kinds.Archer) < plain * .75f, $"{plain} s → {simM.TrainTime(Kinds.Archer)} s");
+}
+
+// ---- dwellings: a room closed all round, roofed, with a door, furnished by the workers, and a place for each bunk
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--dwelling")
+{
+    Console.WriteLine();
+    var mpD = new MapParams();
+    var wD = new VoxelWorld(mpD.SizeX, mpD.SizeY, mpD.SizeZ);
+    var siteD = MapGen.Generate(wD, mpD);
+    wD.Compact();
+    var simD = new Sim(wD, siteD);
+    simD.Waves.Countdown = 1e9; simD.WildTarget = 0;
+    void RunD(double seconds) { for (double t = 0; t < seconds; t += .05) simD.Step(.05f); }
+    var (gxD, _, gzD) = simD.Nav.Feet(simD.Gate);
+    // a house of stone 6 by 9 m outside, walls a metre thick and four high, roofed with timber (which spans the
+    // 3.75 m between its walls; stone would fall in), on the nearest flat dry ground west of the citadel
+    int hx = -1, hz = -1;
+    for (int r = 120; r < 600 && hx < 0; r += 16)
+        for (int a = 0; a < 24 && hx < 0; a++)
+        {
+            int cx = (int)gxD - (int)(r * Math.Cos(a * Math.PI / 12)), cz = (int)gzD + (int)(r * Math.Sin(a * Math.PI / 12));
+            int lo = int.MaxValue, hi = int.MinValue; bool wet = false;
+            for (int z = cz - 48; z <= cz + 48; z += 4)
+                for (int x = cx - 56; x <= cx + 56; x += 4)
+                {
+                    if (x < 0 || z < 0 || x >= wD.SX || z >= wD.SZ || siteD.Forbidden(x, z)) { wet = true; continue; }
+                    int g = wD.SurfAt(x, z); lo = Math.Min(lo, g); hi = Math.Max(hi, g);
+                    if (wD.Get(x, g, z) == Mat.Water || wD.Get(x, g - 1, z) == Mat.Water) wet = true;
+                }
+            if (!wet && hi - lo <= 2) (hx, hz) = (cx, cz);
+        }
+    int ytop = Shapes.LevelTop(wD, hx, hz, 32);
+    simD.InstantLabour = true;
+    simD.DesignateBuild(Shapes.Box(wD, siteD, hx - 23, hz - 36, hx + 22, hz + 35, new Stroke { Mat = Mat.Stone, Width = 8, Height = 32, Level = true, Hollow = true }, ytop));
+    simD.InstantLabour = false;
+    RunD(1);
+    var noRoof = simD.CheckDwelling(hx - 23, hz - 36, hx + 22, hz + 35);
+    for (int z = hz - 36; z <= hz + 35; z++) for (int x = hx - 23; x <= hx + 22; x++) for (int y = ytop; y < ytop + 4; y++) wD.Set(x, y, z, Mat.Wood);
+    RunD(1);
+    var noDoor = simD.CheckDwelling(hx - 23, hz - 36, hx + 22, hz + 35);
+    // a gate in its south wall, clicked from outside
+    int fy = ytop - 26, fz = hz;
+    while (wD.Get(hx, fy, fz) == Mat.Air) fz++;
+    while (wD.Get(hx, fy, fz) != Mat.Air) fz++;
+    var face = new VoxelHit { X = hx, Y = fy, Z = fz - 1, NZ = 1, M = wD.Get(hx, fy, fz - 1) };
+    var plan = GatePlan.At(wD, siteD, face);
+    var door = plan == null ? null : simD.AddGate(plan, built: true);
+    RunD(1);
+    var ok = simD.CheckDwelling(hx - 23, hz - 36, hx + 22, hz + 35);
+    Check("a room is a dwelling only once it is roofed and has its door; then it has floor and bunks enough",
+        noRoof is { Ok: false } && noRoof.Why.Contains("крыш") && noDoor is { Ok: false } && noDoor.Why.Contains("двер") && door != null && ok.Ok && ok.Area > 18 && ok.Bunks >= 4,
+        $"without a roof: «{noRoof.Why}»; without a door: «{noDoor.Why}»; with both: {(ok.Ok ? "a dwelling" : "«" + ok.Why + "»")}, {ok.Area:0.#} m², {ok.Bunks} bunks; " +
+        $"the gate {(plan == null ? "does not fit" : door == null ? "not hung" : $"hung, ready {door.Ready}, leaves {(door.In > 0 ? "outside" : "inside")}")}");
+    // set aside as a dwelling with a crew inside: they furnish it, and its bunks are places in the household
+    var home = simD.AddZone(hx - 26, hz - 40, hx + 25, hz + 39, Zone.Dwelling, 0);
+    int inside = simD.NearestStand(hx, hz - 10, 2);
+    for (int i = 0; i < 4; i++) simD.Spawn(Kinds.Worker, inside);
+    double wood0 = simD.Stock[Stockpile.Wood];
+    int places0 = simD.Places;
+    for (int t = 0; t < 300 && home.Beds < ok.Bunks; t++) RunD(1);
+    int bunk = 0, bedding = 0, table = 0;
+    for (int z = hz - 36; z <= hz + 35; z++) for (int x = hx - 23; x <= hx + 22; x++) for (int y = ytop - 34; y < ytop; y++)
+    {
+        byte m = wD.Get(x, y, z);
+        if (m == Mat.Bunk) bunk++; else if (m == Mat.Bedding) bedding++; else if (m is Mat.Table or Mat.Bench) table++;
+    }
+    Check("the workers furnish a dwelling of timber, bunks along the walls (and a table in the middle if there is room), and every whole bunk is a place",
+        home.Closed && home.Beds == ok.Bunks && simD.Places == places0 + home.Beds && bunk > 0 && bedding > 0 && simD.Stock[Stockpile.Wood] < wood0,
+        $"{home.Beds} of {ok.Bunks} bunks whole ({bunk} voxels of frame, {bedding} of bedding, {table} of table and benches), timber {Fmt.M3(wood0 - simD.Stock[Stockpile.Wood])} m³; places {places0} → {simD.Places}");
+    // a hole hacked through its wall: it is open, and its places are lost till it is closed again
+    for (int y = ytop - 32; y < ytop - 8; y++) for (int z = hz - 8; z < hz + 8; z++) for (int x = hx - 23; x < hx - 15; x++) wD.Set(x, y, z, Mat.Air);
+    RunD(6);
+    // (the timber roof over the breach comes down in part too, having lost the wall under it)
+    Check("a dwelling broken open gives no places till it is closed again", !home.Closed && simD.Places == Sim.CitadelPlaces && (home.Why.Contains("стен") || home.Why.Contains("крыш")),
+        $"closed {home.Closed}: «{home.Why}», places {simD.Places}");
 }
 
 // ---- bodies of voxels: a skeleton inside, blows carving out what they strike, limbs cut off, vital wounds, bleeding

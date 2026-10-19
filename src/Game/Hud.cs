@@ -44,7 +44,7 @@ public partial class Hud : CanvasLayer
         (Tool.Extrude, Icons.Extrude, "5", "Выдавить\nЩелчок по ровной грани: она нарастёт на шаг выбранным материалом. С киркой — грань вынут на шаг вглубь: ступени в склоне, проход в скале."),
         (Tool.Unmark, Icons.Erase, "6", "Снять разметку\nРамка снимает всю разметку внутри, щелчок — разметку поблизости. Что уже сделано, остаётся."),
         (Tool.Ladder, Icons.Ladder, "7", "Лестница\nЩелчок по боковой грани стены, башни или обрыва: рабочие приставят лестницу от земли до верха. По лестницам ваши пешки поднимаются на стены. Орда тоже ими пользуется — и ставит свои."),
-        (Tool.Gather, Icons.Gather, "8", "Делянка\nРамкой отметьте участок, откуда брать ресурс: Z — камень (скалы и валуны), X — лес, C — земля; у камня и земли — глубина. Размечать каждое дерево не нужно: свободные пешки сами берут оттуда работу понемногу, а разметка стен и рвов идёт первой. В консоли можно выбрать и «убежище»: участок, куда по тревоге (T) уходят мирные, — и «святилище», где днём молятся жрецы."),
+        (Tool.Gather, Icons.Gather, "8", "Делянка\nРамкой отметьте участок, откуда брать ресурс: Z — камень (скалы и валуны), X — лес, C — земля; у камня и земли — глубина. Размечать каждое дерево не нужно: свободные пешки сами берут оттуда работу понемногу, а разметка стен и рвов идёт первой. В консоли можно выбрать и «убежище»: участок, куда по тревоге (T) уходят мирные, — «святилище», где днём молятся жрецы, — и «жилой дом»: закрытую комнату с воротами, где рабочие поставят лежанки, а каждая лежанка — место в войске."),
         (Tool.Gate, Icons.GateIcon, "9", "Ворота\nЩелчок по боковой грани стены: рабочие прорубят проём в два метра шириной и три высотой и навесят дубовые створки на железе. Свои открывают их на ходу, перед ордой они закрыты, и рубить их ей не легче камня. Щелчок по воротам без кисти — держать открытыми, на засов или снова сами."),
         (Tool.Repair, Icons.Mend, "0", "Починка\nЩелчок по разрушенной постройке: рабочие вернут ей прежний вид — разберут завал, где он лёг на кладку, доложат недостающее тем же камнем, навесят ворота. Помнится всё, что вы построили, и старая крепость тоже. Рамка чинит только то, что в ней."),
         (Tool.Bridge, Icons.BridgeIcon, "M", "Мост\nЗажмите на одном берегу и протяните до другого: рабочие перекинут мост, который идёт аркой, а не плоско. Каменный (Z) — на арке, с парапетами; деревянный (X) — настил на гнутых рёбрах, с перилами. Строят от берегов, стоя на уже уложенном. Пролёт — от 2 до 25 м. Подъёмный («Вид» в консоли) — дубовый настил над рвом от 2 до 6 м на петлях у берега, что ближе к цитадели: опущен, пока не подойдёт орда, тогда поднимается сам и сбрасывает в ров тех, кто на нём. Щелчок по нему без кисти — сам / опущен / поднят."),
@@ -288,6 +288,9 @@ public partial class Hud : CanvasLayer
         var st = _m.Sim.Stock;
         _stores.Values[0] = Fmt.Int(Math.Floor(st.Gold));
         _stores.Values[4] = Fmt.Int(Math.Floor(_m.Sim.Favour));
+        int have = _m.Sim.Household(), places = _m.Sim.Places;
+        _stores.Values[5] = $"{have}/{places}";
+        _stores.Short[5] = have >= places;
         var t = _m.Tools;
         for (int k = 1; k <= 3; k++)
         {
@@ -350,6 +353,14 @@ public partial class Hud : CanvasLayer
             {
                 _tag.Show("Подъёмный мост · " + Commander.BridgeWord(draw), draw.Broken ? Ornament.Blood : Ornament.EmberGlow,
                     draw.Broken || !draw.Ready ? "" : "щелчок — сменить: сам / опущен / поднят");
+                return;
+            }
+            if (u == null && t.HoverKeep)
+            {
+                var sim = _m.Sim;
+                string line = sim.Recruits.Count == 0 ? "щелчок или K — набор войска"
+                    : $"готовится: {sim.Recruits[0].Kind.Name.ToLowerInvariant()}, ещё {Math.Ceiling(sim.TrainTime(sim.Recruits[0].Kind) - sim.Recruits[0].Done)} с" + (sim.Recruits.Count > 1 ? $" · в очереди {sim.Recruits.Count}" : "");
+                _tag.Show($"Цитадель · войско {sim.Household()} из {sim.Places}", Ornament.EmberGlow, line);
                 return;
             }
             if (u == null && t.HoverPlace is { } place)
@@ -605,6 +616,9 @@ public partial class Hud : CanvasLayer
     /// <summary>Which panel hangs from the beam (null for none), and who the console shows in full, for tests.</summary>
     public string OpenTab => _drop?.OpenKey;
     public Unit Inspecting => _inspector?.One;
+    /// <summary>The console's middle (the self-test presses its tiles); whether it shows the citadel's muster.</summary>
+    public Inspector Inspector => _inspector;
+    public bool KeepShown => _inspector?.KeyNow == "keep";
     public void OpenPanel(string key) => _drop.Open(key);
     public void ClosePanel() => _drop.Close();
     public LorePanel Lore => _lore;

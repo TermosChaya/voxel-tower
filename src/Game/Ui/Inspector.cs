@@ -8,7 +8,8 @@ namespace VoxelTower.Game;
 /// <summary>
 /// The middle of the bottom console, saying what is in hand or who is chosen: a brush shows its settings; one pawn its
 /// name, health, its wounds part by part of the body, what it is doing and the work it is set to; several their faces;
-/// nobody chosen, the household by kind with hiring and the squads. Orders for the chosen run along its foot.
+/// nobody chosen, the household by kind and the squads; the citadel clicked, its muster — the places, the line, and the
+/// kinds to take on. Orders for the chosen run along its foot.
 /// </summary>
 public partial class Inspector : Control
 {
@@ -19,6 +20,8 @@ public partial class Inspector : Control
 
     /// <summary>The one pawn shown in full, if one is.</summary>
     public Unit One { get; private set; }
+    /// <summary>What it shows now: "home", "keep", "tool", "one:…" and so on.</summary>
+    public string KeyNow => _key;
 
     public void Init(Main m)
     {
@@ -43,6 +46,7 @@ public partial class Inspector : Control
         if (_m.Tools.Tool == Tool.Spell) return "spell:" + (int)_m.Tools.CurrentSpell;
         if (_m.Tools.Tool != Tool.None) return "tool";
         var sel = Chosen();
+        if (sel.Count == 0 && _m.KeepChosen) return "keep";
         if (sel.Count == 0 && _m.Inspected is { } look) return "look:" + look.Id;
         if (sel.Count == 0) return "home";
         return (sel.Count == 1 ? "one:" : "many:") + string.Join(",", sel.ConvertAll(u => u.Id));
@@ -65,7 +69,7 @@ public partial class Inspector : Control
         box.SetAnchorsPreset(LayoutPreset.FullRect);
         foreach (var (side, px) in new[] { ("margin_left", 14), ("margin_right", 12), ("margin_top", 8), ("margin_bottom", 8) }) box.AddThemeConstantOverride(side, px);
         var sel = Chosen();
-        box.AddChild(_key == "tool" ? ToolPane() : _key.StartsWith("spell:") ? SpellPane() : _key.StartsWith("look:") && _m.Inspected != null ? LookPane(_m.Inspected)
+        box.AddChild(_key == "tool" ? ToolPane() : _key == "keep" ? KeepPane() : _key.StartsWith("spell:") ? SpellPane() : _key.StartsWith("look:") && _m.Inspected != null ? LookPane(_m.Inspected)
             : sel.Count == 0 ? HomePane() : sel.Count == 1 ? OnePane(sel[0]) : GroupPane(sel));
         AddChild(box);
         _pane = box;
@@ -105,7 +109,7 @@ public partial class Inspector : Control
         var head = new HBoxContainer();
         head.AddThemeConstantOverride("separation", 14);
         head.AddChild(Hud.Text(t.Tool == Tool.Paste && t.PasteBp != null ? $"Чертёж «{t.PasteBp.Name}»" : BuildTools.ToolName(t.Tool), Ornament.Display, 22, Ornament.EmberGlow));
-        var mat = Hud.CapsLabel((t.Tool == Tool.Gather ? (t.Shelter ? "убежище от орды" : t.Sanctum ? "святилище жрецов" : "добывать: " + (t.GatherKind switch { Stockpile.Wood => "лес", Stockpile.Earth => "землю", _ => "камень" }))
+        var mat = Hud.CapsLabel((t.Tool == Tool.Gather ? (t.Shelter ? "убежище от орды" : t.Sanctum ? "святилище жрецов" : t.Dwelling ? "жилой дом" : "добывать: " + (t.GatherKind switch { Stockpile.Wood => "лес", Stockpile.Earth => "землю", _ => "камень" }))
             : o.Dig ? "кирка: копать и рубить" : "материал: " + Mat.NameOf(o.Material).ToLowerInvariant()), 9);
         mat.VerticalAlignment = VerticalAlignment.Center;
         head.AddChild(mat);
@@ -203,9 +207,11 @@ public partial class Inspector : Control
             case Tool.Gather:
                 opts.AddChild(new Choice("Участок", "Участок\nКамень (Z), лес (X), земля (C) — откуда брать этот запас. Убежище — куда по тревоге (T) уходят мирные " +
                     "и где пережидают её: под крышей, за стенами; ближайшее из убежищ и цитадели. Святилище — где днём молятся жрецы и копят вмешательство " +
-                    "для заклинаний; на месте силы (Курган, Чёрный камень, Мёртвый родник), пока оно ваше, молитву слышат втрое лучше.",
-                    new[] { "камень", "лес", "земля", "убежище", "святилище" }, t.GatherKind switch { Stockpile.Wood => 1, Stockpile.Earth => 2, Zone.Shelter => 3, Zone.Sanctum => 4, _ => 0 },
-                    i => { if (i == 3) t.SetShelter(true); else if (i == 4) t.SetSanctum(true); else t.SetMaterial(new[] { Mat.Stone, Mat.Wood, Mat.Rammed }[i]); }));
+                    "для заклинаний; на месте силы (Курган, Чёрный камень, Мёртвый родник), пока оно ваше, молитву слышат втрое лучше. Жилой дом — " +
+                    "закрытая комната (стены, крыша, ворота): рамкой обведите её, и рабочие поставят в ней лежанки; каждая — место в войске.",
+                    new[] { "камень", "лес", "земля", "убежище", "святилище", "жилой дом" },
+                    t.GatherKind switch { Stockpile.Wood => 1, Stockpile.Earth => 2, Zone.Shelter => 3, Zone.Sanctum => 4, Zone.Dwelling => 5, _ => 0 },
+                    i => { if (i == 3) t.SetShelter(true); else if (i == 4) t.SetSanctum(true); else if (i == 5) t.SetDwelling(true); else t.SetMaterial(new[] { Mat.Stone, Mat.Wood, Mat.Rammed }[i]); }));
                 if (t.GatherKind is Stockpile.Stone or Stockpile.Earth)
                     opts.AddChild(new Stepper("Глубина", "Глубина\nДо какой глубины от нынешней поверхности брать камень или землю. Клавиши − и =.", () => Len(o.Depth), d => t.StepHeight(d)));
                 break;
@@ -489,13 +495,68 @@ public partial class Inspector : Control
         return col;
     }
 
+    // ---------------------------------------------------------------- the citadel
+
+    /// <summary>The kinds' tiles in the citadel's muster, for the self-test.</summary>
+    public KindTile TileOf(UnitType t) => _tiles.Find(k => k.Kind == t);
+    readonly List<KindTile> _tiles = new();
+
+    Control KeepPane()
+    {
+        var sim = _m.Sim;
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 12);
+        var left = new VBoxContainer { CustomMinimumSize = new Vector2(236, 0) };
+        left.AddThemeConstantOverride("separation", 3);
+        left.AddChild(Hud.CapsLabel("Цитадель · набор войска", 9));
+        var head = Hud.Text("", Ornament.SerifBold, 14, Ornament.Parchment);
+        left.AddChild(head);
+        var note = Hud.Text("", Ornament.Serif, 12, Ornament.Aged);
+        note.TooltipText = "Места в войске\nЦитадель вмещает 10 (с «Казармами» — 14). Каждая лежанка в жилом доме — ещё место: обведите закрытую комнату с " +
+            "воротами участком (8, «жилой дом»), и рабочие обставят её мебелью. Всадник занимает 2 места, великан — 4.";
+        note.MouseFilter = MouseFilterEnum.Stop;
+        left.AddChild(note);
+        var line = new HBoxContainer();
+        line.AddThemeConstantOverride("separation", 3);
+        for (int i = 0; i < Sim.RecruitsMax; i++) line.AddChild(new RecruitFace(_m, i) { CustomMinimumSize = new Vector2(30, 37) });
+        left.AddChild(line);
+        row.AddChild(left);
+        row.AddChild(new Rule(true));
+        var kinds = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        kinds.AddThemeConstantOverride("h_separation", 4);
+        kinds.AddThemeConstantOverride("v_separation", 4);
+        _tiles.Clear();
+        foreach (var t in Kinds.PlayerKinds)
+        {
+            var tile = new KindTile(_m, t) { CustomMinimumSize = new Vector2(38, 48) };
+            _tiles.Add(tile);
+            kinds.AddChild(tile);
+        }
+        row.AddChild(kinds);
+        _refresh.Add(() =>
+        {
+            int have = sim.Household(), places = sim.Places, beds = places - Sim.CitadelPlaces - (sim.Knows("barracks") ? 4 : 0);
+            head.Text = $"Войско: {have} из {places} мест" + (sim.Recruits.Count > 0 ? $" · в очереди {sim.Recruits.Count}" : "");
+            head.AddThemeColorOverride("font_color", have >= places ? Ornament.Ember : Ornament.Parchment);
+            note.Text = beds > 0 ? $"места: цитадель {places - beds}, жилые дома {beds}" : "места даёт цитадель; ещё — жилые дома (8)";
+            foreach (var k in _tiles) k.QueueRedraw();
+        });
+        return row;
+    }
+
     // ---------------------------------------------------------------- nobody chosen
 
     Control HomePane()
     {
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 10);
-        foreach (var kind in Kinds.PlayerKinds)
+        var present = new List<UnitType>();
+        foreach (var kind in Kinds.PlayerKinds) if (_m.Sim.Count(kind) > 0) present.Add(kind);
+        var keep = Btn("Цитадель · K", "Цитадель (K)\nНабор войска: щелчок по цитадели или K. Набранные готовятся в цитадели по очереди и выходят из её ворот; " +
+            "войско не больше, чем мест — их дают цитадель и жилые дома.", () => _m.Command.OpenKeep(), 98);
+        keep.SizeFlagsVertical = SizeFlags.ShrinkBegin;
+        row.AddChild(keep);
+        foreach (var kind in present.GetRange(0, Math.Min(present.Count, 4)))
         {
             var t = kind;
             var block = new HBoxContainer();
@@ -510,9 +571,6 @@ public partial class Inspector : Control
             var note = Hud.Text("", Ornament.Serif, 12, Ornament.Aged);
             note.CustomMinimumSize = new Vector2(112, 0);
             info.AddChild(note);
-            var hire = Btn("", "", () => _m.Command.Hire(t), 98);
-            hire.SizeFlagsHorizontal = SizeFlags.ShrinkBegin;
-            info.AddChild(hire);
             block.AddChild(info);
             row.AddChild(block);
             _refresh.Add(() =>
@@ -520,10 +578,6 @@ public partial class Inspector : Control
                 var (n, text) = Retinue.Summary(_m.Sim, t);
                 name.Text = $"{Retinue.Many(t)} · {n}";
                 note.Text = text;
-                int cost = _m.Sim.HireCost(t);
-                hire.Text = $"Нанять · {cost}";
-                hire.TooltipText = $"Нанять: {t.Name.ToLowerInvariant()}\n{cost} золота. Приходит к воротам цитадели. Золото дают рудники, убитые налётчики, охота и отбитые волны.";
-                hire.Disabled = _m.Sim.Stock.Gold < cost || _m.Sim.Over;
             });
         }
         row.AddChild(new Rule(true));

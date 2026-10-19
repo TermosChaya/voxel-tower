@@ -64,6 +64,8 @@ public partial class Main : Node3D
     public readonly HashSet<Unit> Selected = new();
     /// <summary>A raider or a beast the player clicked on to look at (with none of ours chosen), or null.</summary>
     public Unit Inspected;
+    /// <summary>The citadel was clicked (or K pressed): the console shows its muster.</summary>
+    public bool KeepChosen;
     /// <summary>Game seconds per real second: 1, 2 or 3.</summary>
     public int Speed = 1;
     /// <summary>The game's time slowed for a moment after a great blast or fall (see Spectacle): 1 is as fast as it goes.</summary>
@@ -522,9 +524,6 @@ public partial class Main : Node3D
         Check("the pawns and the beasts are drawn", Units.Drawn() >= 5 + Sim.WildAlive() && Sim.WildAlive() >= 15, $"{Units.Drawn()} figures, {Sim.WildAlive()} beasts");
         Check("the river and the ponds are drawn", View.WaterChunks() >= 20, $"{View.WaterChunks()} chunks with water");
 
-        int w0 = Sim.Count(Kinds.Worker);
-        Command.Hire(Kinds.Worker);
-        Check("hiring takes gold and brings a worker", Sim.Count(Kinds.Worker) == w0 + 1 && Math.Abs(Sim.Stock.Gold - (500 - Kinds.Worker.Cost)) < .01, $"{Sim.Stock.Gold:0} gold left");
 
         // a stone wall is marked, not built
         await Look(740, 470);
@@ -654,6 +653,16 @@ public partial class Main : Node3D
         Advance(60);
         Check("a frame sets the sanctuary, and a priest hired goes there and prays", sanctum != null && priest != null && priest.Pastime == Pastime.Pray && Sim.Favour > favour0 + .4,
             $"sanctuary {(sanctum != null ? $"{sanctum.W}×{sanctum.D}" : "none")}; the priest: {(priest == null ? "not hired" : Retinue.DoingNow(priest, Sim))}; intervention +{Sim.Favour - favour0:0.00}");
+        // a dwelling framed on open ground is set out, and waits: it gives no places till it is a closed room with a door
+        Tools.SetDwelling(true);
+        int dx0 = kx - 260, dz0 = kz + 120;
+        await Look(dx0 + 20, dz0 + 20);
+        await Drag((dx0, dz0), (dx0 + 40, dz0 + 40));
+        var home = Sim.Zones.Find(z => z.Kind == Zone.Dwelling);
+        Advance(5);
+        Check("8 with «жилой дом» frames a dwelling, which gives no places while it is open ground", Tools.GatherKind == Zone.Dwelling && home != null && !home.Closed && home.Why != "" && Sim.Places == Sim.CitadelPlaces,
+            home == null ? "no dwelling set" : $"«{home.Why}», places {Sim.Places}");
+        if (home != null) Sim.RemoveZones(home.X0, home.Z0, home.X1, home.Z1);
         Tools.SetMaterial(Mat.Stone);
 
         // taken alive: «Живьём» for the swordsman, a goblin beaten down and bound, a worker leading it into the citadel,
@@ -986,6 +995,21 @@ public partial class Main : Node3D
         Check("map click moves the view", Rig.Target.DistanceTo(before) > 1, $"{before} → {Rig.Target}");
         await Frames(10);
         Check("chunks re-meshed", World.DirtyCount == 0, $"{View.Triangles()} triangles");
+        // the citadel's muster: a click on the citadel opens it; a worker taken on is paid for at once and comes out of
+        // its door only when made ready
+        Sim.Stock.Gold = 500;
+        int w0 = Sim.Count(Kinds.Worker);
+        await Look(kx, kz);
+        await ClickAt(ScreenAt(kx, Site.KeepBase + 40, kz));
+        bool keepOpen = Hud.KeepShown;
+        Hud.Inspector.TileOf(Kinds.Worker)?.Press();
+        bool paidNow = Math.Abs(Sim.Stock.Gold - (500 - Kinds.Worker.Cost)) < .01 && Sim.Recruits.Count == 1 && Sim.Count(Kinds.Worker) == w0;
+        Advance(Sim.TrainTime(Kinds.Worker) + 8);
+        Check("a click on the citadel opens its muster; a worker taken on is paid for at once and comes out when made ready",
+            keepOpen && paidNow && Sim.Count(Kinds.Worker) == w0 + 1 && Sim.Recruits.Count == 0 && Sim.Places == Sim.CitadelPlaces,
+            $"muster {(keepOpen ? "open" : "not open")}, paid at once {paidNow}, {Sim.Stock.Gold:0} gold left, workers {w0} → {Sim.Count(Kinds.Worker)}");
+        KeyPress(Key.Escape);
+        Check("Esc lets the citadel go", !KeepChosen && !Hud.KeepShown);
         // the game written down, and its head read back for the list of saves
         bool saved = Saves.Write(this, "selftest");
         var peek = Saves.Peek("selftest");
@@ -1008,6 +1032,7 @@ public partial class Main : Node3D
         if (_pose == "fire") { Blaze(); return; }
         if (_pose == "sap") { Sapping(); return; }
         if (_pose == "shelter") { Sheltering(); return; }
+        if (_pose == "dwelling") { Housing(); return; }
         if (_pose == "traps") { Trapped(); return; }
         if (_pose == "drawbridge") { Drawn(); return; }
         if (_pose == "thieves") { Robbed(); return; }
@@ -1816,6 +1841,62 @@ public partial class Main : Node3D
         sim.RaiseAlarm();
         Advance(_poseSeconds);
         Rig.Set(World.WX((x0 + x1) / 2f + 10), World.WZ((z0 + z1) / 2f), -.66f, .7f, 1.6f, snap: true);
+        Hud.Refresh();
+        Marks.Flush();
+    }
+
+    /// <summary>
+    /// A dwelling: a stone house roofed with timber, a gate in its side, framed as a dwelling and furnished by the workers
+    /// with bunks along its walls; for the picture half its roof is lifted off to show them. The citadel's muster is open
+    /// in the console with the places the bunks give.
+    /// </summary>
+    void Housing()
+    {
+        var w = World; var s = Site; var sim = Sim;
+        sim.Waves.Countdown = 1e9;
+        int kx = s.KeepX, kz = s.KeepZ;
+        // the nearest flat dry ground east of the citadel, clear of the fort
+        int hx = kx + 150, hz = kz + 160;
+        bool found = false;
+        for (int r = 110; r < 400 && !found; r += 12)
+            for (int a = 0; a < 24 && !found; a++)
+            {
+                int cx = kx + (int)(r * Math.Cos(a * Math.PI / 12)), cz = kz + (int)(r * Math.Sin(a * Math.PI / 12));
+                int lo = int.MaxValue, hi = int.MinValue; bool bad = false;
+                for (int z = cz - 48; z <= cz + 48 && !bad; z += 4)
+                    for (int x = cx - 36; x <= cx + 36 && !bad; x += 4)
+                    {
+                        if (x < 0 || z < 0 || x >= w.SX || z >= w.SZ || s.Forbidden(x, z)) { bad = true; break; }
+                        int g = w.SurfAt(x, z); lo = Math.Min(lo, g); hi = Math.Max(hi, g);
+                        if (w.Get(x, g, z) == Mat.Water || w.Get(x, g - 1, z) == Mat.Water || Mat.IsPlayer[w.Get(x, g - 1, z)]) bad = true;
+                    }
+                if (!bad && hi - lo <= 2) { hx = cx; hz = cz; found = true; }
+            }
+        int top = Shapes.LevelTop(w, hx, hz, 32), floor = top - 32;
+        sim.InstantLabour = true;
+        // five metres by nine, walls a metre thick: the timber roof spans the three metres between the long walls
+        sim.DesignateBuild(Shapes.Box(w, s, hx - 20, hz - 36, hx + 19, hz + 35, new Stroke { Mat = Mat.Stone, Width = 8, Height = 32, Level = true, Hollow = true }, top));
+        for (int z = hz - 36; z <= hz + 35; z++) for (int x = hx - 20; x <= hx + 19; x++) for (int y = top; y < top + 4; y++) w.Set(x, y, z, Mat.Wood);
+        // the gate in the north end wall
+        int fy = floor + 6, fz = hz;
+        while (w.Get(hx, fy, fz) == Mat.Air) fz--;
+        while (w.Get(hx, fy, fz) != Mat.Air) fz--;
+        var plan = GatePlan.At(w, s, new VoxelHit { X = hx, Y = fy, Z = fz + 1, NZ = -1, M = w.Get(hx, fy, fz + 1) });
+        if (plan != null) sim.AddGate(plan, built: true);
+        Advance(1);
+        var home = sim.AddZone(hx - 23, hz - 40, hx + 22, hz + 39, Zone.Dwelling, 0);
+        sim.LookOver(home);
+        sim.InstantLabour = false;
+        sim.LookOver(home);
+        foreach (var (dx, dz) in new[] { (-60, 10), (-70, 40), (-50, -30) })
+            sim.Spawn(Kinds.Worker, sim.NearestStand(hx + dx, hz + dz, 4));
+        Advance(_poseSeconds);
+        // half the roof off, to see in (the dwelling counts as closed till it is next looked over, seconds from now)
+        sim.LookOver(home);
+        GD.Print($"[pose] dwelling at {hx},{hz}: {(home.Closed ? "closed" : home.Why)}, {home.Beds} of {home.Planned} bunks, {sim.Places} places");
+        for (int z = hz; z <= hz + 35; z++) for (int x = hx - 20; x <= hx + 19; x++) for (int y = top; y < top + 4; y++) w.Set(x, y, z, Mat.Air);
+        Command.OpenKeep();
+        Rig.Set(World.WX(hx), World.WZ(hz + 16), -.6f, 1.05f, 2.2f, snap: true);
         Hud.Refresh();
         Marks.Flush();
     }
