@@ -72,6 +72,8 @@ public partial class Sound : Node
         // a piece of the world coming down: the heavier, the louder, and a great one deeper
         sim.Landed += (x, y, z, n, speed) => { if (n >= 20) Play("crash", x, y, z, .07, Math.Clamp(.25f + n / 700f, .25f, 1.1f), pitch: n >= 600 ? .72f : 0); };
         sim.Struck += (x, y, z) => Play("thunder", x, y, z, .1, 1.3f, far: true);
+        // and far off, low and long, after the sheet lightning of a night of rain
+        m.Atmos.Thunder += loud => Everywhere("thunder", loud, .62f);
         sim.RiteDone += (x, y, z) => Play("gong", x, y, z, .5, 1, far: true);
         sim.Healed += (x, y, z) => Play("hex", x, y, z, .6, .5f);
         sim.Hexed += (x, y, z) => Play("hex", x, y, z, .6, 1);
@@ -123,14 +125,14 @@ public partial class Sound : Node
         }
     }
 
-    /// <summary>A sound heard everywhere alike: the horn.</summary>
-    void Everywhere(string clip, float loud)
+    /// <summary>A sound heard everywhere alike: the horn, thunder far off.</summary>
+    void Everywhere(string clip, float loud, float pitch = 1)
     {
         if (!_clips.TryGetValue(clip, out var wav)) return;
         foreach (var p in _pool)
         {
             if (p.Playing) continue;
-            p.Stream = wav; p.VolumeDb = Mathf.LinearToDb(loud); p.PitchScale = 1;
+            p.Stream = wav; p.VolumeDb = Mathf.LinearToDb(loud); p.PitchScale = pitch;
             p.Play();
             Played++;
             Heard.Add(clip);

@@ -1086,11 +1086,18 @@ public partial class Main : Node3D
         FP.TestMove = Vector2.Zero;
         await Frames(2);
         float strode = MathF.Sqrt((mine.X - fx0) * (mine.X - fx0) + (mine.Z - fz0) * (mine.Z - fz0)) / VoxelWorld.PerMetre;
+        bool farSeen = Atmos.Far.Visible, eyesSky = Atmos.Told["sky_view"].Z > .5f;
         FP._Input(new InputEventKey { PhysicalKeycode = Key.Escape, Keycode = Key.Escape, Pressed = true });
         await Frames(2);
         bool outOf = !FP.On && Sim.Possessed == null && Rig.Cam.Current && !Hud.InFirstPerson && !Rig.Held && Units.HiddenId < 0 && Selected.Contains(mine);
         Check("I goes into the one chosen and the view is its eyes; it walks where it is told; Esc lets it go and the view goes back over the valley",
             into && strode > 2 && outOf, $"in {into}, walked {strode:0.0} m, out {outOf}");
+        // the land beyond the valley and the sky looked along the view are for someone's eyes; over the diorama the valley
+        // floats on its backdrop again
+        bool farGone = !Atmos.Far.Visible, backdrop = Atmos.Told["sky_view"].Z < .5f;
+        Check("from someone's eyes the far land round the valley shows and the sky is looked along the view; over the diorama neither",
+            farSeen && eyesSky && farGone && backdrop && Atmos.Far.Triangles > 10000,
+            $"far land {(farSeen ? "seen" : "unseen")} from the eyes, {(farGone ? "gone" : "still there")} after, {Atmos.Far.Triangles} triangles; sky {(eyesSky ? "along the view" : "a backdrop")} → {(backdrop ? "a backdrop" : "along the view")}");
 
         // the citadel's muster: a click on the citadel opens it; a worker taken on is paid for at once and comes out of
         // its door only when made ready. Whoever stands about the citadel's foot by now is sent a little way off first (an
@@ -1118,6 +1125,39 @@ public partial class Main : Node3D
         var peek = Saves.Peek("selftest");
         Check("the game is saved, and the list of saves can read what it is", saved && peek is { } pk && pk.label.Length > 0 && Math.Abs(pk.time - Sim.Time) < .01,
             $"{Saves.PathOf("selftest")}: {(peek is { } pv ? $"«{pv.label}», {pv.time:0} s" : "unreadable")}, {new System.IO.FileInfo(Saves.PathOf("selftest")).Length / 1024} KB");
+
+        // the sky goes with the day: high sun and a bright sky at noon; at the dusk the sun on the horizon and the sky red
+        // there; at night the sun under it, the stars out, the moon up; under the spell the moon red and the horizon too
+        Vector4 Sky(string name) => Atmos.Told[name];
+        float Luma(Vector4 c) => .2126f * c.X + .7152f * c.Y + .0722f * c.Z;
+        async Task<(Vector4 sun, Vector4 zenith, Vector4 horizon, Vector4 light, Vector4 moon)> SkyAt(float day, float dark)
+        {
+            Atmos.Pin(day, dark);
+            await Frames(2);
+            return (Sky("sky_sun"), Sky("sky_zenith"), Sky("sky_horizon"), Sky("sky_light"), Sky("sky_moon"));
+        }
+        // under a clear sky: rain or fog would grey it all
+        var weatherWas = Sim.Weather;
+        Sim.Weather = Weather.Clear;
+        var noon = await SkyAt(.5f, 0);
+        var dusk = await SkyAt(1, .5f);
+        var night = await SkyAt(1, 1);
+        double bloodWas = Sim.BloodMoonUntil;
+        Sim.BloodMoonUntil = Sim.Time + 100;
+        Atmos.Snap();
+        var blood = await SkyAt(1, 1);
+        Sim.BloodMoonUntil = bloodWas;
+        Sim.Weather = weatherWas;
+        Atmos.Unpin();
+        await Frames(2);
+        float Deg(Vector4 v) => Mathf.RadToDeg(MathF.Asin(Math.Clamp(v.Y, -1, 1)));
+        Check("the sky goes with the day: a high sun at noon, the sun going down red at dusk, the stars and the moon at night, the blood moon red",
+            Deg(noon.sun) > 40 && Luma(noon.zenith) > .1f && noon.zenith.W < .01f
+            && Deg(dusk.sun) is > -2 and < 6 && dusk.horizon.X > dusk.horizon.Z * 2.5f
+            && Deg(night.sun) < -8 && Luma(night.zenith) < .01f && night.zenith.W > .9f && night.light.W > .9f
+            && blood.moon.W > .9f && blood.horizon.X > blood.horizon.Y * 4,
+            $"sun {Deg(noon.sun):0}° at noon, {Deg(dusk.sun):0.0}° at dusk, {Deg(night.sun):0}° at night; zenith {Luma(noon.zenith):0.000} → {Luma(night.zenith):0.0000}; " +
+            $"dusk horizon {dusk.horizon.X:0.00},{dusk.horizon.Y:0.00},{dusk.horizon.Z:0.00}; stars {night.zenith.W:0.00}, moon {night.light.W:0.00}, red {blood.moon.W:0.00}");
         GD.Print($"[selftest] {(fails == 0 ? "all passed" : fails + " failed")}");
         if (_shot == null) GetTree().Quit(fails == 0 ? 0 : 1);
     }
@@ -1131,6 +1171,7 @@ public partial class Main : Node3D
     /// </summary>
     void Demo()
     {
+        if (_pose == "sky") { Skies(); return; }
         if (_pose == "battle") { Siege(); return; }
         if (_pose == "fire") { Blaze(); return; }
         if (_pose == "sap") { Sapping(); return; }
@@ -1662,6 +1703,62 @@ public partial class Main : Node3D
         else if (_look == 1) { sim.WishStrike = true; Advance(.35); sim.WishStrike = false; Advance(.08); }
         else { sim.WishStrike = true; Advance(.2); }
         Paused = true;
+        Hud.Refresh();
+    }
+
+    /// <summary>
+    /// The sky, to be looked at: --look=0 noon, 1 the sun going down, 2 night under the moon, 3 rain, 4 the blood moon,
+    /// 5 daybreak, 6 a night of rain with sheet lightning in it; the diorama zoomed out towards the sun or the moon so its
+    /// backdrop shows round the valley. The same with ten added (10–16) from the eyes of a swordsman of ours on a lookout
+    /// on the rim of the plateau, looking out over the valley to the far land and the mountains; 17 at noon from the
+    /// valley's western edge on the old road, where the valley goes over into the far land. The clock is stopped.
+    /// </summary>
+    void Skies()
+    {
+        var sim = Sim; var w = World;
+        int mood = _look == 17 ? 0 : Math.Max(0, _look) % 10;
+        bool eyes = _look >= 10;
+        sim.Waves.Countdown = Waves.Prep * .5;
+        if (mood == 1) sim.Waves.Countdown = 33;
+        if (mood == 3) { sim.Waves.Countdown = Waves.Prep * .4; sim.StartWeather(Weather.Rain, 900); }
+        if (mood == 5) { sim.Waves.Countdown = Waves.Prep; sim.Waves.DawnLeft = Waves.Dawn * .25; }
+        if (mood is 2 or 4 or 6) Nightfall();
+        if (mood == 4) sim.BloodMoonUntil = 1e9;
+        if (mood == 6) sim.StartWeather(Weather.Rain, 900);
+        // which way to look: west into the sunset, east into the daybreak, south-west to the moon
+        float toward = mood switch { 1 or 3 => MathF.PI * .87f, 5 => .62f, 2 or 4 => 2.27f, 6 => 2.6f, _ => MathF.PI * .8f };
+        Paused = true;
+        if (!eyes)
+        {
+            // the low sun off to one side, where the block of the valley stands lowest before the backdrop
+            float look = toward + (mood == 1 ? .65f : mood == 5 ? -1.02f : 0);
+            Rig.Set(MathF.Cos(look) * 14, MathF.Sin(look) * 14, -look - MathF.PI / 2, .42f, .28f, snap: true);
+            if (mood == 6) Atmos.Flash(new Vector3(-.6f, .3f, .5f), 1);
+            Hud.Refresh();
+            return;
+        }
+        if (_look == 17)
+        {
+            // on the old road at the western edge, where the horde comes in, looking out along it
+            int rz = (int)(w.SZ * .56f);
+            var walker = sim.Spawn(Kinds.Swordsman, sim.NearestStand(30, rz, 2));
+            FP.Enter(walker);
+            FP.Face(MathF.PI - .12f, -.04f);
+            Hud.Refresh();
+            return;
+        }
+        // a stone lookout eight metres tall on the plateau's rim west of the citadel, over the crowns of the trees
+        int z = Site.KeepZ - 130, x = Site.KeepX;
+        while (x > 40 && Site.HTop[z * w.SX + x - 6] > Site.KeepBase - 30) x -= 2;
+        x += 12;
+        sim.InstantLabour = true;
+        sim.DesignateBuild(Shapes.Circle(w, Site, x, z, 7, new Stroke { Mat = Mat.Stone, Width = 7, Height = 64, Level = true }, Shapes.LevelTop(w, x, z, 64)));
+        sim.InstantLabour = false;
+        var me = sim.Spawn(Kinds.Swordsman, sim.NearestStand(x, z, 2));
+        FP.Enter(me);
+        FP.Face(toward, mood is 2 or 4 ? .42f : mood == 6 ? .16f : .05f);
+        if (mood == 6) Atmos.Flash(new Vector3(MathF.Cos(toward + .4f), .3f, MathF.Sin(toward + .4f)), 1);
+        GD.Print($"[pose] the sky from the eyes of a swordsman at {me.X:0},{me.Z:0}, height {me.Y:0}");
         Hud.Refresh();
     }
 
