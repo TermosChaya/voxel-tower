@@ -9,7 +9,8 @@ render_mode cull_back, diffuse_burley, specular_schlick_ggx;
 // What lives is drawn finer than its voxels once they are big enough on screen: blades on the turf and a fringe of them
 // over the earth down its sides, leaves and needles in every voxel of a crown, furrows up a trunk, dashes across a birch.
 // Vertex data: COLOR = linear rgb + colour variance, UV = (corner shade, glow),
-// UV2 = (sway, skin: 0 rough, 1 dressed stone, 2 metal, 3 turf, 4 leaves, 5 bark, 6 birch bark, 7 needles, 8 burnt turf).
+// UV2 = (sway, skin: 0 rough, 1 dressed stone, 2 metal, 3 turf, 4 leaves, 5 bark, 6 birch bark, 7 needles, 8 burnt turf,
+// 9 the earth of a bank under turf, grown over with grass).
 // The figures are meshed in their own voxels but sculpted in halves of them: grid says how many cells
 // a unit of the mesh holds, so the jitter and the bevel follow the cells they are made of.
 
@@ -83,16 +84,17 @@ float turf_top(vec2 p, float px) {
 	return 1.0 + amp * (lit * 0.3 - (1.0 - cover) * 0.07 - 0.06);
 }
 
-// Turf seen from the side: blades hang over the edge in a ragged fringe, and under them the sod is earth and roots.
-vec3 turf_side(vec3 col, float across, float up, float px) {
+// Turf, or a bank grown over under it, seen from the side: grass all over, blades hanging down it in streaks, the tips
+// of those from the top catching the light in a ragged fringe along its upper edge, and the shade deeper toward the foot
+// of the bank. A voxel is a hand's breadth: grass covers it whole, it is no slab of sod.
+vec3 turf_side(vec3 col, float across, float up, float px, float fringe) {
 	float amp = fade(px, 6.0);
-	float edge = 0.55 + 0.16 * sin(across * 23.0 + sin(across * 7.0) * 2.0) + 0.1 * (vhash(vec3(floor(across * 6.0), 3.0, 1.0)) - 0.5);
+	float edge = 0.62 + 0.14 * sin(across * 23.0 + sin(across * 7.0) * 2.0) + 0.12 * (vhash(vec3(floor(across * 6.0), 3.0, 1.0)) - 0.5);
 	float aa = max(px * 1.5, 0.03);
-	float earth = 1.0 - smoothstep(edge - aa, edge + aa, up);
-	vec3 soil = vec3(0.098, 0.052, 0.030);
-	float streak = sin(across * 37.0 + vhash(vec3(floor(across * 9.0), 5.0, 2.0)) * 6.0) * 0.5 + 0.5;
-	vec3 blades = col * (1.0 + amp * (streak * 0.22 - 0.1) * smoothstep(edge, 1.0, up) + amp * 0.08 * (up - 0.5));
-	return mix(blades, mix(col, soil, 0.72) * (0.85 + 0.15 * up), earth);
+	float tips = smoothstep(edge - aa, edge + aa, up) * fringe;
+	float streak = sin(across * 37.0 + vhash(vec3(floor(across * 9.0), 5.0, 2.0)) * 6.0 + up * 3.0) * 0.5 + 0.5;
+	float fine = sin(across * 71.0 + vhash(vec3(floor(across * 17.0), 8.0, 4.0)) * 6.0) * 0.5 + 0.5;
+	return col * (0.86 + 0.14 * up + amp * ((streak * 0.6 + fine * 0.4) * 0.24 - 0.12) + tips * (0.1 + amp * 0.08));
 }
 
 // A crown's voxel face: three leaves across, each turned its own way and lit its own way; the gaps between them deep.
@@ -186,7 +188,7 @@ void fragment() {
 		float mott = sin(p.x * 1.7 + p.y * 0.9) * sin(p.z * 1.3 - p.y * 1.1) + sin(p.x * 3.1 - p.z * 2.3) * 0.35;
 		col = COLOR.rgb * (1.0 + mott * 0.035 + (vhash(floor(v_vox * 0.5)) - 0.5) * COLOR.a);
 	} else {
-		col = COLOR.rgb * (1.0 + (skin == 3 ? turf_tone(cell) : vhash(cell) - 0.5) * COLOR.a);
+		col = COLOR.rgb * (1.0 + (skin == 3 || skin == 9 ? turf_tone(cell) : vhash(cell) - 0.5) * COLOR.a);
 		vec3 an = abs(v_nrm);
 		vec3 fv = fract(v_vox);
 		vec2 fp = an.x > 0.5 ? fv.yz : (an.y > 0.5 ? fv.xz : fv.xy);
@@ -204,10 +206,12 @@ void fragment() {
 					float under = sward_at.w * (1.0 - smoothstep(sward_reach.x, sward_reach.y, length(v_world.xz - sward_at.xz)));
 					col *= turf_top(face, px) * mix(1.0, 0.74, under);
 				}
-				else if (!top) col = turf_side(col, across, fract(v_vox.y), px);
+				else if (!top) col = turf_side(col, across, fract(v_vox.y), px, 1.0);
 			} else if (skin == 4) col *= leaves(face, px, 3.0, vec2(0.62, 0.36));
 			else if (skin == 7) col *= leaves(face, px * 1.5, 5.0, vec2(0.75, 0.16));
 			else if (skin == 8) { if (v_nrm.y > 0.5) col *= scorch(face, px); }
+			// the earth of a bank under its turf, grown over: grass all down it, a little deeper in shade
+			else if (skin == 9) col = turf_side(col, across, fract(v_vox.y), px, 0.0) * 0.9;
 			else if (!top) col *= skin == 6 ? birch(across, v_vox.y, px) : bark(across, v_vox.y, px);
 			// a crown's faces are leaves, not a wall of bricks: its bevel is lighter
 			if (skin == 4 || skin == 7) line *= 0.5;

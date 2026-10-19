@@ -83,9 +83,9 @@ sw.Restart();
 long quads = 0; int meshed = 0;
 for (int ci = 0; ci < w.ChunkCount; ci++) { var mb = mesher.MeshChunk(w, ci, pad); if (mb != null) { quads += mb.Quads; meshed++; } }
 long oneMs = sw.ElapsedMilliseconds;
-// the prototype had 232642; its citadel of neat brick is rough masonry now (234006), and its tufts of grass are drawn
-// in blades by the game instead of meshed as cubes
-Check("triangles as counted", quads * 2 == 145454, $"{quads * 2} triangles in {meshed} chunks, 145454 expected (the prototype's 232642 with a brick citadel and its tufts as cubes)");
+// the prototype had 232642; its citadel of neat brick is rough masonry now (234006), its tufts of grass are drawn in
+// blades by the game instead of meshed as cubes (145454), and the earth in its banks under turf is grassed over (145640)
+Check("triangles as counted", quads * 2 == 145640, $"{quads * 2} triangles in {meshed} chunks, 145640 expected (the prototype's 232642 with a brick citadel and its tufts as cubes)");
 Console.WriteLine($"     mesh, 1 thread: {oneMs} ms");
 
 // meshing, all cores
@@ -4322,6 +4322,24 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--grass")
         sward != null && sward.Sprigs.Length == (swardBare.Sprigs?.Length ?? 0) + 2 && Sward.Mat(tuft) == Mat.Tuft && Sward.Tall(tuft) == 2 && Sward.Mat(flower) == Mat.Flower && Sward.Tall(flower) == 1
             && turfUnder && grown.Quads == bareQuads && grown.Uv.AsSpan().SequenceEqual(bareUv) && swardBare.Turf.Length == sward.Turf.Length,
         $"{sward?.Sprigs?.Length ?? 0} sprigs (tuft {Sward.Tall(tuft)} tall), {sward?.Turf?.Length ?? 0} open turf; {grown.Quads} quads with them, {bareQuads} without");
+
+    // a bank under turf: the earth in its side, two voxels of it under the turf, is grassed over; deeper it is earth
+    for (int y = gs - 4; y < gs; y++) for (int z = gz - 2; z <= gz + 2; z++) for (int x = gx + 5; x <= gx + 7; x++) wG.Set(x, y, z, Mat.Air);
+    var bankMesh = gm.MeshChunk(wG, gci, gpad, null, out _, out _);
+    int banked = 0, earthy = 0;
+    for (int q = 0; q < bankMesh.Quads; q++)
+    {
+        float skinQ = bankMesh.Uv2[q * 8 + 1], yQ = bankMesh.Pos[q * 12 + 1];
+        bool side = bankMesh.Nrm[q * 12 + 1] == 0;
+        int sx = (int)MathF.Round(bankMesh.Pos[q * 12]);
+        if (!side || sx < gx + 5 || sx > gx + 8) continue;
+        if (skinQ == 9) banked++;
+        else if (skinQ == 0) earthy++;
+    }
+    for (int y = gs - 4; y < gs; y++) for (int z = gz - 2; z <= gz + 2; z++) for (int x = gx + 5; x <= gx + 7; x++)
+        wG.Set(x, y, z, y == gs - 1 ? Mat.Grass : Mat.Soil);
+    Check("the earth in the side of a bank is grassed over for two voxels under its turf, and is earth below that",
+        banked > 0 && earthy > 0, $"{banked} grassed faces, {earthy} of earth in the pit's walls");
 
     // fire: a tuft burnt leaves the turf under it black, and the grass creeps back over it in the rain
     var simG = new Sim(wG, siteG);

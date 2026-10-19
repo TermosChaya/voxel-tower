@@ -31,7 +31,7 @@ public partial class GrassView : Node3D
     VoxelWorld _w;
     Main _m;
     ShaderMaterial _mat;
-    ArrayMesh _tuft, _flower, _blades;
+    ArrayMesh _tuft, _flower, _blades, _fringe;
     int[][] _sprigs, _turf;
     int _cx, _cz, _cy;
 
@@ -42,7 +42,7 @@ public partial class GrassView : Node3D
         public bool On;
         public float Dist;
     }
-    Patch[] _tufts, _flowers, _sward;
+    Patch[] _tufts, _flowers, _sward, _edges;
     int _pw, _ph, _tw, _th;
     readonly List<int> _want = new();
     float[] _buf = Array.Empty<float>();
@@ -63,12 +63,14 @@ public partial class GrassView : Node3D
         _tufts = NewPatches(_pw * _ph);
         _flowers = NewPatches(_pw * _ph);
         _sward = NewPatches(_tw * _th);
+        _edges = NewPatches(_tw * _th);
         _mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/grass.gdshader") };
         _mat.SetShaderParameter("vox", VoxelWorld.Vox);
         _mat.SetShaderParameter("origin", new Vector3(w.OriginX, 0, w.OriginZ));
         _tuft = Tuft();
         _flower = Flowers();
         _blades = Blades();
+        _fringe = Fringe();
     }
 
     static Patch[] NewPatches(int n)
@@ -159,7 +161,8 @@ public partial class GrassView : Node3D
                     double h = Hash.H3(x, y, z), h2 = Hash.H3(z, x, y + 7);
                     byte under = _w.Get(x, y - 1, z);
                     float dry = under == Mat.GrassDry ? .7f : under == Mat.GrassLush ? .05f : .3f;
-                    float tall = Sward.Tall(e) * (.92f + (float)h2 * .3f);
+                    // a tuft of the meadow stands a foot and more, knee-high where it grows two voxels of it
+                    float tall = Sward.Tall(e) * (1.6f + (float)h2 * .5f);
                     Put(buf, n++, x + .5f + (float)(h - .5) * .3f, y, z + .5f + (float)(h2 - .5) * .3f, (float)(h * Math.Tau), .9f + (float)h * .25f, tall,
                         Mat.Tuft, dry, 0, (float)h2);
                     aabb.Add(y);
@@ -180,7 +183,7 @@ public partial class GrassView : Node3D
                     if (m == Mat.Tuft) continue;
                     int x = cx * VoxelWorld.CS + Sward.X(e), y = cy * VoxelWorld.CS + Sward.Y(e), z = cz * VoxelWorld.CS + Sward.Z(e);
                     double h = Hash.H3(x, y, z + 3), h2 = Hash.H3(z, x + 5, y);
-                    float tall = (.85f + (float)h2 * .35f) * Math.Max(1, Sward.Tall(e));
+                    float tall = (1.25f + (float)h2 * .45f) * Math.Max(1, Sward.Tall(e));
                     Put(buf, n++, x + .5f, y, z + .5f, (float)(h * Math.Tau), .9f + (float)h * .3f, tall, Mat.Tuft, .1f, m == Mat.Flower ? 1 : 2, (float)h2);
                     aabb.Add(y);
                 }
@@ -249,6 +252,7 @@ public partial class GrassView : Node3D
             if (!on)
             {
                 if (t.Mi != null) { t.Mi.QueueFree(); t.Mi = null; }
+                if (_edges[i].Mi != null) { _edges[i].Mi.QueueFree(); _edges[i].Mi = null; }
                 t.On = false;
                 continue;
             }
@@ -323,7 +327,39 @@ public partial class GrassView : Node3D
             });
             return n;
         });
+        // and over every open edge of it, the blades hanging down the side
+        int nE = 0;
+        ForChunks(tx, tz, TileChunks, ci => { if (_turf[ci] != null) foreach (int e in _turf[ci]) nE += BitCount(Sward.Sides(e)); });
+        Fill(_edges[i], _fringe, nE, tx, tz, TileChunks, (buf, aabb) =>
+        {
+            int n = 0;
+            ForChunks(tx, tz, TileChunks, ci =>
+            {
+                if (_turf[ci] == null) return;
+                _w.ChunkCoords(ci, out int cx, out int cy, out int cz);
+                foreach (int e in _turf[ci])
+                {
+                    int sides = Sward.Sides(e);
+                    if (sides == 0) continue;
+                    byte m = Sward.Mat(e);
+                    int x = cx * VoxelWorld.CS + Sward.X(e), y = cy * VoxelWorld.CS + Sward.Y(e), z = cz * VoxelWorld.CS + Sward.Z(e);
+                    float dry = m == Mat.GrassDry ? .75f : m == Mat.GrassLush ? .05f : .3f;
+                    for (int k = 0; k < 4; k++)
+                    {
+                        if ((sides >> k & 1) == 0) continue;
+                        // +x, -x, +z, -z: the fringe's mesh hangs toward +z, turned to face the open side
+                        float yaw = k switch { 0 => MathF.PI / 2, 1 => -MathF.PI / 2, 2 => 0, _ => MathF.PI };
+                        double h = Hash.H3(x + k * 7, y, z);
+                        Put(buf, n++, x + .5f, y + 1, z + .5f, yaw, 1, .85f + (float)h * .4f, m, dry, 3, (float)h);
+                        aabb.Add(y - 2);
+                    }
+                }
+            });
+            return n;
+        });
     }
+
+    static int BitCount(int v) => System.Numerics.BitOperations.PopCount((uint)v);
 
     // ------------------------------------------------------------------ the buffers
 
@@ -576,7 +612,7 @@ public partial class GrassView : Node3D
             float az = k * 2.39996f + (float)r.NextDouble() * .6f, out1 = (float)Math.Sqrt(r.NextDouble()) * .22f;
             var root = new Vector3(MathF.Cos(az) * out1, 0, MathF.Sin(az) * out1);
             float lean = .12f + out1 * 1.6f + (float)r.NextDouble() * .3f, len = .7f + (float)r.NextDouble() * .38f;
-            c.Blade(root, az, lean, len, .042f, 3, (k + .5f) / n, 1.2f);
+            c.Blade(root, az, lean, len, .05f, 3, (k + .5f) / n, 1.2f);
         }
         return c.Mesh();
     }
@@ -602,8 +638,8 @@ public partial class GrassView : Node3D
     }
 
     /// <summary>
-    /// The sward on a voxel of turf: a dozen short blades, five to twelve centimetres, rooted all over its top in a
-    /// jittered grid so none bunch up, leaning every way.
+    /// The sward on a voxel of turf: a dozen blades, ten to twenty-five centimetres, a meadow's and not a lawn's, rooted
+    /// all over its top in a jittered grid so none bunch up, leaning every way.
     /// </summary>
     static ArrayMesh Blades()
     {
@@ -614,9 +650,27 @@ public partial class GrassView : Node3D
         {
             float gx = (k % 4 + (float)r.NextDouble()) / 4 - .5f, gz = (k / 4 + (float)r.NextDouble()) / 3 - .5f;
             var root = new Vector3(gx, 0, gz) * .96f;
-            float az = (float)(r.NextDouble() * Math.Tau), lean = .12f + (float)r.NextDouble() * .5f, len = .42f + (float)r.NextDouble() * .55f;
+            float az = (float)(r.NextDouble() * Math.Tau), lean = .15f + (float)r.NextDouble() * .55f, len = .85f + (float)r.NextDouble() * 1.15f;
             // which blades go first when the clump thins is shuffled, so what is left is still spread over the voxel
-            c.Blade(root, az, lean, len, .034f, 2, (k * 7 % n + .5f) / n);
+            c.Blade(root, az, lean, len, .04f, 3, (k * 7 % n + .5f) / n, 1.3f);
+        }
+        return c.Mesh();
+    }
+
+    /// <summary>
+    /// The blades over an open edge of turf: seven rooted along the edge, leaning out over it and curving down the side,
+    /// so a bank is fringed with grass hanging over it rather than cut off square.
+    /// </summary>
+    static ArrayMesh Fringe()
+    {
+        var c = new Clump();
+        var r = new Random(23);
+        const int n = 7;
+        for (int k = 0; k < n; k++)
+        {
+            var root = new Vector3((k + (float)r.NextDouble()) / n - .5f, 0, .38f + (float)r.NextDouble() * .1f);
+            float az = MathF.PI / 2 + ((float)r.NextDouble() - .5f) * .9f, lean = 1.1f + (float)r.NextDouble() * .5f, len = .8f + (float)r.NextDouble() * .7f;
+            c.Blade(root, az, lean, len, .04f, 3, (k * 3 % n + .5f) / n, 1.5f);
         }
         return c.Mesh();
     }

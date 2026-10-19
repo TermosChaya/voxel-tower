@@ -22,7 +22,8 @@ public sealed class MeshBuffers
 /// <summary>
 /// What grows on a chunk's ground, which the game draws in blades finer than the voxels instead of as cubes of them:
 /// the tufts of grass and the flowers standing in it, and the open tops of its turf. Entries are packed: x | y &lt;&lt; 5 |
-/// z &lt;&lt; 10 in the chunk, the material &lt;&lt; 15 and, for a tuft or a flower, how many voxels tall it stands &lt;&lt; 23.
+/// z &lt;&lt; 10 in the chunk, the material &lt;&lt; 15 and, for a tuft or a flower, how many voxels tall it stands &lt;&lt; 23; for
+/// turf, which of its sides are open &lt;&lt; 23 (1 +x, 2 −x, 4 +z, 8 −z), where its blades hang over the edge.
 /// </summary>
 public sealed class Sward
 {
@@ -36,6 +37,7 @@ public sealed class Sward
     public static int Z(int e) => (e >> 10) & 31;
     public static byte Mat(int e) => (byte)(e >> 15);
     public static int Tall(int e) => (e >> 23) & 7;
+    public static int Sides(int e) => (e >> 23) & 15;
 }
 
 /// <summary>
@@ -47,6 +49,11 @@ public sealed class GreedyMesher
     static readonly float[] CornerShade = { .38f, .58f, .8f, 1f };
 
     int[] _mask = new int[VoxelWorld.CS * VoxelWorld.CS];
+    /// <summary>
+    /// Meshing the world: the earth showing in the side of a bank under its turf, two voxels of it, is grown over with
+    /// grass like the turf above it (a bank a hand's breadth high is green all over, not a stripe of dirt).
+    /// </summary>
+    bool _banks;
     float[] _pos = Array.Empty<float>(), _nrm = Array.Empty<float>(), _col = Array.Empty<float>(), _uv = Array.Empty<float>(), _uv2 = Array.Empty<float>();
     int[] _idx = Array.Empty<int>();
     int _q, _capQ;
@@ -102,7 +109,9 @@ public sealed class GreedyMesher
         // too), so nothing is meshed of them and they hide no face of what they stand on
         if (sprigs)
             for (int i = 0; i < pad.Length; i++) if (Mat.IsSprig(pad[i])) pad[i] = Mat.Air;
+        _banks = true;
         var mb = Mesh(pad, VoxelWorld.CS, VoxelWorld.CS, VoxelWorld.CS, ox, oy, oz);
+        _banks = false;
         return mb.Quads > 0 ? mb : null;
     }
 
@@ -135,7 +144,10 @@ public sealed class GreedyMesher
                     else if (Mat.IsGrass(m))
                     {
                         byte up = pad[idx + Row];
-                        if (up == Mat.Air || Mat.IsSprig(up)) _turf.Add(x | y << 5 | z << 10 | m << 15);
+                        if (up != Mat.Air && !Mat.IsSprig(up)) continue;
+                        static bool Open(byte n) => n == Mat.Air || Mat.IsSprig(n);
+                        int sides = (Open(pad[idx + 1]) ? 1 : 0) | (Open(pad[idx - 1]) ? 2 : 0) | (Open(pad[idx + P]) ? 4 : 0) | (Open(pad[idx - P]) ? 8 : 0);
+                        _turf.Add(x | y << 5 | z << 10 | m << 15 | sides << 23);
                     }
                 }
             }
@@ -189,7 +201,14 @@ public sealed class GreedyMesher
                             int a1 = (s1u & s0v) != 0 ? 0 : 3 - (s1u + s0v + c10);
                             int a2 = (s1u & s1v) != 0 ? 0 : 3 - (s1u + s1v + c11);
                             int a3 = (s0u & s1v) != 0 ? 0 : 3 - (s0u + s1v + c01);
-                            mask[n] = m | (a0 << 8) | (a1 << 10) | (a2 << 12) | (a3 << 14);
+                            int bank = 0;
+                            if (_banks && d != 1 && m == Mat.Soil)
+                            {
+                                byte up = grid[idx + st[1]];
+                                if (Mat.IsGrass(up)) { m = up; bank = 1; }
+                                else if (up == Mat.Soil && idx / st[1] + 2 <= dy + 1 && Mat.IsGrass(grid[idx + 2 * st[1]])) { m = grid[idx + 2 * st[1]]; bank = 1; }
+                            }
+                            mask[n] = m | (a0 << 8) | (a1 << 10) | (a2 << 12) | (a3 << 14) | (bank << 16);
                         }
                     }
                     int plane = org[d] + i + (s > 0 ? 1 : 0);
@@ -255,7 +274,7 @@ public sealed class GreedyMesher
                 sway = d == 1 ? (s > 0 ? 1 : 0) : y >= top ? 1 : 0;
             }
             else if (Mat.SwayKind[m] == 2) sway = .55f;
-            _uv2[t] = sway; _uv2[t + 1] = Mat.Skin[m];
+            _uv2[t] = sway; _uv2[t + 1] = (val >> 16 & 1) != 0 ? 9 : Mat.Skin[m];
         }
         // Godot treats clockwise triangles as front faces; the diagonal follows the darker corners
         bool flip = ao[0] + ao[2] > ao[1] + ao[3];
