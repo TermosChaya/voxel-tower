@@ -281,7 +281,7 @@ public sealed partial class Sim
         {
             if (u.Dead || u.Inside || u.Airborne != null) continue;
             float dx = u.X - f.X, dz = u.Z - f.Z, dy = u.Y + u.T.BodyH * .5f - f.Y, reach = f.R + u.T.BodyR + 2;
-            if (dx * dx + dz * dz + dy * dy * .5f > reach * reach) continue;
+            if (dx * dx + dz * dz + dy * dy * .5f > reach * reach || f.Unit == null && !Touches(f, u, 1.5f)) continue;
             Hurt(u, null, blow, f.Cause);
             f.LastBlow = Time;
         }
@@ -345,14 +345,51 @@ public sealed partial class Sim
         }
         // a piece just torn out is still in its socket: only its middle can strike anything till it is out
         if (Time - f.Since < .15) return Stops(f.X, f.Y, f.Z);
-        float lead = f.R * .7f;
-        if (Stops(f.X + ux * lead, f.Y + uy * lead, f.Z + uz * lead) || f.VY <= 0 && Stops(f.X, f.Y - lead, f.Z)) return true;
+        // any voxel of it in something solid, as it is turned now
+        if (Embedded(f)) return true;
         if (f.Voxels.Count < 24) return false;
         foreach (var u in Units)
         {
             if (u.Dead || u.Inside || u.Airborne != null || u == f.By) continue;
-            float dx = u.X - f.X, dz = u.Z - f.Z, dy = u.Y + u.T.BodyH * .5f - f.Y, reach = f.R * .8f + u.T.BodyR;
-            if (dx * dx + dz * dz < reach * reach && MathF.Abs(dy) < u.T.BodyH * .5f + f.R * .8f) return true;
+            float dx = u.X - f.X, dz = u.Z - f.Z, dy = u.Y + u.T.BodyH * .5f - f.Y, reach = f.R + u.T.BodyR;
+            if (dx * dx + dz * dz < reach * reach && MathF.Abs(dy) < u.T.BodyH * .5f + f.R && Touches(f, u, .5f)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>Whether a piece, turned as it is now, is in something solid: any voxel of it (of a great one, every few).</summary>
+    bool Embedded(Flier f)
+    {
+        float al = MathF.Sqrt(f.AX * f.AX + f.AZ * f.AZ);
+        float ax = al > 1e-4f ? f.AX / al : 1, az = al > 1e-4f ? f.AZ / al : 0, c = MathF.Cos(f.Turn), s = MathF.Sin(f.Turn);
+        int stride = Math.Max(1, f.Voxels.Count / 400);
+        for (int i = 0; i < f.Voxels.Count; i += stride)
+        {
+            var (dx, dy, dz, _) = f.Voxels[i];
+            float dot = ax * dx + az * dz;
+            float px = f.X + dx * c - az * dy * s + ax * dot * (1 - c);
+            float py = f.Y + dy * c + (az * dx - ax * dz) * s;
+            float pz = f.Z + dz * c + ax * dy * s + az * dot * (1 - c);
+            if (Stops(px, py, pz)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>Whether any voxel of a piece, turned as it is now, is within a margin (voxels) of a body.</summary>
+    static bool Touches(Flier f, Unit u, float margin)
+    {
+        float al = MathF.Sqrt(f.AX * f.AX + f.AZ * f.AZ);
+        float ax = al > 1e-4f ? f.AX / al : 1, az = al > 1e-4f ? f.AZ / al : 0, c = MathF.Cos(f.Turn), s = MathF.Sin(f.Turn);
+        float r = u.T.BodyR + margin, x0 = u.X - r, x1 = u.X + r, z0 = u.Z - r, z1 = u.Z + r, y0 = u.Y - margin, y1 = u.Y + u.T.BodyH + margin;
+        foreach (var (dx, dy, dz, _) in f.Voxels)
+        {
+            float dot = ax * dx + az * dz;
+            float px = f.X + dx * c - az * dy * s + ax * dot * (1 - c);
+            if (px < x0 || px > x1) continue;
+            float pz = f.Z + dz * c + ax * dy * s + az * dot * (1 - c);
+            if (pz < z0 || pz > z1) continue;
+            float py = f.Y + dy * c + (az * dx - ax * dz) * s;
+            if (py > y0 && py < y1) return true;
         }
         return false;
     }
@@ -406,15 +443,16 @@ public sealed partial class Sim
             {
                 if (u.Dead || u.Inside || u.Airborne != null) continue;
                 float dx = u.X - f.X, dz = u.Z - f.Z, dy = u.Y + u.T.BodyH * .5f - f.Y, d = MathF.Sqrt(dx * dx + dz * dz + dy * dy * .5f);
-                if (d < reach) Hurt(u, null, blow * (1 - .5f * d / reach) * (Kinds.IsEngine(u.T) ? 1.5f : 1), f.Cause);
+                // those it comes down on, or right beside: not those its middle is near
+                if (d < reach && Touches(f, u, 3)) Hurt(u, null, blow * (1 - .5f * d / reach) * (Kinds.IsEngine(u.T) ? 1.5f : 1), f.Cause);
             }
-        // heavy and hard, it knocks out a little of what it strikes, which lies in the heap with it
+        // heavy and hard, it knocks a little out of what it strikes: chips of it fly off
         if (blow > 60 && f.Voxels.Count > 150)
         {
             int cr = (int)(f.R * .45f * MathF.Min(1.5f, blow / 120));
             float s = MathF.Max(1, speed);
             int bx = ix + (int)(f.VX / s * f.R * .6f), by = iy + (int)(f.VY / s * f.R * .6f), bz = iz + (int)(f.VZ / s * f.R * .6f);
-            int knocked = 0;
+            var chips = new List<(int x, int y, int z)>();
             for (int dy = -cr; dy <= cr; dy++)
                 for (int dz = -cr; dz <= cr; dz++)
                     for (int dx = -cr; dx <= cr; dx++)
@@ -425,34 +463,122 @@ public sealed partial class Sim
                         if (!Breakable(m)) continue;
                         // powder it falls on is not knocked aside: it goes up
                         if (m == Mat.Powder) { Fuse(x, y, z, .2, "порох"); continue; }
-                        World.Set(x, y, z, Mat.Air);
-                        if (Orders.At(x, y, z) != 0) Orders.Clear(x, y, z);
-                        Burning.Remove(WaterPlanner.Pack(x, y, z));
-                        if (++knocked % 2 == 0 && f.Voxels.Count < 4000) f.Voxels.Add(((sbyte)Math.Clamp(x - ix, -120, 120), (sbyte)Math.Clamp(y - iy, -120, 120), (sbyte)Math.Clamp(z - iz, -120, 120), m));
+                        chips.Add((x, y, z));
                     }
+            int room = MaxAloft - Aloft - f.Voxels.Count;
+            foreach (var chip in Split(chips, 40))
+            {
+                float cx = 0, cz = 0;
+                foreach (var (x, _, z) in chip) { cx += x; cz += z; }
+                cx = cx / chip.Count - bx; cz = cz / chip.Count - bz;
+                float cl = MathF.Max(.5f, MathF.Sqrt(cx * cx + cz * cz)), out_ = (2 + chip.Count % 3) * VoxelWorld.PerMetre;
+                var c = chip.Count <= room ? Loose(chip, cx / cl * out_, (3 + chip.Count % 4) * VoxelWorld.PerMetre, cz / cl * out_, f.Cause, room) : null;
+                if (c != null) room -= c.Voxels.Count;
+                else foreach (var (x, y, z) in chip) { World.Set(x, y, z, Mat.Air); if (Orders.At(x, y, z) != 0) Orders.Clear(x, y, z); }
+            }
         }
-        // its voxels lie where it came down, lowest first, in a heap of what they were, broken
-        f.Voxels.Sort((a, b) => a.dy.CompareTo(b.dy));
-        _settling = true;
-        int lit = 0;
+        // it lies where it came down, whole, as it lay when it struck
+        Lay(f, ix, iy, iz);
+        Landed?.Invoke(f.X, f.Y, f.Z, f.Voxels.Count, speed);
+    }
+
+    /// <summary>
+    /// How a piece turned as it tumbled, to the nearest right angle: where its own three ways point now, each one of the
+    /// six ways of the world. So it lies in the grid of the world as it was seen to come down.
+    /// </summary>
+    static ((int x, int y, int z) ex, (int x, int y, int z) ey, (int x, int y, int z) ez) Snapped(Flier f)
+    {
+        float al = MathF.Sqrt(f.AX * f.AX + f.AZ * f.AZ);
+        float ax = al > 1e-4f ? f.AX / al : 1, az = al > 1e-4f ? f.AZ / al : 0, c = MathF.Cos(f.Turn), sn = MathF.Sin(f.Turn);
+        // a vector turned about the level axis (ax, 0, az)
+        (float, float, float) Turn(float vx, float vy, float vz)
+        {
+            float dot = ax * vx + az * vz;
+            float cxv = -az * vy, cyv = az * vx - ax * vz, czv = ax * vy;
+            return (vx * c + cxv * sn + ax * dot * (1 - c), vy * c + cyv * sn, vz * c + czv * sn + az * dot * (1 - c));
+        }
+        static (int, int, int) Axis((float x, float y, float z) v, int not)
+        {
+            float best = -1; int k = 0;
+            float[] comp = { v.x, v.y, v.z };
+            for (int i = 0; i < 3; i++) if (i != not && MathF.Abs(comp[i]) > best) { best = MathF.Abs(comp[i]); k = i; }
+            int sg = comp[k] < 0 ? -1 : 1;
+            return k == 0 ? (sg, 0, 0) : k == 1 ? (0, sg, 0) : (0, 0, sg);
+        }
+        static int Which((int x, int y, int z) a) => a.x != 0 ? 0 : a.y != 0 ? 1 : 2;
+        var ex = Axis(Turn(1, 0, 0), -1);
+        var ey = Axis(Turn(0, 1, 0), Which(ex));
+        var ez = (ex.Item2 * ey.Item3 - ex.Item3 * ey.Item2, ex.Item3 * ey.Item1 - ex.Item1 * ey.Item3, ex.Item1 * ey.Item2 - ex.Item2 * ey.Item1);
+        return (ex, ey, ez);
+    }
+
+    /// <summary>
+    /// A piece lies down whole: turned as it came down, to the nearest right angle; out of whatever it struck into,
+    /// then down till it rests on something; each voxel what it is once broken. Whatever burned of it sets alight what
+    /// it lies on.
+    /// </summary>
+    void Lay(Flier f, int ix, int iy, int iz)
+    {
+        var (ex, ey, ez) = Snapped(f);
+        var cells = new List<(int ox, int oy, int oz, byte m)>(f.Voxels.Count);
         foreach (var (dx, dy, dz, m) in f.Voxels)
         {
             byte b = Shattered(m);
             if (b == 0) continue;
-            int x = Math.Clamp(ix + (int)(dx * .8f), 2, World.SX - 3), z = Math.Clamp(iz + (int)(dz * .8f), 2, World.SZ - 3);
-            int from = Math.Clamp(iy + dy, 2, World.SY - 3);
-            // out of whatever it came down into, up to the first air above
-            for (int up = 0; up < 40 && from < World.SY - 3 && Stops(x, from, z) && World.Get(x, from, z) != Mat.Water; up++) from++;
-            var (lx, ly, lz) = Landing(x, from, z, b == Mat.Lumber);
-            if (ly < 2 || ly >= World.SY - 2) continue;
-            byte at = World.Get(lx, ly, lz);
+            cells.Add((dx * ex.x + dy * ey.x + dz * ez.x, dx * ex.y + dy * ey.y + dz * ez.y, dx * ex.z + dy * ey.z + dz * ez.z, b));
+        }
+        if (cells.Count == 0) return;
+        bool Clash(int ax, int ay, int az)
+        {
+            foreach (var (ox, oy, oz, _) in cells)
+            {
+                int x = ax + ox, y = ay + oy, z = az + oz;
+                if (x < 1 || z < 1 || x >= World.SX - 1 || z >= World.SZ - 1 || y < 2) return true;
+                if (y >= World.SY - 1) continue;
+                byte at = World.Get(x, y, z);
+                if (at != Mat.Air && at != Mat.Water && !Mat.Passable[at]) return true;
+            }
+            return false;
+        }
+        int ay = iy;
+        for (int k = 0; k < 48 && Clash(ix, ay, iz); k++) ay++;
+        for (int k = 0; k < 120 && ay > 4 && !Clash(ix, ay - 1, iz); k++) ay--;
+        _settling = true;
+        int lit = 0;
+        foreach (var (ox, oy, oz, b) in cells)
+        {
+            int x = ix + ox, y = ay + oy, z = iz + oz;
+            if (!World.InBounds(x, y, z) || y < 2) continue;
+            byte at = World.Get(x, y, z);
             if (at != Mat.Air && at != Mat.Water && !Mat.Passable[at]) continue;
-            World.Set(lx, ly, lz, b);
-            if (Orders.At(lx, ly, lz) != 0) Orders.Clear(lx, ly, lz);
-            if (f.Burning > 0 && lit < Math.Min(4, f.Burning) && Mat.Burns(b) && Ignite(lx, ly, lz)) lit++;
+            World.Set(x, y, z, b);
+            if (Orders.At(x, y, z) != 0) Orders.Clear(x, y, z);
+            if (f.Burning > 0 && lit < Math.Min(4, f.Burning) && Mat.Burns(b) && Ignite(x, y, z)) lit++;
         }
         _settling = false;
-        Landed?.Invoke(f.X, f.Y, f.Z, f.Voxels.Count, speed);
+    }
+
+    /// <summary>Voxels broken into pieces of about so many each, about points strewn through them, each voxel going with the nearest.</summary>
+    List<List<(int x, int y, int z)>> Split(List<(int x, int y, int z)> voxels, int around)
+    {
+        var parts = new List<List<(int x, int y, int z)>>();
+        if (voxels.Count == 0) return parts;
+        int n = Math.Clamp(voxels.Count / Math.Max(1, around), 1, 130);
+        var seeds = new (int x, int y, int z)[n];
+        for (int i = 0; i < n; i++) seeds[i] = voxels[Rng.Next(voxels.Count)];
+        for (int i = 0; i < n; i++) parts.Add(new List<(int, int, int)>());
+        foreach (var v in voxels)
+        {
+            int best = 0, bd = int.MaxValue;
+            for (int i = 0; i < n; i++)
+            {
+                int ex = v.x - seeds[i].x, ey = v.y - seeds[i].y, ez = v.z - seeds[i].z, d = ex * ex + ey * ey + ez * ez;
+                if (d < bd) { bd = d; best = i; }
+            }
+            parts[best].Add(v);
+        }
+        parts.RemoveAll(p => p.Count == 0);
+        return parts;
     }
 
     /// <summary>One thrown comes down: onto whatever is under it, hurt as hard as it landed, and those it lands on too.</summary>

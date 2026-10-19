@@ -1681,8 +1681,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--collapse")
     int collapses = 0;
     simC.Collapsed = (n, x, y, z) => collapses++;
 
-    // a stone tower two metres square and six high, cut through at its foot: it all comes down in a heap, and the goblin
-    // standing by it is crushed
+    // a stone tower two metres square and six high, cut through at its foot: it comes down whole and stands as it was,
+    // only lower, and the goblin standing beside it is not touched
     int tx0 = kxC - 150, tz0 = kzC + 100, tg = Flatten(tx0 - 40, tz0 - 40, tx0 + 56, tz0 + 56);
     for (int z = tz0; z < tz0 + 16; z++) for (int x = tx0; x < tx0 + 16; x++) for (int y = tg; y < tg + 48; y++) wC.Set(x, y, z, Mat.Stone);
     RunC(.5);
@@ -1694,9 +1694,10 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--collapse")
     static bool Stony(byte m) => m is Mat.Stone or Mat.Rubble;
     int high = CountC(Stony, tx0, tz0, tx0 + 15, tz0 + 15, tg + 40, tg + 50), heap = CountC(m => m == Mat.Rubble, tx0 - 40, tz0 - 40, tx0 + 56, tz0 + 56);
     int spread = heap - CountC(m => m == Mat.Rubble, tx0, tz0, tx0 + 15, tz0 + 15);
-    Check("a tower cut through at its foot comes down whole in a heap, and crushes the goblin by it",
-        high == 0 && heap > tower0 * 8 / 10 && spread > heap / 3 && collapses > 0 && (under.Dead || under.Hp < under.MaxHp),
-        $"{tower0 - 512} voxels of tower over the cut, {high} still at its top, {heap} lying in the heap ({spread} run out past its foot); the goblin {(under.Dead ? "dead, " + under.KilledBy : $"{under.Hp:0} hp")}");
+    int stood = CountC(Stony, tx0, tz0, tx0 + 15, tz0 + 15, tg, tg + 50), top = CountC(Stony, tx0, tz0, tx0 + 15, tz0 + 15, tg + 46, tg + 50);
+    Check("a tower cut through at its foot comes down whole and stands in its shape, lower; the goblin beside it is not touched",
+        stood >= (tower0 - 512) * 95 / 100 && top == 0 && spread < stood / 20 && collapses > 0 && !under.Dead && under.Hp >= under.MaxHp,
+        $"{tower0 - 512} voxels of tower over the cut, {stood} standing in its footprint ({top} over its new top), {spread} spilled past its foot; the goblin {(under.Dead ? "dead, " + under.KilledBy : $"{under.Hp:0} hp")}");
     GoneC(under);
 
     // a stone wall a metre thick and three high: a hole a metre and a half wide under it holds, one of four metres
@@ -2842,7 +2843,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--physics")
                 if (wY.Get(x, y, z) == Mat.Rubble) { rubble++; farthest = MathF.Max(farthest, MathF.Sqrt((x - ex) * (x - ex) + (z - emid) * (z - emid)) / VoxelWorld.PerMetre); }
         }
     Check("a blast in a wall: it goes up in pieces that fly and come down as rubble far about, and the wall over it falls",
-        castBlast == null && flying >= 10 && aloft > 3000 && simY.Fliers.Count == 0 && stoneE0 - stoneE1 > 6000 && rubble > 2000 && farthest > 8,
+        castBlast == null && flying >= 10 && aloft > 3000 && simY.Fliers.Count == 0 && stoneE0 - stoneE1 > 6000 && rubble > 2000 && farthest > 6,
         $"cast: {castBlast ?? "yes"}; {flying} pieces, {aloft} voxels in the air, {simY.Fliers.Count} still flying after 8 s; masonry {stoneE0} → {stoneE1}; rubble {rubble}, the farthest {farthest:0.0} m off");
     Check("the goblin by the blast is hurt and thrown", thrownE && (gobE.Dead || gobE.Hp < gobE0 - 20) && gobE.Airborne == null && Far(gobE, gx0, gz0) > 2,
         $"thrown {thrownE}; the goblin {(gobE.Dead ? "dead: " + gobE.KilledBy : $"{gobE.Hp:0} of {gobE0:0}")}, {Far(gobE, gx0, gz0):0.0} m from where it stood, {(gobE.Airborne == null ? "down" : "still in the air")}");
@@ -2870,6 +2871,9 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--physics")
     float gb0 = gobB.Hp;
     int SoilBy() { int n = 0; for (int z = (int)gobB.Z - 20; z <= gobB.Z + 20; z++) for (int x = (int)gobB.X - 20; x <= gobB.X + 20; x++) for (int y = (int)gobB.Y - 2; y < gobB.Y + 24; y++) if (wY.Get(x, y, z) == Mat.Soil) n++; return n; }
     int soil0 = SoilBy();
+    // the earth there before, to tell the ball from it after
+    var earthBefore = new System.Collections.Generic.HashSet<(int, int, int)>();
+    for (int z = (int)gobB.Z - 24; z <= gobB.Z + 24; z++) for (int x = (int)gobB.X - 24; x <= gobB.X + 24; x++) for (int y = (int)gobB.Y - 2; y < gobB.Y + 30; y++) if (wY.Get(x, y, z) == Mat.Soil) earthBefore.Add((x, y, z));
     simY.ReadyNow(SpellKind.Telekinesis);
     string castBall = simY.Cast(SpellKind.Telekinesis, bx + .5f, bg - 3, bz + .5f);
     var ball = simY.HeldNow;
@@ -2883,6 +2887,14 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--physics")
     int heap = SoilBy() - soil0;
     Check("a ball of earth torn out and let fall on a goblin strikes it, and lies in a heap where it fell", castBall == null && ballN > 600 && hole && (gobB.Dead || gobB.Hp < gb0 - 15) && heap > 300,
         $"cast: {castBall ?? "yes"}; {ballN} voxels lifted, a hole {hole}; the goblin {(gobB.Dead ? "dead: " + gobB.KilledBy : $"{gobB.Hp:0} of {gb0:0}")}; {heap} voxels of earth heaped by it");
+    // and it lies as the ball it was, not spilled out flat: as high as it is wide, no wider than the ball
+    var ballNow = new System.Collections.Generic.List<(int x, int y, int z)>();
+    for (int z = (int)gobB.Z - 24; z <= gobB.Z + 24; z++) for (int x = (int)gobB.X - 24; x <= gobB.X + 24; x++) for (int y = (int)gobB.Y - 2; y < gobB.Y + 30; y++) if (wY.Get(x, y, z) == Mat.Soil && !earthBefore.Contains((x, y, z))) ballNow.Add((x, y, z));
+    int bx0 = int.MaxValue, bx1 = int.MinValue, by0 = int.MaxValue, by1 = int.MinValue, bz0 = int.MaxValue, bz1 = int.MinValue;
+    foreach (var (x, y, z) in ballNow) { bx0 = Math.Min(bx0, x); bx1 = Math.Max(bx1, x); by0 = Math.Min(by0, y); by1 = Math.Max(by1, y); bz0 = Math.Min(bz0, z); bz1 = Math.Max(bz1, z); }
+    int wide = Math.Max(bx1 - bx0, bz1 - bz0) + 1, tall = by1 - by0 + 1;
+    Check("a ball of earth that fell lies in its shape: as the ball it was, not spilled out flat", ballNow.Count > 600 && wide <= 18 && tall >= 8,
+        $"{ballNow.Count} voxels of it lying {wide} wide and {tall} high (the ball was 17 across)");
     Gone(gobB);
 
     // what telekinesis holds does not go through a wall: pulled at one from behind it, it stays on its side

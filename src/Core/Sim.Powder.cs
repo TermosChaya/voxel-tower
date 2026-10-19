@@ -352,21 +352,7 @@ public sealed partial class Sim
         if (shell.Count > 0)
         {
             // the rest breaks into pieces about points strewn through it, each voxel going with the nearest
-            int n = Math.Clamp(shell.Count / 150, 1, 130);
-            var seeds = new (int x, int y, int z)[n];
-            for (int i = 0; i < n; i++) seeds[i] = shell[Rng.Next(shell.Count)];
-            var pieces = new List<(int x, int y, int z)>[n];
-            for (int i = 0; i < n; i++) pieces[i] = new List<(int, int, int)>();
-            foreach (var v in shell)
-            {
-                int best = 0, bd = int.MaxValue;
-                for (int i = 0; i < n; i++)
-                {
-                    int ex = v.x - seeds[i].x, ey = v.y - seeds[i].y, ez = v.z - seeds[i].z, d = ex * ex + ey * ey + ez * ez;
-                    if (d < bd) { bd = d; best = i; }
-                }
-                pieces[best].Add(v);
-            }
+            var pieces = Split(shell, 150);
             int room = MaxAloft - Aloft;
             float kick = Math.Clamp(r / (2.5f * VoxelWorld.PerMetre), .5f, 1.3f);
             foreach (var piece in pieces)

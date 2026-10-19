@@ -369,6 +369,7 @@ public sealed partial class Sim
     /// </summary>
     void Fall(HashSet<int> falling, bool quiet)
     {
+        if (!quiet && FallWhole(falling)) return;
         _settling = true;
         var pieces = new List<(int x, int y, int z, byte m, byte order)>(falling.Count);
         int trunks = 0, baseY = int.MaxValue;
@@ -467,6 +468,77 @@ public sealed partial class Sim
                 Say($"Обвал: рухнула {what}, {Fmt.M3(laid)} м³.", 2, cx, cz);
             }
         }
+    }
+
+    /// <summary>
+    /// What is no longer held comes down whole: each block of it that hangs together falls as one, a great one broken
+    /// into blocks of a cubic metre or so, through the air as anything falls, and lies where it lands in its shape.
+    /// Trees fall over their own way, and what there is no room for in the air comes down as before (false then).
+    /// </summary>
+    bool FallWhole(HashSet<int> falling)
+    {
+        var list = new List<(int x, int y, int z)>(falling.Count);
+        foreach (int p in falling)
+        {
+            var (x, y, z) = WaterPlanner.Unpack(p);
+            byte m = World.Get(x, y, z);
+            if (m == Mat.Air) continue;
+            if (Mat.IsTrunk(m) || !Breakable(m)) return false;
+            list.Add((x, y, z));
+        }
+        if (list.Count == 0) return true;
+        if (list.Count > MaxAloft - Aloft) return false;
+        // the blocks that hang together, face to face
+        var left = new HashSet<int>(); foreach (var (x, y, z) in list) left.Add(WaterPlanner.Pack(x, y, z));
+        var blocks = new List<List<(int x, int y, int z)>>();
+        var queue = new Queue<int>();
+        foreach (var (sx, sy, sz) in list)
+        {
+            int s = WaterPlanner.Pack(sx, sy, sz);
+            if (!left.Remove(s)) continue;
+            var block = new List<(int x, int y, int z)>();
+            queue.Enqueue(s);
+            while (queue.Count > 0)
+            {
+                var (x, y, z) = WaterPlanner.Unpack(queue.Dequeue());
+                block.Add((x, y, z));
+                for (int d = 0; d < 6; d++)
+                {
+                    var (nx, ny, nz) = Step6(x, y, z, d);
+                    if (left.Remove(WaterPlanner.Pack(nx, ny, nz))) queue.Enqueue(WaterPlanner.Pack(nx, ny, nz));
+                }
+            }
+            blocks.Add(block);
+        }
+        int stone = 0, wood = 0, laid = 0;
+        float cx = 0, cy = 0, cz = 0;
+        foreach (var (x, y, z) in list)
+        {
+            byte m = World.Get(x, y, z);
+            if (Mat.IsMasonry(m) || m == Mat.Ruin) stone++; else if (m is Mat.Wood or Mat.Deck) wood++;
+            cx += x; cy += y; cz += z; laid++;
+            // for the chips and dust at its broken edges
+            Fell?.Invoke(x, y, z, m);
+        }
+        // each block beginning to fall, turning a little as it goes
+        foreach (var block in blocks)
+            foreach (var piece in block.Count > 1200 ? Split(block, 700) : new List<List<(int x, int y, int z)>> { block })
+            {
+                var f = Loose(piece, 0, -8, 0, "обвал");
+                if (f != null) f.Spin = .3f + f.Id % 5 * .15f;
+            }
+        cx /= laid; cy /= laid; cz /= laid;
+        Collapsed?.Invoke(laid, cx, cy, cz);
+        if (laid > 120 && Time - _collapseSaid > 8)
+        {
+            _collapseSaid = Time;
+            if (stone + wood > laid / 3)
+            {
+                string what = stone >= wood ? "кладка" : "деревянное";
+                Say($"Обвал: рухнула {what}, {Fmt.M3(laid)} м³.", 2, cx, cz);
+            }
+        }
+        return true;
     }
 
     /// <summary>What a voxel is once it has fallen: masonry broken stone, timber broken timber, rammed earth loose earth;
