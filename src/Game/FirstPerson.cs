@@ -23,7 +23,6 @@ public partial class FirstPerson : Node3D
     MeshInstance3D _main, _off;
     Figure _fig;
     int _rev = -1;
-    ShaderMaterial _mat;
     CanvasLayer _layer;
     Sights _sights;
     Label _name, _hint, _aim;
@@ -41,10 +40,9 @@ public partial class FirstPerson : Node3D
         // it sees out over the valley to the far land's rim
         _cam = new Camera3D { Fov = 74, Near = .015f, Far = 480, Current = false };
         AddChild(_cam);
-        _mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/voxel.gdshader") };
-        _mat.SetShaderParameter("grid", (float)BodyPlan.Sub);
-        _main = new MeshInstance3D { MaterialOverride = _mat, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Visible = false };
-        _off = new MeshInstance3D { MaterialOverride = _mat, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Visible = false };
+        // the arms are drawn in their finest cells, what they hold finer still: each surface brings its own material
+        _main = new MeshInstance3D { CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Visible = false };
+        _off = new MeshInstance3D { CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Visible = false };
         _cam.AddChild(_main);
         _cam.AddChild(_off);
         _layer = new CanvasLayer { Layer = 30, Visible = false };
@@ -216,14 +214,14 @@ public partial class FirstPerson : Node3D
         if (u.Wounds != null && u.Wounds.Rev != _rev)
         {
             _rev = u.Wounds.Rev;
-            _main.Mesh = Figure.MeshOf(u.Wounds.Grid[(int)Part.Main]);
-            _off.Mesh = Figure.MeshOf(u.Wounds.Grid[(int)Part.Off]);
+            _main.Mesh = Figure.Whole(u.Wounds.Plan, (int)Part.Main, u.Wounds.Grid[(int)Part.Main]);
+            _off.Mesh = Figure.Whole(u.Wounds.Plan, (int)Part.Off, u.Wounds.Grid[(int)Part.Off]);
         }
         else if (u.Wounds == null && _rev != 0)
         {
             _rev = 0;
-            _main.Mesh = _fig.Mesh[(int)Part.Main];
-            _off.Mesh = _fig.Mesh[(int)Part.Off];
+            _main.Mesh = Figure.Whole(_fig.Plan, (int)Part.Main, _fig.Plan.Grid[(int)Part.Main]);
+            _off.Mesh = Figure.Whole(_fig.Plan, (int)Part.Off, _fig.Plan.Grid[(int)Part.Off]);
         }
         float swing = u.Swing, main, off;
         if (u.T.Ranged) { main = -1.42f + swing * .3f; off = -1.5f; }

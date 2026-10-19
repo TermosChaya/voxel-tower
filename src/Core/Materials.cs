@@ -90,7 +90,15 @@ public static class Mat
     public const byte HorseBay = 114, HorseBlack = 115, HorseGrey = 116, HorseChestnut = 117, Fawn = 118, Gambeson = 119, Clay = 120, ClothWhite = 121;
     /// <summary>Turf a fire has gone over, or a blast seared: black, until the grass creeps back over it.</summary>
     public const byte Scorch = 122;
-    public const int Count = 123;
+    /// <summary>
+    /// For the figures drawn finer than their half-voxels: a blade's honed edge and the dark of its fuller, rust, the dark
+    /// leather wound round a grip, the whites of the eyes, a mouth, a tusk's yellowed ivory, warpaint in chalk and in red
+    /// ochre, the dark ink of a tattoo, a troll's darker hide and the stony growths on it, raw hide, horn, an ash shaft,
+    /// the red of a maw and of an old scar.
+    /// </summary>
+    public const byte SteelEdge = 123, SteelDark = 124, Rust = 125, LeatherDark = 126, EyeWhite = 127, Lips = 128, Tusk = 129, Warpaint = 130,
+        WarpaintRed = 131, Ink = 132, SkinTrollDark = 133, Crag = 134, Hide = 135, Horn = 136, Shaft = 137, Maw = 138, Scar = 139;
+    public const int Count = 140;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
     public static readonly bool[] IsVeg = new bool[Count], IsPlayer = new bool[Count], IsEarthy = new bool[Count],
@@ -233,6 +241,15 @@ public static class Mat
         D(Fawn, "шерсть", 0x9a7a52, .14f, MatGroup.Hard, 0); D(Gambeson, "стёганка", 0x9a8b68, .16f, MatGroup.Hard, 0);
         D(Clay, "глина", 0x8e5634, .14f, MatGroup.Hard, 0); D(ClothWhite, "сукно", 0xb9b2a3, .1f, MatGroup.Hard, 0);
         D(Scorch, "Гарь", 0x2e2822, .26f, MatGroup.Earth, Natural | Earthy);
+        D(SteelEdge, "лезвие", 0xdfe3e8, .04f, MatGroup.Hard, 0); D(SteelDark, "дол", 0x60656d, .08f, MatGroup.Hard, 0);
+        D(Rust, "ржавчина", 0x553423, .22f, MatGroup.Hard, 0); D(LeatherDark, "обмотка", 0x2b1d15, .12f, MatGroup.Hard, 0);
+        D(EyeWhite, "белок", 0xd9d1c2, .03f, MatGroup.Hard, 0); D(Lips, "губы", 0x7c3f37, .08f, MatGroup.Hard, 0);
+        D(Tusk, "клык", 0xcfbb85, .07f, MatGroup.Hard, 0); D(Warpaint, "краска", 0xdcd5bf, .06f, MatGroup.Hard, 0);
+        D(WarpaintRed, "охра", 0x9b3b23, .08f, MatGroup.Hard, 0); D(Ink, "наколка", 0x1f2c2b, .06f, MatGroup.Hard, 0);
+        D(SkinTrollDark, "кожа", 0x495245, .14f, MatGroup.Hard, 0); D(Crag, "нарост", 0x76726a, .22f, MatGroup.Hard, 0);
+        D(Hide, "шкура", 0x6b4d33, .2f, MatGroup.Hard, 0); D(Horn, "рог", 0x4e4133, .1f, MatGroup.Hard, 0);
+        D(Shaft, "древко", 0x7d5c3b, .12f, MatGroup.Hard, 0); D(Maw, "пасть", 0x3c1213, .08f, MatGroup.Hard, 0);
+        D(Scar, "шрам", 0x8f5f55, .08f, MatGroup.Hard, 0);
 
         foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage, Flower, Bloom, Birch, NeedleLight, FoliageLight, FoliageGold, PineBark, Snag }) IsVeg[m] = true;
         foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame, Stakes, Pitch, TowerLadder }) Passable[m] = true;
@@ -240,7 +257,7 @@ public static class Mat
         foreach (var m in new[] { Tuft, Flower, Bloom }) SwayKind[m] = 1;
         foreach (var m in new[] { Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold }) SwayKind[m] = 2;
         foreach (var m in new[] { Stone, StoneDark, StoneLight, StoneWarm, StoneCool, Mortar, Keep, KeepShade, KeepDark }) Smooth[m] = true;
-        foreach (var m in new[] { Steel, Mail, Brass, Pitch }) Metal[m] = true;
+        foreach (var m in new[] { Steel, Mail, Brass, Pitch, SteelEdge, SteelDark }) Metal[m] = true;
         for (int m = 0; m < Count; m++)
             Skin[m] = Smooth[m] ? (byte)1 : Metal[m] ? (byte)2 : IsGrass((byte)m) ? (byte)3 : m is Leaf or NeedleLight ? (byte)7
                 : IsLeafy((byte)m) ? (byte)4 : m == Birch ? (byte)6 : IsTrunk((byte)m) ? (byte)5 : m == Scorch ? (byte)8 : (byte)0;

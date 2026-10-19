@@ -10,6 +10,14 @@ public static class GodotMesh
     public static ArrayMesh From(MeshBuffers b)
     {
         if (b == null || b.Quads == 0) return null;
+        var mesh = new ArrayMesh();
+        AddTo(mesh, b);
+        return mesh;
+    }
+
+    /// <summary>Adds the buffers to a mesh as a surface of their own.</summary>
+    public static void AddTo(ArrayMesh mesh, MeshBuffers b)
+    {
         var arrays = new Godot.Collections.Array();
         arrays.Resize((int)Mesh.ArrayType.Max);
         arrays[(int)Mesh.ArrayType.Vertex] = MemoryMarshal.Cast<float, Vector3>(b.Pos).ToArray();
@@ -18,8 +26,6 @@ public static class GodotMesh
         arrays[(int)Mesh.ArrayType.TexUV] = MemoryMarshal.Cast<float, Vector2>(b.Uv).ToArray();
         if (b.Uv2 != null) arrays[(int)Mesh.ArrayType.TexUV2] = MemoryMarshal.Cast<float, Vector2>(b.Uv2).ToArray();
         arrays[(int)Mesh.ArrayType.Index] = b.Idx;
-        var mesh = new ArrayMesh();
         mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
-        return mesh;
     }
 }

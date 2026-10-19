@@ -2835,8 +2835,11 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--spells")
     bool onlyA = sickA.PlagueUntil > simP.Time && sickB.PlagueUntil < simP.Time && sickC.PlagueUntil < simP.Time;
     float pa0 = sickA.Hp;
     RunP(8);
-    Check("the plague sickens the raider it falls on, and passes on to those standing by it", castPlague == null && onlyA && pa0 - sickA.Hp >= 12 && sickB.PlagueUntil > simP.Time - 1 && sickC.PlagueUntil > simP.Time - 1,
-        $"cast: {castPlague ?? "yes"}; at first only the nearest: {onlyA}; it {pa0:0} → {sickA.Hp:0} in 8 s; the next {(sickB.PlagueUntil > 0 ? "sick" : "well")}, the one past it {(sickC.PlagueUntil > 0 ? "sick" : "well")}");
+    float pa8 = sickA.Hp;
+    // (it passes on by chance, a quarter of the time each second it is near: given a little longer, it reaches the third)
+    for (int i = 0; i < 12 && sickC.PlagueUntil < 0; i++) RunP(1);
+    Check("the plague sickens the raider it falls on, and passes on to those standing by it", castPlague == null && onlyA && pa0 - pa8 >= 12 && sickB.PlagueUntil > simP.Time - 1 && sickC.PlagueUntil > simP.Time - 1,
+        $"cast: {castPlague ?? "yes"}; at first only the nearest: {onlyA}; it {pa0:0} → {pa8:0} in 8 s; the next {(sickB.PlagueUntil > 0 ? "sick" : "well")}, the one past it {(sickC.PlagueUntil > 0 ? "sick" : "well")}");
     Gone(sickA); Gone(sickB); Gone(sickC);
 
     // the blood oath: ours in the circle mend two fifths and stop bleeding
@@ -4215,6 +4218,135 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bodies")
     Check("bodies in every look have a skull with a brain, a heart behind ribs, and none of it shows", looks > 30 && showing == 0 && man.Brain > 20 && man.Heart > 4,
         $"{looks} looks, {showing} inner voxels on the surface; a man: {man.Brain} of brain, {man.Heart} of heart");
 
+    // the figures are sculpted in cells of 3 cm, the blows cut half-voxels made of them: every look's half-voxels, sculpted
+    // two cells to one without the finer work, are the half-voxels of the same look sculpted in half-voxels — the same
+    // tissue, the same brain, heart and joints — so the wounds cut what they always cut
+    int parityLooks = 0, parityCells = 0;
+    var parityOff = new System.Collections.Generic.List<string>();
+    var everyKind = Kinds.PlayerKinds.Concat(Kinds.HordeKinds).Concat(Kinds.WildKinds)
+        .Concat(new[] { Kinds.Catapult, Kinds.Mantlet, Kinds.SiegeTower, Kinds.Risen, Kinds.Thrall, Kinds.Shaman, Kinds.Witch, Kinds.Necromancer }).Distinct().ToArray();
+    foreach (var t in everyKind)
+        for (int l = 0; l < Bodies.Looks(t); l++)
+        {
+            var one = Bodies.Sculpted(t, l, 1, false);
+            var two = Bodies.Sculpted(t, l, 2, false);
+            parityLooks++;
+            bool same = one.Brain == two.Brain && one.Heart == two.Heart && one.Top == two.Top && one.HeadY0 == two.HeadY0 && one.HeadY1 == two.HeadY1;
+            for (int p = 0; p < BodyPlan.Parts && same; p++)
+            {
+                var a = one.Grid[p]; var b = two.Grid[p];
+                same = a == null ? b == null : b != null && a.X0 == b.X0 && a.Y0 == b.Y0 && a.Z0 == b.Z0 && a.SX == b.SX && a.SY == b.SY && a.SZ == b.SZ
+                    && a.Count == b.Count && a.M.AsSpan().SequenceEqual(b.M) && a.T.AsSpan().SequenceEqual(b.T)
+                    && one.JX[p] == two.JX[p] && one.JY[p] == two.JY[p] && one.JZ[p] == two.JZ[p];
+                // and every cell of the finer body lies in a half-voxel of it
+                if (same && two.Fine[p] is { } fine)
+                    for (int i = 0; i < fine.M.Length; i++)
+                    {
+                        if (fine.M[i] == 0) continue;
+                        parityCells++;
+                        int fx = i % fine.SX + fine.X0, fz = i / fine.SX % fine.SZ + fine.Z0, fy = i / (fine.SX * fine.SZ) + fine.Y0;
+                        if (b.Mat(fx >> 1, fy >> 1, fz >> 1) == 0) { same = false; break; }
+                    }
+            }
+            if (!same) parityOff.Add($"{t.Key}{l}");
+        }
+    Check("a body sculpted in cells of 3 cm is, half-voxel for half-voxel, the body sculpted in half-voxels: the wounds cut what they always cut",
+        parityLooks > 90 && parityOff.Count == 0, $"{parityLooks} looks, {parityCells} cells; differing: {string.Join(", ", parityOff.Take(8))}");
+
+    // and sculpted finer, every piece of every body of every kind hangs together with its part by a face (else the
+    // first wound would knock it off), what the hand holds is a piece of dress with its grip in the fist and its point
+    // out beyond it, and a figure near is no more than a few thousand faces
+    int looseAll = 0, armed = 0, unarmed = 0, heavy = 0, maxQuads = 0;
+    var looseWhere = new System.Collections.Generic.List<string>();
+    string heaviest = "";
+    var mesherB = new GreedyMesher();
+    foreach (var t in everyKind)
+        for (int l = 0; l < Bodies.Looks(t); l++)
+        {
+            var plan = Bodies.Plan(t, l);
+            // (an engine's timbers are not cut by blows)
+            bool engine = t.Key is "ram" or "catapult" or "mantlet" or "tower";
+            for (int p = 0; p < BodyPlan.Parts && !engine; p++)
+            {
+                var g = plan.Grid[p];
+                if (g == null) continue;
+                float jx = plan.JX[p] * BodyPlan.Sub, jy = plan.JY[p] * BodyPlan.Sub, jz = plan.JZ[p] * BodyPlan.Sub;
+                int seed = -1; float best = float.MaxValue;
+                for (int i = 0; i < g.M.Length; i++)
+                {
+                    if (g.M[i] == 0 || g.T[i] == (byte)Tissue.Gear) continue;
+                    float x = i % g.SX + g.X0 + .5f - jx, z = i / g.SX % g.SZ + g.Z0 + .5f - jz, y = i / (g.SX * g.SZ) + g.Y0 + .5f - jy;
+                    if (x * x + y * y + z * z < best) { best = x * x + y * y + z * z; seed = i; }
+                }
+                var kept = new bool[g.M.Length];
+                var q = new System.Collections.Generic.Queue<int>();
+                if (seed >= 0) { q.Enqueue(seed); kept[seed] = true; }
+                while (q.Count > 0)
+                {
+                    int i = q.Dequeue(), x = i % g.SX, z = i / g.SX % g.SZ, y = i / (g.SX * g.SZ);
+                    foreach (var (ax, ay, az) in new[] { (1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1) })
+                    {
+                        int nx = x + ax, ny = y + ay, nz = z + az;
+                        if (nx < 0 || ny < 0 || nz < 0 || nx >= g.SX || ny >= g.SY || nz >= g.SZ) continue;
+                        int n = (ny * g.SZ + nz) * g.SX + nx;
+                        if (g.M[n] == 0 || kept[n]) continue;
+                        kept[n] = true; q.Enqueue(n);
+                    }
+                }
+                for (int i = 0; i < g.M.Length; i++)
+                    if (g.M[i] != 0 && !kept[i] && looseAll++ < 6) looseWhere.Add($"{t.Key}{l} {(BodyPart)p} at {i % g.SX + g.X0},{i / (g.SX * g.SZ) + g.Y0},{i / g.SX % g.SZ + g.Z0} ({Mat.NameOf(g.M[i])})");
+            }
+            if (plan.Weapon is { } wpn)
+            {
+                var hand = plan.Grid[(int)wpn.On];
+                bool inFist = hand.Mat((int)MathF.Floor(wpn.Grip.X * BodyPlan.Sub), (int)MathF.Floor(wpn.Grip.Y * BodyPlan.Sub), (int)MathF.Floor(wpn.Grip.Z * BodyPlan.Sub)) != 0;
+                float reach = MathF.Sqrt((wpn.Tip.X - wpn.Grip.X) * (wpn.Tip.X - wpn.Grip.X) + (wpn.Tip.Y - wpn.Grip.Y) * (wpn.Tip.Y - wpn.Grip.Y) + (wpn.Tip.Z - wpn.Grip.Z) * (wpn.Tip.Z - wpn.Grip.Z));
+                if (inFist && reach > 1) armed++; else looseWhere.Add($"{t.Key}{l}: grip in fist {inFist}, reach {reach:0.0}");
+            }
+            else if (!plan.Beast && !engine) unarmed++;
+            int nearQuads = 0;
+            foreach (var g in plan.Fine) if (g != null) nearQuads += mesherB.Mesh(g.Padded(), g.SX, g.SY, g.SZ, g.X0, g.Y0, g.Z0)?.Quads ?? 0;
+            foreach (var d in plan.Dress) nearQuads += mesherB.Mesh(d.Grid.Padded(), d.Grid.SX, d.Grid.SY, d.Grid.SZ, d.Grid.X0, d.Grid.Y0, d.Grid.Z0)?.Quads ?? 0;
+            if (nearQuads > maxQuads) { maxQuads = nearQuads; heaviest = $"{t.Key}{l}"; }
+            if (nearQuads > 6000) heavy++;
+        }
+    Check("every piece of every finer body hangs together with its part, the hand holds its weapon by the grip, and none is too heavy to draw near",
+        looseAll == 0 && unarmed == 0 && armed > 80 && heavy == 0,
+        $"{looseAll} loose half-voxels, {armed} armed, {unarmed} unarmed with a hand; the heaviest near {heaviest}, {maxQuads} quads; {string.Join("; ", looseWhere.Take(6))}");
+
+    // drawn in half-voxels (the middle distance), every half-voxel a weapon or a shield fills enough of is drawn — none
+    // left out at the fist, where a knuckle has it and too little of it — and a painted shield shows its paint there,
+    // not the planks under it
+    int holes = 0, shieldHalves = 0, bare = 0;
+    var holeWhere = new System.Collections.Generic.List<string>();
+    foreach (var t in everyKind)
+        for (int l = 0; l < Bodies.Looks(t); l++)
+        {
+            var plan = Bodies.Plan(t, l);
+            for (int d = 0; d < plan.Dress.Count; d++)
+            {
+                var dress = plan.Dress[d];
+                int p = (int)dress.On, r = dress.Sub / BodyPlan.Sub;
+                var g = plan.Grid[p]; var dg = dress.Grid;
+                var solid = plan.Solid[p]; var owner = plan.Owner[p]; var shown = plan.Shown[p];
+                for (int i = 0; i < g.M.Length; i++)
+                {
+                    if (g.M[i] == 0) continue;
+                    int x = i % g.SX + g.X0, z = i / g.SX % g.SZ + g.Z0, y = i / (g.SX * g.SZ) + g.Y0, n = 0;
+                    for (int dy = 0; dy < r; dy++) for (int dz = 0; dz < r; dz++) for (int dx = 0; dx < r; dx++)
+                        if (dg.Mat(x * r + dx, y * r + dy, z * r + dz) != 0) n++;
+                    if (n >= Math.Max(1, r * r * r / 16) && !solid[i] && holes++ < 6) holeWhere.Add($"{t.Key}{l} {(BodyPart)p} {x},{y},{z}");
+                    if (dress.Kind != DressKind.Shield || owner[i] != d + 1 || !solid[i]) continue;
+                    shieldHalves++;
+                    byte m = shown != null && shown[i] != 0 ? shown[i] : g.M[i];
+                    if (m is Mat.Board or Mat.BoardDark) bare++;
+                }
+            }
+        }
+    Check("drawn in half-voxels, every half-voxel a weapon or a shield fills is drawn, the haft on into the fist, and a shield shows its paint and not its planks",
+        holes == 0 && shieldHalves > 300 && bare * 8 < shieldHalves,
+        $"{holes} left out ({string.Join("; ", holeWhere)}); of {shieldHalves} half-voxels of shields {bare} bare planks");
+
     var mpB = new MapParams();
     var wB = new VoxelWorld(mpB.SizeX, mpB.SizeY, mpB.SizeZ);
     var siteB = MapGen.Generate(wB, mpB);
@@ -4702,7 +4834,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troops")
     gobP.Hp = gobP.MaxHp = 50000;
     flown.Clear();
     bool burnt = false;
-    for (int i = 0; i < 900 && !(simT.Pitched > 0 && burnt); i++) { Watch(.05); burnt |= gobP.Burn > 0; }
+    // (a pot is a quarter of the throws, by chance: watched until a few have flown, as well as till the pot has burnt)
+    for (int i = 0; i < 1200 && !(simT.Pitched > 0 && burnt && flown.Count >= 4); i++) { Watch(.05); burnt |= gobP.Burn > 0; }
     int potsP = flown.Count(a => a.Kind == Shot.FirePot), stonesP = flown.Count(a => a.Kind == Shot.Stone);
     Check("with the fire pots a slinger now and then throws a pot of burning pitch: the raider catches fire and so does the ground about it",
         potsP >= 1 && stonesP >= potsP && simT.Pitched > 0 && simT.Burning.Count > 0 && burnt,

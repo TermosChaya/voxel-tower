@@ -6,7 +6,7 @@ using VoxelTower.Core;
 namespace VoxelTower.Game;
 
 /// <summary>
-/// Faces for the interface: a pawn's head and shoulders cast from its own half-voxels, as it is now — with its hat, its
+/// Faces for the interface: a pawn's head and shoulders cast from the cells it is sculpted in, as it is now — with its hat, its
 /// beard and its wounds — a little turned and seen from a little above, lit from the upper left. Each look is cast once
 /// at each size; a hurt body again after every wound.
 /// </summary>
@@ -44,25 +44,39 @@ public static class Portraits
     static readonly Vector3 Light = new Vector3(-.5f, .75f, .55f).Normalized();
 
     /// <summary>
-    /// Casts a ray for every pixel through the body's trunk and arms (as they stand at rest) and paints the first
-    /// half-voxel it meets: its colour, shaded by the face it was met on, with a dark line where the shape ends.
+    /// Casts a ray for every pixel through the body's trunk and arms (as they stand at rest), in the cells of 3 cm it is
+    /// sculpted in, with what it wears and holds there, and paints the first cell it meets: its colour, shaded by the face
+    /// it was met on, with a dark line where the shape ends. A cell is there while the half-voxel it lies in is; where a
+    /// wound has changed that, the cell takes its colour (blood), or shows what the wound opened.
     /// </summary>
     static Image Cast(PartGrid[] parts, BodyPlan plan, int size)
     {
-        var grids = new List<PartGrid>();
-        foreach (var p in new[] { BodyPart.Body, BodyPart.Main, BodyPart.Off }) if (parts[(int)p] is { Count: > 0 } g) grids.Add(g);
+        const int K = BodyPlan.K;
+        var grids = new List<(PartGrid fine, PartGrid now, PartGrid was)>();
+        var worn = new List<(PartGrid cells, PartGrid now, int r)>();
+        foreach (var p in new[] { BodyPart.Body, BodyPart.Main, BodyPart.Off })
+        {
+            if (parts[(int)p] is not { Count: > 0 } g || plan.Fine[(int)p] is not { } fine || g.M.Length != plan.Grid[(int)p].M.Length) continue;
+            grids.Add((fine, g, plan.Grid[(int)p]));
+            foreach (var d in plan.Dress) if (d.On == p) worn.Add((d.Grid, g, d.Sub / BodyPlan.FineSub));
+        }
         // what to look at: from the shoulders to the top of the head, a little more for a big body
-        float top = plan.Top * BodyPlan.Sub + 1, head = plan.HeadY0, span = Math.Max(10, (top - head) * 1.4f);
+        float top = plan.Top * BodyPlan.FineSub + K, head = plan.HeadY0 * K, span = Math.Max(10 * K, (top - head) * 1.4f);
         float cy = top - span * .56f;
         var dir = new Vector3(-MathF.Sin(Yaw) * MathF.Cos(Pitch), -MathF.Sin(Pitch), -MathF.Cos(Yaw) * MathF.Cos(Pitch));
         var right = new Vector3(MathF.Cos(Yaw), 0, -MathF.Sin(Yaw));
         var up = right.Cross(dir).Normalized();
         if (up.Y < 0) up = -up;
         int x0 = int.MaxValue, y0 = int.MaxValue, z0 = int.MaxValue, x1 = int.MinValue, y1 = int.MinValue, z1 = int.MinValue;
-        foreach (var g in grids)
+        foreach (var (g, _, _) in grids)
         {
             x0 = Math.Min(x0, g.X0); y0 = Math.Min(y0, g.Y0); z0 = Math.Min(z0, g.Z0);
             x1 = Math.Max(x1, g.X0 + g.SX); y1 = Math.Max(y1, g.Y0 + g.SY); z1 = Math.Max(z1, g.Z0 + g.SZ);
+        }
+        foreach (var (g, _, r) in worn)
+        {
+            x0 = Math.Min(x0, Down(g.X0, r)); y0 = Math.Min(y0, Down(g.Y0, r)); z0 = Math.Min(z0, Down(g.Z0, r));
+            x1 = Math.Max(x1, Down(g.X0 + g.SX, r) + 1); y1 = Math.Max(y1, Down(g.Y0 + g.SY, r) + 1); z1 = Math.Max(z1, Down(g.Z0 + g.SZ, r) + 1);
         }
         var img = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
         var depth = new float[size * size];
@@ -70,16 +84,42 @@ public static class Portraits
         if (grids.Count == 0) return img;
         byte M(int x, int y, int z)
         {
-            foreach (var g in grids) { byte m = g.Mat(x, y, z); if (m != 0) return m; }
+            int cx = Down(x, K), cy = Down(y, K), cz = Down(z, K);
+            foreach (var (fine, now, was) in grids)
+            {
+                byte m = fine.Mat(x, y, z);
+                if (m == 0 || !now.In(cx, cy, cz)) continue;
+                int ci = now.Index(cx, cy, cz);
+                byte cm = now.M[ci];
+                if (cm == 0) continue;
+                if (ReferenceEquals(now, was)) return m;
+                if (cm != was.M[ci]) return cm;
+                if (now.T[ci] >= (byte)Tissue.Flesh)
+                    foreach (var (dx, dy, dz) in Around)
+                        if (was.Mat(cx + dx, cy + dy, cz + dz) != 0 && now.Mat(cx + dx, cy + dy, cz + dz) == 0) return cm;
+                return m;
+            }
+            // the dress, finer: a cell here if any of its own in it is there
+            foreach (var (cells, now, r) in worn)
+            {
+                if (now.Mat(cx, cy, cz) == 0) continue;
+                for (int dy = 0; dy < r; dy++)
+                    for (int dz = 0; dz < r; dz++)
+                        for (int dx = 0; dx < r; dx++)
+                        {
+                            byte m = cells.Mat(x * r + dx, y * r + dy, z * r + dz);
+                            if (m != 0) return m;
+                        }
+            }
             return 0;
         }
         var colour = new Color[size * size];
         // on the head, wherever it is: a man's over his feet, a hound's or a troll's out before its body
         float cz = 0;
-        if (parts[(int)BodyPart.Body] is { } body)
+        if (grids.Count > 0 && plan.Fine[(int)BodyPart.Body] is { } body)
         {
             double sum = 0; int n = 0;
-            for (int y = Math.Max(plan.HeadY0, body.Y0); y < Math.Min(plan.HeadY1, body.Y0 + body.SY); y++)
+            for (int y = Math.Max(plan.HeadY0 * K, body.Y0); y < Math.Min(plan.HeadY1 * K, body.Y0 + body.SY); y++)
                 for (int z = body.Z0; z < body.Z0 + body.SZ; z++)
                     for (int x = body.X0; x < body.X0 + body.SX; x++)
                         if (body.Mat(x, y, z) != 0) { sum += z + .5; n++; }
@@ -90,7 +130,7 @@ public static class Portraits
             for (int i = 0; i < size; i++)
             {
                 float sx = ((i + .5f) / size - .5f) * span, sy = (.5f - (j + .5f) / size) * span;
-                var o = centre + right * sx + up * sy - dir * 60;
+                var o = centre + right * sx + up * sy - dir * 60 * K;
                 if (!March(o, dir, x0, y0, z0, x1, y1, z1, M, out var hit, out var n, out float t, out byte m)) continue;
                 depth[j * size + i] = t;
                 colour[j * size + i] = Paint(m, hit, n, dir);
@@ -107,7 +147,7 @@ public static class Portraits
                     int ni = i + di, nj = j + dj;
                     float nd = ni < 0 || nj < 0 || ni >= size || nj >= size ? float.PositiveInfinity : depth[nj * size + ni];
                     if (float.IsPositiveInfinity(nd)) rim = true;
-                    else if (nd - d > 2.2f) step = true;
+                    else if (nd - d > 2.2f * K) step = true;
                 }
                 var c = colour[j * size + i];
                 if (rim) c = c.Darkened(.55f);
@@ -116,6 +156,10 @@ public static class Portraits
             }
         return img;
     }
+
+    static readonly (int, int, int)[] Around = { (1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1) };
+
+    static int Down(int v, int r) => v >= 0 ? v / r : (v - r + 1) / r;
 
     /// <summary>A voxel's colour as the portrait shows it: lit by its face, a little different from its neighbours, metal glinting.</summary>
     static Color Paint(byte m, Vector3I v, Vector3 n, Vector3 dir)
@@ -158,7 +202,7 @@ public static class Portraits
         float dx = sx == 0 ? float.PositiveInfinity : MathF.Abs(1 / d.X), dy = sy == 0 ? float.PositiveInfinity : MathF.Abs(1 / d.Y), dz = sz == 0 ? float.PositiveInfinity : MathF.Abs(1 / d.Z);
         int axis = -1;
         float t = tmin;
-        for (int step = 0; step < 400; step++)
+        for (int step = 0; step < 400 * BodyPlan.K; step++)
         {
             if (x < x0 - 1 || y < y0 - 1 || z < z0 - 1 || x > x1 || y > y1 || z > z1) return false;
             byte here = mat(x, y, z);
