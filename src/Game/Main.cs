@@ -1096,8 +1096,8 @@ public partial class Main : Node3D
         // floats on its backdrop again
         bool farGone = !Atmos.Far.Visible, backdrop = Atmos.Told["sky_view"].Z < .5f;
         Check("from someone's eyes the far land round the valley shows and the sky is looked along the view; over the diorama neither",
-            farSeen && eyesSky && farGone && backdrop && Atmos.Far.Triangles > 10000,
-            $"far land {(farSeen ? "seen" : "unseen")} from the eyes, {(farGone ? "gone" : "still there")} after, {Atmos.Far.Triangles} triangles; sky {(eyesSky ? "along the view" : "a backdrop")} → {(backdrop ? "a backdrop" : "along the view")}");
+            farSeen && eyesSky && farGone && backdrop && Atmos.Far.Triangles > 10000 && Atmos.Far.Trees > 300,
+            $"far land {(farSeen ? "seen" : "unseen")} from the eyes, {(farGone ? "gone" : "still there")} after, {Atmos.Far.Trees} trees, {Atmos.Far.Triangles} triangles; sky {(eyesSky ? "along the view" : "a backdrop")} → {(backdrop ? "a backdrop" : "along the view")}");
 
         // the citadel's muster: a click on the citadel opens it; a worker taken on is paid for at once and comes out of
         // its door only when made ready. Whoever stands about the citadel's foot by now is sent a little way off first (an
@@ -1158,6 +1158,29 @@ public partial class Main : Node3D
             && blood.moon.W > .9f && blood.horizon.X > blood.horizon.Y * 4,
             $"sun {Deg(noon.sun):0}° at noon, {Deg(dusk.sun):0.0}° at dusk, {Deg(night.sun):0}° at night; zenith {Luma(noon.zenith):0.000} → {Luma(night.zenith):0.0000}; " +
             $"dusk horizon {dusk.horizon.X:0.00},{dusk.horizon.Y:0.00},{dusk.horizon.Z:0.00}; stars {night.zenith.W:0.00}, moon {night.light.W:0.00}, red {blood.moon.W:0.00}");
+        // a wave beaten back starts the day over in the dark: the night does not go through noon on the way to the morning,
+        // the sun stays under the horizon while it is dark; and lightning seen as the game is stopped dies away all the same
+        Atmos.Pin(1, 1);
+        await Frames(2);
+        bool pausedWas = Paused;
+        Paused = true;
+        Atmos.Pin(0, 1, eased: true);
+        Atmos.Flash(Vector3.Up, 1);
+        float highest = -90, struck = 0;
+        ulong waitFrom = Time.GetTicksMsec();
+        while (Time.GetTicksMsec() - waitFrom < 2000)
+        {
+            await Frames(1);
+            highest = Math.Max(highest, Deg(Sky("sky_sun")));
+            struck = Math.Max(struck, Sky("sky_flash").W);
+        }
+        float shownDay = Atmos.ShownDay, struckAfter = Sky("sky_flash").W;
+        Paused = pausedWas;
+        Atmos.Unpin();
+        await Frames(2);
+        Check("a wave beaten back: the night stays night, the sun under the horizon, the morning taken up at once; lightning dies away while the game is stopped",
+            highest < -5 && shownDay < .01f && struck > .05f && struckAfter < .01f,
+            $"the sky's sun at most {highest:0.0}° over two seconds, the day shown {shownDay:0.00}; lightning {struck:0.00} → {struckAfter:0.00}");
         GD.Print($"[selftest] {(fails == 0 ? "all passed" : fails + " failed")}");
         if (_shot == null) GetTree().Quit(fails == 0 ? 0 : 1);
     }

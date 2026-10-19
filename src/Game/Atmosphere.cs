@@ -40,8 +40,6 @@ public partial class Atmosphere : Node3D
     float _wet, _fog;
     /// <summary>The land beyond the valley, round it to the mountains, seen only from someone's eyes.</summary>
     public FarLand Far { get; private set; }
-    /// <summary>The colour of the sky at the horizon now (linear): someone's eyes see the fog in it, the far land fades to it.</summary>
-    public Vector3 Horizon { get; private set; }
     /// <summary>Thunder far off after the sheet lightning of a night of rain, as loud as it is (0 to 1): the sounds hear of it.</summary>
     public event Action<float> Thunder;
     // the sky's own clock and the clouds' drift, wound on by the wind; both stand still in a calm run, so that a screenshot
@@ -57,8 +55,8 @@ public partial class Atmosphere : Node3D
     bool _snap;
     /// <summary>Where the day's sun stands, as its light comes from it; the sky lets it go down under the horizon at dusk.</summary>
     Vector3 _sunDir = Vector3.Up;
-    // lightning: towards where it was seen, when (game seconds) and how bright; the next sheet lightning of a night of
-    // rain, and the thunder after the last one
+    // lightning: towards where it was seen, when (on our own clock _t, which runs on while the game is stopped) and how
+    // bright; the next sheet lightning of a night of rain (game seconds), and the thunder after the last one (our clock)
     Vector3 _flashDir = Vector3.Up;
     double _flashAt = -1e9, _nextSheet, _thunderAt = -1;
     float _flashPower, _thunderLoud;
@@ -66,6 +64,17 @@ public partial class Atmosphere : Node3D
     /// <summary>What the sky was told last, the sky_* globals by name: the rendering server will not say them back outside the
     /// editor, and the tests want to see that the sky goes with the day.</summary>
     public readonly Dictionary<string, Vector4> Told = new();
+    /// <summary>A sky_* global, its name made into the engine's own once and for all: told every frame by a plain string, it
+    /// would be looked up in the engine's table afresh each time and leave one more object behind for the collector.</summary>
+    sealed class SkyGlobal
+    {
+        public readonly string Name;
+        public readonly StringName Id;
+        public SkyGlobal(string name) { Name = name; Id = new StringName(name); }
+    }
+    static readonly SkyGlobal SkySun = new("sky_sun"), SkyMoon = new("sky_moon"), SkyMood = new("sky_mood"), SkyZenith = new("sky_zenith"),
+        SkyHorizon = new("sky_horizon"), SkyGlow = new("sky_glow"), SkyLight = new("sky_light"), SkyView = new("sky_view"),
+        SkyFlash = new("sky_flash"), SkyClock = new("sky_clock");
 
     public void Build(VoxelWorld w, Site site, bool calm)
     {
@@ -178,8 +187,9 @@ public partial class Atmosphere : Node3D
         return ImageTexture.CreateFromImage(packed);
     }
 
-    /// <summary>Holds the sky and the light at a time of day and a darkness (tests, staged scenes), shown at once.</summary>
-    public void Pin(float day, float dark) { _pin = (day, dark); _snap = true; }
+    /// <summary>Holds the sky and the light at a time of day and a darkness (tests, staged scenes), shown at once; or, eased,
+    /// gone over to the way they go over to the sim's.</summary>
+    public void Pin(float day, float dark, bool eased = false) { _pin = (day, dark); _snap |= !eased; }
 
     /// <summary>Lets the sky and the light follow the sim's day again, shown at once.</summary>
     public void Unpin() { _pin = null; _snap = true; }
@@ -187,11 +197,13 @@ public partial class Atmosphere : Node3D
     /// <summary>Shows the weather, the day and the dark as they are now, without easing into them.</summary>
     public void Snap() => _snap = true;
 
-    /// <summary>Lightning towards a direction: the clouds that way light up, and the air a little, for a moment of game time.</summary>
+    /// <summary>Lightning towards a direction: the clouds that way light up, and the air a little, for a moment. The moment
+    /// is the eye's, not the game's, as the bolt's own flare is: lightning seen just as the game is stopped dies away all
+    /// the same.</summary>
     public void Flash(Vector3 towards, float power)
     {
         _flashDir = towards.Normalized();
-        _flashAt = _sim?.Time ?? 0;
+        _flashAt = _t;
         _flashPower = power;
     }
 
@@ -203,10 +215,11 @@ public partial class Atmosphere : Node3D
         Flash((d.LengthSquared() < 1e-4f ? Vector3.Forward : d.Normalized()) + Vector3.Up * .45f, power);
     }
 
-    /// <summary>How bright the lightning is now: a stroke and two flickers after it, over a second of game time.</summary>
+    /// <summary>How bright the lightning is now: a stroke and two flickers after it, over a second or so. A calm run holds it
+    /// at its stroke, so that a screenshot of it comes out the same every time.</summary>
     float FlashNow()
     {
-        double t = (_sim?.Time ?? 0) - _flashAt;
+        double t = _flashAt < -1e8 ? -1 : _calm ? 0 : _t - _flashAt;
         if (t < 0 || t > 1.5) return 0;
         static float Pulse(double t, double at, double len) => t < at ? 0 : (float)Math.Exp(-(t - at) / len);
         return _flashPower * Math.Min(1.2f, Pulse(t, 0, .07) + .55f * Pulse(t, .12, .05) + .85f * Pulse(t, .27, .1));
@@ -346,7 +359,14 @@ public partial class Atmosphere : Node3D
             // a staged scene stops the clock far out: it keeps the afternoon light it always had
             float day = _pin?.day ?? (wv.Countdown > Waves.Prep * 2 ? .7f : wv.Day), dark = _pin?.dark ?? wv.Darkness, k = (float)delta / 4;
             if (_day < 0 || _calm || _snap) { _day = day; _dark = dark; }
-            else { _day = Mathf.MoveToward(_day, day, Math.Max(k, Math.Abs(day - _day) * k * 2)); _dark = Mathf.MoveToward(_dark, dark, k); }
+            else
+            {
+                // a wave beaten back starts the day over in the dark: the morning is taken up at once, under the moon's
+                // light, and the dawn comes in the dark's own time; easing back over the sky would bring the sun up over
+                // the south and down again in the night
+                _day = day < _day - .5f ? day : Mathf.MoveToward(_day, day, Math.Max(k, Math.Abs(day - _day) * k * 2));
+                _dark = Mathf.MoveToward(_dark, dark, k);
+            }
             _snap = false;
             Light(_day, _dark);
             Heavens(_day, _dark, (float)delta);
@@ -448,7 +468,6 @@ public partial class Atmosphere : Node3D
         tone = tone.To(new Tone(new Vector3(.62f, .65f, .72f) * grey * .6f, new Vector3(.8f, .82f, .87f) * grey * .78f, Vector3.Zero, 0), _wet * .85f);
         var fogSky = new Vector3(.5f, .52f, .56f).Lerp(new Vector3(.02f, .024f, .04f), Smooth(dark * 1.4f));
         tone = tone with { Horizon = tone.Horizon.Lerp(fogSky, _fog * .8f), Zenith = tone.Zenith.Lerp(tone.Horizon.Lerp(fogSky, _fog * .8f), _fog * .65f) };
-        Horizon = tone.Horizon;
 
         // the sunlight on the clouds and in the disc: white by day, gold low down, red at the horizon, gone a little under it
         var warm = morning ? Morning : Evening;
@@ -465,7 +484,8 @@ public partial class Atmosphere : Node3D
         if (!_calm) { _skyT += dt; _drift += new Vector2(.0042f, .0013f) * _cloudWind * dt; }
         float cover = Mathf.Lerp(Mathf.Lerp(.27f, .6f, _fog), .97f, _wet) + (_sim.Weather == Weather.Wind ? .1f : 0);
 
-        // sheet lightning in the clouds of a night of rain, now and then, and its thunder a few seconds after
+        // sheet lightning in the clouds of a night of rain, now and then while the game goes on, and its thunder a few
+        // seconds after, as the flash is seen: the thunder of one seen comes even if the game is stopped
         if (!_calm && _wet > .6f && dark > .5f)
         {
             if (_nextSheet <= 0) _nextSheet = _sim.Time + 4 + 10 * _rnd.NextDouble();
@@ -473,13 +493,13 @@ public partial class Atmosphere : Node3D
             {
                 double a = _rnd.NextDouble() * Math.Tau;
                 Flash(new Vector3((float)Math.Cos(a), .22f + .3f * (float)_rnd.NextDouble(), (float)Math.Sin(a)), .45f + .55f * (float)_rnd.NextDouble());
-                _thunderAt = _sim.Time + 2 + 4 * _rnd.NextDouble();
+                _thunderAt = _t + 2 + 4 * _rnd.NextDouble();
                 _thunderLoud = .2f + .4f * _flashPower;
                 _nextSheet = _sim.Time + 6 + 14 * _rnd.NextDouble();
             }
         }
         else _nextSheet = 0;
-        if (_thunderAt >= 0 && _sim.Time >= _thunderAt) { _thunderAt = -1; Thunder?.Invoke(_thunderLoud); }
+        if (_thunderAt >= 0 && _t >= _thunderAt) { _thunderAt = -1; Thunder?.Invoke(_thunderLoud); }
 
         // how the camera looks: someone's eyes look along their rays; the diorama's backdrop is made from its turn and tilt
         var cam = GetViewport().GetCamera3D();
@@ -487,17 +507,17 @@ public partial class Atmosphere : Node3D
         var fwd = cam != null ? -cam.GlobalBasis.Z : Vector3.Forward;
         var vp = GetViewport().GetVisibleRect().Size;
 
-        void G(string name, Vector4 v) { RenderingServer.GlobalShaderParameterSet(name, v); Told[name] = v; }
-        G("sky_sun", new Vector4(sun.X, sun.Y, sun.Z, (1 - .85f * _wet) * (1 - .7f * _fog)));
-        G("sky_moon", new Vector4(MoonDir.X, MoonDir.Y, MoonDir.Z, _blood));
-        G("sky_mood", new Vector4(day, dark, _wet, _fog));
-        G("sky_zenith", new Vector4(tone.Zenith.X, tone.Zenith.Y, tone.Zenith.Z, stars));
-        G("sky_horizon", new Vector4(tone.Horizon.X, tone.Horizon.Y, tone.Horizon.Z, haze));
-        G("sky_glow", new Vector4(tone.Glow.X, tone.Glow.Y, tone.Glow.Z, tone.Belt) * (1 - .9f * _wet) * (1 - .8f * _fog));
-        G("sky_light", new Vector4(light.X, light.Y, light.Z, moon * (1 - .7f * _wet) * (1 - .6f * _fog)));
-        G("sky_view", new Vector4(MathF.Atan2(fwd.X, fwd.Z), MathF.Asin(Math.Clamp(-fwd.Y, -1, 1)), eyes ? 1 : 0, vp.X / Math.Max(1, vp.Y)));
-        G("sky_flash", new Vector4(_flashDir.X, _flashDir.Y, _flashDir.Z, FlashNow()));
-        G("sky_clock", new Vector4((float)_skyT, _drift.X, _drift.Y, cover));
+        void G(SkyGlobal g, Vector4 v) { RenderingServer.GlobalShaderParameterSet(g.Id, v); Told[g.Name] = v; }
+        G(SkySun, new Vector4(sun.X, sun.Y, sun.Z, (1 - .85f * _wet) * (1 - .7f * _fog)));
+        G(SkyMoon, new Vector4(MoonDir.X, MoonDir.Y, MoonDir.Z, _blood));
+        G(SkyMood, new Vector4(day, dark, _wet, _fog));
+        G(SkyZenith, new Vector4(tone.Zenith.X, tone.Zenith.Y, tone.Zenith.Z, stars));
+        G(SkyHorizon, new Vector4(tone.Horizon.X, tone.Horizon.Y, tone.Horizon.Z, haze));
+        G(SkyGlow, new Vector4(tone.Glow.X, tone.Glow.Y, tone.Glow.Z, tone.Belt) * (1 - .9f * _wet) * (1 - .8f * _fog));
+        G(SkyLight, new Vector4(light.X, light.Y, light.Z, moon * (1 - .7f * _wet) * (1 - .6f * _fog)));
+        G(SkyView, new Vector4(MathF.Atan2(fwd.X, fwd.Z), MathF.Asin(Math.Clamp(-fwd.Y, -1, 1)), eyes ? 1 : 0, vp.X / Math.Max(1, vp.Y)));
+        G(SkyFlash, new Vector4(_flashDir.X, _flashDir.Y, _flashDir.Z, FlashNow()));
+        G(SkyClock, new Vector4((float)_skyT, _drift.X, _drift.Y, cover));
 
         // from someone's eyes the fog is the air at the horizon (the environment takes its colours as sRGB)
         if (eyes)
