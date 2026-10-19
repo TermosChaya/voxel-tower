@@ -6,35 +6,50 @@ using VoxelTower.Core;
 namespace VoxelTower.Game;
 
 /// <summary>
-/// Draws everyone on the field from the simulation: every part of every kind of figure is one MultiMesh, so a hundred
-/// pawns cost a few dozen draw calls. Legs swing with the stride, arms with the blows; the fallen lie down and sink.
-/// Also draws arrows in flight and rings under the selected.
+/// Draws everyone on the field from the simulation: every part of every kind of figure, and every piece of its dress, is
+/// one MultiMesh, so a hundred pawns cost a few dozen draw calls. Near they are drawn in cells of 3 cm with their
+/// weapons and shields finer still, casting their shadows from the half-voxels; at the middle distance in half-voxels;
+/// far in whole voxels. Legs swing with the stride, arms with the blows; the fallen lie down and sink. A hurt body draws
+/// the parts its wounds have changed on its own. Also draws arrows in flight and rings under the selected.
 /// </summary>
 public partial class UnitView : Node3D
 {
     sealed class Kind
     {
         public Figure Fig;
-        public MultiMeshInstance3D[] Parts;
-        /// <summary>One buffer per part: a transform and a colour for every figure of this kind.</summary>
+        /// <summary>Each part as near, middle or far wants it; and in half-voxels again, casting the shadows when near.</summary>
+        public MultiMeshInstance3D[] Parts, Shades;
+        /// <summary>Each piece of its dress, and its shadow.</summary>
+        public MultiMeshInstance3D[] Dress, DressShades;
+        /// <summary>One buffer per part and per piece of dress: a transform and a colour for every figure of this kind.</summary>
         public readonly float[][] Bufs = new float[Figure.Parts][];
+        public float[][] DressBufs;
         public int Count, Cap;
     }
 
     /// <summary>What the view remembers of a unit between frames: smoothed facing and how fast it is moving.</summary>
     sealed class Look { public float Face, Move, LastX, LastZ; public bool Seen; public Transform3D Body; }
 
-    /// <summary>A hurt body drawn on its own: a mesh of what is left of each part, made again after every wound.</summary>
-    sealed class Own { public readonly MeshInstance3D[] Parts = new MeshInstance3D[Figure.Parts]; public int Rev = -1; }
+    /// <summary>
+    /// A hurt body: the parts its wounds have changed (and what they hold) drawn on their own, meshed again after every
+    /// wound and when the distance changes; the rest are drawn with their kind.
+    /// </summary>
+    sealed class Own
+    {
+        public readonly MeshInstance3D[] Parts = new MeshInstance3D[Figure.Parts];
+        public MeshInstance3D[] Dress = Array.Empty<MeshInstance3D>();
+        public readonly bool[] Hurt = new bool[Figure.Parts];
+        public readonly int[] Sums = new int[Figure.Parts];
+        public int Rev = -1, Lod = -1;
+    }
 
     /// <summary>A piece cut off a body, falling and then lying where it fell.</summary>
     sealed class Fallen { public MeshInstance3D Node; public Transform3D From, To; public double At; }
 
     Main _m;
     VoxelWorld _w;
-    ShaderMaterial _mat, _matFar;
-    /// <summary>The camera is far: figures are drawn in whole voxels and cast no shadows (a half-voxel is under a pixel).</summary>
-    bool _far;
+    /// <summary>How near the figures are drawn: 0 in cells of 3 cm, 1 in half-voxels, 2 in whole voxels and without shadows.</summary>
+    int _lod = 1;
     readonly Dictionary<BodyPlan, Kind> _kinds = new();
     readonly Dictionary<int, Look> _looks = new();
     readonly HashSet<int> _alive = new();
@@ -56,11 +71,6 @@ public partial class UnitView : Node3D
     {
         _m = m;
         _w = m.World;
-        _mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/voxel.gdshader") };
-        // the figures are sculpted in half-voxels: their grain and bevels follow those
-        _mat.SetShaderParameter("grid", (float)BodyPlan.Sub);
-        _matFar = (ShaderMaterial)_mat.Duplicate();
-        _matFar.SetShaderParameter("grid", 1f);
 
         // an arrow is 70 cm long, a little under five voxels
         var shaft = new BoxMesh { Size = new Vector3(.022f, .022f, .35f), Material = new StandardMaterial3D { AlbedoColor = new Color("4a3424"), Roughness = .9f } };
@@ -94,27 +104,67 @@ public partial class UnitView : Node3D
     {
         var plan = Bodies.Plan(u.T, u.Look);
         if (_kinds.TryGetValue(plan, out var k)) return k;
-        k = new Kind { Fig = Figure.For(plan), Parts = new MultiMeshInstance3D[Figure.Parts] };
+        var fig = Figure.For(plan);
+        int dn = fig.DressOn.Length;
+        k = new Kind
+        {
+            Fig = fig, Parts = new MultiMeshInstance3D[Figure.Parts], Shades = new MultiMeshInstance3D[Figure.Parts],
+            Dress = new MultiMeshInstance3D[dn], DressShades = new MultiMeshInstance3D[dn], DressBufs = new float[dn][],
+        };
         for (int p = 0; p < Figure.Parts; p++)
-            if (k.Fig.Mesh[p] != null) k.Parts[p] = Multi(k.Fig.Mesh[p], _mat, true);
+        {
+            if (fig.Mesh[p] == null && fig.Mid[p] == null && fig.Far[p] == null) continue;
+            k.Parts[p] = Multi(fig.Mid[p] ?? fig.Mesh[p] ?? fig.Far[p], Figure.Material(BodyPlan.Sub), true);
+            if (fig.Mid[p] != null) k.Shades[p] = Multi(fig.Mid[p], Figure.Material(BodyPlan.Sub), true);
+        }
+        for (int d = 0; d < dn; d++)
+        {
+            if (fig.DressNear[d] == null && fig.DressMid[d] == null) continue;
+            k.Dress[d] = Multi(fig.DressMid[d] ?? fig.DressNear[d], Figure.Material(BodyPlan.Sub), true);
+            if (fig.DressMid[d] != null) k.DressShades[d] = Multi(fig.DressMid[d], Figure.Material(BodyPlan.Sub), true);
+        }
         _kinds[plan] = k;
-        if (_far) Dress(k);
+        Fit(k);
         return k;
     }
 
-    /// <summary>Near or far, every kind of figure in the meshes and the material for it.</summary>
-    void Dress(Kind k)
+    /// <summary>
+    /// Every kind of figure in the meshes and the materials for how near it is drawn: near the cells of 3 cm and the
+    /// dress, the shadows cast by the half-voxels; in the middle the half-voxels, casting their own; far whole voxels, no
+    /// dress of its own and no shadows.
+    /// </summary>
+    void Fit(Kind k)
     {
+        var fig = k.Fig;
+        var on = GeometryInstance3D.ShadowCastingSetting.On;
+        var off = GeometryInstance3D.ShadowCastingSetting.Off;
         for (int p = 0; p < Figure.Parts; p++)
         {
             var mi = k.Parts[p];
             if (mi == null) continue;
-            var mesh = _far ? k.Fig.Far[p] : k.Fig.Mesh[p];
+            var mesh = _lod == 0 ? fig.Mesh[p] : _lod == 1 ? fig.Mid[p] : fig.Far[p];
             mi.Visible = mesh != null;
-            if (mesh == null) continue;
-            mi.Multimesh.Mesh = mesh;
-            mi.MaterialOverride = _far ? _matFar : _mat;
-            mi.CastShadow = _far ? GeometryInstance3D.ShadowCastingSetting.Off : GeometryInstance3D.ShadowCastingSetting.On;
+            if (mesh != null)
+            {
+                mi.Multimesh.Mesh = mesh;
+                mi.MaterialOverride = Figure.Material(_lod == 0 ? BodyPlan.FineSub : _lod == 1 ? BodyPlan.Sub : 1);
+                mi.CastShadow = _lod == 1 ? on : off;
+            }
+            if (k.Shades[p] is { } sh) { sh.Visible = _lod == 0; sh.CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly; }
+        }
+        for (int d = 0; d < k.Dress.Length; d++)
+        {
+            var mi = k.Dress[d];
+            if (mi == null) continue;
+            var mesh = _lod == 0 ? fig.DressNear[d] : _lod == 1 ? fig.DressMid[d] : null;
+            mi.Visible = mesh != null;
+            if (mesh != null)
+            {
+                mi.Multimesh.Mesh = mesh;
+                mi.MaterialOverride = Figure.Material(_lod == 0 ? fig.Plan.Dress[d].Sub : BodyPlan.Sub);
+                mi.CastShadow = _lod == 1 ? on : off;
+            }
+            if (k.DressShades[d] is { } sh) { sh.Visible = _lod == 0; sh.CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly; }
         }
     }
 
@@ -130,16 +180,29 @@ public partial class UnitView : Node3D
         return false;
     }
 
-    /// <summary>How many pixels of the window a voxel takes: under three, the figures go over to whole voxels.</summary>
+    /// <summary>
+    /// How many pixels of the window a voxel takes: from seven up the figures are drawn in their cells of 3 cm, under
+    /// three in whole voxels, between in half-voxels.
+    /// </summary>
     void Distance()
     {
-        if (ForceNear) { if (_far) { _far = false; foreach (var k in _kinds.Values) Dress(k); } return; }
-        float px = GetTree().Root.Size.Y / Math.Max(.01f, _m.Rig.Cam.Size) * VoxelWorld.Vox;
-        bool far = _far ? px < 3.6f : px < 3.2f;
-        if (far == _far) return;
-        _far = far;
-        foreach (var k in _kinds.Values) Dress(k);
+        int lod = 0;
+        if (!ForceNear)
+        {
+            float px = GetTree().Root.Size.Y / Math.Max(.01f, _m.Rig.Cam.Size) * VoxelWorld.Vox;
+            lod = px >= (_lod == 0 ? NearPx * .9f : NearPx) ? 0 : px < (_lod == 2 ? 3.6f : 3.2f) ? 2 : 1;
+        }
+        if (lod == _lod) return;
+        _lod = lod;
+        foreach (var k in _kinds.Values) Fit(k);
+        foreach (var own in _own.Values) own.Rev = -1;
     }
+
+    /// <summary>Pixels of the window to a voxel from which the figures are drawn in their finest cells.</summary>
+    const float NearPx = 7;
+
+    /// <summary>How near the figures are drawn now: 0 in their finest cells, 1 in half-voxels, 2 in whole voxels.</summary>
+    public int Detail => _lod;
 
     MultiMeshInstance3D Multi(Mesh mesh, Material mat, bool colors)
     {
@@ -172,7 +235,7 @@ public partial class UnitView : Node3D
         look_xf.Clear();
         foreach (var k in _kinds.Values) k.Count = 0;
         // those in the citadel are not to be seen
-        foreach (var u in sim.Units) if (u.Wounds == null && !u.Inside && u.Id != HiddenId) KindOf(u).Count++;
+        foreach (var u in sim.Units) if (!u.Inside && u.Id != HiddenId) KindOf(u).Count++;
         foreach (var k in _kinds.Values) { if (k.Count > k.Cap) Grow(k, k.Count); k.Count = 0; }
         _alive.Clear();
         foreach (var u in sim.Units)
@@ -186,15 +249,18 @@ public partial class UnitView : Node3D
             if (u.Id == HiddenId)
             {
                 // its own wounded body hidden, and made anew when it is drawn again
-                if (_own.TryGetValue(u.Id, out var hid)) { foreach (var part in hid.Parts) if (part != null) part.Visible = false; hid.Rev = -1; }
+                if (_own.TryGetValue(u.Id, out var hid)) { Show(hid, false); hid.Rev = -1; }
                 continue;
             }
-            if (u.Wounds == null)
+            // with its kind: all of it, or what the wounds have not changed (the rest, drawn on its own, is folded away here)
+            var hurt = u.Wounds != null ? DrawOwn(u, k.Fig) : null;
+            int o = k.Count++ * 16;
+            for (int p = 0; p < Figure.Parts; p++) Write(k.Bufs[p], o, hurt != null && hurt[p] ? Folded : _xf[p], tint);
+            for (int d = 0; d < k.DressBufs.Length; d++)
             {
-                int o = k.Count++ * 16;
-                for (int p = 0; p < Figure.Parts; p++) Write(k, (Part)p, o, _xf[p], tint);
+                int on = (int)k.Fig.DressOn[d];
+                Write(k.DressBufs[d], o, hurt != null && hurt[on] ? Folded : _xf[on] * Wrist(u, k.Fig, d), tint);
             }
-            else DrawOwn(u);
         }
         foreach (var k in _kinds.Values) Upload(k);
         _gone.Clear();
@@ -202,7 +268,9 @@ public partial class UnitView : Node3D
         foreach (int id in _gone)
         {
             _looks.Remove(id);
-            if (_own.Remove(id, out var own)) foreach (var n in own.Parts) n?.QueueFree();
+            if (!_own.Remove(id, out var own)) continue;
+            foreach (var n in own.Parts) n?.QueueFree();
+            foreach (var n in own.Dress) n?.QueueFree();
         }
         DrawArrows(sim);
         DrawStuck(sim);
@@ -227,15 +295,32 @@ public partial class UnitView : Node3D
     static void Grow(Kind k, int need)
     {
         while (k.Cap < need) k.Cap = Math.Max(8, k.Cap * 2);
-        for (int p = 0; p < Figure.Parts; p++)
+        void Room(MultiMeshInstance3D mi)
         {
-            var mi = k.Parts[p];
-            if (mi == null) continue;
-            k.Bufs[p] = new float[k.Cap * 16];
+            if (mi == null) return;
             mi.Multimesh.InstanceCount = k.Cap;
             mi.Multimesh.VisibleInstanceCount = 0;
         }
+        for (int p = 0; p < Figure.Parts; p++)
+        {
+            k.Bufs[p] = new float[k.Cap * 16];
+            Room(k.Parts[p]); Room(k.Shades[p]);
+        }
+        for (int d = 0; d < k.Dress.Length; d++)
+        {
+            k.DressBufs[d] = new float[k.Cap * 16];
+            Room(k.Dress[d]); Room(k.DressShades[d]);
+        }
     }
+
+    /// <summary>
+    /// How the hand turns what it holds about its grip, on top of the arm's swing (identity: as it was sculpted in the
+    /// fist). The place for a wrist's own turn — a blade laid flat, a thrust — when the blows want one.
+    /// </summary>
+    static Transform3D Wrist(Unit u, Figure f, int dress) => Transform3D.Identity;
+
+    /// <summary>Folds a part of a figure to nothing: it is drawn elsewhere (a hurt part, on its own).</summary>
+    static readonly Transform3D Folded = new(new Basis(Vector3.Zero, Vector3.Zero, Vector3.Zero), new Vector3(0, -1000, 0));
 
     /// <summary>Works out the joints for this frame and writes the part transforms of one figure.</summary>
     /// <summary>Works out the joints for this frame: the part transforms go to _xf, the tint is returned.</summary>
@@ -442,28 +527,75 @@ public partial class UnitView : Node3D
         }
     }
 
-    /// <summary>A hurt body: what is left of each part, meshed again whenever it is wounded, posed like any other.</summary>
-    void DrawOwn(Unit u)
+    /// <summary>
+    /// A hurt body: the parts its wounds have changed, and what hangs on them, drawn on their own — meshed again when a
+    /// wound changes that part (not the others) or the distance changes — and posed like any other. Returns which parts
+    /// are drawn here.
+    /// </summary>
+    bool[] DrawOwn(Unit u, Figure fig)
     {
         var w = u.Wounds;
-        if (!_own.TryGetValue(u.Id, out var own)) _own[u.Id] = own = new Own();
-        if (own.Rev != w.Rev)
+        var plan = w.Plan;
+        if (!_own.TryGetValue(u.Id, out var own)) _own[u.Id] = own = new Own { Dress = new MeshInstance3D[plan.Dress.Count] };
+        if (own.Rev != w.Rev || own.Lod != _lod)
         {
-            own.Rev = w.Rev;
+            bool relod = own.Lod != _lod;
+            own.Rev = w.Rev; own.Lod = _lod;
             for (int p = 0; p < Figure.Parts; p++)
             {
-                var mesh = Figure.MeshOf(w.Grid[p]);
-                if (own.Parts[p] == null && mesh != null)
+                var g = w.Grid[p]; var g0 = plan.Grid[p];
+                bool hurt = g != g0 && (g == null || g0 == null || g.Count != g0.Count || !g.M.AsSpan().SequenceEqual(g0.M));
+                int sum = Sum(g);
+                if (hurt && own.Hurt[p] && own.Sums[p] == sum && !relod) continue;
+                own.Hurt[p] = hurt; own.Sums[p] = sum;
+                Mesh body = null;
+                if (hurt)
+                    body = _lod == 0 ? GodotMesh.From(Figure.NearOf(plan, p, g, out _)) : _lod == 1 ? GodotMesh.From(Figure.MidOf(plan, p, g, 0, out _)) : Figure.CoarseOf(g);
+                Put(ref own.Parts[p], body, _lod == 0 ? BodyPlan.FineSub : _lod == 1 ? BodyPlan.Sub : 1);
+                for (int d = 0; d < plan.Dress.Count; d++)
                 {
-                    own.Parts[p] = new MeshInstance3D { MaterialOverride = _mat, CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
-                    AddChild(own.Parts[p]);
+                    if ((int)plan.Dress[d].On != p) continue;
+                    Mesh worn = null;
+                    if (hurt && _lod < 2)
+                        worn = GodotMesh.From(_lod == 0 ? Figure.DressOf(plan, d, g, out _) : Figure.MidOf(plan, p, g, d + 1, out _));
+                    Put(ref own.Dress[d], worn, _lod == 0 ? plan.Dress[d].Sub : BodyPlan.Sub);
                 }
-                if (own.Parts[p] != null) { own.Parts[p].Mesh = mesh; own.Parts[p].Visible = mesh != null; }
             }
         }
         for (int p = 0; p < Figure.Parts; p++) if (own.Parts[p] != null) own.Parts[p].Transform = _xf[p];
+        for (int d = 0; d < own.Dress.Length; d++) if (own.Dress[d] != null) own.Dress[d].Transform = _xf[(int)fig.DressOn[d]] * Wrist(u, fig, d);
         // for the arrows stuck in it
         for (int p = 0; p < Figure.Parts; p++) look_xf[u.Id * Figure.Parts + p] = _xf[p];
+        return own.Hurt;
+    }
+
+    /// <summary>A node of a hurt body given its mesh (made the first time one is wanted), or hidden when there is none.</summary>
+    void Put(ref MeshInstance3D node, Mesh mesh, int grid)
+    {
+        if (node == null && mesh == null) return;
+        if (node == null) { node = new MeshInstance3D(); AddChild(node); }
+        node.Mesh = mesh;
+        node.Visible = mesh != null;
+        node.MaterialOverride = Figure.Material(grid);
+        node.CastShadow = _lod == 2 ? GeometryInstance3D.ShadowCastingSetting.Off : GeometryInstance3D.ShadowCastingSetting.On;
+    }
+
+    static void Show(Own own, bool on)
+    {
+        foreach (var n in own.Parts) if (n != null) n.Visible = on && n.Mesh != null;
+        foreach (var n in own.Dress) if (n != null) n.Visible = on && n.Mesh != null;
+    }
+
+    /// <summary>A sum of a part's half-voxels that changes when any of them does (so only a part a wound changed is meshed again).</summary>
+    static int Sum(PartGrid g)
+    {
+        if (g == null) return 0;
+        unchecked
+        {
+            int h = g.Count * 31 + g.M.Length;
+            for (int i = 0; i < g.M.Length; i++) h = h * 16777619 ^ g.M[i];
+            return h;
+        }
     }
 
     // where each part of a hurt body was drawn this frame, for the arrows in it: by unit and part
@@ -504,9 +636,11 @@ public partial class UnitView : Node3D
     /// <summary>A piece comes off a body: it drops from where it was and lies down on the ground beside it.</summary>
     void Fall(Remnant r)
     {
-        var mesh = Figure.MeshOf(r.Grid);
+        // drawn near, with what it held: its cells where its half-voxels came off, the flesh showing where it was cut
+        var plan = r.Of?.Wounds?.Plan ?? (r.Of != null ? Bodies.Plan(r.Of.T, r.Of.Look) : null);
+        var mesh = plan != null ? Figure.Whole(plan, (int)r.From, r.Grid) : Figure.MeshOf(r.Grid);
         if (mesh == null) return;
-        var node = new MeshInstance3D { Mesh = mesh, MaterialOverride = _mat, CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
+        var node = new MeshInstance3D { Mesh = mesh, MaterialOverride = plan != null ? null : Figure.Material(BodyPlan.Sub), CastShadow = GeometryInstance3D.ShadowCastingSetting.On };
         AddChild(node);
         var at = new Vector3(_w.WX(r.X), _w.WY(r.Y), _w.WZ(r.Z));
         var basis = new Basis(Vector3.Up, MathF.PI / 2 - r.Facing).Scaled(Vector3.One * VoxelWorld.Vox * r.Scale);
@@ -629,9 +763,8 @@ public partial class UnitView : Node3D
         return Colors.White;
     }
 
-    static void Write(Kind k, Part p, int o, Transform3D t, Color c)
+    static void Write(float[] b, int o, Transform3D t, Color c)
     {
-        var b = k.Bufs[(int)p];
         if (b == null) return;
         int i = o;
         b[i] = t.Basis.X.X; b[i + 1] = t.Basis.Y.X; b[i + 2] = t.Basis.Z.X; b[i + 3] = t.Origin.X;
@@ -642,15 +775,16 @@ public partial class UnitView : Node3D
 
     static void Upload(Kind k)
     {
-        for (int p = 0; p < Figure.Parts; p++)
+        void One(MultiMeshInstance3D mi, float[] buf)
         {
-            var mi = k.Parts[p];
-            if (mi == null) continue;
+            if (mi == null || !mi.Visible) return;
             var mm = mi.Multimesh;
-            if (k.Count == 0) { if (mm.VisibleInstanceCount != 0) mm.VisibleInstanceCount = 0; continue; }
-            RenderingServer.MultimeshSetBuffer(mm.GetRid(), k.Bufs[p]);
+            if (k.Count == 0) { if (mm.VisibleInstanceCount != 0) mm.VisibleInstanceCount = 0; return; }
+            RenderingServer.MultimeshSetBuffer(mm.GetRid(), buf);
             mm.VisibleInstanceCount = k.Count;
         }
+        for (int p = 0; p < Figure.Parts; p++) { One(k.Parts[p], k.Bufs[p]); One(k.Shades[p], k.Bufs[p]); }
+        for (int d = 0; d < k.Dress.Length; d++) { One(k.Dress[d], k.DressBufs[d]); One(k.DressShades[d], k.DressBufs[d]); }
     }
 
     // ---------------------------------------------------------------- arrows and rings

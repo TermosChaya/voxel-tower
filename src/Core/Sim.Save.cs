@@ -15,7 +15,8 @@ namespace VoxelTower.Core;
 /// </summary>
 public sealed partial class Sim
 {
-    public const int SaveVersion = 19;
+    /// <summary>20: the bodies sculpted finer, their half-voxels (and so a wounded body's) not what they were.</summary>
+    public const int SaveVersion = 20;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -497,7 +498,13 @@ public sealed partial class Sim
         b.Rev = rev + 1; b.MainHand = main; b.OffHand = off; b.Shield = shield; b.Legs = legs; b.Bleed = bleed;
         b.Wounds.AddRange(wounds);
         b.Arrows.AddRange(arrows);
-        for (int p = 0; p < BodyPlan.Parts; p++) if (!kept[p]) b.Grid[p] = grids[p];
+        // a part whose half-voxels are not of the shape its body has now (sculpted anew since) is read back whole
+        for (int p = 0; p < BodyPlan.Parts; p++)
+        {
+            var g = grids[p]; var o = b.Plan.Grid[p];
+            if (kept[p] || g != null && (o == null || g.X0 != o.X0 || g.Y0 != o.Y0 || g.Z0 != o.Z0 || g.SX != o.SX || g.SY != o.SY || g.SZ != o.SZ)) continue;
+            b.Grid[p] = g;
+        }
         return b;
     }
 
