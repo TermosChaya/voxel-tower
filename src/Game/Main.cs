@@ -1333,6 +1333,7 @@ public partial class Main : Node3D
         if (_pose == "roll") { RollDown(); return; }
         if (_pose == "crush") { CrushDeck(); return; }
         if (_pose == "drops") { Drops(); return; }
+        if (_pose == "felling") { Felling(); return; }
         if (_pose == "sigils")
         {
             var layer = new CanvasLayer { Layer = 100 };
@@ -2250,6 +2251,34 @@ public partial class Main : Node3D
     /// and on the slope below: the stones and logs go over onto those at the foot and roll on down the slope through the
     /// rest (--look=1: lying at the bottom after).
     /// </summary>
+    /// <summary>
+    /// The household of a new game felling the trees nearest the fort west of the citadel, marked as the player marks
+    /// them; --at= seconds of the work: with time enough, stumps and logs being cut up, and no crown left in the air.
+    /// </summary>
+    void Felling()
+    {
+        var sim = Sim; var w = World;
+        sim.Waves.Countdown = 1e9;
+        StartingFort.Raise(sim);
+        foreach (var t in new[] { Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Worker }) sim.Spawn(t, sim.Gate);
+        int cx = Site.KeepX - Site.KeepR - 90, cz = Site.KeepZ + 40, felled = 0;
+        var taken = new HashSet<(int, int)>();
+        for (int r = 0; r < 120 && felled < 3; r += 3)
+            for (int a = 0; a < 32 && felled < 3; a++)
+            {
+                int x = cx + (int)(MathF.Cos(a * MathF.Tau / 32) * r), z = cz + (int)(MathF.Sin(a * MathF.Tau / 32) * r);
+                if (!w.InBounds(x, 2, z) || taken.Contains((x >> 4, z >> 4))) continue;
+                int g = w.SurfAt(x, z);
+                if (!Mat.IsTrunk(w.Get(x, g + 2, z))) continue;
+                sim.DesignateRemove(Shapes.Tree(w, x, g + 2, z));
+                for (int dz = -3; dz <= 3; dz++) for (int dx = -3; dx <= 3; dx++) taken.Add(((x >> 4) + dx, (z >> 4) + dz));
+                felled++;
+            }
+        Advance(_poseSeconds);
+        Rig.Set(w.WX(cx), w.WZ(cz), -.66f, .6f, 1.5f, snap: true);
+        Hud.Refresh();
+    }
+
     void Drops()
     {
         var sim = Sim; var w = World; var s = Site;

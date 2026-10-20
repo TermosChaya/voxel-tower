@@ -300,24 +300,50 @@ public static class Shapes
                 if (Math.Abs(nx - x0) <= 40 && Math.Abs(nz - z0) <= 40 && Mat.IsTrunk(w.Get(nx, ny, nz)) && seen.Add(Key(w, nx, ny, nz))) queue.Enqueue((nx, ny, nz, 0));
             });
         }
-        // the leaves within reach of it, and the wood of other trees met among them
+        // the leaves within reach of it, nearer to it than to any other tree's wood met among them
+        var wood = new List<(int x, int y, int z)>(L.Count);
+        for (int i = 0; i < L.Count; i++) wood.Add((L.X(i), L.Y(i), L.Z(i)));
+        foreach (var (x, y, z) in Crown(w, wood))
+        {
+            if (L.Count >= limit) break;
+            L.Add(x, y, z, Mat.Air);
+        }
+        return L;
+    }
+
+    /// <summary>
+    /// The leaves that go with this wood when it is felled or comes down: those within reach of it through the leaves
+    /// (twenty-two steps), no nearer to the wood of another tree met among them than to it. Another tree's wood is any
+    /// trunk not of this wood that the test (if given) says still stands; a leaf the other test says is this tree's
+    /// anyway (marked to be felled with it) goes with it however near the other tree is. Each leaf counted once, nearest
+    /// first.
+    /// </summary>
+    public static List<(int x, int y, int z)> Crown(VoxelWorld w, IReadOnlyList<(int x, int y, int z)> wood, Func<int, int, int, bool> stands = null, Func<int, int, int, bool> ours = null)
+    {
         const int Reach = 22;
+        var mine = new HashSet<long>(wood.Count);
+        foreach (var (x, y, z) in wood) mine.Add(Key(w, x, y, z));
+        var queue = new Queue<(int x, int y, int z, int d)>();
         var near = new Dictionary<long, int>();
         var order = new List<(int x, int y, int z, long k)>();
         var other = new List<(int x, int y, int z)>();
         var otherSeen = new HashSet<long>();
-        for (int i = 0; i < L.Count; i++) queue.Enqueue((L.X(i), L.Y(i), L.Z(i), 0));
+        foreach (var (x, y, z) in wood) queue.Enqueue((x, y, z, 0));
         while (queue.Count > 0)
         {
             var (x, y, z, d) = queue.Dequeue();
             if (d >= Reach) continue;
-            Around(x, y, z, (nx, ny, nz) =>
-            {
-                byte m = w.Get(nx, ny, nz);
-                long k = Key(w, nx, ny, nz);
-                if (Mat.IsLeafy(m)) { if (near.TryAdd(k, d + 1)) { order.Add((nx, ny, nz, k)); queue.Enqueue((nx, ny, nz, d + 1)); } }
-                else if (Mat.IsTrunk(m) && !seen.Contains(k) && otherSeen.Add(k)) other.Add((nx, ny, nz));
-            });
+            for (int dy = -1; dy <= 1; dy++)
+                for (int dz = -1; dz <= 1; dz++)
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        int nx = x + dx, ny = y + dy, nz = z + dz;
+                        if ((dx | dy | dz) == 0 || !w.InBounds(nx, ny, nz)) continue;
+                        byte m = w.Get(nx, ny, nz);
+                        long k = Key(w, nx, ny, nz);
+                        if (Mat.IsLeafy(m)) { if (near.TryAdd(k, d + 1)) { order.Add((nx, ny, nz, k)); queue.Enqueue((nx, ny, nz, d + 1)); } }
+                        else if (Mat.IsTrunk(m) && !mine.Contains(k) && (stands == null || stands(nx, ny, nz)) && otherSeen.Add(k)) other.Add((nx, ny, nz));
+                    }
         }
         // how near the other trees' wood is to the same leaves
         var theirs = new Dictionary<long, int>();
@@ -326,18 +352,20 @@ public static class Shapes
         {
             var (x, y, z, d) = queue.Dequeue();
             if (d >= Reach) continue;
-            Around(x, y, z, (nx, ny, nz) =>
-            {
-                long k = Key(w, nx, ny, nz);
-                if (near.ContainsKey(k) && theirs.TryAdd(k, d + 1)) queue.Enqueue((nx, ny, nz, d + 1));
-            });
+            for (int dy = -1; dy <= 1; dy++)
+                for (int dz = -1; dz <= 1; dz++)
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        int nx = x + dx, ny = y + dy, nz = z + dz;
+                        if ((dx | dy | dz) == 0 || !w.InBounds(nx, ny, nz)) continue;
+                        long k = Key(w, nx, ny, nz);
+                        if (near.ContainsKey(k) && theirs.TryAdd(k, d + 1)) queue.Enqueue((nx, ny, nz, d + 1));
+                    }
         }
+        var crown = new List<(int x, int y, int z)>(order.Count);
         foreach (var (x, y, z, k) in order)
-        {
-            if (L.Count >= limit) break;
-            if (!theirs.TryGetValue(k, out int dt) || near[k] <= dt) L.Add(x, y, z, Mat.Air);
-        }
-        return L;
+            if (!theirs.TryGetValue(k, out int dt) || near[k] <= dt || ours != null && ours(x, y, z)) crown.Add((x, y, z));
+        return crown;
     }
 
     /// <summary>Trees a dig cuts into come down whole, not as stumps under floating crowns: adds the rest of each to the plan.</summary>

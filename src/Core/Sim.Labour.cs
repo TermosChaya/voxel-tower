@@ -156,8 +156,9 @@ public sealed partial class Sim
             if (u.Jobs.Count == 0)
             {
                 // nothing to do from here after all (stores empty, or someone stands where the masonry goes):
-                // leave this spot to others for a while and look elsewhere
-                u.Unreachable[u.Site] = Time + (u.Why.StartsWith("нет") ? 8 : 4);
+                // leave this spot to others for a while and look elsewhere; what waits for something to be laid under
+                // it waits a good while — walking back to it every few seconds only takes the hands off other work
+                u.Unreachable[u.Site] = Time + (u.Why.StartsWith("ждёт опоры") ? 30 : u.Why.StartsWith("нет") ? 8 : 4);
                 ReleaseSite(u);
                 u.NextSearch = Time + .2;
                 return;

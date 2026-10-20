@@ -415,6 +415,105 @@ public sealed partial class Sim
     }
 
     /// <summary>
+    /// After a tree came down: any tuft of its leaves still marked to be felled that touches no wood — cut off from the
+    /// rest of its crown by what went before — comes down as brushwood too, so no one is left looking up at work out of
+    /// reach.
+    /// </summary>
+    void DropStrays(List<(int x, int y, int z)> timber, List<(int x, int y, int z)> twigs)
+    {
+        const int Margin = 24;
+        int x0 = int.MaxValue, y0 = int.MaxValue, z0 = int.MaxValue, x1 = int.MinValue, y1 = int.MinValue, z1 = int.MinValue;
+        foreach (var (x, y, z) in timber) { x0 = Math.Min(x0, x); y0 = Math.Min(y0, y); z0 = Math.Min(z0, z); x1 = Math.Max(x1, x); y1 = Math.Max(y1, y); z1 = Math.Max(z1, z); }
+        foreach (var (x, y, z) in twigs) { x0 = Math.Min(x0, x); y0 = Math.Min(y0, y); z0 = Math.Min(z0, z); x1 = Math.Max(x1, x); y1 = Math.Max(y1, y); z1 = Math.Max(z1, z); }
+        x0 = Math.Max(0, x0 - Margin); z0 = Math.Max(0, z0 - Margin); y0 = Math.Max(1, y0 - Margin);
+        x1 = Math.Min(World.SX - 1, x1 + Margin); z1 = Math.Min(World.SZ - 1, z1 + Margin); y1 = Math.Min(World.SY - 1, y1 + Margin);
+        var seen = new HashSet<int>();
+        for (int y = y0; y <= y1; y++)
+            for (int z = z0; z <= z1; z++)
+                for (int x = x0; x <= x1; x++)
+                    DropTuft(x, y, z, seen);
+    }
+
+    float _straysAt;
+
+    /// <summary>Every few seconds, where felling is marked: leaves marked with a tree that no longer touch any wood come down.</summary>
+    void TickStrays(float dt)
+    {
+        _straysAt += dt;
+        if (_straysAt < 3) return;
+        _straysAt = 0;
+        DropStrayLeaves(fellingOnly: true);
+    }
+
+    /// <summary>
+    /// Every tuft of leaves still marked to be felled that touches no wood comes down: what a felling leaves hanging —
+    /// a tuft held by a neighbour's trunk that went next, or a game read back from before the crowns went with the
+    /// trunks. Looks only where felling is marked, unless told to look at all the marked work. Returns how many leaves
+    /// came down.
+    /// </summary>
+    public int DropStrayLeaves(bool fellingOnly = false)
+    {
+        var seen = new HashSet<int>();
+        int n = 0;
+        var fell = Orders.ColWork[(int)WorkKind.Fell];
+        foreach (int col in new List<int>(Orders.Active))
+        {
+            if (fellingOnly && fell[col] == 0) continue;
+            if (!Orders.Span(col, out int y0, out int y1)) continue;
+            int cx = col % Nav.NX << NavGrid.Shift, cz = col / Nav.NX << NavGrid.Shift;
+            for (int y = y0; y <= y1; y++)
+                for (int z = cz; z < cz + NavGrid.CS && z < World.SZ; z++)
+                    for (int x = cx; x < cx + NavGrid.CS && x < World.SX; x++)
+                        n += DropTuft(x, y, z, seen);
+        }
+        return n;
+    }
+
+    /// <summary>
+    /// A leaf comes down as brushwood: gone, its order and its fire with it; whatever lay on it (a log, splinters that
+    /// came down on the crown before) is looked at again for what holds it.
+    /// </summary>
+    void Shed(int x, int y, int z)
+    {
+        World.Set(x, y, z, Mat.Air);
+        if (Orders.At(x, y, z) != 0) Orders.Clear(x, y, z);
+        Burning.Remove(WaterPlanner.Pack(x, y, z));
+        if (World.InBounds(x, y + 1, z) && Bound(World.Get(x, y + 1, z))) _shaken.Add(WaterPlanner.Pack(x, y + 1, z));
+    }
+
+    readonly List<(int x, int y, int z)> _tuft = new();
+    readonly Queue<(int x, int y, int z)> _tuftQueue = new();
+
+    /// <summary>
+    /// The leaves marked to be felled that hang together with this one, down — unless any of them touches wood (a trunk
+    /// or a bough, standing or a stump still to be cut). Another tree's leaves they lean on do not hold them up.
+    /// </summary>
+    int DropTuft(int x, int y, int z, HashSet<int> seen)
+    {
+        if (!Mat.IsLeafy(World.Get(x, y, z)) || !Orders.IsRemove(Orders.At(x, y, z)) || !seen.Add(WaterPlanner.Pack(x, y, z))) return 0;
+        _tuft.Clear(); _tuftQueue.Clear();
+        _tuftQueue.Enqueue((x, y, z));
+        while (_tuftQueue.Count > 0)
+        {
+            var (px, py, pz) = _tuftQueue.Dequeue();
+            _tuft.Add((px, py, pz));
+            if (_tuft.Count > 40000) return 0;
+            for (int dy = -1; dy <= 1; dy++)
+                for (int dz = -1; dz <= 1; dz++)
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        int nx = px + dx, ny = py + dy, nz = pz + dz;
+                        if ((dx | dy | dz) == 0 || !World.InBounds(nx, ny, nz)) continue;
+                        byte m = World.Get(nx, ny, nz);
+                        if (Mat.IsTrunk(m)) return 0;
+                        if (Mat.IsLeafy(m) && Orders.IsRemove(Orders.At(nx, ny, nz)) && seen.Add(WaterPlanner.Pack(nx, ny, nz))) _tuftQueue.Enqueue((nx, ny, nz));
+                    }
+        }
+        foreach (var (px, py, pz) in _tuft) Shed(px, py, pz);
+        return _tuft.Count;
+    }
+
+    /// <summary>
     /// What is no longer held comes down: taken out of where it stood, and laid again lower, column by column, each
     /// voxel running off its heap to a lower neighbour as loose stone does. A tree falls over instead, away from whoever
     /// is beside it, and lies as a log — and rolls on, if it lies across a slope. Leaves and twigs that fall are lost.
@@ -446,16 +545,13 @@ public sealed partial class Sim
             int dir = near == null ? Rng.Next(4) : MathF.Abs(near.X - tx) > MathF.Abs(near.Z - tz) ? (near.X > tx ? 1 : 0) : (near.Z > tz ? 3 : 2);
             (fx, fz) = dir switch { 0 => (1, 0), 1 => (-1, 0), 2 => (0, 1), _ => (0, -1) };
         }
-        // the crowns of trees go with their trunks
-        var twigs = new List<(int x, int y, int z)>();
-        foreach (var (x, y, z, m, _) in pieces)
-        {
-            if (!Mat.IsTrunk(m) || twigs.Count > 30000) continue;
-            for (int dy = -1; dy <= 1; dy++)
-                for (int dz = -1; dz <= 1; dz++)
-                    for (int dx = -1; dx <= 1; dx++)
-                        if (Mat.IsLeafy(World.Get(x + dx, y + dy, z + dz))) twigs.Add((x + dx, y + dy, z + dz));
-        }
+        // the crowns of trees go with their trunks: the leaves nearer to the wood that falls than to any tree left
+        // standing (a stump marked to be cut stands no more), all of them however big the crown
+        var timber = new List<(int x, int y, int z)>();
+        foreach (var (x, y, z, m, _) in pieces) if (Mat.IsTrunk(m)) timber.Add((x, y, z));
+        var twigs = timber.Count == 0 ? new List<(int x, int y, int z)>()
+            : Shapes.Crown(World, timber, (x, y, z) => !falling.Contains(WaterPlanner.Pack(x, y, z)) && !Orders.IsRemove(Orders.At(x, y, z)),
+                (x, y, z) => Orders.IsRemove(Orders.At(x, y, z)));
         foreach (var (x, y, z, m, _) in pieces)
         {
             World.Set(x, y, z, Mat.Air);
@@ -464,18 +560,8 @@ public sealed partial class Sim
             if (!quiet) Fell?.Invoke(x, y, z, m);
         }
         // a crown with its trunk gone comes down as brushwood, which does not keep
-        for (int i = 0; i < twigs.Count; i++)
-        {
-            var (x, y, z) = twigs[i];
-            if (!Mat.IsLeafy(World.Get(x, y, z))) continue;
-            World.Set(x, y, z, Mat.Air);
-            if (Orders.At(x, y, z) != 0) Orders.Clear(x, y, z);
-            Burning.Remove(WaterPlanner.Pack(x, y, z));
-            for (int dy = -1; dy <= 1; dy++)
-                for (int dz = -1; dz <= 1; dz++)
-                    for (int dx = -1; dx <= 1; dx++)
-                        if (twigs.Count < 60000 && Mat.IsLeafy(World.Get(x + dx, y + dy, z + dz))) twigs.Add((x + dx, y + dy, z + dz));
-        }
+        foreach (var (x, y, z) in twigs) if (Mat.IsLeafy(World.Get(x, y, z))) Shed(x, y, z);
+        if (timber.Count > 0) DropStrays(timber, twigs);
         pieces.Sort((a, b) => a.y.CompareTo(b.y));
         float cx = 0, cy = 0, cz = 0;
         int laid = 0, stone = 0, wood = 0;
@@ -485,6 +571,7 @@ public sealed partial class Sim
         foreach (var (x, _, z, _, _) in pieces) { ax0 = Math.Min(ax0, x); az0 = Math.Min(az0, z); ax1 = Math.Max(ax1, x); az1 = Math.Max(az1, z); }
         var marked = new VoxelList();
         var logCells = new List<(int x, int y, int z)>();
+        var logLaid = new HashSet<int>();
         var under = quiet ? new List<Unit>() : Units.FindAll(u => !u.Dead && !u.Inside && u.X > ax0 - 16 && u.X < ax1 + 16 && u.Z > az0 - 16 && u.Z < az1 + 16);
         foreach (var (x, y, z, m, order) in pieces)
         {
@@ -492,12 +579,12 @@ public sealed partial class Sim
             bool log = Mat.IsTrunk(m);
             int sx = log ? x + fx * (y - baseY) : x, sz = log ? z + fz * (y - baseY) : z, sy = log ? baseY + 6 : y;
             if (!World.InBounds(sx, sy, sz)) continue;
-            var (lx, ly, lz) = Landing(sx, sy, sz, log || m is Mat.Wood or Mat.Deck or Mat.Char || Mat.IsLeaf(m), runs: !log);
+            var (lx, ly, lz) = Landing(sx, sy, sz, log || m is Mat.Wood or Mat.Deck or Mat.Char || Mat.IsLeaf(m), runs: !log, log: log ? logLaid : null);
             if (ly < 0) continue;
             World.Set(lx, ly, lz, Broken(m));
             if (Orders.At(lx, ly, lz) != 0) Orders.Clear(lx, ly, lz);
             if (Orders.IsRemove(order)) marked.Add(lx, ly, lz, Mat.Air);
-            if (log) logCells.Add((lx, ly, lz));
+            if (log) { logCells.Add((lx, ly, lz)); logLaid.Add(WaterPlanner.Pack(lx, ly, lz)); }
             cx += lx; cy += ly; cz += lz; laid++;
             if (Mat.IsMasonry(m) || m == Mat.Ruin) stone++; else if (m is Mat.Wood or Mat.Deck || Mat.IsTrunk(m)) wood++;
             // a falling tree comes down away from those beside it
@@ -608,16 +695,20 @@ public sealed partial class Sim
     /// <summary>Where a falling voxel comes to rest: down its column onto whatever is solid, then off its heap down to a
     /// lower neighbour while there is one two voxels lower (or one lower, half the time), as loose stone runs; (−1, −1, −1)
     /// if it drops out of the world.</summary>
-    (int x, int y, int z) Landing(int x, int y, int z, bool floats, bool runs = true)
+    (int x, int y, int z) Landing(int x, int y, int z, bool floats, bool runs = true, HashSet<int> log = null)
     {
-        // timber floats: it comes to rest on water as on ground; stone sinks through it
+        // timber floats: it comes to rest on water as on ground; stone sinks through it; and all of it comes down through
+        // the leaves of a crown, which hold nothing up (on them it would hang in the air once they went)
         int Rest(int cx, int cz, int from)
         {
             int yy = from;
             while (yy > 0)
             {
                 byte b = World.Get(cx, yy - 1, cz);
-                if (b != Mat.Air && (b != Mat.Water || floats) && (!Mat.Passable[b] || b == Mat.Water)) break;
+                if (b != Mat.Air && (b != Mat.Water || floats) && (!Mat.Passable[b] || b == Mat.Water) && !Mat.IsLeafy(b)
+                    // a felled trunk is not caught up in a neighbour high over the ground, out of every reach: it comes
+                    // down past its boughs and lies low, on what of itself came down first or on the ground
+                    && !(log != null && Mat.IsTrunk(b) && yy - 1 > World.GroundTop(cx, cz) + 16 && !log.Contains(WaterPlanner.Pack(cx, yy - 1, cz)))) break;
                 yy--;
             }
             return yy;

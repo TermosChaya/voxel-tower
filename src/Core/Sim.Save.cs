@@ -420,6 +420,8 @@ public sealed partial class Sim
         SidesRev++;
         FindDropStones();
         FindScorched();
+        // what an old felling left hanging up in the air comes down
+        DropStrayLeaves();
         return extra;
     }
 

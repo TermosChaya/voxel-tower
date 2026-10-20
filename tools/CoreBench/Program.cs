@@ -514,7 +514,34 @@ if (args.Length == 0 || args[0] == "--sim")
         int ex = px - 60, ez = pz + 40;
         double e0 = sim.Stock[Stockpile.Earth];
         var cut = sim.AddZone(ex, ez, ex + 15, ez + 15, Stockpile.Earth, 8);
-        Run(60);
+        if (Environment.GetEnvironmentVariable("CUT_WHY") == "1")
+        {
+            // what was marked before the cut, and where
+            foreach (int col in sim.Orders.Active)
+            {
+                if (!sim.Orders.Span(col, out int sy0, out int sy1)) continue;
+                int cx = col % sim.Nav.NX << NavGrid.Shift, cz = col / sim.Nav.NX << NavGrid.Shift;
+                for (int y = sy0; y <= sy1; y++) for (int z = cz; z < cz + NavGrid.CS; z++) for (int x = cx; x < cx + NavGrid.CS; x++)
+                {
+                    byte o = sim.Orders.At(x, y, z);
+                    if (o == 0) continue;
+                    int up = 0, down = 0;
+                    while (up < 200 && Mat.IsTrunk(w4.Get(x, y + up + 1, z))) up++;
+                    while (down < 200 && Mat.IsTrunk(w4.Get(x, y - down - 1, z))) down++;
+                    Console.WriteLine($"     marked {o} at {x},{y},{z} ({y - w4.SurfAt(x, z)} from the top), is {Mat.NameOf(w4.Get(x, y, z))}, under it {Mat.NameOf(w4.Get(x, y - 1, z))}; wood above {up}, below {down}, ground at {w4.GroundTop(x, z)}");
+                }
+            }
+        }
+        if (Environment.GetEnvironmentVariable("CUT_WHY") == "1")
+            for (int t = 0; t < 6; t++)
+            {
+                for (int q = 0; q < 10; q++)
+                {
+                    foreach (var u in crew) Console.WriteLine($"     {t * 10 + q} s: {u.T.Name} #{u.Id} {u.State} at {u.X:0},{u.Z:0} ({MathF.Sqrt((u.X - ex - 8) * (u.X - ex - 8) + (u.Z - ez - 8) * (u.Z - ez - 8)) / 8:0} m off) {Retinue0(u)}, site {(u.Site >= 0 ? $"{u.Site % sim.Nav.NX * 8},{u.Site / sim.Nav.NX * 8}" : "-")}, orders {sim.Orders.Total}");
+                    Run(1);
+                }
+            }
+        else Run(60);
         Check("…and dig a set-aside cut until it is done, then let it go", !sim.Zones.Contains(cut) && sim.Stock[Stockpile.Earth] > e0 + 1000,
             $"{cut.Marked} voxels dug, earth +{Fmt.M3(sim.Stock[Stockpile.Earth] - e0)} m³, zones left {sim.Zones.Count}");
     }
@@ -923,11 +950,19 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--life")
         sim.CancelArea(0, 0, w4.SX - 1, w4.SZ - 1);
 
         var guardsman = idlers[0];
+        // out of whatever pit the duties left him in, onto open ground before the citadel, and called up there
+        sim.Command(new[] { guardsman }, sim.NearestStand(site4.KeepX - site4.KeepR - 60, site4.KeepZ + 30, 2));
+        Run(40);
         sim.SetMilitia(new[] { guardsman }, true);
         var gob = sim.Spawn(Kinds.Goblin, sim.NearestStand((int)guardsman.X + 40, (int)guardsman.Z, 2));
         gob.Raid = null;
         bool fought = false;
-        for (int t = 0; t < 20 * 20 && !gob.Dead; t++) { sim.Step(.05f); fought |= guardsman.State == UnitState.Fight; }
+        for (int t = 0; t < 20 * 20 && !gob.Dead; t++)
+        {
+            sim.Step(.05f); fought |= guardsman.State == UnitState.Fight;
+            if (t % 40 == 0 && Environment.GetEnvironmentVariable("LIFE_WHY") == "1")
+                Console.WriteLine($"     {t / 20} s: the worker {guardsman.State} at {guardsman.X:0},{guardsman.Y:0},{guardsman.Z:0} «{Retinue0(guardsman)}»; the goblin {gob.State} at {gob.X:0},{gob.Y:0},{gob.Z:0} «{Retinue0(gob)}»");
+        }
         Check("a worker called up meets a goblin instead of running", fought && guardsman.State != UnitState.Flee,
             $"fought {fought}, the goblin {(gob.Dead ? "dead" : "alive")}, the worker {Math.Ceiling(guardsman.Hp)} hp");
         gob.Dead = true; gob.DiedAt = -999;
@@ -5207,6 +5242,148 @@ static int OverLand(VoxelWorld w, Site site)
         }
     }
     return n;
+}
+
+// ---- felling: trees round the fort felled by the household of a new game, crowns and all, nothing left up in the air
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--felling")
+{
+    Console.WriteLine();
+    var mpF = new MapParams();
+    var wF = new VoxelWorld(mpF.SizeX, mpF.SizeY, mpF.SizeZ);
+    var siteF = MapGen.Generate(wF, mpF);
+    wF.Compact();
+    var sim = new Sim(wF, siteF);
+    sim.Waves.Countdown = 1e9; sim.WildTarget = 0;
+    StartingFort.Raise(sim);
+    void Run(double seconds) { for (double t = 0; t < seconds; t += .05) sim.Step(.05f); }
+    var crew = new List<Unit>();
+    for (int i = 0; i < 4; i++) crew.Add(sim.Spawn(Kinds.Worker, sim.Gate));
+    // the trees nearest the fort, each felled by a click on its trunk as the player does
+    var trees = new List<(int x, int z, VoxelList plan)>();
+    var taken = new HashSet<long>();
+    long K(int x, int y, int z) => ((long)y * wF.SZ + z) * wF.SX + x;
+    for (int r = 70; r < 480 && trees.Count < 6; r += 4)
+        for (int a = 0; a < 64 && trees.Count < 6; a++)
+        {
+            int x = siteF.KeepX + (int)(Math.Cos(a * Math.Tau / 64) * r), z = siteF.KeepZ + (int)(Math.Sin(a * Math.Tau / 64) * r);
+            if (!wF.InBounds(x, 2, z)) continue;
+            int g = wF.SurfAt(x, z);
+            if (!Mat.IsTrunk(wF.Get(x, g + 2, z))) continue;
+            var plan = Shapes.Tree(wF, x, g + 2, z);
+            bool fresh = true;
+            for (int i = 0; i < plan.Count; i++) if (taken.Contains(K(plan.X(i), plan.Y(i), plan.Z(i)))) { fresh = false; break; }
+            if (!fresh || plan.Count < 300) continue;
+            for (int i = 0; i < plan.Count; i++) taken.Add(K(plan.X(i), plan.Y(i), plan.Z(i)));
+            sim.DesignateRemove(plan);
+            trees.Add((x, z, plan));
+        }
+    double woodF = sim.Stock[Stockpile.Wood];
+    if (Environment.GetEnvironmentVariable("FELL_DEBUG") == "1")
+    {
+        // one tree's trunk cut through at three metres by hand: how much of its crown goes when the top comes down
+        var (tx, tz, tplan) = trees[0];
+        int Leaves() { int n = 0; for (int i = 0; i < tplan.Count; i++) if (Mat.IsLeafy(wF.Get(tplan.X(i), tplan.Y(i), tplan.Z(i)))) n++; return n; }
+        int Wood() { int n = 0; for (int i = 0; i < tplan.Count; i++) if (Mat.IsTrunk(wF.Get(tplan.X(i), tplan.Y(i), tplan.Z(i)))) n++; return n; }
+        int g0 = wF.SurfAt(tx, tz);
+        Console.WriteLine($"     before: {Leaves()} leaves, {Wood()} wood in the plan of {tplan.Count}");
+        for (int z = tz - 6; z <= tz + 6; z++) for (int x = tx - 6; x <= tx + 6; x++) if (Mat.IsTrunk(wF.Get(x, g0 + 24, z))) wF.Set(x, g0 + 24, z, Mat.Air);
+        Run(2);
+        Console.WriteLine($"     after the cut at 3 m: {Leaves()} leaves, {Wood()} wood");
+    }
+    Run(900);
+    int left = 0, up = 0, marked = 0;
+    var where = new List<string>();
+    foreach (var (x, z, plan) in trees)
+    {
+        int l = 0, u = 0, m = 0, wood = 0, low = 99999;
+        for (int i = 0; i < plan.Count; i++)
+        {
+            int px = plan.X(i), py = plan.Y(i), pz = plan.Z(i);
+            byte b = wF.Get(px, py, pz);
+            if (Mat.IsLeafy(b) || Mat.IsTrunk(b))
+            {
+                l++;
+                if (Mat.IsTrunk(b)) wood++;
+                low = Math.Min(low, py - wF.GroundTop(px, pz));
+                if (py > wF.SurfAt(px, pz) + 1 || wF.Get(px, py - 1, pz) == Mat.Air) u++;
+            }
+            if (sim.Orders.At(px, py, pz) != 0) m++;
+        }
+        left += l; up += u; marked += m;
+        if (l > 0 && Environment.GetEnvironmentVariable("FELL_WHY") == "1")
+        {
+            // what the leaves left touch: other leaves not of the plan, wood, the ground, nothing
+            var inPlan = new HashSet<long>();
+            for (int i = 0; i < plan.Count; i++) inPlan.Add(K(plan.X(i), plan.Y(i), plan.Z(i)));
+            int touchOther = 0, touchWood = 0, alone = 0, minY = 999, maxY = 0;
+            for (int i = 0; i < plan.Count; i++)
+            {
+                int px = plan.X(i), py = plan.Y(i), pz = plan.Z(i);
+                if (!Mat.IsLeafy(wF.Get(px, py, pz))) continue;
+                minY = Math.Min(minY, py); maxY = Math.Max(maxY, py);
+                bool o = false, wd = false, any = false;
+                for (int dy = -1; dy <= 1; dy++) for (int dz = -1; dz <= 1; dz++) for (int dx = -1; dx <= 1; dx++)
+                {
+                    if ((dx | dy | dz) == 0) continue;
+                    byte b2 = wF.Get(px + dx, py + dy, pz + dz);
+                    if (b2 != Mat.Air) any = true;
+                    if (Mat.IsTrunk(b2)) wd = true;
+                    if (Mat.IsLeafy(b2) && !inPlan.Contains(K(px + dx, py + dy, pz + dz))) o = true;
+                }
+                if (o) touchOther++; if (wd) touchWood++; if (!any) alone++;
+            }
+            Console.WriteLine($"     {x},{z}: left leaves at y {minY}…{maxY}: {touchOther} touch leaves not of this tree, {touchWood} touch wood, {alone} touch nothing");
+            // the wood they touch: where, whether marked, whether it is in this tree's plan
+            var woodSeen = new HashSet<long>();
+            for (int i = 0; i < plan.Count && woodSeen.Count < 6; i++)
+            {
+                int px = plan.X(i), py = plan.Y(i), pz = plan.Z(i);
+                if (!Mat.IsLeafy(wF.Get(px, py, pz))) continue;
+                for (int dy = -1; dy <= 1; dy++) for (int dz = -1; dz <= 1; dz++) for (int dx = -1; dx <= 1; dx++)
+                {
+                    int qx = px + dx, qy = py + dy, qz = pz + dz;
+                    if (!Mat.IsTrunk(wF.Get(qx, qy, qz)) || !woodSeen.Add(K(qx, qy, qz))) continue;
+                    int below = 0; while (below < 200 && Mat.IsTrunk(wF.Get(qx, qy - below - 1, qz))) below++;
+                    Console.WriteLine($"       wood {Mat.NameOf(wF.Get(qx, qy, qz))} at {qx},{qy},{qz} ({qy - wF.GroundTop(qx, qz)} up), marked {sim.Orders.At(qx, qy, qz) != 0}, in the plan {inPlan.Contains(K(qx, qy, qz))}, wood straight under it {below}, ground under the column at {wF.SurfAt(qx, qz)}");
+                }
+            }
+        }
+        if (l > 0) where.Add($"{x},{z}: {l} left, {wood} of them wood, the lowest {low} over the ground ({u} up in the air, {m} still marked)");
+    }
+    foreach (var u in crew) if (u.Why != "") Console.WriteLine($"     {u.T.Name} #{u.Id}: {u.Why}");
+    Check("the household fells six trees round the fort whole, crowns and all, nothing left hanging", trees.Count == 6 && left == 0,
+        $"{trees.Count} trees, wood +{Fmt.M3((int)(sim.Stock[Stockpile.Wood] - woodF))} m³; " + (where.Count == 0 ? "all gone" : string.Join("; ", where)));
+    // a game saved before that: a crown marked to be felled hanging with no trunk under it comes down when it is read back
+    {
+        (int x, int z, VoxelList plan) hung = (-1, -1, null);
+        for (int r = 100; r < 480 && hung.plan == null; r += 6)
+            for (int a2 = 0; a2 < 48 && hung.plan == null; a2++)
+            {
+                int x = siteF.KeepX - (int)(Math.Cos(a2 * Math.Tau / 48) * r), z = siteF.KeepZ + (int)(Math.Sin(a2 * Math.Tau / 48) * r);
+                if (!wF.InBounds(x, 2, z)) continue;
+                int g = wF.SurfAt(x, z);
+                if (!Mat.IsTrunk(wF.Get(x, g + 2, z)) || taken.Contains(K(x, g + 2, z))) continue;
+                var plan = Shapes.Tree(wF, x, g + 2, z);
+                if (plan.Count > 2000) hung = (x, z, plan);
+            }
+        int crown = 0, after = 0;
+        if (hung.plan != null)
+        {
+            sim.DesignateRemove(hung.plan);
+            // the trunk taken out from under the crown at once, as the old felling left it
+            for (int i = 0; i < hung.plan.Count; i++)
+            {
+                int px = hung.plan.X(i), py = hung.plan.Y(i), pz = hung.plan.Z(i);
+                if (Mat.IsTrunk(wF.Get(px, py, pz))) { wF.Set(px, py, pz, Mat.Air); sim.Orders.Clear(px, py, pz); }
+                else if (Mat.IsLeafy(wF.Get(px, py, pz))) crown++;
+            }
+            Run(1);
+            sim.DropStrayLeaves();
+            for (int i = 0; i < hung.plan.Count; i++) if (Mat.IsLeafy(wF.Get(hung.plan.X(i), hung.plan.Y(i), hung.plan.Z(i)))) after++;
+        }
+        Check("…and a crown left hanging by an older felling comes down when the game is read back", hung.plan != null && crown > 500 && after == 0,
+            $"tree at {hung.x},{hung.z}: {crown} leaves hanging, {after} left");
+    }
 }
 
 Console.WriteLine(failures == 0 ? "\nall checks passed" : $"\n{failures} check(s) failed");

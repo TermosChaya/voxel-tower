@@ -172,6 +172,7 @@ public sealed partial class Sim
         TickSpells();
         TickCurses();
         TickCollapse(dt);
+        TickStrays(dt);
         TickFlight(dt);
         TickGates(dt);
         TickDrawbridges(dt);
