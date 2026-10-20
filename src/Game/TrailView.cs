@@ -108,7 +108,7 @@ public partial class TrailView : Node3D
         if (_m?.Sim == null) return;
         var sim = _m.Sim;
         // the horde's ways are the commander's to see, not one standing in the field
-        Visible = sim.WantTrails && sim.Possessed == null;
+        Visible = sim.WantTrails && sim.Possessed == null && !_m.Hud.TitleOpen;
         if (!Visible) return;
         if (_sidesRev != sim.SidesRev) { _sidesRev = sim.SidesRev; RebuildSides(); }
         // the ring is for the bands still to come and on the march

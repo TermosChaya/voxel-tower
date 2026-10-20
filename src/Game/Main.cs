@@ -85,12 +85,19 @@ public partial class Main : Node3D
     /// <summary>The great moments made to be felt: the view shaken, the screen flashed, the time slowed a moment.</summary>
     public Spectacle Spectacle;
     /// <summary>A run driven by a script (a test, a staged scene, a screenshot), not by a hand on the mouse.</summary>
-    public bool Scripted => _selfTest || _demo || _shot != null;
+    public bool Scripted => _selfTest || _demo || _shot != null || _tutCheck;
 
     const string BlueprintFile = "user://blueprints.json";
 
     /// <summary>A saved game to read back when the scene starts (set, then the scene started again: <see cref="Saves.Read"/>).</summary>
     public static string PendingLoad;
+    /// <summary>What the next start of the scene begins with, asked from the menu: "game" — a new siege, "tutorial" — the tutorial; none — the title.</summary>
+    public static string PendingStart;
+    /// <summary>The tutorial, while this game is one.</summary>
+    public Tutorial Tutor { get; private set; }
+    /// <summary>--tutorial or --tutorial=N: the tutorial from its Nth step; --title: the title over the valley (screenshots, tests).</summary>
+    int _tutorialAt = -1;
+    bool _titleArg;
     /// <summary>The seed the valley was made from: what a save keeps of it.</summary>
     public uint Seed => _seed;
     bool _loaded, _waveWasActive;
@@ -122,6 +129,9 @@ public partial class Main : Node3D
     /// <summary>--tab=key: a panel let down from the beam at the start; --tool=N: the Nth tool of the grid in hand.</summary>
     string _tab;
     int _tool = -1;
+    /// <summary>--grid=N: the brushes snap to a grid of N voxels; --aim=x,z: the cursor over that voxel of the valley (screenshots).</summary>
+    int _grid = -1;
+    float[] _aim;
     uint _seed = 7;
     string _pose = "";
     /// <summary>How long the staged siege runs before the screenshot (--at=seconds).</summary>
@@ -153,10 +163,16 @@ public partial class Main : Node3D
             else if (a.StartsWith("--select=") && int.TryParse(a["--select=".Length..], out int sn)) _select = sn;
             else if (a.StartsWith("--tab=")) _tab = a["--tab=".Length..];
             else if (a.StartsWith("--tool=") && int.TryParse(a["--tool=".Length..], out int tn)) _tool = tn;
+            else if (a.StartsWith("--grid=") && int.TryParse(a["--grid=".Length..], out int gn)) _grid = gn;
+            else if (a.StartsWith("--aim=")) _aim = Array.ConvertAll(a["--aim=".Length..].Split(','), v => float.Parse(v, System.Globalization.CultureInfo.InvariantCulture));
             else if (a.StartsWith("--cam=")) _cam = Array.ConvertAll(a["--cam=".Length..].Split(','), v => float.Parse(v, System.Globalization.CultureInfo.InvariantCulture));
             else if (a == "--selftest") _selfTest = true;
             else if (a == "--inspect") _inspect = true;
             else if (a.StartsWith("--load=")) PendingLoad = a["--load=".Length..];
+            else if (a == "--tutorial") _tutorialAt = 0;
+            else if (a.StartsWith("--tutorial=") && int.TryParse(a["--tutorial=".Length..], out int ta)) _tutorialAt = ta;
+            else if (a == "--title") _titleArg = true;
+            else if (a == "--tutorial-check") { _tutCheck = true; _tutorialAt = 0; }
             else if (a == "--menu" || a.StartsWith("--menu=")) _menu = a.Length > 7 ? a[7..] : "";
             else if (a.StartsWith("--pose=")) _pose = a["--pose=".Length..];
             else if (a.StartsWith("--at=") && double.TryParse(a["--at=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double at)) _poseSeconds = at;
@@ -165,10 +181,10 @@ public partial class Main : Node3D
             else TrailerArg(a);
         }
         // scripted runs draw the interface at its usual size, unless told otherwise, and leave the player's settings be
-        if (_selfTest || _demo || _shot != null || _uiScale > 0) Settings.Scripted(_uiScale);
+        if (_selfTest || _demo || _shot != null || _tutCheck || _uiScale > 0) Settings.Scripted(_uiScale);
         else Settings.Load();
         // the self-test and the screenshots play out of the player's sight (--show keeps the window up)
-        if ((_selfTest || _shot != null || _trailer >= 0) && !OS.GetCmdlineUserArgs().Contains("--show")) Backstage.Withdraw(this);
+        if ((_selfTest || _shot != null || _trailer >= 0 || _tutCheck) && !OS.GetCmdlineUserArgs().Contains("--show")) Backstage.Withdraw(this);
         Settings.Apply(GetTree().Root);
         Settings.ApplyVolume();
         if (_lines) Settings.ScriptLines(true);
@@ -317,19 +333,11 @@ public partial class Main : Node3D
         Sim.SeedWildlife();
         if (!_selfTest && !_demo) Sim.SeedMines();
 
-        Hud.Log("Пробел — позвать орду раньше: золота за это нет, зато она меньше узнает о вашей обороне.");
-        Hud.Log("Между волнами охотьтесь: выберите лучника и щёлкните ПКМ по зверю — добыча приносит золото.");
-        Hud.Log("Кисти размечают работу, пешки её делают: кладут из запасов, копают, рубят. V — кирка, 7 — лестница, 8 — делянка: ресурс с участка.");
-        if (!_selfTest && !_demo)
-        {
-            Hud.Log("Рудники платят золотом, пока они ваши: медный — к востоку от крепости, серебряную жилу в низине стерегут гоблины. " +
-                "Пошлите людей к входу. Задачи — во вкладке на верхней балке.", Hud.Kind.Ok);
-            Hud.Log("Крепость вокруг цитадели наполовину разрушена. Починка (0), щелчок по стене — рабочие вернут ей прежний вид, " +
-                "рамкой — только проломы. Камень ломают в скалах, валунах и руинах (8 и Z).", Hud.Kind.Warn);
-        }
-        Hud.Log("Вождь орды высматривает, где ваши стены слабее, и шлёт ватаги туда. Кольцо вокруг цитадели показывает, как он видит " +
-            "каждую сторону: красная — слабая, зелёная — крепкая, ярче — куда пойдёт ватага. J — показать или скрыть пути орды.");
-        Hud.Log("Орда придёт с запада на закате, через десять минут. Ройте, рубите и стройте, пока светло.", Hud.Kind.Warn);
+        // a game of one's own opens on the title over the valley; the tutorial, asked for, on its first step
+        _startTutorial = PendingStart == "tutorial" || _tutorialAt >= 0;
+        _startTitle = !_startTutorial && (_titleArg || (PendingStart == null && !Scripted));
+        PendingStart = null;
+        if (!_startTutorial && !_startTitle) Welcome();
         GD.Print($"[voxel-tower] world {genMs:0} ms, navigation {navMs:0} ms, mesh {View.LastFullMeshMs:0} ms, {View.Triangles()} triangles");
 
         if (_demo) Demo();
@@ -376,11 +384,51 @@ public partial class Main : Node3D
             Rig.Set(World.WX(seen.X), World.WZ(seen.Z), -.66f, .62f, 2.2f, snap: true);
         }
         if (_tool >= 0 && _tool < Hud.ToolDefs.Length) Tools.SetTool(Hud.ToolDefs[_tool].tool);
+        if (_grid >= 0) Tools.SetGrid(_grid);
         if (_cam is { Length: 5 }) Rig.Set(World.WX(_cam[0]), World.WZ(_cam[1]), _cam[2], _cam[3], _cam[4], snap: true);
         if (_top) Rig.ToggleTopDown();
+        if (_startTutorial) StartTutorial(Math.Max(0, _tutorialAt));
+        else if (_startTitle) Hud.ShowTitle();
         if (_selfTest) SelfTest();
+        if (_tutCheck) TutorialCheck();
         // a hidden or minimised window never draws a frame: don't let scripted runs hang
         if (_shot != null || _selfTest) GetTree().CreateTimer(120).Timeout += () => { GD.PrintErr("[voxel-tower] gave up waiting for a frame"); GetTree().Quit(2); };
+    }
+
+    bool _startTutorial, _startTitle;
+
+    /// <summary>The tips of the start, into the chronicle: a game of one's own begins with them.</summary>
+    public void Welcome()
+    {
+        Hud.Log("{CallWave} — позвать орду раньше: золота за это нет, зато она меньше узнает о вашей обороне.");
+        Hud.Log("Между волнами охотьтесь: выберите лучника и щёлкните ПКМ по зверю — добыча приносит золото.");
+        Hud.Log("Кисти размечают работу, пешки её делают: кладут из запасов, копают, рубят. {Pick} — кирка, {ToolLadder} — лестница, {ToolGather} — делянка: ресурс с участка. {Help} — всё управление.");
+        if (!_selfTest && !_demo)
+        {
+            Hud.Log("Рудники платят золотом, пока они ваши: медный — к востоку от крепости, серебряную жилу в низине стерегут гоблины. " +
+                "Пошлите людей к входу. Задачи — во вкладке на верхней балке.", Hud.Kind.Ok);
+            Hud.Log("Крепость вокруг цитадели наполовину разрушена. Починка ({ToolRepair}), щелчок по стене — рабочие вернут ей прежний вид, " +
+                "рамкой — только проломы. Камень ломают в скалах, валунах и руинах ({ToolGather} и {MatStone}).", Hud.Kind.Warn);
+        }
+        Hud.Log("Вождь орды высматривает, где ваши стены слабее, и шлёт ватаги туда. Кольцо вокруг цитадели показывает, как он видит " +
+            "каждую сторону: красная — слабая, зелёная — крепкая, ярче — куда пойдёт ватага. {Trails} — показать или скрыть пути орды.");
+        Hud.Log("Орда придёт с запада на закате, через десять минут. Ройте, рубите и стройте, пока светло.", Hud.Kind.Warn);
+    }
+
+    /// <summary>The tutorial, from its step n: the frame shut, the card on the first step.</summary>
+    public void StartTutorial(int from = 0)
+    {
+        if (Tutor != null) return;
+        Tutor = new Tutorial();
+        AddChild(Tutor);
+        Tutor.Init(this, from);
+    }
+
+    /// <summary>A new siege (or the tutorial) from the menu: the scene begins again, without the title.</summary>
+    public void NewGame(bool tutorial = false)
+    {
+        PendingStart = tutorial ? "tutorial" : "game";
+        GetTree().ReloadCurrentScene();
     }
 
     double _slowest;
@@ -389,6 +437,8 @@ public partial class Main : Node3D
     {
         if (_frames > 5) _slowest = Math.Max(_slowest, delta);
         if (_trailer >= 0) Roll();
+        // under the title the valley turns slowly round the citadel
+        if (Hud.TitleOpen) { var a = Rig.Aim; Rig.Set(a.x, a.z, a.yaw + (float)delta * .045f, a.pitch, a.zoom, snap: false); }
         if (!Paused && !_selfTest)
         {
             double dt = Math.Min(delta, .1) * Speed * Slow * Pace;
@@ -402,7 +452,7 @@ public partial class Main : Node3D
         // a wave beaten back is written down by itself
         if (_shot == null && !_selfTest && !_demo)
         {
-            if (_waveWasActive && !Sim.Waves.Active && !Sim.Over && Saves.Write(this, Saves.Auto)) Hud.Log("Автосохранение: волна отбита.", Hud.Kind.Ok, toast: false);
+            if (_waveWasActive && !Sim.Waves.Active && !Sim.Over && Tutor is not { Over: false } && Saves.Write(this, Saves.Auto)) Hud.Log("Автосохранение: волна отбита.", Hud.Kind.Ok, toast: false);
             _waveWasActive = Sim.Waves.Active;
         }
         Command.Prune();
@@ -414,6 +464,9 @@ public partial class Main : Node3D
             if (Sim.Won) Hud.Finale("Осада снята", $"Долина устояла: {Waves.Total} волн отбито, {Sim.Kills} налётчиков пало.", true);
             else Hud.Finale("Цитадель пала", $"Отбито волн: {Math.Max(0, Sim.Waves.Number - 1)} из {Waves.Total}. Налётчиков пало: {Sim.Kills}.", false);
         }
+        // the cursor laid over a voxel for a screenshot, once the view has settled
+        if (_shot != null && _aim is { Length: 2 } && _frames == Math.Max(2, _shotFrames - 8))
+            Tools._UnhandledInput(new InputEventMouseMotion { Position = Rig.Cam.UnprojectPosition(new Vector3(World.WX(_aim[0] + .5f), World.WY(World.SurfAt((int)_aim[0], (int)_aim[1])), World.WZ(_aim[1] + .5f))) });
         if (_shot != null && ++_frames == _shotFrames) TakeShot();
     }
 

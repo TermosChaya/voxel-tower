@@ -57,27 +57,29 @@ public partial class BuildTools : Node3D
         Tool.Paste => "Чертёж", Tool.Spell => "Заклинание", _ => "Без кисти",
     };
 
-    public static string Hint(Tool t, bool dig) => (t, dig) switch
+    public static string Hint(Tool t, bool dig) => Bindings.Fill(HintText(t, dig));
+
+    static string HintText(Tool t, bool dig) => (t, dig) switch
     {
-        (Tool.Brush, false) => "Ведите по земле — рабочие выложат столб до заданной высоты. F — шар. Shift или кирка (V) — размечать, что копать.",
-        (Tool.Brush, true) => "Ведите по земле — рабочие выкопают полосу на заданную глубину. Шар (F) вынимает ком: так пробивают ходы. Щелчок по дереву — срубить.",
+        (Tool.Brush, false) => "Ведите по земле — рабочие выложат столб до заданной высоты. {Form} — шар. Shift или кирка ({Pick}) — размечать, что копать.",
+        (Tool.Brush, true) => "Ведите по земле — рабочие выкопают полосу на заданную глубину. Шар ({Form}) вынимает ком: так пробивают ходы. Щелчок по дереву — срубить.",
         (Tool.Line, false) => "Зажмите и протяните: стена заданной толщины и высоты. Рабочие сложат её из запасов.",
         (Tool.Line, true) => "Протяните — ров или траншея заданной ширины и глубины. Деревья на пути срубят целиком.",
-        (Tool.Box, false) => "От угла до угла. F — сплошной помост или только стенки: двор, квадратная башня.",
-        (Tool.Box, true) => "От угла до угла — котлован. Ровное дно или по рельефу (G).",
+        (Tool.Box, false) => "От угла до угла. {Form} — сплошной помост или только стенки: двор, квадратная башня.",
+        (Tool.Box, true) => "От угла до угла — котлован. Ровное дно или по рельефу ({Level}).",
         (Tool.Circle, false) => "Из центра к краю. Кольцо — круглая башня, сплошной — бастион. F переключает.",
-        (Tool.Circle, true) => "Из центра к краю — круглая яма или кольцевой ров вокруг башни (F).",
+        (Tool.Circle, true) => "Из центра к краю — круглая яма или кольцевой ров вокруг башни ({Form}).",
         (Tool.Extrude, false) => "Щёлкните по ровной грани: она нарастёт на шаг выбранным материалом.",
         (Tool.Extrude, true) => "Щёлкните по ровной грани: её вынут на шаг вглубь. Ступени в склоне, проход в скале.",
         (Tool.Ladder, _) => "Щёлкните по боковой грани стены, башни или обрыва — рабочие приставят лестницу от земли до верха. По ней ходят ваши пешки… и орда, если доберётся.",
         (Tool.Gate, _) => "Щёлкните по боковой грани стены — рабочие прорубят в ней проём и навесят ворота: створки внутри, со стороны цитадели. Своим они открываются сами, орде их придётся рубить.",
         (Tool.Repair, _) => "Щёлкните по разрушенной постройке — рабочие вернут ей прежний вид: разберут завал, доложат недостающее, навесят ворота. Рамкой — чинить только то, что в ней.",
-        (Tool.Bridge, _) => "Зажмите на одном берегу и протяните до другого: рабочие перекинут арочный мост — каменный (Z) или деревянный (X) — или подъёмный («Вид» в консоли). [ и ] — ширина прохода.",
-        (Tool.Gather, _) => "Протяните рамку — участок для добычи. Z — камень из скал и валунов, X — лес, C — земля. Свободные рабочие сами понемногу берут оттуда работу.",
+        (Tool.Bridge, _) => "Зажмите на одном берегу и протяните до другого: рабочие перекинут арочный мост — каменный ({MatStone}) или деревянный ({MatWood}) — или подъёмный («Вид» в консоли). {WidthLess} и {WidthMore} — ширина прохода.",
+        (Tool.Gather, _) => "Протяните рамку — участок для добычи. {MatStone} — камень из скал и валунов, {MatWood} — лес, {MatEarth} — земля. Свободные рабочие сами понемногу берут оттуда работу.",
         (Tool.Unmark, _) => "Протяните рамку — вся разметка и делянки в ней снимаются. Щелчок снимает разметку поблизости и делянку под курсором.",
         (Tool.Capture, _) => "Обведите рамкой свою постройку — она станет чертежом.",
         (Tool.Paste, _) => "Щёлкните, чтобы разметить копию. R поворачивает, Esc отменяет.",
-        _ => "ЛКМ — выбрать пешек, рамкой — нескольких, ПКМ — послать, ПКМ по зверю — охотиться. 1–5 — кисти, 7 — лестница, 0 — починка, V — кирка.",
+        _ => "ЛКМ — выбрать пешек, рамкой — нескольких, ПКМ — послать, ПКМ по зверю — охотиться. {ToolBrush}–{ToolExtrude} — кисти, {ToolLadder} — лестница, {ToolRepair} — починка, {Pick} — кирка; {Help} — всё управление.",
     };
 
     const int MaxExtrudeFaces = 6000;
@@ -161,6 +163,8 @@ public partial class BuildTools : Node3D
     public void Init(Main m)
     {
         _m = m;
+        // the grid as the player left it last time
+        if (Settings.Grid > 0) Opt.Grid = Opt.GridLast = Settings.Grid;
         var w = m.World;
         _voxSpace = new Node3D { Position = new Vector3(w.OriginX, 0, w.OriginZ), Scale = Vector3.One * VoxelWorld.Vox };
         AddChild(_voxSpace);
@@ -204,6 +208,8 @@ public partial class BuildTools : Node3D
 
     public void SetTool(Tool t)
     {
+        // what the tutorial has not come to yet stays shut
+        if (t != Tool.None && t != Tool.Paste && t != Tool.Spell && _m.Hud.Locked(t)) { Refuse("это откроется дальше в обучении"); return; }
         // what telekinesis holds is let go when the spell is put away
         Throw();
         Tool = Tool == t ? Tool.None : t;
@@ -252,7 +258,11 @@ public partial class BuildTools : Node3D
     Vector2 _mouse;
 
     /// <summary>A material to lay; puts the pick away.</summary>
-    public void SetMaterial(byte m) { Opt.Material = m; Opt.Dig = false; Shelter = Sanctum = Dwelling = false; Changed(); }
+    public void SetMaterial(byte m)
+    {
+        if (_m.Hud.MaterialsLocked) { Refuse("материалы откроются дальше в обучении"); return; }
+        Opt.Material = m; Opt.Dig = false; Shelter = Sanctum = Dwelling = false; Changed();
+    }
 
     /// <summary>The area tool sets aside a shelter, not a resource to take.</summary>
     public bool Shelter;
@@ -267,6 +277,7 @@ public partial class BuildTools : Node3D
     /// <summary>Takes up the pick (or puts it away): the brushes then mark digging instead of laying.</summary>
     public void SetDig(bool dig)
     {
+        if (_m.Hud.PickLocked) { Refuse("кирка откроется дальше в обучении"); return; }
         Opt.Dig = dig;
         if (dig && Tool is Tool.None or Tool.Capture or Tool.Unmark or Tool.Paste or Tool.Ladder or Tool.Gate or Tool.Repair or Tool.Bridge or Tool.Gather) { Tool = Tool.Line; PasteBp = null; }
         Changed();
@@ -300,10 +311,12 @@ public partial class BuildTools : Node3D
     {
         if (Opt.Grid > 0) { Opt.GridLast = Opt.Grid; Opt.Grid = 0; }
         else Opt.Grid = Opt.GridLast;
+        Settings.KeepGrid(Opt.Grid);
+        _m.Hud.Float(Opt.Grid > 0 ? $"сетка: {Inspector.Len(Opt.Grid)}" : "сетка выключена", Ornament.BronzeLight);
         Changed();
     }
 
-    public void SetGrid(int step) { Opt.Grid = step; if (step > 0) Opt.GridLast = step; Changed(); }
+    public void SetGrid(int step) { Opt.Grid = step; if (step > 0) Opt.GridLast = step; Settings.KeepGrid(step); Changed(); }
 
     /// <summary>Strokes of this tool start and end on the grid while snapping is on.</summary>
     bool Snapping => Opt.Grid > 0 && Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather or Tool.Repair or Tool.Paste or Tool.Bridge;
@@ -382,37 +395,40 @@ public partial class BuildTools : Node3D
         if (_m.Hud.MenuOpen && code != global::Godot.Key.Escape) return false;
         // Shift and a digit calls up a squad, it is no tool
         if (k.ShiftPressed && code is >= global::Godot.Key.Key0 and <= global::Godot.Key.Key9) return false;
-        if (k.Echo && code is not (global::Godot.Key.Bracketleft or global::Godot.Key.Bracketright or global::Godot.Key.Minus or global::Godot.Key.Equal)) return false;
-        Tool t = code switch
+        var act = Bindings.Find(code, Bindings.Scope.Field);
+        // only the steps of the thickness and the height go on while their key is held
+        if (k.Echo && act is not (Act.WidthLess or Act.WidthMore or Act.HeightLess or Act.HeightMore)) return false;
+        Tool t = act switch
         {
-            global::Godot.Key.Key1 => Tool.Brush, global::Godot.Key.Key2 => Tool.Line, global::Godot.Key.Key3 => Tool.Box,
-            global::Godot.Key.Key4 => Tool.Circle, global::Godot.Key.Key5 => Tool.Extrude, global::Godot.Key.Key6 => Tool.Unmark,
-            global::Godot.Key.Key7 => Tool.Ladder, global::Godot.Key.Key8 => Tool.Gather, global::Godot.Key.Key9 => Tool.Gate, global::Godot.Key.Key0 => Tool.Repair, global::Godot.Key.B => Tool.Capture,
+            Act.ToolBrush => Tool.Brush, Act.ToolLine => Tool.Line, Act.ToolBox => Tool.Box, Act.ToolCircle => Tool.Circle,
+            Act.ToolExtrude => Tool.Extrude, Act.ToolUnmark => Tool.Unmark, Act.ToolLadder => Tool.Ladder, Act.ToolGather => Tool.Gather,
+            Act.ToolGate => Tool.Gate, Act.ToolRepair => Tool.Repair, Act.ToolCapture => Tool.Capture, Act.ToolBridge => Tool.Bridge,
             _ => Tool.None,
         };
         if (t != Tool.None) { SetTool(t); return true; }
-        switch (code)
+        if (code == global::Godot.Key.Escape)
         {
-            case global::Godot.Key.Escape:
-                // a brush in hand is put down, the chosen let go; with nothing of that, the menu
-                if (_m.Hud.MenuOpen) _m.Hud.MenuBack();
-                else if (Tool != Tool.None) SetTool(Tool.None);
-                else if (_m.Selected.Count > 0 || _m.Inspected != null || _m.KeepChosen) { _m.Command.ClearSelection(); _m.Inspected = null; _m.KeepChosen = false; _m.Hud.OnSelectionChanged(); }
-                else _m.Hud.OpenMenu();
-                return true;
-            case global::Godot.Key.Z: SetMaterial(Mat.Stone); return true;
-            case global::Godot.Key.X: SetMaterial(Mat.Wood); return true;
-            case global::Godot.Key.C: SetMaterial(Mat.Rammed); return true;
-            case global::Godot.Key.V: SetDig(!Opt.Dig); return true;
-            case global::Godot.Key.Bracketleft: StepWidth(-1); return true;
-            case global::Godot.Key.Bracketright: StepWidth(1); return true;
-            case global::Godot.Key.Minus: StepHeight(-1); return true;
-            case global::Godot.Key.Equal: StepHeight(1); return true;
-            case global::Godot.Key.F: ToggleForm(); return true;
-            case global::Godot.Key.G: ToggleLevel(); return true;
-            case global::Godot.Key.N: ToggleGrid(); return true;
-            case global::Godot.Key.M: SetTool(Tool.Bridge); return true;
-            case global::Godot.Key.R when Tool == Tool.Paste: PasteRot = (PasteRot + 1) & 3; Changed(); return true;
+            // a brush in hand is put down, the chosen let go; with nothing of that, the menu
+            if (_m.Hud.MenuOpen) _m.Hud.MenuBack();
+            else if (Tool != Tool.None) SetTool(Tool.None);
+            else if (_m.Selected.Count > 0 || _m.Inspected != null || _m.KeepChosen) { _m.Command.ClearSelection(); _m.Inspected = null; _m.KeepChosen = false; _m.Hud.OnSelectionChanged(); }
+            else _m.Hud.OpenMenu();
+            return true;
+        }
+        switch (act)
+        {
+            case Act.MatStone: SetMaterial(Mat.Stone); return true;
+            case Act.MatWood: SetMaterial(Mat.Wood); return true;
+            case Act.MatEarth: SetMaterial(Mat.Rammed); return true;
+            case Act.Pick: SetDig(!Opt.Dig); return true;
+            case Act.WidthLess: StepWidth(-1); return true;
+            case Act.WidthMore: StepWidth(1); return true;
+            case Act.HeightLess: StepHeight(-1); return true;
+            case Act.HeightMore: StepHeight(1); return true;
+            case Act.Form: ToggleForm(); return true;
+            case Act.Level: ToggleLevel(); return true;
+            case Act.Grid: ToggleGrid(); return true;
+            case Act.Rotate when Tool == Tool.Paste: PasteRot = (PasteRot + 1) & 3; Changed(); return true;
         }
         return false;
     }
@@ -731,7 +747,7 @@ public partial class BuildTools : Node3D
             var room = _m.Sim.CheckDwelling(x0, z0, x1, z1);
             any = room.Ok || room.Area > 0 || room.Why.StartsWith("нет") || room.Why.StartsWith("стены");
             return room.Ok ? $"Жилой дом: {Fmt.One(room.Area)} м² пола, дверь есть — рабочие поставят лежанок: {room.Bunks}, это +{room.Bunks} {PlaceWord(room.Bunks)} в войске"
-                : $"Жилой дом: {room.Why}";
+                : $"Жилой дом: {Bindings.Fill(room.Why)}";
         }
         if (kind == Zone.Sanctum)
         {
@@ -775,7 +791,7 @@ public partial class BuildTools : Node3D
             Zone.Shelter => ". Тревога — T.",
             Zone.Sanctum => ". Днём здесь молятся жрецы: их набирают в цитадели (щелчок по ней или K).",
             Zone.Dwelling => text.Contains("лежанок") ? ". Рабочие обставят его из запаса брёвен; каждая готовая лежанка — место в войске."
-                : ". Отметка подождёт: когда дом закроют — стены, крыша, ворота (9) — рабочие обставят его.",
+                : ". Отметка подождёт: когда дом закроют — стены, крыша, ворота ({ToolGate}) — рабочие обставят его.",
             _ => ". Свободные рабочие возьмутся за неё сами.",
         }));
     }
@@ -1013,37 +1029,61 @@ public partial class BuildTools : Node3D
         UpdateGrid();
     }
 
-    /// <summary>Dots on the ground at the grid's nodes round the cursor, brighter on the two lines through the citadel's middle.</summary>
+    /// <summary>
+    /// The grid laid on the ground round the cursor, as the brushes snap to it: thin lines from node to node over the
+    /// lie of the land, a dot at each node, the two lines through the citadel's middle brighter; it fades out with the
+    /// distance, and a line does not hang down a cliff.
+    /// </summary>
     void UpdateGrid()
     {
         if (!Snapping || !_hasHover) { _gridDots.Visible = false; _gridKey = ""; return; }
         var w = _m.World;
         var c = _lmb && _hasDrag ? _dragPt : HoverGround();
-        int g = Opt.Grid, n = g <= 4 ? 9 : g <= 8 ? 6 : 4;
+        int g = Opt.Grid, n = g <= 8 ? 12 : 9;
         string key = $"{c.x},{c.z},{g},{_rev}";
         _gridDots.Visible = true;
         if (key == _gridKey) return;
         _gridKey = key;
         var mm = _gridDots.Multimesh;
-        mm.InstanceCount = (2 * n + 1) * (2 * n + 1);
+        int side = 2 * n + 1;
+        mm.InstanceCount = side * side + 2 * side * (side - 1);
         float v = VoxelWorld.Vox;
+        var hidden = new Transform3D(Basis.Identity.Scaled(Vector3.One * 1e-4f), Vector3.Zero);
         int i = 0;
+        bool In(int x, int z) => x >= 0 && z >= 0 && x < w.SX && z < w.SZ;
+        Vector3 At(int x, int z) => new(w.WX(x + .5f), w.WY(w.SurfAt(x, z)) + .35f * v, w.WZ(z + .5f));
+        float Fade(float di, float dk) => 1 - MathF.Sqrt(di * di + dk * dk) / (n + .5f);
+        bool Axis(int x, int z) => x == _m.Site.KeepX || z == _m.Site.KeepZ;
+        void Hide() { mm.SetInstanceTransform(i, hidden); mm.SetInstanceColor(i, new Color(0, 0, 0, 0)); i++; }
+        // the nodes
         for (int dk = -n; dk <= n; dk++)
-            for (int di = -n; di <= n; di++, i++)
+            for (int di = -n; di <= n; di++)
             {
                 int x = c.x + di * g, z = c.z + dk * g;
-                float fade = 1 - MathF.Sqrt(di * di + dk * dk) / (n + 1);
-                if (x < 0 || z < 0 || x >= w.SX || z >= w.SZ || fade <= 0)
-                {
-                    mm.SetInstanceTransform(i, new Transform3D(Basis.Identity.Scaled(Vector3.One * 1e-4f), Vector3.Zero));
-                    mm.SetInstanceColor(i, new Color(0, 0, 0, 0));
-                    continue;
-                }
-                bool axis = x == _m.Site.KeepX || z == _m.Site.KeepZ;
-                float size = (axis ? 1.7f : 1.1f) * v;
-                mm.SetInstanceTransform(i, new Transform3D(Basis.Identity.Scaled(new Vector3(size, 1, size)), new Vector3(w.WX(x + .5f), w.WY(w.SurfAt(x, z)) + .3f * v, w.WZ(z + .5f))));
-                mm.SetInstanceColor(i, axis ? new Color(1f, .8f, .5f, .9f * fade) : new Color(.95f, .68f, .38f, .65f * fade));
+                float fade = Fade(di, dk);
+                if (!In(x, z) || fade <= 0) { Hide(); continue; }
+                bool axis = Axis(x, z);
+                float size = (axis ? 1.6f : 1.1f) * v;
+                mm.SetInstanceTransform(i, new Transform3D(Basis.Identity.Scaled(new Vector3(size, 1, size)), At(x, z)));
+                mm.SetInstanceColor(i++, axis ? new Color(1f, .82f, .52f, .95f * fade) : new Color(.95f, .7f, .4f, .75f * fade));
             }
+        // the lines between them, along x and along z
+        for (int along = 0; along < 2; along++)
+            for (int dk = -n; dk <= n; dk++)
+                for (int di = -n; di < n; di++)
+                {
+                    int x0 = c.x + (along == 0 ? di : dk) * g, z0 = c.z + (along == 0 ? dk : di) * g;
+                    int x1 = x0 + (along == 0 ? g : 0), z1 = z0 + (along == 0 ? 0 : g);
+                    float fade = Fade(di + .5f, dk);
+                    if (!In(x0, z0) || !In(x1, z1) || fade <= 0 || Math.Abs(w.SurfAt(x0, z0) - w.SurfAt(x1, z1)) > g * 1.5f) { Hide(); continue; }
+                    var p0 = At(x0, z0); var p1 = At(x1, z1);
+                    // a line through the citadel's middle runs along its own axis
+                    bool axis = along == 0 ? z0 == _m.Site.KeepZ : x0 == _m.Site.KeepX;
+                    var d = p1 - p0;
+                    var across = new Vector3(-d.Z, 0, d.X).Normalized() * ((axis ? .7f : .38f) * v);
+                    mm.SetInstanceTransform(i, new Transform3D(new Basis(d, Vector3.Up * .01f, across), (p0 + p1) / 2));
+                    mm.SetInstanceColor(i++, axis ? new Color(1f, .8f, .5f, .8f * fade) : new Color(.92f, .68f, .4f, .5f * fade));
+                }
     }
 
     void UpdateCursor()

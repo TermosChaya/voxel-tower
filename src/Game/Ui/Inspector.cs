@@ -83,7 +83,7 @@ public partial class Inspector : Control
 
     static Button Btn(string text, string tip, Action act, float w = 0)
     {
-        var b = new Button { Text = text, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(w, 24), TooltipText = tip, MouseDefaultCursorShape = CursorShape.PointingHand };
+        var b = new Button { Text = text, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(w, 24), TooltipText = Bindings.Fill(tip), MouseDefaultCursorShape = CursorShape.PointingHand };
         b.AddThemeFontSizeOverride("font_size", 12);
         b.Pressed += act;
         return b;
@@ -142,7 +142,7 @@ public partial class Inspector : Control
             mats.AddChild(new Choice("Ловушка", TrapTip, new[] { "колья", "настил", "камни", "брёвна", "порох" }, Array.IndexOf(Traps, o.Material), i => t.SetMaterial(Traps[i])));
             col.AddChild(mats);
         }
-        if (opts.GetChildCount() == 0) col.AddChild(Hud.Text("Esc — убрать кисть. Щелчок по ячейке справа или клавиша — взять другую.", Ornament.SerifItalic, 12, Ornament.Faded));
+        if (opts.GetChildCount() == 0) col.AddChild(Hud.Text(Bindings.Fill("Esc — убрать кисть. Щелчок по ячейке справа или клавиша — взять другую. {Help} — всё управление."), Ornament.SerifItalic, 12, Ornament.Faded));
         return col;
     }
 
@@ -162,19 +162,19 @@ public partial class Inspector : Control
         "отброшен. Соседние бочки рвутся следом, а по дорожке пороха огонь бежит, взрываясь по пути. Подорвать, когда орда рядом, " +
         "— огненной стрелой: выберите лучника, «Огонь» и щелчок по бочкам. Рабочие порох не тушат.";
 
-    const string MaterialTip = "Материал\nКамень (Z), брёвна (X), земля (C) — из запасов. Смола варится из брёвен: слой её на дне рва " +
+    const string MaterialTip = "Материал\nКамень ({MatStone}), брёвна ({MatWood}), земля ({MatEarth}) — из запасов. Смола варится из брёвен: слой её на дне рва " +
         "вспыхивает весь разом от огненной стрелы и горит долго и вдвое жарче — налётчики в нём сгорают, а кто выбежал, горит ещё. " +
-        "Рабочие смолу не тушат; сгоревшую возвращает починка (0).";
+        "Рабочие смолу не тушат; сгоревшую возвращает починка ({ToolRepair}).";
 
     void Options(HBoxContainer opts)
     {
         var t = _m.Tools; var o = t.Opt;
         bool dig = o.Dig;
-        const string widthTip = "Толщина\nТолщина линии и стен, ширина рва, размер кисти. Клавиши [ и ].";
-        const string heightTip = "Высота\nНасколько поднимется кладка. Клавиши − и =.";
-        const string depthTip = "Глубина\nНасколько глубоко копать от поверхности. Клавиши − и =.";
-        const string levelTip = "Верх\nРовный: верх на одной высоте от точки, где начали. По рельефу: каждый столбец поднимается над своей землёй. Клавиша G.";
-        const string floorTip = "Дно\nРовное: дно на одной глубине от точки, где начали. По рельефу: каждый столбец углубляется от своей поверхности. Клавиша G.";
+        const string widthTip = "Толщина\nТолщина линии и стен, ширина рва, размер кисти. Клавиши {WidthLess} и {WidthMore}.";
+        const string heightTip = "Высота\nНасколько поднимется кладка. Клавиши {HeightLess} и {HeightMore}.";
+        const string depthTip = "Глубина\nНасколько глубоко копать от поверхности. Клавиши {HeightLess} и {HeightMore}.";
+        const string levelTip = "Верх\nРовный: верх на одной высоте от точки, где начали. По рельефу: каждый столбец поднимается над своей землёй. Клавиша {Level}.";
+        const string floorTip = "Дно\nРовное: дно на одной глубине от точки, где начали. По рельефу: каждый столбец углубляется от своей поверхности. Клавиша {Level}.";
         Control Width(string caption = "Толщина") => new Stepper(caption, widthTip, () => Len(o.Width), d => t.StepWidth(d));
         Control Height() => dig ? new Stepper("Глубина", depthTip, () => Len(o.Depth), d => t.StepHeight(d)) : new Stepper("Высота", heightTip, () => Len(o.Height), d => t.StepHeight(d));
         Control Level() => dig
@@ -183,7 +183,7 @@ public partial class Inspector : Control
         switch (t.Tool)
         {
             case Tool.Brush:
-                opts.AddChild(new Choice("Форма", "Форма кисти\nСтолб — стена от руки до заданной высоты (с киркой — полоса на глубину). Шар — налипает на поверхность (с киркой — вынимает ком). Клавиша F.",
+                opts.AddChild(new Choice("Форма", "Форма кисти\nСтолб — стена от руки до заданной высоты (с киркой — полоса на глубину). Шар — налипает на поверхность (с киркой — вынимает ком). Клавиша {Form}.",
                     new[] { "столб", "шар" }, (int)o.Form, i => { o.Form = (BrushForm)i; t.Changed(); }));
                 opts.AddChild(Width("Размер"));
                 if (o.Form == BrushForm.Column) { opts.AddChild(Height()); opts.AddChild(Level()); }
@@ -193,7 +193,7 @@ public partial class Inspector : Control
                 break;
             case Tool.Box:
             case Tool.Circle:
-                opts.AddChild(new Choice("Заливка", "Заливка\nСплошная фигура или только стенки заданной толщины. Клавиша F.",
+                opts.AddChild(new Choice("Заливка", "Заливка\nСплошная фигура или только стенки заданной толщины. Клавиша {Form}.",
                     new[] { "сплошной", t.Tool == Tool.Box ? "стенки" : "кольцо" }, o.Hollow ? 1 : 0, i => { if ((i == 1) != o.Hollow) t.ToggleForm(); }));
                 if (o.Hollow) opts.AddChild(Width());
                 opts.AddChild(Height()); opts.AddChild(Level());
@@ -203,15 +203,15 @@ public partial class Inspector : Control
                     "над рвом от 2 до 6 м, у берега, что ближе к цитадели: опущен, пока не подойдёт орда, тогда поднимается сам — кто на нём, летит в ров; " +
                     "поднятый — стена из брёвен. Щелчок по подъёмному мосту без кисти — сам / опущен / поднят.",
                     new[] { "арочный", "подъёмный" }, o.DrawBridge ? 1 : 0, i => { o.DrawBridge = i == 1; t.Changed(); }));
-                opts.AddChild(new Stepper("Проход", "Ширина прохода\nПо мосту ходят строем: уже 1,25 м его не сделать, к ширине добавляются парапеты или перила. Клавиши [ и ].",
+                opts.AddChild(new Stepper("Проход", "Ширина прохода\nПо мосту ходят строем: уже 1,25 м его не сделать, к ширине добавляются парапеты или перила. Клавиши {WidthLess} и {WidthMore}.",
                     () => Len(Math.Max(Bridges.MinWidth, o.Width)), d => t.StepWidth(d)));
                 opts.AddChild(Hud.CapsLabel(o.DrawBridge || o.Material == Mat.Wood ? "деревянный" : "каменный", 11, Ornament.BronzeLight));
                 break;
             case Tool.Extrude:
-                opts.AddChild(new Stepper("Шаг", "Шаг\nНа сколько нарастает или уходит вглубь грань за щелчок. Клавиши − и =.", () => Len(o.Step), d => t.StepHeight(d)));
+                opts.AddChild(new Stepper("Шаг", "Шаг\nНа сколько нарастает или уходит вглубь грань за щелчок. Клавиши {HeightLess} и {HeightMore}.", () => Len(o.Step), d => t.StepHeight(d)));
                 break;
             case Tool.Gather:
-                opts.AddChild(new Choice("Участок", "Участок\nКамень (Z), лес (X), земля (C) — откуда брать этот запас. Убежище — куда по тревоге (T) уходят мирные " +
+                opts.AddChild(new Choice("Участок", "Участок\nКамень ({MatStone}), лес ({MatWood}), земля ({MatEarth}) — откуда брать этот запас. Убежище — куда по тревоге ({Alarm}) уходят мирные " +
                     "и где пережидают её: под крышей, за стенами; ближайшее из убежищ и цитадели. Святилище — где днём молятся жрецы и копят вмешательство " +
                     "для заклинаний; на месте силы (Курган, Чёрный камень, Мёртвый родник), пока оно ваше, молитву слышат втрое лучше. Жилой дом — " +
                     "закрытая комната (стены, крыша, ворота): рамкой обведите её, и рабочие поставят в ней лежанки; каждая — место в войске.",
@@ -219,15 +219,15 @@ public partial class Inspector : Control
                     t.GatherKind switch { Stockpile.Wood => 1, Stockpile.Earth => 2, Zone.Shelter => 3, Zone.Sanctum => 4, Zone.Dwelling => 5, _ => 0 },
                     i => { if (i == 3) t.SetShelter(true); else if (i == 4) t.SetSanctum(true); else if (i == 5) t.SetDwelling(true); else t.SetMaterial(new[] { Mat.Stone, Mat.Wood, Mat.Rammed }[i]); }));
                 if (t.GatherKind is Stockpile.Stone or Stockpile.Earth)
-                    opts.AddChild(new Stepper("Глубина", "Глубина\nДо какой глубины от нынешней поверхности брать камень или землю. Клавиши − и =.", () => Len(o.Depth), d => t.StepHeight(d)));
+                    opts.AddChild(new Stepper("Глубина", "Глубина\nДо какой глубины от нынешней поверхности брать камень или землю. Клавиши {HeightLess} и {HeightMore}.", () => Len(o.Depth), d => t.StepHeight(d)));
                 break;
             case Tool.Paste when t.PasteBp != null:
-                opts.AddChild(Hud.CapsLabel($"поворот {t.PasteRot * 90}° · R — повернуть · {t.PasteBp.Describe()}", 10, Ornament.Aged));
+                opts.AddChild(Hud.CapsLabel($"поворот {t.PasteRot * 90}° · {Bindings.Label(Act.Rotate)} — повернуть · {t.PasteBp.Describe()}", 10, Ornament.Aged));
                 break;
         }
         if (t.Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Paste or Tool.Gather or Tool.Repair or Tool.Capture or Tool.Unmark or Tool.Bridge)
             opts.AddChild(new Choice("Сетка", "Сетка\nПривязка к сетке от центра цитадели: начало и конец штриха встают в её узлы, линии идут вдоль осей или под 45°, " +
-                "круги — целыми шагами. Стены выходят ровными, а одинаковое по обе стороны цитадели — симметричным. Клавиша N.",
+                "круги — целыми шагами. Стены выходят ровными, а одинаковое по обе стороны цитадели — симметричным. Клавиша {Grid}.",
                 new[] { "нет", "50 см", "1 м", "2 м" }, Array.IndexOf(ToolOptions.Grids, o.Grid), i => t.SetGrid(ToolOptions.Grids[i])));
     }
 
@@ -370,7 +370,7 @@ public partial class Inspector : Control
         row.AddChild(Btn("Стоять", "Стоять здесь\nВыбранные остаются на месте; для солдат это место становится постом.", () => _m.Command.HoldSelected(), 70));
         row.AddChild(AlarmButton(70));
         if (chosen.Count == 1)
-            row.AddChild(Btn("Вселиться · I", "Вселиться (I)\nВы — в нём: видите его глазами и делаете его руками. WASD — идти, мышь — смотреть, ЛКМ — удар, " +
+            row.AddChild(Btn($"Вселиться · {Bindings.Label(Act.Possess)}", "Вселиться ({Possess})\nВы — в нём: видите его глазами и делаете его руками. {FpForward}{FpLeft}{FpBack}{FpRight} — идти, мышь — смотреть, ЛКМ — удар, " +
                 "выстрел или кирка, ПКМ — класть (рабочий), Esc — выйти.", () => _m.FP.Enter(chosen[0]), 104));
         var duty = new List<Button>();
         // priests bring nothing in
@@ -547,7 +547,7 @@ public partial class Inspector : Control
             int have = sim.Household(), places = sim.Places, beds = places - Sim.CitadelPlaces - (sim.Knows("barracks") ? 4 : 0);
             head.Text = $"Войско: {have} из {places} мест" + (sim.Recruits.Count > 0 ? $" · в очереди {sim.Recruits.Count}" : "");
             head.AddThemeColorOverride("font_color", have >= places ? Ornament.Ember : Ornament.Parchment);
-            note.Text = beds > 0 ? $"места: цитадель {places - beds}, жилые дома {beds}" : "места даёт цитадель; ещё — жилые дома (8)";
+            note.Text = beds > 0 ? $"места: цитадель {places - beds}, жилые дома {beds}" : Bindings.Fill("места даёт цитадель; ещё — жилые дома ({ToolGather})");
             foreach (var k in _tiles) k.QueueRedraw();
         });
         return row;
@@ -561,7 +561,7 @@ public partial class Inspector : Control
         row.AddThemeConstantOverride("separation", 10);
         var present = new List<UnitType>();
         foreach (var kind in Kinds.PlayerKinds) if (_m.Sim.Count(kind) > 0) present.Add(kind);
-        var keep = Btn("Цитадель · K", "Цитадель (K)\nНабор войска: щелчок по цитадели или K. Набранные готовятся в цитадели по очереди и выходят из её ворот; " +
+        var keep = Btn($"Цитадель · {Bindings.Label(Act.Keep)}", "Цитадель ({Keep})\nНабор войска: щелчок по цитадели или {Keep}. Набранные готовятся в цитадели по очереди и выходят из её ворот; " +
             "войско не больше, чем мест — их дают цитадель и жилые дома.", () => _m.Command.OpenKeep(), 98);
         keep.SizeFlagsVertical = SizeFlags.ShrinkBegin;
         row.AddChild(keep);

@@ -279,10 +279,14 @@ public partial class Commander : Node
     /// Right click with pawns chosen: on a beast they hunt it, on a raider they go for it,
     /// on the ground they go there and stay (soldiers make it their post).
     /// </summary>
+    /// <summary>How many times the chosen were sent somewhere, set on a beast or on a foe (the tutorial counts them).</summary>
+    public int Sent;
+
     public void OrderTo(Vector2 screen)
     {
         Prune();
         if (_m.Selected.Count == 0) return;
+        Sent++;
         var prey = UnitAt(screen, pawnsFirst: false);
         if (prey != null && prey.Team != Team.Player)
         {
@@ -337,10 +341,10 @@ public partial class Commander : Node
         _m.Hud.Refresh();
     }
 
-    public const string AlarmTip = "Тревога (T)\nМирные бросают работу и уходят в ближайшее убежище: в цитадель — там их не достать — или на участок, " +
+    public const string AlarmTip = "Тревога ({Alarm})\nМирные бросают работу и уходят в ближайшее убежище: в цитадель — там их не достать — или на участок, " +
         "отмеченный убежищем (8, «убежище»). Солдаты бегут на посты и держат их. Посланные по приказу идут, куда посланы. Ещё раз — отбой; " +
         "после отбитой волны отбой трубят сами. Рабочие и без тревоги бегут в убежище, когда враг подходит ближе 9 м.";
-    public const string StandDownTip = "Отбой (T)\nМирные выходят из убежищ и возвращаются к работе, солдаты — к своим делам.";
+    public const string StandDownTip = "Отбой ({Alarm})\nМирные выходят из убежищ и возвращаются к работе, солдаты — к своим делам.";
 
     /// <summary>Takes one on at once (scripted scenes).</summary>
     public Unit Hire(UnitType t)
@@ -389,6 +393,8 @@ public partial class Commander : Node
     {
         var w = _m.Sim.Waves;
         if (w.Active || _m.Sim.Over) return;
+        // in the tutorial the horde comes when the lesson comes to it
+        if (_m.Tutor is { Over: false }) { _m.Hud.Float("в обучении орда придёт, когда до неё дойдёт урок", Ornament.Aged); return; }
         w.StartNow(_m.Sim);
         _m.Hud.Refresh();
     }
@@ -411,8 +417,8 @@ public partial class Commander : Node
     {
         if (e is not InputEventKey k || !k.Pressed || k.Echo || _m.Hud.MenuOpen) return;
         // the quick save, and reading it back
-        if (k.PhysicalKeycode == Key.F5) { if (Saves.Write(_m, Saves.Quick)) _m.Hud.Float("быстрое сохранение", Ornament.Moss); GetViewport().SetInputAsHandled(); return; }
-        if (k.PhysicalKeycode == Key.F9) { Saves.Read(_m, Saves.Quick); GetViewport().SetInputAsHandled(); return; }
+        if (Bindings.Is(k, Act.QuickSave) && !k.CtrlPressed && !k.MetaPressed) { if (Saves.Write(_m, Saves.Quick)) _m.Hud.Float("быстрое сохранение", Ornament.Moss); GetViewport().SetInputAsHandled(); return; }
+        if (Bindings.Is(k, Act.QuickLoad) && !k.CtrlPressed && !k.MetaPressed) { Saves.Read(_m, Saves.Quick); GetViewport().SetInputAsHandled(); return; }
         // squads: Ctrl and a digit remembers the chosen, Shift and the digit calls them up
         if (k.PhysicalKeycode is >= Key.Key1 and <= Key.Key5 && (k.CtrlPressed || k.MetaPressed || k.ShiftPressed))
         {
@@ -431,15 +437,16 @@ public partial class Commander : Node
             return;
         }
         if (k.CtrlPressed || k.MetaPressed) return;
-        switch (k.PhysicalKeycode)
+        switch (Bindings.Find(k.PhysicalKeycode, Bindings.Scope.Field))
         {
-            case Key.Space: CallWave(); break;
-            case Key.P: TogglePause(); break;
-            case Key.Tab: CycleSpeed(); break;
-            case Key.T: Alarm(); break;
-            case Key.J: ToggleTrails(); break;
-            case Key.K: OpenKeep(); break;
-            case Key.I: Possess(); break;
+            case Act.CallWave: CallWave(); break;
+            case Act.Pause: TogglePause(); break;
+            case Act.Speed: CycleSpeed(); break;
+            case Act.Alarm: Alarm(); break;
+            case Act.Trails: ToggleTrails(); break;
+            case Act.Keep: OpenKeep(); break;
+            case Act.Possess: Possess(); break;
+            case Act.Help: _m.Hud.OpenMenu("controls"); break;
             default: return;
         }
         GetViewport().SetInputAsHandled();

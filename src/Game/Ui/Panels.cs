@@ -17,7 +17,7 @@ public static class Retinue
         (Kinds.Archer, "Лучник\nСтреляет на 24 м, первыми бьёт тех, кто ломает стены, ставит лестницы или лезет по ним. Сверху бьёт точнее. " +
             "Ночью в темноте видит врага лишь на 13 м — дальше только освещённого. Лучший охотник. Щелчок — выбрать всех."),
         (Kinds.Swordsman, "Мечник\nДержит землю на 12 м вокруг поста, в кольчуге и со щитом. Сбрасывает осадные лестницы. Щелчок — выбрать всех."),
-        (Kinds.Priest, "Жрец\nДнём молится в святилище — участке, отмеченном делянкой (8) как «святилище»; молитва копит вмешательство для заклинаний, " +
+        (Kinds.Priest, "Жрец\nДнём молится в святилище — участке, отмеченном делянкой ({ToolGather}) как «святилище»; молитва копит вмешательство для заклинаний, " +
             "а на месте силы, пока оно ваше, её слышат втрое лучше. Ночью уходит в цитадель. Не работает, почти не дерётся, от орды бежит. Щелчок — выбрать всех."),
         (Kinds.Spearman, "Копейщик\nВ стёганке и шапеле, с копьём в два с половиной метра: колет с 1,9 м — дальше мечника. Сбрасывает осадные лестницы. " +
             "Со знанием длинных древков бьёт ещё на четверть дальше. Щелчок — выбрать всех."),
@@ -148,7 +148,7 @@ public static class Retinue
             Pastime.Warm => "греется у огня", Pastime.Watch => "смотрит на запад", Pastime.Pray => "молится", _ => "",
         };
         if (u.Hold) return leisure == "" ? "стоит по приказу" : "стоит по приказу, " + leisure;
-        if (u.Why != "") return u.Why;
+        if (u.Why != "") return Bindings.Fill(u.Why);
         if (u.Duty != Stockpile.None) return $"ищет, где добыть: {Stockpile.Name(u.Duty)}";
         return leisure != "" ? leisure : "без дела";
     }
@@ -342,7 +342,7 @@ public partial class UnitOverlay : Control
                 top.Y -= 8;
             }
             if (why)
-                Ornament.Lettering(this, Ornament.SerifItalic, top + new Vector2(-80, -2), u.Why, 12, Ornament.BronzeLight, HorizontalAlignment.Center, 160);
+                Ornament.Lettering(this, Ornament.SerifItalic, top + new Vector2(-80, -2), Bindings.Fill(u.Why), 12, Ornament.BronzeLight, HorizontalAlignment.Center, 160);
         }
         if (_m.Command.Frame is Rect2 f2)
         {

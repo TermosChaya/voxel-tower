@@ -44,6 +44,11 @@ public sealed partial class Sim
     /// <summary>How many of the player's markings can still be taken back.</summary>
     public int UndoDepth => _undo.Count + (_marking is { Empty: false } ? 1 : 0);
 
+    /// <summary>How many markings the player's hand has made in all, and how many it has taken back (the tutorial counts them).</summary>
+    public int MarkingsMade, MarkingsUndone;
+    /// <summary>The last marking the player made, kept or not.</summary>
+    public Marking LastMarking { get; private set; }
+
     /// <summary>The player's hand goes to the marking: what it does until <see cref="EndMarking"/> is one step to take back.</summary>
     public void BeginMarking()
     {
@@ -62,6 +67,8 @@ public sealed partial class Sim
         {
             _undo.Add(_marking);
             if (_undo.Count > UndoKept) _undo.RemoveAt(0);
+            LastMarking = _marking;
+            MarkingsMade++;
         }
         _marking = null;
     }
@@ -78,6 +85,7 @@ public sealed partial class Sim
         if (_undo.Count == 0) return null;
         var mk = _undo[^1];
         _undo.RemoveAt(_undo.Count - 1);
+        MarkingsUndone++;
         voxels = Orders.Undo(mk);
         foreach (var z in mk.Added)
         {

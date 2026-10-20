@@ -6,7 +6,7 @@ namespace VoxelTower.Game;
 /// <summary>
 /// The orthographic diorama camera. Wheel, a pinch or two fingers up and down on a trackpad, PageUp/PageDown zoom;
 /// middle button (or Alt + left) orbits, right button drags the map, WASD or arrows pan, Q/E turn,
-/// Y looks straight down and back, H returns home. A blast or a great fall near what it looks at shakes it.
+/// Y looks straight down and back, H returns home (the keys as the player bound them). A blast or a great fall near what it looks at shakes it.
 /// </summary>
 public partial class CameraRig : Node3D
 {
@@ -68,7 +68,10 @@ public partial class CameraRig : Node3D
         Home(true);
     }
 
-    public void Home(bool snap = false) => Set(_homeX, _homeZ, HomeYaw, HomePitch, HomeZoom, snap);
+    public void Home(bool snap = false) { Set(_homeX, _homeZ, HomeYaw, HomePitch, HomeZoom, snap); Homes++; }
+
+    /// <summary>How many times the view was sent home (the tutorial counts them).</summary>
+    public int Homes;
 
     /// <summary>Where the camera is heading: its target, turn, tilt and zoom, as <see cref="Set"/> takes them.</summary>
     public (float x, float z, float yaw, float pitch, float zoom) Aim => (_tx, _tz, _yaw, _pitch, _zoom);
@@ -123,11 +126,14 @@ public partial class CameraRig : Node3D
         }
         else if (e is InputEventKey k && k.Pressed && !k.Echo && !k.CtrlPressed && !k.MetaPressed)
         {
-            if (k.PhysicalKeycode is Key.H or Key.Home) Home();
-            else if (k.PhysicalKeycode == Key.Y) ToggleTopDown();
-            else if (k.PhysicalKeycode is Key.Pageup or Key.KpAdd) ZoomBy(1.3f);
-            else if (k.PhysicalKeycode is Key.Pagedown or Key.KpSubtract) ZoomBy(1 / 1.3f);
-            else return;
+            switch (Bindings.Find(k.PhysicalKeycode, Bindings.Scope.Field))
+            {
+                case Act.CamHome: Home(); break;
+                case Act.CamTop: ToggleTopDown(); break;
+                case Act.CamZoomIn: ZoomBy(1.3f); break;
+                case Act.CamZoomOut: ZoomBy(1 / 1.3f); break;
+                default: return;
+            }
             GetViewport().SetInputAsHandled();
         }
     }
@@ -148,13 +154,13 @@ public partial class CameraRig : Node3D
         float fx = -MathF.Sin(_yaw), fz = -MathF.Cos(_yaw), rx = MathF.Cos(_yaw), rz = -MathF.Sin(_yaw);
         float mx = 0, mz = 0;
         if (Held) goto settle;
-        if (Down(Key.W) || Down(Key.Up)) { mx += fx; mz += fz; }
-        if (Down(Key.S) || Down(Key.Down)) { mx -= fx; mz -= fz; }
-        if (Down(Key.D) || Down(Key.Right)) { mx += rx; mz += rz; }
-        if (Down(Key.A) || Down(Key.Left)) { mx -= rx; mz -= rz; }
+        if (Down(Act.CamForward)) { mx += fx; mz += fz; }
+        if (Down(Act.CamBack)) { mx -= fx; mz -= fz; }
+        if (Down(Act.CamRight)) { mx += rx; mz += rz; }
+        if (Down(Act.CamLeft)) { mx -= rx; mz -= rz; }
         if (mx != 0 || mz != 0) { _tx = ClampX(_tx + mx * sp); _tz = ClampZ(_tz + mz * sp); }
-        if (Down(Key.Q)) _yaw += 1.6f * dt;
-        if (Down(Key.E)) _yaw -= 1.6f * dt;
+        if (Down(Act.CamTurnLeft)) _yaw += 1.6f * dt;
+        if (Down(Act.CamTurnRight)) _yaw -= 1.6f * dt;
 
         settle:
         float a = 1 - MathF.Exp(-dt * 14f);
@@ -169,7 +175,7 @@ public partial class CameraRig : Node3D
     /// <summary>A shaking, one way of it: three tremors over one another, from a slow sway to a rattle.</summary>
     static float Wobble(float t, float seed) => MathF.Sin(t * 31 + seed) * .55f + MathF.Sin(t * 47 + seed * 2.3f) * .3f + MathF.Sin(t * 83 + seed * 4.1f) * .15f;
 
-    static bool Down(Key k) => Input.IsPhysicalKeyPressed(k) && !Input.IsKeyPressed(Key.Ctrl) && !Input.IsKeyPressed(Key.Meta);
+    static bool Down(Act a) => Bindings.Held(a) && !Input.IsKeyPressed(Key.Ctrl) && !Input.IsKeyPressed(Key.Meta);
 
     void Apply()
     {

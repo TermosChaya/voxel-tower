@@ -6,14 +6,17 @@ namespace VoxelTower.Game;
 
 /// <summary>
 /// The game's own menu, over a darkened field: go on, save into a slot, read one back (a slot, the quick save, the
-/// autosave), the settings, quit. The siege stands still while it is open. Esc or the medallion by the clock opens it.
+/// autosave), the controls, the settings, a new siege, the tutorial, quit. At the start of the game it is the title:
+/// a new siege, the tutorial, a saved game, the controls, the settings, quit. The siege stands still while it is open. Esc or the medallion by the
+/// clock opens it; the help medallion and {Help} open it on the controls.
 /// </summary>
 public partial class GameMenu : Control
 {
     Main _m;
     VBoxContainer _page;
+    Control _panel;
     bool _wasPaused;
-    const float W = 600, H = 470;
+    const float W = 600, H = 560;
 
     public void Init(Main m)
     {
@@ -26,8 +29,9 @@ public partial class GameMenu : Control
         AddChild(dim);
         var panel = new BottomConsole.Plate(c => Craft.Framed(c, new Rect2(Vector2.Zero, c.Size), 12)) { MouseFilter = MouseFilterEnum.Stop };
         panel.SetAnchorsPreset(LayoutPreset.Center);
-        panel.OffsetLeft = -W / 2; panel.OffsetRight = W / 2; panel.OffsetTop = -H / 2; panel.OffsetBottom = H / 2;
         AddChild(panel);
+        _panel = panel;
+        Fit(W, H);
         var box = new MarginContainer();
         box.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         foreach (var side in new[] { "margin_left", "margin_right" }) box.AddThemeConstantOverride(side, 34);
@@ -47,6 +51,16 @@ public partial class GameMenu : Control
     }
 
     public bool IsOpen => Visible;
+    /// <summary>The page shown: "main", "save", "load", "settings", "controls".</summary>
+    public string PageName { get; private set; } = "main";
+    /// <summary>The title of the game's start: its first page begins a game; Esc does not leave it.</summary>
+    bool _title;
+
+    public void OpenTitle()
+    {
+        _title = true;
+        Open();
+    }
 
     public void Open(string page = null)
     {
@@ -59,8 +73,17 @@ public partial class GameMenu : Control
             case "save": Saving(); break;
             case "load": Loading(); break;
             case "settings": Settings_(); break;
+            case "controls": Controls_(); break;
             default: Main_(); break;
         }
+    }
+
+    /// <summary>The panel this large in the middle of the screen, as far as the screen lets it.</summary>
+    void Fit(float w, float h)
+    {
+        var vp = GetViewportRect().Size;
+        if (vp.X > 0) { w = Math.Min(w, vp.X - 40); h = Math.Min(h, vp.Y - 40); }
+        _panel.OffsetLeft = -w / 2; _panel.OffsetRight = w / 2; _panel.OffsetTop = -h / 2; _panel.OffsetBottom = h / 2;
     }
 
     public void Close()
@@ -74,7 +97,18 @@ public partial class GameMenu : Control
     /// <summary>Esc: from a page back to the first, from the first out of the menu.</summary>
     public void Back()
     {
-        if (_onMain) Close(); else Main_();
+        if (_onMain) { if (!_title) Close(); }
+        else Main_();
+    }
+
+    /// <summary>The title left for a game: the siege or the tutorial begins.</summary>
+    void Begin(bool tutorial)
+    {
+        _title = false;
+        Close();
+        _m.Paused = false;
+        _m.Hud.EndTitle();
+        if (tutorial) _m.StartTutorial(); else _m.Welcome();
     }
 
     bool _onMain;
@@ -82,11 +116,13 @@ public partial class GameMenu : Control
     void Clear()
     {
         foreach (var c in _page.GetChildren()) c.QueueFree();
+        _capture = null;
+        Fit(W, H);
     }
 
     static Button Big(string text, string tip, Action act, bool enabled = true)
     {
-        var b = new Button { Text = text, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(280, 38), TooltipText = tip, Disabled = !enabled,
+        var b = new Button { Text = text, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(280, 38), TooltipText = Bindings.Fill(tip), Disabled = !enabled,
             MouseDefaultCursorShape = CursorShape.PointingHand, SizeFlagsHorizontal = SizeFlags.ShrinkCenter };
         b.AddThemeFontOverride("font", Ornament.SerifBold);
         b.AddThemeFontSizeOverride("font_size", 16);
@@ -98,10 +134,28 @@ public partial class GameMenu : Control
     {
         _onMain = true;
         Clear();
+        PageName = "main";
+        if (_title)
+        {
+            Fit(W, 430);
+            var sub = Hud.Text("Оборона крепости в долине из вокселей", Ornament.SerifItalic, 15, Ornament.Aged);
+            sub.HorizontalAlignment = HorizontalAlignment.Center;
+            _page.AddChild(sub);
+            _page.AddChild(Big("Новая игра", "Осада: двенадцать волн орды, раз в десять минут. Старая крепость вокруг цитадели наполовину разрушена.", () => Begin(false)));
+            _page.AddChild(Big("Обучение", "Отдельный режим: шаг за шагом, за руку — через всё, что умеет игра. Орда не придёт, пока не дойдёт до неё урок.", () => Begin(true)));
+            _page.AddChild(Big("Загрузить игру", "Продолжить сохранённую игру: из ячейки, быстрого сохранения или автосохранения после отбитой волны.", Loading));
+            _page.AddChild(Big("Управление", "Все клавиши и кнопки мыши и что они делают; любую клавишу можно переназначить.", Controls_));
+            _page.AddChild(Big("Настройки", "Размер интерфейса, громкость, тряска, замедление, обводка вокселей.", Settings_));
+            _page.AddChild(Big("Выйти из игры", "", () => _m.GetTree().Quit()));
+            return;
+        }
         _page.AddChild(Big("Продолжить", "Вернуться к осаде (Esc).", Close));
-        _page.AddChild(Big("Сохранить игру", "Записать игру в одну из трёх ячеек. Быстро — F5.", Saving));
-        _page.AddChild(Big("Загрузить игру", "Продолжить сохранённую игру: из ячейки, быстрого сохранения (F9) или автосохранения после отбитой волны.", Loading));
-        _page.AddChild(Big("Настройки", "Размер интерфейса.", Settings_));
+        _page.AddChild(Big("Сохранить игру", "Записать игру в одну из трёх ячеек. Быстро — {QuickSave}.", Saving));
+        _page.AddChild(Big("Загрузить игру", "Продолжить сохранённую игру: из ячейки, быстрого сохранения ({QuickLoad}) или автосохранения после отбитой волны.", Loading));
+        _page.AddChild(Big("Управление", "Все клавиши и кнопки мыши и что они делают; любую клавишу можно переназначить ({Help}).", Controls_));
+        _page.AddChild(Big("Настройки", "Размер интерфейса, громкость, тряска, замедление, обводка вокселей.", Settings_));
+        _page.AddChild(Big("Новая игра", "Начать новую осаду. Несохранённое здесь пропадёт.", () => _m.NewGame()));
+        _page.AddChild(Big(_m.Tutor is { Over: false } ? "Обучение сначала" : "Обучение", "Отдельный режим: за руку через всё, что умеет игра. Несохранённое здесь пропадёт.", () => _m.NewGame(tutorial: true)));
         _page.AddChild(Big("Выйти из игры", "Закрыть игру. Несохранённое пропадёт (автосохранение пишется после каждой отбитой волны).", () => _m.GetTree().Quit()));
     }
 
@@ -134,6 +188,7 @@ public partial class GameMenu : Control
     {
         _onMain = false;
         Clear();
+        PageName = "save";
         _page.AddChild(Hud.CapsLabel("Сохранить игру", 10));
         foreach (string slot in Saves.Slots)
         {
@@ -152,6 +207,7 @@ public partial class GameMenu : Control
     {
         _onMain = false;
         Clear();
+        PageName = "load";
         _page.AddChild(Hud.CapsLabel("Загрузить игру", 10));
         foreach (string slot in new[] { Saves.Auto, Saves.Quick, Saves.Slots[0], Saves.Slots[1], Saves.Slots[2] })
         {
@@ -166,6 +222,7 @@ public partial class GameMenu : Control
     {
         _onMain = false;
         Clear();
+        PageName = "settings";
         _page.AddChild(Hud.CapsLabel("Настройки", 10));
         var scale = new Stepper("Размер интерфейса", "Размер интерфейса\nКрупнее или мельче балка, консоль, панели и подсказки. Ctrl и + или − в игре — то же, Ctrl+0 — как был.",
             () => $"{Math.Round(Settings.UiScale * 100)} %", d => Settings.Step(_m.GetTree().Root, d));

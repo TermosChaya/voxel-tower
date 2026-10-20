@@ -80,7 +80,7 @@ public sealed partial class Sim
             u.Shrine = ShrineFor(u);
             if (u.Shrine < 0)
             {
-                u.Why = Zones.Exists(z => z.Kind == Zone.Sanctum) ? "в святилище нет места" : "нет святилища: отметьте его делянкой (8)";
+                u.Why = Zones.Exists(z => z.Kind == Zone.Sanctum) ? "в святилище нет места" : "нет святилища: отметьте его делянкой ({ToolGather})";
                 if (u.Pastime == Pastime.Pray) Busy(u);
                 Idle(u, dt, stay: false);
                 return;

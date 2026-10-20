@@ -159,7 +159,7 @@ public sealed partial class Sim
         FloorOf(best, cells);
         res.Area = cells.Count / (float)(VoxelWorld.PerMetre * VoxelWorld.PerMetre);
         res.Bunks = Furnish(cells, Math.Clamp((int)(res.Area / FloorPerBunk), 1, MostBunks)).Bunks.Count;
-        if (!bestDoor) { res.Why = "нет двери: поставьте ворота (9) в стену"; return res; }
+        if (!bestDoor) { res.Why = "нет двери: поставьте ворота ({ToolGate}) в стену"; return res; }
         if (res.Area < DwellingFloor) { res.Why = $"тесно: {res.Area:0.#} м² пола, нужно хотя бы {DwellingFloor:0}"; return res; }
         if (res.Bunks == 0) { res.Why = "лежанке негде встать: нужна стена и пол два метра в длину"; return res; }
         res.Ok = true;

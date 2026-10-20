@@ -104,7 +104,7 @@ public partial class MysteryPanel : VBoxContainer
     void Ask(RiteKind kind, Unit victim = null)
     {
         string why = _m.Sim.Sacrifice(kind, victim);
-        if (why != null) _m.Hud.Float(why, Ornament.Blood);
+        if (why != null) _m.Hud.Float(Bindings.Fill(why), Ornament.Blood);
         _ownArmed = -99;
         Refresh();
         _m.Hud.Refresh();
@@ -168,7 +168,7 @@ public partial class MysteryPanel : VBoxContainer
             b.TooltipText = $"{sp.Name} · {Sim.Circles[sp.Circle].ToLowerInvariant()}\n{sp.About} {what}";
         }
         _rite.Text = sim.RiteNow is { } r ? RiteText(r) : !day ? "Ночью жрецы в цитадели: жертвы — утром." : !hasPriest ? "Жрецов нет: наберите их в цитадели (щелчок по ней или K)."
-            : !hasSanctum ? "Святилища нет: отметьте его делянкой (8), выбрав в консоли «святилище»." : sim.Time < sim.MournUntil ? $"Дружина скорбит ещё {sim.MournUntil - sim.Time:0} с: работа идёт медленнее." : "";
+            : !hasSanctum ? Bindings.Fill("Святилища нет: отметьте его делянкой ({ToolGather}), выбрав в консоли «святилище».") : sim.Time < sim.MournUntil ? $"Дружина скорбит ещё {sim.MournUntil - sim.Time:0} с: работа идёт медленнее." : "";
     }
 
     static string RiteText(Rite r) => r.Kind switch

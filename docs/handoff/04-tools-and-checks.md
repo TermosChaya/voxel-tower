@@ -7,6 +7,7 @@ export DOTNET_ROOT=/opt/homebrew/opt/dotnet/libexec
 dotnet build VoxelTower.csproj -nologo -v q          # сборка игры
 ./run-game.command                                    # собрать и запустить (Godot Mono из /Applications)
 ./run-game.command -- --selftest                      # самотест: «[selftest] all passed»
+./run-game.command -- --tutorial-check                # обучение проходится само: «[tutorial] all steps went», ~2 мин
 cd tools/CoreBench && dotnet run -c Release           # стенд: «all checks passed», ~2–3 мин
 cd tools/CoreBench && dotnet run -c Release -- --seeds   # ещё три долины (после правок генерации)
 ```
@@ -31,8 +32,13 @@ cd tools/CoreBench && dotnet run -c Release -- --seeds   # ещё три дол�
   нужной валютой); `--tool=N` — взять N-ю кисть сетки
   (0 — кисть, 1 — линия…); `--resolution 1440x900` (до `--`) — другое окно; `--inspect` — осмотреть первого
   налётчика (или зверя), камера к нему; `--ui-scale=1.1` — интерфейс в этом размере (0,7–1,1); `--load=файл.sav` —
-  начать с сохранения (самотест пишет `…/app_userdata/Voxel Tower/saves/selftest.sav`); `--menu[=save|load|settings]`
-  — меню открыто.
+  начать с сохранения (самотест пишет `…/app_userdata/Voxel Tower/saves/selftest.sav`); `--menu[=save|load|settings|controls]`
+  — меню открыто (`controls` — страница «Управление»). `--title` — главное меню над долиной (обычный запуск игры начинается
+  с него; скриптовые — сразу с игры). `--tutorial[=N]` — обучение с N-го шага (с нуля; снимки карточки, рамки и маяка
+  через `--frames=70`, чтобы камера доехала). `--tutorial-check` — прогон обучения: каждый шаг выполняется через те же
+  входы, что у игрока (кисти — синтетическими щелчками и протяжками), в лог по строке `[tutorial] ok|FAIL NN шаг`, код
+  выхода — число незасчитанных. `--grid=N` — сетка кистей в N вокселей; `--aim=x,z` — курсор над вокселем за 8 кадров до
+  снимка (с `--tool=1 --grid=8` — сетка линиями у курсора).
 - `--look=N` — к месту долины: 0 медный рудник, 1 дома рудокопов, 2 серебряная жила, 3 золотой прииск,
   4 застава, 5 сторожевая башня, 6 упавшая башня, 7 старый мост, 8 обрушенный мост, 9 Курган, 10 Чёрный камень,
   11 Мёртвый родник.

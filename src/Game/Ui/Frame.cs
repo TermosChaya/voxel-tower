@@ -203,7 +203,7 @@ public partial class WaveClock : Control
     KeepBar _keep;
     DayDial _dial;
     const string CallTip = "Позвать орду сейчас\nЗолота за это не дают. Зато орда придёт, зная о вашей обороне меньше: сколько времени до волны прошло, столько она и разведала. " +
-        "Солнце сядет тотчас: орда ходит только ночью. Пробел.";
+        "Солнце сядет тотчас: орда ходит только ночью. {CallWave}.";
     public const float W = 470, H = 70;
 
     public void Init(Main m)
@@ -251,7 +251,7 @@ public partial class WaveClock : Control
             {
                 Text = labels[i], ToggleMode = true, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(29, 24),
                 MouseDefaultCursorShape = CursorShape.PointingHand, SizeFlagsVertical = SizeFlags.ShrinkCenter,
-                TooltipText = "Скорость\nПауза останавливает всё, кроме разметки: кисти работают и на паузе. P — пауза, Tab — сменить скорость.",
+                TooltipText = "Скорость\nПауза останавливает всё, кроме разметки: кисти работают и на паузе. {Pause} — пауза, {Speed} — сменить скорость.",
             };
             b.AddThemeFontSizeOverride("font_size", 12);
             b.Pressed += () => { if (k == 0) _m.Command.TogglePause(); else _m.Command.SetSpeed(k); };
@@ -264,7 +264,7 @@ public partial class WaveClock : Control
             MouseDefaultCursorShape = CursorShape.PointingHand, SizeFlagsVertical = SizeFlags.ShrinkCenter,
             TooltipText = "Пути орды\nКуда пойдут ватаги следующей волны — каждая своей пунктирной линией от места, где войдёт в долину, до цитадели; " +
                 "красные кольца — где она будет прорубаться, янтарные — где поставит лестницу, наведёт мост или засыплет ров. " +
-                "Пути пересчитываются, пока вы строите: перекройте дорогу — и линия уйдёт в обход. Клавиша J.",
+                "Пути пересчитываются, пока вы строите: перекройте дорогу — и линия уйдёт в обход. Клавиша {Trails}.",
         };
         _trails.AddThemeFontSizeOverride("font_size", 12);
         _trails.Pressed += () => _m.Command.ToggleTrails();
@@ -535,8 +535,11 @@ public partial class MapRing : Control
 {
     public const float Outer = 118, Inner = 103, Side = Inner * 1.62f;
     Main _m;
-    Button _top;
+    Medallion _top;
     public Minimap Map { get; private set; }
+    /// <summary>The buttons of the view on the ring: looking straight down and back, home to the citadel (the tutorial points at them).</summary>
+    public Control TopButton => _top;
+    public Control HomeButton { get; private set; }
 
     public void Init(Main m)
     {
@@ -553,20 +556,31 @@ public partial class MapRing : Control
         Map.Size = new Vector2(Side, Side);
         Map.Position = new Vector2(Outer - Side / 2, Outer - Side / 2);
         AddChild(new Ring { Size = Size, MouseFilter = MouseFilterEnum.Ignore });
-        // the buttons sit on the ring, low on either side
+        // the buttons sit on the ring, low on either side of the south: the zoom outermost, the views within
         foreach (var (text, factor, angle, tip) in new[]
         {
-            ("−", 1 / 1.3f, 2.45f, "Отдалить\nКолесо, щипок или два пальца на тачпаде, PageDown."),
-            ("+", 1.3f, .69f, "Приблизить\nКолесо, щипок или два пальца на тачпаде, PageUp."),
+            ("−", 1 / 1.3f, 2.86f, "Отдалить ({CamZoomOut})\nКолесо мыши, щипок или два пальца на тачпаде."),
+            ("+", 1.3f, .28f, "Приблизить ({CamZoomIn})\nКолесо мыши, щипок или два пальца на тачпаде."),
         })
         {
             var b = Knob(text, tip, angle);
             float f = factor;
             b.Pressed += () => _m.Rig.ZoomBy(f);
         }
-        _top = Knob("◎", "Вид сверху\nСмотреть на долину ровно сверху, как на карту, и обратно. Y.", 1.57f);
-        _top.ToggleMode = true;
-        _top.Pressed += () => _m.Rig.ToggleTopDown();
+        _top = ViewKnob(Icons.TopView, "Вид сверху ({CamTop})\nСмотреть на долину ровно сверху, как на карту, — удобно размечать по сетке. Ещё раз — обратно, наискосок.", 2.3f);
+        _top.Clicked += () => _m.Rig.ToggleTopDown();
+        var home = ViewKnob(Icons.HomeView, "Вернуть вид ({CamHome})\nК крепости, как в начале игры: обычный наклон, поворот и масштаб.", .84f);
+        home.Clicked += () => _m.Rig.Home();
+        HomeButton = home;
+    }
+
+    Medallion ViewKnob(Icons.Painter icon, string tip, float angle)
+    {
+        var b = new Medallion(icon, tip) { Size = new Vector2(30, 30), CustomMinimumSize = new Vector2(30, 30), MouseDefaultCursorShape = CursorShape.PointingHand };
+        float r = (Outer + Inner) / 2;
+        b.Position = new Vector2(Outer + MathF.Cos(angle) * r - 15, Outer + MathF.Sin(angle) * r - 15);
+        AddChild(b);
+        return b;
     }
 
     Button Knob(string text, string tip, float angle)
@@ -574,7 +588,7 @@ public partial class MapRing : Control
         var b = new Button
         {
             Text = text, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(24, 24), Size = new Vector2(24, 24),
-            MouseDefaultCursorShape = CursorShape.PointingHand, TooltipText = tip, Flat = false,
+            MouseDefaultCursorShape = CursorShape.PointingHand, TooltipText = Bindings.Fill(tip), Flat = false,
         };
         b.AddThemeFontSizeOverride("font_size", 13);
         float r = (Outer + Inner) / 2;
@@ -585,7 +599,7 @@ public partial class MapRing : Control
 
     public override void _Process(double delta)
     {
-        if (_m != null && _top.ButtonPressed != _m.Rig.TopDown) _top.SetPressedNoSignal(_m.Rig.TopDown);
+        if (_m != null) _top.Lit = _m.Rig.TopDown;
     }
 
     public override void _Draw()

@@ -354,6 +354,31 @@ public static partial class Icons
             c.DrawCircle(P(r, x, y), S(r, .03f), new Color("4b3727"), true, -1, true);
     }
 
+    /// <summary>The valley as a map seen from straight above: a square sheet ruled in three by three, a mark at its middle.</summary>
+    public static void TopView(CanvasItem c, Rect2 r, Color ink)
+    {
+        var a = P(r, .14f, .14f); var b = P(r, .86f, .86f);
+        Fill(c, Shade(ink, .35f), a, new Vector2(b.X, a.Y), b, new Vector2(a.X, b.Y));
+        c.DrawRect(new Rect2(a, b - a), ink, false, Math.Max(1.4f, S(r, .07f)), true);
+        for (int i = 1; i < 3; i++)
+        {
+            float f = .14f + .72f * i / 3;
+            c.DrawLine(P(r, f, .14f), P(r, f, .86f), Shade(ink, .8f), 1, true);
+            c.DrawLine(P(r, .14f, f), P(r, .86f, f), Shade(ink, .8f), 1, true);
+        }
+        c.DrawCircle(P(r, .5f, .5f), S(r, .1f), ink, true, -1, true);
+    }
+
+    /// <summary>The citadel the view goes back to: a round tower with its merlons and a door.</summary>
+    public static void HomeView(CanvasItem c, Rect2 r, Color ink)
+    {
+        Fill(c, Shade(ink, .9f), P(r, .26f, .88f), P(r, .26f, .3f), P(r, .32f, .3f), P(r, .32f, .18f), P(r, .42f, .18f), P(r, .42f, .3f),
+            P(r, .58f, .3f), P(r, .58f, .18f), P(r, .68f, .18f), P(r, .68f, .3f), P(r, .74f, .3f), P(r, .74f, .88f));
+        c.DrawColoredPolygon(new[] { P(r, .42f, .88f), P(r, .42f, .68f), P(r, .5f, .6f), P(r, .58f, .68f), P(r, .58f, .88f) }, new Color(0, 0, 0, .75f * ink.A));
+        c.DrawRect(new Rect2(P(r, .46f, .4f), new Vector2(S(r, .08f), S(r, .1f))), new Color(0, 0, 0, .6f * ink.A));
+        Line(c, Shade(ink, .7f), 1.2f, P(r, .14f, .88f), P(r, .86f, .88f));
+    }
+
     public static void Question(CanvasItem c, Rect2 r, Color ink)
     {
         int size = (int)(r.Size.Y * .8f);

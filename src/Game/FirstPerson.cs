@@ -125,7 +125,8 @@ public partial class FirstPerson : Node3D
 
     public override void _Input(InputEvent e)
     {
-        if (_u == null) return;
+        // with the menu open its keys are the menu's
+        if (_u == null || _m.Hud.MenuOpen) return;
         var sim = _m.Sim;
         switch (e)
         {
@@ -142,14 +143,12 @@ public partial class FirstPerson : Node3D
                 break;
             case InputEventKey { Pressed: true, Echo: false } k:
                 if (k.PhysicalKeycode == Key.Escape) { Exit(); break; }
-                if (k.PhysicalKeycode == Key.F && Sim.Kindles(_u.T)) { _u.FireArrows = !_u.FireArrows; break; }
-                if (k.PhysicalKeycode is Key.Key1 or Key.Key2 or Key.Key3)
-                {
-                    sim.LayMat = k.PhysicalKeycode == Key.Key1 ? Mat.Stone : k.PhysicalKeycode == Key.Key2 ? Mat.Wood : Mat.Rammed;
-                    break;
-                }
+                if (Bindings.Is(k, Act.FpFire) && Sim.Kindles(_u.T)) { _u.FireArrows = !_u.FireArrows; break; }
+                if (Bindings.Is(k, Act.FpStone)) { sim.LayMat = Mat.Stone; break; }
+                if (Bindings.Is(k, Act.FpWood)) { sim.LayMat = Mat.Wood; break; }
+                if (Bindings.Is(k, Act.FpEarth)) { sim.LayMat = Mat.Rammed; break; }
                 // the pause, the speed and the quick save go on as ever
-                if (k.PhysicalKeycode is Key.P or Key.Tab or Key.F5 or Key.F9) return;
+                if (Bindings.Is(k, Act.Pause) || Bindings.Is(k, Act.Speed) || Bindings.Is(k, Act.QuickSave) || Bindings.Is(k, Act.QuickLoad)) return;
                 break;
             case InputEventKey:
                 break;
@@ -167,7 +166,7 @@ public partial class FirstPerson : Node3D
         Update((float)delta);
     }
 
-    static bool Down(Key k) => Input.IsPhysicalKeyPressed(k);
+    static bool Down(Act a) => Bindings.Held(a);
 
     void Update(float dt)
     {
@@ -178,17 +177,17 @@ public partial class FirstPerson : Node3D
         float fwd = TestMove.Y, side = TestMove.X;
         if (!_m.Hud.MenuOpen)
         {
-            if (Down(Key.W) || Down(Key.Up)) fwd += 1;
-            if (Down(Key.S) || Down(Key.Down)) fwd -= 1;
-            if (Down(Key.D) || Down(Key.Right)) side += 1;
-            if (Down(Key.A) || Down(Key.Left)) side -= 1;
+            if (Down(Act.FpForward)) fwd += 1;
+            if (Down(Act.FpBack)) fwd -= 1;
+            if (Down(Act.FpRight)) side += 1;
+            if (Down(Act.FpLeft)) side -= 1;
         }
         float fx = MathF.Cos(_yaw), fz = MathF.Sin(_yaw), rx = -fz, rz = fx;
         float wx = fx * fwd + rx * side, wz = fz * fwd + rz * side, wl = MathF.Sqrt(wx * wx + wz * wz);
         if (wl > 1) { wx /= wl; wz /= wl; }
         sim.WishX = wx; sim.WishZ = wz;
-        sim.WishRun = Down(Key.Shift);
-        sim.WishClimb = Down(Key.Space) ? 1 : Down(Key.C) || Down(Key.Ctrl) ? -1 : 0;
+        sim.WishRun = Down(Act.FpRun);
+        sim.WishClimb = Down(Act.FpUp) ? 1 : Down(Act.FpDown) ? -1 : 0;
         sim.LookYaw = _yaw; sim.LookPitch = _pitch;
         // the eyes: at the height of its head, the steps and the sim's ticks smoothed out; walking, they dip at each
         // footfall and sway from foot to foot, harder at a run
@@ -230,9 +229,9 @@ public partial class FirstPerson : Node3D
             : sim.LookedAt(u, 4 * VoxelWorld.PerMetre, out var hit) ? Mat.NameOf(hit.M) : "";
         _aim.Text = aim;
         _aim.Position = new Vector2((vp.X - _aim.Size.X) / 2, vp.Y / 2 + 26);
-        _hint.Text = "WASD — идти, Shift — бегом · мышь — смотреть · ЛКМ — " + (u.T.Ranged ? "выстрел" : u.T.Work > 0 ? "удар или кирка" : "удар")
-            + (u.T.Work > 0 ? " · ПКМ — класть (1 камень, 2 брёвна, 3 земля)" : "") + (Sim.Kindles(u.T) ? " · F — огненные стрелы" : "")
-            + " · Пробел / C — вверх и вниз по лестнице · Esc — выйти";
+        _hint.Text = Bindings.Fill("{FpForward}{FpLeft}{FpBack}{FpRight} — идти, {FpRun} — бегом · мышь — смотреть · ЛКМ — " + (u.T.Ranged ? "выстрел" : u.T.Work > 0 ? "удар или кирка" : "удар")
+            + (u.T.Work > 0 ? " · ПКМ — класть ({FpStone} камень, {FpWood} брёвна, {FpEarth} земля)" : "") + (Sim.Kindles(u.T) ? " · {FpFire} — огненные стрелы" : "")
+            + " · {FpUp} / {FpDown} — вверх и вниз по лестнице · Esc — выйти");
         _hint.Position = new Vector2((vp.X - _hint.Size.X) / 2, vp.Y - 34);
         _sights.Foe = seen != null && seen.Team != Team.Player && along <= (u.T.Ranged ? sim.BowRange(u) : u.T.Reach + seen.T.BodyR + 2);
         _sights.Work = !_sights.Foe && u.T.Work > 0 && sim.LookedAt(u, 4 * VoxelWorld.PerMetre, out var h2) && Labour.Diggable(h2.M);

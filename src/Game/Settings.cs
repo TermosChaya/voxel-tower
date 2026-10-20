@@ -28,6 +28,9 @@ public static class Settings
     static bool _keptLines;
     /// <summary>A scripted run (a test, a screenshot) neither reads the player's settings nor keeps its own.</summary>
     static bool _scripted;
+    public static bool IsScripted => _scripted;
+    /// <summary>The step of the grid the brushes snap to as the player last left it (0: off), for the next game.</summary>
+    public static int Grid { get; private set; }
 
     /// <summary>Reads what the player set last time, if anything.</summary>
     public static void Load()
@@ -39,6 +42,9 @@ public static class Settings
         Shake = Math.Clamp(cfg.GetValue("view", "shake", 1f).AsSingle(), 0, 1);
         SlowMo = cfg.GetValue("view", "slowmo", true).AsBool();
         Lines = _keptLines = cfg.GetValue("view", "lines", false).AsBool();
+        int grid = cfg.GetValue("tools", "grid", 0).AsInt32();
+        Grid = Array.IndexOf(ToolOptions.Grids, grid) > 0 ? grid : 0;
+        Bindings.Load(cfg);
     }
 
     static void Save()
@@ -52,6 +58,7 @@ public static class Settings
         cfg.SetValue("view", "shake", Shake);
         cfg.SetValue("view", "slowmo", SlowMo);
         cfg.SetValue("view", "lines", _keptLines);
+        cfg.SetValue("tools", "grid", Grid);
         cfg.Save(File);
     }
 
@@ -78,6 +85,14 @@ public static class Settings
 
     /// <summary>A scripted run that is to be heard (the trailer) has its sound this loud, and nothing kept.</summary>
     public static void Hear(float volume) { Volume = Math.Clamp(volume, 0, 1); ApplyVolume(); }
+
+    /// <summary>The grid's step as the player set it, kept for next time.</summary>
+    public static void KeepGrid(int step)
+    {
+        if (Grid == step) return;
+        Grid = step;
+        Save();
+    }
 
     /// <summary>A step more or less shaking; kept for next time.</summary>
     public static void StepShake(int dir)

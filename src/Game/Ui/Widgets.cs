@@ -30,6 +30,8 @@ public static class Tooltip
     public static Control Make(string text)
     {
         if (string.IsNullOrEmpty(text)) return null;
+        // the keys named as they are bound now
+        text = Bindings.Fill(text);
         var parts = text.Split('\n', 2);
         var panel = new OrnatePanel(12, false);
         var box = new VBoxContainer();
@@ -55,10 +57,15 @@ public static class Tooltip
 public partial class Slot : Control
 {
     readonly Icons.Painter _icon;
-    readonly string _key;
-    bool _selected, _disabled, _hover, _down;
+    string _key;
+    bool _selected, _disabled, _hover, _down, _locked;
+
+    /// <summary>Shut, as the tutorial keeps what it has not come to yet: an empty well that takes no click.</summary>
+    public bool Locked { get => _locked; set { if (_locked == value) return; _locked = value; QueueRedraw(); } }
 
     public string Caption;
+    /// <summary>The key's letter in the corner, as the command is bound now.</summary>
+    public string Key { get => _key; set { if (_key == value) return; _key = value; QueueRedraw(); } }
     public event Action Clicked;
 
     public Slot() { }
@@ -82,6 +89,7 @@ public partial class Slot : Control
     public override void _GuiInput(InputEvent e)
     {
         if (e is not InputEventMouseButton mb || mb.ButtonIndex != MouseButton.Left) return;
+        if (_locked) { AcceptEvent(); return; }
         if (mb.Pressed) _down = true;
         else if (_down) { _down = false; if (_hover && !_disabled) Clicked?.Invoke(); }
         QueueRedraw();
@@ -91,6 +99,12 @@ public partial class Slot : Control
     public override void _Draw()
     {
         var r = new Rect2(Vector2.Zero, Size);
+        if (_locked)
+        {
+            Ornament.Well(this, r, false, false, true);
+            Ornament.Diamond(this, Size / 2, Size.X * .08f, Ornament.Fade(Ornament.BronzeDark, .6f));
+            return;
+        }
         Ornament.Well(this, r, _hover && !_disabled, _selected, _disabled);
         float pad = Size.X * (_down ? .2f : .17f), side = Size.X - 2 * pad;
         var ir = new Rect2(pad, pad, side, side);
@@ -103,7 +117,7 @@ public partial class Slot : Control
             Ornament.Lettering(this, Ornament.Mono, new Vector2(0, Size.Y - 5), Caption, 10, Ornament.Aged, HorizontalAlignment.Center, Size.X);
     }
 
-    public override GodotObject _MakeCustomTooltip(string forText) => Tooltip.Make(forText);
+    public override GodotObject _MakeCustomTooltip(string forText) => Tooltip.Make(_locked ? "Закрыто\nОткроется дальше в обучении." : forText);
 }
 
 /// <summary>A labelled value with − and + on either side.</summary>
@@ -130,7 +144,7 @@ public partial class Stepper : HBoxContainer
 
     static Button Small(string text, Action act, string tip)
     {
-        var b = new Button { Text = text, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(26, 26), TooltipText = tip, MouseDefaultCursorShape = CursorShape.PointingHand };
+        var b = new Button { Text = text, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(26, 26), TooltipText = Bindings.Fill(tip), MouseDefaultCursorShape = CursorShape.PointingHand };
         b.AddThemeFontSizeOverride("font_size", 16);
         b.Pressed += act;
         return b;
@@ -155,7 +169,7 @@ public partial class Choice : HBoxContainer
         for (int i = 0; i < items.Length; i++)
         {
             int k = i;
-            var b = new Button { Text = items[i], ToggleMode = true, ButtonGroup = group, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 26), TooltipText = tooltip, MouseDefaultCursorShape = CursorShape.PointingHand };
+            var b = new Button { Text = items[i], ToggleMode = true, ButtonGroup = group, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 26), TooltipText = Bindings.Fill(tooltip), MouseDefaultCursorShape = CursorShape.PointingHand };
             b.SetPressedNoSignal(i == current);
             b.Pressed += () => pick(k);
             AddChild(b);
@@ -204,13 +218,15 @@ public partial class CursorTag : Control
     }
 }
 
-/// <summary>A round bronze medallion; the help one shows the controls on hover.</summary>
+/// <summary>A round bronze medallion: the menu, and the help that opens the page of the controls.</summary>
 public partial class Medallion : Control
 {
     readonly Icons.Painter _icon;
-    bool _hover;
-    /// <summary>A click on it (the help medallion only shows its tip).</summary>
+    bool _hover, _lit;
+    /// <summary>A click on it.</summary>
     public event Action Clicked;
+    /// <summary>Its icon glowing like an ember: what it turns on is on.</summary>
+    public bool Lit { get => _lit; set { if (_lit == value) return; _lit = value; QueueRedraw(); } }
 
     public Medallion() { }
 
@@ -237,7 +253,7 @@ public partial class Medallion : Control
             float a = i * MathF.Tau / 8;
             DrawCircle(c + new Vector2(MathF.Cos(a), MathF.Sin(a)) * (r - 3), 1.1f, Ornament.BronzeDark, true, -1, true);
         }
-        _icon?.Invoke(this, new Rect2(c - new Vector2(r * .62f, r * .62f), new Vector2(r * 1.24f, r * 1.24f)), _hover ? Ornament.BronzeLight : Ornament.Bronze);
+        _icon?.Invoke(this, new Rect2(c - new Vector2(r * .62f, r * .62f), new Vector2(r * 1.24f, r * 1.24f)), _lit ? Ornament.EmberGlow : _hover ? Ornament.BronzeLight : Ornament.Bronze);
     }
 
     public override void _GuiInput(InputEvent e)

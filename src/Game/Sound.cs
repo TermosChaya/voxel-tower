@@ -132,6 +132,21 @@ public partial class Sound : Node
     }
 
     /// <summary>Plays a sound at a spot (voxels), unless the same one was heard just now or it is too far to be heard.</summary>
+    /// <summary>A soft stroke of the gong, high, heard wherever the view is: a step of the tutorial done.</summary>
+    public void Chime()
+    {
+        if (!_clips.TryGetValue("gong", out var wav)) return;
+        foreach (var p in _pool)
+        {
+            if (p.Playing) continue;
+            p.Stream = wav;
+            p.VolumeDb = Mathf.LinearToDb(.2f);
+            p.PitchScale = 1.7f;
+            p.Play();
+            return;
+        }
+    }
+
     void Play(string clip, float x, float y, float z, double every, float loud, bool far = false, float pitch = 0)
     {
         if (!_clips.TryGetValue(clip, out var wav)) return;

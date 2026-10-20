@@ -75,7 +75,7 @@ public sealed partial class Sim
     public string Sacrifice(RiteKind kind, Unit victim = null)
     {
         if (Waves.Active) return "жертвы приносят днём, когда орды нет в долине";
-        if (!Zones.Exists(z => z.Kind == Zone.Sanctum)) return "нет святилища: отметьте его делянкой (8 → «святилище»)";
+        if (!Zones.Exists(z => z.Kind == Zone.Sanctum)) return "нет святилища: отметьте его делянкой ({ToolGather} → «святилище»)";
         if (RiteNow != null) return "обряд уже идёт";
         Unit priest = null; float bd = float.MaxValue;
         foreach (var u in Units)

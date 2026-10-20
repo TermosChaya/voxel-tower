@@ -217,7 +217,7 @@ public partial class Minimap : Control
         if (e is InputEventMouseButton mb && mb.ButtonIndex == MouseButton.Left)
         {
             _drag = mb.Pressed;
-            if (mb.Pressed) Jump(mb.Position);
+            if (mb.Pressed) { Jump(mb.Position); Clicks++; }
             AcceptEvent();
         }
         else if (e is InputEventMouseMotion mm && _drag)
@@ -226,6 +226,9 @@ public partial class Minimap : Control
             AcceptEvent();
         }
     }
+
+    /// <summary>How many times the map was clicked to look somewhere (the tutorial counts them).</summary>
+    public int Clicks;
 
     /// <summary>Moves the view to a point of the map given in its own pixels.</summary>
     public void Jump(Vector2 p)
