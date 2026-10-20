@@ -1892,6 +1892,34 @@ public static class Bodies
         int cuff = (b.HandY + b.Hand) * 2;
         s.FPattern(Main, -80, cuff, -80, 80, cuff + 1, 80, (x, y, z) => s.FMat(Main, x, y, z) == Mat.Mail ? Mat.Brass : (byte)0);
         s.FPattern(Off, -80, cuff, -80, 80, cuff + 1, 80, (x, y, z) => s.FMat(Off, x, y, z) == Mat.Mail ? Mat.Brass : (byte)0);
+        Gauntlets(s, b);
+    }
+
+    /// <summary>
+    /// Gauntlets of leather on the hands of one in mail; near, a cuff flared out a cell at the wrist, darker at its
+    /// edge, and steel scales in rows over the back of the hand.
+    /// </summary>
+    static void Gauntlets(Sculpt s, Build b)
+    {
+        s.Paint(Main, b.ArmX0, b.HandY, b.ArmZ0, -b.Chest, b.HandY + b.Hand, b.ArmZ1, Mat.Leather, Tissue.Armor);
+        s.Paint(Off, b.Chest, b.HandY, b.ArmZ0, -b.ArmX0, b.HandY + b.Hand, b.ArmZ1, Mat.Leather, Tissue.Armor);
+        if (!s.Detail) return;
+        int ax0 = b.ArmX0 * 2, ax1 = -b.Chest * 2, az0 = b.ArmZ0 * 2, az1 = b.ArmZ1 * 2, hand = b.HandY * 2, wrist = (b.HandY + b.Hand) * 2;
+        foreach (var (p, sg) in new[] { (Main, 1), (Off, -1) })
+        {
+            int X(int x) => sg > 0 ? x : -1 - x;
+            // the thumb laid along the fist, and whatever else of the hand still shows its skin
+            s.FPattern(p, -80, hand - 1, -80, 80, wrist + 1, 80, (x, y, z) => s.FMat(p, x, y, z) == b.Skin ? Mat.Leather : (byte)0);
+            for (int z = az0 - 1; z <= az1; z++)
+                for (int x = ax0 - 1; x <= ax1; x++)
+                    if (x == ax0 - 1 || x == ax1 || z == az0 - 1 || z == az1)
+                    {
+                        s.FSet(p, X(x), wrist - 1, z, Mat.Leather, Tissue.Armor);
+                        s.FSet(p, X(x), wrist - 2, z, Mat.LeatherDark, Tissue.Armor);
+                    }
+            for (int y = hand + 1; y < wrist - 2; y += 2)
+                for (int z = az0 + 1; z < az1 - 1; z++) s.FPut(p, X(ax0), y, z, Mat.Steel);
+        }
     }
 
     /// <summary>

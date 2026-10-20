@@ -114,6 +114,8 @@ public partial class ViewModel : Node3D
         var guard = Guard();
         if (snap) _now = guard;
         if (!_aimed && u.StrokeTime > _strokeT) { _strokeT = u.StrokeTime; _k = u.Stroke; _from = _now; _glanced = u.Glanced; _stroking = true; }
+        // the blow lands as the blade comes to the body, and only then is it known whether it was turned
+        else if (_stroking && u.StrokeTime == _strokeT) _glanced = u.Glanced;
         float since = (float)(sim.Time - _strokeT);
         _ready += ((foe && u.Cooldown <= 0 && !_aimed ? .3f : 0) - _ready) * (1 - MathF.Exp(-dt * 6));
         _work += ((u.State == UnitState.Work && u.T.Work > 0 ? 1 : 0) - _work) * (1 - MathF.Exp(-dt * 8));
@@ -234,10 +236,16 @@ public partial class ViewModel : Node3D
         return new Quaternion(b.Orthonormalized());
     }
 
+    /// <summary>
+    /// The arms a little smaller than the figure's: its fists are sculpted big, to read from above, and so near the eye
+    /// one would fill a quarter of the sight. What they hold keeps its true size.
+    /// </summary>
+    const float ArmSize = .65f;
+
     /// <summary>A piece in figure voxels set before the eye: turned by <paramref name="r"/> about its point <paramref name="g"/>, which comes to <paramref name="p"/> (metres).</summary>
-    static void Place(MeshInstance3D mi, Basis r, Vector3 g, Vector3 p)
+    static void Place(MeshInstance3D mi, Basis r, Vector3 g, Vector3 p, float size = 1)
     {
-        float s = VoxelWorld.Vox;
+        float s = VoxelWorld.Vox * size;
         var b = r * Basis.FromScale(new Vector3(s, s, s));
         mi.Transform = new Transform3D(b, p * M - b * g);
     }
@@ -261,7 +269,7 @@ public partial class ViewModel : Node3D
     {
         if (mi.Mesh == null) return;
         var up = (left ? V(_g.OffShoulder) : V(_g.Shoulder)) - fist;
-        Place(mi, Frame(elbow - p, d) * Frame(up, Vector3.Back).Transposed(), fist, p);
+        Place(mi, Frame(elbow - p, d) * Frame(up, Vector3.Back).Transposed(), fist, p, ArmSize);
         mi.Visible = true;
     }
 
@@ -314,8 +322,9 @@ public partial class ViewModel : Node3D
 
     static Pose[] Keys(StrokeKind k) => Shapes[Math.Clamp((int)k, 0, Shapes.Length - 1)];
 
-    // a stroke's beats (seconds): cocked, struck across the sight, carried through, held, and back to the guard
-    const float Tw = .07f, Ts = .08f, Tf = .12f, Th = .04f, Tb = .32f, Total = Tw + Ts + Tf + Th + Tb;
+    // a stroke's beats (seconds): cocked, struck across the sight, carried through, held, and back to the guard; the
+    // blade comes to the body at the end of the second, when the simulation lands the blow (Sim.HandBlowLag)
+    const float Tw = .07f, Ts = Sim.HandBlowLag - Tw, Tf = .12f, Th = .04f, Tb = .32f, Total = Tw + Ts + Tf + Th + Tb;
 
     static float Smooth(float x) { x = Math.Clamp(x, 0, 1); return x * x * (3 - 2 * x); }
     static float In(float x) { x = Math.Clamp(x, 0, 1); return x * x; }
@@ -371,7 +380,7 @@ public partial class ViewModel : Node3D
         else c += new Vector3(-.05f, -.06f, .04f) * -b;
         var r = Frame(n, new Vector3(-.35f, -.85f, .4f)) * Frame(V(w.Edge), V(_g.OffShoulder) - V(w.Grip)).Transposed();
         if (_shield.Mesh != null) Place(_shield, r, V(w.Grip), c);
-        if (_armL.Mesh != null) { Place(_armL, r, V(w.Grip), c); _armL.Visible = true; }
+        if (_armL.Mesh != null) { Place(_armL, r, V(w.Grip), c, ArmSize); _armL.Visible = true; }
     }
 
     // ---------------------------------------------------------------- the bow
@@ -410,14 +419,15 @@ public partial class ViewModel : Node3D
         var grip = V(w.Grip);
         var r = Frame(new Vector3(-.22f, -.30f, .05f) - b, axis) * Frame(V(_g.OffShoulder) - grip, Vector3.Back).Transposed();
         if (_held.Mesh != null) Place(_held, r, grip, b);
-        if (_armL.Mesh != null) { Place(_armL, r, grip, b); _armL.Visible = true; }
+        if (_armL.Mesh != null) { Place(_armL, r, grip, b, ArmSize); _armL.Visible = true; }
         // the tips of its limbs, where the string is tied
         var tip = V(w.Tip);
         float s = VoxelWorld.Vox / M;
         Vector3 Seen(Vector3 local) => b + r * (local - grip) * s;
         Vector3 top = Seen(tip), low = Seen(new Vector3(tip.X, tip.Y, -tip.Z)), rest = (top + low) / 2;
         // the drawing hand: flown back, down to the quiver and back with an arrow, on the string and drawn to the jaw
-        var anchor = new Vector3(0, -.11f, -.06f);
+        // drawn to the corner of the jaw, a little out to the right and under the eye, the forearm going off low
+        var anchor = new Vector3(.05f, -.13f, -.09f);
         var quiver = new Vector3(.32f, -.55f, -.05f);
         var flown = _loosed + new Vector3(.03f, -.01f, .06f);
         _hand = f < .1f ? _loosed.Lerp(flown, Out(f / .1f)) : f < .28f ? flown.Lerp(quiver, Smooth((f - .1f) / .18f))
@@ -437,6 +447,6 @@ public partial class ViewModel : Node3D
             Rod(_head, point - dir * .05f, point, .013f);
         }
         else _shaft.Visible = _head.Visible = false;
-        Arm(_armR, false, V(_g.Fist), _hand, (b - _hand).Normalized(), new Vector3(.32f, -.06f, .12f));
+        Arm(_armR, false, V(_g.Fist), _hand, (b - _hand).Normalized(), new Vector3(.34f, -.16f, .10f));
     }
 }

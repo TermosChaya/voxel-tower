@@ -1764,7 +1764,9 @@ public partial class Main : Node3D
         FP.Enter(me);
         var aim = sim.Units.Find(u => u.Team == Team.Horde && !u.Dead && u.T == Kinds.Goblin);
         float tdx = aim.X - me.X, tdz = aim.Z - me.Z;
-        FP.Face(MathF.Atan2(tdz, tdx), _look == 2 ? -.62f : _look == 1 ? .02f : -.05f);
+        // the swordsman looks the goblin in the face, which is well below his own
+        float face = MathF.Atan2(aim.Y + aim.T.BodyH * .75f - (me.Y + me.T.BodyH * .88f), MathF.Sqrt(tdx * tdx + tdz * tdz));
+        FP.Face(MathF.Atan2(tdz, tdx), _look == 2 ? -.62f : _look == 1 ? .02f : Math.Clamp(face, -.6f, .05f));
         if (_look == 2) { sim.WishStrike = true; Advance(1.2); }
         else if (_look == 1) { sim.WishStrike = true; Advance(.35); sim.WishStrike = false; Advance(.08); }
         else { sim.WishStrike = true; Advance(.2); }

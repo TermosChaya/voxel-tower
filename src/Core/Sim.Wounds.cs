@@ -374,10 +374,45 @@ public sealed partial class Sim
     static void Note(BodyState body, string wound) { if (!body.Wounds.Contains(wound)) body.Wounds.Add(wound); }
 
     /// <summary>
+    /// Each thing carried (a run of gear touching itself) stays with the side of the cut it holds on to most: a sword or
+    /// a bow goes with the fist round its grip, a quiver with the back it is slung on, even where it touches the head too.
+    /// One that touches nothing kept goes with what fell.
+    /// </summary>
+    static void Carried(PartGrid g, bool[] kept)
+    {
+        var seen = new bool[g.M.Length];
+        var run = new List<int>();
+        var q = new Queue<int>();
+        for (int i0 = 0; i0 < g.M.Length; i0++)
+        {
+            if (seen[i0] || g.M[i0] == 0 || g.T[i0] != (byte)Tissue.Gear) continue;
+            run.Clear();
+            seen[i0] = true; q.Enqueue(i0);
+            int stays = 0, goes = 0;
+            while (q.Count > 0)
+            {
+                int i = q.Dequeue(), x = i % g.SX, z = i / g.SX % g.SZ, y = i / (g.SX * g.SZ);
+                run.Add(i);
+                foreach (var (ax, ay, az) in Around)
+                {
+                    int nx = x + ax, ny = y + ay, nz = z + az;
+                    if (nx < 0 || ny < 0 || nz < 0 || nx >= g.SX || ny >= g.SY || nz >= g.SZ) continue;
+                    int n = (ny * g.SZ + nz) * g.SX + nx;
+                    if (g.M[n] == 0) continue;
+                    if (g.T[n] == (byte)Tissue.Gear) { if (!seen[n]) { seen[n] = true; q.Enqueue(n); } }
+                    else if (kept[n]) stays++;
+                    else goes++;
+                }
+            }
+            if (stays > 0 && stays >= goes) foreach (int i in run) kept[i] = true;
+        }
+    }
+
+    /// <summary>
     /// Whatever no longer hangs together with the rest of its part falls off: a hand, an arm, a foot, a leg, the head. Then
     /// what still works is worked out again. True when what fell (the head, half the trunk) is death.
     /// </summary>
-    bool Sever(Unit u, BodyState body)
+    internal bool Sever(Unit u, BodyState body)
     {
         bool vital = false;
         var plan = body.Plan;
@@ -395,6 +430,7 @@ public sealed partial class Sim
                 float d = x * x + y * y + z * z;
                 if (d < best) { best = d; seed = i; }
             }
+            // what is carried does not hold flesh together: the body first, through itself alone
             var kept = new bool[g.M.Length];
             if (seed >= 0)
             {
@@ -408,18 +444,20 @@ public sealed partial class Sim
                         int nx = x + ax, ny = y + ay, nz = z + az;
                         if (nx < 0 || ny < 0 || nz < 0 || nx >= g.SX || ny >= g.SY || nz >= g.SZ) continue;
                         int n = (ny * g.SZ + nz) * g.SX + nx;
-                        if (g.M[n] == 0 || kept[n]) continue;
+                        if (g.M[n] == 0 || kept[n] || g.T[n] == (byte)Tissue.Gear) continue;
                         kept[n] = true;
                         q.Enqueue(n);
                     }
                 }
+                Carried(g, kept);
             }
             int off = 0, offHead = 0, head = 0;
             for (int i = 0; i < g.M.Length; i++)
             {
                 if (g.M[i] == 0) continue;
                 int y = i / (g.SX * g.SZ) + g.Y0;
-                bool inHead = p == 0 && y >= plan.HeadY0 && y < plan.HeadY1;
+                // the head is what grows there: a quiver's top beside it or a ladder over it stays with the back
+                bool inHead = p == 0 && y >= plan.HeadY0 && y < plan.HeadY1 && g.T[i] != (byte)Tissue.Gear;
                 if (inHead) head++;
                 if (kept[i]) continue;
                 off++;
@@ -440,7 +478,7 @@ public sealed partial class Sim
             body.Bleed = Math.Min(12, body.Bleed + (piece.Count > 20 ? 1.2f : .3f));
             if (p == 0)
             {
-                if (offHead * 2 >= head + offHead) { vital = true; Note(body, "отрублена голова"); }
+                if (head > 0 && offHead * 4 >= head * 3) { vital = true; Note(body, "отрублена голова"); }
                 else if (off * 4 >= g.Count + off) { vital = true; Note(body, "разрублен пополам"); }
             }
             else Note(body, p switch

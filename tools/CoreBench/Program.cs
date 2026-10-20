@@ -4561,6 +4561,33 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--strokes")
     Check("a knight's sweep at the neck takes a goblin's head off; his cut from over the head splits it instead", heads >= 8 && overHeads == 0 && split >= 7,
         $"heads off {heads} of 12 by six sweeps at the neck, {overHeads} by five overheads, which split {split}");
 
+    // what is carried on the back and touches the head too (a quiver, a pack, a ladder, a sack) does not hold a head on
+    // that the neck no longer holds: it stays with the back it is slung on. The neck is cut clean through under the jaw,
+    // all of it but what is carried, and what falls is looked at — real blows at the neck meet the shoulders (the head
+    // sits on their line), the heart under them and the brain over them first, and are the checks above
+    var carriers = new[] { Kinds.Archer, Kinds.Miner, Kinds.Sapper, Kinds.Thief };
+    var headsOf = new int[carriers.Length];
+    int slung = 0;
+    for (int ci = 0; ci < carriers.Length; ci++)
+        for (int i = 0; i < Bodies.Looks(carriers[ci]); i++)
+        {
+            var t = carriers[ci];
+            var (a, b) = Pair(simK, Kinds.Knight, t, 40);
+            b.Look = i;
+            var body = b.Wounds = new BodyState(Bodies.Plan(t, i));
+            var g0 = body.Grid[0];
+            int under = body.Plan.HeadY0 - 1;
+            for (int z = g0.Z0; z < g0.Z0 + g0.SZ; z++)
+                for (int x = g0.X0; x < g0.X0 + g0.SX; x++)
+                    if (g0.Mat(x, under, z) != 0 && g0.Kind(x, under, z) != Tissue.Gear) g0.Clear(x, under, z);
+            simK.Sever(b, body);
+            if (body.Wounds.Contains("отрублена голова")) headsOf[ci]++;
+            for (int k = 0; k < g0.M.Length; k++) if (g0.T[k] == (byte)Tissue.Gear) { slung++; break; }
+            Done(a, b);
+        }
+    Check("a neck cut through takes the head off one with a quiver, a pack, a ladder or a sack on his back, and what is slung stays on the back", carriers.Select((t, ci) => headsOf[ci] == Bodies.Looks(t)).All(x => x) && slung == carriers.Sum(t => Bodies.Looks(t)),
+        $"heads off: {string.Join(", ", carriers.Select((t, ci) => $"{t.Name} {headsOf[ci]} of {Bodies.Looks(t)}"))}; what is carried still on {slung} of them");
+
     // the same valley, the same blows: the strokes are chosen without the dice of the simulation
     List<(StrokeKind, float)> Bout(Sim s)
     {

@@ -31,6 +31,15 @@ public sealed partial class Sim
     /// <summary>How far one of ours reaches with a pick or a trowel from its eye, in voxels; and how big a bite the pick takes.</summary>
     const float HandReach = 4 * VoxelWorld.PerMetre, Bite = 2.2f;
 
+    /// <summary>
+    /// Seconds from the click to the blade at the body: the arm is cocked and brought across the sight before it lands
+    /// (the hands before the eyes are drawn to the same beat), so the wound is cut then and not at the click.
+    /// </summary>
+    public const float HandBlowLag = .15f;
+    // the blow swung and not yet landed: at whom, and when it lands
+    Unit _handFoe;
+    double _handLands;
+
     /// <summary>Whether this one can be gone into now: ours, alive and on the field, not one of the risen dead.</summary>
     public bool CanPossess(Unit u) => u is { Dead: false, Inside: false, Captor: null, Airborne: null } && u.Team == Team.Player && u.T != Kinds.Risen;
 
@@ -49,6 +58,7 @@ public sealed partial class Sim
         LookYaw = u.Facing; LookPitch = 0;
         WishX = WishZ = 0; WishRun = WishStrike = WishLay = false; WishClimb = 0;
         _swingRight = _swingDown = 0; _lookYaw0 = float.NaN;
+        _handFoe = null;
         return true;
     }
 
@@ -62,6 +72,7 @@ public sealed partial class Sim
         if (u == null) return;
         Possessed = null;
         WishX = WishZ = 0; WishStrike = WishLay = false; WishClimb = 0;
+        _handFoe = null;
         u.Why = "";
         u.Effort = 0;
         if (!u.Dead && !u.Inside && u.Captor == null && u.T.Work < 1) { u.Post = u.Cell; u.Dest = u.Cell; }
@@ -110,6 +121,7 @@ public sealed partial class Sim
         if (!Climbing(u)) u.Y += (Nav.Floor[u.Cell] - u.Y) * Math.Min(1, dt * 14);
         u.State = moving || climbed ? UnitState.Walk : UnitState.Idle;
         u.Pastime = Pastime.None;
+        if (_handFoe != null && Time >= _handLands) Land(u);
         if (WishStrike && u.Cooldown <= 0) Blow(u);
         else if (WishStrike && u.T.Work > 0 && !u.T.Ranged) Pick(u, dt);
         if (WishLay && u.T.Work > 0) Trowel(u, dt);
@@ -264,7 +276,26 @@ public sealed partial class Sim
         }
         u.State = UnitState.Fight;
         u.NextStroke = Fit(u, best, wish); u.StrokeFor = best;
-        Strike(u, best);
+        // swung now, for the eye; it lands when the blade comes to the body
+        u.Swing = 1;
+        u.Stroke = u.NextStroke; u.StrokeTime = Time; u.Glanced = false;
+        _handFoe = best; _handLands = Time + HandBlowLag;
+    }
+
+    /// <summary>
+    /// The blow swung at the click comes to the body: the wound is cut and the hurt done as for any blow, if the foe is
+    /// still within the blade's reach — one that stepped out of it or fell meanwhile is missed. The stroke goes on being
+    /// drawn as it was begun.
+    /// </summary>
+    void Land(Unit u)
+    {
+        var t = _handFoe;
+        _handFoe = null;
+        if (t.Dead || t.Inside || t.Bound || Dist(u, t) > ReachOf(u) + t.T.BodyR + 4) return;
+        double swung = u.StrokeTime;
+        var k = u.Stroke;
+        Strike(u, t);
+        u.Stroke = k; u.StrokeTime = swung;
     }
 
     /// <summary>
