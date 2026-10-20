@@ -76,6 +76,9 @@ public static class Settings
     /// <summary>A scripted run that looks at the shaking and the slowing has them for itself, and nothing kept.</summary>
     public static void Feel(float shake, bool slowMo) { Shake = shake; SlowMo = slowMo; }
 
+    /// <summary>A scripted run that is to be heard (the trailer) has its sound this loud, and nothing kept.</summary>
+    public static void Hear(float volume) { Volume = Math.Clamp(volume, 0, 1); ApplyVolume(); }
+
     /// <summary>A step more or less shaking; kept for next time.</summary>
     public static void StepShake(int dir)
     {

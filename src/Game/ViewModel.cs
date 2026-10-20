@@ -296,27 +296,27 @@ public partial class ViewModel : Node3D
 
     static Vector3 v(float x, float y, float z) => new(x, y, z);
 
-    static readonly Pose[] Overhead = Arc(v(.16f, .10f, -.20f), v(-.1f, .5f, .86f), v(.05f, -.05f, -.55f), v(0, .2f, -.98f), v(-.02f, -.40f, -.45f), v(-.1f, -.85f, -.5f));
+    static readonly Pose[] Overhead = Arc(v(.18f, .14f, -.34f), v(-.1f, .5f, .86f), v(.05f, -.05f, -.55f), v(0, .2f, -.98f), v(-.02f, -.40f, -.45f), v(-.1f, -.85f, -.5f));
     static readonly Pose[][] Shapes =
     {
         // over the head: cocked down the back, brought down the middle, spent low before the feet
         Overhead,
         // the forehand from over the right shoulder down across to the low left
-        Arc(v(.30f, .10f, -.22f), v(-.3f, .6f, .75f), v(.06f, -.08f, -.55f), v(-.70f, .15f, -.70f), v(-.22f, -.40f, -.35f), v(-.60f, -.65f, -.45f)),
+        Arc(v(.34f, .12f, -.34f), v(-.3f, .6f, .75f), v(.06f, -.08f, -.55f), v(-.70f, .15f, -.70f), v(-.22f, -.40f, -.35f), v(-.60f, -.65f, -.45f)),
         // the backhand from over the left shoulder down to the low right
-        Arc(v(-.18f, .08f, -.30f), v(.4f, .6f, .7f), v(.02f, -.08f, -.55f), v(.75f, .10f, -.65f), v(.32f, -.36f, -.32f), v(.65f, -.60f, -.45f)),
+        Arc(v(-.22f, .10f, -.38f), v(.4f, .6f, .7f), v(.02f, -.08f, -.55f), v(.75f, .10f, -.65f), v(.32f, -.36f, -.32f), v(.65f, -.60f, -.45f)),
         // flat across from the right, round through the front to the left
-        Arc(v(.38f, -.06f, -.14f), v(.85f, .2f, -.1f), v(.05f, -.12f, -.55f), v(-.90f, .05f, -.42f), v(-.30f, -.16f, -.30f), v(-.55f, 0, .83f)),
+        Arc(v(.42f, -.06f, -.30f), v(.85f, .2f, -.1f), v(.05f, -.12f, -.55f), v(-.90f, .05f, -.42f), v(-.30f, -.16f, -.30f), v(-.55f, 0, .83f)),
         // the point driven home from the hip, the flat level
         new[] { At(.16f, -.18f, -.20f, v(-.05f, .05f, -1), Vector3.Right), At(.04f, -.10f, -.75f, v(-.03f, .04f, -1), Vector3.Right), At(.04f, -.10f, -.75f, v(-.03f, .04f, -1), Vector3.Right) },
         // up from low on the right to high on the left
-        Arc(v(.26f, -.42f, -.25f), v(.55f, -.55f, -.6f), v(.04f, -.12f, -.55f), v(-.6f, .5f, -.62f), v(-.20f, .12f, -.40f), v(-.4f, .85f, .35f)),
+        Arc(v(.28f, -.40f, -.34f), v(.55f, -.55f, -.6f), v(.04f, -.12f, -.55f), v(-.6f, .5f, -.62f), v(-.20f, .12f, -.40f), v(-.4f, .85f, .35f)),
         // the shield driven in: the blade drawn back out of its way
         new[] { At(.26f, -.30f, -.28f, v(-.25f, .85f, -.3f), Vector3.Forward, 1.05f), At(.26f, -.32f, -.26f, v(-.25f, .85f, -.3f), Vector3.Forward, 1.05f), At(.26f, -.32f, -.26f, v(-.25f, .85f, -.3f), Vector3.Forward, 1.05f) },
         // a polearm's head brought down from high
         Overhead,
         // a club or a maul up over the right shoulder and smashed down
-        Arc(v(.24f, .12f, -.18f), v(-.2f, .55f, .8f), v(.06f, -.06f, -.55f), v(-.15f, .15f, -.97f), v(-.06f, -.42f, -.42f), v(-.2f, -.85f, -.45f)),
+        Arc(v(.26f, .14f, -.32f), v(-.2f, .55f, .8f), v(.06f, -.06f, -.55f), v(-.15f, .15f, -.97f), v(-.06f, -.42f, -.42f), v(-.2f, -.85f, -.45f)),
         Overhead,
     };
 
@@ -426,8 +426,8 @@ public partial class ViewModel : Node3D
         Vector3 Seen(Vector3 local) => b + r * (local - grip) * s;
         Vector3 top = Seen(tip), low = Seen(new Vector3(tip.X, tip.Y, -tip.Z)), rest = (top + low) / 2;
         // the drawing hand: flown back, down to the quiver and back with an arrow, on the string and drawn to the jaw
-        // drawn to the corner of the jaw, a little out to the right and under the eye, the forearm going off low
-        var anchor = new Vector3(.05f, -.13f, -.09f);
+        // drawn to the cheek beside the eye: the hand all but out of sight at the lower right, the arrow running from it
+        var anchor = new Vector3(.08f, -.11f, -.03f);
         var quiver = new Vector3(.32f, -.55f, -.05f);
         var flown = _loosed + new Vector3(.03f, -.01f, .06f);
         _hand = f < .1f ? _loosed.Lerp(flown, Out(f / .1f)) : f < .28f ? flown.Lerp(quiver, Smooth((f - .1f) / .18f))
@@ -448,5 +448,7 @@ public partial class ViewModel : Node3D
         }
         else _shaft.Visible = _head.Visible = false;
         Arm(_armR, false, V(_g.Fist), _hand, (b - _hand).Normalized(), new Vector3(.34f, -.16f, .10f));
+        // drawn to the cheek the hand is beside the eye, out of sight: only the string and the arrow show
+        if (nocked && _draw > .5f) _armR.Visible = false;
     }
 }

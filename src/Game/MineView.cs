@@ -36,7 +36,8 @@ public partial class MineView : Node3D
             {
                 int px = mine.Place.X, pz = mine.Place.Z;
                 var at = new Vector3(w.WX(px + .5f), w.WY(w.SurfAt(px, pz) + 10), w.WZ(pz + .5f));
-                var light = new OmniLight3D { Position = at, OmniRange = 7, LightEnergy = 0, ShadowEnabled = false, LightColor = Heard };
+                // no glint of its own, like the torches (see Atmosphere.Build)
+                var light = new OmniLight3D { Position = at, OmniRange = 7, LightEnergy = 0, ShadowEnabled = false, LightColor = Heard, LightSpecular = 0 };
                 AddChild(light);
                 _glows.Add(new Glow { Mine = mine, Light = light, Seed = px * .37f });
                 continue;

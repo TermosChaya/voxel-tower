@@ -68,6 +68,12 @@ public sealed partial class Sim
     /// <summary>What lies where it came down: broken stone and splinters.</summary>
     static bool Debris(byte m) => m is Mat.Rubble or Mat.Lumber;
 
+    /// <summary>
+    /// Timber floats: what is of wood and lies on water is held by it as by the ground (it came to rest there so, see
+    /// <see cref="Landing"/>); else splinters come down on a moat, are found held by nothing, come down on it again, for ever.
+    /// </summary>
+    static bool Floats(byte m) => Mat.IsTrunk(m) || m is Mat.Wood or Mat.Deck or Mat.Char or Mat.Lumber or Mat.DropLog;
+
     /// <summary>What holds things up from below: the ground itself, the citadel, a solid floor.</summary>
     static bool Ground(byte m) => m != Mat.Air && (Mat.IsAnchor[m] || m == Mat.Ore);
 
@@ -153,8 +159,8 @@ public sealed partial class Sim
                 if (ny < 0) { held = true; break; }
                 if (!World.InBounds(nx, ny, nz)) continue;
                 byte m = World.Get(nx, ny, nz);
-                // resting on the ground, or set into rock sideways (not hanging under it)
-                if (d == 3 ? Ground(m) : d != 2 && HoldsAside(here, m)) { held = true; break; }
+                // resting on the ground (timber on water as well), or set into rock sideways (not hanging under it)
+                if (d == 3 ? Ground(m) || m == Mat.Water && Floats(here) : d != 2 && HoldsAside(here, m)) { held = true; break; }
                 if (!Bound(m)) continue;
                 int q = WaterPlanner.Pack(nx, ny, nz);
                 if (_held.Contains(q)) { held = true; break; }
@@ -239,7 +245,7 @@ public sealed partial class Sim
                         // held from the start: on the ground, set into rock aside, at the edge of the patch, or an arch; and
                         // what came down on a tree's wood, caught in a fork or lying on a bough or a log, as on the ground
                         byte below = World.Get(x, y - 1, z);
-                        bool held = Ground(below) || Debris(m) && Mat.IsTrunk(below)
+                        bool held = Ground(below) || Debris(m) && Mat.IsTrunk(below) || below == Mat.Water && Floats(m)
                             || HoldsAside(m, World.Get(x + 1, y, z)) || HoldsAside(m, World.Get(x - 1, y, z))
                             || HoldsAside(m, World.Get(x, y, z + 1)) || HoldsAside(m, World.Get(x, y, z - 1))
                             || x == bx0 || x == bx1 || z == bz0 || z == bz1 || SpanOf(m) == Free || Arched.Get(x, y, z) != 0;

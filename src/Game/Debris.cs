@@ -20,7 +20,10 @@ public partial class Debris : MultiMeshInstance3D
     VoxelWorld _w;
     float[] _buf, _sparkBuf;
     MultiMeshInstance3D _glow;
-    readonly Random _rnd = new();
+    Random _rnd = new();
+
+    /// <summary>The chips fly the same way each time a scene is filmed again (the trailer).</summary>
+    public void Seed(int seed) => _rnd = new Random(seed);
 
     /// <summary>While this holds (the game stopped), what flies hangs where it is.</summary>
     public Func<bool> Held;
@@ -74,6 +77,9 @@ public partial class Debris : MultiMeshInstance3D
     }
 
     static Color Of(byte m, float shade) => new(Mat.Lin[m * 3] * shade, Mat.Lin[m * 3 + 1] * shade, Mat.Lin[m * 3 + 2] * shade);
+
+    /// <summary>Every chip and spark in the air gone at once (a staged scene, before it is filmed).</summary>
+    public void Clear() { _n = 0; _ns = 0; }
 
     /// <summary>Throws n bits of material m from a voxel position.</summary>
     public void Spawn(byte m, int vx, int vy, int vz, int n, float speed, float size = 1)

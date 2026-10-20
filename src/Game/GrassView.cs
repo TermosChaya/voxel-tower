@@ -195,17 +195,19 @@ public partial class GrassView : Node3D
     // ------------------------------------------------------------------ the sward
 
     /// <summary>
-    /// Which tiles of the valley grow a sward now: through someone's eyes, those round the eye; from above, those the
-    /// view sees once it is close enough for blades to be seen, each tile tried against the camera's frustum between the
-    /// lowest and the highest of its turf. Tiles that fall out of it are let go.
+    /// Which tiles of the valley grow a sward now: through someone's eyes, those round the eye; through the trailer's lens,
+    /// those round what it looks at, once that is near enough for blades to be seen; from above, those the view sees once
+    /// it is close enough, each tile tried against the camera's frustum between the lowest and the highest of its turf.
+    /// Tiles that fall out of it are let go.
     /// </summary>
     void GrowSward(float dt)
     {
         var fp = _m.FP;
-        bool eyes = fp != null && fp.On;
+        var cine = _m.Cine;
+        bool eyes = fp != null && fp.On, lens = !eyes && cine != null && cine.On, round = eyes || lens;
         float pxPerVox = GetTree().Root.Size.Y / Math.Max(.01f, _m.Rig.Cam.Size) * VoxelWorld.Vox;
-        float grow = eyes ? 1 : Mathf.SmoothStep(SwardFrom, SwardFull, pxPerVox);
-        _mat.SetShaderParameter("keep", eyes ? 1f : .6f);
+        float grow = eyes ? 1 : lens ? cine.Grow : Mathf.SmoothStep(SwardFrom, SwardFull, pxPerVox);
+        _mat.SetShaderParameter("keep", round ? 1f : .6f);
         // the ground in the middle of the view, which the grass parted nearest it is counted from
         {
             var t = _m.Rig.Target;
@@ -217,9 +219,9 @@ public partial class GrassView : Node3D
         Vector3 focus;
         float near, far;
         Godot.Collections.Array<Plane> frustum = null;
-        if (eyes)
+        if (round)
         {
-            focus = fp.Cam.GlobalPosition;
+            focus = eyes ? fp.Cam.GlobalPosition : cine.Focus;
             near = EyeNear * VoxelWorld.Vox;
             far = EyeFar * VoxelWorld.Vox;
         }
@@ -242,7 +244,7 @@ public partial class GrassView : Node3D
             float ax = tx * span, az = tz * span;
             var t = _sward[i];
             bool on;
-            if (eyes) on = ax + span >= ex - EyeFar && ax <= ex + EyeFar && az + span >= ez - EyeFar && az <= ez + EyeFar;
+            if (round) on = grow > 0 && ax + span >= ex - EyeFar && ax <= ex + EyeFar && az + span >= ez - EyeFar && az <= ez + EyeFar;
             else if (frustum == null) on = false;
             else
             {
@@ -258,7 +260,7 @@ public partial class GrassView : Node3D
             }
             if (!t.On || t.Dirty)
             {
-                t.Dist = MathF.Abs(ax + span * .5f - (eyes ? ex : _centre.X)) + MathF.Abs(az + span * .5f - (eyes ? ez : _centre.Y));
+                t.Dist = MathF.Abs(ax + span * .5f - (round ? ex : _centre.X)) + MathF.Abs(az + span * .5f - (round ? ez : _centre.Y));
                 _want.Add(i);
             }
         }
@@ -440,9 +442,9 @@ public partial class GrassView : Node3D
 
         var fp = _m.FP;
         float ax = _centre.X, az = _centre.Y;
-        if (fp != null && fp.On)
+        if (fp != null && fp.On || _m.Cine is { On: true })
         {
-            var at = fp.Cam.GlobalPosition;
+            var at = fp != null && fp.On ? fp.Cam.GlobalPosition : _m.Cine.Focus;
             ax = (at.X - _w.OriginX) / VoxelWorld.Vox;
             az = (at.Z - _w.OriginZ) / VoxelWorld.Vox;
         }

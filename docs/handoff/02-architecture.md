@@ -684,6 +684,27 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   с повтором (`TextureRepeat`). Летопись: `Hud.Log(text, kind, x, z)` — строка с местом получает «◎» и по щелчку
   ведёт камеру туда; ядро говорит через `Sim.Said` (`Say(text, kind, x, z)` / `Say(text, kind, unit)`). Запасы на
   балке сжимаются до `Stores.MinW`, если до часов тесно.
+- Трейлер (`--trailer=N`, `tools/trailer.command`): `CineCam.cs` — камера-перспектива (свой `Camera3D`, Fov 36–58,
+  Near .04, Far 400, глубина резкости `CameraAttributesPractical` по расстоянию до того, на что смотрит, «рука» —
+  медленный дрейф, тряска от `Rig.Shaking`); `Lens(Eye, At, Fov)` и движения: `Keys` (Catmull-Rom по ключам),
+  `Orbit`, `Dolly`, `Ease`/`EaseIn`/`EaseOut`. Пока она включена (`Begin`): `Rig.Held`, `Rig.Set` каждый кадр на то,
+  на что смотрит (звук, тряска, угли), `Units.ForceNear`, `Atmos.FogShift` по расстоянию, `Atmos.Perspective`,
+  пути орды, укрытия и делянки скрыты; `GrassView` растит газон вокруг `Cine.Focus` по `Cine.Grow` (как вокруг глаз
+  при вселении). `Main.Trailer.cs` — сцены (`Shot`: `Stage`, `Moments` по секундам, `Each` каждый кадр, `Lens`,
+  `Day`/`Dark` → `Atmos.DayOverride`/`DarkOverride`, `Pace` — над 1 ускоряет сим через `Main.Pace`, под 1 замедляет
+  всё через `Engine.TimeScale`, `Cards` — надписи: `Tag` — пара слов о том, что на экране, мелко в углу нижней полосы, `Say` — только название в
+  конце; громких фраз автор не хочет, `Exposure`, `Haze`); полосы 2,39 : 1, затемнение и надписи — свой
+  `CanvasLayer` 60; HUD скрыт, `FP.Bare` убирает надписи вселения. Первые кадры — чёрные, пока чанки не досчитаны
+  (`[trailer] preroll N` в логе; `trailer.command` их отрезает), звук — `Settings.Hear(1)`, глушится в затемнениях.
+  В лог идут `[trailer] hit t` (большие взрывы, молния, землетрясение, тяжёлые падения) и `reveal t` (название) —
+  по ним `tools/trailer/score.py` бьёт в музыке. Постановки, которые есть и в позах, разделены на «только
+  поставить» (`WonderBand`, `MeadowAt`, `KegsBefore`, `HillStage`, `DeckStage`), крепость трейлера рисуется кистями
+  (`MarkRing`, `MarkTowers`, `MarkMoat`, `MarkGate`, `MarkLadders`, `MarkChannel`; `FortStanding` — та же разом).
+  Скрытый запуск (`Backstage.Withdraw`) сам рисует каждый кадр (`RenderLoopEnabled = false` и `ForceDraw` последним
+  узлом): иначе macOS, заметив окно спрятанным, перестаёт его рисовать, и кадры застывают или чернеют.
+  Точечные источники (факелы, огонь, заклинания, рудники) — без блика (`LightSpecular = 0`), а в перспективе и у
+  солнца с луной (`Atmos.Perspective`): пиксель, смотрящий прямо на источник, давал NaN, и свечение растягивало его
+  в чёрный кадр.
 
 ## Материалы (id)
 

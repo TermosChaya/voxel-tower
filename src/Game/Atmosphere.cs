@@ -35,6 +35,16 @@ public partial class Atmosphere : Node3D
     public CameraRig Follow;
     /// <summary>How much nearer the fog begins (Godot units): seen from someone's eyes the valley is near, not eighty units off.</summary>
     public float FogShift;
+    /// <summary>The time of day and the darkness set from outside (the trailer's shots), 0 to 1; below 0, the sim's own.</summary>
+    public float DayOverride = -1, DarkOverride = -1;
+    /// <summary>How much thicker the air is than the weather makes it, 0 to 1 (the trailer's far looks over the valley).</summary>
+    public float Haze;
+    /// <summary>
+    /// The valley is seen in perspective (someone's eyes, the trailer's lens): the sun and the moon give no glint then.
+    /// The pixel whose way into the scene runs straight at the sun got a glint of nothing over nothing, and the glow spread
+    /// it black over the whole frame; from the diorama's camera, every pixel looking the same way, that never happens.
+    /// </summary>
+    public bool Perspective;
     GpuParticles3D _embers, _rain;
     /// <summary>How far the weather has come on, as shown: rain and fog, easing in and out.</summary>
     float _wet, _fog;
@@ -143,6 +153,9 @@ public partial class Atmosphere : Node3D
                 OmniRange = 6f,
                 OmniAttenuation = 2f,
                 ShadowEnabled = false,
+                // no glint of its own: seen in perspective (first person, the trailer), the one pixel a light stands
+                // straight behind gave a glint of nothing over nothing, and the glow spread it black over the whole frame
+                LightSpecular = 0,
                 Position = new Vector3(w.WX(x), w.WY(y), w.WZ(z)),
             };
             AddChild(l);
@@ -255,6 +268,7 @@ public partial class Atmosphere : Node3D
             OmniRange = 3.2f,
             OmniAttenuation = 1.6f,
             ShadowEnabled = false,
+            LightSpecular = 0,
             Position = new Vector3(_w.WX(f.LX), _w.WY(f.LY), _w.WZ(f.LZ)),
         };
         AddChild(l);
@@ -368,6 +382,9 @@ public partial class Atmosphere : Node3D
                 _dark = Mathf.MoveToward(_dark, dark, k);
             }
             _snap = false;
+            // a shot of the trailer sets its own light, and keeps to it
+            if (DayOverride >= 0) _day = DayOverride;
+            if (DarkOverride >= 0) _dark = DarkOverride;
             Light(_day, _dark);
             Heavens(_day, _dark, (float)delta);
         }
@@ -406,6 +423,7 @@ public partial class Atmosphere : Node3D
         _sun.LightEnergy = Mathf.Lerp(energy, .3f + .45f * _blood, dark);
         _sun.LookAtFromPosition(dir * 20, Vector3.Zero, Mathf.Abs(dir.Y) > .98f ? Vector3.Forward : Vector3.Up);
         _rim.LightEnergy = Mathf.Lerp(.55f, .22f, dark);
+        _sun.LightSpecular = _rim.LightSpecular = Perspective ? 0 : 1;
         // rain greys the light and dims it; fog comes in close, pale by day and dark at night
         // and lightning lights everything for a moment
         Env.AmbientLightEnergy = Mathf.Lerp(.82f, .27f + .2f * _blood, dark) * (1 - .18f * _wet) + .35f * FlashNow();
@@ -414,7 +432,7 @@ public partial class Atmosphere : Node3D
         Env.FogLightColor = fogDay.Lerp(new Color(.03f, .035f, .07f), dark);
         Env.FogDepthBegin = Mathf.Lerp(84, 22, _fog) - 20 * _wet + FogShift;
         Env.FogDepthEnd = Mathf.Lerp(170, 80, _fog) - 30 * _wet + FogShift * .6f;
-        Env.FogDensity = Mathf.Lerp(.55f, .82f, Math.Max(_fog, _wet * .5f));
+        Env.FogDensity = Mathf.Lerp(.55f, .82f, Math.Max(Math.Max(_fog, _wet * .5f), Haze));
         var amb = new Vector3(0.254f, 0.246f, 0.578f).Lerp(new Vector3(.09f, .11f, .3f).Lerp(new Vector3(.42f, .07f, .06f), _blood), dark);
         if (Math.Max(Math.Abs(amb.X - _ambSky.X), Math.Max(Math.Abs(amb.Y - _ambSky.Y), Math.Abs(amb.Z - _ambSky.Z))) > 1f / 512)
         {

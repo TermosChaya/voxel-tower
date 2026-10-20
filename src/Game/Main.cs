@@ -41,7 +41,7 @@ namespace VoxelTower.Game;
 /// --day=F starts at that time of the day (0 dawn, 1 sunset), --alarm=S raises the alarm and runs on S seconds,
 /// --weather=rain|fog|wind brings that weather at once, --envoy sends the horde's envoy and waits for its offer,
 /// --lore=N,key,… puts N knowledge in hand with that lore learnt, --sounds=folder writes every sound out as a .wav and quits,
-/// --load=file.sav reads a saved game back.
+/// --load=file.sav reads a saved game back, --trailer=N stages and films the Nth shot of the trailer (Main.Trailer.cs).
 /// </summary>
 public partial class Main : Node3D
 {
@@ -162,12 +162,13 @@ public partial class Main : Node3D
             else if (a.StartsWith("--at=") && double.TryParse(a["--at=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double at)) _poseSeconds = at;
             else if (a.StartsWith("--ui-scale=") && float.TryParse(a["--ui-scale=".Length..], System.Globalization.CultureInfo.InvariantCulture, out float us)) _uiScale = us;
             else if (a == "--lines") _lines = true;
+            else TrailerArg(a);
         }
         // scripted runs draw the interface at its usual size, unless told otherwise, and leave the player's settings be
         if (_selfTest || _demo || _shot != null || _uiScale > 0) Settings.Scripted(_uiScale);
         else Settings.Load();
         // the self-test and the screenshots play out of the player's sight (--show keeps the window up)
-        if ((_selfTest || _shot != null) && !OS.GetCmdlineUserArgs().Contains("--show")) Backstage.Withdraw();
+        if ((_selfTest || _shot != null || _trailer >= 0) && !OS.GetCmdlineUserArgs().Contains("--show")) Backstage.Withdraw(this);
         Settings.Apply(GetTree().Root);
         Settings.ApplyVolume();
         if (_lines) Settings.ScriptLines(true);
@@ -195,6 +196,7 @@ public partial class Main : Node3D
         if (_demo && _pose == "shaman") ClearTrees(Site.KeepX - Site.KeepR - 240, Site.KeepZ - 90, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 90);
         if (_demo && _pose == "spells") ClearTrees(Site.KeepX - Site.KeepR - 260, Site.KeepZ - 100, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
         if (_demo && _pose == "traps") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
+        if (_trailer >= 0) TrailerGround();
         if (_demo && _pose is "blast" or "grip" or "wind" or "hexes" or "sorcerers" or "wonders" or "fp" or "powder" or "charge" or "stones" or "topple" or "roll" or "crush" or "drops" or "troops") ClearTrees(Site.KeepX - Site.KeepR - 300, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 140);
         World.Compact();
         save?.Valley(World, Site);
@@ -282,6 +284,9 @@ public partial class Main : Node3D
         Input.MouseMode = Input.MouseModeEnum.Visible;
         FP = new FirstPerson();
         AddChild(FP);
+        Cine = new CineCam();
+        AddChild(Cine);
+        Cine.Init(this);
         View.Grass.Bind(this);
         Tools.Init(this);
         Rig.RightClick += p => { if (Tools.Tool != Tool.None) Tools.Cancel(); else Command.OrderTo(p); };
@@ -383,9 +388,10 @@ public partial class Main : Node3D
     public override void _Process(double delta)
     {
         if (_frames > 5) _slowest = Math.Max(_slowest, delta);
+        if (_trailer >= 0) Roll();
         if (!Paused && !_selfTest)
         {
-            double dt = Math.Min(delta, .1) * Speed * Slow;
+            double dt = Math.Min(delta, .1) * Speed * Slow * Pace;
             while (dt > 1e-6)
             {
                 float step = (float)Math.Min(dt, .05);
@@ -1002,8 +1008,10 @@ public partial class Main : Node3D
         await Look(Site.KeepX, Site.KeepZ);
         Settings.Feel(1, true);
         Spectacle.Felt(Site.KeepX, Site.KeepZ, 1.2f, flash: true);
+        // the flash is gone in a tenth of a second, and a hidden run draws each frame itself, slowly: it is read at once
+        float flashed = Spectacle.FlashNow;
         await Frames(3);
-        float shook = Rig.Shaking, slowed = Slow, flashed = Spectacle.FlashNow;
+        float shook = Rig.Shaking, slowed = Slow;
         await Frames(150);
         Check("a great blast in the middle of the view shakes it, flashes the screen and slows the time a moment, and it all passes",
             shook > .3f && slowed < .5f && flashed > .05f && Slow == 1 && Rig.Shaking < shook && Spectacle.FlashNow == 0,
@@ -1237,6 +1245,7 @@ public partial class Main : Node3D
     void Demo()
     {
         if (_pose == "sky") { Skies(); return; }
+        if (_trailer >= 0) { Trailer(); return; }
         if (_pose == "battle") { Siege(); return; }
         if (_pose == "fire") { Blaze(); return; }
         if (_pose == "sap") { Sapping(); return; }
@@ -1651,18 +1660,9 @@ public partial class Main : Node3D
     void Wonders()
     {
         var sim = Sim; var w = World;
-        foreach (var s in Sim.Spells) sim.Known.Add(s.Kind);
-        sim.Favour = 600;
-        sim.Waves.Countdown = 1e9;
+        Sorcerous();
         int cx = Site.KeepX - Site.KeepR - 150, cz = Site.KeepZ + 10;
-        Unit Raider(UnitType t, int dx, int dz) { var u = sim.Spawn(t, sim.NearestStand(cx + dx, cz + dz, t.Move.Height)); u.Guard = true; u.Home = u.Cell; return u; }
-        foreach (var (t, dx, dz) in new[] { (Kinds.Orc, -20, 0), (Kinds.Goblin, -10, 14), (Kinds.Goblin, -6, -12), (Kinds.Troll, 6, 4), (Kinds.Goblin, 14, 18),
-            (Kinds.Orc, 20, -8), (Kinds.Goblin, 28, 10), (Kinds.Sapper, -26, 20), (Kinds.Goblin, 36, -20), (Kinds.Orc, 2, -26) })
-            Raider(t, dx, dz);
-        // a siege ladder of theirs standing in the field, a deck laid by it
-        int lg = w.SurfAt(cx + 8, cz - 40);
-        for (int y = lg; y < lg + 28; y++) for (int x = cx + 6; x < cx + 9; x++) w.Set(x, y, cz - 40, Mat.SiegeLadder);
-        for (int z = cz + 30; z < cz + 46; z++) for (int x = cx - 10; x < cx + 10; x++) w.Set(x, w.SurfAt(x, z), z, Mat.Deck);
+        WonderBand(cx, cz);
         Advance(.5);
         float ground = w.SurfAt(cx, cz);
         if (_look == 1)
@@ -1685,6 +1685,19 @@ public partial class Main : Node3D
         Hud.Refresh();
     }
 
+    /// <summary>A band of the horde standing on guard round a spot in the field, a siege ladder of theirs standing by it and a deck laid beside: what the great spells are shown on.</summary>
+    void WonderBand(int cx, int cz)
+    {
+        var w = World;
+        foreach (var (t, dx, dz) in new[] { (Kinds.Orc, -20, 0), (Kinds.Goblin, -10, 14), (Kinds.Goblin, -6, -12), (Kinds.Troll, 6, 4), (Kinds.Goblin, 14, 18),
+            (Kinds.Orc, 20, -8), (Kinds.Goblin, 28, 10), (Kinds.Sapper, -26, 20), (Kinds.Goblin, 36, -20), (Kinds.Orc, 2, -26) })
+            Camp(t, cx + dx, cz + dz);
+        // a siege ladder of theirs standing in the field, a deck laid by it
+        int lg = w.SurfAt(cx + 8, cz - 40);
+        for (int y = lg; y < lg + 28; y++) for (int x = cx + 6; x < cx + 9; x++) w.Set(x, y, cz - 40, Mat.SiegeLadder);
+        for (int z = cz + 30; z < cz + 46; z++) for (int x = cx - 10; x < cx + 10; x++) w.Set(x, w.SurfAt(x, z), z, Mat.Deck);
+    }
+
     /// <summary>
     /// A meadow, the most flowered and tufted patch of open turf near the citadel: --look=0 as the view first opens on
     /// it, 1 closer, where the sward grows in, 2 close, 3 as close as the view goes; 4 through a swordsman's eyes, a band
@@ -1693,8 +1706,16 @@ public partial class Main : Node3D
     /// </summary>
     void Meadow()
     {
-        var sim = Sim; var w = World;
-        sim.Waves.Countdown = 1e9;
+        Sim.Waves.Countdown = 1e9;
+        var (cx, cz) = MeadowAt();
+        GD.Print($"[voxel-tower] the meadow at {cx},{cz}");
+        MeadowShot(cx, cz);
+    }
+
+    /// <summary>The most flowered and tufted patch of open turf near the citadel, out of its walls' way (voxels).</summary>
+    (int x, int z) MeadowAt()
+    {
+        var w = World;
         int bx = Site.KeepX, bz = Site.KeepZ, best = -1, cx = bx - 200, cz = bz;
         for (int z = Math.Max(40, bz - 420); z < Math.Min(w.SZ - 40, bz + 420); z += 16)
             for (int x = Math.Max(Site.SpawnStrip + 40, bx - 420); x < Math.Min(w.SX - 40, bx + 420); x += 16)
@@ -1713,8 +1734,17 @@ public partial class Main : Node3D
                     }
                 if (score > best) { best = score; cx = x; cz = z; }
             }
+        return (cx, cz);
+    }
+
+    /// <summary>
+    /// The camera on the meadow, from the usual view to as close as it goes; or a swordsman there, a band wading at him,
+    /// gone into; or a blast or a whirlwind in the grass.
+    /// </summary>
+    void MeadowShot(int cx, int cz)
+    {
+        var sim = Sim; var w = World;
         float ground = w.SurfAt(cx, cz);
-        GD.Print($"[voxel-tower] the meadow at {cx},{cz}");
         if (_look == 4)
         {
             var me = sim.Spawn(Kinds.Swordsman, sim.NearestStand(cx + 30, cz, 2));
@@ -1996,17 +2026,25 @@ public partial class Main : Node3D
             Hud.Refresh();
             return;
         }
-        // four stacks of kegs before the wall, a band among them
-        foreach (int dz in new[] { -36, -12, 12, 36 }) Stack(wx - 26, kz + dz, 3);
-        foreach (var (t, dx, dz) in new[] { (Kinds.Goblin, -32, -24), (Kinds.Orc, -36, 0), (Kinds.Goblin, -30, 22), (Kinds.Goblin, -40, 40), (Kinds.Troll, -44, -6), (Kinds.Orc, -34, -44) })
-            Camp(t, wx + dx, kz + dz);
+        var (sx, sy, sz) = KegsBefore(wx, kz, 26, 3);
         Advance(.3);
-        int sg = w.SurfAt(wx - 25, kz - 35) - 1;
-        sim.Ignite(wx - 25, sg, kz - 35);
+        sim.Ignite(sx, sy, sz);
         Advance(1.25);
         Paused = true;
         Rig.SetAt(w.WX(wx - 30), w.WY(top - 22), w.WZ(kz), -.75f, .45f, 2.4f);
         Hud.Refresh();
+    }
+
+    /// <summary>
+    /// Four stacks of kegs before a wall of ours (this many voxels out from its line, this many a side) and a band among
+    /// them, nothing lit yet: the keg of the first stack to light, which sets the rest off one after another.
+    /// </summary>
+    (int x, int y, int z) KegsBefore(int wx, int kz, int before, int size)
+    {
+        foreach (int dz in new[] { -36, -12, 12, 36 }) Stack(wx - before, kz + dz, size);
+        foreach (var (t, dx, dz) in new[] { (Kinds.Goblin, -32, -24), (Kinds.Orc, -36, 0), (Kinds.Goblin, -30, 22), (Kinds.Goblin, -40, 40), (Kinds.Troll, -44, -6), (Kinds.Orc, -34, -44) })
+            Camp(t, wx + dx - before + 26, kz + dz);
+        return (wx - before + 1, World.SurfAt(wx - before + 1, kz - 35) - 1, kz - 35);
     }
 
     /// <summary>A sapper's charge against our ring of stone round the citadel, its fuse burning, the sapper running (--look=1: the moment it goes; --look=2: a swordsman of ours running for the fuse).</summary>
@@ -2066,24 +2104,7 @@ public partial class Main : Node3D
     void RollDown()
     {
         var sim = Sim; var w = World;
-        Sorcerous();
-        int sx = Site.KeepX - Site.KeepR - 200, sz = Site.KeepZ + 40, g = w.SurfAt(sx, sz);
-        // a hill of earth falling away eastward, three metres down over six, into a hollow that rises gently again beyond;
-        // its sides going down into the ground about it
-        int Top(int x) => x < sx + 24 ? g + 24 : x < sx + 72 ? g + 24 - (x - sx - 24) / 2 : x < sx + 122 ? g + (x - sx - 72) / 5 : g + 10;
-        var ground = new int[148, 80];
-        for (int z = 0; z < 80; z++) for (int x = 0; x < 148; x++) ground[x, z] = w.SurfAt(sx - 8 + x, sz - 40 + z);
-        for (int z = sz - 40; z < sz + 40; z++)
-            for (int x = sx - 8; x < sx + 140; x++)
-            {
-                float side = Math.Clamp((Math.Abs(z - sz) - 18) / 22f, 0, 1);
-                int was = ground[x - sx + 8, z - sz + 40], top = (int)MathF.Round(Top(x) * (1 - side) + was * side);
-                for (int y = Math.Min(top, was) - 4; y < Math.Max(top, was) + 40; y++) w.Set(x, y, z, y < top - 1 ? Mat.Soil : y == top - 1 ? Mat.Grass : Mat.Air);
-            }
-        // our fighters off the field, so the band stands where it is
-        foreach (var u in sim.Units) if (u.Team == Team.Player && u.T.Work < 1) { u.Dead = true; u.DiedAt = -999; }
-        foreach (var (t, dx, dz) in new[] { (Kinds.Goblin, 80, -3), (Kinds.Orc, 88, 5), (Kinds.Goblin, 84, 10), (Kinds.Goblin, 94, -8), (Kinds.Orc, 98, 2), (Kinds.Goblin, 76, 6) })
-            Camp(t, sx + dx, sz + dz);
+        var (sx, sz, g) = HillStage();
         sim.Cast(SpellKind.Telekinesis, sx + 10.5f, g + 23.5f, sz + .5f);
         var ball = sim.HeldNow;
         sim.HoldAt(sx + 28, g + 44, sz + .5f);
@@ -2099,27 +2120,41 @@ public partial class Main : Node3D
     }
 
     /// <summary>
+    /// A hill of earth west of the citadel falling away eastward, three metres down over six, into a hollow that rises
+    /// gently again beyond, and a band of the horde standing in the hollow; our fighters off the field: where the hill
+    /// stands (voxels) and the ground it was raised from.
+    /// </summary>
+    (int sx, int sz, int g) HillStage()
+    {
+        var sim = Sim; var w = World;
+        Sorcerous();
+        int sx = Site.KeepX - Site.KeepR - 200, sz = Site.KeepZ + 40, g = w.SurfAt(sx, sz);
+        // its sides going down into the ground about it
+        int Top(int x) => x < sx + 24 ? g + 24 : x < sx + 72 ? g + 24 - (x - sx - 24) / 2 : x < sx + 122 ? g + (x - sx - 72) / 5 : g + 10;
+        var ground = new int[148, 80];
+        for (int z = 0; z < 80; z++) for (int x = 0; x < 148; x++) ground[x, z] = w.SurfAt(sx - 8 + x, sz - 40 + z);
+        for (int z = sz - 40; z < sz + 40; z++)
+            for (int x = sx - 8; x < sx + 140; x++)
+            {
+                float side = Math.Clamp((Math.Abs(z - sz) - 18) / 22f, 0, 1);
+                int was = ground[x - sx + 8, z - sz + 40], top = (int)MathF.Round(Top(x) * (1 - side) + was * side);
+                for (int y = Math.Min(top, was) - 4; y < Math.Max(top, was) + 40; y++) w.Set(x, y, z, y < top - 1 ? Mat.Soil : y == top - 1 ? Mat.Grass : Mat.Air);
+            }
+        // our fighters off the field, so the band stands where it is
+        foreach (var u in sim.Units) if (u.Team == Team.Player && u.T.Work < 1) { u.Dead = true; u.DiedAt = -999; }
+        foreach (var (t, dx, dz) in new[] { (Kinds.Goblin, 80, -3), (Kinds.Orc, 88, 5), (Kinds.Goblin, 84, 10), (Kinds.Goblin, 94, -8), (Kinds.Orc, 98, 2), (Kinds.Goblin, 76, 6) })
+            Camp(t, sx + dx, sz + dz);
+        return (sx, sz, g);
+    }
+
+    /// <summary>
     /// The horde's deck over a ditch, a band on it, and a ball of earth the hand tore out let fall on them: it breaks
     /// through the planks in splinters, and the band goes down with it (--look=1: after, the hole and the ditch).
     /// </summary>
     void CrushDeck()
     {
         var sim = Sim; var w = World;
-        Sorcerous();
-        foreach (var u in sim.Units) if (u.Team == Team.Player && u.T.Work < 1) { u.Dead = true; u.DiedAt = -999; }
-        int sx = Site.KeepX - Site.KeepR - 180, sz = Site.KeepZ, g = w.SurfAt(sx, sz);
-        // a ditch three metres deep and three and a half across, and the horde's deck over it, two metres wide
-        for (int z = sz - 40; z < sz + 40; z++)
-            for (int x = sx - 40; x < sx + 60; x++)
-                for (int y = g - 30; y < g + 40; y++)
-                {
-                    bool ditch = x >= sx && x < sx + 28 && Math.Abs(z - sz) < 30 && y >= g - 24;
-                    bool deck = y >= g - 2 && y < g && x >= sx - 4 && x < sx + 32 && Math.Abs(z - sz) < 8;
-                    w.Set(x, y, z, deck ? Mat.Deck : ditch || y >= g ? Mat.Air : y == g - 1 ? Mat.Grass : Mat.Soil);
-                }
-        Advance(.5);
-        foreach (var (t, dx, dz) in new[] { (Kinds.Goblin, 8, -3), (Kinds.Orc, 14, 2), (Kinds.Goblin, 20, -2), (Kinds.Goblin, 11, 4), (Kinds.Orc, 18, -5) })
-            Camp(t, sx + dx, sz + dz);
+        var (sx, sz, g) = DeckStage();
         sim.Cast(SpellKind.Telekinesis, sx - 30.5f, g - .5f, sz + 30.5f);
         var ball = sim.HeldNow;
         sim.HoldAt(sx + 14, g + 52, sz + .5f);
@@ -2131,6 +2166,30 @@ public partial class Main : Node3D
         Paused = true;
         Rig.SetAt(w.WX(sx + 14), w.WY(g - 6), w.WZ(sz), -.75f, .42f, 3.6f);
         Hud.Refresh();
+    }
+
+    /// <summary>
+    /// A ditch west of the citadel, three metres deep and three and a half across, the horde's deck over it two metres
+    /// wide, and a band on the deck; our fighters off the field: where the ditch begins (voxels) and the ground there.
+    /// </summary>
+    (int sx, int sz, int g) DeckStage()
+    {
+        var sim = Sim; var w = World;
+        Sorcerous();
+        foreach (var u in sim.Units) if (u.Team == Team.Player && u.T.Work < 1) { u.Dead = true; u.DiedAt = -999; }
+        int sx = Site.KeepX - Site.KeepR - 180, sz = Site.KeepZ, g = w.SurfAt(sx, sz);
+        for (int z = sz - 40; z < sz + 40; z++)
+            for (int x = sx - 40; x < sx + 60; x++)
+                for (int y = g - 30; y < g + 40; y++)
+                {
+                    bool ditch = x >= sx && x < sx + 28 && Math.Abs(z - sz) < 30 && y >= g - 24;
+                    bool deck = y >= g - 2 && y < g && x >= sx - 4 && x < sx + 32 && Math.Abs(z - sz) < 8;
+                    w.Set(x, y, z, deck ? Mat.Deck : ditch || y >= g ? Mat.Air : y == g - 1 ? Mat.Grass : Mat.Soil);
+                }
+        Advance(.5);
+        foreach (var (t, dx, dz) in new[] { (Kinds.Goblin, 8, -3), (Kinds.Orc, 14, 2), (Kinds.Goblin, 20, -2), (Kinds.Goblin, 11, 4), (Kinds.Orc, 18, -5) })
+            Camp(t, sx + dx, sz + dz);
+        return (sx, sz, g);
     }
 
     /// <summary>

@@ -81,7 +81,8 @@ public partial class MagicView : Node3D
         _sparks = Multi(new BoxMesh { Size = Vector3.One * .05f },
             new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = new Color(1f, .78f, .3f) });
         _whirls = Multi(new BoxMesh { Size = Vector3.One * .22f }, new StandardMaterial3D { AlbedoColor = new Color(.3f, .27f, .24f), Roughness = 1 });
-        _starLight = new OmniLight3D { LightColor = new Color(1f, .55f, .22f), LightEnergy = 0, OmniRange = 18, ShadowEnabled = false, Visible = false };
+        // the lights of the spells, like the torches, have no glint of their own (see Atmosphere.Build)
+        _starLight = new OmniLight3D { LightColor = new Color(1f, .55f, .22f), LightEnergy = 0, OmniRange = 18, ShadowEnabled = false, Visible = false, LightSpecular = 0 };
         AddChild(_starLight);
         _bits = new MultiMeshInstance3D
         {
@@ -93,7 +94,7 @@ public partial class MagicView : Node3D
             CastShadow = GeometryInstance3D.ShadowCastingSetting.On, CustomAabb = new Aabb(new Vector3(-1e4f, -1e4f, -1e4f), new Vector3(2e4f, 2e4f, 2e4f)),
         };
         AddChild(_bits);
-        _grip = new OmniLight3D { LightColor = Violet, LightEnergy = 0, OmniRange = 7, ShadowEnabled = false, Visible = false };
+        _grip = new OmniLight3D { LightColor = Violet, LightEnergy = 0, OmniRange = 7, ShadowEnabled = false, Visible = false, LightSpecular = 0 };
         AddChild(_grip);
         _gripRing = new MeshInstance3D
         {
@@ -149,7 +150,7 @@ public partial class MagicView : Node3D
     /// <summary>A light that flares and fades, with whatever goes with it, gone after a while.</summary>
     void Flare(Vector3 at, Color c, float energy, float range, float life, Node3D thing = null)
     {
-        var light = new OmniLight3D { Position = at, LightColor = c, LightEnergy = energy, OmniRange = range, ShadowEnabled = false };
+        var light = new OmniLight3D { Position = at, LightColor = c, LightEnergy = energy, OmniRange = range, ShadowEnabled = false, LightSpecular = 0 };
         AddChild(light);
         _flashes.Add(new Flash { Light = light, Thing = thing, At = _t, Energy = energy, Life = life });
     }

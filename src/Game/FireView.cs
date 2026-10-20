@@ -36,7 +36,8 @@ public partial class FireView : Node3D
         _smoke = Multi(quad, new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/smoke.gdshader") });
         for (int i = 0; i < _lights.Length; i++)
         {
-            _lights[i] = new OmniLight3D { LightColor = new Color(1f, .52f, .18f), ShadowEnabled = false, Visible = false, OmniAttenuation = 1.6f };
+            // no glint of its own, like the torches (see Atmosphere.Build)
+            _lights[i] = new OmniLight3D { LightColor = new Color(1f, .52f, .18f), ShadowEnabled = false, Visible = false, OmniAttenuation = 1.6f, LightSpecular = 0 };
             AddChild(_lights[i]);
         }
         // what burns away falls in cinders
@@ -45,6 +46,9 @@ public partial class FireView : Node3D
         m.Sim.Fell += (x, y, z, mat) => { if (_rnd.NextDouble() < .03) m.Debris.Spawn(mat, x, y, z, 1, 1.6f); };
         m.Sim.Collapsed += (n, x, y, z) => Dust(x, y, z, n);
     }
+
+    /// <summary>The dust and smoke in the air laid at once (a staged scene, before it is filmed).</summary>
+    public void Settle() => _puffs.Clear();
 
     /// <summary>A cloud of dust where something came down: more of it, and wider, the more that fell.</summary>
     public void Dust(float x, float y, float z, int voxels)

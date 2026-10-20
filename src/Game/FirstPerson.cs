@@ -32,6 +32,8 @@ public partial class FirstPerson : Node3D
     const float Look = .0026f, PitchMax = 1.35f;
 
     public bool On => _u != null;
+    /// <summary>The eyes alone, with nothing written over them: no mark, no name, no keys (the trailer).</summary>
+    public bool Bare;
     public Unit Unit => _u;
     public Camera3D Cam => _cam;
 
@@ -75,12 +77,13 @@ public partial class FirstPerson : Node3D
         _m.Units.HiddenId = u.Id;
         _m.Units.ForceNear = true;
         _m.Atmos.FogShift = -62;
+        _m.Atmos.Perspective = true;
         _m.Cover.Visible = false;
         _fig = Figure.For(u.T, u.Look);
         _vm.Reset(u, _m.Sim);
         _yawWas = _yaw; _pitchWas = _pitch; _walk = 0;
         _cam.MakeCurrent();
-        _layer.Visible = true;
+        _layer.Visible = !Bare;
         if (!_m.Scripted) Input.MouseMode = Input.MouseModeEnum.Captured;
         _m.Hud.Log($"Вы в нём: {u.Name.ToLowerInvariant()} №{u.Id}. Esc — выйти.", Hud.Kind.Ok);
         Update(0);
@@ -109,6 +112,7 @@ public partial class FirstPerson : Node3D
         _m.Units.HiddenId = -1;
         _m.Units.ForceNear = false;
         _m.Atmos.FogShift = 0;
+        _m.Atmos.Perspective = false;
         _m.Cover.Visible = true;
         _layer.Visible = false;
         _vm.Visible = false;
