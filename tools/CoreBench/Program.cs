@@ -1112,7 +1112,9 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--life")
         sim.EndMarking("Насыпь");
         int fed = plot.Marked;
         var un6 = sim.UndoMarking(out _);
-        int felling = Left(tree.x - 20, tree.z - 20, tree.x + 20, tree.z + 20, WorkKind.Fell) + Left(tree.x - 20, tree.z - 20, tree.x + 20, tree.z + 20, WorkKind.Dig);
+        // (the tree is cut at its foot and may be down by now, its log lying out of the plot along the ground: what is
+        // felled already and lying is still marked to be cut up after the plot goes; what stands in the plot is not)
+        int felling = Left(tree.x - 100, tree.z - 100, tree.x + 100, tree.z + 100, WorkKind.Fell) + Left(tree.x - 100, tree.z - 100, tree.x + 100, tree.z + 100, WorkKind.Dig);
         var un7 = sim.UndoMarking(out _);
         int fellingAfter = Left(tree.x - 20, tree.z - 20, tree.x + 20, tree.z + 20, WorkKind.Fell) + Left(tree.x - 20, tree.z - 20, tree.x + 20, tree.z + 20, WorkKind.Dig);
         Check("a plot taken back goes with the felling it had marked; what it marks meanwhile is not the hand's",

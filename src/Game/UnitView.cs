@@ -507,6 +507,9 @@ public partial class UnitView : Node3D
                     elbowR = -.35f; elbowL = -.1f;
                     break;
                 }
+                case UnitState.Work when u.JobI < u.Jobs.Count:
+                    Labour(u, f, ref main, ref off, ref lean, ref elbowR, ref elbowL, ref kneeR, ref kneeL);
+                    break;
                 case UnitState.Work:
                 case UnitState.Carve:
                 case UnitState.Siege:
@@ -669,6 +672,80 @@ public partial class UnitView : Node3D
         _xf[(int)Bone.ThighL] = thighL;
         _xf[(int)Bone.ShinL] = thighL * RotAt(f.Pivot[(int)Bone.ShinL], Vector3.Right, kneeL);
         return tint;
+    }
+
+    /// <summary>
+    /// A pawn at its work, by the blow it is at (<see cref="Unit.Beat"/>, the tool comes down at 1, when the simulation
+    /// takes the voxel out or sets it in): digging, the tool drawn up over the shoulder and brought down hard on the very
+    /// voxel worked, the other hand on the haft, bending low to what is low; laying, a stone taken up from beside the
+    /// feet, carried to its place and pressed down into it.
+    /// </summary>
+    void Labour(Unit u, Figure f, ref float main, ref float off, ref float lean, ref float elbowR, ref float elbowL, ref float kneeR, ref float kneeL)
+    {
+        var j = u.Jobs[u.JobI];
+        bool dig = Orders.IsRemove(j.m);
+        // the voxel from the shoulder, in the figure's own frame: how far ahead and how far up
+        float dx = j.x + .5f - u.X, dz = j.z + .5f - u.Z, ahead = MathF.Max(.5f, MathF.Sqrt(dx * dx + dz * dz));
+        float up = j.y + .5f - (u.Y + f.Joint[(int)Part.Main].Y);
+        // what is low is reached by bending: the trunk leans in and the knees give, and the arm need come down less far
+        float low = Math.Clamp(-up / MathF.Max(1, f.Joint[(int)Part.Main].Y) - .45f, 0, 1);
+        float bend = low * .55f;
+        // the arm's angle at which the tool's head (or the hand) is on the voxel: 0 straight down, more negative higher
+        float at = -MathF.Atan2(ahead + bend * 4, -(up + bend * 5));
+        float c = u.Beat;
+        if (dig)
+        {
+            // drawn up slowly over the shoulder; brought down fast, the knees giving with it; a jar and back
+            float over = -2.85f;
+            if (c < .62f)
+            {
+                float s = Smooth(c / .62f);
+                main = Mathf.Lerp(at, over, s);
+                lean = Mathf.Lerp(bend + .1f, -.08f, s);
+                elbowR = Mathf.Lerp(-.1f, -.75f, s);
+            }
+            else
+            {
+                float s = (c - .62f) / .38f; s *= s;
+                main = Mathf.Lerp(over, at, s);
+                lean = Mathf.Lerp(-.08f, bend + .14f, s);
+                elbowR = Mathf.Lerp(-.75f, -.05f, s);
+            }
+            // the other hand lower on the same haft
+            off = main * .92f + .1f;
+            elbowL = elbowR - .35f;
+            kneeR = kneeL = .15f + low * .5f + .12f * MathF.Max(0, lean);
+        }
+        else
+        {
+            // a stone up from beside the feet, carried to its place, pressed down into its bed
+            if (c < .4f)
+            {
+                float s = Smooth(c / .4f);
+                main = Mathf.Lerp(at * .3f, .25f, s);
+                lean = Mathf.Lerp(.15f, .38f, s);
+                elbowR = elbowL = Mathf.Lerp(-.6f, -.25f, s);
+                kneeR = kneeL = Mathf.Lerp(.25f, .65f, s);
+            }
+            else if (c < .85f)
+            {
+                float s = Smooth((c - .4f) / .45f);
+                main = Mathf.Lerp(.25f, at - .25f, s);
+                lean = Mathf.Lerp(.38f, bend + .1f, s);
+                elbowR = elbowL = Mathf.Lerp(-.25f, -1.05f, s);
+                kneeR = kneeL = Mathf.Lerp(.65f, .15f + low * .5f, s);
+            }
+            else
+            {
+                float s = Smooth((c - .85f) / .15f);
+                main = Mathf.Lerp(at - .25f, at, s);
+                lean = bend + .1f + .05f * s;
+                elbowR = elbowL = Mathf.Lerp(-1.05f, -.55f, s);
+                kneeR = kneeL = .15f + low * .5f;
+            }
+            // both hands on the stone
+            off = main;
+        }
     }
 
     /// <summary>A turn about an axis through a point (in figure voxels).</summary>

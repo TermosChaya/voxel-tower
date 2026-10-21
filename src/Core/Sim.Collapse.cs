@@ -3,6 +3,14 @@ using System.Collections.Generic;
 
 namespace VoxelTower.Core;
 
+/// <summary>A tree going over: its voxels as they stood, the foot it turns on, the way it goes, and from when to when.</summary>
+public sealed class Toppling
+{
+    public readonly List<(int x, int y, int z, byte m)> Voxels = new();
+    public float PX, PY, PZ, DX, DZ;
+    public double From, To;
+}
+
 /// <summary>
 /// What holds up what is built. A voxel of masonry, timber or earth stands on whatever is under it; out over empty air
 /// it is held by its neighbours in the course only so far
@@ -100,6 +108,7 @@ public sealed partial class Sim
 
     void TickCollapse(float dt)
     {
+        if (_toppling.Count > 0) LandToppling();
         _collapseAt += dt;
         if (_collapseAt < .25f || _shaken.Count == 0) return;
         _collapseAt = 0;
@@ -552,16 +561,63 @@ public sealed partial class Sim
         var twigs = timber.Count == 0 ? new List<(int x, int y, int z)>()
             : Shapes.Crown(World, timber, (x, y, z) => !falling.Contains(WaterPlanner.Pack(x, y, z)) && !Orders.IsRemove(Orders.At(x, y, z)),
                 (x, y, z) => Orders.IsRemove(Orders.At(x, y, z)));
+        // a tree cut through goes over whole, crown and all, turning on its stump, and lies down only when it gets to the
+        // ground: what it is made of is taken out of the valley now and drawn falling (Toppled), and laid in a moment
+        Toppling topple = null;
+        int height = 0;
+        foreach (var pc in pieces) height = Math.Max(height, pc.y - baseY);
+        if (!quiet && trunks >= 60 && trunks == pieces.Count && height >= 2 * VoxelWorld.PerMetre)
+        {
+            int top = baseY;
+            topple = new Toppling { PX = tx + .5f, PY = baseY, PZ = tz + .5f, DX = fx, DZ = fz, From = Time };
+            foreach (var (x, y, z, m, _) in pieces) { topple.Voxels.Add((x, y, z, m)); top = Math.Max(top, y); }
+            foreach (var (x, y, z) in twigs) { byte m = World.Get(x, y, z); if (Mat.IsLeafy(m)) topple.Voxels.Add((x, y, z, m)); }
+            // a tall tree is longer about it: about a second and a half for ten metres
+            topple.To = Time + Math.Clamp(.85 + .07 * (top - baseY) / VoxelWorld.PerMetre, 1, 2.4);
+        }
         foreach (var (x, y, z, m, _) in pieces)
         {
             World.Set(x, y, z, Mat.Air);
             if (Orders.At(x, y, z) != 0) Orders.Clear(x, y, z);
             Burning.Remove(WaterPlanner.Pack(x, y, z));
-            if (!quiet) Fell?.Invoke(x, y, z, m);
+            if (!quiet && topple == null) Fell?.Invoke(x, y, z, m);
         }
         // a crown with its trunk gone comes down as brushwood, which does not keep
         foreach (var (x, y, z) in twigs) if (Mat.IsLeafy(World.Get(x, y, z))) Shed(x, y, z);
         if (timber.Count > 0) DropStrays(timber, twigs);
+        if (topple != null)
+        {
+            _settling = false;
+            _toppling.Add((topple, pieces, fx, fz, baseY));
+            Toppled?.Invoke(topple);
+            return;
+        }
+        Lay(pieces, fx, fz, baseY, trunks, quiet);
+    }
+
+    /// <summary>Trees going over now, to be laid down when they get to the ground.</summary>
+    readonly List<(Toppling t, List<(int x, int y, int z, byte m, byte order)> pieces, int fx, int fz, int baseY)> _toppling = new();
+
+    /// <summary>A tree begins to go over: what it is made of, the foot of it, which way it goes and how long it takes.</summary>
+    public Action<Toppling> Toppled;
+
+    /// <summary>The trees going over that have got to the ground are laid down there (all of them, before a game is saved).</summary>
+    void LandToppling(bool all = false)
+    {
+        for (int i = _toppling.Count - 1; i >= 0; i--)
+        {
+            var (t, pieces, fx, fz, baseY) = _toppling[i];
+            if (!all && Time < t.To) continue;
+            _toppling.RemoveAt(i);
+            _settling = true;
+            foreach (var (x, y, z, m, _) in pieces) Fell?.Invoke(x, y, z, m);
+            Lay(pieces, fx, fz, baseY, pieces.Count, quiet: false);
+        }
+    }
+
+    /// <summary>What fell, laid down where it comes to rest: a trunk along the ground as a log, the rest in a heap.</summary>
+    void Lay(List<(int x, int y, int z, byte m, byte order)> pieces, int fx, int fz, int baseY, int trunks, bool quiet)
+    {
         pieces.Sort((a, b) => a.y.CompareTo(b.y));
         float cx = 0, cy = 0, cz = 0;
         int laid = 0, stone = 0, wood = 0;

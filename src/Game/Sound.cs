@@ -52,7 +52,8 @@ public partial class Sound : Node
         _hum = Loop("hum");
         var sim = m.Sim;
         _wave = sim.Waves.Number;
-        sim.Mined += (x, y, z, mat) => Struck(Dug(mat), x, y, z, .07);
+        // a pawn's tool rings at each blow, whether a voxel comes away or not; a stone set down knocks softly
+        sim.Worked += (x, y, z, mat, dig) => { if (dig) Struck(Dug(mat), x, y, z, .07); else Play("dig", x + .5f, y, z + .5f, .12, .35f, pitch: 1.45f); };
         sim.Hacked += (x, y, z, mat) => Struck(Dug(mat), x, y, z, .09);
         sim.Collapsed += (n, x, y, z) => Play("rumble", x, y, z, .4, Math.Clamp(.4f + n / 2000f, .4f, 1.3f));
         sim.Spelled += (k, x, y, z) =>

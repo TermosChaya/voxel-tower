@@ -384,6 +384,8 @@ public sealed class Unit
     public readonly List<(int x, int y, int z, byte m)> Jobs = new();
     public int JobI;
     public float Effort;
+    /// <summary>How far through the blow it is working at, 0 to 1: the tool comes down at 1 (the view draws the arm by it).</summary>
+    public float Beat;
     public double NextSearch;
     /// <summary>Why it is not working, for the panel: "нет камня", "не дойти".</summary>
     public string Why = "";

@@ -35,6 +35,8 @@ public sealed partial class Sim
     /// The label is for the list of saves; whatever the screen keeps (the camera, the chronicle) goes in as one string.</summary>
     public void Save(Stream to, uint seed, string label, string extra)
     {
+        // a tree going over is laid down where it is going: the save keeps no trees in the air
+        LandToppling(all: true);
         using var z = new GZipStream(to, CompressionLevel.Fastest, leaveOpen: true);
         using var w = new BinaryWriter(z, Encoding.UTF8, leaveOpen: true);
         w.Write(SaveMagic); w.Write(SaveVersion); w.Write(seed); w.Write(label ?? ""); w.Write(Time);

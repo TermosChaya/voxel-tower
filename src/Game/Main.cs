@@ -271,6 +271,9 @@ public partial class Main : Node3D
         var cover = new CoverView(); Cover = cover;
         AddChild(cover);
         cover.Init(this);
+        var fell = new FellView();
+        AddChild(fell);
+        fell.Init(this);
         var fire = new FireView();
         AddChild(fire);
         fire.Init(this);
@@ -314,9 +317,12 @@ public partial class Main : Node3D
         Sim.Said += (text, kind, x, z) => Hud.Log(text, (Hud.Kind)Math.Clamp(kind, 0, 3), x, z);
         // the chronicle in the self-test's log, for when something goes wrong
         if (_selfTest) Sim.Said += (text, kind, x, z) => GD.Print($"[chronicle] {Sim.Time:0} s: {text}");
-        Sim.Mined = (x, y, z, m) => { if (Random.Shared.NextDouble() < .045) Debris.Spawn(m, x, y, z, 1, 1.3f); };
-        Sim.Hacked = (x, y, z, m) => { if (Random.Shared.NextDouble() < .16) Debris.Spawn(m, x, y, z, 1, 1.8f); };
-        Sim.Raised = (x, y, z, m) => { if (Random.Shared.NextDouble() < .05) Debris.Spawn(m, x, y, z, 1, .8f); };
+        // (added to, not set: the sounds hear these too)
+        Sim.Mined += (x, y, z, m) => { if (Random.Shared.NextDouble() < .12) Debris.Spawn(m, x, y, z, 1, 1.3f); };
+        Sim.Hacked += (x, y, z, m) => { if (Random.Shared.NextDouble() < .16) Debris.Spawn(m, x, y, z, 1, 1.8f); };
+        Sim.Raised += (x, y, z, m) => { if (Random.Shared.NextDouble() < .05) Debris.Spawn(m, x, y, z, 1, .8f); };
+        // every blow of a pawn's tool knocks chips off where it lands; a stone set down puffs a little dust of mortar
+        Sim.Worked += (x, y, z, m, dig) => { if (m != Mat.Air) Debris.Spawn(m, x, y, z, dig ? 2 + Random.Shared.Next(2) : 1, dig ? 1.4f : .5f, dig ? .8f : .6f); };
         Sim.Splashed = (x, y, z, n) => Debris.Spawn(Mat.Blood, (int)x, (int)y, (int)z, Math.Clamp(n / 3, 1, 6), 1.1f, .4f);
 
         if (_loaded)
@@ -659,7 +665,17 @@ public partial class Main : Node3D
         for (int z = pz + 2; z < pz + 23; z += 3) for (int x = px + 2; x < px + 23; x += 3) if (World.SurfAt(x, z) < Site.HTop[z * World.SX + x] - 8) dugCols++;
         Check("workers dig the pit", dugCols > 30 && Sim.Stock[Stockpile.Earth] > earth0 + 1000, $"{dugCols} of 64 columns down, earth +{Fmt.M3(Sim.Stock[Stockpile.Earth] - earth0)} m³");
         Check("…lay the wall from the stores", World.SurfAt(lx, 460) > ground + 16, $"top {World.SurfAt(lx, 460)} over ground {ground}, stone {Fmt.M3(stone0)} → {Fmt.M3(Sim.Stock[Stockpile.Stone])} m³");
-        Check("…and fell the tree for wood", Sim.Stock[Stockpile.Wood] > wood0 + 100, $"wood +{Fmt.M3(Sim.Stock[Stockpile.Wood] - wood0)} m³, {Sim.Orders.Total} of {left0} voxels left; 150 s in {ms} ms");
+        // (the wood of the tree still marked, and how high the lowest of it lies over the ground, for when it fails)
+        int woodLeft = 0, woodLow = int.MaxValue;
+        for (int z = tz - 90; z < tz + 90; z++)
+            for (int x = tx - 90; x < tx + 90; x++)
+            {
+                if (!World.InBounds(x, 1, z)) continue;
+                int g = World.GroundTop(x, z);
+                for (int y = g; y < g + 100 && y < World.SY; y++)
+                    if (Mat.IsTrunk(World.Get(x, y, z)) && Orders.IsRemove(Sim.Orders.At(x, y, z))) { woodLeft++; woodLow = Math.Min(woodLow, y - g); }
+            }
+        Check("…and fell the tree for wood", Sim.Stock[Stockpile.Wood] > wood0 + 100, $"wood +{Fmt.M3(Sim.Stock[Stockpile.Wood] - wood0)} m³, {Sim.Orders.Total} of {left0} voxels left, {woodLeft} of the tree's wood still marked, the lowest {(woodLeft > 0 ? woodLow : 0)} over the ground; 150 s in {ms} ms");
         foreach (var u in Sim.Units) if (u.Why != "") GD.Print($"[selftest]      {u.T.Name} #{u.Id}: {u.Why}");
 
         // a ladder against the new wall, from the side the camera sees
@@ -674,7 +690,7 @@ public partial class Main : Node3D
         Advance(40);
         int built = 0;
         for (int y = ground; y < ground + 48; y++) for (int z = 450; z < 472; z++) for (int x = face - 10; x < face; x++) if (World.Get(x, y, z) == Mat.Ladder) built++;
-        Check("…the workers set it against the wall", rungs > 40 && built > 40, $"{rungs} voxels marked, {built} in place");
+        Check("…the workers set it against the wall", rungs > 40 && built > 40, $"{rungs} voxels marked, {built} in place; clicked on «{Tools.HoverText}», west of the face {Mat.NameOf(World.Get(face - 1, fy, 460))}, the face {Mat.NameOf(World.Get(face, fy, 460))} at {face},{fy}, wall top {World.SurfAt(lx, 460)}");
 
         // a gate through the same wall, further along it
         KeyPress(Key.Key9);
@@ -843,8 +859,14 @@ public partial class Main : Node3D
         Check("Esc drops the tool", Tools.Tool == Tool.None);
 
         // choosing and sending pawns
+        // a worker with nobody right beside it, so the click is on it and not on a neighbour in front of it
         Unit worker = null;
-        foreach (var u in Sim.Units) if (!u.Dead && u.T == Kinds.Worker) { worker = u; break; }
+        foreach (var u in Sim.Units)
+        {
+            if (u.Dead || u.T != Kinds.Worker || u.Inside) continue;
+            worker ??= u;
+            if (!Sim.Units.Exists(o => o != u && !o.Dead && !o.Inside && MathF.Abs(o.X - u.X) < 6 && MathF.Abs(o.Z - u.Z) < 6)) { worker = u; break; }
+        }
         await Look(worker.X, worker.Z);
         await ClickAt(Command.Screen(worker, .5f));
         Check("a click picks a pawn, and the console shows it in full", Selected.Count == 1 && Selected.Contains(worker) && Hud.Inspecting == worker, $"{Selected.Count} chosen, the console on {Hud.Inspecting?.Name}");
@@ -1139,7 +1161,10 @@ public partial class Main : Node3D
             linesOff && lined > .6f && lined > Math.Abs(idle) * 3, $"the picture {lined:0.00} darker with the lines, {idle:0.00} by itself");
         // first person: one of ours chosen (a swordsman if one is about), I goes into it: the view is its eyes, the frame of
         // the game put away; it walks where it is told, and Esc lets it go, the view back over the valley and it chosen
-        var mine = Sim.Units.Find(u => Sim.CanPossess(u) && u.T == Kinds.Swordsman) ?? Sim.Units.Find(u => Sim.CanPossess(u) && u.T.Work < 1) ?? Sim.Units.Find(Sim.CanPossess);
+        // one standing on the ground (not up on a wall, with nowhere to walk), a swordsman if there is one
+        bool Grounded(Unit u) => u.Y - World.GroundTop((int)u.X, (int)u.Z) < 3;
+        var mine = Sim.Units.Find(u => Sim.CanPossess(u) && u.T == Kinds.Swordsman && Grounded(u)) ?? Sim.Units.Find(u => Sim.CanPossess(u) && u.T.Work < 1 && Grounded(u))
+            ?? Sim.Units.Find(u => Sim.CanPossess(u) && Grounded(u)) ?? Sim.Units.Find(Sim.CanPossess);
         Selected.Clear(); Selected.Add(mine); Hud.OnSelectionChanged();
         // a nick out of its off arm first, so that the arm is drawn on its own: put away with it, and back after
         var nicked = new BodyState(Bodies.Plan(mine.T, mine.Look));
@@ -1152,21 +1177,26 @@ public partial class Main : Node3D
         bool nickShown = Units.HurtShown(mine.Id);
         KeyPress(Key.I);
         bool into = FP.On && FP.Unit == mine && Sim.Possessed == mine && FP.Cam.Current && Hud.InFirstPerson && Rig.Held && Units.HiddenId == mine.Id;
-        float fx0 = mine.X, fz0 = mine.Z;
-        FP.Face(mine.Facing, 0);
-        FP.TestMove = new Vector2(0, 1);
-        await Frames(2);
-        Advance(2);
-        FP.TestMove = Vector2.Zero;
-        await Frames(2);
-        float strode = MathF.Sqrt((mine.X - fx0) * (mine.X - fx0) + (mine.Z - fz0) * (mine.Z - fz0)) / VoxelWorld.PerMetre;
+        // forward for two seconds; if a wall is right before it, the other ways round, the best of them counting
+        float strode = 0, face0 = mine.Facing;
+        for (int way = 0; way < 4 && strode <= 2; way++)
+        {
+            float fx0 = mine.X, fz0 = mine.Z;
+            FP.Face(face0 + way * MathF.PI / 2, 0);
+            FP.TestMove = new Vector2(0, 1);
+            await Frames(2);
+            Advance(2);
+            FP.TestMove = Vector2.Zero;
+            await Frames(2);
+            strode = Math.Max(strode, MathF.Sqrt((mine.X - fx0) * (mine.X - fx0) + (mine.Z - fz0) * (mine.Z - fz0)) / VoxelWorld.PerMetre);
+        }
         bool farSeen = Atmos.Far.Visible, eyesSky = Atmos.Told["sky_view"].Z > .5f;
         FP._Input(new InputEventKey { PhysicalKeycode = Key.Escape, Keycode = Key.Escape, Pressed = true });
         await Frames(2);
         bool outOf = !FP.On && Sim.Possessed == null && Rig.Cam.Current && !Hud.InFirstPerson && !Rig.Held && Units.HiddenId < 0 && Selected.Contains(mine);
         bool nickBack = Units.HurtShown(mine.Id);
         Check("I goes into the one chosen and the view is its eyes; it walks where it is told; Esc lets it go and the view goes back over the valley, its nicked arm drawn again",
-            into && strode > 2 && outOf && nickShown && nickBack, $"in {into}, walked {strode:0.0} m, out {outOf}; the nicked arm drawn {nickShown}, again after {nickBack}");
+            into && strode > 2 && outOf && nickShown && nickBack, $"in {into}, walked {strode:0.0} m, out {outOf}; the nicked arm drawn {nickShown}, again after {nickBack}; it stood at {mine.X:0},{mine.Y:0},{mine.Z:0} ({mine.Y - World.GroundTop((int)mine.X, (int)mine.Z):0} over the ground), {mine.State}, climbing {Sim.Climbing(mine)}");
         // the land beyond the valley and the sky looked along the view are for someone's eyes; over the diorama the valley
         // floats on its backdrop again
         bool farGone = !Atmos.Far.Visible, backdrop = Atmos.Told["sky_view"].Z < .5f;
@@ -2254,7 +2284,7 @@ public partial class Main : Node3D
     /// <summary>
     /// The household of a new game felling the trees nearest the fort west of the citadel, marked as the player marks
     /// them; --at= seconds of the work: with time enough, stumps and logs being cut up, and no crown left in the air;
-    /// --look=1 close on the first of them.
+    /// --look=1 close on the first of them; --look=2 the first caught halfway over, the game stopped.
     /// </summary>
     void Felling()
     {
@@ -2275,6 +2305,23 @@ public partial class Main : Node3D
                 for (int dz = -3; dz <= 3; dz++) for (int dx = -3; dx <= 3; dx++) taken.Add(((x >> 4) + dx, (z >> 4) + dz));
                 if (felled++ == 0) (fx, fz) = (x, z);
             }
+        // --look=2: the first tree caught halfway over, the game stopped
+        if (_look == 2)
+        {
+            Toppling first = null;
+            sim.Toppled += t => first ??= t;
+            for (int t = 0; t < 1600 && first == null; t++) Advance(.25);
+            GD.Print($"[pose] felling: {(first == null ? "no tree went over" : $"a tree went over at {first.From:0} s, {first.Voxels.Count} voxels, foot {first.PX:0},{first.PY:0},{first.PZ:0}")}; " +
+                string.Join("; ", sim.Units.FindAll(x => x.T == Kinds.Worker).ConvertAll(x => $"#{x.Id} {x.State} {x.Why} at {x.X:0},{x.Y:0},{x.Z:0}")));
+            if (first != null)
+            {
+                Advance((first.To - first.From) * .6);
+                Paused = true;
+                Rig.Set(w.WX(first.PX + first.DX * 12), w.WZ(first.PZ + first.DZ * 12), -.66f, .42f, 1.6f, snap: true);
+            }
+            Hud.Refresh();
+            return;
+        }
         Advance(_poseSeconds);
         // --look=1: close on the first tree, to watch it felled
         if (_look == 1) Rig.Set(w.WX(fx), w.WZ(fz), -.66f, .5f, 2.6f, snap: true);

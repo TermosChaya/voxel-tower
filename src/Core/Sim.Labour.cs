@@ -163,10 +163,26 @@ public sealed partial class Sim
                 u.NextSearch = Time + .2;
                 return;
             }
+            // fresh work in reach: the tool already up, so the hands do not stand idle a whole blow
+            u.Beat = Math.Max(u.Beat, .62f);
         }
         u.State = UnitState.Work;
         // mourning one of their own given to the old powers, they work a quarter slower
         u.Effort += (float)(Labour.WorkPerSecond * u.T.Work * u.Pace * dt) * (Time < MournUntil ? .75f : 1);
+        // the tool comes down in blows, one every so long by the body (a heavy one slower): at each it does as much as
+        // the effort since the last affords — a stone may take two or three blows to come away, loose earth comes a few
+        // spadefuls to the blow — and between them the arm draws back to come down on the very voxel it works next
+        if (u.JobI < u.Jobs.Count) { var next = u.Jobs[u.JobI]; u.Facing = MathF.Atan2(next.z + .5f - u.Z, next.x + .5f - u.X); }
+        u.Beat += dt * u.Pace / Math.Max(.3f, Bodies.Plan(u.T, u.Look).Chop);
+        if (u.Beat < 1) { u.Effort = Math.Min(u.Effort, 60); return; }
+        u.Beat -= MathF.Floor(u.Beat);
+        // the blow lands on the voxel it was drawn at: chips and the ring of it, whether or not it comes away this time
+        if (u.JobI < u.Jobs.Count)
+        {
+            var hit = u.Jobs[u.JobI];
+            bool dig = Orders.IsRemove(hit.m);
+            Worked?.Invoke(hit.x, hit.y, hit.z, dig ? World.Get(hit.x, hit.y, hit.z) : hit.m, dig);
+        }
         int guard = 0;
         while (u.JobI < u.Jobs.Count && guard++ < 256)
         {
@@ -216,6 +232,9 @@ public sealed partial class Sim
     /// <summary>Called for every voxel a pawn digs out, for chips and dust.</summary>
     public Action<int, int, int, byte> Mined;
 
+    /// <summary>A blow of a pawn's tool lands (or a stone is set down): the voxel, what it is of, and whether it is dug or laid.</summary>
+    public Action<int, int, int, byte, bool> Worked;
+
     /// <summary>
     /// The orders within reach of where the pawn stands, of the work it came here for: digging top-down first, then
     /// laying bottom-up, and within each course the voxels nearest to it first, so two at one site work different ends.
@@ -247,7 +266,15 @@ public sealed partial class Sim
                 }
         float ux = u.X, uz = u.Z;
         float Near((int x, int y, int z, byte m) j) => (j.x + .5f - ux) * (j.x + .5f - ux) + (j.z + .5f - uz) * (j.z + .5f - uz);
-        digs.Sort((a, b) => a.y != b.y ? b.y.CompareTo(a.y) : Near(a).CompareTo(Near(b)));
+        // a tree is cut at its foot, so that it goes over whole on its stump; everything else is dug from the top down
+        int Foot((int x, int y, int z, byte m) j) => Mat.IsTrunk(World.Get(j.x, j.y, j.z)) ? 0 : 1;
+        digs.Sort((a, b) =>
+        {
+            int fa = Foot(a), fb = Foot(b);
+            if (fa != fb) return fa.CompareTo(fb);
+            if (a.y != b.y) return fa == 0 ? a.y.CompareTo(b.y) : b.y.CompareTo(a.y);
+            return Near(a).CompareTo(Near(b));
+        });
         builds.Sort((a, b) => a.y != b.y ? a.y.CompareTo(b.y) : Near(a).CompareTo(Near(b)));
         u.Jobs.AddRange(digs);
         u.Jobs.AddRange(builds);
