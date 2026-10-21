@@ -149,6 +149,9 @@ public sealed partial class Sim
 
     /// <summary>What the last blow struck first, where (world voxels), and how much flesh it cut (half-voxels); air for a blow that met nothing.</summary>
     public byte LastMat { get; private set; }
+    /// <summary>The part the last wound was cut into first, and the half-voxel row it was struck at.</summary>
+    public BodyPart LastPart { get; private set; }
+    public int LastRow { get; private set; }
     public Vec LastAt { get; private set; }
     public int LastFlesh { get; private set; }
 
@@ -230,8 +233,9 @@ public sealed partial class Sim
                 if (body.Mat(ix, iy, iz, out _) != 0) hit = true;
             }
         }
-        if (!hit) { LastCut = 0; LastFlesh = 0; LastMat = Mat.Air; return .5f; }
-        LastMat = body.Mat(ix, iy, iz, out _);
+        if (!hit) { LastCut = 0; LastFlesh = 0; LastMat = Mat.Air; LastPart = BodyPart.Body; LastRow = -1; return .5f; }
+        LastMat = body.Mat(ix, iy, iz, out int lastPart);
+        LastPart = (BodyPart)lastPart; LastRow = iy;
         float cx = ix + .5f, cy = iy + .5f, cz = iz + .5f;
         float sx, sy, sz;
         if (edged)

@@ -1416,13 +1416,61 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--wits")
     simW.Command(new[] { guard }, guard.Cell);
     RunW(1);
     var biter = simW.Spawn(Kinds.Goblin, simW.NearestStand((int)guard.X + 9, (int)guard.Z, 2));
-    var helper = simW.Spawn(Kinds.Goblin, simW.NearestStand((int)guard.X, (int)guard.Z + 120, 2));
+    // (well within the sixteen metres it sees a fight from: the fighters step about as they fight)
+    var helper = simW.Spawn(Kinds.Goblin, simW.NearestStand((int)guard.X, (int)guard.Z + 100, 2));
     float hx0 = helper.X, hz0 = helper.Z, toGuardX = guard.X - hx0, toGuardZ = guard.Z - hz0, toGuard = MathF.Sqrt(toGuardX * toGuardX + toGuardZ * toGuardZ);
     RunW(2.5);
     float came = ((helper.X - hx0) * toGuardX + (helper.Z - hz0) * toGuardZ) / toGuard;
-    Check("raiders see one of their own fighting and come to help it", biter.State == UnitState.Fight || biter.Dead ? came > 32 : false,
+    // (the first may well be knocked off its feet at the first blow, and get up only to run)
+    Check("raiders see one of their own fighting and come to help it", biter.State == UnitState.Fight || biter.Dead || biter.Routed ? came > 32 : false,
         $"{toGuard / VoxelWorld.PerMetre:0.0} m off, came {came / VoxelWorld.PerMetre:0.0} m toward the fight, {helper.State}; the first {biter.State}");
     Gone(biter); Gone(helper); Gone(guard);
+
+    // a hard blow sends a goblin reeling, no blow of its own the while; hurt past bearing, whole as it is, it breaks
+    var hitter = simW.Spawn(Kinds.Swordsman, simW.NearestStand(kxW - 300, kzW - 200, 4));
+    simW.Command(new[] { hitter }, hitter.Cell);
+    var reeler = simW.Spawn(Kinds.Goblin, simW.NearestStand(kxW - 300, kzW - 60, 2));
+    simW.Hurt(reeler, hitter, reeler.MaxHp * .3f, "test");
+    bool reeled = reeler.StaggerUntil > simW.Time && reeler.Cooldown > .25f && !reeler.Routed && !reeler.Down;
+    float painOne = reeler.Pain;
+    simW.Hurt(reeler, hitter, reeler.MaxHp * .15f, "test");
+    RunW(.1);
+    Check("a hard blow sends a goblin reeling; hurt past bearing, whole as it is, it breaks and runs", reeled && painOne > .3f && reeler.Routed && reeler.Hp > reeler.MaxHp * .25f,
+        $"reeling {reeled}, pain {painOne:0.00} after the first; after the second {reeler.Pain:0.00}, running {reeler.Routed} with {reeler.Hp:0} of {reeler.MaxHp:0} hp");
+    Gone(reeler);
+
+    // a blow that would fell an ox knocks one off its feet a while; it gets up, and runs
+    var felledW = simW.Spawn(Kinds.Goblin, simW.NearestStand(kxW - 300, kzW - 60, 2));
+    simW.Hurt(felledW, hitter, felledW.MaxHp * .4f, "test");
+    bool downW = felledW.Down;
+    RunW(3);
+    Check("a blow that would fell an ox knocks a goblin off its feet a while; it gets up and runs", downW && !felledW.Down && felledW.Routed,
+        $"down at once {downW}; three seconds on down {felledW.Down}, running {felledW.Routed}");
+    Gone(felledW);
+
+    // a blow seen coming is now and then stepped out of the way of, taken on the shield or turned; from behind, never
+    var hewer = simW.Spawn(Kinds.Orc, simW.NearestStand((int)hitter.X + 10, (int)hitter.Z, 2));
+    hewer.Guard = true; hewer.Home = hewer.Cell;
+    hewer.Hp = hewer.MaxHp = hitter.Hp = hitter.MaxHp = 100000;
+    int Seen(bool behind)
+    {
+        int n = 0;
+        for (int i = 0; i < 60; i++)
+        {
+            RunW(.05);
+            hitter.State = UnitState.Fight; hitter.Target = hewer; hitter.Cooldown = 0; hitter.Pain = 0; hitter.StaggerUntil = hitter.DazedUntil = 0;
+            float to = MathF.Atan2(hewer.Z - hitter.Z, hewer.X - hitter.X);
+            hitter.Facing = behind ? to + MathF.PI : to;
+            double at = hitter.ReactAt;
+            simW.Strike(hewer, hitter);
+            if (hitter.ReactAt != at) n++;
+        }
+        return n;
+    }
+    int seenW = Seen(false), behindW = Seen(true);
+    Check("a blow seen coming is now and then got out of the way of or turned; one from behind never", seenW >= 6 && seenW <= 50 && behindW == 0,
+        $"of 60 blows of an orc at a swordsman facing it {seenW} not taken; from behind {behindW}");
+    Gone(hewer); Gone(hitter);
 
     // a band that has lost its leader and two in three of its own breaks and runs
     var band = new Warband { Id = 900, State = BandState.Coming, Name = "Ватага Проверки", Entry = simW.NearestStand(kxW - 320, kzW + 90, 2) };
@@ -2099,6 +2147,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--traps")
     simT.Command(new[] { guardT }, guardT.Cell);
     var footGob = simT.Spawn(Kinds.Goblin, simT.NearestStand(edge - 5, wz0 + 40, 2));
     footGob.Raid = null; footGob.Guard = true; footGob.Home = footGob.Cell;
+    // just where the stones come down, not wherever in its cell the dice put it
+    footGob.X = edge - 4.5f; footGob.OffX = footGob.X - simT.Nav.Feet(footGob.Cell).x;
     float fhp0 = footGob.Hp;
     float onWall = guardT.Y - wallTop;
     RunT(3);
@@ -4047,7 +4097,9 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--possess")
     // a goblin before it: the blow finds it
     var gob = simQ.Spawn(Kinds.Goblin, simQ.NearestStand((int)sword.X - 10, (int)sword.Z, 2));
     gob.Guard = true; gob.Home = gob.Cell;
-    simQ.LookYaw = MathF.PI;
+    // looking at it, as one would: the blade goes where the eyes do, and a goblin stands a head lower than a man
+    float sdx = gob.X - sword.X, sdz = gob.Z - sword.Z, sdy = gob.Y + gob.T.BodyH * .55f - (sword.Y + sword.T.BodyH * .88f);
+    simQ.LookYaw = MathF.Atan2(sdz, sdx); simQ.LookPitch = MathF.Atan2(sdy, MathF.Sqrt(sdx * sdx + sdz * sdz));
     simQ.WishStrike = true;
     RunQ(1.5);
     simQ.WishStrike = false;

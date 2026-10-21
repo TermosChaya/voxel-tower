@@ -48,7 +48,8 @@ public sealed partial class Sim
                 u.State = UnitState.Fight; u.Target = prey;
                 u.Facing = MathF.Atan2(prey.Z - u.Z, prey.X - u.X);
                 if (u.Cooldown <= 0) { Strike(u, prey); u.Cooldown = u.T.AttackTime; }
-                if (!prey.Dead && prey.Hp < prey.MaxHp * .6f) Bind(u, prey);
+                // beaten till it hits back no more, stunned or down: bound
+                if (!prey.Dead && (prey.Hp < prey.MaxHp * .6f || prey.Pain >= Cowed || Time < prey.DazedUntil || prey.Down)) Bind(u, prey);
                 return true;
             }
             // close on the same ground: straight at it

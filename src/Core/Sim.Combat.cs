@@ -69,15 +69,17 @@ public sealed partial class Sim
     /// <summary>The nearest living unit of a team within a distance (voxels), or null.</summary>
     public Unit Nearest(Unit u, Team team, float maxDist)
     {
-        Unit best = null; float bd = maxDist;
+        Unit best = null, down = null; float bd = maxDist, dd = maxDist;
         foreach (var o in Units)
         {
             // one bound and led off is in no fight, nor one lying bound, nor an envoy under a white rag
             if (o.Dead || o.Inside || o.Captor != null || o.Bound || o.Envoy || o.Team != team) continue;
             float d = Dist(u, o);
+            // one down is out of the fight: it is passed over while any of its side still stand near
+            if (o.Down) { if (d < dd) { dd = d; down = o; } continue; }
             if (d < bd) { bd = d; best = o; }
         }
-        return best;
+        return best ?? down;
     }
 
     /// <summary>Close enough to strike, with nothing solid between them: no hitting through walls.</summary>
@@ -93,15 +95,20 @@ public sealed partial class Sim
     {
         // the same two draws as ever: now how high the stroke comes, and to which side of the middle
         float up = (float)Rng.NextDouble(), side = (float)Rng.NextDouble();
-        Strike(a, b, up, side);
+        // seen coming, it may be got out of the way of, or taken on a shield or a blade
+        var k = a.StrokeFor == b ? a.NextStroke : Choose(a, b);
+        var g = Defend(a, b, k);
+        if (g is Guarded.StepBack or Guarded.Dodge or Guarded.Duck) { Missed(a, b, k, g); return; }
+        if (g is Guarded.Block or Guarded.Parry) { Turned(a, b, k, g); return; }
+        Strike(a, b, up, side, k);
     }
 
     /// <summary>A blow whose height and side (0…1) are given rather than drawn: the bench aims one at the neck so.</summary>
-    internal void Strike(Unit a, Unit b, float up, float side)
+    internal void Strike(Unit a, Unit b, float up, float side, StrokeKind? stroke = null)
     {
         a.Swing = 1;
         var (cut, depth, reach) = WeaponOf(a.T);
-        var k = a.StrokeFor == b ? a.NextStroke : Choose(a, b);
+        var k = stroke ?? (a.StrokeFor == b ? a.NextStroke : Choose(a, b));
         LayStroke(a, b, k, up, side, out var at, out var dir, out var root, out var edge);
         (cut, depth, reach) = Strokes.CutOf(k, cut, depth, reach);
         b.HurtBy = a;
@@ -109,6 +116,9 @@ public sealed partial class Sim
         // the wound is cut by the whole blade coming on along its way, from a little short of where it met the body
         var from = root - dir * 4;
         float share = engine ? EngineShare(false) : Wound(b, cut, depth, reach, from.X, from.Y, from.Z, dir.X, dir.Y, dir.Z, edge.X, edge.Y, edge.Z);
+        // where it struck, for the pain of it: a blow to the head hurts most and dazes
+        b.HitPart = LastPart;
+        b.HitHead = !engine && LastMat != Mat.Air && LastPart == BodyPart.Body && LastRow >= Bodies.Plan(b.T, b.Look).HeadY0;
         a.Glanced = !engine && LastMat != Mat.Air && (LastCut == 0 || LastFlesh == 0 && share < .3f);
         if (k == StrokeKind.Bash) Staggered(a, b);
         Smote?.Invoke(new Smiting(a, b, engine || LastMat == Mat.Air ? at : LastAt, dir, engine ? Mat.Board : LastMat, engine ? 0 : LastFlesh, k, a.Glanced));
@@ -137,6 +147,7 @@ public sealed partial class Sim
         b.Hp -= dmg;
         b.LastHurt = Time;
         if (by != null) b.HurtBy = by;
+        if (b.Hp > 0) Pained(b, by, dmg); else b.HitHead = false;
         // a wounded boar turns on whoever wounded it
         if (b.Team == Team.Wild && b.T.Damage > 0 && by != null && !by.Dead) b.Target = by;
         if (b.Hp <= 0) Kill(b, by, cause);
@@ -283,7 +294,8 @@ public sealed partial class Sim
         {
             u.Path = null;
             u.Facing = MathF.Atan2(foe.Z - u.Z, foe.X - u.X);
-            if (u.Cooldown <= 0) { Strike(u, foe); u.Cooldown = u.T.AttackTime * (.9f + (float)Rng.NextDouble() * .2f); }
+            if (u.Cooldown <= 0) { Strike(u, foe); u.Cooldown = u.T.AttackTime * (.9f + (float)Rng.NextDouble() * .2f) / PainPace(u); }
+            Footwork(u, foe, dt);
             return true;
         }
         if (u.Path == null || Time >= u.NextSearch)

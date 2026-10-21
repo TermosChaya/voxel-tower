@@ -115,6 +115,8 @@ public sealed partial class Sim
         else if (u.T == Kinds.Necromancer && !u.Routed) NecromancerTick(u, dt);
         // hurt to a quarter of itself, a raider has had enough (a leader leads to the end, a guard keeps its camp)
         if (!u.Routed && !u.Leader && !u.Guard && u.Hp < u.MaxHp * .25f) u.Routed = true;
+        // or hurt past bearing: it breaks (a leader holds on longer)
+        if (!u.Routed && !u.Guard && u.Pain >= (u.Leader ? LeaderBreak : BreakPain)) u.Routed = true;
         // the horde's envoy comes to bargain, and fights nobody
         if (u.Envoy && EnvoyTick(u, dt)) return;
         // the horde's engines go about their own work, and never run
@@ -127,8 +129,10 @@ public sealed partial class Sim
         {
             u.State = UnitState.Fight;
             u.Target = foe;
+            u.FoughtAt = Time; u.FoughtWith = foe;
             u.Facing = MathF.Atan2(foe.Z - u.Z, foe.X - u.X);
-            if (u.Cooldown <= 0) { Strike(u, foe); u.Cooldown = u.T.AttackTime * (.9f + (float)Rng.NextDouble() * .2f); }
+            if (u.Cooldown <= 0) { Strike(u, foe); u.Cooldown = u.T.AttackTime * (.9f + (float)Rng.NextDouble() * .2f) / PainPace(u); }
+            Footwork(u, foe, dt);
             return;
         }
         u.Target = null;
@@ -197,7 +201,12 @@ public sealed partial class Sim
         float best = HelpRange;
         foreach (var o in Units)
         {
-            if (o == u || o.Dead || o.Team != Team.Horde || o.State != UnitState.Fight || o.Target is not { Dead: false, Team: Team.Player } t) continue;
+            if (o == u || o.Dead || o.Team != Team.Horde) continue;
+            // fighting now, or a moment ago (a fight is all steps in and out of reach), or set on hand to hand and
+            // knocked off its feet before it could strike back
+            Unit t = Time - o.FoughtAt <= 3 && o.FoughtWith is { Dead: false, Team: Team.Player } f ? f
+                : Time - o.LastHurt <= 3 && o.HurtBy is { Dead: false, Team: Team.Player } h && Dist(h, o) < 4 * VoxelWorld.PerMetre ? h : null;
+            if (t == null) continue;
             float d = Dist(u, o);
             if (d < best) { best = d; foe = t; }
         }

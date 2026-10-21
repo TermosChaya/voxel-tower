@@ -202,6 +202,9 @@ public sealed partial class Sim
             if (u.Airborne != null) continue;
             u.Cooldown -= dt;
             Settle(u);
+            TickPain(u, dt);
+            // off its feet: it lies there
+            if (u.Down) { DownTick(u, dt); continue; }
             if (u == Possessed) PossessedTick(u, dt);
             else if (u.Team == Team.Player) PawnTick(u, dt);
             else if (u.Team == Team.Horde) RaiderTick(u, dt);
@@ -276,7 +279,7 @@ public sealed partial class Sim
         bool climbing = Nav.I(next) == Nav.I(u.Cell) && Nav.K(next) == Nav.K(u.Cell) && next != u.Cell;
         if (climbing) { tx = u.X; tz = u.Z; ty = (Nav.Y(next) << NavGrid.Shift) + (Nav.Ground(Nav.I(next), Nav.Y(next) - 1, Nav.K(next)) ? Nav.Floor[next] - (Nav.Y(next) << NavGrid.Shift) : 0); }
         else { tx += u.OffX; tz += u.OffZ; }
-        float speed = u.T.Move.Speed * NavGrid.CS * pace * u.Pace * CartPace(u) * TroopPace(u) * (u.Hp < u.MaxHp * .4f ? .7f : 1) * (Nav.Water[u.Cell] > 0 ? .6f : 1)
+        float speed = u.T.Move.Speed * NavGrid.CS * pace * u.Pace * CartPace(u) * TroopPace(u) * (u.Hp < u.MaxHp * .4f ? .7f : 1) * (Nav.Water[u.Cell] > 0 ? .6f : 1) * (u.Routed || u.State == UnitState.Flee ? .85f + .15f * PainPace(u) : .55f + .45f * PainPace(u))
             * (Nav.Spikes[u.Cell] > 0 ? .4f : 1) * Gait(u) * (Mires.Count > 0 && InMire(u.X, u.Z) ? .35f : 1)
             * (DeadFogs.Count > 0 && u.Team == Team.Horde && !Deathless(u) && InDeadFog(u.X, u.Z) ? .5f : 1);
         float step = speed * dt * (climbing ? .5f : 1);

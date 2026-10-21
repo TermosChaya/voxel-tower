@@ -101,10 +101,11 @@ public sealed partial class Sim
     {
         Bands.RemoveAll(b => b.State == BandState.Coming);
         var list = new List<UnitType>();
-        for (int i = 0; i < 2 + n; i++) list.Add(Kinds.Goblin);
-        for (int i = 0; i < n / 2 + 1; i++) list.Add(Kinds.Orc);
+        // the horde feels its wounds, breaks and goes down: it comes the more of it for that
+        for (int i = 0; i < (int)((2 + n) * 1.8f); i++) list.Add(Kinds.Goblin);
+        for (int i = 0; i < (int)((n / 2 + 1) * 1.8f); i++) list.Add(Kinds.Orc);
         for (int i = 0; i < (n + 1) / 3; i++) list.Add(Kinds.Miner);
-        for (int i = 0; i < 1 + n / 3; i++) list.Add(Kinds.Sapper);
+        for (int i = 0; i < (int)((1 + n / 3) * 1.5f); i++) list.Add(Kinds.Sapper);
         for (int i = 0; i < (n >= 5 ? (n - 3) / 3 : 0); i++) list.Add(Kinds.Troll);
         // thieves from the second wave, one more every third
         for (int i = 0; i < (n >= 2 ? 1 + (n - 2) / 3 : 0); i++) list.Add(Kinds.Thief);

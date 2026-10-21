@@ -386,6 +386,28 @@ public sealed class Unit
     public float Effort;
     /// <summary>How far through the blow it is working at, 0 to 1: the tool comes down at 1 (the view draws the arm by it).</summary>
     public float Beat;
+    /// <summary>
+    /// What its wounds do to it (Sim.Pain.cs): the pain of them (0 none, 1 hardly to be borne); reeling from a hard blow
+    /// till then, knocked back so fast; dazed by a blow to the head till then; the hand to the wound — the part (9 the
+    /// head) and till when; off its feet since and till when (infinite: till the pain eases).
+    /// </summary>
+    public float Pain, StagX, StagZ;
+    public double StaggerUntil, DazedUntil, ClutchUntil, DownSince, DownUntil;
+    public byte Clutch;
+    public bool Down;
+    /// <summary>Where the last blow struck it (for the pain of it): the part, and whether the head.</summary>
+    public BodyPart HitPart;
+    public bool HitHead;
+    /// <summary>How it got out of the way of the last blow at it, or took it on its shield or blade, and when; to which side it leaned.</summary>
+    public Guarded React;
+    public double ReactAt = -99;
+    public sbyte ReactSide;
+    /// <summary>When it last fought hand to hand and with whom (its own come to help a fight that steps in and out of reach).</summary>
+    public double FoughtAt = -99;
+    public Unit FoughtWith;
+    /// <summary>Circling the one it fights: which way round (−1, 0, 1), till it changes its mind.</summary>
+    public float Circle;
+    public double CircleNext;
     public double NextSearch;
     /// <summary>Why it is not working, for the panel: "нет камня", "не дойти".</summary>
     public string Why = "";

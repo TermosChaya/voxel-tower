@@ -598,9 +598,11 @@ public sealed partial class Sim
             if (!Alarm) u.Refuge = -1;
             return false;
         }
-        if (InReach(u, foe) && Armed(u))
+        // (one hurt past bearing hits back no more: it is no fighter)
+        if (InReach(u, foe) && Armed(u) && u.Pain < Cowed)
         {
-            // caught: hit back
+            // caught: hit back — once it has turned round from running to face it
+            if (u.State == UnitState.Flee) u.Cooldown = Math.Max(u.Cooldown, .5f);
             u.State = UnitState.Fight;
             u.Facing = MathF.Atan2(foe.Z - u.Z, foe.X - u.X);
             if (u.Cooldown <= 0) { Strike(u, foe); u.Cooldown = u.T.AttackTime; }

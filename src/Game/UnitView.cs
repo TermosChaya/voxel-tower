@@ -37,6 +37,8 @@ public partial class UnitView : Node3D
     {
         public float Face, Move, LastX, LastZ, Speed, Run, Dist, Phase;
         public float Breath, Exert, HeadYaw, HeadPitch, IdleYaw, IdlePitch;
+        /// <summary>How far down it is (0 on its feet, 1 lying), eased so it goes down and gets up.</summary>
+        public float Down;
         public double GazeNext;
         public Unit GazeAt;
         public bool Seen;
@@ -598,6 +600,14 @@ public partial class UnitView : Node3D
             }
         }
 
+        // off its feet with its wounds: down it goes, and up again by and by, as the dead go down
+        if (f.Jointed && !u.Dead)
+        {
+            // (going down by the time since it fell, so that one down lies down in a game stopped or just loaded too)
+            if (u.Down) look.Down = Math.Max(look.Down, 1 - MathF.Exp(-(float)(_m.Sim.Time - u.DownSince) * 3.5f));
+            else look.Down -= look.Down * Math.Min(1, _dt * 1.4f);
+            if (look.Down > .01f) fall = Math.Max(fall, Smooth(look.Down));
+        }
         var at = new Vector3(_w.WX(u.X), _w.WY(u.Y + bob - sink), _w.WZ(u.Z));
         // a leader stands a little taller than its kind
         var root = new Transform3D(new Basis(Vector3.Up, MathF.PI / 2 - look.Face).Scaled(Vector3.One * VoxelWorld.Vox * (u.Leader ? 1.15f : 1)), at);
@@ -639,6 +649,9 @@ public partial class UnitView : Node3D
         if (float.IsNaN(elbowL)) elbowL = f.Shield ? -.9f : -.2f;
         elbowR *= 1 - turns.Fight; if (!f.Shield) elbowL *= 1 - turns.Fight * .7f;
         if (u.Dead || fall > 0) { kneeR = kneeL = .25f * fall; elbowR = elbowL = -.3f * fall; }
+        // what the wounds and the blows do to the pose: getting out of the way, reeling, hurt, dazed
+        Reacting(u, f, look, ref turns, ref kneeR, ref kneeL, ref elbowR, ref elbowL, ref legR, ref legL, out float leanAdd, out float rollAdd, out var shove, out float headAdd);
+        if (shove != Vector3.Zero) hips *= new Transform3D(Basis.Identity, shove);
         // the breath: slow at rest, quick and deep after a run or in a fight, and it takes a while to settle
         float exert = u.Dead ? 0 : look.Run > .3f ? 1 : u.State == UnitState.Fight ? .8f : u.State is UnitState.Work or UnitState.Carve or UnitState.Siege ? .45f : look.Move > .2f ? .25f : 0;
         look.Exert += (exert - look.Exert) * Math.Min(1, _dt * (exert > look.Exert ? 1.2f : .12f));
@@ -648,7 +661,8 @@ public partial class UnitView : Node3D
         Gaze(u, f, look);
         var waist = f.Pivot[(int)Bone.Torso];
         var legs = hips * RotAt(waist, Vector3.Up, hipYaw);
-        var body = legs * TurnAt(f, Part.Body, turns.Body) * RotAt(waist, Vector3.Up, chestYaw + look.HeadYaw * .25f);
+        var body = legs * TurnAt(f, Part.Body, turns.Body) * RotAt(waist, Vector3.Right, leanAdd) * RotAt(waist, Vector3.Back, rollAdd)
+            * RotAt(waist, Vector3.Up, chestYaw + look.HeadYaw * .25f);
         look.Body = body;
         // the chest swells with the breath and the shoulders and the head rise with it
         var chest = body * new Transform3D(Basis.Identity, waist) * new Transform3D(Basis.FromScale(new Vector3(1 + .018f * inhale, 1 + .008f * inhale, 1 + .03f * inhale)), Vector3.Zero)
@@ -657,7 +671,7 @@ public partial class UnitView : Node3D
         _xf[(int)Bone.Torso] = chest;
         // the head: turned and tilted to what it looks at, holding the eyes level against the trunk's lean
         var neck = f.Pivot[(int)Bone.Head];
-        float tilt = look.HeadPitch - (turns.Lean + lean) * .5f;
+        float tilt = look.HeadPitch - (turns.Lean + lean + leanAdd) * .5f + headAdd;
         _xf[(int)Bone.Head] = top * new Transform3D(new Basis(Vector3.Up, look.HeadYaw * .75f) * new Basis(Vector3.Right, tilt), neck - new Basis(Vector3.Up, look.HeadYaw * .75f) * new Basis(Vector3.Right, tilt) * neck);
         var upperR = top * TurnAt(f, Part.Main, turns.Main);
         var upperL = top * TurnAt(f, Part.Off, turns.Off);
@@ -745,6 +759,72 @@ public partial class UnitView : Node3D
             }
             // both hands on the stone
             off = main;
+        }
+    }
+
+    /// <summary>
+    /// The pose over what it is doing, from what the fight does to it: out of the way of a blow (a step back, a lean
+    /// aside, ducking under it, the shield up into it, its own blade up across it); reeling back from a hard one; the
+    /// free hand to the wound and the hurt leg kept stiff; bent with the pain; swaying, dazed. All of it eased in and out.
+    /// </summary>
+    void Reacting(Unit u, Figure f, Look look, ref Turns turns, ref float kneeR, ref float kneeL, ref float elbowR, ref float elbowL,
+        ref float legR, ref float legL, out float lean, out float roll, out Vector3 shift, out float head)
+    {
+        lean = 0; roll = 0; shift = Vector3.Zero; head = 0;
+        if (u.Dead || look.Down > .5f) return;
+        double now = _m.Sim.Time;
+        // getting out of the way: quick in, held while the blade goes by, eased out
+        float t = (float)(now - u.ReactAt), w = t < 0 ? 0 : t < .07f ? t / .07f : t < .3f ? 1 : Math.Max(0, 1 - (t - .3f) / .22f);
+        w = Smooth(w);
+        if (w > 0)
+            switch (u.React)
+            {
+                case Guarded.StepBack:
+                    lean -= .28f * w; shift += new Vector3(0, 0, -1.6f * w); legR += .35f * w; kneeR += .3f * w; kneeL += .15f * w; head -= .15f * w;
+                    break;
+                case Guarded.Dodge:
+                    roll += .38f * w * u.ReactSide; shift += new Vector3(1.3f * w * u.ReactSide, -.3f * w, 0); kneeR += .25f * w; kneeL += .25f * w; lean -= .05f * w;
+                    break;
+                case Guarded.Duck:
+                    kneeR += 1.05f * w; kneeL += 1.05f * w; legR -= .55f * w; legL -= .55f * w; lean += .5f * w; shift += new Vector3(0, -f.Thigh * .42f * w, 0); head += .2f * w;
+                    break;
+                case Guarded.Block:
+                    turns.Off = turns.Off.Slerp(new Quaternion(Vector3.Right, -1.65f), w); elbowL = Mathf.Lerp(elbowL, -1.3f, w); lean += .1f * w; kneeR += .15f * w; kneeL += .2f * w;
+                    break;
+                case Guarded.Parry:
+                    turns.Main = turns.Main.Slerp(new Quaternion(Vector3.Right, -1.95f) * new Quaternion(Vector3.Up, .5f), w); elbowR = Mathf.Lerp(elbowR, -.45f, w); lean -= .06f * w;
+                    break;
+            }
+        // reeling back from a hard blow: the trunk thrown back, the head snapped, the arms flung, a foot back to catch it
+        float reel = (float)Math.Clamp((u.StaggerUntil - now) / .55, 0, 1);
+        if (reel > 0)
+        {
+            float k = Smooth(reel);
+            lean -= .32f * k; head -= .35f * k;
+            turns.Main = turns.Main.Slerp(new Quaternion(Vector3.Right, .35f) * new Quaternion(Vector3.Back, -.35f), k * .6f);
+            turns.Off = turns.Off.Slerp(new Quaternion(Vector3.Right, .3f) * new Quaternion(Vector3.Back, .35f), k * .6f);
+            legL += .3f * k; kneeL += .3f * k; kneeR += .15f * k;
+        }
+        // hurt: bent with it, the free hand to the wound (unless the fight wants it), the hurt leg kept stiff
+        float pain = Math.Min(1, u.Pain);
+        lean += .16f * pain; head += .22f * pain;
+        float clutch = (float)Math.Clamp((u.ClutchUntil - now) / 1.2, 0, 1) * (1 - turns.Fight * .8f);
+        if (clutch > 0 && !f.Shield)
+        {
+            var (to, bend) = u.Clutch switch
+            {
+                9 => (-2.55f, -1.95f), (byte)BodyPart.Main => (-.75f, -1.45f), (byte)BodyPart.LegR or (byte)BodyPart.LegL => (.15f, -.25f), _ => (-.95f, -1.75f),
+            };
+            turns.Off = turns.Off.Slerp(new Quaternion(Vector3.Right, to), Smooth(clutch));
+            elbowL = Mathf.Lerp(elbowL, bend, Smooth(clutch));
+        }
+        if (u.Clutch is (byte)BodyPart.LegR && now < u.ClutchUntil + 20) kneeR *= .35f;
+        if (u.Clutch is (byte)BodyPart.LegL && now < u.ClutchUntil + 20) kneeL *= .35f;
+        // dazed: the head lolling, the body swaying on its feet
+        if (now < u.DazedUntil)
+        {
+            float d = (float)Math.Min(1, (u.DazedUntil - now) / 1.5), tt = (float)_t * 2.3f + u.Id;
+            roll += .12f * d * MathF.Sin(tt); head += .2f * d * MathF.Sin(tt * 1.7f); lean += .06f * d * MathF.Sin(tt * .8f);
         }
     }
 

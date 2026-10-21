@@ -289,13 +289,63 @@ public sealed partial class Sim
     /// </summary>
     void Land(Unit u)
     {
-        var t = _handFoe;
         _handFoe = null;
-        if (t.Dead || t.Inside || t.Bound || Dist(u, t) > ReachOf(u) + t.T.BodyR + 4) return;
         double swung = u.StrokeTime;
         var k = u.Stroke;
-        Strike(u, t);
+        // only what the blade itself comes to is struck: swept along the stroke as it is drawn before the eyes, the
+        // first body any of its striking part goes into — or none, and it cut the air
+        var t = Touched(u, k, out float up);
+        if (t != null)
+        {
+            // seen coming, it may yet be stepped out of the way of, or taken on a shield
+            var g = Defend(u, t, k);
+            if (g is Guarded.StepBack or Guarded.Dodge or Guarded.Duck) Missed(u, t, k, g);
+            else if (g is Guarded.Block or Guarded.Parry) Turned(u, t, k, g);
+            else Strike(u, t, Math.Clamp(up, .05f, .98f), .5f);
+        }
         u.Stroke = k; u.StrokeTime = swung;
+    }
+
+    /// <summary>
+    /// The blade of one gone into swept along its stroke about the moment it meets — from a fifth of the stroke before to
+    /// a fifth after, the striking part from the hand to its end — and the first raider or beast any of it goes into
+    /// (as they stand), with how high on that one it struck (0 its feet, 1 its crown); null when it cut only air.
+    /// </summary>
+    Unit Touched(Unit u, StrokeKind k, out float up)
+    {
+        up = .5f;
+        var g = Strokes.GripOf(Bodies.Plan(u.T, u.Look), u.T);
+        float c = Strokes.Contact(k), aim = Math.Clamp(-LookPitch * .6f, -.5f, .6f);
+        float lunge = Strokes.Straight(k) ? 0 : Math.Min(Strokes.MaxStep(u, g), Strokes.StepOf(k) * u.T.BodyH / 15) * .5f;
+        var near = Units.FindAll(t => !t.Dead && !t.Inside && !t.Bound && t.Team != Team.Player && t != u && Dist(u, t) <= ReachOf(u) + t.T.BodyR + 6);
+        if (near.Count == 0) return null;
+        for (float s = c - .22f; s <= c + .22f; s += .04f)
+        {
+            var pose = Strokes.Pose(g, u.T, k, Math.Clamp(s, 0, 1), aim, 0, lunge);
+            for (float along = .2f; along <= 1.001f; along += .2f)
+            {
+                var w = Strokes.ToWorld(u, Strokes.Striking(g, k, pose, along));
+                foreach (var t in near)
+                {
+                    var (bx, by, bz) = ToBody(t, w.X, w.Y, w.Z);
+                    int ix = (int)MathF.Floor(bx), iy = (int)MathF.Floor(by), iz = (int)MathF.Floor(bz);
+                    if (!InBody(t, ix, iy, iz)) continue;
+                    up = (w.Y - t.Y) / Math.Max(1, t.T.BodyH);
+                    return t;
+                }
+            }
+        }
+        return null;
+    }
+
+    /// <summary>Whether a half-voxel of a body's own frame is of it, as its wounds have left it.</summary>
+    static bool InBody(Unit t, int x, int y, int z)
+    {
+        if (t.Wounds != null) return t.Wounds.Mat(x, y, z, out _) != 0;
+        var plan = Bodies.Plan(t.T, t.Look);
+        for (int p = 0; p < BodyPlan.Parts; p++)
+            if (plan.Grid[p] is { } g && g.In(x, y, z) && g.M[g.Index(x, y, z)] != 0) return true;
+        return false;
     }
 
     /// <summary>
