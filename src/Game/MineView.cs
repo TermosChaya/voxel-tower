@@ -55,6 +55,7 @@ public partial class MineView : Node3D
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("MineView");
         _t += delta;
         float v = VoxelWorld.Vox;
         foreach (var g in _glows)

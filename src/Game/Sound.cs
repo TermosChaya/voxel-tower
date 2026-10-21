@@ -219,6 +219,7 @@ public partial class Sound : Node
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("Sound");
         if (_m?.Sim == null) return;
         _t += delta;
         var sim = _m.Sim;

@@ -177,6 +177,8 @@ public partial class Main : Node3D
             else if (a == "--tutorial-check") { _tutCheck = true; _tutorialAt = 0; }
             else if (a == "--menu" || a.StartsWith("--menu=")) _menu = a.Length > 7 ? a[7..] : "";
             else if (a.StartsWith("--pose=")) _pose = a["--pose=".Length..];
+            else if (a.StartsWith("--quality=") && int.TryParse(a["--quality=".Length..], out int qa)) _quality = qa;
+            else if (a.StartsWith("--perf=") && double.TryParse(a["--perf=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double pf)) _perf = pf;
             else if (a.StartsWith("--at=") && double.TryParse(a["--at=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double at)) _poseSeconds = at;
             else if (a.StartsWith("--ui-scale=") && float.TryParse(a["--ui-scale=".Length..], System.Globalization.CultureInfo.InvariantCulture, out float us)) _uiScale = us;
             else if (a == "--lines") _lines = true;
@@ -185,6 +187,7 @@ public partial class Main : Node3D
         // scripted runs draw the interface at its usual size, unless told otherwise, and leave the player's settings be
         if (_selfTest || _demo || _shot != null || _tutCheck || _uiScale > 0) Settings.Scripted(_uiScale);
         else Settings.Load();
+        if (_quality >= 0) Settings.ScriptQuality(_quality);
         // the self-test and the screenshots play out of the player's sight (--show keeps the window up)
         if ((_selfTest || _shot != null || _trailer >= 0 || _tutCheck) && !OS.GetCmdlineUserArgs().Contains("--show")) Backstage.Withdraw(this);
         Settings.Apply(GetTree().Root);
@@ -294,6 +297,10 @@ public partial class Main : Node3D
         Progress = new WorkProgress();
         AddChild(Progress);
         Progress.Init(this);
+        Graphics.Apply(this);
+        var meter = new CanvasLayer { Layer = 50 };
+        AddChild(meter);
+        meter.AddChild(new FrameMeter());
         if (_soundsTo != null) { Sound.SaveAll(_soundsTo); GD.Print($"[voxel-tower] {Sound.Clips} sounds written to {_soundsTo}"); GetTree().Quit(); }
         // where the warbands will go is shown in play; scripted runs keep the horde's ways to the waves
         Sim.WantTrails = !_selfTest;
@@ -405,11 +412,71 @@ public partial class Main : Node3D
         else if (_startTitle) Hud.ShowTitle();
         if (_selfTest) SelfTest();
         if (_tutCheck) TutorialCheck();
+        if (_perf > 0) Perf(_perf);
         // a hidden or minimised window never draws a frame: don't let scripted runs hang
         if (_shot != null || _selfTest) GetTree().CreateTimer(120).Timeout += () => { GD.PrintErr("[voxel-tower] gave up waiting for a frame"); GetTree().Quit(2); };
     }
 
     bool _startTutorial, _startTitle;
+    int _quality = -1;
+    double _perf;
+
+    /// <summary>
+    /// How fast the picture is drawn (--perf=seconds; --quality=0…3 for the picture, --show to keep the window up): after
+    /// three seconds settling, the frames over so many seconds — how many a second on the whole, the slowest one, the
+    /// calls to draw and the triangles of the last — written out, and the game left.
+    /// </summary>
+    async void Perf(double seconds)
+    {
+        // not held to the screen's refresh: as fast as it can be drawn
+        DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
+        Engine.MaxFps = 0;
+        for (int i = 0; i < 180; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        ulong t0 = Time.GetTicksUsec(), last = t0;
+        int frames = 0;
+        double worst = 0, process = 0;
+        _simTicks = 0;
+        Prof.On = true; Prof.Reset();
+        var vpRid = GetViewport().GetViewportRid();
+        RenderingServer.ViewportSetMeasureRenderTime(vpRid, true);
+        double gpu = 0, cpu = 0;
+        while ((Time.GetTicksUsec() - t0) / 1e6 < seconds)
+        {
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            ulong now = Time.GetTicksUsec();
+            worst = Math.Max(worst, (now - last) / 1e3);
+            last = now;
+            frames++;
+            process += Performance.GetMonitor(Performance.Monitor.TimeProcess);
+            gpu += RenderingServer.ViewportGetMeasuredRenderTimeGpu(vpRid);
+            cpu += RenderingServer.ViewportGetMeasuredRenderTimeCpu(vpRid) + RenderingServer.GetFrameSetupTimeCpu();
+        }
+        double simMs = _simTicks * 1000.0 / Stopwatch.Frequency / Math.Max(1, frames), procMs = process * 1000 / Math.Max(1, frames);
+        double took = (Time.GetTicksUsec() - t0) / 1e6;
+        var draws = Performance.GetMonitor(Performance.Monitor.RenderTotalDrawCallsInFrame);
+        var tris = Performance.GetMonitor(Performance.Monitor.RenderTotalPrimitivesInFrame);
+        var objects = Performance.GetMonitor(Performance.Monitor.RenderTotalObjectsInFrame);
+        GD.Print($"[perf] picture {Settings.Qualities[Settings.Quality]}: {frames / took:0.0} frames a second over {took:0.0} s, the slowest {worst:0.0} ms; a frame's process {procMs:0.0} ms, of it the simulation {simMs:0.0} ms; " +
+            $"{draws:0} draw calls, {objects:0} objects, {tris / 1e6:0.00} M triangles; {Sim.Units.Count} units; {RenderingServer.GetVideoAdapterName()}");
+        // what is drawn, by who made it
+        var kinds = new Dictionary<string, int>();
+        void Count(Node n)
+        {
+            if (n is GeometryInstance3D g && g.IsVisibleInTree())
+            {
+                string by = (n.GetParent()?.GetType().Name ?? "?") + (g.CastShadow != GeometryInstance3D.ShadowCastingSetting.Off ? "+shadow" : "");
+                kinds[by] = kinds.GetValueOrDefault(by) + 1;
+            }
+            foreach (var c in n.GetChildren()) Count(c);
+        }
+        Count(this);
+        var told = new List<string>();
+        foreach (var (k, v) in kinds) told.Add($"{k} {v}");
+        told.Sort((a, b) => int.Parse(b[(b.LastIndexOf(' ') + 1)..]).CompareTo(int.Parse(a[(a.LastIndexOf(' ') + 1)..])));
+        GD.Print($"[perf] drawn: {string.Join(", ", told.GetRange(0, Math.Min(12, told.Count)))}");
+        GD.Print($"[perf] ms a frame: drawing {cpu / Math.Max(1, frames):0.0} on the processor, {gpu / Math.Max(1, frames):0.0} on the graphics card; the views: {Prof.Heaviest(frames, 8)}");
+        GetTree().Quit();
+    }
 
     /// <summary>The tips of the start, into the chronicle: a game of one's own begins with them.</summary>
     public void Welcome()
@@ -446,6 +513,8 @@ public partial class Main : Node3D
     }
 
     double _slowest;
+    // the time the simulation took, for --perf
+    long _simTicks;
 
     public override void _Process(double delta)
     {
@@ -456,12 +525,14 @@ public partial class Main : Node3D
         if (!Paused && !_selfTest)
         {
             double dt = Math.Min(delta, .1) * Speed * Slow * Pace;
+            long t0 = Stopwatch.GetTimestamp();
             while (dt > 1e-6)
             {
                 float step = (float)Math.Min(dt, .05);
                 Sim.Step(step);
                 dt -= step;
             }
+            _simTicks += Stopwatch.GetTimestamp() - t0;
         }
         // a wave beaten back is written down by itself
         if (_shot == null && !_selfTest && !_demo)
@@ -470,8 +541,8 @@ public partial class Main : Node3D
             _waveWasActive = Sim.Waves.Active;
         }
         Command.Prune();
-        View.RemeshDirty();
-        View.UpdateFlow(Sim);
+        using (Prof.Time("Remesh")) View.RemeshDirty();
+        using (Prof.Time("Flow")) View.UpdateFlow(Sim);
         if (Sim.Over && !_finale)
         {
             _finale = true;
@@ -1119,6 +1190,16 @@ public partial class Main : Node3D
         KeyPress(Key.Key0, ctrl: true);
         Check("Ctrl+= draws the interface larger, Ctrl+0 as it was", Math.Abs(larger - 1.1f) < .01f && Math.Abs(GetTree().Root.ContentScaleFactor - 1) < .01f,
             $"{larger:0.00} → {GetTree().Root.ContentScaleFactor:0.00}");
+
+        // the picture lowered for a weak machine and put back: no shadows, fewer pixels, no smoothing past FXAA, no blades
+        Settings.ScriptQuality(0);
+        Graphics.Apply(this);
+        var vpG = GetViewport();
+        bool lowered = !Atmos.Sun.ShadowEnabled && vpG.Scaling3DScale < .7f && vpG.Msaa3D == Viewport.Msaa.Disabled && vpG.ScreenSpaceAA == Viewport.ScreenSpaceAAEnum.Fxaa && !Atmos.Env.GlowEnabled;
+        Settings.ScriptQuality(2);
+        Graphics.Apply(this);
+        bool restored = Atmos.Sun.ShadowEnabled && vpG.Scaling3DScale == 1 && vpG.Msaa3D == Viewport.Msaa.Msaa2X && Atmos.Env.GlowEnabled;
+        Check("the picture can be lowered for a weak machine and put back", lowered && restored, $"lowered {lowered}, back {restored}");
 
         Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 28 && Sound.Heard.Count >= 4,
             $"{Sound.Clips} sounds, {Sound.Played} played: {string.Join(", ", Sound.Heard)}");

@@ -145,6 +145,7 @@ public partial class Debris : MultiMeshInstance3D
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("Debris");
         float dt = Held?.Invoke() == true ? 0 : (float)Math.Min(delta, .05);
         Sparkle(dt);
         if (_n == 0) { if (Multimesh.VisibleInstanceCount != 0) Multimesh.VisibleInstanceCount = 0; return; }

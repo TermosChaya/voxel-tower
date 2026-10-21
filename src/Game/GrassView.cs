@@ -123,6 +123,7 @@ public partial class GrassView : Node3D
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("GrassView");
         if (_m == null) return;
         float dt = (float)delta;
         for (int p = 0; p < _tufts.Length; p++)
@@ -205,8 +206,10 @@ public partial class GrassView : Node3D
         var fp = _m.FP;
         var cine = _m.Cine;
         bool eyes = fp != null && fp.On, lens = !eyes && cine != null && cine.On, round = eyes || lens;
-        float pxPerVox = GetTree().Root.Size.Y / Math.Max(.01f, _m.Rig.Cam.Size) * VoxelWorld.Vox;
-        float grow = eyes ? 1 : lens ? cine.Grow : Mathf.SmoothStep(SwardFrom, SwardFull, pxPerVox);
+        float pxPerVox = GetTree().Root.Size.Y * Settings.Details[Settings.Detail] / Math.Max(.01f, _m.Rig.Cam.Size) * VoxelWorld.Vox;
+        // (the grass as the player set it: none of the blades, only close to, or all)
+        float lush = Settings.Grass == 1 ? 1.7f : 1, reach = Settings.Grass == 1 ? .6f : 1;
+        float grow = Settings.Grass == 0 ? 0 : eyes ? 1 : lens ? cine.Grow : Mathf.SmoothStep(SwardFrom * lush, SwardFull * lush, pxPerVox);
         _mat.SetShaderParameter("keep", round ? 1f : .6f);
         // the ground in the middle of the view, which the grass parted nearest it is counted from
         {
@@ -222,8 +225,8 @@ public partial class GrassView : Node3D
         if (round)
         {
             focus = eyes ? fp.Cam.GlobalPosition : cine.Focus;
-            near = EyeNear * VoxelWorld.Vox;
-            far = EyeFar * VoxelWorld.Vox;
+            near = EyeNear * reach * VoxelWorld.Vox;
+            far = EyeFar * reach * VoxelWorld.Vox;
         }
         else
         {
@@ -244,7 +247,8 @@ public partial class GrassView : Node3D
             float ax = tx * span, az = tz * span;
             var t = _sward[i];
             bool on;
-            if (round) on = grow > 0 && ax + span >= ex - EyeFar && ax <= ex + EyeFar && az + span >= ez - EyeFar && az <= ez + EyeFar;
+            float ef = EyeFar * reach;
+            if (round) on = grow > 0 && ax + span >= ex - ef && ax <= ex + ef && az + span >= ez - ef && az <= ez + ef;
             else if (frustum == null) on = false;
             else
             {

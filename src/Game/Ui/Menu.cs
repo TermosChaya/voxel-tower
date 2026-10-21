@@ -73,6 +73,7 @@ public partial class GameMenu : Control
             case "save": Saving(); break;
             case "load": Loading(); break;
             case "settings": Settings_(); break;
+            case "graphics": Picture_(); break;
             case "controls": Controls_(); break;
             default: Main_(); break;
         }
@@ -251,6 +252,44 @@ public partial class GameMenu : Control
         lines.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
         _page.AddChild(lines);
         _page.AddChild(new Rule(false));
+        _page.AddChild(Big("Графика", "Графика\nКачество картинки: тени, сглаживание, чёткость, трава, — для слабого или сильного компьютера.", Picture_));
         _page.AddChild(Big("Назад", "", Main_));
     }
+
+    void Picture_()
+    {
+        _onMain = false;
+        Clear();
+        PageName = "graphics";
+        _page.AddChild(Hud.CapsLabel("Графика", 10));
+        void Row(string name, string tip, Func<string> value, Action<int> step, bool whole = false)
+        {
+            // the whole picture changes every part of it: the page is laid out again to show them
+            var st = new Stepper(name, name + "\n" + tip, value, d => { step(d); Graphics.Apply(_m); if (whole) Picture_(); else Settings_Refresh(); });
+            st.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+            _page.AddChild(st);
+        }
+        Row("Качество", "Всё сразу: низкое — для слабого ноутбука (без теней и травы, мир рисуется с меньшей чёткостью), " +
+            "среднее — для встроенной видеокарты, высокое — как задумано, наивысшее — мягчайшие тени, четырёхкратное сглаживание " +
+            "и затенение в углах. Ниже можно поменять что-то одно.", () => Settings.Qualities[Settings.Quality], Settings.StepQuality, whole: true);
+        _page.AddChild(new Rule(false));
+        Row("Тени", "Тени от солнца и луны: нет, простые (с резким краем), мягкие, мягчайшие. Самое дорогое в картинке.",
+            () => Settings.Shadows switch { 0 => "нет", 1 => "простые", 2 => "мягкие", _ => "мягчайшие" }, Settings.StepShadows);
+        Row("Сглаживание", "Сглаживание лесенки по краям: нет, быстрое (FXAA, чуть размывает), двойное и четверное (MSAA).",
+            () => Settings.Smoothing switch { 0 => "нет", 1 => "FXAA", 2 => "MSAA 2×", _ => "MSAA 4×" }, Settings.StepSmoothing);
+        Row("Чёткость", "С какой долей точек экрана рисуется мир (интерфейс — всегда в полную): меньше — быстрее, а до экрана " +
+            "картинку дотягивает FSR.", () => $"{Math.Round(Settings.Details[Settings.Detail] * 100)} %", Settings.StepDetail);
+        Row("Трава", "Травинки на лугах: нет (луг остаётся цветным), только вблизи, вся.",
+            () => Settings.Grass switch { 0 => "нет", 1 => "вблизи", _ => "вся" }, Settings.StepGrass);
+        Row("Затенение в углах", "Мягкая тень в углах и щелях, у подножия стен и между вокселями (SSAO).",
+            () => Settings.Occlusion ? "да" : "нет", _ => Settings.ToggleOcclusion());
+        Row("Свечение", "Ореол вокруг огня, факелов, искр и заклинаний.", () => Settings.Glow ? "да" : "нет", _ => Settings.ToggleGlow());
+        Row("Счётчик кадров", "Сколько кадров в секунду и самый долгий из последних — мелко в левом верхнем углу.",
+            () => Settings.ShowFps ? "да" : "нет", _ => Settings.ToggleFps());
+        _page.AddChild(new Rule(false));
+        _page.AddChild(Big("Назад", "", Settings_));
+    }
+
+    /// <summary>One part of the picture changed: the whole's name may have changed with it.</summary>
+    void Settings_Refresh() => Picture_();
 }

@@ -599,6 +599,7 @@ public partial class MapRing : Control
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("Frame");
         if (_m != null) _top.Lit = _m.Rig.TopDown;
     }
 

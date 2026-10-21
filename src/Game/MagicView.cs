@@ -476,6 +476,7 @@ public partial class MagicView : Node3D
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("MagicView");
         _t += delta;
         var sim = _m.Sim;
         if (sim == null) return;

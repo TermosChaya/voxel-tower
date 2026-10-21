@@ -159,6 +159,7 @@ public partial class CameraRig : Node3D
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("CameraRig");
         float dt = (float)delta;
         float sp = 6f / _zoom * dt;
         float fx = -MathF.Sin(_yaw), fz = -MathF.Cos(_yaw), rx = MathF.Cos(_yaw), rz = -MathF.Sin(_yaw);

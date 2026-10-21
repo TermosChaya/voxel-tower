@@ -451,6 +451,13 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   Звуки рамки — `Sound.Ui(clip)` (статический `Sound.Now`): `tick` (всякий `BaseButton` через `NodeAdded`, и свои
   виджеты в их щелчке), `mark`, `nope` (`BuildTools.Refuse`), `done`. `Settings.EdgeScroll` — прокрутка у края
   (`CameraRig`, полоса 8 px, только пока указатель над окном и окно в фокусе).
+- `Graphics.cs` — `Graphics.Apply(main)` переносит `Settings.Quality/Shadows/Smoothing/Detail/Grass/Occlusion/Glow` в
+  рендер: MSAA/FXAA вьюпорта, `Scaling3DScale` (FSR ниже 100 %), карта теней 2048/4096 и мягкость фильтра, тень солнца
+  (`Atmosphere.Sun`), SSAO и свечение окружения; трава читает `Settings.Grass` в `GrassView.GrowSward`, порог
+  детализации фигур (`UnitView.Distance`) и травы — в точках с учётом `Detail`. Пресеты — `Settings.Presets`; ручная
+  смена части — «своя» (`Own`), если не совпала ни с одним. Первый запуск без раздела `graphics` — `Settings.Guess` по
+  `GetVideoAdapterName`. `FrameMeter` — счётчик кадров. `Prof` — замер времени по видам для `--perf` (каждый `_Process`
+  обёрнут `using var prof = Prof.Time("Имя")`; пока `Prof.On` ложно, это ничего не стоит).
   `OrdersView` — разметка работ, `ZoneView` — делянки, `TrailView` — пути ватаг и кольцо вождя (восемь дуг на
   уровне подножия цитадели, без теста глубины, цвет — `SideColor` по `Sim.SideSeen`), `MineView` — флаги рудников,
   `FireView` — огонь: язык пламени над каждым горящим вокселем, что смотрит в воздух (до 6000, мультимеш,

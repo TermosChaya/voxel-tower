@@ -293,6 +293,7 @@ public partial class Toasts : VBoxContainer
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("Widgets");
         _clock += delta;
         for (int i = _lines.Count - 1; i >= 0; i--)
         {

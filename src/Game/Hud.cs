@@ -409,6 +409,7 @@ public partial class Hud : CanvasLayer
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("Hud");
         if (_stores == null) return;
         _clock += delta;
         _refreshAt -= delta;

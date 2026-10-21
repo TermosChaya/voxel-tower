@@ -97,6 +97,7 @@ public partial class RecruitFace : Control
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("Muster");
         if (IsVisibleInTree()) QueueRedraw();
         MouseDefaultCursorShape = Here != null ? CursorShape.PointingHand : CursorShape.Arrow;
     }

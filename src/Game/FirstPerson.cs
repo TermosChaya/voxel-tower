@@ -189,6 +189,7 @@ void fragment() {
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("FirstPerson");
         if (_u == null) return;
         // the game's menu takes the mouse back
         if (_m.Hud.MenuOpen && Input.MouseMode == Input.MouseModeEnum.Captured) Input.MouseMode = Input.MouseModeEnum.Visible;

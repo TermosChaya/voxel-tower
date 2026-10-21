@@ -35,6 +35,7 @@ public partial class CoverView : Node3D
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("CoverView");
         if (_m?.Sim == null) return;
         var archers = new List<Unit>();
         foreach (var u in _m.Selected) if (!u.Dead && u.T.Ranged && archers.Count < 8) archers.Add(u);

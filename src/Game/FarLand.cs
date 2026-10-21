@@ -311,6 +311,7 @@ public partial class FarLand : MeshInstance3D
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("FarLand");
         // only a camera with a view to the horizon sees it: someone's eyes, not the diorama
         Visible = GetViewport().GetCamera3D() is { Projection: Camera3D.ProjectionType.Perspective };
     }

@@ -64,6 +64,7 @@ public partial class FellView : Node3D
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("FellView");
         if (_falling.Count == 0) return;
         double now = _m.Sim.Time;
         for (int i = _falling.Count - 1; i >= 0; i--)

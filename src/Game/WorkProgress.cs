@@ -76,6 +76,7 @@ public partial class WorkProgress : CanvasLayer
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("WorkProgress");
         var now = Time.GetTicksMsec() / 1000.0;
         if (now >= _next)
         {

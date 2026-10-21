@@ -30,6 +30,7 @@ public partial class ColonistBar : Control
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("Colonists");
         if (_m?.Sim == null) return;
         _pawns.Clear();
         // the risen are no household of ours

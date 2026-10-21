@@ -40,6 +40,7 @@ public partial class WorkTable : Control
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("WorkTable");
         if (_m == null || !IsVisibleInTree()) return;
         _rows.Clear();
         // priests do none of this work, nor hounds and riders: they are not in the table

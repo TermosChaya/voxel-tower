@@ -1044,6 +1044,7 @@ public partial class BuildTools : Node3D
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("BuildTools");
         _clock += delta;
         if (_holding) Steer();
         UpdateCursor();

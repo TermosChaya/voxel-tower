@@ -69,6 +69,7 @@ public partial class Spectacle : Node
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("Spectacle");
         _now += delta;
         double t = _now - _slowFrom;
         // held slow a quarter of a second, then let back to the full pace over a second

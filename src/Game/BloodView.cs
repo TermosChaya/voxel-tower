@@ -113,6 +113,7 @@ public partial class BloodView : MultiMeshInstance3D
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("BloodView");
         if (_w == null) return;
         var sim = _m.Sim;
         float dt = _m.Paused ? 0 : (float)Math.Min(delta, .05);

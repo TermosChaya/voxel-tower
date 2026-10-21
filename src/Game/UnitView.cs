@@ -228,7 +228,8 @@ public partial class UnitView : Node3D
         if (_pinned >= 0) lod = _pinned;
         else if (!ForceNear)
         {
-            float px = GetTree().Root.Size.Y / Math.Max(.01f, _m.Rig.Cam.Size) * VoxelWorld.Vox;
+            // (the pixels the world is drawn in, which is fewer than the window's at a lower detail)
+            float px = GetTree().Root.Size.Y * Settings.Details[Settings.Detail] / Math.Max(.01f, _m.Rig.Cam.Size) * VoxelWorld.Vox;
             lod = px >= (_lod == 0 ? NearPx * .9f : NearPx) ? 0 : px < (_lod == 2 ? 3.6f : 3.2f) ? 2 : 1;
         }
         if (lod == _lod) return;
@@ -285,6 +286,7 @@ public partial class UnitView : Node3D
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("UnitView");
         if (_m?.Sim == null) return;
         float dt = (float)Math.Min(delta, .1);
         _t += dt;

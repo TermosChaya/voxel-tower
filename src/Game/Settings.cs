@@ -7,7 +7,7 @@ namespace VoxelTower.Game;
 /// The player's own settings, kept between games in user://settings.cfg: how large the interface is drawn, over what
 /// the window's size already gives it (Ctrl and + or − steps it, Ctrl+0 puts it back as it was), how loud the sounds
 /// are, how hard a blast shakes the view, whether the game's time slows for a moment after a great one and whether the
-/// voxels are drawn each with a thin line round it.
+/// voxels are drawn each with a thin line round it; and how much the picture asks of the machine (see <see cref="Graphics"/>).
 /// </summary>
 public static class Settings
 {
@@ -28,6 +28,75 @@ public static class Settings
     public static bool Lines { get; private set; }
     /// <summary>What the player chose for the lines, kept apart from a run that draws them for itself (--lines).</summary>
     static bool _keptLines;
+
+    // ---------------------------------------------------------------- the picture
+
+    /// <summary>The picture as a whole: low, medium, high, the highest — or the player's own mix (<see cref="Own"/>).</summary>
+    public static int Quality { get; private set; } = 2;
+    public const int Own = 4;
+    public static readonly string[] Qualities = { "низкая", "средняя", "высокая", "наивысшая", "своя" };
+    /// <summary>Shadows: none, plain, soft, softest; the edges smoothed: not at all, cheaply (FXAA), twice, four times over (MSAA);
+    /// the share of the screen's pixels the world is drawn at; the grass: none of the blades, only close to, all of it;
+    /// the corners darkened (ambient occlusion); the glow round what burns and shines; the frames a second shown.</summary>
+    public static int Shadows { get; private set; } = 2;
+    public static int Smoothing { get; private set; } = 2;
+    public static int Detail { get; private set; } = 3;
+    public static int Grass { get; private set; } = 2;
+    public static bool Occlusion { get; private set; }
+    public static bool Glow { get; private set; } = true;
+    public static bool ShowFps { get; private set; }
+    public static readonly float[] Details = { .5f, .67f, .8f, 1f };
+
+    static readonly (int shadows, int smoothing, int detail, int grass, bool occlusion, bool glow)[] Presets =
+    {
+        (0, 1, 1, 0, false, false),
+        (1, 1, 2, 1, false, true),
+        (2, 2, 3, 2, false, true),
+        (3, 3, 3, 2, true, true),
+    };
+
+    /// <summary>A step to a lower or higher picture as a whole: every part of it set to that one's.</summary>
+    public static void StepQuality(int dir)
+    {
+        int q = Math.Clamp((Quality == Own ? 2 : Quality) + dir, 0, Presets.Length - 1);
+        SetQuality(q);
+        Save();
+    }
+
+    /// <summary>A scripted run with a picture of its own (--quality), nothing kept.</summary>
+    public static void ScriptQuality(int q) => SetQuality(Math.Clamp(q, 0, Presets.Length - 1));
+
+    static void SetQuality(int q)
+    {
+        Quality = q;
+        (Shadows, Smoothing, Detail, Grass, Occlusion, Glow) = Presets[q];
+    }
+
+    /// <summary>One part of the picture changed by itself: the whole is the player's own from now on (unless it is one of them again).</summary>
+    static void Mixed()
+    {
+        Quality = Own;
+        for (int q = 0; q < Presets.Length; q++)
+            if (Presets[q] == (Shadows, Smoothing, Detail, Grass, Occlusion, Glow)) Quality = q;
+        Save();
+    }
+
+    public static void StepShadows(int dir) { Shadows = Math.Clamp(Shadows + dir, 0, 3); Mixed(); }
+    public static void StepSmoothing(int dir) { Smoothing = Math.Clamp(Smoothing + dir, 0, 3); Mixed(); }
+    public static void StepDetail(int dir) { Detail = Math.Clamp(Detail + dir, 0, Details.Length - 1); Mixed(); }
+    public static void StepGrass(int dir) { Grass = Math.Clamp(Grass + dir, 0, 2); Mixed(); }
+    public static void ToggleOcclusion() { Occlusion = !Occlusion; Mixed(); }
+    public static void ToggleGlow() { Glow = !Glow; Mixed(); }
+    public static void ToggleFps() { ShowFps = !ShowFps; Save(); }
+
+    /// <summary>The first time the game runs: the picture by the machine — a graphics chip built into the processor gets the medium one.</summary>
+    static void Guess()
+    {
+        string card = RenderingServer.GetVideoAdapterName().ToLowerInvariant();
+        bool weak = card.Contains("intel") || card.Contains("uhd") || card.Contains("iris") || card.Contains("vega") && !card.Contains("rx")
+            || card.Contains("mali") || card.Contains("adreno") || card.Contains("llvmpipe") || card.Contains("swiftshader");
+        SetQuality(weak ? 1 : 2);
+    }
     /// <summary>A scripted run (a test, a screenshot) neither reads the player's settings nor keeps its own.</summary>
     static bool _scripted;
     public static bool IsScripted => _scripted;
@@ -38,7 +107,19 @@ public static class Settings
     public static void Load()
     {
         var cfg = new ConfigFile();
+        if (cfg.Load(File) != Error.Ok || !cfg.HasSection("graphics")) Guess();
         if (cfg.Load(File) != Error.Ok) return;
+        if (cfg.HasSection("graphics"))
+        {
+            Quality = Math.Clamp(cfg.GetValue("graphics", "quality", 2).AsInt32(), 0, Own);
+            Shadows = Math.Clamp(cfg.GetValue("graphics", "shadows", 2).AsInt32(), 0, 3);
+            Smoothing = Math.Clamp(cfg.GetValue("graphics", "smoothing", 2).AsInt32(), 0, 3);
+            Detail = Math.Clamp(cfg.GetValue("graphics", "detail", 3).AsInt32(), 0, Details.Length - 1);
+            Grass = Math.Clamp(cfg.GetValue("graphics", "grass", 2).AsInt32(), 0, 2);
+            Occlusion = cfg.GetValue("graphics", "occlusion", false).AsBool();
+            Glow = cfg.GetValue("graphics", "glow", true).AsBool();
+            ShowFps = cfg.GetValue("graphics", "fps", false).AsBool();
+        }
         UiScale = Snap(cfg.GetValue("interface", "scale", 1f).AsSingle());
         Volume = Math.Clamp(MathF.Round(cfg.GetValue("sound", "volume", .8f).AsSingle() * 10) / 10, 0, 1);
         Shake = Math.Clamp(cfg.GetValue("view", "shake", 1f).AsSingle(), 0, 1);
@@ -63,6 +144,14 @@ public static class Settings
         cfg.SetValue("view", "edge_scroll", EdgeScroll);
         cfg.SetValue("view", "lines", _keptLines);
         cfg.SetValue("tools", "grid", Grid);
+        cfg.SetValue("graphics", "quality", Quality);
+        cfg.SetValue("graphics", "shadows", Shadows);
+        cfg.SetValue("graphics", "smoothing", Smoothing);
+        cfg.SetValue("graphics", "detail", Detail);
+        cfg.SetValue("graphics", "grass", Grass);
+        cfg.SetValue("graphics", "occlusion", Occlusion);
+        cfg.SetValue("graphics", "glow", Glow);
+        cfg.SetValue("graphics", "fps", ShowFps);
         cfg.Save(File);
     }
 

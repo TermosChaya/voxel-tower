@@ -105,6 +105,7 @@ public partial class TrailView : Node3D
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("TrailView");
         if (_m?.Sim == null) return;
         var sim = _m.Sim;
         // the horde's ways are the commander's to see, not one standing in the field

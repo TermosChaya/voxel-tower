@@ -116,6 +116,7 @@ public partial class Tutorial : Node
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("Tutorial");
         if (_over || _at < 0) return;
         _clock += delta;
         var sim = _m.Sim;
@@ -779,6 +780,7 @@ public partial class Tutorial : Node
 
         public override void _Process(double delta)
         {
+            using var prof = Prof.Time("Tutorial2");
             var vp = GetViewportRect().Size;
             Size = _box.GetCombinedMinimumSize();
             _box.Size = Size;
@@ -806,6 +808,7 @@ public partial class Tutorial : Node
 
         public override void _Process(double delta)
         {
+            using var prof = Prof.Time("Tutorial3");
             _t += delta;
             QueueRedraw();
         }

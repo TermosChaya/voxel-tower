@@ -77,6 +77,7 @@ public partial class Minimap : Control
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("Minimap");
         if (_m == null) return;
         var w = _m.World;
         if (w.TakeDirtyColumns(_cols) > 0)

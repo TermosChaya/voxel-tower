@@ -48,6 +48,7 @@ public partial class ZoneView : Node3D
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("ZoneView");
         if (_sim == null) return;
         _t += delta;
         bool changed = _sim.ZonesVersion != _version;

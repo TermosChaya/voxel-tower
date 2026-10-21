@@ -50,6 +50,8 @@ public partial class Atmosphere : Node3D
     float _wet, _fog;
     /// <summary>The land beyond the valley, round it to the mountains, seen only from someone's eyes.</summary>
     public FarLand Far { get; private set; }
+    /// <summary>The sun (and by night the moon): the light that throws the shadows.</summary>
+    public DirectionalLight3D Sun => _sun;
     /// <summary>Thunder far off after the sheet lightning of a night of rain, as loud as it is (0 to 1): the sounds hear of it.</summary>
     public event Action<float> Thunder;
     // the sky's own clock and the clouds' drift, wound on by the wind; both stand still in a calm run, so that a screenshot
@@ -354,6 +356,7 @@ public partial class Atmosphere : Node3D
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("Atmosphere");
         _t += delta;
         if (_embers != null && Follow != null) { var t0 = Follow.Target; _embers.Position = new Vector3(t0.X, 9, t0.Y); }
         if (Follow != null) { var t1 = Follow.Target; _rain.Position = new Vector3(t1.X, 20, t1.Y); }

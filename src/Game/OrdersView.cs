@@ -43,6 +43,7 @@ public partial class OrdersView : Node3D
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("OrdersView");
         _t += delta;
         if (_layer == null || _layer.DirtyCount == 0 || _t < _next) return;
         _next = _t + .2;

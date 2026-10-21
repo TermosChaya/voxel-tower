@@ -196,6 +196,7 @@ public partial class LorePanel : VBoxContainer
 
         public override void _Process(double delta)
         {
+            using var prof = Prof.Time("Lore");
             // only the one to be learnt now breathes
             if (State == 1 && IsVisibleInTree()) QueueRedraw();
         }

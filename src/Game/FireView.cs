@@ -101,6 +101,7 @@ public partial class FireView : Node3D
 
     public override void _Process(double delta)
     {
+        using var prof = Prof.Time("FireView");
         if (_m?.Sim == null) return;
         float dt = (float)Math.Min(delta, .1);
         _t += dt;
