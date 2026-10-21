@@ -133,7 +133,8 @@ public partial class Stepper : HBoxContainer
         var cap = Hud.CapsLabel(caption);
         cap.VerticalAlignment = VerticalAlignment.Center;
         AddChild(cap);
-        var val = new Label { Text = value(), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, CustomMinimumSize = new Vector2(58, 0) };
+        // wide enough for the longest of its words, so that the row does not shift as the value changes
+        var val = new Label { Text = value(), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, CustomMinimumSize = new Vector2(118, 0) };
         val.AddThemeFontOverride("font", Ornament.SerifBold);
         val.AddThemeFontSizeOverride("font_size", 15);
         val.AddThemeColorOverride("font_color", Ornament.Parchment);

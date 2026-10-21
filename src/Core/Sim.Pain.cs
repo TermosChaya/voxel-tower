@@ -199,9 +199,11 @@ public sealed partial class Sim
         float nx = dx / d, nz = dz / d;
         // round, and back off a little just after a blow of its own (its arm still coming round)
         float round = u.Circle * .9f * VoxelWorld.PerMetre * .3f, back = u.Cooldown > u.T.AttackTime * .7f ? -.5f * VoxelWorld.PerMetre * .4f : 0;
-        // too close: give ground; a little far: close in
+        // too close: give ground; a little far: close in — and never backing out of its own reach
         float reach = ReachOf(u) + foe.T.BodyR;
         if (d < reach * .55f) back -= .3f * VoxelWorld.PerMetre * .4f;
+        if (back < 0 && d > reach * .75f) back = 0;
+        if (d > reach * .85f) back = .5f * VoxelWorld.PerMetre * .4f;
         var (fx, _, fz) = Nav.Feet(u.Cell);
         u.X = Math.Clamp(u.X + (-nz * round + nx * back) * dt, fx - 3.5f, fx + 3.5f);
         u.Z = Math.Clamp(u.Z + (nx * round + nz * back) * dt, fz - 3.5f, fz + 3.5f);

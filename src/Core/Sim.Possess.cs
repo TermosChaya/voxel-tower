@@ -241,6 +241,10 @@ public sealed partial class Sim
     /// The blow of one gone into: a shot along its eyes for a bowman, else a stroke at whoever is before it — the stroke
     /// the player swung for (the way the mouse went just before), or the nearest the weapon makes of it.
     /// </summary>
+    /// <summary>The cuts of a drill at the air, in turn.</summary>
+    static readonly StrokeKind[] Drill = { StrokeKind.DiagR, StrokeKind.DiagL, StrokeKind.Overhead, StrokeKind.Sweep, StrokeKind.Rising };
+    int _drill;
+
     void Blow(Unit u)
     {
         if (!Armed(u)) return;
@@ -266,7 +270,10 @@ public sealed partial class Sim
             if (u.T.Work <= 0)
             {
                 u.Swing = 1;
-                var k = Fit(u, null, wish);
+                // the mouse still and nobody before it: not a poke at nothing but the cuts of a fighter's drill, one
+                // after another, as at a foe (a spear still thrusts)
+                bool still = WishStroke == null && _swingRight * _swingRight + _swingDown * _swingDown < .03f * .03f;
+                var k = Fit(u, null, still && wish == StrokeKind.Thrust ? Drill[_drill++ % Drill.Length] : wish);
                 var g = Strokes.GripOf(Bodies.Plan(u.T, u.Look), u.T);
                 u.Stroke = k; u.StrokeTime = Time; u.StrokeAt = Strokes.Contact(k);
                 u.StrokeAim = Math.Clamp(-LookPitch * .6f, -.5f, .6f); u.StrokeYaw = 0; u.Glanced = false;

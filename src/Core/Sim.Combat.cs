@@ -115,7 +115,10 @@ public sealed partial class Sim
         bool engine = Kinds.IsEngine(b.T);
         // the wound is cut by the whole blade coming on along its way, from a little short of where it met the body
         var from = root - dir * 4;
+        float bleed0 = b.Wounds?.Bleed ?? 0;
         float share = engine ? EngineShare(false) : Wound(b, cut, depth, reach, from.X, from.Y, from.Z, dir.X, dir.Y, dir.Z, edge.X, edge.Y, edge.Z);
+        // one told to take them alive strikes with the flat and the pommel more than the edge: the wound bleeds little
+        if (a.TakeAlive && Takeable(b) && b.Wounds != null) b.Wounds.Bleed = bleed0 + Math.Max(0, b.Wounds.Bleed - bleed0) * .25f;
         // where it struck, for the pain of it: a blow to the head hurts most and dazes
         b.HitPart = LastPart;
         b.HitHead = !engine && LastMat != Mat.Air && LastPart == BodyPart.Body && LastRow >= Bodies.Plan(b.T, b.Look).HeadY0;
@@ -212,8 +215,11 @@ public sealed partial class Sim
     {
         var p = u.Prey;
         if (p == null || p.Dead || p.Bound || Dist(u, p) > 70 * 16 || !Armed(u)) { u.Prey = null; u.Path = null; return false; }
+        bool engaged = u.State == UnitState.Fight && u.Path == null;
         u.State = UnitState.Fight;
-        if (u.T.Ranged ? Dist(u, p) <= RangeAt(u, p.X, p.Z) && Sight(u, p) : InReach(u, p))
+        // a bowman on the way comes on to well within its range, so that a step of the quarry's does not take it out of
+        // it; standing, it shoots while the quarry is anywhere in range
+        if (u.T.Ranged ? Dist(u, p) <= RangeAt(u, p.X, p.Z) * (engaged ? 1 : .7f) && Sight(u, p) : InReach(u, p))
         {
             u.Path = null;
             u.Facing = MathF.Atan2(p.Z - u.Z, p.X - u.X);
@@ -224,6 +230,8 @@ public sealed partial class Sim
             }
             return true;
         }
+        // hand to hand, a step or so off: after it straight, still at it
+        if (!u.T.Ranged && engaged && StepAfter(u, p, dt)) return true;
         if (u.Path == null || Time >= u.NextSearch)
         {
             u.NextSearch = Time + .7;
@@ -231,6 +239,26 @@ public sealed partial class Sim
         }
         if (u.Path != null) Walk(u, dt);
         else u.State = UnitState.Idle;
+        return true;
+    }
+
+    /// <summary>
+    /// One fighting hand to hand whose foe has stepped a little out of its reach — up to half as far again — goes after it
+    /// straight over the same ground, facing it, its blow still drawn back: true while it does. Further off, or up or
+    /// down a step, or with no way straight to it, it finds a way as before.
+    /// </summary>
+    bool StepAfter(Unit u, Unit foe, float dt)
+    {
+        float dx = foe.X - u.X, dz = foe.Z - u.Z, d = MathF.Sqrt(dx * dx + dz * dz);
+        if (d < .01f || d > (ReachOf(u) + foe.T.BodyR) * 1.5f || MathF.Abs(foe.Y - u.Y) > 4 || !Sight(u, foe)) return false;
+        float step = u.T.Move.Speed * NavGrid.CS * u.Pace * dt * .9f;
+        float nx = u.X + dx / d * step, nz = u.Z + dz / d * step;
+        int at = Nav.CellOf(nx, u.Y + 1, nz);
+        if (at != u.Cell && !Passable(u, at)) return false;
+        u.X = nx; u.Z = nz; u.Cell = at; u.Y = Nav.Floor[at];
+        u.Stride += step;
+        u.Facing = MathF.Atan2(dz, dx);
+        u.Path = null;
         return true;
     }
 
@@ -287,6 +315,7 @@ public sealed partial class Sim
         // a giant or a tame troll hurls a stone at one out of its reach
         if ((foe == null || !InReach(u, foe)) && HurlBoulder(u)) { ReleaseSite(u); return true; }
         if (foe == null) return false;
+        bool engaged = u.State == UnitState.Fight && u.Target == foe && u.Path == null;
         u.State = UnitState.Fight;
         u.Target = foe;
         ReleaseSite(u);
@@ -298,6 +327,8 @@ public sealed partial class Sim
             Footwork(u, foe, dt);
             return true;
         }
+        // the foe a step out of reach: after it, without stopping to find a way
+        if (engaged && StepAfter(u, foe, dt)) return true;
         if (u.Path == null || Time >= u.NextSearch)
         {
             u.NextSearch = Time + .5;
