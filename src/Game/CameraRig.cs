@@ -64,6 +64,8 @@ public partial class CameraRig : Node3D
             KeepAspect = Camera3D.KeepAspectEnum.Height,
         };
         AddChild(Cam);
+        GetWindow().MouseExited += () => _inside = false;
+        GetWindow().FocusExited += () => _inside = false;
         Cam.MakeCurrent();
         Home(true);
     }
@@ -90,6 +92,14 @@ public partial class CameraRig : Node3D
 
     /// <summary>Held: the view is someone's eyes now (first person), and the keys and the mouse do not move it.</summary>
     public bool Held;
+
+    // whether the pointer is over the window (moved over it since it last left it), for the scrolling at its edges
+    bool _inside;
+
+    public override void _Input(InputEvent e)
+    {
+        if (e is InputEventMouseMotion) _inside = true;
+    }
 
     public override void _UnhandledInput(InputEvent e)
     {
@@ -158,6 +168,18 @@ public partial class CameraRig : Node3D
         if (Down(Act.CamBack)) { mx -= fx; mz -= fz; }
         if (Down(Act.CamRight)) { mx += rx; mz += rz; }
         if (Down(Act.CamLeft)) { mx -= rx; mz -= rz; }
+        // the pointer at an edge of the screen: the view goes that way, the nearer the edge the faster
+        if (Settings.EdgeScroll && _inside && !_panning && !_rotating && Input.MouseMode == Input.MouseModeEnum.Visible && GetWindow().HasFocus())
+        {
+            var vp = GetViewport().GetVisibleRect().Size;
+            var mp = GetViewport().GetMousePosition();
+            const float band = 8;
+            float l = band - mp.X, r = mp.X - (vp.X - band), t = band - mp.Y, b = mp.Y - (vp.Y - band);
+            if (l > 0) { mx -= rx * Math.Min(1, l / band + .3f); mz -= rz * Math.Min(1, l / band + .3f); }
+            if (r > 0) { mx += rx * Math.Min(1, r / band + .3f); mz += rz * Math.Min(1, r / band + .3f); }
+            if (t > 0) { mx += fx * Math.Min(1, t / band + .3f); mz += fz * Math.Min(1, t / band + .3f); }
+            if (b > 0) { mx -= fx * Math.Min(1, b / band + .3f); mz -= fz * Math.Min(1, b / band + .3f); }
+        }
         if (mx != 0 || mz != 0) { _tx = ClampX(_tx + mx * sp); _tz = ClampZ(_tz + mz * sp); }
         if (Down(Act.CamTurnLeft)) _yaw += 1.6f * dt;
         if (Down(Act.CamTurnRight)) _yaw -= 1.6f * dt;

@@ -91,7 +91,7 @@ public partial class Slot : Control
         if (e is not InputEventMouseButton mb || mb.ButtonIndex != MouseButton.Left) return;
         if (_locked) { AcceptEvent(); return; }
         if (mb.Pressed) _down = true;
-        else if (_down) { _down = false; if (_hover && !_disabled) Clicked?.Invoke(); }
+        else if (_down) { _down = false; if (_hover && !_disabled && Clicked != null) { Sound.Ui("tick"); Clicked(); } }
         QueueRedraw();
         AcceptEvent();
     }
@@ -259,6 +259,7 @@ public partial class Medallion : Control
     public override void _GuiInput(InputEvent e)
     {
         if (Clicked == null || e is not InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true }) return;
+        Sound.Ui("tick");
         Clicked();
         AcceptEvent();
     }

@@ -241,6 +241,10 @@ public partial class GameMenu : Control
             "как летят обломки, — и возвращается само.", () => Settings.SlowMo ? "да" : "нет", d => Settings.ToggleSlowMo());
         slow.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
         _page.AddChild(slow);
+        var edge = new Stepper("Прокрутка у края", "Прокрутка у края\nПодведите мышь к краю экрана — вид поедет в ту сторону, как от WASD. " +
+            "Если мешает (например, в окне), выключите.", () => Settings.EdgeScroll ? "да" : "нет", d => Settings.ToggleEdgeScroll());
+        edge.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+        _page.AddChild(edge);
         var lines = new Stepper("Обводка вокселей", "Обводка вокселей\nТонкая тёмная линия по краю каждого вокселя, когда он на экране достаточно крупный, " +
             "чтобы её было видно: мир смотрится сложенным из кубиков. Без неё земля, камень и дерево глаже, а трава, листва и кора " +
             "всё равно прорисованы мельче вокселей.", () => Settings.Lines ? "да" : "нет", d => Settings.ToggleLines());

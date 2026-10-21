@@ -12,7 +12,9 @@ namespace VoxelTower.Game;
 /// horn, stone coming down, thunder, a spell, the gong of a
 /// rite, a shaman's croon, a blast, stone crashing down, the black wind — and the fire, the rain and the hum of the hand
 /// of telekinesis as loops. Each is played where it happens, as loud as that is near the middle of the view, the same
-/// one no more often than it would be heard apart, a score of them at most.
+/// one no more often than it would be heard apart, a score of them at most. The frame of the game has its own, heard
+/// wherever the view is: a wooden tick for a button, a soft knock of chalk for work marked, a low muffled pair of notes
+/// for what cannot be done, a small bell for work finished.
 /// </summary>
 public partial class Sound : Node
 {
@@ -42,10 +44,42 @@ public partial class Sound : Node
         foreach (var (name, wav) in _clips) wav.SaveToWav($"{dir}/{name}.wav");
     }
 
+    /// <summary>The game's sounds now (for the frame's buttons, wherever they are).</summary>
+    public static Sound Now { get; private set; }
+
+    /// <summary>A sound of the frame: a button, a mark, a refusal, work done.</summary>
+    public static void Ui(string clip, float loud = .55f) => Now?.Plain(clip, loud);
+
+    void Plain(string clip, float loud)
+    {
+        if (!_clips.TryGetValue(clip, out var wav)) return;
+        if (_last.TryGetValue(clip, out double at) && _t - at < .05) return;
+        foreach (var p in _pool)
+        {
+            if (p.Playing) continue;
+            _last[clip] = _t;
+            p.Stream = wav;
+            p.VolumeDb = Mathf.LinearToDb(loud * loud);
+            p.PitchScale = .96f + (float)_rnd.NextDouble() * .08f;
+            p.Play();
+            Played++; Heard.Add(clip);
+            return;
+        }
+    }
+
+    /// <summary>Every button of the frame ticks when pressed, the ones made later too.</summary>
+    void Hook(Node n)
+    {
+        if (n is BaseButton b) b.Pressed += () => Ui("tick");
+    }
+
     public void Init(Main m)
     {
         _m = m;
+        Now = this;
         Make();
+        GetTree().NodeAdded += Hook;
+        TreeExiting += () => { GetTree().NodeAdded -= Hook; if (Now == this) Now = null; };
         for (int i = 0; i < 20; i++) { var p = new AudioStreamPlayer(); AddChild(p); _pool.Add(p); }
         _fire = Loop("fire");
         _rain = Loop("rain");
@@ -256,6 +290,10 @@ public partial class Sound : Node
         Add("fire", Crackle(), loop: true);
         Add("rain", RainLoop(), loop: true);
         Add("hum", Hum(), loop: true);
+        Add("tick", Tick());
+        Add("mark", Chalk());
+        Add("nope", Nope());
+        Add("done", Bell());
     }
 
     void Add(string name, float[] s, bool loop = false)
@@ -635,6 +673,72 @@ public partial class Sound : Node
             s[i] = v * Math.Min(1, t / .01f);
         }
         Normalise(s, .7f);
+        return s;
+    }
+
+    /// <summary>A button: a dry wooden tick.</summary>
+    float[] Tick()
+    {
+        var s = Buf(.05f);
+        var ring = new Ring(2300, 9);
+        for (int i = 0; i < s.Length; i++)
+        {
+            float t = i / (float)Rate;
+            s[i] = ring.Step(Noise()) * Decay(i, .005f) * 3 + MathF.Sin(MathF.Tau * 540 * t) * Decay(i, .01f) * .5f;
+        }
+        Normalise(s, .45f);
+        return s;
+    }
+
+    /// <summary>Work marked: a soft knock, and chalk drawn a moment over wood.</summary>
+    float[] Chalk()
+    {
+        var s = Buf(.18f);
+        var lo = new Low(1800);
+        for (int i = 0; i < s.Length; i++)
+        {
+            float t = i / (float)Rate;
+            float scrape = lo.Step(Noise()) * Math.Min(1, t / .012f) * MathF.Exp(-t / .05f);
+            s[i] = scrape + MathF.Sin(MathF.Tau * 170 * t) * MathF.Exp(-t / .03f) * .7f;
+        }
+        Normalise(s, .5f);
+        return s;
+    }
+
+    /// <summary>What cannot be done: two low notes, the second lower, muffled.</summary>
+    float[] Nope()
+    {
+        var s = Buf(.24f);
+        var lo = new Low(700);
+        for (int i = 0; i < s.Length; i++)
+        {
+            float t = i / (float)Rate, f = t < .1f ? 196 : 156, tt = t < .1f ? t : t - .11f;
+            float env = tt < 0 ? 0 : Math.Min(1, tt / .008f) * MathF.Exp(-tt / .05f);
+            float v = MathF.Sin(MathF.Tau * f * t);
+            s[i] = lo.Step(MathF.Sign(v) * .6f + v * .4f) * env;
+        }
+        Normalise(s, .42f);
+        return s;
+    }
+
+    /// <summary>Work finished: a small bell struck twice, the second a fourth higher.</summary>
+    float[] Bell()
+    {
+        var s = Buf(1.1f);
+        float[] p = { 1, 2.76f, 5.4f }, a = { 1, .35f, .12f };
+        var strokes = new[] { (880f, 0f), (1174.7f, .13f) };
+        for (int i = 0; i < s.Length; i++)
+        {
+            float t = i / (float)Rate, v = 0;
+            foreach (var (f0, at) in strokes)
+            {
+                float tt = t - at;
+                if (tt < 0) continue;
+                for (int k = 0; k < p.Length; k++) v += a[k] * MathF.Sin(MathF.Tau * f0 * p[k] * tt) * MathF.Exp(-tt / (.45f - k * .12f)) * Math.Min(1, tt / .002f);
+            }
+            s[i] = v;
+        }
+        Normalise(s, .38f);
         return s;
     }
 

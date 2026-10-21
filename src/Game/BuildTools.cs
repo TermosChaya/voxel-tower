@@ -465,7 +465,7 @@ public partial class BuildTools : Node3D
         _pressPos = mb.Position;
         _shift = mb.ShiftPressed;
         _hasStart = _hasHover;
-        _strokeVox = 0; _strokeSec = 0; Array.Clear(_strokeEst);
+        _strokeVox = 0; _strokeSec = 0; Array.Clear(_strokeEst); _strokePlan.Clear();
         if (!_hasHover) return;
         var w = _m.World;
         if (Tool == Tool.Spell && CurrentSpell == SpellKind.Telekinesis) { GrabHere(); return; }
@@ -498,7 +498,11 @@ public partial class BuildTools : Node3D
         {
             _paint = false;
             _markName = dig ? "Копать" : ToolName(Tool);
-            if (_strokeVox > 0) _m.Hud.Log($"{_markName}: {Summary(_strokeEst, dig, _strokeSec)}");
+            if (_strokeVox > 0)
+            {
+                _m.Hud.Log($"{_markName}: {Summary(_strokeEst, dig, _strokeSec)}");
+                Marked(_markName, _strokePlan, dig, _strokeVox);
+            }
             return;
         }
         if (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather or Tool.Repair or Tool.Bridge)
@@ -540,6 +544,7 @@ public partial class BuildTools : Node3D
             _markName = "Ворота";
             _m.Sim.AddGate(gp);
             _m.Hud.Log("Ворота: " + GateSummary(gp));
+            Sound.Ui("mark");
             _planKey = "~";
         }
         else if (Tool == Tool.Extrude)
@@ -706,6 +711,7 @@ public partial class BuildTools : Node3D
         foreach (var g in _mendGates) n += _m.Sim.MendGate(g);
         if (n == 0) { Refuse("всё, что нужно, уже размечено"); return; }
         _m.Hud.Log($"Починка: {text}");
+        Sound.Ui("mark");
         _planKey = "~";
     }
 
@@ -786,6 +792,7 @@ public partial class BuildTools : Node3D
         if (!any) { Refuse(text); return; }
         _markName = Zone.Name0(GatherKind);
         _m.Sim.AddZone(a.x, a.z, b.x, b.z, GatherKind, Opt.Depth);
+        Sound.Ui("mark");
         _m.Hud.Log(text + (GatherKind switch
         {
             Zone.Shelter => ". Тревога — T.",
@@ -825,6 +832,7 @@ public partial class BuildTools : Node3D
         if (plan == null) { Refuse(why); return; }
         _markName = "Подъёмный мост";
         _m.Sim.AddDrawbridge(plan);
+        Sound.Ui("mark");
         _m.Hud.Log($"Подъёмный мост: {Fmt.One(plan.Length / (double)VoxelWorld.PerMetre)} м. Рабочие сколотят настил; он опущен, пока не подойдёт орда, " +
             "тогда поднимается сам и сбрасывает в ров тех, кто на нём. Щелчок по мосту без кисти — сменить: сам / опущен / поднят.");
     }
@@ -909,7 +917,9 @@ public partial class BuildTools : Node3D
         if (dig) plan = Shapes.WithTrees(_m.World, plan);
         _strokeSec += Labour.Estimate(_m.World, plan, dig, _est);
         for (int k = 0; k < 4; k++) _strokeEst[k] += _est[k];
-        _strokeVox += dig ? _m.Sim.DesignateRemove(plan) : _m.Sim.DesignateBuild(plan);
+        int n = dig ? _m.Sim.DesignateRemove(plan) : _m.Sim.DesignateBuild(plan);
+        _strokeVox += n;
+        if (n > 0) for (int i = 0; i < plan.Count; i++) _strokePlan.Add(plan.X(i), plan.Y(i), plan.Z(i), plan.M(i));
         _planKey = "~";
     }
 
@@ -922,6 +932,7 @@ public partial class BuildTools : Node3D
         if (n == 0) { Refuse(dig ? "здесь нечего копать" : "здесь нечего класть: всё уже занято"); return false; }
         _markName = what;
         _m.Hud.Log($"{what}: {Summary(_est, dig, sec)}");
+        Marked(what, plan, dig, n);
         _planKey = "~";
         return true;
     }
@@ -947,6 +958,18 @@ public partial class BuildTools : Node3D
         if (msg == _lastRefuse && _clock - _lastRefuseAt < .8) return;
         _lastRefuse = msg; _lastRefuseAt = _clock;
         _m.Hud.Float(msg, Ornament.Blood);
+        Sound.Ui("nope");
+    }
+
+    // every voxel a freehand stroke marked, to follow the stroke's work to its end
+    readonly VoxelList _strokePlan = new();
+
+    /// <summary>Work marked: a knock heard, said by the pointer, and followed till it is done.</summary>
+    void Marked(string what, VoxelList plan, bool dig, int voxels)
+    {
+        Sound.Ui("mark");
+        _m.Hud.Float($"{what}: {Fmt.M3(voxels)} м³", Ornament.Moss);
+        _m.Progress?.Track(what, plan, dig);
     }
 
     // ---------------------------------------------------------------- picking and previews

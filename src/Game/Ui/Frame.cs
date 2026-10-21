@@ -72,7 +72,7 @@ public partial class TabPlaque : Control
 
     public override void _GuiInput(InputEvent e)
     {
-        if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true }) { Clicked?.Invoke(); AcceptEvent(); }
+        if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true }) { if (Clicked != null) Sound.Ui("tick"); Clicked?.Invoke(); AcceptEvent(); }
     }
 
     public override void _Draw()

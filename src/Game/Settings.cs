@@ -22,6 +22,8 @@ public static class Settings
     public static readonly float[] Shakes = { 0, .5f, 1 };
     /// <summary>Whether the game's time slows for a moment after a great blast or fall near what the view looks at.</summary>
     public static bool SlowMo { get; private set; } = true;
+    /// <summary>Whether the view goes along as the pointer is brought to an edge of the screen.</summary>
+    public static bool EdgeScroll { get; private set; } = true;
     /// <summary>Whether every voxel is drawn with a thin dark line round its edge, where it is big enough on screen to read.</summary>
     public static bool Lines { get; private set; }
     /// <summary>What the player chose for the lines, kept apart from a run that draws them for itself (--lines).</summary>
@@ -41,6 +43,7 @@ public static class Settings
         Volume = Math.Clamp(MathF.Round(cfg.GetValue("sound", "volume", .8f).AsSingle() * 10) / 10, 0, 1);
         Shake = Math.Clamp(cfg.GetValue("view", "shake", 1f).AsSingle(), 0, 1);
         SlowMo = cfg.GetValue("view", "slowmo", true).AsBool();
+        EdgeScroll = cfg.GetValue("view", "edge_scroll", true).AsBool();
         Lines = _keptLines = cfg.GetValue("view", "lines", false).AsBool();
         int grid = cfg.GetValue("tools", "grid", 0).AsInt32();
         Grid = Array.IndexOf(ToolOptions.Grids, grid) > 0 ? grid : 0;
@@ -57,6 +60,7 @@ public static class Settings
         cfg.SetValue("sound", "volume", Volume);
         cfg.SetValue("view", "shake", Shake);
         cfg.SetValue("view", "slowmo", SlowMo);
+        cfg.SetValue("view", "edge_scroll", EdgeScroll);
         cfg.SetValue("view", "lines", _keptLines);
         cfg.SetValue("tools", "grid", Grid);
         cfg.Save(File);
@@ -78,6 +82,7 @@ public static class Settings
         Volume = 0;
         Shake = 0;
         SlowMo = false;
+        EdgeScroll = false;
     }
 
     /// <summary>A scripted run that looks at the shaking and the slowing has them for itself, and nothing kept.</summary>
@@ -107,6 +112,13 @@ public static class Settings
     public static void ToggleSlowMo()
     {
         SlowMo = !SlowMo;
+        Save();
+    }
+
+    /// <summary>The view going along at the screen's edges, on or off; kept for next time.</summary>
+    public static void ToggleEdgeScroll()
+    {
+        EdgeScroll = !EdgeScroll;
         Save();
     }
 

@@ -57,6 +57,7 @@ public partial class Main : Node3D
     public Hud Hud { get; private set; }
     public Debris Debris { get; private set; }
     public BloodView Blood { get; private set; }
+    public WorkProgress Progress { get; private set; }
     public UnitView Units { get; private set; }
     public OrdersView Marks { get; private set; }
     public ZoneView Areas { get; private set; }
@@ -290,6 +291,9 @@ public partial class Main : Node3D
         Spectacle = new Spectacle();
         AddChild(Spectacle);
         Spectacle.Init(this);
+        Progress = new WorkProgress();
+        AddChild(Progress);
+        Progress.Init(this);
         if (_soundsTo != null) { Sound.SaveAll(_soundsTo); GD.Print($"[voxel-tower] {Sound.Clips} sounds written to {_soundsTo}"); GetTree().Quit(); }
         // where the warbands will go is shown in play; scripted runs keep the horde's ways to the waves
         Sim.WantTrails = !_selfTest;
@@ -1116,7 +1120,7 @@ public partial class Main : Node3D
         Check("Ctrl+= draws the interface larger, Ctrl+0 as it was", Math.Abs(larger - 1.1f) < .01f && Math.Abs(GetTree().Root.ContentScaleFactor - 1) < .01f,
             $"{larger:0.00} → {GetTree().Root.ContentScaleFactor:0.00}");
 
-        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 24 && Sound.Heard.Count >= 4,
+        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 28 && Sound.Heard.Count >= 4,
             $"{Sound.Clips} sounds, {Sound.Played} played: {string.Join(", ", Sound.Heard)}");
 
         var before = Rig.Target;
@@ -1245,6 +1249,20 @@ public partial class Main : Node3D
             $"{Blood.Dripped - drips0} drops dripped, {stainsH} stains after the fight, {Blood.Pools - pools0} pool spreading, {Blood.Stains} stains now");
         Rig.Set(aim1.x, aim1.z, aim1.yaw, aim1.pitch, aim1.zoom, snap: true);
 
+        // work marked is followed: a tag over it says how far it has got, and when it is done the chronicle says so
+        int lowTop = Shapes.LevelTop(World, kx - 110, kz + 70, 4);
+        var low = Shapes.Line(World, Site, kx - 116, kz + 70, kx - 104, kz + 70, new Stroke { Mat = Mat.Stone, Width = 2, Height = 2, Level = true }, lowTop);
+        int finished0 = Progress.Finished, lines0 = Hud.Lines.Count;
+        Sim.DesignateBuild(low);
+        Progress.Track("Камень", low, false);
+        bool following = Progress.Following > 0;
+        for (int t = 0; t < 240 && Progress.Finished == finished0; t++) { Advance(.5); await Frames(1); }
+        bool toldDone = false;
+        for (int i = lines0; i < Hud.Lines.Count; i++) toldDone |= Hud.Lines[i].text.StartsWith("Готово: камень");
+        Check("work marked is followed with how far it has got, and when it is done the chronicle says so",
+            following && Progress.Finished > finished0 && toldDone,
+            $"followed {following}; finished {Progress.Finished - finished0}, told {toldDone}");
+
         // the citadel's muster: a click on the citadel opens it; a worker taken on is paid for at once and comes out of
         // its door only when made ready. Whoever stands about the citadel's foot by now is sent a little way off first (an
         // envoy come to the walls is taken off), so that the click finds the citadel and not one of them
@@ -1359,6 +1377,7 @@ public partial class Main : Node3D
         if (_pose == "duel") { Duel(); return; }
         if (_pose == "reel") { Reeling(); return; }
         if (_pose == "blood") { Bloodshed(); return; }
+        if (_pose == "works") { Works(); return; }
         if (_pose == "troops") { Troops(); return; }
         if (_pose == "faith") { Faith(); return; }
         if (_pose == "captives") { Captives(); return; }
@@ -3049,6 +3068,31 @@ public partial class Main : Node3D
             float over = (World.WY(World.SurfAt((int)cx, (int)cz) + 8) - 4) / MathF.Tan(pitch);
             Rig.Set(World.WX(cx) - sin * over, World.WZ(cz) - cos * over, yaw, pitch, 3.4f, snap: true);
         }
+        Hud.Refresh();
+    }
+
+    /// <summary>
+    /// Work marked and under way (--pose=works, --at=seconds of it, 25 by itself): a stone wall, a ditch and a timber
+    /// platform west of the citadel, each with its tag of how far it has got.
+    /// </summary>
+    void Works()
+    {
+        var sim = Sim; var s = Site;
+        sim.Waves.Countdown = 1e9;
+        int kx = s.KeepX - s.KeepR - 40, kz = s.KeepZ;
+        foreach (var t in new[] { Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Worker }) sim.Spawn(t, sim.Gate);
+        int top = Shapes.LevelTop(World, kx - 20, kz - 30, 16);
+        var wall = Shapes.Line(World, s, kx - 20, kz - 50, kx - 20, kz - 10, new Stroke { Mat = Mat.Stone, Width = 6, Height = 16, Level = true }, top);
+        sim.DesignateBuild(wall); Progress.Track("Камень", wall, false);
+        var ditch = Shapes.Line(World, s, kx - 40, kz + 10, kx - 40, kz + 50, new Stroke { Mat = Mat.Air, Width = 8, Height = 8 }, World.SurfAt(kx - 40, kz + 30));
+        sim.DesignateRemove(ditch); Progress.Track("Копать", ditch, true);
+        int deck = Shapes.LevelTop(World, kx, kz + 30, 6);
+        var plat = Shapes.Box(World, s, kx - 6, kz + 20, kx + 6, kz + 40, new Stroke { Mat = Mat.Wood, Height = 6, Level = true }, deck);
+        sim.DesignateBuild(plat); Progress.Track("Брёвна", plat, false);
+        Advance(_poseSeconds > 0 ? _poseSeconds : 25);
+        const float yaw = -.3f, pitch = .62f;
+        float over = (World.WY(top) - 4) / MathF.Tan(pitch);
+        Rig.Set(World.WX(kx - 20) - MathF.Sin(yaw) * over, World.WZ(kz) - MathF.Cos(yaw) * over, yaw, pitch, 1.6f, snap: true);
         Hud.Refresh();
     }
 
