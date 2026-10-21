@@ -2253,7 +2253,8 @@ public partial class Main : Node3D
     /// </summary>
     /// <summary>
     /// The household of a new game felling the trees nearest the fort west of the citadel, marked as the player marks
-    /// them; --at= seconds of the work: with time enough, stumps and logs being cut up, and no crown left in the air.
+    /// them; --at= seconds of the work: with time enough, stumps and logs being cut up, and no crown left in the air;
+    /// --look=1 close on the first of them.
     /// </summary>
     void Felling()
     {
@@ -2261,7 +2262,7 @@ public partial class Main : Node3D
         sim.Waves.Countdown = 1e9;
         StartingFort.Raise(sim);
         foreach (var t in new[] { Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Worker }) sim.Spawn(t, sim.Gate);
-        int cx = Site.KeepX - Site.KeepR - 90, cz = Site.KeepZ + 40, felled = 0;
+        int cx = Site.KeepX - Site.KeepR - 90, cz = Site.KeepZ + 40, felled = 0, fx = cx, fz = cz;
         var taken = new HashSet<(int, int)>();
         for (int r = 0; r < 120 && felled < 3; r += 3)
             for (int a = 0; a < 32 && felled < 3; a++)
@@ -2272,10 +2273,12 @@ public partial class Main : Node3D
                 if (!Mat.IsTrunk(w.Get(x, g + 2, z))) continue;
                 sim.DesignateRemove(Shapes.Tree(w, x, g + 2, z));
                 for (int dz = -3; dz <= 3; dz++) for (int dx = -3; dx <= 3; dx++) taken.Add(((x >> 4) + dx, (z >> 4) + dz));
-                felled++;
+                if (felled++ == 0) (fx, fz) = (x, z);
             }
         Advance(_poseSeconds);
-        Rig.Set(w.WX(cx), w.WZ(cz), -.66f, .6f, 1.5f, snap: true);
+        // --look=1: close on the first tree, to watch it felled
+        if (_look == 1) Rig.Set(w.WX(fx), w.WZ(fz), -.66f, .5f, 2.6f, snap: true);
+        else Rig.Set(w.WX(cx), w.WZ(cz), -.66f, .6f, 1.5f, snap: true);
         Hud.Refresh();
     }
 

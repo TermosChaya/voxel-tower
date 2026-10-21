@@ -23,13 +23,25 @@ public partial class UnitView : Node3D
         /// <summary>Each piece of its dress, and its shadow.</summary>
         public MultiMeshInstance3D[] Dress, DressShades;
         /// <summary>One buffer per part and per piece of dress: a transform and a colour for every figure of this kind.</summary>
-        public readonly float[][] Bufs = new float[Figure.Parts][];
+        public readonly float[][] Bufs = new float[Figure.Bones][];
         public float[][] DressBufs;
         public int Count, Cap;
     }
 
-    /// <summary>What the view remembers of a unit between frames: smoothed facing and how fast it is moving.</summary>
-    sealed class Look { public float Face, Move, LastX, LastZ; public bool Seen; public Transform3D Body; }
+    /// <summary>
+    /// What the view remembers of a unit between frames: smoothed facing, how fast it is moving (and how much of that is
+    /// a run), how far through its stride, how far it went this frame; its breath and how hard it is breathing; where
+    /// its head turns and what it looks at next.
+    /// </summary>
+    sealed class Look
+    {
+        public float Face, Move, LastX, LastZ, Speed, Run, Dist, Phase;
+        public float Breath, Exert, HeadYaw, HeadPitch, IdleYaw, IdlePitch;
+        public double GazeNext;
+        public Unit GazeAt;
+        public bool Seen;
+        public Transform3D Body;
+    }
 
     /// <summary>
     /// A hurt body: the parts its wounds have changed (and what they hold) drawn on their own, meshed again after a wound
@@ -37,14 +49,16 @@ public partial class UnitView : Node3D
     /// </summary>
     sealed class Own
     {
-        public readonly MeshInstance3D[] Parts = new MeshInstance3D[Figure.Parts];
+        /// <summary>Each bone of it (the parts are cut into bones as its kind's are).</summary>
+        public readonly MeshInstance3D[] Parts = new MeshInstance3D[Figure.Bones];
         public MeshInstance3D[] Dress = Array.Empty<MeshInstance3D>();
+        /// <summary>Which parts a wound has changed, and a sum of each.</summary>
         public readonly bool[] Hurt = new bool[Figure.Parts];
         public readonly int[] Sums = new int[Figure.Parts];
-        /// <summary>The distance each part is drawn at now (-1: to be drawn again at once, a wound has changed it).</summary>
-        public readonly int[] At = { -1, -1, -1, -1, -1 };
-        /// <summary>The meshes made of each part as it is now, at each distance (null: not made yet).</summary>
-        public readonly Made[,] Kept = new Made[Figure.Parts, 3];
+        /// <summary>The distance each bone is drawn at now (-1: to be drawn again at once, a wound has changed it).</summary>
+        public readonly int[] At = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
+        /// <summary>The meshes made of each bone as it is now, at each distance (null: not made yet).</summary>
+        public readonly Made[,] Kept = new Made[Figure.Bones, 3];
         /// <summary>The wounds last drawn, and how far they had gone.</summary>
         public BodyState Of;
         public int Rev = -1;
@@ -79,7 +93,8 @@ public partial class UnitView : Node3D
     readonly float[][] _shotBufs = { Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>() };
     readonly Dictionary<int, Own> _own = new();
     readonly List<Fallen> _fallen = new();
-    readonly Transform3D[] _xf = new Transform3D[Figure.Parts];
+    readonly Transform3D[] _xf = new Transform3D[Figure.Bones];
+    float _dt;
     readonly Random _rnd = new(5);
     double _t;
 
@@ -129,14 +144,14 @@ public partial class UnitView : Node3D
         int dn = fig.DressOn.Length;
         k = new Kind
         {
-            Fig = fig, Parts = new MultiMeshInstance3D[Figure.Parts], Shades = new MultiMeshInstance3D[Figure.Parts],
+            Fig = fig, Parts = new MultiMeshInstance3D[Figure.Bones], Shades = new MultiMeshInstance3D[Figure.Bones],
             Dress = new MultiMeshInstance3D[dn], DressShades = new MultiMeshInstance3D[dn], DressBufs = new float[dn][],
         };
-        for (int p = 0; p < Figure.Parts; p++)
+        for (int b = 0; b < Figure.Bones; b++)
         {
-            if (fig.Mesh[p] == null && fig.Mid[p] == null && fig.Far[p] == null) continue;
-            k.Parts[p] = Multi(fig.Mid[p] ?? fig.Mesh[p] ?? fig.Far[p], Figure.Material(BodyPlan.Sub), true);
-            if (fig.Mid[p] != null) k.Shades[p] = Multi(fig.Mid[p], Figure.Material(BodyPlan.Sub), true);
+            if (fig.BoneNear[b] == null && fig.BoneMid[b] == null && fig.BoneFar[b] == null) continue;
+            k.Parts[b] = Multi(fig.BoneMid[b] ?? fig.BoneNear[b] ?? fig.BoneFar[b], Figure.Material(BodyPlan.Sub), true);
+            if (fig.BoneMid[b] != null) k.Shades[b] = Multi(fig.BoneMid[b], Figure.Material(BodyPlan.Sub), true);
         }
         for (int d = 0; d < dn; d++)
         {
@@ -159,11 +174,11 @@ public partial class UnitView : Node3D
         var fig = k.Fig;
         var on = GeometryInstance3D.ShadowCastingSetting.On;
         var off = GeometryInstance3D.ShadowCastingSetting.Off;
-        for (int p = 0; p < Figure.Parts; p++)
+        for (int p = 0; p < Figure.Bones; p++)
         {
             var mi = k.Parts[p];
             if (mi == null) continue;
-            var mesh = _lod == 0 ? fig.Mesh[p] : _lod == 1 ? fig.Mid[p] : fig.Far[p];
+            var mesh = _lod == 0 ? fig.BoneNear[p] : _lod == 1 ? fig.BoneMid[p] : fig.BoneFar[p];
             mi.Visible = mesh != null;
             if (mesh != null)
             {
@@ -241,8 +256,15 @@ public partial class UnitView : Node3D
     public bool HurtShown(int id)
     {
         if (!_own.TryGetValue(id, out var own)) return false;
+        // every hurt part with something left of it is drawn by at least one of its bones
         for (int p = 0; p < Figure.Parts; p++)
-            if (own.Hurt[p] && own.Of.Grid[p] is { Count: > 0 } && (own.Parts[p] is not { } n || !n.Visible || n.Mesh == null)) return false;
+        {
+            if (!own.Hurt[p] || own.Of.Grid[p] is not { Count: > 0 }) continue;
+            var (upper, lower) = Figure.BonesOf((Part)p);
+            bool drawn = false;
+            foreach (var b in new[] { upper, lower }) drawn |= own.Parts[(int)b] is { Visible: true, Mesh: not null };
+            if (!drawn) return false;
+        }
         return Array.IndexOf(own.Hurt, true) >= 0;
     }
 
@@ -264,6 +286,7 @@ public partial class UnitView : Node3D
         if (_m?.Sim == null) return;
         float dt = (float)Math.Min(delta, .1);
         _t += dt;
+        _dt = _m.Paused ? 0 : dt;
         var sim = _m.Sim;
         Distance();
         _meshing = 0;
@@ -292,11 +315,11 @@ public partial class UnitView : Node3D
             if (u.Wounds == null && _own.Count > 0 && _own.Remove(u.Id, out var whole)) Free(whole);
             var hurt = u.Wounds != null ? DrawOwn(u, k.Fig, tint) : null;
             int o = k.Count++ * 16;
-            for (int p = 0; p < Figure.Parts; p++) Write(k.Bufs[p], o, hurt != null && hurt[p] ? Folded : _xf[p], tint);
+            for (int b = 0; b < Figure.Bones; b++) Write(k.Bufs[b], o, hurt != null && hurt[(int)Figure.PartOf[b]] ? Folded : _xf[b], tint);
             for (int d = 0; d < k.DressBufs.Length; d++)
             {
                 int on = (int)k.Fig.DressOn[d];
-                Write(k.DressBufs[d], o, hurt != null && hurt[on] ? Folded : _xf[on] * Wrist(u, k.Fig, d), tint);
+                Write(k.DressBufs[d], o, hurt != null && hurt[on] ? Folded : _xf[(int)k.Fig.DressBone[d]] * Wrist(u, k.Fig, d), tint);
             }
         }
         StrokesEnd();
@@ -317,12 +340,19 @@ public partial class UnitView : Node3D
 
     void Track(Unit u, Look l, float dt)
     {
-        if (!l.Seen) { l.Seen = true; l.Face = u.Facing; l.LastX = u.X; l.LastZ = u.Z; }
+        if (!l.Seen) { l.Seen = true; l.Face = u.Facing; l.LastX = u.X; l.LastZ = u.Z; l.Phase = u.Id * 1.7f; l.Breath = u.Id * 2.3f; }
         float dx = u.X - l.LastX, dz = u.Z - l.LastZ;
-        float speed = MathF.Sqrt(dx * dx + dz * dz) / Math.Max(dt, 1e-4f);
+        float moved = MathF.Sqrt(dx * dx + dz * dz);
+        // a jump of more than a couple of voxels in a frame is no step (put somewhere, or a game read back)
+        l.Dist = _m.Paused || moved > 3 ? 0 : moved;
+        float speed = moved / Math.Max(dt, 1e-4f);
         float target = Math.Clamp(speed / (u.T.Move.Speed * NavGrid.CS * .6f), 0, 1);
         if (_m.Paused || u.Dead) target = l.Move * .9f;
         l.Move += (target - l.Move) * Math.Min(1, dt * 10);
+        if (!_m.Paused && moved <= 3) l.Speed += (speed - l.Speed) * Math.Min(1, dt * 6);
+        // a run: faster than its walk by a good deal (fleeing, charging, called to its post)
+        float walk = u.T.Move.Speed * NavGrid.CS;
+        l.Run += (Math.Clamp((l.Speed / Math.Max(walk, .1f) - 1.1f) / .45f, 0, 1) - l.Run) * Math.Min(1, dt * 4);
         l.LastX = u.X; l.LastZ = u.Z;
         float d = Mathf.Wrap(u.Facing - l.Face, -MathF.PI, MathF.PI);
         l.Face += d * Math.Min(1, dt * 12);
@@ -337,7 +367,7 @@ public partial class UnitView : Node3D
             mi.Multimesh.InstanceCount = k.Cap;
             mi.Multimesh.VisibleInstanceCount = 0;
         }
-        for (int p = 0; p < Figure.Parts; p++)
+        for (int p = 0; p < Figure.Bones; p++)
         {
             k.Bufs[p] = new float[k.Cap * 16];
             Room(k.Parts[p]); Room(k.Shades[p]);
@@ -363,6 +393,8 @@ public partial class UnitView : Node3D
     Color Pose(Unit u, Figure f, Look look)
     {
         float legR = 0, legL = 0, main = f.Carry, off = 0, lean = 0, bob = 0, fall = 0, sink = 0;
+        // the joints a man moves at besides the shoulders and the hips (NaN: as the hip and the shoulder have them)
+        float kneeR = float.NaN, kneeL = float.NaN, elbowR = float.NaN, elbowL = float.NaN, hipYaw = 0, chestYaw = 0;
         float seed = u.Id * .618f;
         if (Kinds.IsEngine(u.T))
         {
@@ -434,6 +466,88 @@ public partial class UnitView : Node3D
             off = -2.6f - MathF.Sin(phase) * .35f;
             legR = -.5f + MathF.Sin(phase) * .45f;
             legL = -.5f - MathF.Sin(phase) * .45f;
+            // pulling up on the rungs, stepping up on them
+            elbowR = -.5f - .4f * MathF.Max(0, MathF.Sin(phase)); elbowL = -.5f - .4f * MathF.Max(0, -MathF.Sin(phase));
+            kneeR = .5f - legR * .9f; kneeL = .5f - legL * .9f;
+        }
+        else if (f.Jointed)
+        {
+            // the stride: a full step of each leg every so many voxels walked, longer at a run
+            float a = look.Move, run = look.Run;
+            look.Phase += look.Dist / (f.Stride * (1 + .35f * run)) * MathF.Tau;
+            float phase = look.Phase, swing = (.42f + .22f * run) * a;
+            legR = -MathF.Sin(phase) * swing;
+            legL = -legR;
+            // the knee bends as the leg swings through, most as it passes under the body, and gives a little under the
+            // weight as the foot comes down; running, the heel comes up high behind
+            float lift = .7f + .65f * run;
+            kneeR = a * (.1f + lift * MathF.Pow(MathF.Max(0, MathF.Cos(phase)), 1.5f) + .12f * run);
+            kneeL = a * (.1f + lift * MathF.Pow(MathF.Max(0, -MathF.Cos(phase)), 1.5f) + .12f * run);
+            // the arms swing against the legs, the elbows bent the more the faster; a priest walks with its staff
+            float arm = u.T.Prays ? .2f : .62f + .25f * run;
+            main += -legR * arm;
+            off = f.Shield ? -.3f - legL * .2f : -legL * arm;
+            elbowR = -(.18f + 1.05f * run * a + .3f * MathF.Max(0, -(main - f.Carry)));
+            elbowL = f.Shield ? -1.0f : -(.18f + 1.05f * run * a + .3f * MathF.Max(0, -off));
+            // the hips turn with the leg going forward, the chest against them; the body rises over the leg it stands on
+            hipYaw = .11f * MathF.Sin(phase) * a;
+            chestYaw = -.08f * MathF.Sin(phase) * a;
+            bob = (MathF.Abs(MathF.Cos(phase)) - .64f) * a * (.5f + .35f * run);
+            // leaning into the walk, more into a run
+            lean = .04f * a + .17f * run;
+            if (u.Bound && a >= .05f) { main = .55f; off = .55f; lean = .08f; elbowR = elbowL = -.4f; }
+            switch (u.State)
+            {
+                case UnitState.Work when u.T.Prays:
+                {
+                    float k = u.Rite != null ? Math.Clamp(u.Rite.Done / Sim.RiteTime, 0, 1) : 0, t = (float)_t;
+                    main = -.15f;
+                    off = k < .85f ? -2.9f + MathF.Sin(t * 2.3f + seed) * .12f : Mathf.Lerp(-2.9f, -.5f, (k - .85f) / .15f);
+                    lean = k < .85f ? -.1f : Mathf.Lerp(-.1f, .22f, (k - .85f) / .15f);
+                    elbowR = -.35f; elbowL = -.1f;
+                    break;
+                }
+                case UnitState.Work:
+                case UnitState.Carve:
+                case UnitState.Siege:
+                    Chop(f.Chop / u.Pace, (float)_t + seed * f.Chop, out main, out lean);
+                    off = -.35f;
+                    // the hands together on the haft, the knees giving a little with the blow
+                    elbowR = -.12f; elbowL = -.9f;
+                    kneeR = kneeL = .18f + .12f * MathF.Max(0, lean);
+                    break;
+                case UnitState.Fight:
+                    FightArms(u, f, seed, ref main, ref off, ref lean);
+                    // a fighter's stance: the knees bent, the guard arm's elbow up
+                    kneeR = MathF.Max(kneeR, .22f); kneeL = MathF.Max(kneeL, .22f);
+                    break;
+                default:
+                    if (a < .05f)
+                    {
+                        if (u.State == UnitState.Idle) Leisure(u, f, seed, ref main, ref off, ref legR, ref legL, ref lean, ref bob);
+                        // standing at ease: the weight on one leg, the other knee easy, shifted now and then
+                        if (u.State != UnitState.Idle || u.Pastime is Pastime.None or Pastime.Talk or Pastime.Watch or Pastime.Warm or Pastime.Pray)
+                        {
+                            float shift = MathF.Sin((float)_t * .23f + seed * 4);
+                            kneeR = .06f + .16f * MathF.Max(0, shift);
+                            kneeL = .06f + .16f * MathF.Max(0, -shift);
+                            hipYaw = .05f * shift;
+                        }
+                        if (u.Pastime == Pastime.Bound)
+                        {
+                            // on its knees, sitting back on its heels, the hands tied behind, the head bowed
+                            bob = -f.Shin * .95f; legR = legL = .08f; kneeR = kneeL = 1.55f; elbowR = elbowL = -.3f;
+                        }
+                        else if (u.Pastime == Pastime.Sit)
+                        {
+                            // on the ground, the knees drawn up
+                            bob = -(f.Thigh + f.Shin) * .78f; legR = -1.25f; legL = -1.15f; kneeR = .9f; kneeL = 1.05f; elbowR = elbowL = -.5f;
+                        }
+                        else if (u.Pastime == Pastime.Warm) { elbowR = elbowL = -.9f; }
+                        else if (u.Pastime == Pastime.Talk) { elbowR = -.9f; }
+                    }
+                    break;
+            }
         }
         else
         {
@@ -499,19 +613,125 @@ public partial class UnitView : Node3D
         // a blow: the arms turned every way at the shoulders, the trunk twisted, the step taken (UnitView.Strokes.cs)
         var turns = StrokeTurns(u, f, look, main, off, lean, ref legR, ref legL, root);
         var hips = turns.Step == Vector3.Zero ? root : root * new Transform3D(Basis.Identity, turns.Step);
-        var body = hips * TurnAt(f, Part.Body, turns.Body);
-        look.Body = body;
         var tint = Tint(u);
-        // a horse's legs go with its body as it rocks
-        var arms = f.Beast ? hips : body;
-        var legs = f.Mounted ? body : hips;
-        _xf[(int)Part.Body] = body;
-        _xf[(int)Part.Main] = arms * TurnAt(f, Part.Main, turns.Main);
-        _xf[(int)Part.Off] = arms * TurnAt(f, Part.Off, turns.Off);
-        _xf[(int)Part.LegR] = legs * Swing(f, Part.LegR, legR);
-        _xf[(int)Part.LegL] = legs * Swing(f, Part.LegL, legL);
+        if (!f.Jointed)
+        {
+            var body0 = hips * TurnAt(f, Part.Body, turns.Body);
+            look.Body = body0;
+            // a horse's legs go with its body as it rocks
+            var arms0 = f.Beast ? hips : body0;
+            var legs0 = f.Mounted ? body0 : hips;
+            _xf[(int)Bone.Torso] = body0;
+            _xf[(int)Bone.UpperR] = arms0 * TurnAt(f, Part.Main, turns.Main);
+            _xf[(int)Bone.UpperL] = arms0 * TurnAt(f, Part.Off, turns.Off);
+            _xf[(int)Bone.ThighR] = legs0 * Swing(f, Part.LegR, legR);
+            _xf[(int)Bone.ThighL] = legs0 * Swing(f, Part.LegL, legL);
+            return tint;
+        }
+        // the knees and the elbows, where the pose did not set them: a thigh raised forward lets its shin hang, an arm
+        // hangs easy; in a blow (or just after one) the striking arm goes straight, along the stroke the simulation laid out
+        if (float.IsNaN(kneeR)) kneeR = MathF.Max(0, -legR) * .9f + .05f;
+        if (float.IsNaN(kneeL)) kneeL = MathF.Max(0, -legL) * .9f + .05f;
+        if (float.IsNaN(elbowR)) elbowR = -.2f;
+        if (float.IsNaN(elbowL)) elbowL = f.Shield ? -.9f : -.2f;
+        elbowR *= 1 - turns.Fight; if (!f.Shield) elbowL *= 1 - turns.Fight * .7f;
+        if (u.Dead || fall > 0) { kneeR = kneeL = .25f * fall; elbowR = elbowL = -.3f * fall; }
+        // the breath: slow at rest, quick and deep after a run or in a fight, and it takes a while to settle
+        float exert = u.Dead ? 0 : look.Run > .3f ? 1 : u.State == UnitState.Fight ? .8f : u.State is UnitState.Work or UnitState.Carve or UnitState.Siege ? .45f : look.Move > .2f ? .25f : 0;
+        look.Exert += (exert - look.Exert) * Math.Min(1, _dt * (exert > look.Exert ? 1.2f : .12f));
+        look.Breath += _dt * (1.5f + 3.2f * look.Exert);
+        float inhale = u.Dead ? 0 : MathF.Sin(look.Breath) * (.55f + .9f * look.Exert);
+        // where the head turns: at whom it fights, what it works, what it hunts, about it when idle
+        Gaze(u, f, look);
+        var waist = f.Pivot[(int)Bone.Torso];
+        var legs = hips * RotAt(waist, Vector3.Up, hipYaw);
+        var body = legs * TurnAt(f, Part.Body, turns.Body) * RotAt(waist, Vector3.Up, chestYaw + look.HeadYaw * .25f);
+        look.Body = body;
+        // the chest swells with the breath and the shoulders and the head rise with it
+        var chest = body * new Transform3D(Basis.Identity, waist) * new Transform3D(Basis.FromScale(new Vector3(1 + .018f * inhale, 1 + .008f * inhale, 1 + .03f * inhale)), Vector3.Zero)
+            * new Transform3D(Basis.Identity, -waist);
+        var top = body * new Transform3D(Basis.Identity, new Vector3(0, .008f * inhale * f.NeckUp, .01f * inhale));
+        _xf[(int)Bone.Torso] = chest;
+        // the head: turned and tilted to what it looks at, holding the eyes level against the trunk's lean
+        var neck = f.Pivot[(int)Bone.Head];
+        float tilt = look.HeadPitch - (turns.Lean + lean) * .5f;
+        _xf[(int)Bone.Head] = top * new Transform3D(new Basis(Vector3.Up, look.HeadYaw * .75f) * new Basis(Vector3.Right, tilt), neck - new Basis(Vector3.Up, look.HeadYaw * .75f) * new Basis(Vector3.Right, tilt) * neck);
+        var upperR = top * TurnAt(f, Part.Main, turns.Main);
+        var upperL = top * TurnAt(f, Part.Off, turns.Off);
+        _xf[(int)Bone.UpperR] = upperR;
+        _xf[(int)Bone.LowerR] = upperR * RotAt(f.Pivot[(int)Bone.LowerR], Vector3.Right, elbowR);
+        _xf[(int)Bone.UpperL] = upperL;
+        _xf[(int)Bone.LowerL] = upperL * RotAt(f.Pivot[(int)Bone.LowerL], Vector3.Right, elbowL);
+        var thighR = legs * Swing(f, Part.LegR, legR);
+        var thighL = legs * Swing(f, Part.LegL, legL);
+        _xf[(int)Bone.ThighR] = thighR;
+        _xf[(int)Bone.ShinR] = thighR * RotAt(f.Pivot[(int)Bone.ShinR], Vector3.Right, kneeR);
+        _xf[(int)Bone.ThighL] = thighL;
+        _xf[(int)Bone.ShinL] = thighL * RotAt(f.Pivot[(int)Bone.ShinL], Vector3.Right, kneeL);
         return tint;
     }
+
+    /// <summary>A turn about an axis through a point (in figure voxels).</summary>
+    static Transform3D RotAt(Vector3 at, Vector3 axis, float angle)
+    {
+        if (angle == 0) return Transform3D.Identity;
+        var b = new Basis(axis, angle);
+        return new Transform3D(b, at - b * at);
+    }
+
+    /// <summary>
+    /// Where the head turns this frame, eased towards what it looks at: the foe it fights, the voxel it works, the beast
+    /// it hunts; walking, ahead, with a glance aside now and then; idle, about it, and now and then at someone near.
+    /// The angles are the head's own, yaw about the neck and pitch down; the trunk turns a little with a wide look.
+    /// </summary>
+    void Gaze(Unit u, Figure f, Look look)
+    {
+        float yaw = 0, pitch = 0;
+        var sim = _m.Sim;
+        float ex = u.X, ey = u.Y + u.T.BodyH * .88f, ez = u.Z;
+        bool at = false;
+        float tx = 0, ty = 0, tz = 0;
+        if (u.Dead || u.Airborne != null) { }
+        else if (u.Target is { Dead: false } foe && (u.State == UnitState.Fight || Dist2(u, foe) < 30 * 30)) { tx = foe.X; ty = foe.Y + foe.T.BodyH * .8f; tz = foe.Z; at = true; }
+        else if (u.Prey is { Dead: false } prey) { tx = prey.X; ty = prey.Y + prey.T.BodyH * .6f; tz = prey.Z; at = true; }
+        else if (u.State == UnitState.Work && u.JobI < u.Jobs.Count) { var j = u.Jobs[u.JobI]; tx = j.x + .5f; ty = j.y + .5f; tz = j.z + .5f; at = true; }
+        else
+        {
+            // now and then something else to look at: about, or someone near
+            if (_m.Sim.Time >= look.GazeNext)
+            {
+                double rnd = Hash01(u.Id, (int)(sim.Time * 3));
+                look.GazeNext = sim.Time + 1.6 + rnd * 3.4;
+                bool walking = look.Move > .2f;
+                look.GazeAt = null;
+                if (!walking && rnd < .4)
+                {
+                    float best = 10 * 10 * VoxelWorld.PerMetre;
+                    foreach (var o in sim.Units)
+                        if (o != u && !o.Dead && Dist2(u, o) is var d2 && d2 < best && d2 > 4) { best = d2; look.GazeAt = o; }
+                }
+                look.IdleYaw = walking ? (float)(Hash01(u.Id, (int)(sim.Time * 7)) - .5) * (rnd < .7 ? .3f : 1.3f) : (float)(Hash01(u.Id, (int)(sim.Time * 5)) - .5) * 2.1f;
+                look.IdlePitch = (float)(Hash01(u.Id + 7, (int)(sim.Time * 5)) - .45) * .35f;
+            }
+            if (look.GazeAt is { Dead: false } g) { tx = g.X; ty = g.Y + g.T.BodyH * .85f; tz = g.Z; at = true; }
+            else { yaw = look.IdleYaw; pitch = look.IdlePitch; }
+        }
+        if (at)
+        {
+            float dx = tx - ex, dz = tz - ez, dy = ty - ey;
+            yaw = -Mathf.Wrap(MathF.Atan2(dz, dx) - look.Face, -MathF.PI, MathF.PI);
+            pitch = -MathF.Atan2(dy, MathF.Max(1, MathF.Sqrt(dx * dx + dz * dz)));
+        }
+        yaw = Math.Clamp(yaw, -1.2f, 1.2f);
+        pitch = Math.Clamp(pitch, -.6f, .75f);
+        float k = Math.Min(1, _dt * (at ? 7 : 3.5f));
+        look.HeadYaw += (yaw - look.HeadYaw) * k;
+        look.HeadPitch += (pitch - look.HeadPitch) * k;
+    }
+
+    static float Dist2(Unit a, Unit b) => (a.X - b.X) * (a.X - b.X) + (a.Z - b.Z) * (a.Z - b.Z);
+
+    static double Hash01(int a, int b) { unchecked { uint h = (uint)(a * 73856093) ^ (uint)(b * 19349663); h ^= h >> 13; h *= 0x5bd1e995; h ^= h >> 15; return (h & 0xFFFFFF) / (double)0x1000000; } }
 
     /// <summary>
     /// The arms in a fight, by what is in them: a bow drawn; a crossbow spanned with its nose to the ground, then
@@ -588,16 +808,21 @@ public partial class UnitView : Node3D
                 var g = w.Grid[p]; var g0 = plan.Grid[p];
                 bool hurt = g != g0 && (g == null || g0 == null || g.Count != g0.Count || !g.M.AsSpan().SequenceEqual(g0.M));
                 int sum = Sum(g);
-                if (own.At[p] >= 0 && hurt == own.Hurt[p] && sum == own.Sums[p]) continue;
-                own.Hurt[p] = hurt; own.Sums[p] = sum; own.At[p] = -1;
-                for (int l = 0; l < 3; l++) own.Kept[p, l] = null;
+                var (upper, lower) = Figure.BonesOf((Part)p);
+                if (own.At[(int)upper] >= 0 && hurt == own.Hurt[p] && sum == own.Sums[p]) continue;
+                own.Hurt[p] = hurt; own.Sums[p] = sum;
+                foreach (var b in new[] { (int)upper, (int)lower })
+                {
+                    own.At[b] = -1;
+                    for (int l = 0; l < 3; l++) own.Kept[b, l] = null;
+                }
             }
         }
-        for (int p = 0; p < Figure.Parts; p++)
+        for (int b = 0; b < Figure.Bones; b++)
         {
-            if (own.At[p] == _lod) continue;
-            if (own.At[p] >= 0 && own.Kept[p, _lod] == null && _meshing >= Spare) continue;
-            Draw(own, plan, p, w.Grid[p]);
+            if (own.At[b] == _lod) continue;
+            if (own.At[b] >= 0 && own.Kept[b, _lod] == null && _meshing >= Spare) continue;
+            Draw(own, plan, fig, b, w.Grid[(int)Figure.PartOf[b]]);
         }
         if (tint != own.Tint)
         {
@@ -606,10 +831,10 @@ public partial class UnitView : Node3D
             foreach (var n in own.Dress) n?.SetInstanceShaderParameter(Tinted, tint);
         }
         if (own.Hidden) { own.Hidden = false; Show(own, true); }
-        for (int p = 0; p < Figure.Parts; p++) if (own.Parts[p] != null) own.Parts[p].Transform = _xf[p];
-        for (int d = 0; d < own.Dress.Length; d++) if (own.Dress[d] != null) own.Dress[d].Transform = _xf[(int)fig.DressOn[d]] * Wrist(u, fig, d);
+        for (int b = 0; b < Figure.Bones; b++) if (own.Parts[b] != null) own.Parts[b].Transform = _xf[b];
+        for (int d = 0; d < own.Dress.Length; d++) if (own.Dress[d] != null) own.Dress[d].Transform = _xf[(int)fig.DressBone[d]] * Wrist(u, fig, d);
         // for the arrows stuck in it
-        for (int p = 0; p < Figure.Parts; p++) look_xf[u.Id * Figure.Parts + p] = _xf[p];
+        for (int b = 0; b < Figure.Bones; b++) look_xf[u.Id * Figure.Bones + b] = _xf[b];
         return own.Hurt;
     }
 
@@ -617,28 +842,31 @@ public partial class UnitView : Node3D
     /// One part of a hurt body drawn at the distance the figures are drawn at now, and what hangs on it: from the meshes
     /// kept for it there, or new ones made (nothing, for a part no wound has changed: its kind draws it).
     /// </summary>
-    void Draw(Own own, BodyPlan plan, int p, PartGrid g)
+    void Draw(Own own, BodyPlan plan, Figure fig, int b, PartGrid g)
     {
-        int lod = _lod;
-        var made = own.Kept[p, lod];
+        int lod = _lod, p = (int)Figure.PartOf[b];
+        var made = own.Kept[b, lod];
         if (made == null)
         {
             long t0 = Stopwatch.GetTimestamp();
             made = new Made { Dress = new Mesh[plan.Dress.Count] };
             if (own.Hurt[p])
             {
-                made.Body = lod == 0 ? GodotMesh.From(Figure.NearOf(plan, p, g, out _)) : lod == 1 ? GodotMesh.From(Figure.MidOf(plan, p, g, 0, out _)) : Figure.CoarseOf(plan.Seen(p, g));
+                int lo = fig.Lo[b], hi = fig.Hi[b];
+                bool has = fig.BoneNear[b] != null || fig.BoneMid[b] != null || fig.BoneFar[b] != null;
+                made.Body = !has ? null : lod == 0 ? GodotMesh.From(Figure.NearOf(plan, p, g, out _, lo, hi)) : lod == 1 ? GodotMesh.From(Figure.MidOf(plan, p, g, 0, out _, lo, hi))
+                    : Figure.CoarseOf(fig.Keep(plan, (Bone)b, plan.Seen(p, g)));
                 for (int d = 0; d < plan.Dress.Count && lod < 2; d++)
-                    if ((int)plan.Dress[d].On == p)
+                    if ((int)fig.DressBone[d] == b)
                         made.Dress[d] = GodotMesh.From(lod == 0 ? Figure.DressOf(plan, d, g, out _) : Figure.MidOf(plan, p, g, d + 1, out _));
             }
-            own.Kept[p, lod] = made;
+            own.Kept[b, lod] = made;
             _meshing += Stopwatch.GetTimestamp() - t0;
         }
-        Put(ref own.Parts[p], made.Body, lod == 0 ? BodyPlan.FineSub : lod == 1 ? BodyPlan.Sub : 1, lod, own);
+        Put(ref own.Parts[b], made.Body, lod == 0 ? BodyPlan.FineSub : lod == 1 ? BodyPlan.Sub : 1, lod, own);
         for (int d = 0; d < plan.Dress.Count; d++)
-            if ((int)plan.Dress[d].On == p) Put(ref own.Dress[d], made.Dress[d], lod == 0 ? plan.Dress[d].Sub : BodyPlan.Sub, lod, own);
-        own.At[p] = lod;
+            if ((int)fig.DressBone[d] == b) Put(ref own.Dress[d], made.Dress[d], lod == 0 ? plan.Dress[d].Sub : BodyPlan.Sub, lod, own);
+        own.At[b] = lod;
     }
 
     /// <summary>The figures' shader's tint for one drawn on its own (its kind's figures have theirs from the MultiMesh).</summary>
@@ -702,9 +930,10 @@ public partial class UnitView : Node3D
         foreach (var u in sim.Units)
         {
             if (u.Wounds == null) continue;
+            var fig = Figure.For(u.Wounds.Plan);
             foreach (var (part, x, y, z, dx, dy, dz) in u.Wounds.Arrows)
             {
-                if (!look_xf.TryGetValue(u.Id * Figure.Parts + (int)part, out var px)) continue;
+                if (!look_xf.TryGetValue(u.Id * Figure.Bones + (int)fig.BoneAt((Part)part, y), out var px)) continue;
                 var d = new Vector3(dx, dy, dz).Normalized();
                 var side = Vector3.Up.Cross(d);
                 side = side.LengthSquared() < 1e-6f ? Vector3.Right : side.Normalized();
@@ -872,7 +1101,7 @@ public partial class UnitView : Node3D
             RenderingServer.MultimeshSetBuffer(mm.GetRid(), buf);
             mm.VisibleInstanceCount = k.Count;
         }
-        for (int p = 0; p < Figure.Parts; p++) { One(k.Parts[p], k.Bufs[p]); One(k.Shades[p], k.Bufs[p]); }
+        for (int p = 0; p < Figure.Bones; p++) { One(k.Parts[p], k.Bufs[p]); One(k.Shades[p], k.Bufs[p]); }
         for (int d = 0; d < k.Dress.Length; d++) { One(k.Dress[d], k.DressBufs[d]); One(k.DressShades[d], k.DressBufs[d]); }
     }
 

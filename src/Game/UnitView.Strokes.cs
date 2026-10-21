@@ -20,7 +20,13 @@ namespace VoxelTower.Game;
 public partial class UnitView
 {
     /// <summary>The arms, the trunk and the step of one figure this frame, as turns at the joints.</summary>
-    struct Turns { public Quaternion Body, Main, Off; public Vector3 Step; }
+    struct Turns
+    {
+        public Quaternion Body, Main, Off;
+        public Vector3 Step;
+        /// <summary>How far the fight has taken over the arms (the striking arm straight along the stroke), and the trunk's lean in it.</summary>
+        public float Fight, Lean;
+    }
 
     /// <summary>
     /// What the view keeps of a fighter between frames: the pose last drawn and the stroke it was of, the blow it saw
@@ -192,6 +198,7 @@ public partial class UnitView
         }
         if (k > .5f && !f.Beast && MathF.Abs(t.Main.Y) + MathF.Abs(t.Main.Z) > .08f) Twisted++;
         Smear(u, f, st, root, since, lag, k);
+        t.Fight = k;
         return t;
     }
 
