@@ -1272,6 +1272,9 @@ public partial class UnitView : Node3D
     void DrawArrows(Sim sim)
     {
         DrawKegs(sim);
+        // a shot that missed throws up bits of what it came down in: earth, grass, chips of stone, water
+        foreach (var a in sim.Arrows) if (a.Done && !a.Hits && a.Kind is not (Shot.Pot or Shot.FirePot) && _grounded.Add(a)) Thud(a);
+        if (_grounded.Count > 600) _grounded.RemoveWhere(a => !sim.Arrows.Contains(a));
         var meshes = new[] { _arrows, _bolts, _stones, _pots, _firePots };
         Span<int> counts = stackalloc int[meshes.Length];
         foreach (var a in sim.Arrows) if (Flying(a)) counts[(int)a.Kind]++;
@@ -1311,6 +1314,21 @@ public partial class UnitView : Node3D
             var mm = meshes[k].Multimesh;
             RenderingServer.MultimeshSetBuffer(mm.GetRid(), _shotBufs[k]);
             mm.VisibleInstanceCount = counts[k];
+        }
+    }
+
+    readonly HashSet<Arrow> _grounded = new();
+
+    void Thud(Arrow a)
+    {
+        int x = (int)MathF.Floor(a.X1), z = (int)MathF.Floor(a.Z1);
+        bool stone = a.Kind == Shot.Stone;
+        for (int y = (int)a.Y1 + 1; y >= 0 && y >= (int)a.Y1 - 4; y--)
+        {
+            byte m = _w.Get(x, y, z);
+            if (m == 0) continue;
+            _m.Debris.Spawn(m, x, y, z, stone ? 4 : 2, stone ? 1.3f : .8f, m == Mat.Water ? .35f : .45f);
+            return;
         }
     }
 

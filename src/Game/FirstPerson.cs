@@ -26,6 +26,10 @@ public partial class FirstPerson : Node3D
     float _walk, _yawWas, _pitchWas;
     CanvasLayer _layer;
     Sights _sights;
+    // the edges of the eyes reddening as a blow strikes home on it, and dimly beating while it is near its end
+    ColorRect _hurt;
+    ShaderMaterial _hurtMat;
+    float _hurtA;
     Label _name, _hint, _aim;
     /// <summary>The keys as if held (the self-test walks it so): x right, y forward.</summary>
     public Vector2 TestMove;
@@ -51,6 +55,10 @@ public partial class FirstPerson : Node3D
         var root = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
         root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         _layer.AddChild(root);
+        _hurtMat = new ShaderMaterial { Shader = new Shader { Code = HurtShader } };
+        _hurt = new ColorRect { MouseFilter = Control.MouseFilterEnum.Ignore, Material = _hurtMat, Color = Colors.White };
+        _hurt.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        root.AddChild(_hurt);
         _sights = new Sights(this) { MouseFilter = Control.MouseFilterEnum.Ignore };
         _sights.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         root.AddChild(_sights);
@@ -59,7 +67,28 @@ public partial class FirstPerson : Node3D
         _hint = Hud.Text("", Ornament.Serif, 13, Ornament.Aged, outline: 5);
         foreach (var l in new[] { _name, _aim, _hint }) { l.MouseFilter = Control.MouseFilterEnum.Ignore; root.AddChild(l); }
         m.Sim.Unpossessed += why => { if (_u != null) Leave(why); };
+        m.Units.Landed += Felt;
     }
+
+    /// <summary>A blow come home, seen from the eyes: one struck on it jolts the view and reddens its edges, one it struck jolts it a little.</summary>
+    void Felt(Smiting h)
+    {
+        if (_u == null || h.Mat == Mat.Air) return;
+        if (h.On == _u)
+        {
+            _m.Rig.Shake(h.Glanced ? .3f : .45f);
+            if (!h.Glanced || h.Flesh > 0) _hurtA = Math.Min(.85f, _hurtA + .38f + Math.Min(.3f, h.Flesh * .02f));
+        }
+        else if (h.By == _u) _m.Rig.Shake(h.Glanced ? .32f : .24f);
+    }
+
+    const string HurtShader = @"shader_type canvas_item;
+uniform float strength = 0.0;
+void fragment() {
+    vec2 d = (UV - 0.5) * vec2(1.25, 1.0);
+    float edge = smoothstep(0.28, 0.75, length(d));
+    COLOR = vec4(0.55, 0.02, 0.01, edge * strength);
+}";
 
     /// <summary>Goes into one of ours; false if it cannot be gone into.</summary>
     public bool Enter(Unit u)
@@ -173,6 +202,11 @@ public partial class FirstPerson : Node3D
         var sim = _m.Sim;
         var u = _u;
         var w = _m.World;
+        // the red at the edges fading; near its end it beats there with its heart
+        _hurtA = Math.Max(0, _hurtA - dt * 1.4f);
+        float low = Math.Clamp((.35f - u.Hp / Math.Max(1, u.MaxHp)) / .35f, 0, 1);
+        float beat = low * (.18f + .12f * MathF.Pow(MathF.Max(0, MathF.Sin(Time.GetTicksMsec() / 1000f * 7.5f)), 6));
+        _hurtMat.SetShaderParameter("strength", Math.Max(_hurtA, beat));
         // the wish: forward and to the side as the keys are held, turned to where it looks
         float fwd = TestMove.Y, side = TestMove.X;
         if (!_m.Hud.MenuOpen)

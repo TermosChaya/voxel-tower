@@ -56,6 +56,7 @@ public partial class Main : Node3D
     public BuildTools Tools { get; private set; }
     public Hud Hud { get; private set; }
     public Debris Debris { get; private set; }
+    public BloodView Blood { get; private set; }
     public UnitView Units { get; private set; }
     public OrdersView Marks { get; private set; }
     public ZoneView Areas { get; private set; }
@@ -205,7 +206,7 @@ public partial class Main : Node3D
         World = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         Site = MapGen.Generate(World, mp);
         if (_demo && _pose == "trees") Grove();
-        if (_demo && _pose is "people" or "duel" or "reel") ClearGrove();
+        if (_demo && _pose is "people" or "duel" or "reel" or "blood") ClearGrove();
         // the field of the traps cleared of trees, so they are to be seen
         if (_demo && _pose == "engines") ClearTrees(Site.KeepX - Site.KeepR - 420, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 20, Site.KeepZ + 140);
         if (_demo && _pose == "drawbridge") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 120);
@@ -271,6 +272,9 @@ public partial class Main : Node3D
         var cover = new CoverView(); Cover = cover;
         AddChild(cover);
         cover.Init(this);
+        Blood = new BloodView();
+        AddChild(Blood);
+        Blood.Init(this);
         var fell = new FellView();
         AddChild(fell);
         fell.Init(this);
@@ -323,7 +327,7 @@ public partial class Main : Node3D
         Sim.Raised += (x, y, z, m) => { if (Random.Shared.NextDouble() < .05) Debris.Spawn(m, x, y, z, 1, .8f); };
         // every blow of a pawn's tool knocks chips off where it lands; a stone set down puffs a little dust of mortar
         Sim.Worked += (x, y, z, m, dig) => { if (m != Mat.Air) Debris.Spawn(m, x, y, z, dig ? 2 + Random.Shared.Next(2) : 1, dig ? 1.4f : .5f, dig ? .8f : .6f); };
-        Sim.Splashed = (x, y, z, n) => Debris.Spawn(Mat.Blood, (int)x, (int)y, (int)z, Math.Clamp(n / 3, 1, 6), 1.1f, .4f);
+        Sim.Splashed = (x, y, z, n) => { Debris.Spawn(Mat.Blood, (int)x, (int)y, (int)z, Math.Clamp(n / 3, 1, 6), 1.1f, .4f); Blood?.Splash(x, y, z, n); };
 
         if (_loaded)
         {
@@ -1220,7 +1224,7 @@ public partial class Main : Node3D
         // the camera looks at a plane 4 m up: past it by as much as the two stand under it
         float overD = (World.WY(duelist.Y + 8) - 4) / MathF.Tan(.5f);
         Rig.Set(World.WX(duelist.X) - MathF.Sin(-.3f) * overD, World.WZ(duelist.Z) - MathF.Cos(-.3f) * overD, -.3f, .5f, 7, snap: true);
-        int twisted0 = Units.Twisted, smears0 = Units.Smears, thrown0 = Debris.Sparked + Debris.Sprayed, blows0 = Units.Blows, coming0 = Units.BlowsSeenComing;
+        int twisted0 = Units.Twisted, smears0 = Units.Smears, thrown0 = Debris.Sparked + Debris.Sprayed, blows0 = Units.Blows, coming0 = Units.BlowsSeenComing, drips0 = Blood.Dripped;
         for (int i = 0; i < 140; i++) { Advance(.05); await Frames(1); }
         Sim.Smote -= Watch;
         // the blade is seen brought down to the body by the moment the blow is struck, so that the wound opens as it gets
@@ -1230,6 +1234,15 @@ public partial class Main : Node3D
             ways.Count >= 3 && Units.Twisted > twisted0 && Units.Smears > smears0 && Debris.Sparked + Debris.Sprayed > thrown0 && blowsH >= 4 && comingH * 3 >= blowsH * 2,
             $"{landed} blows, {ways.Count} ways ({string.Join(", ", ways)}); {comingH} of {blowsH} blows of the two brought down to the body by the time they were struck; {Units.Twisted - twisted0} figures turned out of a plain swing, {Units.Smears - smears0} smears, {Debris.Sparked + Debris.Sprayed - thrown0} sparks and bits");
         duelist.Dead = orc.Dead = true; duelist.DiedAt = orc.DiedAt = -999;
+
+        // blood spilt: the blows spatter the grass, the wounded drip as they go, and one killed lies in a pool spreading from under it
+        int pools0 = Blood.Pools, stainsH = Blood.Stains;
+        var slain = Sim.Spawn(Kinds.Goblin, Sim.NearestStand(kx - 140, kz + 175, 2));
+        Sim.Hurt(slain, null, 1000, "test");
+        for (int i = 0; i < 20; i++) { Advance(.1); await Frames(1); }
+        Check("blood is spilt: the blows spatter the ground, the wounded drip as they go, and one killed lies in a pool",
+            Blood.Dripped > drips0 && stainsH > 20 && Blood.Pools > pools0 && Blood.Stains > stainsH,
+            $"{Blood.Dripped - drips0} drops dripped, {stainsH} stains after the fight, {Blood.Pools - pools0} pool spreading, {Blood.Stains} stains now");
         Rig.Set(aim1.x, aim1.z, aim1.yaw, aim1.pitch, aim1.zoom, snap: true);
 
         // the citadel's muster: a click on the citadel opens it; a worker taken on is paid for at once and comes out of
@@ -1345,6 +1358,7 @@ public partial class Main : Node3D
         if (_pose == "people") { People(); return; }
         if (_pose == "duel") { Duel(); return; }
         if (_pose == "reel") { Reeling(); return; }
+        if (_pose == "blood") { Bloodshed(); return; }
         if (_pose == "troops") { Troops(); return; }
         if (_pose == "faith") { Faith(); return; }
         if (_pose == "captives") { Captives(); return; }
@@ -3035,6 +3049,30 @@ public partial class Main : Node3D
             float over = (World.WY(World.SurfAt((int)cx, (int)cz) + 8) - 4) / MathF.Tan(pitch);
             Rig.Set(World.WX(cx) - sin * over, World.WZ(cz) - cos * over, yaw, pitch, 3.4f, snap: true);
         }
+        Hud.Refresh();
+    }
+
+    /// <summary>
+    /// Blood spilt (--pose=blood, --at=seconds of fighting, 14 by itself): two swordsmen and a knight against goblins and
+    /// an orc on cleared ground, close; the blows spatter the grass, the wounded drip as they go, the dead lie in their pools.
+    /// </summary>
+    void Bloodshed()
+    {
+        var sim = Sim;
+        sim.Waves.Countdown = 1e9;
+        var (gx, gz) = GroveAt;
+        float cx = gx + 150, cz = gz + 110;
+        void Stand(UnitType t, float x, float z)
+        {
+            var u = sim.Spawn(t, sim.NearestStand((int)(cx + x), (int)(cz + z), t.Move.Height));
+            if (t.Team == Team.Player) { u.Hold = true; u.Post = u.Dest = u.Cell; } else { u.Guard = true; u.Home = u.Cell; }
+        }
+        Stand(Kinds.Swordsman, -12, -10); Stand(Kinds.Swordsman, -12, 10); Stand(Kinds.Knight, -16, 0);
+        Stand(Kinds.Goblin, 2, -12); Stand(Kinds.Goblin, 2, 12); Stand(Kinds.Goblin, 0, 0); Stand(Kinds.Goblin, 6, 6); Stand(Kinds.Orc, 6, -4);
+        Advance(_poseSeconds > 0 ? _poseSeconds : 14);
+        const float yaw = -.3f, pitch = .5f;
+        float over = (World.WY(World.SurfAt((int)cx, (int)cz) + 8) - 4) / MathF.Tan(pitch);
+        Rig.Set(World.WX(cx) - MathF.Sin(yaw) * over, World.WZ(cz) - MathF.Cos(yaw) * over, yaw, pitch, 4, snap: true);
         Hud.Refresh();
     }
 
