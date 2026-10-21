@@ -497,30 +497,42 @@ public sealed partial class Sim
     /// The leaves marked to be felled that hang together with this one, down — unless any of them touches wood (a trunk
     /// or a bough, standing or a stump still to be cut). Another tree's leaves they lean on do not hold them up.
     /// </summary>
-    int DropTuft(int x, int y, int z, HashSet<int> seen)
+    int DropTuft(int x, int y, int z, HashSet<int> held)
     {
-        if (!Mat.IsLeafy(World.Get(x, y, z)) || !Orders.IsRemove(Orders.At(x, y, z)) || !seen.Add(WaterPlanner.Pack(x, y, z))) return 0;
-        _tuft.Clear(); _tuftQueue.Clear();
+        int p0 = WaterPlanner.Pack(x, y, z);
+        if (!Mat.IsLeafy(World.Get(x, y, z)) || !Orders.IsRemove(Orders.At(x, y, z)) || held.Contains(p0)) return 0;
+        // (what is looked at for this tuft is kept apart from the tufts already found held: a tuft half looked at is
+        // not to be taken for one cut off, whatever order the columns are gone through in)
+        _tuft.Clear(); _tuftQueue.Clear(); _tuftSeen.Clear();
+        _tuftSeen.Add(p0);
         _tuftQueue.Enqueue((x, y, z));
-        while (_tuftQueue.Count > 0)
+        bool holds = false;
+        while (_tuftQueue.Count > 0 && !holds)
         {
             var (px, py, pz) = _tuftQueue.Dequeue();
             _tuft.Add((px, py, pz));
-            if (_tuft.Count > 40000) return 0;
-            for (int dy = -1; dy <= 1; dy++)
-                for (int dz = -1; dz <= 1; dz++)
+            if (_tuft.Count > 40000) { holds = true; break; }
+            for (int dy = -1; dy <= 1 && !holds; dy++)
+                for (int dz = -1; dz <= 1 && !holds; dz++)
                     for (int dx = -1; dx <= 1; dx++)
                     {
                         int nx = px + dx, ny = py + dy, nz = pz + dz;
                         if ((dx | dy | dz) == 0 || !World.InBounds(nx, ny, nz)) continue;
                         byte m = World.Get(nx, ny, nz);
-                        if (Mat.IsTrunk(m)) return 0;
-                        if (Mat.IsLeafy(m) && Orders.IsRemove(Orders.At(nx, ny, nz)) && seen.Add(WaterPlanner.Pack(nx, ny, nz))) _tuftQueue.Enqueue((nx, ny, nz));
+                        if (Mat.IsTrunk(m)) { holds = true; break; }
+                        if (!Mat.IsLeafy(m) || !Orders.IsRemove(Orders.At(nx, ny, nz))) continue;
+                        int np = WaterPlanner.Pack(nx, ny, nz);
+                        // hanging together with a tuft already found held: held too
+                        if (held.Contains(np)) { holds = true; break; }
+                        if (_tuftSeen.Add(np)) _tuftQueue.Enqueue((nx, ny, nz));
                     }
         }
+        if (holds) { foreach (int q in _tuftSeen) held.Add(q); return 0; }
         foreach (var (px, py, pz) in _tuft) Shed(px, py, pz);
         return _tuft.Count;
     }
+
+    readonly HashSet<int> _tuftSeen = new();
 
     /// <summary>
     /// What is no longer held comes down: taken out of where it stood, and laid again lower, column by column, each

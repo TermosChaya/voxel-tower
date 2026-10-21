@@ -758,6 +758,16 @@ if (args.Length == 0 || args[0] == "--sim")
         Check("archers hunt a boar down for gold", sent == 2 && boar.Dead && sim.Stock.Gold >= g0 + Kinds.Boar.Bounty, $"boar {(boar.Dead ? "taken" : $"{boar.Hp:0} hp")}, gold +{sim.Stock.Gold - g0:0}, archers {hunters[0].Hp:0}/{hunters[1].Hp:0} hp");
         foreach (var u in hunters) { u.Dead = true; u.DiedAt = -999; }
         deer.Dead = true; deer.DiedAt = -999;
+        // a deer runs from whoever hunts it: an archer sent after one keeps it in range as it runs, and brings it down
+        var stag = sim.Spawn(Kinds.Deer, sim.NearestStand((int)mx - 60, (int)mz + 140, 2));
+        var bowman = sim.Spawn(Kinds.Archer, sim.NearestStand((int)stag.X - 220, (int)stag.Z, 4));
+        int shots0 = sim.Shots;
+        sim.Hunt(new[] { bowman }, stag);
+        double hunted = 0;
+        for (; hunted < 60 && !stag.Dead; hunted += .5) Run(.5);
+        Check("an archer sent after a running deer keeps it in range and brings it down", stag.Dead,
+            $"the deer {(stag.Dead ? $"taken in {hunted:0} s" : $"{stag.Hp:0} hp after a minute")}, {sim.Shots - shots0} shots");
+        bowman.Dead = true; bowman.DiedAt = -999; stag.Dead = true; stag.DiedAt = -999;
     }
 
     // the horde finds its way
@@ -2720,6 +2730,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--captives")
     simC.Carcasses.Add(Kinds.Boar);
     string nightC = simC.Sacrifice(RiteKind.Carcass);
     for (int t = 0; t < 300 && gob2C.Inside; t++) RunC(.5);
+    if (Environment.GetEnvironmentVariable("NIGHT_WHY") != null)
+        foreach (var o in simC.Units) if (!o.Dead && o.Team == Team.Player) Console.WriteLine($"  NIGHT_WHY {o.T.Name} #{o.Id} {o.X:0},{o.Z:0} inside {o.Inside} {o.State} militia {o.Militia}; waves {simC.Waves.Active}, unguarded {gob2C.Unguarded:0.0}, bound {gob2C.Bound}");
     Check("by night there are no rites; a prisoner left unguarded slips out of the citadel and runs", nightC != null && !gob2C.Inside && !gob2C.Bound && gob2C.Routed,
         $"a rite by night: {nightC ?? "asked"}; the prisoner {(gob2C.Inside ? "still inside" : gob2C.Routed ? "out and running" : "out")}");
     simC.Waves.CallOff(simC);
@@ -3839,9 +3851,9 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
     RunS(20);
     simS.Waves.StartNow(simS);
     RunS(25);
-    // a post of logs set alight
-    int px = kxS - 170, pz = kzS + 60, pg = wS.SurfAt(px, pz);
-    for (int y = pg; y < pg + 12; y++) for (int z = pz; z < pz + 2; z++) for (int x = px; x < px + 2; x++) wS.Set(x, y, z, Mat.Wood);
+    // a dead tree's trunk set alight, out in the field (our workers put out what burns of ours, and are quick about it)
+    int px = kxS - 400, pz = kzS + 60, pg = wS.SurfAt(px, pz);
+    for (int y = pg; y < pg + 12; y++) for (int z = pz; z < pz + 2; z++) for (int x = px; x < px + 2; x++) wS.Set(x, y, z, Mat.Trunk);
     simS.Ignite(px, pg + 4, pz);
     RunS(1);
     // and something learnt, and given
@@ -3882,7 +3894,40 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
     {
         var a = wS.ChunkData(ci); var b = wL.ChunkData(ci);
         bool same = a == null ? b == null && wS.ChunkUniform(ci) == wL.ChunkUniform(ci) : b != null && a.AsSpan().SequenceEqual(b);
-        if (!same) chunksOff++;
+        if (!same)
+        {
+            chunksOff++;
+            if (Environment.GetEnvironmentVariable("SAVE_WHY") != null)
+            {
+                wS.ChunkCoords(ci, out int ccx, out int ccy, out int ccz);
+                int shown = 0;
+                for (int y = ccy * 32; y < ccy * 32 + 32 && shown < 6; y++)
+                    for (int z = ccz * 32; z < ccz * 32 + 32 && shown < 6; z++)
+                        for (int x = ccx * 32; x < ccx * 32 + 32 && shown < 6; x++)
+                            if (wS.Get(x, y, z) != wL.Get(x, y, z)) { shown++; Console.WriteLine($"  SAVE_WHY {x},{y},{z}: saved {Mat.NameOf(wS.Get(x, y, z))}, read {Mat.NameOf(wL.Get(x, y, z))}; order {simS.Orders.At(x, y, z)} / {simL.Orders.At(x, y, z)}; chunk changed {wS.Changed(ci)}; below {Mat.NameOf(wS.Get(x, y - 1, z))} / {Mat.NameOf(wL.Get(x, y - 1, z))}");
+                                if (shown == 1)
+                                {
+                                    // the tuft it hangs in, and any trunk it touches, in both
+                                    foreach (var (wv, nm) in new[] { (wS, "saved"), (wL, "read") })
+                                    {
+                                        var seenT = new HashSet<long>(); var q = new Queue<(int, int, int)>(); q.Enqueue((x, y, z)); seenT.Add(((long)y * 1024 + z) * 1024 + x);
+                                        int leaves = 0; string trunk = "none";
+                                        while (q.Count > 0 && leaves < 50000)
+                                        {
+                                            var (qx, qy, qz) = q.Dequeue(); leaves++;
+                                            for (int ddy = -1; ddy <= 1; ddy++) for (int ddz = -1; ddz <= 1; ddz++) for (int ddx = -1; ddx <= 1; ddx++)
+                                            {
+                                                int nx = qx + ddx, ny = qy + ddy, nz = qz + ddz; byte nm2 = wv.Get(nx, ny, nz);
+                                                if (Mat.IsTrunk(nm2) && trunk == "none") trunk = $"{nx},{ny},{nz} {Mat.NameOf(nm2)} (other {Mat.NameOf((wv == wS ? wL : wS).Get(nx, ny, nz))})";
+                                                if (Mat.IsLeafy(nm2) && seenT.Add(((long)ny * 1024 + nz) * 1024 + nx)) q.Enqueue((nx, ny, nz));
+                                            }
+                                        }
+                                        Console.WriteLine($"    {nm}: tuft {leaves} leaves, trunk {trunk}");
+                                    }
+                                }
+                            }
+            }
+        }
     }
     int designOff = 0;
     for (int ci = 0; ci < wS.ChunkCount; ci++)
@@ -5299,6 +5344,44 @@ static int OverLand(VoxelWorld w, Site site)
 }
 
 // ---- felling: trees round the fort felled by the household of a new game, crowns and all, nothing left up in the air
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--labour")
+{
+    // the pace of the work: a block of rock broken out by one worker, and a wall of stone laid by one, each in about the
+    // time the reckoning shown with the marking promises (the walking to it and about it on top)
+    Console.WriteLine();
+    var mpL = new MapParams();
+    var wL = new VoxelWorld(mpL.SizeX, mpL.SizeY, mpL.SizeZ);
+    var siteL = MapGen.Generate(wL, mpL);
+    wL.Compact();
+    var simL = new Sim(wL, siteL);
+    simL.Waves.Countdown = 1e9; simL.WildTarget = 0;
+    void RunL(double seconds) { for (double t = 0; t < seconds; t += .05) simL.Step(.05f); }
+    var (glx, _, glz) = simL.Nav.Feet(simL.Gate);
+    int bx = (int)glx - 60, bz = (int)glz - 8, bg = wL.SurfAt(bx + 8, bz + 8);
+    var block = new VoxelList();
+    for (int y = bg; y < bg + 8; y++)
+        for (int z = bz; z < bz + 16; z++)
+            for (int x = bx; x < bx + 16; x++) { wL.Set(x, y, z, Mat.Rock); block.Add(x, y, z, Mat.Rock); }
+    simL.Nav.Flush();
+    var est = new double[4];
+    double promised = Labour.Estimate(wL, block, true, est);
+    var miner = simL.Spawn(Kinds.Worker, simL.NearestStand(bx - 6, bz + 8, 4));
+    double stone0 = simL.Stock[Stockpile.Stone];
+    simL.DesignateRemove(block);
+    double took = 0;
+    while (simL.Orders.Total > 0 && took < promised * 6 + 30) { RunL(.5); took += .5; }
+    Check("one worker breaks out a block of rock in about the time the marking reckons", simL.Orders.Total == 0 && took < promised * 1.8 + 6,
+        $"{block.Count} voxels of rock, reckoned {promised:0} s, took {took:0} s; stone +{Fmt.M3(simL.Stock[Stockpile.Stone] - stone0)} m³");
+    var wallL = Shapes.Line(wL, siteL, bx, bz + 30, bx + 24, bz + 30, new Stroke { Mat = Mat.Stone, Width = 4, Height = 12, Level = true }, Shapes.LevelTop(wL, bx + 12, bz + 30, 12));
+    double promisedLay = Labour.Estimate(wL, wallL, false, est);
+    simL.Stock[Stockpile.Stone] = Math.Max(simL.Stock[Stockpile.Stone], wallL.Count + 100);
+    simL.DesignateBuild(wallL);
+    double tookLay = 0;
+    while (simL.Orders.BuildTotal > 0 && tookLay < promisedLay * 6 + 30) { RunL(.5); tookLay += .5; }
+    Check("one worker lays a wall of stone in about the time the marking reckons", simL.Orders.BuildTotal == 0 && tookLay < promisedLay * 1.8 + 6,
+        $"{wallL.Count} voxels of stone, reckoned {promisedLay:0} s, took {tookLay:0} s");
+}
+
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--felling")
 {
     Console.WriteLine();

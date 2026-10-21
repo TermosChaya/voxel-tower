@@ -158,7 +158,8 @@ public sealed partial class Sim
                 // nothing to do from here after all (stores empty, or someone stands where the masonry goes):
                 // leave this spot to others for a while and look elsewhere; what waits for something to be laid under
                 // it waits a good while — walking back to it every few seconds only takes the hands off other work
-                u.Unreachable[u.Site] = Time + (u.Why.StartsWith("ждёт опоры") ? 30 : u.Why.StartsWith("нет") ? 8 : 4);
+                bool aside = _inTheWay && StepAside(u);
+                u.Unreachable[u.Site] = Time + (aside ? 1.5 : u.Why.StartsWith("ждёт опоры") ? 30 : u.Why.StartsWith("нет") ? 8 : 4);
                 ReleaseSite(u);
                 u.NextSearch = Time + .2;
                 return;
@@ -173,8 +174,10 @@ public sealed partial class Sim
         // the effort since the last affords — a stone may take two or three blows to come away, loose earth comes a few
         // spadefuls to the blow — and between them the arm draws back to come down on the very voxel it works next
         if (u.JobI < u.Jobs.Count) { var next = u.Jobs[u.JobI]; u.Facing = MathF.Atan2(next.z + .5f - u.Z, next.x + .5f - u.X); }
-        u.Beat += dt * u.Pace / Math.Max(.3f, Bodies.Plan(u.T, u.Look).Chop);
-        if (u.Beat < 1) { u.Effort = Math.Min(u.Effort, 60); return; }
+        float chop = Math.Max(.3f, Bodies.Plan(u.T, u.Look).Chop);
+        u.Beat += dt * u.Pace / chop;
+        // what is put by between blows is the work of one blow (none stored up while it walked or stood about)
+        if (u.Beat < 1) { u.Effort = Math.Min(u.Effort, (float)(Labour.WorkPerSecond * u.T.Work * chop) * 1.1f + 60); return; }
         u.Beat -= MathF.Floor(u.Beat);
         // the blow lands on the voxel it was drawn at: chips and the ring of it, whether or not it comes away this time
         if (u.JobI < u.Jobs.Count)
@@ -239,9 +242,12 @@ public sealed partial class Sim
     /// The orders within reach of where the pawn stands, of the work it came here for: digging top-down first, then
     /// laying bottom-up, and within each course the voxels nearest to it first, so two at one site work different ends.
     /// </summary>
+    // set by Gather: what is to be laid waits on the very spot the one gathering stands on
+    bool _inTheWay;
+
     void Gather(Unit u)
     {
-        u.Jobs.Clear(); u.JobI = 0; u.Why = "";
+        u.Jobs.Clear(); u.JobI = 0; u.Why = ""; _inTheWay = false;
         int i = Nav.I(u.Cell), k = Nav.K(u.Cell), feet = (int)MathF.Round(u.Y);
         int x0 = Math.Max(0, (i - 1) * NavGrid.CS), x1 = Math.Min(World.SX, (i + 2) * NavGrid.CS);
         int z0 = Math.Max(0, (k - 1) * NavGrid.CS), z1 = Math.Min(World.SZ, (k + 2) * NavGrid.CS);
@@ -259,7 +265,14 @@ public sealed partial class Sim
                     if (Orders.IsRemove(o)) { digs.Add((x, y, z, o)); continue; }
                     int ck = Labour.CostKind(o);
                     if (ck != Stockpile.None && Stock[ck] < 1) { missing = Stockpile.Name(ck); continue; }
-                    if (_bodies[Nav.CellOf(x, y, z)] > 0) { crowded = true; continue; }
+                    int bc = Nav.CellOf(x, y, z);
+                    if (_bodies[bc] > 0)
+                    {
+                        crowded = true;
+                        // it is itself where the masonry goes
+                        if (Nav.I(bc) == Nav.I(u.Cell) && Nav.K(bc) == Nav.K(u.Cell) && Nav.Y(bc) >= Nav.Y(u.Cell) && Nav.Y(bc) < Nav.Y(u.Cell) + u.T.Move.Height) _inTheWay = true;
+                        continue;
+                    }
                     // nothing yet to lay it on: what is under it first (it is gathered again once that is laid)
                     if (o != Mat.Pitch && !Footed(x, y, z) && !builds.Exists(b => Math.Abs(b.x - x) + Math.Abs(b.y - y) + Math.Abs(b.z - z) == 1)) { unfooted = true; continue; }
                     builds.Add((x, y, z, o));
@@ -279,6 +292,44 @@ public sealed partial class Sim
         u.Jobs.AddRange(digs);
         u.Jobs.AddRange(builds);
         if (u.Jobs.Count == 0) u.Why = missing != "" ? "нет: " + missing : crowded ? "на месте кладки стоят" : unfooted ? "ждёт опоры: класть не на что" : "";
+    }
+
+    /// <summary>
+    /// One standing where its own masonry is to go steps off it to the nearest ground beside where nothing is to be
+    /// laid, and comes back to the work from there; true if it found where to go.
+    /// </summary>
+    bool StepAside(Unit u)
+    {
+        int i = Nav.I(u.Cell), k = Nav.K(u.Cell), y = Nav.Y(u.Cell), h = u.T.Move.Height;
+        for (int r = 1; r <= 2; r++)
+            for (int dk = -r; dk <= r; dk++)
+                for (int di = -r; di <= r; di++)
+                {
+                    if (Math.Max(Math.Abs(di), Math.Abs(dk)) != r) continue;
+                    for (int dy = 0; dy <= 2; dy = dy <= 0 ? 1 - dy : -dy)
+                    {
+                        int ni = i + di, nk = k + dk, ny = y + dy;
+                        if (ni < 0 || nk < 0 || ni >= Nav.NX || nk >= Nav.NZ || ny < 1 || ny >= Nav.NY || !Nav.Stand(ni, ny, nk, h)) continue;
+                        int c = Nav.Id(ni, ny, nk);
+                        if (_bodies[c] > 0 || ToLay(c, h)) continue;
+                        if (GoTo(u, c, budget: 600)) { u.Why = ""; return true; }
+                    }
+                }
+        return false;
+    }
+
+    /// <summary>Whether anything is marked to be laid in a cell someone so tall would stand in.</summary>
+    bool ToLay(int cell, int h)
+    {
+        int x0 = Nav.I(cell) << NavGrid.Shift, z0 = Nav.K(cell) << NavGrid.Shift, y0 = Nav.Y(cell) << NavGrid.Shift;
+        for (int y = y0; y < Math.Min(World.SY, y0 + h * NavGrid.CS); y++)
+            for (int z = z0; z < z0 + NavGrid.CS; z++)
+                for (int x = x0; x < x0 + NavGrid.CS; x++)
+                {
+                    byte o = Orders.At(x, y, z);
+                    if (o != 0 && !Orders.IsRemove(o)) return true;
+                }
+        return false;
     }
 
     void FindWork(Unit u)

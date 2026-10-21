@@ -178,7 +178,7 @@ public sealed partial class Sim
     double _guardLook = -99;
     bool _guarded;
 
-    /// <summary>Some of our fighters by the citadel's door or inside it: the prisoners are watched.</summary>
+    /// <summary>Some of our fighters by the citadel's door or inside it (not lying there to mend): the prisoners are watched.</summary>
     bool GuardedKeep()
     {
         if (Time - _guardLook < .5) return _guarded;
@@ -187,7 +187,8 @@ public sealed partial class Sim
         _guarded = false;
         foreach (var o in Units)
         {
-            if (o.Dead || o.Team != Team.Player || !Fighter(o)) continue;
+            // (one lying hurt in the citadel to mend watches nobody)
+            if (o.Dead || o.Team != Team.Player || !Fighter(o) || o.Inside && o.Mending) continue;
             float dx = o.X - gx, dz = o.Z - gz;
             if (o.Inside || dx * dx + dz * dz < GuardBy * GuardBy) { _guarded = true; break; }
         }

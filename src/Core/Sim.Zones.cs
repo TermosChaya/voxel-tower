@@ -366,13 +366,14 @@ public sealed partial class Sim
     }
 
     /// <summary>
-    /// A patch of rock or earth around a column, from the surface down to the zone's floor, and the plants over it;
-    /// a tree standing in it comes down whole.
+    /// A patch of rock or earth around a column, two and a half metres across, from the surface down to the zone's
+    /// floor, and the plants over it; a tree standing in it comes down whole. As much as a worker gets through from where
+    /// it stands, so that it is not forever walking to the next.
     /// </summary>
     VoxelList Patch(Zone z, int x0, int z0)
     {
         var L = new VoxelList();
-        const int r = 6;
+        const int r = 10;
         for (int zz = z0 - r; zz <= z0 + r; zz++)
             for (int x = x0 - r; x <= x0 + r; x++)
             {

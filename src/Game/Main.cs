@@ -781,7 +781,8 @@ public partial class Main : Node3D
         var hung = Sim.Gates.Count > gates0 ? Sim.Gates[^1] : null;
         Advance(60);
         Check("…the workers cut the gateway and hang the gate", hung != null && hung.Ready,
-            hung == null ? "no gate planned" : $"leaves on the {(hung.In > 0 ? "east" : "west")}, ready {hung.Ready}");
+            hung == null ? "no gate planned" : $"leaves on the {(hung.In > 0 ? "east" : "west")}, ready {hung.Ready}; {Sim.Orders.Total} marked, {Sim.Orders.BuildTotal} to lay, wood {Fmt.M3(Sim.Stock[Stockpile.Wood])} m³; " +
+                string.Join(", ", Sim.Units.FindAll(u => u.T == Kinds.Worker && !u.Dead).ConvertAll(u => $"#{u.Id} {u.State} {u.Why}")));
 
         // the horde knocks a hole into the new wall: a click with the mending tool lays it again as it was
         int hy = ground + 8, holed = 0;
@@ -855,13 +856,22 @@ public partial class Main : Node3D
         Selected.Clear(); Selected.Add(swordsman);
         Hud.OnSelectionChanged();
         Command.TakeAliveSelected();
+        // (the archers, told nothing of it, stood well off meanwhile: they would shoot it down)
+        var bowmen = Sim.Units.FindAll(u => !u.Dead && !u.Inside && u.Team == Team.Player && u.T.Ranged);
+        var bowAt = bowmen.ConvertAll(u => u.Cell);
+        foreach (var b in bowmen)
+        {
+            int far = Sim.NearestStand((int)b.X + (b.X > World.SX / 2 ? -300 : 300), (int)b.Z, b.T.Move.Height);
+            if (far >= 0) { b.Cell = far; (b.X, b.Y, b.Z) = Sim.Nav.Feet(far); b.Path = null; }
+        }
         var captive = Sim.Spawn(Kinds.Goblin, Sim.NearestStand((int)swordsman.X + 10, (int)swordsman.Z, 2));
         captive.Guard = true; captive.Home = captive.Cell;
         for (int t = 0; t < 120 && !captive.Bound && !captive.Dead; t++) Advance(.25);
         bool felled = captive.Bound && !captive.Dead;
         for (int t = 0; t < 240 && !captive.Inside && !captive.Dead; t++) Advance(.5);
         Check("«Живьём»: the swordsman fells a goblin and binds it, and a worker leads it into the citadel", swordsman.TakeAlive && felled && captive.Inside,
-            $"take alive {swordsman.TakeAlive}, felled and bound {felled}, inside {captive.Inside}{(captive.Dead ? ", dead: " + captive.KilledBy : "")}");
+            $"take alive {swordsman.TakeAlive}, felled and bound {felled}, inside {captive.Inside}{(captive.Dead ? ", dead: " + captive.KilledBy : "")}; hurt last by {captive.HurtBy?.T.Name}");
+        for (int i = 0; i < bowmen.Count; i++) { var b = bowmen[i]; b.Cell = bowAt[i]; (b.X, b.Y, b.Z) = Sim.Nav.Feet(bowAt[i]); b.Path = null; }
         Command.ClearSelection();
         Hud.OpenPanel("magic");
         Hud.Refresh();
@@ -1331,6 +1341,8 @@ public partial class Main : Node3D
         Rig.Set(aim1.x, aim1.z, aim1.yaw, aim1.pitch, aim1.zoom, snap: true);
 
         // work marked is followed: a tag over it says how far it has got, and when it is done the chronicle says so
+        // (the valley cleared of raiders left over, which would keep the workers in the citadel)
+        foreach (var u in Sim.Units) if (u.Team == Team.Horde && !u.Dead && !u.Bound && !u.Inside) { u.Dead = true; u.DiedAt = -999; }
         int lowTop = Shapes.LevelTop(World, kx - 110, kz + 70, 4);
         var low = Shapes.Line(World, Site, kx - 116, kz + 70, kx - 104, kz + 70, new Stroke { Mat = Mat.Stone, Width = 2, Height = 2, Level = true }, lowTop);
         int finished0 = Progress.Finished, lines0 = Hud.Lines.Count;
@@ -1342,7 +1354,8 @@ public partial class Main : Node3D
         for (int i = lines0; i < Hud.Lines.Count; i++) toldDone |= Hud.Lines[i].text.StartsWith("Готово: камень");
         Check("work marked is followed with how far it has got, and when it is done the chronicle says so",
             following && Progress.Finished > finished0 && toldDone,
-            $"followed {following}; finished {Progress.Finished - finished0}, told {toldDone}");
+            $"followed {following}; finished {Progress.Finished - finished0}, told {toldDone}; " +
+            string.Join(", ", Sim.Units.FindAll(u => u.T == Kinds.Worker && !u.Dead).ConvertAll(u => $"#{u.Id} {u.State} {u.Why}")));
 
         // the citadel's muster: a click on the citadel opens it; a worker taken on is paid for at once and comes out of
         // its door only when made ready. Whoever stands about the citadel's foot by now is sent a little way off first (an
