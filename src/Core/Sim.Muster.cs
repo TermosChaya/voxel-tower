@@ -45,10 +45,10 @@ public sealed partial class Sim
     }
 
     /// <summary>The places there are: the citadel's (more with barracks), and a place for each bed in a dwelling (two with bunks).</summary>
-    public int Places => CitadelPlaces + (Knows("barracks") ? 4 : 0) + DwellingBeds() * (Knows("bunks") ? 2 : 1);
+    public int Places => CitadelPlaces + (Knows("barracks") ? 4 : 0) + DwellingBeds() * (Knows("bunks") ? 2 : 1) + (Sandbox ? 100 : 0);
 
     /// <summary>The seconds the citadel takes to make one of this kind ready (less with a drill yard).</summary>
-    public float TrainTime(UnitType t) => t.Train * (Knows("drillyard") ? .7f : 1);
+    public float TrainTime(UnitType t) => Sandbox ? .5f : t.Train * (Knows("drillyard") ? .7f : 1);
 
     /// <summary>Whether the household has learnt what this kind waits on.</summary>
     public bool Unlocked(UnitType t) => t.Lore == "" || Knows(t.Lore);

@@ -5777,5 +5777,34 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--felling")
     }
 }
 
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--sandbox")
+{
+    // the sandbox: everything learnt, spells free and ready at once, the stores kept full, room for a hundred more,
+    // and a band of the horde called up where it is pointed at, which does the citadel no harm
+    Console.WriteLine();
+    var mpS = new MapParams();
+    var wS = new VoxelWorld(mpS.SizeX, mpS.SizeY, mpS.SizeZ);
+    var siteS = MapGen.Generate(wS, mpS);
+    wS.Compact();
+    var simS = new Sim(wS, siteS);
+    simS.WildTarget = 0;
+    StartingFort.Raise(simS);
+    void RunS(double seconds) { for (double t = 0; t < seconds; t += .05) simS.Step(.05f); }
+    simS.BeginSandbox();
+    bool allKnown = Sim.Lores.All(l => simS.Knows(l.Key));
+    var spell = Sim.SpellOf(SpellKind.Explosion);
+    simS.Stock.Gold -= 4000;
+    RunS(.1);
+    Check("the sandbox learns everything, makes spells free and ready at once, keeps the stores full and the army roomy",
+        allKnown && simS.CostOf(spell) == 0 && simS.CooldownOf(spell) == 0 && simS.Stock.Gold >= 5000 && simS.Places >= 100 && simS.Errands.Count == 0,
+        $"all known {allKnown}, cost {simS.CostOf(spell)}, cooldown {simS.CooldownOf(spell)}, gold {simS.Stock.Gold:0}, places {simS.Places}, errands {simS.Errands.Count}");
+    double keep0 = simS.KeepHp;
+    var called = simS.Summon(siteS.KeepX - 60, siteS.KeepZ, heavy: true);
+    RunS(40);
+    Check("…a band called up where it is pointed at comes whole and goes at the citadel, which takes no harm",
+        called != null && called.Members.Count == 6 && called.Members.Exists(u => u.T == Kinds.Troll) && simS.KeepHp >= keep0 && !simS.Over,
+        $"band {called?.Name} of {called?.Members.Count}, state {called?.State}; citadel {keep0:0} → {simS.KeepHp:0}");
+}
+
 Console.WriteLine(failures == 0 ? "\nall checks passed" : $"\n{failures} check(s) failed");
 return failures == 0 ? 0 : 1;

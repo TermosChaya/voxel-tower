@@ -412,12 +412,24 @@ public partial class Commander : Node
 
     public void CycleSpeed() => SetSpeed(_m.Speed % 3 + 1);
 
+    void Summon(bool heavy)
+    {
+        var (o, d) = _m.Rig.Ray(GetViewport().GetMousePosition());
+        var w = _m.World;
+        if (!Raycast.Cast(w, (o.X - w.OriginX) / VoxelWorld.Vox, o.Y / VoxelWorld.Vox, (o.Z - w.OriginZ) / VoxelWorld.Vox, d.X, d.Y, d.Z, out var hit, skipVeg: true)) return;
+        var g = hit.Ground(w);
+        bool ok = _m.Sim.Summon(g.x, g.z, heavy) != null;
+        _m.Hud.Float(!ok ? "здесь некуда встать" : heavy ? "тяжёлая ватага" : "ватага", ok ? Ornament.EmberGlow : Ornament.Blood);
+    }
+
     public override void _UnhandledInput(InputEvent e)
     {
         if (e is not InputEventKey k || !k.Pressed || k.Echo || _m.Hud.MenuOpen) return;
         // the quick save, and reading it back
         if (Bindings.Is(k, Act.QuickSave) && !k.CtrlPressed && !k.MetaPressed) { if (Saves.Write(_m, Saves.Quick)) _m.Hud.Float("быстрое сохранение", Ornament.Moss); GetViewport().SetInputAsHandled(); return; }
         if (Bindings.Is(k, Act.QuickLoad) && !k.CtrlPressed && !k.MetaPressed) { Saves.Read(_m, Saves.Quick); GetViewport().SetInputAsHandled(); return; }
+        // the sandbox: a band of the horde called up where the pointer is, a heavy one with Shift
+        if (_m.Sim.Sandbox && k.PhysicalKeycode == Key.O && !k.CtrlPressed && !k.MetaPressed) { Summon(k.ShiftPressed); GetViewport().SetInputAsHandled(); return; }
         // squads: Ctrl and a digit remembers the chosen, Shift and the digit calls them up
         if (k.PhysicalKeycode is >= Key.Key1 and <= Key.Key5 && (k.CtrlPressed || k.MetaPressed || k.ShiftPressed))
         {

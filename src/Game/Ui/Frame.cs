@@ -427,8 +427,10 @@ public partial class Stores : Control
             if (g > 0) Ornament.Diamond(this, new Vector2(x, Size.Y / 2), 3.2f, Ornament.Fade(Ornament.BronzeLight, .85f));
             if (_glow[g] > 0) DrawRect(new Rect2(x + 3, 3, Cell - 6, Size.Y - 6), new Color(Ornament.EmberGlow, .22f * _glow[g]));
             Groups[g].icon(this, new Rect2(x + 10, (Size.Y - 22) / 2, 22, 22), Ornament.BronzeLight);
+            // a long figure (thousands of gold, an army of a hundred) is set smaller rather than cut off
             int size = Cell < 96 ? 18 : 21;
-            DrawString(Ornament.SerifBold, new Vector2(x + 36, Size.Y / 2 + size * .36f), Values[g], HorizontalAlignment.Left, Cell - 38, size, Short[g] ? Ornament.Blood : Ornament.Parchment);
+            while (size > 12 && Ornament.SerifBold.GetStringSize(Values[g], HorizontalAlignment.Left, -1, size).X > Cell - 40) size--;
+            DrawString(Ornament.SerifBold, new Vector2(x + 36, Size.Y / 2 + size * .36f), Values[g], HorizontalAlignment.Left, -1, size, Short[g] ? Ornament.Blood : Ornament.Parchment);
         }
         foreach (var (cell, text, age) in _gains)
         {

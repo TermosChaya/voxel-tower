@@ -137,7 +137,7 @@ public sealed partial class Sim
     float FearOfUs => HasRelic("jaw") ? .75f : 1;
     float HideHack => HasRelic("hide") ? .7f : 1;
     float Drum => HasRelic("drum") ? 1.17f : 1;
-    float KeepHurt => HordeHarm * (HasRelic("shield") ? .5f : 1);
+    float KeepHurt => Sandbox ? 0 : HordeHarm * (HasRelic("shield") ? .5f : 1);
 
     // ---------------------------------------------------------------- saved
 

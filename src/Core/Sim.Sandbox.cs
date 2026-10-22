@@ -1,0 +1,52 @@
+using System;
+
+namespace VoxelTower.Core;
+
+/// <summary>
+/// The sandbox, for trying the whole game at once (--sandbox): every lore learnt and every spell known, the stores and
+/// the intervention full and kept full, spells free and ready again at once, recruits ready as soon as they are taken,
+/// room for a hundred more in the army, and a citadel nothing breaks. Bands of the horde can be called up anywhere in
+/// the valley to try things on. No errands, chapters or gifts: it is no siege of one's own. Not kept in a save.
+/// </summary>
+public sealed partial class Sim
+{
+    public bool Sandbox;
+
+    public void BeginSandbox()
+    {
+        Sandbox = true;
+        NoErrands = true;
+        Errands.Clear();
+        foreach (var l in Lores)
+        {
+            if (l.Spell is { } k) Known.Add(k);
+            else Learnt.Add(l.Key);
+        }
+        Fill();
+    }
+
+    /// <summary>The stores and the intervention topped up, so that nothing tried runs short.</summary>
+    void Fill()
+    {
+        Stock.Gold = Math.Max(Stock.Gold, 5000);
+        foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth }) Stock[k] = Math.Max(Stock[k], 1000.0 * VoxelWorld.PerM3);
+        Favour = Math.Max(Favour, FavourCap);
+        Revelations = Math.Max(Revelations, 20);
+        Knowledge = Math.Max(Knowledge, 50);
+    }
+
+    /// <summary>A band of the horde called up at a place of the valley: light (goblins and orcs) or heavy (trolls and a shaman).</summary>
+    public Warband Summon(int x, int z, bool heavy)
+    {
+        // room to stand for the tallest of the band
+        int at = NearestStand(x, z, (heavy ? Kinds.Troll : Kinds.Orc).Move.Height);
+        if (at < 0) return null;
+        var b = new Warband { Id = _nextBand++, State = BandState.Coming, Entry = at, Name = heavy ? "Тяжёлая ватага" : "Ватага" };
+        b.Roster.AddRange(heavy
+            ? new[] { Kinds.Troll, Kinds.Orc, Kinds.Orc, Kinds.Troll, Kinds.Orc, Kinds.Shaman }
+            : new[] { Kinds.Orc, Kinds.Goblin, Kinds.Goblin, Kinds.Orc, Kinds.Goblin, Kinds.Goblin, Kinds.Orc });
+        Bands.Add(b);
+        foreach (var t in b.Roster) SpawnRaider(t, b);
+        return b;
+    }
+}

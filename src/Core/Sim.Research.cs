@@ -312,8 +312,8 @@ public sealed partial class Sim
     float PrayerMore => Knows("rosary") ? 1.5f : 1;
     float SacrificeMore => Knows("altar") ? 1.5f : 1;
     /// <summary>What casting a spell takes now, and how long before it can be cast again.</summary>
-    public double CostOf(Spell s) => s.Cost * (Knows("litany") ? .8 : 1) * (HasRelic("staff") ? .67 : 1);
-    public double CooldownOf(Spell s) => s.Cooldown * (Knows("vigil") ? .7 : 1);
+    public double CostOf(Spell s) => Sandbox ? 0 : s.Cost * (Knows("litany") ? .8 : 1) * (HasRelic("staff") ? .67 : 1);
+    public double CooldownOf(Spell s) => Sandbox ? 0 : s.Cooldown * (Knows("vigil") ? .7 : 1);
     /// <summary>How much harder the spells strike and how much longer they last, with the strength of faith.</summary>
     float Might => Knows("might") ? 1.3f : 1;
     /// <summary>What the spells kill with: a raider killed so gives intervention back with the reaping.</summary>

@@ -167,6 +167,7 @@ public sealed partial class Sim
     {
         if (Over) return;
         Time += dt;
+        if (Sandbox) Fill();
         TickWater(dt);
         TickFire(dt);
         TickCharges(dt);

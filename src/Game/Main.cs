@@ -41,7 +41,8 @@ namespace VoxelTower.Game;
 /// --day=F starts at that time of the day (0 dawn, 1 sunset), --alarm=S raises the alarm and runs on S seconds,
 /// --weather=rain|fog|wind brings that weather at once, --envoy sends the horde's envoy and waits for its offer,
 /// --lore=N,key,… puts N knowledge in hand with that lore learnt, --sounds=folder writes every sound out as a .wav and quits,
-/// --load=file.sav reads a saved game back, --trailer=N stages and films the Nth shot of the trailer (Main.Trailer.cs).
+/// --load=file.sav reads a saved game back, --sandbox opens a game with everything learnt and plenty of all (O calls up
+/// a band of the horde under the pointer), --trailer=N stages and films the Nth shot of the trailer (Main.Trailer.cs).
 /// </summary>
 public partial class Main : Node3D
 {
@@ -102,6 +103,8 @@ public partial class Main : Node3D
     /// <summary>--tutorial or --tutorial=N: the tutorial from its Nth step; --title: the title over the valley (screenshots, tests).</summary>
     int _tutorialAt = -1;
     bool _titleArg;
+    /// <summary>--sandbox: a game with everything open and plenty of all, to try every part of it at once (Sim.Sandbox.cs).</summary>
+    bool _sandbox;
     /// <summary>The seed the valley was made from: what a save keeps of it.</summary>
     public uint Seed => _seed;
     bool _loaded, _waveWasActive;
@@ -176,6 +179,7 @@ public partial class Main : Node3D
             else if (a == "--tutorial") _tutorialAt = 0;
             else if (a.StartsWith("--tutorial=") && int.TryParse(a["--tutorial=".Length..], out int ta)) _tutorialAt = ta;
             else if (a == "--title") _titleArg = true;
+            else if (a == "--sandbox") _sandbox = true;
             else if (a == "--tutorial-check") { _tutCheck = true; _tutorialAt = 0; }
             else if (a == "--menu" || a.StartsWith("--menu=")) _menu = a.Length > 7 ? a[7..] : "";
             else if (a.StartsWith("--pose=")) _pose = a["--pose=".Length..];
@@ -360,10 +364,14 @@ public partial class Main : Node3D
 
         // a game of one's own opens on the title over the valley; the tutorial, asked for, on its first step
         _startTutorial = PendingStart == "tutorial" || _tutorialAt >= 0;
-        _startTitle = !_startTutorial && (_titleArg || (PendingStart == null && !Scripted));
+        _startTitle = !_startTutorial && !_sandbox && (_titleArg || (PendingStart == null && !Scripted));
         PendingStart = null;
         if (PendingHardness is { } hard) { Sim.SetHardness(hard); PendingHardness = null; }
-        if (!_startTutorial && !_startTitle) Welcome();
+        if (!_startTutorial && !_startTitle)
+        {
+            if (_sandbox) StartSandbox();
+            else Welcome();
+        }
         GD.Print($"[voxel-tower] world {genMs:0} ms, navigation {navMs:0} ms, mesh {View.LastFullMeshMs:0} ms, {View.Triangles()} triangles");
 
         if (_demo) Demo();
@@ -481,6 +489,15 @@ public partial class Main : Node3D
         GD.Print($"[perf] drawn: {string.Join(", ", told.GetRange(0, Math.Min(12, told.Count)))}");
         GD.Print($"[perf] ms a frame: drawing {cpu / Math.Max(1, frames):0.0} on the processor, {gpu / Math.Max(1, frames):0.0} on the graphics card; the views: {Prof.Heaviest(frames, 8)}");
         GetTree().Quit();
+    }
+
+    /// <summary>The sandbox: everything open, the stores never short, and the horde called up by hand.</summary>
+    void StartSandbox()
+    {
+        Sim.BeginSandbox();
+        Hud.Log("Песочница: всё изучено, запасы не кончаются, заклинания бесплатные и без перезарядки, цитадель не падает.", Hud.Kind.Ok);
+        Hud.Log("O — ватага орды под курсором, Shift+O — тяжёлая ватага. Пробел — позвать волну.", Hud.Kind.Ok);
+        Hud.Refresh();
     }
 
     /// <summary>The tips of the start, into the chronicle: a game of one's own begins with them.</summary>
