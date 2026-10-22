@@ -219,3 +219,12 @@ sandbox-exec -p '(version 1)(allow default)(deny file-read* (subpath "/usr/local
 Нагрузка ядра: `dotnet run -c Release -- --stress [зерно] [минуты]` (не входит в обычный прогон) — песочница под
 заклинаниями раз в 1,5 с и ватагами раз в 20 с; печатает самые долгие шаги и после чего они были, а шаг, не
 кончившийся за 20 с, — со стадией и бойцом.
+
+## GitHub
+
+Публичный репозиторий автора: https://github.com/TermosChaya/voxel-tower (ветка `main`, `origin`). Опубликован
+23.10.2026 по просьбе автора; вся история подписана его личным аккаунтом: в `.git/config` этого проекта
+`user.name TermosChaya`, `user.email ymirasanov2@gmail.com` (глобальный git на этом Mac — рабочий аккаунт автора,
+его не трогать). В `gh` вошли оба аккаунта, активный — рабочий `emirsuiunasanov-art`; чтобы `git push` из этого
+проекта шёл от TermosChaya, в `.git/config` свой помощник учётных данных: он берёт токен из связки ключей
+(`gh auth token --user TermosChaya`), сам токен нигде не записан. Просто `git push` после коммита.
