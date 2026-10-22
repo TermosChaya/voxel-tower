@@ -202,8 +202,7 @@ public partial class WaveClock : Control
     readonly List<Button> _speeds = new();
     KeepBar _keep;
     DayDial _dial;
-    const string CallTip = "Позвать орду сейчас\nЗолота за это не дают. Зато орда придёт, зная о вашей обороне меньше: сколько времени до волны прошло, столько она и разведала. " +
-        "Солнце сядет тотчас: орда ходит только ночью. {CallWave}.";
+    const string CallTip = "Позвать орду сейчас ({CallWave})\nНаграды за это нет, но орда хуже знает вашу оборону: процент — сколько она успела разведать. Сразу наступит ночь.";
     public const float W = 470, H = 70;
 
     public void Init(Main m)
@@ -251,7 +250,7 @@ public partial class WaveClock : Control
             {
                 Text = labels[i], ToggleMode = true, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(29, 24),
                 MouseDefaultCursorShape = CursorShape.PointingHand, SizeFlagsVertical = SizeFlags.ShrinkCenter,
-                TooltipText = "Скорость\nПауза останавливает всё, кроме разметки: кисти работают и на паузе. {Pause} — пауза, {Speed} — сменить скорость.",
+                TooltipText = "Скорость\nНа паузе можно размечать. {Pause} — пауза, {Speed} — скорость.",
             };
             b.AddThemeFontSizeOverride("font_size", 12);
             b.Pressed += () => { if (k == 0) _m.Command.TogglePause(); else _m.Command.SetSpeed(k); };
@@ -262,9 +261,8 @@ public partial class WaveClock : Control
         {
             Text = "Пути", ToggleMode = true, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(44, 24),
             MouseDefaultCursorShape = CursorShape.PointingHand, SizeFlagsVertical = SizeFlags.ShrinkCenter,
-            TooltipText = "Пути орды\nКуда пойдут ватаги следующей волны — каждая своей пунктирной линией от места, где войдёт в долину, до цитадели; " +
-                "красные кольца — где она будет прорубаться, янтарные — где поставит лестницу, наведёт мост или засыплет ров. " +
-                "Пути пересчитываются, пока вы строите: перекройте дорогу — и линия уйдёт в обход. Клавиша {Trails}.",
+            TooltipText = "Пути орды ({Trails})\nКуда пойдут ватаги следующей волны. Красные кольца — где они будут прорубаться, жёлтые — где поставят лестницу, " +
+                "наведут мост или засыплют ров. Пути меняются, пока вы строите.",
         };
         _trails.AddThemeFontSizeOverride("font_size", 12);
         _trails.Pressed += () => _m.Command.ToggleTrails();
@@ -314,8 +312,8 @@ public partial class WaveClock : Control
             _time.Text = (sim.RaidersAlive() + w.Coming).ToString();
             _unit.Text = "В ДОЛИНЕ";
             _call.Text = "Орда в долине"; _call.Disabled = true;
-            _call.TooltipText = $"Запасы орды\nНа лестницы и мосты: брёвна {Fmt.M3(sim.HordeStock[Stockpile.Wood])} м³. На засыпку рвов: земля {Fmt.M3(sim.HordeStock[Stockpile.Earth])} м³. " +
-                "Каждая волна приносит свои, и половина того, что орда прорубит, идёт в дело.";
+            _call.TooltipText = $"Запасы орды\nБрёвна на лестницы и мосты: {Fmt.M3(sim.HordeStock[Stockpile.Wood])} м³. Земля на засыпку рвов: {Fmt.M3(sim.HordeStock[Stockpile.Earth])} м³. " +
+                "Каждая волна приносит свои запасы, а половина прорубленного идёт орде.";
         }
         else
         {
@@ -353,14 +351,13 @@ public partial class Stores : Control
 
     static readonly (Icons.Painter icon, string tip)[] Groups =
     {
-        (Icons.Coin, "Казна\nЗолото идёт на набор войска в цитадели. Его дают рудники, убитые налётчики, охота и отбитые волны."),
-        (Icons.Material(Mat.Stone), "Камень, м³\nЕго ломают в скалах, валунах и руинах (кирка или делянка с Z); разобранная кладка возвращает три четверти. Из него кладут стены."),
-        (Icons.Material(Mat.Wood), "Брёвна, м³\nРубят в лесу. Из них — деревянные стены, лестницы, мосты и ворота."),
-        (Icons.Earth, "Земля, м³\nЕё даёт любой ров и котлован. Насыпь кладётся быстрее всего."),
-        (Icons.Eye, "Вмешательство\nЭзотерическое вмешательство — то, на что старые силы готовы ради долины. Его копят жрецы молитвой в святилище " +
-            "(на месте силы, пока оно ваше, — втрое больше) и жертвами; тратят на заклинания."),
-        (Icons.Helm, "Войско: сколько мест занято из скольких\nМеста даёт цитадель (10, с «Казармами» 14) и жилые дома — по месту на лежанку. " +
-            "Пока мест нет, цитадель никого не набирает. Набор — щелчок по цитадели или K."),
+        (Icons.Coin, "Золото\nНа него набирают войско. Золото дают рудники, убитые налётчики, охота и отбитые волны."),
+        (Icons.Material(Mat.Stone), "Камень, м³\nДобывают в скалах, валунах и руинах. Разобранная кладка возвращает 75 % камня."),
+        (Icons.Material(Mat.Wood), "Брёвна, м³\nРубят в лесу. Идут на деревянные стены, лестницы, мосты и ворота."),
+        (Icons.Earth, "Земля, м³\nДаёт любой ров и котлован. Насыпь кладётся быстрее всего."),
+        (Icons.Eye, "Вмешательство\nТратится на заклинания. Его копят жрецы молитвой в святилище (на месте силы втрое быстрее) и жертвы."),
+        (Icons.Helm, "Войско: занято мест из скольких\nМеста дают цитадель (10, с «Казармами» 14) и жилые дома, по месту на лежанку. " +
+            "Без свободных мест набор не идёт. Набор — щелчок по цитадели или K."),
     };
 
     public Stores()
@@ -399,7 +396,7 @@ public partial class KeepBar : Control
     {
         CustomMinimumSize = new Vector2(0, 9);
         MouseFilter = MouseFilterEnum.Stop;
-        TooltipText = "Цитадель\nОрда идёт к ней и бьёт в стены. Когда полоса опустеет, игра проиграна.";
+        TooltipText = "Цитадель\nЕсли полоса опустеет, игра проиграна.";
     }
 
     public override void _Draw()
@@ -428,9 +425,8 @@ public partial class DayDial : Control
     {
         CustomMinimumSize = new Vector2(38, 12);
         MouseFilter = MouseFilterEnum.Stop;
-        TooltipText = "Сутки\nДесять минут до орды — день: стройте, пока светло. За минуту до волны садится солнце, и орда приходит ночью. " +
-            "В темноте лучник бьёт в полную силу только то, что освещено, — у факелов на стенах, у огня, у цитадели, врага с факелом в руке; " +
-            "неосвещённого он видит лишь вблизи и чаще мажет. Отбили волну — светает.";
+        TooltipText = "Сутки\nДнём строят, ночью приходит орда. За минуту до волны садится солнце. " +
+            "В темноте лучники хорошо видят только освещённое: у факелов, огня и цитадели. Остальных видно лишь вблизи, и стрелы чаще мажут.";
     }
 
     public override void _Draw()
@@ -559,17 +555,17 @@ public partial class MapRing : Control
         // the buttons sit on the ring, low on either side of the south: the zoom outermost, the views within
         foreach (var (text, factor, angle, tip) in new[]
         {
-            ("−", 1 / 1.3f, 2.86f, "Отдалить ({CamZoomOut})\nКолесо мыши, щипок или два пальца на тачпаде."),
-            ("+", 1.3f, .28f, "Приблизить ({CamZoomIn})\nКолесо мыши, щипок или два пальца на тачпаде."),
+            ("−", 1 / 1.3f, 2.86f, "Отдалить ({CamZoomOut})"),
+            ("+", 1.3f, .28f, "Приблизить ({CamZoomIn})"),
         })
         {
             var b = Knob(text, tip, angle);
             float f = factor;
             b.Pressed += () => _m.Rig.ZoomBy(f);
         }
-        _top = ViewKnob(Icons.TopView, "Вид сверху ({CamTop})\nСмотреть на долину ровно сверху, как на карту, — удобно размечать по сетке. Ещё раз — обратно, наискосок.", 2.3f);
+        _top = ViewKnob(Icons.TopView, "Вид сверху ({CamTop})\nЕщё раз — обычный вид.", 2.3f);
         _top.Clicked += () => _m.Rig.ToggleTopDown();
-        var home = ViewKnob(Icons.HomeView, "Вернуть вид ({CamHome})\nК крепости, как в начале игры: обычный наклон, поворот и масштаб.", .84f);
+        var home = ViewKnob(Icons.HomeView, "Вернуть вид к крепости ({CamHome})", .84f);
         home.Clicked += () => _m.Rig.Home();
         HomeButton = home;
     }
@@ -664,7 +660,7 @@ public partial class PortraitFrame : Control
         CustomMinimumSize = new Vector2(S, S);
         MouseFilter = MouseFilterEnum.Stop;
         MouseDefaultCursorShape = CursorShape.PointingHand;
-        TooltipText = "Выбранный\nЩелчок — показать его на поле.";
+        TooltipText = "Показать на поле";
     }
 
     public override void _GuiInput(InputEvent e)

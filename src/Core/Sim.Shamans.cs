@@ -46,12 +46,12 @@ public sealed partial class Sim
         u.Swing = 1;
         if (Warded(x, z))
         {
-            if (Time - _wardSaid > 20) { _wardSaid = Time; Say("Шаман наводит порчу на стену, но освящённая земля её не принимает.", 1, x, z); }
+            if (Time - _wardSaid > 20) { _wardSaid = Time; Say("Шаман пытается проклясть стену, но рядом святилище, и проклятие не действует.", 1, x, z); }
             return;
         }
         Curses.Add(new Curse { X = x, Y = y, Z = z, R = CurseR, Until = Time + CurseFor });
         Hexed?.Invoke(x, y, z);
-        if (Time - _curseSaid > 15) { _curseSaid = Time; Say("Шаман навёл порчу на стену: орда рубит её вдвое быстрее. Святилище рядом от порчи бережёт.", 3, x, z); }
+        if (Time - _curseSaid > 15) { _curseSaid = Time; Say("Шаман проклял стену: орда ломает её вдвое быстрее. Святилище рядом защищает от проклятий.", 3, x, z); }
     }
 
     double _wardSaid = -99, _curseSaid = -99;

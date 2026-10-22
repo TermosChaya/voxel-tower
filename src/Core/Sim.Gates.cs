@@ -375,7 +375,7 @@ public sealed partial class Sim
         {
             g.Broken = true;
             var (bx, _, bz) = g.Middle;
-            Say("Ворота прорублены: створки больше не закрываются, пока их не починят.", 3, bx, bz);
+            Say("Ворота прорублены. Они не закроются, пока их не починят.", 3, bx, bz);
             return;
         }
         var (mx, my, mz) = g.Middle;

@@ -142,39 +142,36 @@ public partial class Inspector : Control
             mats.AddChild(new Choice("Ловушка", TrapTip, new[] { "колья", "настил", "камни", "брёвна", "порох" }, Array.IndexOf(Traps, o.Material), i => t.SetMaterial(Traps[i])));
             col.AddChild(mats);
         }
-        if (opts.GetChildCount() == 0) col.AddChild(Hud.Text(Bindings.Fill("Esc — убрать кисть. Щелчок по ячейке справа или клавиша — взять другую. {Help} — всё управление."), Ornament.SerifItalic, 12, Ornament.Faded));
+        if (opts.GetChildCount() == 0) col.AddChild(Hud.Text(Bindings.Fill("Esc — убрать кисть. {Help} — все клавиши."), Ornament.SerifItalic, 12, Ornament.Faded));
         return col;
     }
 
     static readonly byte[] Laid = { Mat.Stone, Mat.Wood, Mat.Rammed, Mat.Pitch };
     static readonly byte[] Traps = { Mat.Stakes, Mat.TrapDeck, Mat.DropStone, Mat.DropLog, Mat.Powder };
 
-    const string TrapTip = "Ловушки\nКолья — частокол заострённых кольев в ладонь друг от друга, высотой с «Высоту»: кто идёт сквозь них, идёт " +
-        "медленно и ранится и понемногу их вытаптывает; орда обходит их, если обход недолог, наши — всегда, где есть как. Из брёвен, горят.\n" +
-        "Настил — ловчий: тонкие жерди под дёрном вровень с землёй, где начат мазок, и только над тем, что ниже, — над ямой, рвом. Наших держит, " +
-        "под ордой проваливается весь, сколько его в трёх метрах. Выройте под ним яму глубже человеческого роста и поставьте на дне колья. Из брёвен.\n" +
-        "Камни — на сброс: сложите их на стене у края. Когда налётчик встанет у подножия под ними, а наш будет рядом с камнями, он столкнёт их " +
-        "врагу на голову: они летят круглыми камнями, бьют, на кого упадут, и катятся по склону дальше, сбивая всех на пути. Из камня.\n" +
-        "Брёвна — на сброс, так же: сложите их на стене у края вдоль неё. Наш скатит их на налётчика у подножия, и брёвна покатятся по склону " +
-        "поперёк себя, давя всех, кого переедут. Из брёвен, горят.\n" +
-        "Порох — бочки с порохом (селитру выщелачивают из земли — из запаса земли). От огня — искры, горящего соседа, огненной " +
-        "стрелы, факела орды, молнии — через полсекунды рвётся: разносит всё вокруг, обломки летят и давят, кто рядом — ранен и " +
-        "отброшен. Соседние бочки рвутся следом, а по дорожке пороха огонь бежит, взрываясь по пути. Подорвать, когда орда рядом, " +
-        "— огненной стрелой: выберите лучника, «Огонь» и щелчок по бочкам. Рабочие порох не тушат.";
+    const string TrapTip = "Ловушки\nКолья: частокол заданной высоты. Кто идёт сквозь него, замедляется, ранится и понемногу его " +
+        "ломает. Орда обходит колья, если обход короткий. Из брёвен, горят.\nНастил: тонкие жерди вровень с землёй " +
+        "над ямой или рвом. Наши по нему ходят, под ордой он проваливается. Выройте под ним глубокую яму с кольями " +
+        "на дне. Из брёвен.\nКамни: сложите на стене у края. Когда налётчик подойдёт к подножию, наш человек рядом " +
+        "столкнёт их вниз. Камни катятся по склону и сбивают всех на пути.\nБрёвна: так же, вдоль края стены. " +
+        "Скатываются на налётчиков у подножия. Горят.\nПорох: бочки с порохом, селитру делают из запаса земли. " +
+        "Бочка взрывается от огня через полсекунды, соседние рвутся следом, по дорожке пороха огонь бежит дальше. " +
+        "Подорвать можно огненной стрелой: выберите лучника, включите «Огонь» и щёлкните по бочкам. Рабочие порох " +
+        "не тушат.";
 
-    const string MaterialTip = "Материал\nКамень ({MatStone}), брёвна ({MatWood}), земля ({MatEarth}) — из запасов. Смола варится из брёвен: слой её на дне рва " +
-        "вспыхивает весь разом от огненной стрелы и горит долго и вдвое жарче — налётчики в нём сгорают, а кто выбежал, горит ещё. " +
-        "Рабочие смолу не тушат; сгоревшую возвращает починка ({ToolRepair}).";
+    const string MaterialTip = "Материал\nКамень ({MatStone}), брёвна ({MatWood}) и земля ({MatEarth}) берутся из запасов. Смолу варят из " +
+        "брёвен. Слой смолы на дне рва загорается целиком от огненной стрелы и горит долго и жарко. Рабочие смолу " +
+        "не тушат, сгоревшую восстанавливает починка ({ToolRepair}).";
 
     void Options(HBoxContainer opts)
     {
         var t = _m.Tools; var o = t.Opt;
         bool dig = o.Dig;
         const string widthTip = "Толщина\nТолщина линии и стен, ширина рва, размер кисти. Клавиши {WidthLess} и {WidthMore}.";
-        const string heightTip = "Высота\nНасколько поднимется кладка. Клавиши {HeightLess} и {HeightMore}.";
-        const string depthTip = "Глубина\nНасколько глубоко копать от поверхности. Клавиши {HeightLess} и {HeightMore}.";
-        const string levelTip = "Верх\nРовный: верх на одной высоте от точки, где начали. По рельефу: каждый столбец поднимается над своей землёй. Клавиша {Level}.";
-        const string floorTip = "Дно\nРовное: дно на одной глубине от точки, где начали. По рельефу: каждый столбец углубляется от своей поверхности. Клавиша {Level}.";
+        const string heightTip = "Высота\nВысота кладки. Клавиши {HeightLess} и {HeightMore}.";
+        const string depthTip = "Глубина\nГлубина от поверхности. Клавиши {HeightLess} и {HeightMore}.";
+        const string levelTip = "Верх\nРовный — на одной высоте с началом штриха, по рельефу — повторяет землю. Клавиша {Level}.";
+        const string floorTip = "Дно\nРовное — на одной глубине с началом штриха, по рельефу — повторяет поверхность. Клавиша {Level}.";
         Control Width(string caption = "Толщина") => new Stepper(caption, widthTip, () => Len(o.Width), d => t.StepWidth(d));
         Control Height() => dig ? new Stepper("Глубина", depthTip, () => Len(o.Depth), d => t.StepHeight(d)) : new Stepper("Высота", heightTip, () => Len(o.Height), d => t.StepHeight(d));
         Control Level() => dig
@@ -183,7 +180,7 @@ public partial class Inspector : Control
         switch (t.Tool)
         {
             case Tool.Brush:
-                opts.AddChild(new Choice("Форма", "Форма кисти\nСтолб — стена от руки до заданной высоты (с киркой — полоса на глубину). Шар — налипает на поверхность (с киркой — вынимает ком). Клавиша {Form}.",
+                opts.AddChild(new Choice("Форма", "Форма кисти\nСтолб рисует стену заданной высоты, шар налипает на поверхность. С киркой столб копает полосу, шар вынимает ком. Клавиша {Form}.",
                     new[] { "столб", "шар" }, (int)o.Form, i => { o.Form = (BrushForm)i; t.Changed(); }));
                 opts.AddChild(Width("Размер"));
                 if (o.Form == BrushForm.Column) { opts.AddChild(Height()); opts.AddChild(Level()); }
@@ -199,35 +196,33 @@ public partial class Inspector : Control
                 opts.AddChild(Height()); opts.AddChild(Level());
                 break;
             case Tool.Bridge:
-                opts.AddChild(new Choice("Вид", "Вид моста\nАрочный — каменный или деревянный мост дугой от берега до берега, до 25 м. Подъёмный — дубовый настил на петлях " +
-                    "над рвом от 2 до 6 м, у берега, что ближе к цитадели: опущен, пока не подойдёт орда, тогда поднимается сам — кто на нём, летит в ров; " +
-                    "поднятый — стена из брёвен. Щелчок по подъёмному мосту без кисти — сам / опущен / поднят.",
+                opts.AddChild(new Choice("Вид", "Вид моста\nАрочный: каменный или деревянный, пролёт до 25 м. Подъёмный: настил над рвом от 2 до 6 м. Когда подходит орда, " +
+                    "он поднимается сам и сбрасывает в ров тех, кто на нём. Щелчок по подъёмному мосту без кисти: сам, опущен или поднят.",
                     new[] { "арочный", "подъёмный" }, o.DrawBridge ? 1 : 0, i => { o.DrawBridge = i == 1; t.Changed(); }));
-                opts.AddChild(new Stepper("Проход", "Ширина прохода\nПо мосту ходят строем: уже 1,25 м его не сделать, к ширине добавляются парапеты или перила. Клавиши {WidthLess} и {WidthMore}.",
+                opts.AddChild(new Stepper("Проход", "Ширина прохода\nНе меньше 1,25 м, парапеты или перила добавляются к ней. Клавиши {WidthLess} и {WidthMore}.",
                     () => Len(Math.Max(Bridges.MinWidth, o.Width)), d => t.StepWidth(d)));
                 opts.AddChild(Hud.CapsLabel(o.DrawBridge || o.Material == Mat.Wood ? "деревянный" : "каменный", 11, Ornament.BronzeLight));
                 break;
             case Tool.Extrude:
-                opts.AddChild(new Stepper("Шаг", "Шаг\nНа сколько нарастает или уходит вглубь грань за щелчок. Клавиши {HeightLess} и {HeightMore}.", () => Len(o.Step), d => t.StepHeight(d)));
+                opts.AddChild(new Stepper("Шаг", "Шаг\nНа сколько грань нарастает или углубляется за щелчок. Клавиши {HeightLess} и {HeightMore}.", () => Len(o.Step), d => t.StepHeight(d)));
                 break;
             case Tool.Gather:
-                opts.AddChild(new Choice("Участок", "Участок\nКамень ({MatStone}), лес ({MatWood}), земля ({MatEarth}) — откуда брать этот запас. Убежище — куда по тревоге ({Alarm}) уходят мирные " +
-                    "и где пережидают её: под крышей, за стенами; ближайшее из убежищ и цитадели. Святилище — где днём молятся жрецы и копят вмешательство " +
-                    "для заклинаний; на месте силы (Курган, Чёрный камень, Мёртвый родник), пока оно ваше, молитву слышат втрое лучше. Жилой дом — " +
-                    "закрытая комната (стены, крыша, ворота): рамкой обведите её, и рабочие поставят в ней лежанки; каждая — место в войске.",
+                opts.AddChild(new Choice("Участок", "Участок\nКамень ({MatStone}), лес ({MatWood}), земля ({MatEarth}): здесь рабочие добывают ресурс.\n" +
+                    "Убежище: сюда по тревоге ({Alarm}) уходят рабочие. Лучше под крышей и за стенами.\n" +
+                    "Святилище: здесь днём молятся жрецы. На месте силы, пока оно ваше, молитва даёт втрое больше.\n" +
+                    "Жилой дом: обведите закрытую комнату со стенами, крышей и воротами. Рабочие поставят лежанки, каждая даёт место в войске.",
                     new[] { "камень", "лес", "земля", "убежище", "святилище", "жилой дом" },
                     t.GatherKind switch { Stockpile.Wood => 1, Stockpile.Earth => 2, Zone.Shelter => 3, Zone.Sanctum => 4, Zone.Dwelling => 5, _ => 0 },
                     i => { if (i == 3) t.SetShelter(true); else if (i == 4) t.SetSanctum(true); else if (i == 5) t.SetDwelling(true); else t.SetMaterial(new[] { Mat.Stone, Mat.Wood, Mat.Rammed }[i]); }));
                 if (t.GatherKind is Stockpile.Stone or Stockpile.Earth)
-                    opts.AddChild(new Stepper("Глубина", "Глубина\nДо какой глубины от нынешней поверхности брать камень или землю. Клавиши {HeightLess} и {HeightMore}.", () => Len(o.Depth), d => t.StepHeight(d)));
+                    opts.AddChild(new Stepper("Глубина", "Глубина\nДо какой глубины брать камень или землю. Клавиши {HeightLess} и {HeightMore}.", () => Len(o.Depth), d => t.StepHeight(d)));
                 break;
             case Tool.Paste when t.PasteBp != null:
                 opts.AddChild(Hud.CapsLabel($"поворот {t.PasteRot * 90}° · {Bindings.Label(Act.Rotate)} — повернуть · {t.PasteBp.Describe()}", 10, Ornament.Aged));
                 break;
         }
         if (t.Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Paste or Tool.Gather or Tool.Repair or Tool.Capture or Tool.Unmark or Tool.Bridge)
-            opts.AddChild(new Choice("Сетка", "Сетка\nПривязка к сетке от центра цитадели: начало и конец штриха встают в её узлы, линии идут вдоль осей или под 45°, " +
-                "круги — целыми шагами. Стены выходят ровными, а одинаковое по обе стороны цитадели — симметричным. Клавиша {Grid}.",
+            opts.AddChild(new Choice("Сетка", "Сетка\nКонцы штрихов встают в узлы сетки, линии идут вдоль осей или под 45°. Сетка отсчитывается от центра цитадели. Клавиша {Grid}.",
                 new[] { "нет", "50 см", "1 м", "2 м" }, Array.IndexOf(ToolOptions.Grids, o.Grid), i => t.SetGrid(ToolOptions.Grids[i])));
     }
 
@@ -266,8 +261,8 @@ public partial class Inspector : Control
                 var w = Sim.Summonable[i];
                 var b = Btn(char.ToUpper(Sim.WeatherName(w)[0]) + Sim.WeatherName(w)[1..], w switch
                 {
-                    Weather.Rain => "Дождь: пожары гаснут, смола не горит, огненный дождь вдвое слабее, молния в полтора раза сильнее; стрелы летят хуже.",
-                    Weather.Fog => "Туман: лучники — и наши, и орды — видят врага лишь вблизи.",
+                    Weather.Rain => "Дождь: пожары гаснут, смола не горит, огненный дождь слабее вдвое, молния сильнее в 1,5 раза, стрелы летят хуже.",
+                    Weather.Fog => "Туман: все лучники видят врага только вблизи.",
                     _ => "Ветер: огонь бежит вдвое быстрее, стрелы сносит.",
                 }, () => { _m.Tools.WeatherPick = n; }, 110);
                 b.ToggleMode = true;
@@ -323,7 +318,7 @@ public partial class Inspector : Control
         hurt.CustomMinimumSize = new Vector2(330, 0);
         who.AddChild(hurt);
         top.AddChild(who);
-        var chart = new BodyChart { Unit = u, CustomMinimumSize = new Vector2(58, 74), TooltipText = "Тело\nЧто от него осталось, по частям: зелёное цело, жёлтое задето, рыжее изранено, красное едва держится; перечёркнутое отрублено." };
+        var chart = new BodyChart { Unit = u, CustomMinimumSize = new Vector2(58, 74), TooltipText = "Раны\nЗелёное — цело, жёлтое — задето, оранжевое — изранено, красное — тяжело ранено, перечёркнутое — отрублено." };
         top.AddChild(chart);
         var work = new VBoxContainer();
         work.AddThemeConstantOverride("separation", 3);
@@ -332,7 +327,7 @@ public partial class Inspector : Control
         {
             // a priest does none of the pawns' work: what it does instead
             work.AddChild(Hud.CapsLabel("Жрец", 8));
-            var about = Hud.Text("Днём молится в святилище, ночью уходит в цитадель. Молитва копит вмешательство; на месте силы её слышат втрое лучше.",
+            var about = Hud.Text("Днём молится в святилище и копит вмешательство, ночью уходит в цитадель. На месте силы молитва даёт втрое больше.",
                 Ornament.Serif, 12, Ornament.Aged, wrap: true);
             about.CustomMinimumSize = new Vector2(300, 0);
             work.AddChild(about);
@@ -353,7 +348,7 @@ public partial class Inspector : Control
         {
             doing.Text = Retinue.DoingNow(u, _m.Sim);
             string h = Retinue.Hurt(u);
-            hurt.Text = u.Dead ? "пал" : h != "" ? h : u.Hp < u.MaxHp - .5f ? "ушиблен" : "цел и невредим";
+            hurt.Text = u.Dead ? "пал" : h != "" ? h : u.Hp < u.MaxHp - .5f ? "ушиблен" : "цел";
             hurt.AddThemeColorOverride("font_color", h != "" || u.Dead ? Ornament.Blood : Ornament.Moss);
             bar.QueueRedraw(); chart.QueueRedraw();
             foreach (var c in cellList) c.QueueRedraw();
@@ -366,12 +361,12 @@ public partial class Inspector : Control
     {
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 4);
-        row.AddChild(Btn("За работу", "За работу\nВыбранные снова сами ищут работу по разметке.", () => _m.Command.ReleaseSelected(), 92));
-        row.AddChild(Btn("Стоять", "Стоять здесь\nВыбранные остаются на месте; для солдат это место становится постом.", () => _m.Command.HoldSelected(), 70));
+        row.AddChild(Btn("За работу", "За работу\nВыбранные снова сами ищут работу.", () => _m.Command.ReleaseSelected(), 92));
+        row.AddChild(Btn("Стоять", "Стоять здесь\nВыбранные остаются на месте. Для солдат это место становится постом.", () => _m.Command.HoldSelected(), 70));
         row.AddChild(AlarmButton(70));
         if (chosen.Count == 1)
-            row.AddChild(Btn($"Вселиться · {Bindings.Label(Act.Possess)}", "Вселиться ({Possess})\nВы — в нём: видите его глазами и делаете его руками. {FpForward}{FpLeft}{FpBack}{FpRight} — идти, мышь — смотреть, ЛКМ — удар, " +
-                "выстрел или кирка, ПКМ — класть (рабочий), Esc — выйти.", () => _m.FP.Enter(chosen[0]), 104));
+            row.AddChild(Btn($"Вселиться · {Bindings.Label(Act.Possess)}", "Вселиться ({Possess})\nУправлять им от первого лица. {FpForward}{FpLeft}{FpBack}{FpRight} — идти, мышь — смотреть, ЛКМ — удар, " +
+                "выстрел или кирка, ПКМ — положить блок, Esc — выйти.", () => _m.FP.Enter(chosen[0]), 104));
         var duty = new List<Button>();
         // priests bring nothing in
         bool labour = chosen.Exists(u => !u.T.Prays);
@@ -384,9 +379,9 @@ public partial class Inspector : Control
         foreach (var (text, kind, tip) in new[]
         {
             ("—", Stockpile.None, "Ничего не добывать самим\nТолько размеченная работа и делянки."),
-            ("камень", Stockpile.Stone, "Добывать камень\nКогда размеченной работы нет, выбранные сами ломают ближайший валун или руины, а выломав, ищут следующие."),
-            ("брёвна", Stockpile.Wood, "Добывать брёвна\nКогда размеченной работы нет, выбранные сами рубят ближайшие деревья."),
-            ("землю", Stockpile.Earth, "Добывать землю\nКогда размеченной работы нет, выбранные роют яму поодаль от крепости — одну на всех."),
+            ("камень", Stockpile.Stone, "Добывать камень\nБез размеченной работы выбранные сами ломают ближайшие валуны и руины."),
+            ("брёвна", Stockpile.Wood, "Добывать брёвна\nБез размеченной работы выбранные сами рубят ближайшие деревья."),
+            ("землю", Stockpile.Earth, "Добывать землю\nБез размеченной работы выбранные копают общую яму в стороне от крепости."),
         })
         {
             int k = kind;
@@ -401,8 +396,8 @@ public partial class Inspector : Control
         if (archers)
         {
             row.AddChild(new Rule(true));
-            fire = Btn("Огонь", "Огненные стрелы\nЛучники стреляют огнём: поджигают лестницы и настилы орды, смолу и доски под ногами налётчиков, " +
-                "а налётчик, в которого попали, горит. Стреляют реже. ПКМ по деревянному, по дереву или смоле — поджечь. Ещё раз — простые стрелы.",
+            fire = Btn("Огонь", "Огненные стрелы\nПоджигают лестницы и настилы орды, смолу и налётчиков. Лучники стреляют реже. " +
+                "ПКМ по дереву или смоле — поджечь. Ещё раз — обычные стрелы.",
                 () => _m.Command.FireArrowsSelected(), 60);
             fire.ToggleMode = true;
             row.AddChild(fire);
@@ -410,16 +405,15 @@ public partial class Inspector : Control
         if (melee)
         {
             row.AddChild(new Rule(true));
-            alive = Btn("Живьём", "Брать живым\nМечники и ополчение не добивают израненного налётчика, а валят и связывают его, когда в нём остаётся четверть сил " +
-                "(скованного Цепями — три пятых). Свободный рабочий отведёт пленного в цитадель, если рядом нет орды. Пленных приносят в жертву (вкладка «Таинства») " +
-                "или отдают послу орды за выкуп. Ещё раз — снова бить насмерть.", () => _m.Command.TakeAliveSelected(), 70);
+            alive = Btn("Живьём", "Брать живым\nМечники и ополчение связывают налётчика, когда у него остаётся 25 % здоровья (скованного Цепями — 60 %). " +
+                "Свободный рабочий отведёт пленного в цитадель. Пленных приносят в жертву или отдают послу орды за выкуп. Ещё раз — снова бить насмерть.", () => _m.Command.TakeAliveSelected(), 70);
             alive.ToggleMode = true;
             row.AddChild(alive);
         }
         if (workers)
         {
             row.AddChild(new Rule(true));
-            militia = Btn("Ополчение", "Ополчение\nРабочие не бегут от орды, а встречают её с кирками, как мечники. Ещё раз — снова бегут. Солдатам не нужно.", () => _m.Command.MilitiaSelected(), 92);
+            militia = Btn("Ополчение", "Ополчение\nРабочие не убегают от орды, а дерутся кирками. Ещё раз — снова убегают.", () => _m.Command.MilitiaSelected(), 92);
             militia.ToggleMode = true;
             row.AddChild(militia);
         }
@@ -458,18 +452,18 @@ public partial class Inspector : Control
         hurt.CustomMinimumSize = new Vector2(380, 0);
         who.AddChild(hurt);
         top.AddChild(who);
-        var chart = new BodyChart { Unit = u, CustomMinimumSize = new Vector2(58, 74), TooltipText = "Тело\nЧто от него осталось, по частям: зелёное цело, жёлтое задето, рыжее изранено, красное едва держится; перечёркнутое отрублено." };
+        var chart = new BodyChart { Unit = u, CustomMinimumSize = new Vector2(58, 74), TooltipText = "Раны\nЗелёное — цело, жёлтое — задето, оранжевое — изранено, красное — тяжело ранено, перечёркнутое — отрублено." };
         top.AddChild(chart);
         var about = new VBoxContainer();
         about.AddThemeConstantOverride("separation", 2);
         about.AddChild(Hud.CapsLabel(u.Team == Team.Horde ? "Налётчик" : "Зверь", 8));
         string note = u.Team == Team.Wild
-            ? $"{u.T.Bounty} зол. за добычу; убегает от тех, кто подходит. Выберите своих и ПКМ по нему — охота."
-            : (u.Leader ? $"Вожак: втрое дороже за голову ({u.T.Bounty * 3} зол.). " : $"{u.T.Bounty} зол. за голову. ")
-              + (u.Returned ? "Бежал в прошлый раз и вернулся. " : "") + "Выберите своих и ПКМ по нему — в атаку.";
+            ? $"{u.T.Bounty} зол. за добычу. Убегает от людей. Выберите своих и щёлкните по нему ПКМ."
+            : (u.Leader ? $"Вожак: {u.T.Bounty * 3} зол. за голову. " : $"{u.T.Bounty} зол. за голову. ")
+              + (u.Returned ? "Сбежал в прошлый раз и вернулся. " : "") + "Выберите своих и щёлкните по нему ПКМ.";
         if (u.Bound)
-            note = u.Inside ? "Пленный в цитадели: его можно принести в жертву (вкладка «Таинства») или отдать послу орды за выкуп. Ночью без стражи у двери он выберется."
-                : "Связан: свободный рабочий отведёт его в цитадель, если рядом нет орды. Оставленный надолго — распутается и убежит.";
+            note = u.Inside ? "Пленный в цитадели. Его можно принести в жертву (вкладка «Таинства») или отдать послу орды за выкуп. Ночью без стражи он сбежит."
+                : "Связан. Свободный рабочий отведёт его в цитадель. Если оставить надолго, развяжется и убежит.";
         var noteLabel = Hud.Text(note, Ornament.Serif, 12, Ornament.Aged, wrap: true);
         noteLabel.CustomMinimumSize = new Vector2(330, 0);
         about.AddChild(noteLabel);
@@ -493,7 +487,7 @@ public partial class Inspector : Control
         col.AddThemeConstantOverride("separation", 4);
         var counts = new List<string>();
         foreach (var t in Kinds.PlayerKinds) { int n = chosen.FindAll(u => u.T == t).Count; if (n > 0) counts.Add(Retinue.Plural(t, n)); }
-        col.AddChild(Hud.Text($"Выбрано {chosen.Count}: {string.Join(", ", counts)} · щелчок по лицу — выбрать одного", Ornament.SerifBold, 13, Ornament.BronzeLight));
+        col.AddChild(Hud.Text($"Выбрано {chosen.Count}: {string.Join(", ", counts)} · щелчок по портрету — выбрать одного", Ornament.SerifBold, 13, Ornament.BronzeLight));
         var faces = new HFlowContainer();
         faces.AddThemeConstantOverride("h_separation", 4);
         faces.AddThemeConstantOverride("v_separation", 3);
@@ -521,8 +515,8 @@ public partial class Inspector : Control
         var head = Hud.Text("", Ornament.SerifBold, 14, Ornament.Parchment);
         left.AddChild(head);
         var note = Hud.Text("", Ornament.Serif, 12, Ornament.Aged);
-        note.TooltipText = "Места в войске\nЦитадель вмещает 10 (с «Казармами» — 14). Каждая лежанка в жилом доме — ещё место: обведите закрытую комнату с " +
-            "воротами участком (8, «жилой дом»), и рабочие обставят её мебелью. Всадник занимает 2 места, великан — 4.";
+        note.TooltipText = "Места в войске\nЦитадель даёт 10 мест (с «Казармами» 14). Каждая лежанка в жилом доме даёт ещё одно: обведите закрытую комнату " +
+            "с воротами делянкой («жилой дом»). Всадник занимает 2 места, великан 4.";
         note.MouseFilter = MouseFilterEnum.Stop;
         left.AddChild(note);
         var line = new HBoxContainer();
@@ -547,7 +541,7 @@ public partial class Inspector : Control
             int have = sim.Household(), places = sim.Places, beds = places - Sim.CitadelPlaces - (sim.Knows("barracks") ? 4 : 0);
             head.Text = $"Войско: {have} из {places} мест" + (sim.Recruits.Count > 0 ? $" · в очереди {sim.Recruits.Count}" : "");
             head.AddThemeColorOverride("font_color", have >= places ? Ornament.Ember : Ornament.Parchment);
-            note.Text = beds > 0 ? $"места: цитадель {places - beds}, жилые дома {beds}" : Bindings.Fill("места даёт цитадель; ещё — жилые дома ({ToolGather})");
+            note.Text = beds > 0 ? $"места: цитадель {places - beds}, жилые дома {beds}" : Bindings.Fill("места дают цитадель и жилые дома ({ToolGather})");
             foreach (var k in _tiles) k.QueueRedraw();
         });
         return row;
@@ -561,8 +555,7 @@ public partial class Inspector : Control
         row.AddThemeConstantOverride("separation", 10);
         var present = new List<UnitType>();
         foreach (var kind in Kinds.PlayerKinds) if (_m.Sim.Count(kind) > 0) present.Add(kind);
-        var keep = Btn($"Цитадель · {Bindings.Label(Act.Keep)}", "Цитадель ({Keep})\nНабор войска: щелчок по цитадели или {Keep}. Набранные готовятся в цитадели по очереди и выходят из её ворот; " +
-            "войско не больше, чем мест — их дают цитадель и жилые дома.", () => _m.Command.OpenKeep(), 98);
+        var keep = Btn($"Цитадель · {Bindings.Label(Act.Keep)}", "Цитадель ({Keep})\nНабор войска. Новобранцы готовятся по очереди. Войско не может быть больше числа мест.", () => _m.Command.OpenKeep(), 98);
         keep.SizeFlagsVertical = SizeFlags.ShrinkBegin;
         row.AddChild(keep);
         foreach (var kind in present.GetRange(0, Math.Min(present.Count, 4)))
@@ -604,7 +597,7 @@ public partial class Inspector : Control
             var b = new Button
             {
                 Text = Commander.Roman(i), FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(42, 26), MouseDefaultCursorShape = CursorShape.PointingHand,
-                TooltipText = $"Отряд {Commander.Roman(i)}\nЩелчок или Shift+{i + 1} — выбрать его, дважды — показать. Ctrl+щелчок или Ctrl+{i + 1} — запомнить в нём выбранных.",
+                TooltipText = $"Отряд {Commander.Roman(i)}\nЩелчок или Shift+{i + 1} — выбрать, дважды — показать. Ctrl+щелчок или Ctrl+{i + 1} — запомнить выбранных.",
             };
             b.AddThemeFontSizeOverride("font_size", 12);
             b.GuiInput += e =>
@@ -757,7 +750,7 @@ public partial class PriorityCell : Control
         CustomMinimumSize = new Vector2(58, 40);
         MouseFilter = MouseFilterEnum.Stop;
         MouseDefaultCursorShape = CursorShape.PointingHand;
-        TooltipText = Work.Tips[(int)k] + "\n\nЩелчок — по очереди 1, 2, 3, 4, никогда; ПКМ — обратно. 1 — первым делом.";
+        TooltipText = Work.Tips[(int)k] + "\n\nЩелчок меняет очередь: 1, 2, 3, 4, никогда. ПКМ — обратно.";
         MouseEntered += () => { _hover = true; QueueRedraw(); };
         MouseExited += () => { _hover = false; QueueRedraw(); };
     }

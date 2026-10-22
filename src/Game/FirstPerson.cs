@@ -264,7 +264,7 @@ void fragment() {
             : sim.LookedAt(u, 4 * VoxelWorld.PerMetre, out var hit) ? Mat.NameOf(hit.M) : "";
         _aim.Text = aim;
         _aim.Position = new Vector2((vp.X - _aim.Size.X) / 2, vp.Y / 2 + 26);
-        _hint.Text = Bindings.Fill("{FpForward}{FpLeft}{FpBack}{FpRight} — идти, {FpRun} — бегом · мышь — смотреть · ЛКМ — " + (u.T.Ranged ? "выстрел" : u.T.Work > 0 ? "удар или кирка" : "удар")
+        _hint.Text = Bindings.Fill("{FpForward}{FpLeft}{FpBack}{FpRight} — идти, {FpRun} — бежать · мышь — смотреть · ЛКМ — " + (u.T.Ranged ? "выстрел" : u.T.Work > 0 ? "удар или кирка" : "удар")
             + (u.T.Work > 0 ? " · ПКМ — класть ({FpStone} камень, {FpWood} брёвна, {FpEarth} земля)" : "") + (Sim.Kindles(u.T) ? " · {FpFire} — огненные стрелы" : "")
             + " · {FpUp} / {FpDown} — вверх и вниз по лестнице · Esc — выйти");
         _hint.Position = new Vector2((vp.X - _hint.Size.X) / 2, vp.Y - 34);

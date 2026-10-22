@@ -115,31 +115,31 @@ public sealed partial class Sim
         {
             case "mend":
                 if (FortArea == default) return null;
-                return new Errand { Key = key, Main = main, Text = "Начните чинить крепость: {ToolRepair} — починка, щелчок по разрушенной стене", Knowledge = 2 };
+                return new Errand { Key = key, Main = main, Text = "Начните чинить крепость: {ToolRepair} и щелчок по разрушенной стене", Knowledge = 2 };
             case "post":
-                return new Errand { Key = key, Main = main, Text = "Поставьте лучника на стену или башню: выберите его и ПКМ по верху стены", Gold = 20 };
+                return new Errand { Key = key, Main = main, Text = "Поставьте лучника на стену: выберите его и щёлкните ПКМ по верху стены", Gold = 20 };
             case "quarry":
-                return new Errand { Key = key, Main = main, Text = "Отведите каменоломню: {ToolGather} — делянка, {MatStone} — камень, рамкой по скалам или валунам", Knowledge = 2 };
+                return new Errand { Key = key, Main = main, Text = "Устройте каменоломню: {ToolGather}, {MatStone} и рамка по скалам или валунам", Knowledge = 2 };
             case "gate":
                 if (FortGate == null) return null;
-                return new Errand { Key = key, Main = main, Text = "Навесьте ворота крепости: {ToolRepair} — починка, щелчок по проёму ворот", Gold = 25 };
+                return new Errand { Key = key, Main = main, Text = "Навесьте ворота крепости: {ToolRepair} и щелчок по проёму ворот", Gold = 25 };
             case "night":
             {
                 int n = Waves.Number + (Waves.Active ? 0 : 1);
                 if (n > Waves.Total) return null;
-                return new Errand { Key = key, Main = main, From = n, Text = n == 1 ? "Выстойте первую ночь: орда придёт на закате" : $"Выстойте ночь {n} из {Waves.Total}" };
+                return new Errand { Key = key, Main = main, From = n, Text = n == 1 ? "Выстойте первую ночь" : $"Выстойте ночь {n} из {Waves.Total}" };
             }
             case "copper":
             {
                 var m = MineOf(0);
                 if (m == null || m.Holder == Holder.Ours) return null;
-                return new Errand { Key = key, Main = main, Text = $"Займите {m.Name.ToLowerInvariant()}: пошлите туда кого-нибудь (ПКМ по нему) — +{m.Income} золота в минуту", Gold = 20 };
+                return new Errand { Key = key, Main = main, Text = $"Займите {m.Name.ToLowerInvariant()}: пошлите туда людей (ПКМ). Даёт +{m.Income} золота в минуту", Gold = 20 };
             }
             case "silver":
             {
                 var m = MineOf(1);
                 if (m == null || m.Holder == Holder.Ours) return null;
-                return new Errand { Key = key, Main = main, Text = m.Holder == Holder.Horde ? $"Отбейте у орды: {m.Name.ToLowerInvariant()} — перебейте лагерь у входа" : $"Займите {m.Name.ToLowerInvariant()}", Gold = 40, Knowledge = 2 };
+                return new Errand { Key = key, Main = main, Text = m.Holder == Holder.Horde ? $"Отбейте у орды {m.Name.ToLowerInvariant()}: перебейте лагерь у входа" : $"Займите {m.Name.ToLowerInvariant()}", Gold = 40, Knowledge = 2 };
             }
             case "gold":
             {
@@ -150,14 +150,14 @@ public sealed partial class Sim
             case "stone":
                 return new Errand { Key = key, Main = main, From = Stock[Stockpile.Stone], Text = "Добудьте 6 м³ камня", Knowledge = 2 };
             case "wood":
-                return new Errand { Key = key, Main = main, From = Stock[Stockpile.Wood], Text = "Добудьте 6 м³ брёвен: {ToolGather} — делянка, {MatWood} — лес", Gold = 15 };
+                return new Errand { Key = key, Main = main, From = Stock[Stockpile.Wood], Text = "Добудьте 6 м³ брёвен: {ToolGather}, {MatWood} и рамка по лесу", Gold = 15 };
             case "leader":
             {
                 // the leader of a band coming tonight (not a champion's: he has his own errand)
                 if (Waves.Active) return null;
                 var b = Bands.Find(x => x.State == BandState.Coming && x.Champion == 0 && x.Name.StartsWith("Ватага "));
                 if (b == null) return null;
-                return new Errand { Key = key, Main = main, From = b.Id, Text = $"Убейте вожака ватаги {b.Name[7..]} этой ночью — у него красный стяг", Gold = 25, Knowledge = 1 };
+                return new Errand { Key = key, Main = main, From = b.Id, Text = $"Убейте этой ночью вожака ватаги {b.Name[7..]}, у него красный стяг", Gold = 25, Knowledge = 1 };
             }
             case "weak":
             {
@@ -166,20 +166,20 @@ public sealed partial class Sim
                 int side = -1, most = 0;
                 for (int i = 0; i < Sides; i++) if (SideBands[i] > most) { most = SideBands[i]; side = i; }
                 if (side < 0) return null;
-                return new Errand { Key = key, Main = main, From = side, Text = $"Укрепите {SideNames[side]} сторону: вождь высмотрел её слабой — стена, ров, лучники", Knowledge = 2 };
+                return new Errand { Key = key, Main = main, From = side, Text = $"Укрепите {SideNames[side]} сторону: вождь считает её слабой", Knowledge = 2 };
             }
             case "thief":
             {
                 int n = Waves.Number + (Waves.Active ? 0 : 1);
                 if (n < 2 || Waves.Active || !Bands.Exists(x => x.State == BandState.Coming && x.Roster.Contains(Kinds.Thief))) return null;
-                return new Errand { Key = key, Main = main, From = n, Text = "Не дайте грабителю уйти с добычей этой ночью: держите солдата у цитадели и у рабочих", Gold = 20 };
+                return new Errand { Key = key, Main = main, From = n, Text = "Не дайте грабителю уйти с добычей этой ночью", Gold = 20 };
             }
             case "hunt":
                 if (Waves.Active || WildAlive() == 0) return null;
-                return new Errand { Key = key, Main = main, From = Hunted, Text = "Добудьте зверя на охоте: выберите лучника и ПКМ по оленю или кабану", Gold = 15 };
+                return new Errand { Key = key, Main = main, From = Hunted, Text = "Добудьте зверя: выберите лучника и щёлкните ПКМ по оленю или кабану", Gold = 15 };
             case "alive":
                 if (Waves.Number < 2 || !Units.Exists(u => !u.Dead && u.Team == Team.Player && Fighter(u) && !u.T.Ranged)) return null;
-                return new Errand { Key = key, Main = main, From = Prisoners(), Text = "Возьмите пленного живьём: выберите бойца, «Живьём» в консоли — рабочий отведёт связанного в цитадель", Knowledge = 2 };
+                return new Errand { Key = key, Main = main, From = Prisoners(), Text = "Возьмите пленного: выберите бойца и включите «Живьём» в нижней панели", Knowledge = 2 };
             case "champion":
             {
                 // a champion coming tonight, or come back: kill him
@@ -189,7 +189,7 @@ public sealed partial class Sim
                 if (c == 0) foreach (var v in Escaped) if (v.Champion > 0 && !ChampionsKilled.Contains(v.Champion)) c = v.Champion;
                 if (c == 0) return null;
                 var (_, of, _, _) = Champion(c);
-                return new Errand { Key = key, Main = main, From = c, Text = c == 4 ? $"Убейте Вождя орды {of}: его падение обратит орду в бегство" : $"Убейте вожака главы {Roman(c)} — {of}: его трофей откроет ярус знаний", Gold = 40, Knowledge = 3 };
+                return new Errand { Key = key, Main = main, From = c, Text = c == 4 ? $"Убейте Вождя орды {of}: тогда вся орда побежит" : $"Убейте {of}, вожака главы {Roman(c)}: это откроет новый ярус знаний", Gold = 40, Knowledge = 3 };
             }
             case "sanctum":
                 if (Waves.Number < 1 || !Mines.Exists(m => m.Power)) return null;

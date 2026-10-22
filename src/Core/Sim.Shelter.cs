@@ -28,7 +28,7 @@ public sealed partial class Sim
         Recall();
         foreach (var u in Units)
             if (!u.Dead && u.Team == Team.Player && !Fighter(u) && !u.Hold) { ReleaseSite(u); u.Refuge = -1; u.Path = null; u.NextSearch = 0; Busy(u); }
-        Say("Тревога! Мирные уходят в убежища, солдаты — на посты.", 2);
+        Say("Тревога: рабочие уходят в убежища, солдаты встают на посты.", 2);
     }
 
     /// <summary>Stands the alarm down: whoever sheltered comes out and goes back to work.</summary>

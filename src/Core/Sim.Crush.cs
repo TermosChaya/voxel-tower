@@ -112,7 +112,7 @@ public sealed partial class Sim
             if (Time - _crushSaid > 10 && what != Mat.TrapDeck)
             {
                 _crushSaid = Time;
-                Say(what == Mat.Deck ? "Настил орды проломлен: тяжёлое рухнуло на него и ушло вниз." : "Бревенчатое перекрытие проломлено: тяжёлое рухнуло на него и ушло вниз.", 2, cx, cz);
+                Say(what == Mat.Deck ? "Настил орды проломлен: тяжёлое рухнуло на него и ушло вниз." : "Деревянное перекрытие проломлено.", 2, cx, cz);
             }
         }
         return holds / heft;

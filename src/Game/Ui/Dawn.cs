@@ -42,7 +42,7 @@ public partial class DawnCard : Control
         top.AddThemeConstantOverride("separation", 10);
         _head = Hud.CapsLabel("", 10, Ornament.EmberGlow);
         top.AddChild(_head);
-        _stars = new StarRow { CustomMinimumSize = new Vector2(66, 18), TooltipText = "Звёзды ночи\nЦитадель цела · никто из наших не пал · убиты все вожаки. Каждая — ещё 15 золота и знание; от двух звёзд даров на выбор четыре." };
+        _stars = new StarRow { CustomMinimumSize = new Vector2(66, 18), TooltipText = "Звёзды ночи\nЗа целую цитадель, за ночь без потерь и за всех убитых вожаков. Каждая звезда даёт 15 золота и 1 знание. С двумя звёздами даров на выбор 4." };
         top.AddChild(_stars);
         var gap = new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
         top.AddChild(gap);
@@ -93,7 +93,7 @@ public partial class DawnCard : Control
         _stars.Lit = r.Stars;
         _stars.QueueRedraw();
         _fold.Text = _folded ? "+" : "–";
-        _fold.TooltipText = _folded ? "Развернуть" : "Свернуть: дары подождут до следующего рога";
+        _fold.TooltipText = _folded ? "Развернуть" : "Свернуть. Дары ждут до следующей волны.";
         if (!taking)
         {
             _night.Text = $"Принято: {_taken}.";
@@ -102,7 +102,7 @@ public partial class DawnCard : Control
         }
         if (_folded)
         {
-            _night.Text = $"Дар рассвета ждёт выбора — до следующего рога ({sim.Gifts.Count} на выбор).";
+            _night.Text = $"Дар рассвета ждёт выбора до следующей волны ({sim.Gifts.Count} на выбор).";
             _cards.Visible = false;
             return;
         }
@@ -110,8 +110,8 @@ public partial class DawnCard : Control
         {
             $"Пало налётчиков: {r.Killed} · наших: {r.Lost} · цитадель потеряла {r.KeepLost * 100:0} % · вожаков убито: {r.LeadersKilled} из {r.Leaders}",
         };
-        if (r.Best.Count > 0) lines.Add("Отличились: " + string.Join(", ", r.Best.ConvertAll(b => $"{b.who.ToLowerInvariant()} — {b.felled}")));
-        lines.Add(legend ? "Выберите один трофей — он останется до конца осады:" : "Выберите один дар:");
+        if (r.Best.Count > 0) lines.Add("Отличились: " + string.Join(", ", r.Best.ConvertAll(b => $"{b.who.ToLowerInvariant()} ({b.felled})")));
+        lines.Add(legend ? "Выберите один трофей, он действует до конца осады:" : "Выберите один дар:");
         _night.Text = string.Join("\n", lines);
         _cards.Visible = true;
         // the plates laid out anew only when the gifts change

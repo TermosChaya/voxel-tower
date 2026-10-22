@@ -43,9 +43,9 @@ public partial class Minimap : Control
         CustomMinimumSize = new Vector2(256, 256f * w.SZ / w.SX);
         MouseFilter = MouseFilterEnum.Stop;
         MouseDefaultCursorShape = CursorShape.PointingHand;
-        TooltipText = "Карта\nЩелчок или протяжка переносит взгляд. Светлая рамка — то, что видит камера, ромб — цитадель. " +
-            "Голубые точки — ваши люди (выбранные в кольце), красные — орда, бурые — звери. " +
-            "Квадраты — рудники в цвете хозяина (светлый — ничей), серые ромбики — руины.";
+        TooltipText = "Карта\nЩелчок переносит вид. Рамка — видимая часть, ромб — цитадель. " +
+            "Голубые точки — ваши люди, красные — орда, бурые — звери. " +
+            "Квадраты — рудники, серые ромбики — руины.";
     }
 
     /// <summary>The highest column of a pixel's block, and what tops it.</summary>

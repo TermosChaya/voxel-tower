@@ -220,7 +220,7 @@ public sealed partial class Sim
         {
             z.Beds = 0;
             z.BunksWhole.Clear();
-            if (was && had > 0 && !quiet) Say($"Жилой дом открыт ({check.Why}) — его {had} {PlacesWord(had)} не в счёт, пока его не закроют.", 2, (z.X0 + z.X1) / 2f, (z.Z0 + z.Z1) / 2f);
+            if (was && had > 0 && !quiet) Say($"Жилой дом открыт ({check.Why}): его {had} {PlacesWord(had)} не считаются, пока его не закроют.", 2, (z.X0 + z.X1) / 2f, (z.Z0 + z.Z1) / 2f);
             return;
         }
         if (!_furnishing.TryGetValue(z.Id, out var plan) || plan.Voxels.Count == 0)

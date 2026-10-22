@@ -490,23 +490,11 @@ public partial class Main : Node3D
         if (!Scripted)
         {
             Sim.BeginErrands();
-            Hud.Log("Крепость наполовину разрушена, а с запада идёт орда: она придёт на закате, через десять минут.", Hud.Kind.Warn);
-            Hud.Log("Что делать — слева, в «Поручениях»: одно главное и два малых, за каждое награда. {Help} — всё управление.", Hud.Kind.Ok);
+            Hud.Log("Орда придёт через 10 минут.", Hud.Kind.Warn);
+            Hud.Log("Что делать дальше, написано слева в «Поручениях». {Help} — все клавиши.", Hud.Kind.Ok);
             return;
         }
-        Hud.Log("{CallWave} — позвать орду раньше: золота за это нет, зато она меньше узнает о вашей обороне.");
-        Hud.Log("Между волнами охотьтесь: выберите лучника и щёлкните ПКМ по зверю — добыча приносит золото.");
-        Hud.Log("Кисти размечают работу, пешки её делают: кладут из запасов, копают, рубят. {Pick} — кирка, {ToolLadder} — лестница, {ToolGather} — делянка: ресурс с участка. {Help} — всё управление.");
-        if (!_selfTest && !_demo)
-        {
-            Hud.Log("Рудники платят золотом, пока они ваши: медный — к востоку от крепости, серебряную жилу в низине стерегут гоблины. " +
-                "Пошлите людей к входу. Задачи — во вкладке на верхней балке.", Hud.Kind.Ok);
-            Hud.Log("Крепость вокруг цитадели наполовину разрушена. Починка ({ToolRepair}), щелчок по стене — рабочие вернут ей прежний вид, " +
-                "рамкой — только проломы. Камень ломают в скалах, валунах и руинах ({ToolGather} и {MatStone}).", Hud.Kind.Warn);
-        }
-        Hud.Log("Вождь орды высматривает, где ваши стены слабее, и шлёт ватаги туда. Кольцо вокруг цитадели показывает, как он видит " +
-            "каждую сторону: красная — слабая, зелёная — крепкая, ярче — куда пойдёт ватага. {Trails} — показать или скрыть пути орды.");
-        Hud.Log("Орда придёт с запада на закате, через десять минут. Ройте, рубите и стройте, пока светло.", Hud.Kind.Warn);
+        Hud.Log("Орда придёт с запада через 10 минут.", Hud.Kind.Warn);
     }
 
     /// <summary>The tutorial, from its step n: the frame shut, the card on the first step.</summary>
@@ -559,8 +547,8 @@ public partial class Main : Node3D
         if (Sim.Over && !_finale)
         {
             _finale = true;
-            if (Sim.Won) Hud.Finale("Осада снята", $"Долина устояла: {Waves.Total} волн отбито, {Sim.Kills} налётчиков пало.", true);
-            else Hud.Finale("Цитадель пала", $"Отбито волн: {Math.Max(0, Sim.Waves.Number - 1)} из {Waves.Total}. Налётчиков пало: {Sim.Kills}.", false);
+            if (Sim.Won) Hud.Finale("Осада снята", $"Отбито волн: {Waves.Total}. Налётчиков убито: {Sim.Kills}.", true);
+            else Hud.Finale("Цитадель пала", $"Отбито волн: {Math.Max(0, Sim.Waves.Number - 1)} из {Waves.Total}. Налётчиков убито: {Sim.Kills}.", false);
         }
         // the cursor laid over a voxel for a screenshot, once the view has settled
         if (_shot != null && _aim is { Length: 2 } && _frames == Math.Max(2, _shotFrames - 8))
@@ -609,7 +597,7 @@ public partial class Main : Node3D
         if (Tools.PasteBp == bp) Tools.SetTool(Tool.None);
         SaveBlueprints();
         Hud.RebuildBlueprints();
-        Hud.Log($"Свиток «{bp.Name}» сожжён.");
+        Hud.Log($"Чертёж «{bp.Name}» удалён.");
     }
 
     sealed class BlueprintStore

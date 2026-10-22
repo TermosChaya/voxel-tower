@@ -110,7 +110,7 @@ public sealed partial class Sim
                 break;
             }
             default:
-                if (victim == null || victim.Dead || victim.Team != Team.Player || victim.T.Prays || victim.Captor != null) return "выберите одного из своих — не жреца";
+                if (victim == null || victim.Dead || victim.Team != Team.Player || victim.T.Prays || victim.Captor != null) return "выберите одного из своих, не жреца";
                 r.Victim = victim;
                 r.Stage = 1;
                 if (victim.Inside) { victim.Mending = false; Leave(victim); }
@@ -234,8 +234,8 @@ public sealed partial class Sim
         priest.Rite = null; priest.Captive = null; priest.State = UnitState.Idle; priest.NextSearch = 0;
         RiteDone?.Invoke(ax, ay, az);
         Say($"Жертва принята: {what}. Вмешательство +{kept:0}" + (kept < favour - .5 ? $" (из {favour:0}: больше не вместить)" : "")
-            + (revelations > 0 ? $", откровения +{revelations}" : "") + (power ? " — на месте силы в полтора раза больше." : "."), 1, priest);
-        if (r.Kind == RiteKind.Own) Say("Дружина скорбит по своему: пять минут работа идёт на четверть медленнее.", 2);
+            + (revelations > 0 ? $", откровения +{revelations}" : "") + (power ? " (на месте силы в 1,5 раза больше)." : "."), 1, priest);
+        if (r.Kind == RiteKind.Own) Say("Дружина скорбит: 5 минут работа идёт на 25 % медленнее.", 2);
     }
 
     /// <summary>What the chronicle says killed one given to the old powers.</summary>

@@ -175,7 +175,7 @@ public sealed partial class Sim
         u.Facing = MathF.Atan2(-dz, -dx);
         Nav.Flush();
         InvalidateFields();
-        Say("Осадная башня у стены: по её лестнице орда полезет наверх. Её не сбросить — только сжечь или разбить.", 3, u);
+        Say("Осадная башня у стены, по ней орда лезет наверх. Башню можно только сжечь или разбить.", 3, u);
     }
 
     /// <summary>A siege tower burnt or broken: its ladder comes down with it.</summary>
@@ -320,7 +320,7 @@ public sealed partial class Sim
         if (broken > 0 && kd >= Site.KeepR + 6 && Time - _stoneSaid > 20)
         {
             _stoneSaid = Time;
-            Say("Камнемёт бьёт по стенам: выбивает кладку. Сожгите его огненными стрелами или выйдите на него.", 3, x, z);
+            Say("Камнемёт бьёт по стенам. Сожгите его огненными стрелами или разбейте вылазкой.", 3, x, z);
         }
         return broken;
     }
@@ -345,7 +345,7 @@ public sealed partial class Sim
             var guard = Spawn(t, g >= 0 ? g : c.Cell);
             guard.Escort = c; guard.Guard = true; guard.Home = c.Cell;
         }
-        Say("С ватагой идёт камнемёт с охраной: он встанет за пределами выстрела и будет разбивать стены.", 3, c);
+        Say("С ватагой идёт камнемёт с охраной. Он будет бить по стенам издали.", 3, c);
         return c;
     }
 }

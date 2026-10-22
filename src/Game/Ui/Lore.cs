@@ -43,11 +43,10 @@ public partial class LorePanel : VBoxContainer
         tabs.AddThemeConstantOverride("separation", 6);
         string[] tips =
         {
-            "Умения\nУмения крепости: луки, кладка, труд, дружина, ловушки. Платятся знаниями — их дают отбитые волны.",
-            "Войско\nКаких воинов набирает цитадель — копейщики, щитоносцы, рыцари, пращники, арбалетчики, бомбардиры, псы, всадники, тролли, великаны — " +
-                "и что делает их сильнее. Платится знаниями.",
-            "Вмешательство\nЗаклинания четырёх кругов и благодать старых сил: первое в круге постигается за вмешательство, остальные — за откровения, " +
-                "благодать — за вмешательство. Вмешательство копят жрецы молитвой и жертвами, откровения дают только жертвы.",
+            "Умения\nЛуки, кладка, труд, дружина и ловушки. Изучаются за знания.",
+            "Войско\nКого можно набирать в цитадели и что их усиливает. Изучается за знания.",
+            "Вмешательство\nЗаклинания и благодать. Первое заклинание круга и благодать изучаются за вмешательство, остальные заклинания за откровения. " +
+                "Откровения дают только жертвы.",
         };
         for (int i = 0; i < 3; i++)
         {
@@ -127,7 +126,7 @@ public partial class LorePanel : VBoxContainer
             return;
         }
         if (sim.Learn(l.Key)) { Refresh(); _m.Hud.Refresh(); return; }
-        _m.Hud.Float(sim.RivalShut(l) ? $"выбрано другое: «{Sim.LoreOf(l.Rival)?.Name}»" : !sim.TierAllows(l) ? $"ярус {Sim.Roman(l.Tier + 1)} ещё закрыт" : StateOf(l) == 3 ? "сначала то, на чём оно стоит" : $"нужно {l.Cost} {CoinWord(l.Coin, l.Cost)}", Ornament.Blood);
+        _m.Hud.Float(sim.RivalShut(l) ? $"выбрано другое: «{Sim.LoreOf(l.Rival)?.Name}»" : !sim.TierAllows(l) ? $"ярус {Sim.Roman(l.Tier + 1)} ещё закрыт" : StateOf(l) == 3 ? "сначала изучите предыдущее" : $"нужно {l.Cost} {CoinWord(l.Coin, l.Cost)}", Ornament.Blood);
     }
 
     public void Refresh()
@@ -144,17 +143,17 @@ public partial class LorePanel : VBoxContainer
             if (l.Page != _page) continue;
             string why = state switch
             {
-                0 => l.Spell != null ? "Постигнуто. Щелчок — взять в руку." : "Изучено.",
-                1 => $"Щелчок — {(l.Spell != null ? "постичь" : "изучить")} за {l.Cost} {CoinWord(l.Coin, l.Cost)}.",
+                0 => l.Spell != null ? "Изучено. Щелчок — выбрать заклинание." : "Изучено.",
+                1 => $"Щелчок — изучить за {l.Cost} {CoinWord(l.Coin, l.Cost)}.",
                 2 => $"Нужно {l.Cost} {CoinWord(l.Coin, l.Cost)}, есть {Math.Floor(sim.Wallet(l.Coin)):0}.",
                 _ => sim.RivalShut(l)
-                    ? $"Выбрана другая специализация ветви: «{Sim.LoreOf(l.Rival)?.Name}». Обе не взять."
+                    ? $"Уже выбрано другое: «{Sim.LoreOf(l.Rival)?.Name}». Можно взять только одно из двух."
                     : !sim.TierAllows(l)
-                    ? $"Ярус {Sim.Roman(l.Tier + 1)} закрыт: откроется, когда падёт вожак главы {Sim.Roman(l.Tier)}, — или на ночь позже."
+                    ? $"Ярус {Sim.Roman(l.Tier + 1)} закрыт. Откроется после гибели вожака главы {Sim.Roman(l.Tier)} или через ночь после его ночи."
                     : "Сначала: " + string.Join(", ", Array.ConvertAll(Array.FindAll(l.Needs, n => !sim.Knows(n)), n => $"«{Sim.LoreOf(n)?.Name ?? n}»")) + ".",
             };
-            string rests = l.Needs.Length == 0 ? "" : "\nСтоит на: " + string.Join(l.Needs.Length == 2 && Sim.LoreOf(l.Needs[0])?.Rival == l.Needs[1] ? " или " : ", ", Array.ConvertAll(l.Needs, n => $"«{Sim.LoreOf(n)?.Name ?? n}»")) + ".";
-            if (l.Rival != null && sim.OwnSiege) rests += $"\nРазвилка: или это, или «{Sim.LoreOf(l.Rival)?.Name}».";
+            string rests = l.Needs.Length == 0 ? "" : "\nТребует: " + string.Join(l.Needs.Length == 2 && Sim.LoreOf(l.Needs[0])?.Rival == l.Needs[1] ? " или " : ", ", Array.ConvertAll(l.Needs, n => $"«{Sim.LoreOf(n)?.Name ?? n}»")) + ".";
+            if (l.Rival != null && sim.OwnSiege) rests += $"\nРазвилка: это или «{Sim.LoreOf(l.Rival)?.Name}».";
             string cost = state == 0 ? "" : $" · {l.Cost} {CoinWord(l.Coin, l.Cost)}";
             k.TooltipText = $"{l.Name} · {l.Branch.ToLowerInvariant()}{cost}\n{l.About}{rests}\n{why}";
         }
@@ -265,9 +264,8 @@ public partial class LorePanel : VBoxContainer
             var sim = _p._m.Sim;
             if (at.DistanceTo(C) < Heart + 4)
                 return _p._page == 2
-                    ? $"Вмешательство: {sim.Favour:0} из {sim.FavourCap:0} · откровений {sim.Revelations}\nВмешательство копят жрецы молитвой в святилище и жертвами, откровения дают только жертвы. " +
-                      "Первое заклинание круга постигается за вмешательство, остальные — за откровения; благодать — за вмешательство."
-                    : $"Знаний: {sim.Knowledge:0}\nЗнания дают отбитые волны — тем больше, чем дальше осада. На оба древа их за осаду не хватит: выбирайте.";
+                    ? $"Вмешательство: {sim.Favour:0} из {sim.FavourCap:0} · откровений {sim.Revelations}\nВмешательство копят жрецы молитвой и жертвами, откровения дают только жертвы."
+                    : $"Знаний: {sim.Knowledge:0}\nЗнания дают за отбитые волны, к концу осады больше. На всё их не хватит.";
             var branches = Sim.PageBranches[_p._page];
             for (int b = 0; b < branches.Length; b++)
             {

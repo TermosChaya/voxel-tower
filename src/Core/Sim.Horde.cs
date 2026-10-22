@@ -242,7 +242,7 @@ public sealed partial class Sim
             {
                 if (u.Wounds != null) { u.Wounds.Bleed = 0; u.Wounds.Arrows.Clear(); }
                 Escaped.Add(new Survivor { Kind = u.T, Look = u.Look, Hp = u.Hp, Wounds = u.Wounds, Champion = u.Champion, Title = u.Title });
-                Say($"{u.T.Name} ушёл живым — вернётся со следующей волной.", 2, u);
+                Say($"{u.T.Name} сбежал и вернётся со следующей волной.", 2, u);
             }
             u.Dead = true; u.DiedAt = -999; u.State = UnitState.Dead;
             return;
@@ -512,7 +512,7 @@ public sealed class Waves
             DawnLeft = Math.Max(0, DawnLeft - dt);
             if (was >= Dusk && Countdown < Dusk)
                 s.Say(Number == 0
-                    ? "Солнце садится: через минуту из темноты выйдет орда. Ночью лучник бьёт в полную силу только освещённое — у факелов на стенах, у огня, у цитадели."
+                    ? "Закат. Через минуту придёт орда. Ночью лучники хорошо видят только освещённых врагов."
                     : "Солнце садится: через минуту орда.", 2);
             if (Countdown <= 0) Start(s);
             return;
@@ -533,11 +533,11 @@ public sealed class Waves
             Countdown = Prep;
             DawnLeft = Dawn;
             s.Bands.RemoveAll(b => b.State != BandState.Coming);
-            s.Say($"Волна {Number} отбита. Светает: до следующей десять минут.", 1);
+            s.Say($"Волна {Number} отбита. До следующей 10 минут.", 1);
             s.Reward(Number);
             s.Dawn(Number);
             s.StandDown(beaten: true);
-            if (Number >= Total) { s.Won = true; s.Over = true; s.Say("Осада снята: долина устояла.", 1); }
+            if (Number >= Total) { s.Won = true; s.Over = true; s.Say("Осада снята. Вы выстояли.", 1); }
             else s.PlanWave(Number + 1);
         }
     }

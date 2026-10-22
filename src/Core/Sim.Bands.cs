@@ -406,7 +406,7 @@ public sealed partial class Sim
             {
                 b.Broken = true;
                 foreach (var m in b.Members) if (!m.Dead) m.Routed = true;
-                Say($"{b.Name} дрогнула и бежит: {(b.Alive == 1 ? "уцелел один" : $"уцелело {b.Alive}")}.", 1, b.Leader ?? b.Members.Find(m => !m.Dead));
+                Say($"{b.Name} бежит: {(b.Alive == 1 ? "уцелел один" : $"уцелело {b.Alive}")}.", 1, b.Leader ?? b.Members.Find(m => !m.Dead));
             }
             var l = b.Leader;
             if (b.State is BandState.March or BandState.Rally && Time >= b.HeadingAt) { b.HeadingAt = Time + .5; Heading(b); }

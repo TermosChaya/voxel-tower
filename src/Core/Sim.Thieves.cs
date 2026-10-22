@@ -125,7 +125,7 @@ public sealed partial class Sim
         if (kind == 0) { u.Loot = Math.Min(LootGold, Stock.Gold); Stock.Gold -= u.Loot; }
         else { u.Loot = Math.Min(LootVoxels, Stock[kind]); Stock[kind] -= u.Loot; }
         u.Path = null; u.NextSearch = 0;
-        Say($"Грабитель стащил из цитадели: {LootText(u)}. Перехватите его, пока он не ушёл из долины!", 3, u);
+        Say($"Грабитель украл из цитадели: {LootText(u)}. Перехватите его, пока он не ушёл.", 3, u);
     }
 
     /// <summary>A worker beaten down is bound and led off.</summary>
@@ -137,7 +137,7 @@ public sealed partial class Sim
         prey.Path = null; prey.Hold = false; prey.Refuge = -1; prey.Prey = null; prey.Patient = null;
         prey.Mending = false;
         thief.Path = null; thief.NextSearch = 0; thief.Target = null;
-        Say($"Грабитель схватил: {prey.T.Name.ToLowerInvariant()} №{prey.Id}. Отбейте, пока его не увели!", 3, prey);
+        Say($"Грабитель схватил: {prey.T.Name.ToLowerInvariant()} №{prey.Id}. Отбейте, пока не увели.", 3, prey);
     }
 
     /// <summary>
@@ -188,7 +188,7 @@ public sealed partial class Sim
         if (u.Loot > 0)
         {
             if (u.LootKind == 0) Stock.Gold += u.Loot; else Stock[u.LootKind] += u.Loot;
-            Say($"Грабитель убит — добро отбито: {LootText(u)}.", 1, u);
+            Say($"Грабитель убит, украденное возвращено: {LootText(u)}.", 1, u);
             u.Loot = 0; u.LootKind = -1;
         }
         if (u.Captive != null) { u.Captive.Captor = null; u.Captive = null; }

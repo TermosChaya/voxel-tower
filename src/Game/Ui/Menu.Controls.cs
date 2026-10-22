@@ -24,8 +24,7 @@ public partial class GameMenu
         public override GodotObject _MakeCustomTooltip(string forText) => Tooltip.Make(forText);
     }
 
-    const string Intro = "Кисти ничего не строят сами: они размечают работу, а рабочие делают её своими руками — кладут из запасов, копают, рубят. " +
-        "Наведите на строку — подробнее; щёлкните по клавише и нажмите другую — команда перейдёт на неё.";
+    const string Intro = "Чтобы переназначить команду, щёлкните по её клавише и нажмите новую.";
 
     void Controls_()
     {
@@ -57,12 +56,12 @@ public partial class GameMenu
         _page.AddChild(_note);
         var foot = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         foot.AddThemeConstantOverride("separation", 16);
-        _reset = Big("Вернуть все клавиши", "Все команды — на клавиши, с которыми игра начинается.", () =>
+        _reset = Big("Вернуть все клавиши", "Вернуть клавиши по умолчанию.", () =>
         {
             Bindings.Reset();
             _capture = null;
             Relabel();
-            _note.Text = "Все клавиши — как в начале.";
+            _note.Text = "Клавиши сброшены.";
         });
         foot.AddChild(_reset);
         foot.AddChild(Big("Назад", "", Main_));
@@ -76,7 +75,7 @@ public partial class GameMenu
         foreach (var t in Hud.ToolDefs) if (t.act == d.Act) return t.tip;
         foreach (var m in Hud.MatDefs) if (m.act == d.Act) return m.tip;
         if (d.Act == Act.Pick) return Hud.PickTip;
-        return $"{d.Name}\n{d.About}";
+        return d.About == "" ? d.Name : $"{d.Name}\n{d.About}";
     }
 
     Control CommandRow(Bindings.Def d)
@@ -92,7 +91,7 @@ public partial class GameMenu
         about.VerticalAlignment = VerticalAlignment.Center;
         row.AddChild(about);
         var key = new Button { FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(118, 30), MouseDefaultCursorShape = CursorShape.PointingHand,
-            TooltipText = "Щёлкните и нажмите клавишу, на которую поставить эту команду." };
+            TooltipText = "Щёлкните и нажмите новую клавишу." };
         key.AddThemeFontOverride("font", Ornament.SerifBold);
         key.AddThemeFontSizeOverride("font_size", 15);
         var act = d.Act;
@@ -141,7 +140,7 @@ public partial class GameMenu
     void Listen(Act act)
     {
         _capture = act;
-        _note.Text = $"Нажмите клавишу для «{Bindings.Of(act).Name}». Esc — оставить как было.";
+        _note.Text = $"Нажмите клавишу для «{Bindings.Of(act).Name}». Esc — отмена.";
         Relabel();
     }
 
@@ -156,8 +155,8 @@ public partial class GameMenu
         var name = Bindings.Of(act).Name;
         var other = Bindings.Bind(act, key);
         _note.Text = other is { } o
-            ? $"«{name}» — на {Bindings.Label(act)}; «{Bindings.Of(o).Name}» была там и перешла на {Bindings.Label(o)}."
-            : $"«{name}» — на {Bindings.Label(act)}.";
+            ? $"«{name}»: {Bindings.Label(act)}. «{Bindings.Of(o).Name}» перенесена на {Bindings.Label(o)}."
+            : $"«{name}»: {Bindings.Label(act)}.";
         Relabel();
     }
 }

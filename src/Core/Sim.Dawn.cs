@@ -51,7 +51,7 @@ public sealed partial class Sim
     /// <summary>The horn: the night's tally begins, and a dawn's gifts not taken are gone.</summary>
     internal void NightBegins(int bands)
     {
-        if (Gifts.Count > 0) { Gifts.Clear(); Say("Дар рассвета так и не выбран: обоз ушёл, пришлые разошлись.", 2); }
+        if (Gifts.Count > 0) { Gifts.Clear(); Say("Дар рассвета не выбран и пропал.", 2); }
         _night0Kills = Kills; _nightLost = 0; _nightLeaders = bands; _nightLeadersKilled = 0; _nightChampion = 0;
         _slainBands.Clear(); _thiefAway = false;
         _nightKeep0 = KeepHp;
@@ -97,7 +97,7 @@ public sealed partial class Sim
         {
             Stock.Gold += 15 * r.Stars;
             Knowledge += r.Stars;
-            Say($"Звёзды ночи: {r.Stars} из 3 — ещё {15 * r.Stars} золота и {r.Stars} {Plural(r.Stars, "знание", "знания", "знаний")}.", 1);
+            Say($"Звёзды ночи: {r.Stars} из 3. Награда: {15 * r.Stars} золота и {r.Stars} {Plural(r.Stars, "знание", "знания", "знаний")}.", 1);
         }
         if (night >= Waves.Total) return;
         Gifts.Clear();
@@ -106,7 +106,7 @@ public sealed partial class Sim
         {
             Gifts.AddRange(RelicGifts(night));
             _nightChampion = 0;
-            if (Gifts.Count > 0) { Say("Рассвет: трофеи вожака главы — выберите один из трёх, до следующего рога.", 1); return; }
+            if (Gifts.Count > 0) { Say("Рассвет: выберите один из трёх трофеев вожака. Выбор ждёт до следующей волны.", 1); return; }
         }
         var trophy = Trophy(night);
         var deal = new List<Gift>();
@@ -120,7 +120,7 @@ public sealed partial class Sim
         // short of four: a second caravan's goods
         if (deal.Count < want && GiftOf(GiftKind.Caravan, night, 1) is { } more) deal.Add(more);
         for (int i = 0; i < Math.Min(want, deal.Count); i++) Gifts.Add(deal[i]);
-        if (Gifts.Count > 0) Say("Рассвет: выберите один из даров — до следующего рога.", 1);
+        if (Gifts.Count > 0) Say("Рассвет: выберите один из даров. Выбор ждёт до следующей волны.", 1);
     }
 
     /// <summary>A draw of the dawn's own, so that the valley's other chances run as they did.</summary>
@@ -135,11 +135,11 @@ public sealed partial class Sim
             {
                 int room = Places - Household();
                 var who = new List<(string key, string title, string about, int n)>();
-                if (room >= 3) who.Add(("workers", "Три работника", "Беженцы из сожжённых деревень просятся в крепость: три рабочих рук.", 3));
-                if (room >= 2) who.Add(("archers", "Двое лучников", "Охотники из леса пришли с луками: двое лучников без найма.", 2));
-                if (room >= 1) who.Add(("swordsman", "Мечник", "Бывалый воин просит места у очага: мечник без найма.", 1));
-                if (room >= 1 && Mines.Exists(m => m.Power)) who.Add(("priest", "Жрец-отшельник", "Отшельник с холмов пришёл служить старым силам: жрец без найма.", 1));
-                if (room >= 2 && night >= 4) who.Add(("knight", "Странствующий рыцарь", "Рыцарь без господина предлагает свой меч до конца осады: рыцарь без найма и без знания.", 2));
+                if (room >= 3) who.Add(("workers", "Три работника", "Беженцы из сожжённых деревень: 3 рабочих.", 3));
+                if (room >= 2) who.Add(("archers", "Двое лучников", "Охотники из леса: 2 лучника без найма.", 2));
+                if (room >= 1) who.Add(("swordsman", "Мечник", "Бывалый воин: мечник без найма.", 1));
+                if (room >= 1 && Mines.Exists(m => m.Power)) who.Add(("priest", "Жрец-отшельник", "Отшельник с холмов: жрец без найма.", 1));
+                if (room >= 2 && night >= 4) who.Add(("knight", "Странствующий рыцарь", "Рыцарь без господина: служит до конца осады, без найма и без знания.", 2));
                 if (who.Count == 0) return null;
                 var w = who[(int)(DawnDraw(night, 1 + nth) * who.Count) % who.Count];
                 return new Gift { Kind = kind, Key = w.key, Title = w.title, About = w.about };
@@ -148,9 +148,9 @@ public sealed partial class Sim
             {
                 var goods = new List<(string key, string title, string about)>
                 {
-                    ("stone", "Обоз камня", "Каменщики с равнины везут тёсаный камень: 8 м³ камня."),
-                    ("wood", "Обоз брёвен", "Лесорубы сплавили плоты: 8 м³ брёвен."),
-                    ("earth", "Обоз земли", "Возы с глиной и дёрном: 12 м³ земли."),
+                    ("stone", "Обоз камня", "8 м³ камня."),
+                    ("wood", "Обоз брёвен", "8 м³ брёвен."),
+                    ("earth", "Обоз земли", "12 м³ земли."),
                     ("gold", "Купеческий кошель", $"Купцы платят за защиту дороги: {50 + 10 * night} золота."),
                 };
                 int i0 = (int)(DawnDraw(night, 7) * goods.Count) % goods.Count;
@@ -161,8 +161,8 @@ public sealed partial class Sim
             {
                 var signs = new List<(string key, string title, string about)>
                 {
-                    ("favour", "Знамение", "Над долиной пролетел белый ворон: старые силы смотрят на вас — 15 вмешательства."),
-                    ("revelation", "Откровение", "Жрецам приснилось слово силы: одно откровение — им открывают заклинания."),
+                    ("favour", "Знамение", "Над долиной пролетел белый ворон: 15 вмешательства."),
+                    ("revelation", "Откровение", "1 откровение. За откровения изучают заклинания."),
                 };
                 var s = signs[(int)(DawnDraw(night, 11) * signs.Count) % signs.Count];
                 return new Gift { Kind = kind, Key = s.key, Title = s.title, About = s.about };
@@ -179,7 +179,7 @@ public sealed partial class Sim
         foreach (var l in Lores) if (l.Coin == Coin.Knowledge && l.Spell == null && !Knows(l.Key) && Opened(l)) can.Add(l);
         if (can.Count == 0) return null;
         var lore = can[(int)(DawnDraw(night, 23) * can.Count) % can.Count];
-        return new Gift { Kind = GiftKind.Trophy, Key = lore.Key, Title = "Трофей вожака", About = $"Со стяга вожака снято знание «{lore.Name}»: {lore.About}" };
+        return new Gift { Kind = GiftKind.Trophy, Key = lore.Key, Title = "Трофей вожака", About = $"Знание «{lore.Name}» без оплаты: {lore.About}" };
     }
 
     /// <summary>Takes one of the dawn's gifts; the rest go. False if there is no such gift.</summary>

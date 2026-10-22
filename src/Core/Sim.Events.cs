@@ -91,9 +91,9 @@ public sealed partial class Sim
         WeatherLeft = seconds;
         Say(w switch
         {
-            Weather.Rain => "Пошёл дождь: огонь едва берётся и гаснет, стрелы летят хуже.",
-            Weather.Fog => "Опустился туман: лучники видят врага лишь вблизи.",
-            _ => "Поднялся ветер: огонь бежит вдвое быстрее, стрелы сносит.",
+            Weather.Rain => "Пошёл дождь: огонь гаснет, стрелы летят хуже.",
+            Weather.Fog => "Опустился туман: лучники видят врага только вблизи.",
+            _ => "Поднялся ветер: огонь распространяется вдвое быстрее, стрелы сносит.",
         }, 2);
     }
 
@@ -121,8 +121,8 @@ public sealed partial class Sim
             if (c < 0 || Nav.Water[c] > 0) continue;
             var u = Spawn(t, c);
             u.Home = c;
-            Say(bear ? "Из пещер вышел медведь: он бросается на всякого, кто подойдёт, — и на орду тоже."
-                     : "В долине видели белого оленя: за него дадут 60 золота — если догонят.", 2, u);
+            Say(bear ? "Из пещер вышел медведь. Он нападает на всех, кто подойдёт, и на орду тоже."
+                     : "В долине появился белый олень. За него дают 60 золота.", 2, u);
             return;
         }
     }
@@ -153,7 +153,7 @@ public sealed partial class Sim
         if (u == null) return;
         u.Envoy = true; u.Band = null; u.Raid = null; u.Torch = false;
         Offer = new Deal { Envoy = u, Until = double.MaxValue };
-        Say("С запада идёт посол орды под белой тряпкой. Не трогайте его, если хотите выслушать.", 2, u);
+        Say("С запада идёт посол орды. Не трогайте его, если хотите выслушать.", 2, u);
     }
 
     /// <summary>The envoy on its way, waiting at the walls, or gone: the offer made when it is near enough to be heard.</summary>
@@ -211,10 +211,10 @@ public sealed partial class Sim
     /// <summary>"Дайте 70 золота — следующая волна придёт на три минуты позже."</summary>
     public static string OfferText(Deal d) => d.Kind switch
     {
-        DealKind.Delay => $"«Дайте {d.Cost:0} золота — следующая волна придёт на три минуты позже».",
-        DealKind.Tribute => $"«Отдайте {Fmt.M3(d.Cost)} м³ {(d.Store == Stockpile.Wood ? "брёвен" : d.Store == Stockpile.Stone ? "камня" : "земли")} — следующая волна будет на четверть меньше».",
-        DealKind.NoEngines => $"«Дайте {d.Cost:0} золота — следующая волна придёт без осадных машин».",
-        DealKind.Ransom => $"«Отпустите наших, что у вас в плену, — дадим за них {d.Cost:0} золота».",
+        DealKind.Delay => $"«Дайте {d.Cost:0} золота, и следующая волна придёт на 3 минуты позже».",
+        DealKind.Tribute => $"«Отдайте {Fmt.M3(d.Cost)} м³ {(d.Store == Stockpile.Wood ? "брёвен" : d.Store == Stockpile.Stone ? "камня" : "земли")} и следующая волна будет на 25 % меньше».",
+        DealKind.NoEngines => $"«Дайте {d.Cost:0} золота, и следующая волна придёт без осадных машин».",
+        DealKind.Ransom => $"«Отпустите наших пленных, и мы дадим за них {d.Cost:0} золота».",
         _ => "",
     };
 
@@ -228,7 +228,7 @@ public sealed partial class Sim
         if (d == null || d.Kind == DealKind.None) return false;
         Offer = null;
         if (!yes) { Say("Послу отказали. Он уходит.", 0, d.Envoy); return true; }
-        if (!CanPay(d)) { Say(d.Kind == DealKind.Ransom ? "Пленных уже нет — посол уходит ни с чем." : "Заплатить нечем — посол уходит ни с чем.", 3, d.Envoy); return false; }
+        if (!CanPay(d)) { Say(d.Kind == DealKind.Ransom ? "Пленных уже нет, посол уходит." : "Заплатить нечем, посол уходит.", 3, d.Envoy); return false; }
         if (d.Kind == DealKind.Ransom)
         {
             // what it pays now, for those still held
@@ -244,12 +244,12 @@ public sealed partial class Sim
         {
             case DealKind.Delay:
                 Waves.Countdown += 180;
-                Say("Сделка: следующая волна придёт на три минуты позже.", 1, d.Envoy);
+                Say("Сделка: следующая волна придёт на 3 минуты позже.", 1, d.Envoy);
                 break;
             case DealKind.Tribute:
                 _waveShare = .75;
                 ThinNextWave();
-                Say("Сделка: следующая волна будет на четверть меньше.", 1, d.Envoy);
+                Say("Сделка: следующая волна будет на 25 % меньше.", 1, d.Envoy);
                 break;
             case DealKind.NoEngines:
                 _waveNoEngines = true;
@@ -279,7 +279,7 @@ public sealed partial class Sim
     void EnvoyKilled()
     {
         Angered = true;
-        Say("Посла орды убили. Орда этого не забудет: следующая волна будет сильнее на пятую часть.", 3);
+        Say("Посол орды убит. Следующая волна будет на 20 % сильнее.", 3);
         AngerNextWave();
     }
 

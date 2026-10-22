@@ -61,25 +61,25 @@ public partial class BuildTools : Node3D
 
     static string HintText(Tool t, bool dig) => (t, dig) switch
     {
-        (Tool.Brush, false) => "Ведите по земле — рабочие выложат столб до заданной высоты. {Form} — шар. Shift или кирка ({Pick}) — размечать, что копать.",
-        (Tool.Brush, true) => "Ведите по земле — рабочие выкопают полосу на заданную глубину. Шар ({Form}) вынимает ком: так пробивают ходы. Щелчок по дереву — срубить.",
-        (Tool.Line, false) => "Зажмите и протяните: стена заданной толщины и высоты. Рабочие сложат её из запасов.",
-        (Tool.Line, true) => "Протяните — ров или траншея заданной ширины и глубины. Деревья на пути срубят целиком.",
-        (Tool.Box, false) => "От угла до угла. {Form} — сплошной помост или только стенки: двор, квадратная башня.",
-        (Tool.Box, true) => "От угла до угла — котлован. Ровное дно или по рельефу ({Level}).",
-        (Tool.Circle, false) => "Из центра к краю. Кольцо — круглая башня, сплошной — бастион. F переключает.",
-        (Tool.Circle, true) => "Из центра к краю — круглая яма или кольцевой ров вокруг башни ({Form}).",
-        (Tool.Extrude, false) => "Щёлкните по ровной грани: она нарастёт на шаг выбранным материалом.",
-        (Tool.Extrude, true) => "Щёлкните по ровной грани: её вынут на шаг вглубь. Ступени в склоне, проход в скале.",
-        (Tool.Ladder, _) => "Щёлкните по боковой грани стены, башни или обрыва — рабочие приставят лестницу от земли до верха. По ней ходят ваши пешки… и орда, если доберётся.",
-        (Tool.Gate, _) => "Щёлкните по боковой грани стены — рабочие прорубят в ней проём и навесят ворота: створки внутри, со стороны цитадели. Своим они открываются сами, орде их придётся рубить.",
-        (Tool.Repair, _) => "Щёлкните по разрушенной постройке — рабочие вернут ей прежний вид: разберут завал, доложат недостающее, навесят ворота. Рамкой — чинить только то, что в ней.",
-        (Tool.Bridge, _) => "Зажмите на одном берегу и протяните до другого: рабочие перекинут арочный мост — каменный ({MatStone}) или деревянный ({MatWood}) — или подъёмный («Вид» в консоли). {WidthLess} и {WidthMore} — ширина прохода.",
-        (Tool.Gather, _) => "Протяните рамку — участок для добычи. {MatStone} — камень из скал и валунов, {MatWood} — лес, {MatEarth} — земля. Свободные рабочие сами понемногу берут оттуда работу.",
-        (Tool.Unmark, _) => "Протяните рамку — вся разметка и делянки в ней снимаются. Щелчок снимает разметку поблизости и делянку под курсором.",
-        (Tool.Capture, _) => "Обведите рамкой свою постройку — она станет чертежом.",
-        (Tool.Paste, _) => "Щёлкните, чтобы разметить копию. R поворачивает, Esc отменяет.",
-        _ => "ЛКМ — выбрать пешек, рамкой — нескольких, ПКМ — послать, ПКМ по зверю — охотиться. {ToolBrush}–{ToolExtrude} — кисти, {ToolLadder} — лестница, {ToolRepair} — починка, {Pick} — кирка; {Help} — всё управление.",
+        (Tool.Brush, false) => "Ведите по земле: рабочие выложат стену до заданной высоты. {Form} — шар. Shift или кирка ({Pick}) — копать.",
+        (Tool.Brush, true) => "Ведите по земле: рабочие выкопают полосу на заданную глубину. Шар ({Form}) вынимает ком. Щелчок по дереву — срубить.",
+        (Tool.Line, false) => "Зажмите и протяните: стена заданной толщины и высоты.",
+        (Tool.Line, true) => "Протяните: ров заданной ширины и глубины. Деревья на пути срубят.",
+        (Tool.Box, false) => "От угла до угла. {Form} — сплошной или только стенки.",
+        (Tool.Box, true) => "От угла до угла: котлован. {Level} — ровное дно или по рельефу.",
+        (Tool.Circle, false) => "От центра к краю. {Form} — кольцо или сплошной.",
+        (Tool.Circle, true) => "От центра к краю: круглая яма или кольцевой ров ({Form}).",
+        (Tool.Extrude, false) => "Щёлкните по ровной грани, она нарастёт на шаг.",
+        (Tool.Extrude, true) => "Щёлкните по ровной грани, её углубят на шаг.",
+        (Tool.Ladder, _) => "Щёлкните по стене, башне или обрыву. Рабочие поставят лестницу. Орда тоже может по ней залезть.",
+        (Tool.Gate, _) => "Щёлкните по стене. Рабочие прорубят проём и навесят ворота. Свои проходят, орде придётся их рубить.",
+        (Tool.Repair, _) => "Щёлкните по разрушенной постройке, рабочие её восстановят. Рамкой можно чинить по частям.",
+        (Tool.Bridge, _) => "Протяните от берега до берега. Камень ({MatStone}) или брёвна ({MatWood}), вид моста — внизу. {WidthLess} и {WidthMore} — ширина прохода.",
+        (Tool.Gather, _) => "Обведите участок рамкой. {MatStone} — камень, {MatWood} — лес, {MatEarth} — земля. Свободные рабочие будут добывать там сами.",
+        (Tool.Unmark, _) => "Рамка снимает всю разметку и делянки внутри. Щелчок снимает разметку рядом и делянку под курсором.",
+        (Tool.Capture, _) => "Обведите постройку рамкой, чтобы сохранить чертёж.",
+        (Tool.Paste, _) => "Щелчок ставит копию. R поворачивает, Esc отменяет.",
+        _ => "ЛКМ — выбрать, рамкой — нескольких, ПКМ — послать. {ToolBrush}–{ToolExtrude} — кисти, {Pick} — кирка, {Help} — все клавиши.",
     };
 
     const int MaxExtrudeFaces = 6000;
@@ -534,13 +534,13 @@ public partial class BuildTools : Node3D
         if (Tool == Tool.Ladder)
         {
             var plan = Shapes.LadderAt(w, _m.Site, _hover);
-            if (plan.Count == 0) { Refuse("лестницу ставят к боковой грани стены или обрыва"); return; }
+            if (plan.Count == 0) { Refuse("лестницу ставят к стене или обрыву"); return; }
             Designate(plan, false, "Лестница");
         }
         else if (Tool == Tool.Gate)
         {
             var gp = GatePlan.At(w, _m.Site, _hover);
-            if (gp == null) { Refuse("ворота ставят в боковую грань стены толщиной до 4 м"); return; }
+            if (gp == null) { Refuse("ворота ставят в стену толщиной до 4 м"); return; }
             _markName = "Ворота";
             _m.Sim.AddGate(gp);
             _m.Hud.Log("Ворота: " + GateSummary(gp));
@@ -568,7 +568,7 @@ public partial class BuildTools : Node3D
         string why;
         if (sp.Stroke)
         {
-            if (!_hasDrag || click) { Refuse("проведите линию по земле: где встанет вал"); return; }
+            if (!_hasDrag || click) { Refuse("проведите линию по земле"); return; }
             why = _m.Sim.Cast(CurrentSpell, _startPt.x + .5f, _startPt.y, _startPt.z + .5f, _dragPt.x + .5f, _dragPt.z + .5f);
         }
         else
@@ -685,7 +685,7 @@ public partial class BuildTools : Node3D
             _mendLay.Clear(); _mendClear.Clear(); _mendGhost.Clear();
             _mendGates = _hasHover ? _m.Sim.BrokenGatesIn(_hover.X - 24, _hover.Z - 24, _hover.X + 24, _hover.Z + 24) : new List<Gateway>();
             foreach (var g in _mendGates) _m.Sim.GateLeaves(g, _mendGhost);
-            if (_mendGates.Count == 0) { Refuse("здесь нечего чинить: щёлкните по разрушенной постройке"); return; }
+            if (_mendGates.Count == 0) { Refuse("здесь нечего чинить"); return; }
         }
         else
         {
@@ -745,14 +745,14 @@ public partial class BuildTools : Node3D
             // how many it holds: a place to a cell of standing room
             int places = _m.Sim.ShelterRoom(x0, z0, x1, z1);
             any = places > 0;
-            return places == 0 ? "Убежище: здесь негде встать" : $"Убежище: {places} {PlaceWord(places)} — сюда по тревоге уходят мирные";
+            return places == 0 ? "Убежище: здесь негде встать" : $"Убежище: {places} {PlaceWord(places)}, сюда уходят по тревоге";
         }
         if (kind == Zone.Dwelling)
         {
             // whether the room in the frame is closed, roofed and has its door, and how many bunks it takes
             var room = _m.Sim.CheckDwelling(x0, z0, x1, z1);
             any = room.Ok || room.Area > 0 || room.Why.StartsWith("нет") || room.Why.StartsWith("стены");
-            return room.Ok ? $"Жилой дом: {Fmt.One(room.Area)} м² пола, дверь есть — рабочие поставят лежанок: {room.Bunks}, это +{room.Bunks} {PlaceWord(room.Bunks)} в войске"
+            return room.Ok ? $"Жилой дом: {Fmt.One(room.Area)} м², лежанок {room.Bunks}, +{room.Bunks} {PlaceWord(room.Bunks)} в войске"
                 : $"Жилой дом: {Bindings.Fill(room.Why)}";
         }
         if (kind == Zone.Sanctum)
@@ -760,10 +760,10 @@ public partial class BuildTools : Node3D
             var (room, power) = _m.Sim.SanctumRoom(x0, z0, x1, z1);
             any = room > 0;
             if (room == 0) return "Святилище: здесь негде встать";
-            string at = power == null ? "на простой земле; на месте силы молитву слышат втрое лучше"
-                : power.Holder == Holder.Ours ? $"на месте силы «{power.Name}»: молитву слышат втрое лучше"
-                : power.Holder == Holder.Horde ? $"на месте силы «{power.Name}», осквернённом ордой: пока его не отбить, молитву не слышат"
-                : $"на месте силы «{power.Name}»: жрецы займут его, и молитву услышат втрое лучше";
+            string at = power == null ? "на месте силы молитва дала бы втрое больше"
+                : power.Holder == Holder.Ours ? $"на месте силы «{power.Name}»: молитва даёт втрое больше"
+                : power.Holder == Holder.Horde ? $"место силы «{power.Name}» у орды: пока его не отбить, святилище не работает"
+                : $"на месте силы «{power.Name}»: когда жрецы его займут, молитва даст втрое больше";
             return $"Святилище: {room} {PlaceWord(room)} для молитвы, {at}";
         }
         var (trees, vox) = _m.Sim.Survey(x0, z0, x1, z1, kind, Opt.Depth);
@@ -833,8 +833,7 @@ public partial class BuildTools : Node3D
         _markName = "Подъёмный мост";
         _m.Sim.AddDrawbridge(plan);
         Sound.Ui("mark");
-        _m.Hud.Log($"Подъёмный мост: {Fmt.One(plan.Length / (double)VoxelWorld.PerMetre)} м. Рабочие сколотят настил; он опущен, пока не подойдёт орда, " +
-            "тогда поднимается сам и сбрасывает в ров тех, кто на нём. Щелчок по мосту без кисти — сменить: сам / опущен / поднят.");
+        _m.Hud.Log($"Подъёмный мост: {Fmt.One(plan.Length / (double)VoxelWorld.PerMetre)} м. Когда подходит орда, мост поднимается сам. Щелчок по мосту без кисти: сам, опущен или поднят.");
     }
 
     /// <summary>Bridges are of stone or of timber; earth in hand means stone.</summary>

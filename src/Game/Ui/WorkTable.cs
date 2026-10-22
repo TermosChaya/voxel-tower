@@ -104,13 +104,13 @@ public partial class WorkTable : Control
         if (at.Y < Head)
             return col switch
             {
-                0 => "Дружина\nЩелчок по имени — выбрать пешку, ещё раз — показать.",
-                >= 1 and <= Work.Kinds => Work.Tips[col - 1] + "\n\nЩелчок по заголовку — весь столбец как у первой строки, следующим числом; ПКМ — обратно.",
-                DutyCol => "Добывать самим\nЧто пешка добывает сама, когда размеченной работы нет: ломает валуны и руины, рубит лес или роет яму поодаль. Щелчок — по кругу.",
-                MilitiaCol => "Ополчение\nРабочие не бегут от орды, а встречают её с кирками, как мечники. Солдатам не нужно.",
-                _ => "Чем занят\nЧто пешка делает сейчас, и почему без дела, если без дела.",
+                0 => "Дружина\nЩелчок по имени — выбрать человека, ещё раз — показать.",
+                >= 1 and <= Work.Kinds => Work.Tips[col - 1] + "\n\nЩелчок по заголовку меняет число во всём столбце, ПКМ — обратно.",
+                DutyCol => "Добывать самим\nЧто человек добывает сам, когда размеченной работы нет: камень, брёвна или землю. Щелчок меняет по кругу.",
+                MilitiaCol => "Ополчение\nРабочие не убегают от орды, а дерутся кирками.",
+                _ => "Чем занят\nЧто человек делает сейчас или почему он без дела.",
             };
-        return col is >= 1 and <= Work.Kinds ? Work.Tips[col - 1] + "\n\nЩелчок — 1, 2, 3, 4, никогда по очереди; ПКМ — обратно. 1 — первым делом." : "";
+        return col is >= 1 and <= Work.Kinds ? Work.Tips[col - 1] + "\n\nЩелчок меняет очередь: 1, 2, 3, 4, никогда. ПКМ — обратно." : "";
     }
 
     public override GodotObject _MakeCustomTooltip(string forText) => Tooltip.Make(forText);
@@ -165,9 +165,9 @@ public partial class WorkTable : Control
             DrawString(Ornament.SerifItalic, new Vector2(DoingX + 4, y + 19), doing, HorizontalAlignment.Left, w - DoingX - 8, 12, hurt ? Ornament.Blood : u.Why != "" ? Ornament.BronzeLight : Ornament.Aged);
         }
         float foot = Head + Math.Max(1, _rows.Count) * Row + 8;
-        if (_rows.Count == 0) DrawString(Ornament.SerifItalic, new Vector2(6, Head + 20), "Никого нет. Наберите людей в цитадели (щелчок по ней или K).", HorizontalAlignment.Left, -1, 13, Ornament.Aged);
+        if (_rows.Count == 0) DrawString(Ornament.SerifItalic, new Vector2(6, Head + 20), "Никого нет. Наберите людей в цитадели (K).", HorizontalAlignment.Left, -1, 13, Ornament.Aged);
         DrawString(Ornament.SerifItalic, new Vector2(6, foot + 14),
-            "Пешка идёт к ближайшей работе с высшим приоритетом (1 — первым делом); пусто — эту работу не берёт никогда. Делянки и добыча тоже по этим работам.",
+            "Человек берёт ближайшую работу с самым высоким приоритетом (1 — первым делом). Пусто — никогда не берёт эту работу.",
             HorizontalAlignment.Left, w - 12, 12, Ornament.Faded);
     }
 }

@@ -35,19 +35,19 @@ public partial class MysteryPanel : VBoxContainer
         AddChild(Hud.CapsLabel("Жертвы · днём, в мирное время", 9, Ornament.BronzeLight));
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 8);
-        _prisoner = Plaque("Пленного в жертву\nЖрец выведет из цитадели пленного, который стоит больше всех, и отведёт к алтарю — месту святилища у его сердца. " +
-            "Гоблин — 15 вмешательства и откровение, орк или рудокоп — 25 и два, тролль — 40 и три; вожак — в полтора раза больше вмешательства. " +
-            "На месте силы, пока оно ваше, вмешательства в полтора раза больше. Пленных берут мечники с приказом «Живьём».", () => Ask(RiteKind.Prisoner));
-        _carcass = Plaque("Тушу в жертву\nЖрец отнесёт к алтарю лучшую из туш, что принесла охота: заяц — 1 вмешательство, олень — 4, кабан — 5, " +
-            "медведь — 10, белый олень — 15. Откровений туши не дают.", () => Ask(RiteKind.Carcass));
-        _own = Plaque("Своего в жертву\nВыберите одного из своих (не жреца) и щёлкните дважды: жрец уведёт его к алтарю. 50 вмешательства и два откровения, " +
-            "но дружина пять минут скорбит и работает на четверть медленнее. Вернуть отданного нельзя.", AskOwn);
+        _prisoner = Plaque("Пленного в жертву\nЖрец отведёт к алтарю в святилище самого ценного пленного. " +
+            "Гоблин: 15 вмешательства и 1 откровение, орк или рудокоп: 25 и 2, тролль: 40 и 3. За вожака вмешательства в 1,5 раза больше, " +
+            "на месте силы тоже. Пленных берут мечники с приказом «Живьём».", () => Ask(RiteKind.Prisoner));
+        _carcass = Plaque("Тушу в жертву\nЖрец отнесёт к алтарю лучшую тушу с охоты. Заяц: 1 вмешательство, олень: 4, кабан: 5, " +
+            "медведь: 10, белый олень: 15. Откровений туши не дают.", () => Ask(RiteKind.Carcass));
+        _own = Plaque("Своего в жертву\nВыберите одного из своих (не жреца) и щёлкните дважды. Даёт 50 вмешательства и 2 откровения, " +
+            "но 5 минут дружина работает на 25 % медленнее. Отменить нельзя.", AskOwn);
         row.AddChild(_prisoner); row.AddChild(_carcass); row.AddChild(_own);
         AddChild(row);
         _rite = Hud.Text("", Ornament.SerifItalic, 13, Ornament.EmberGlow, wrap: true);
         _rite.CustomMinimumSize = new Vector2(Width - 30, 0);
         AddChild(_rite);
-        AddChild(Hud.CapsLabel("Заклинания · постигают их в «Знаниях», на странице «Вмешательство»", 9, Ornament.BronzeLight));
+        AddChild(Hud.CapsLabel("Заклинания · изучаются во вкладке «Знания»", 9, Ornament.BronzeLight));
         // a row to each circle: its name, then its spells, as many to a line as there is room for
         var circles = new VBoxContainer();
         circles.AddThemeConstantOverride("separation", 6);
@@ -114,7 +114,7 @@ public partial class MysteryPanel : VBoxContainer
     void AskOwn()
     {
         var one = OwnChosen();
-        if (one == null) { _m.Hud.Float("выберите одного из своих — не жреца", Ornament.Blood); return; }
+        if (one == null) { _m.Hud.Float("выберите одного из своих, не жреца", Ornament.Blood); return; }
         if (_ownFor == one && Now - _ownArmed < 5) { Ask(RiteKind.Own, one); return; }
         _ownFor = one;
         _ownArmed = Now;
@@ -158,17 +158,17 @@ public partial class MysteryPanel : VBoxContainer
             bool known = sim.Known.Contains(sp.Kind), learnable = sim.CanLearnSpell(sp);
             double ready = sim.ReadyIn(sp.Kind);
             double cost = sim.CostOf(sp);
-            b.Text = known ? $"{sp.Name} · {cost:0}" + (ready > 0 ? $" · {ready:0} с" : "") : $"{sp.Name} · не постигнуто";
+            b.Text = known ? $"{sp.Name} · {cost:0}" + (ready > 0 ? $" · {ready:0} с" : "") : $"{sp.Name} · не изучено";
             b.Disabled = false;
             b.Modulate = known ? (ready > 0 || sim.Favour < cost ? new Color(.85f, .8f, .8f) : new Color(1.1f, 1.02f, 1.2f)) : learnable ? Colors.White : new Color(1, 1, 1, .55f);
             string price = $"{sp.Learn} {(sp.ByFavour ? "вмешательства" : "откровений")}";
-            string what = known ? (ready > 0 ? $"Будет готово через {ready:0} с. " : "") + $"Щелчок — взять в руку: {cost:0} вмешательства за раз, затем {sim.CooldownOf(sp):0} с ждать."
-                : (learnable ? $"Можно постичь за {price}. " : sim.Opened(Sim.LoreOf(Sim.SpellKey(sp.Kind))) ? $"Постигается за {price}. " : "Сначала нужно постичь то, на чём оно стоит в своём круге. ")
-                  + "Щелчок — открыть древо «Вмешательства».";
+            string what = known ? (ready > 0 ? $"Будет готово через {ready:0} с. " : "") + $"Щелчок — выбрать. Стоит {cost:0} вмешательства, перезарядка {sim.CooldownOf(sp):0} с."
+                : (learnable ? $"Можно изучить за {price}. " : sim.Opened(Sim.LoreOf(Sim.SpellKey(sp.Kind))) ? $"Изучается за {price}. " : "Сначала изучите предыдущее заклинание круга. ")
+                  + "Щелчок — открыть древо.";
             b.TooltipText = $"{sp.Name} · {Sim.Circles[sp.Circle].ToLowerInvariant()}\n{sp.About} {what}";
         }
-        _rite.Text = sim.RiteNow is { } r ? RiteText(r) : !day ? "Ночью жрецы в цитадели: жертвы — утром." : !hasPriest ? "Жрецов нет: наберите их в цитадели (щелчок по ней или K)."
-            : !hasSanctum ? Bindings.Fill("Святилища нет: отметьте его делянкой ({ToolGather}), выбрав в консоли «святилище».") : sim.Time < sim.MournUntil ? $"Дружина скорбит ещё {sim.MournUntil - sim.Time:0} с: работа идёт медленнее." : "";
+        _rite.Text = sim.RiteNow is { } r ? RiteText(r) : !day ? "Ночью жрецы в цитадели. Жертвы приносят днём." : !hasPriest ? "Жрецов нет. Наберите их в цитадели (K)."
+            : !hasSanctum ? Bindings.Fill("Святилища нет. Отметьте его делянкой ({ToolGather}) и выберите внизу «святилище».") : sim.Time < sim.MournUntil ? $"Дружина скорбит ещё {sim.MournUntil - sim.Time:0} с, работа идёт медленнее." : "";
     }
 
     static string RiteText(Rite r) => r.Kind switch
@@ -189,12 +189,12 @@ public partial class MysteryPanel : VBoxContainer
             var m = sim.PowerUnder(z);
             parts.Add(m == null ? "святилище на простой земле" : m.Holder switch
             {
-                Holder.Ours => $"святилище на месте силы «{m.Name}»: молитву слышат втрое лучше",
-                Holder.Horde => $"святилище на месте силы «{m.Name}», осквернённом ордой: его не слышат",
-                _ => $"святилище на месте силы «{m.Name}»: займите его, и молитву услышат втрое лучше",
+                Holder.Ours => $"святилище на месте силы «{m.Name}»: молитва даёт втрое больше",
+                Holder.Horde => $"святилище на месте силы «{m.Name}» не работает, пока место у орды",
+                _ => $"святилище на месте силы «{m.Name}»: займите его, и молитва даст втрое больше",
             });
         }
-        return parts.Count == 0 ? "Святилищ нет. Места силы — Курган, Чёрный камень, Мёртвый родник: святилище на таком, пока оно ваше, слышат втрое лучше."
+        return parts.Count == 0 ? "Святилищ нет. На месте силы (Курган, Чёрный камень, Мёртвый родник) молитва даёт втрое больше."
             : char.ToUpper(string.Join("; ", parts)[0]) + string.Join("; ", parts)[1..] + ".";
     }
 

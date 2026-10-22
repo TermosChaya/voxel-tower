@@ -20,19 +20,19 @@ public partial class DuskCard : Control
     /// <summary>What each kind of the horde is, and what is good against it, for the first night it comes.</summary>
     static readonly Dictionary<string, string> Against = new()
     {
-        ["goblin"] = "быстрые и низкие, пролезают где орк застрянет; лучники с башен",
-        ["orc"] = "рубит дерево в разы быстрее камня: стены — из камня",
-        ["sapper"] = "ставит лестницы и мосты, засыпает рвы; лучники бьют его первым",
-        ["miner"] = "прорубает землю и скалу: каменная кладка держит дольше",
-        ["thief"] = "крадёт из цитадели и уводит одиноких рабочих: держите рядом солдата",
-        ["ram"] = "проламывает стены и ворота: ров, смола, огненные стрелы",
-        ["catapult"] = "бьёт стены издали, за выстрелом лучника: выйдите и разбейте его",
-        ["shaman"] = "лечит своих и портит стены: бейте его первым",
-        ["mantlet"] = "щит из досок перед вожаком: стрелы бьют в него, заходите сбоку",
-        ["troll"] = "ломает всё и лезет на уступ в два метра: огонь и копья",
+        ["goblin"] = "быстрые и мелкие, пролезают там, где орк застрянет",
+        ["orc"] = "рубит дерево намного быстрее камня, стройте из камня",
+        ["sapper"] = "ставит лестницы и мосты, засыпает рвы",
+        ["miner"] = "прокапывает землю и скалу, каменная кладка держит дольше",
+        ["thief"] = "крадёт запасы и уводит одиноких рабочих, держите рядом солдата",
+        ["ram"] = "проламывает стены и ворота, против него ров, смола и огонь",
+        ["catapult"] = "бьёт по стенам издали, дальше выстрела лучника, его нужно разбить вылазкой",
+        ["shaman"] = "лечит своих и разрушает стены",
+        ["mantlet"] = "дощатый щит перед ватагой, стрелы его не пробивают, заходите сбоку",
+        ["troll"] = "ломает всё и забирается на уступ в 2 м",
         ["witch"] = "гасит факелы и пожары вокруг себя",
-        ["tower"] = "встаёт к стене и спускает лестницу: жгите её огненными стрелами",
-        ["necro"] = "поднимает павших орды: убейте его первым",
+        ["tower"] = "подъезжает к стене, и по ней лезут наверх; её можно сжечь огненными стрелами",
+        ["necro"] = "поднимает павших налётчиков",
     };
 
     public void Init(Main m)
@@ -87,7 +87,7 @@ public partial class DuskCard : Control
         if (!due) return;
         int n = Night;
         int ch = Sim.ChapterOf(n);
-        _head.Text = $"Глава {Sim.Roman(ch)} · {Sim.ChapterNames[ch]} · ночь {n} из {Waves.Total} · что идёт".ToUpperInvariant();
+        _head.Text = $"Глава {Sim.Roman(ch)} · {Sim.ChapterNames[ch]} · ночь {n} из {Waves.Total}".ToUpperInvariant();
         // the bands, each with its leader and what it brings
         var lines = new List<string>();
         // a chapter's first night: what it brings
@@ -95,13 +95,13 @@ public partial class DuskCard : Control
         foreach (var b in sim.Bands)
         {
             if (b.State != BandState.Coming && !sim.Waves.Active) continue;
-            lines.Add(b.Champion == 4 ? $"{b.Name}: сам Вождь орды {b.Title} с отборной охраной — {HordeInfo.Kinds(b)}. Падёт он — побежит вся орда."
-                : b.Champion > 0 ? $"{b.Name}: вожак главы {b.Title} с охраной — {HordeInfo.Kinds(b)}. Падёт — его трофей откроет ярус знаний."
+            lines.Add(b.Champion == 4 ? $"{b.Name}: Вождь орды {b.Title} с охраной ({HordeInfo.Kinds(b)}). Если он погибнет, вся орда побежит."
+                : b.Champion > 0 ? $"{b.Name}: вожак главы {b.Title} с охраной ({HordeInfo.Kinds(b)}). Его гибель откроет новый ярус знаний."
                 : $"{b.Name}: {HordeInfo.Kinds(b)}");
         }
         int side = -1, most = 0;
         for (int i = 0; i < Sim.Sides; i++) if (sim.SideBands[i] > most) { most = sim.SideBands[i]; side = i; }
-        if (side >= 0) lines.Add($"Вождь поведёт их на {Sim.SideNames[side]} сторону — она слабее всего на его глаз (кольцо вокруг цитадели).");
+        if (side >= 0) lines.Add($"Вождь поведёт их на {Sim.SideNames[side]} сторону: он считает её самой слабой.");
         _bands.Text = string.Join("\n", lines);
         // who comes for the first time, and what is good against it
         var fresh = Sim.NewAt(n);
@@ -114,8 +114,8 @@ public partial class DuskCard : Control
         else
         {
             var then = Sim.NewAt(n + 1);
-            string boss = (n + 1) % 3 == 0 ? (n + 1 == Waves.Total ? " И придёт сам Вождь орды." : $" И придёт вожак главы {Sim.Roman(Sim.ChapterOf(n + 1))}.") : "";
-            _next.Text = (then.Count == 0 ? "Следующей ночью — те же, только больше." : $"Следующей ночью впервые: {string.Join(", ", then.ConvertAll(t => t.Name.ToLowerInvariant()))}.") + boss;
+            string boss = (n + 1) % 3 == 0 ? (n + 1 == Waves.Total ? " Придёт Вождь орды." : $" Придёт вожак главы {Sim.Roman(Sim.ChapterOf(n + 1))}.") : "";
+            _next.Text = (then.Count == 0 ? "Следующей ночью те же, но больше." : $"Следующей ночью впервые: {string.Join(", ", then.ConvertAll(t => t.Name.ToLowerInvariant()))}.") + boss;
         }
     }
 }

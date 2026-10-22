@@ -82,13 +82,13 @@ public sealed partial class Sim
             if (m.Grip >= 1 && m.Holder != Holder.Ours)
             {
                 m.Holder = Holder.Ours;
-                Say(m.Power ? $"Место силы {m.Name} ваше: святилище на нём услышат втрое лучше, пока его держите."
+                Say(m.Power ? $"Место силы {m.Name} ваше: святилище здесь даёт втрое больше вмешательства."
                     : $"{m.Name} ваш: +{m.Income} золота в минуту, пока его держите.", 1, m.Place.StandX, m.Place.StandZ);
             }
             else if (m.Grip <= -1 && m.Holder != Holder.Horde)
             {
                 m.Holder = Holder.Horde;
-                Say(m.Power ? $"Орда осквернила место силы: {m.Name}. Святилище на нём молчит, пока его не отбить." : $"Орда захватила: {m.Name}.", 3, m.Place.StandX, m.Place.StandZ);
+                Say(m.Power ? $"Орда захватила место силы {m.Name}. Святилище здесь не работает, пока его не отбить." : $"Орда захватила: {m.Name}.", 3, m.Place.StandX, m.Place.StandZ);
             }
             else if (m.Holder == Holder.Ours && m.Grip <= 0) { m.Holder = Holder.None; Say(m.Power ? $"Место силы {m.Name} потеряно." : $"{m.Name} потерян.", 2, m.Place.StandX, m.Place.StandZ); }
             else if (m.Holder == Holder.Horde && m.Grip >= 0)

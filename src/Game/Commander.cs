@@ -62,7 +62,7 @@ public partial class Commander : Node
     /// <summary>The chosen bring in a resource by themselves when nothing marked needs them.</summary>
     public void DutySelected(int kind)
     {
-        if (_m.Selected.Count == 0) { _m.Hud.Float("сначала выберите пешек", Ornament.Aged); return; }
+        if (_m.Selected.Count == 0) { _m.Hud.Float("сначала выберите людей", Ornament.Aged); return; }
         _m.Sim.SetDuty(_m.Selected, kind);
         _m.Hud.Float(kind == Stockpile.None ? "без задания" : $"добывать: {Stockpile.Name(kind)}", Ornament.BronzeLight);
         _m.Hud.Refresh();
@@ -75,7 +75,7 @@ public partial class Commander : Node
         foreach (var u in _m.Selected) if (u.T.Work >= 1) { any = true; all &= u.Militia; }
         if (!any) { _m.Hud.Float("в ополчение идут рабочие", Ornament.Aged); return; }
         _m.Sim.SetMilitia(_m.Selected, !all);
-        _m.Hud.Float(all ? "ополчение распущено: рабочие снова бегут от орды" : "ополчение: рабочие встретят орду", Ornament.BronzeLight);
+        _m.Hud.Float(all ? "ополчение распущено" : "ополчение: рабочие будут драться", Ornament.BronzeLight);
         _m.Hud.Refresh();
     }
 
@@ -86,7 +86,7 @@ public partial class Commander : Node
         foreach (var u in _m.Selected) if (Sim.TakesAlive(u)) { any = true; all &= u.TakeAlive; }
         if (!any) { _m.Hud.Float("живьём берут мечники и ополчение", Ornament.Aged); return; }
         foreach (var u in _m.Selected) if (Sim.TakesAlive(u)) u.TakeAlive = !all;
-        _m.Hud.Float(all ? "снова бьют насмерть" : "живьём: израненных налётчиков валят и вяжут", Ornament.BronzeLight);
+        _m.Hud.Float(all ? "снова бьют насмерть" : "живьём: раненых налётчиков связывают", Ornament.BronzeLight);
         _m.Hud.Refresh();
     }
 
@@ -97,7 +97,7 @@ public partial class Commander : Node
         foreach (var u in _m.Selected) if (Sim.Kindles(u.T)) { any = true; all &= u.FireArrows; }
         if (!any) { _m.Hud.Float("огнём стреляют лучники и арбалетчики", Ornament.Aged); return; }
         _m.Sim.SetFireArrows(_m.Selected, !all);
-        _m.Hud.Float(all ? "простые стрелы" : "огненные стрелы: ПКМ по деревянному — поджечь", Ornament.BronzeLight);
+        _m.Hud.Float(all ? "простые стрелы" : "огненные стрелы", Ornament.BronzeLight);
         _m.Hud.Refresh();
     }
 
@@ -108,7 +108,7 @@ public partial class Commander : Node
         if (g.Broken)
         {
             int n = sim.MendGate(g);
-            _m.Hud.Float(n > 0 ? "ворота чинят: створки сколотят заново" : "чинить нечего", Ornament.BronzeLight);
+            _m.Hud.Float(n > 0 ? "ворота чинят" : "чинить нечего", Ornament.BronzeLight);
             return;
         }
         if (!g.Ready) { _m.Hud.Float("ворота ещё навешивают", Ornament.Aged); return; }
@@ -139,13 +139,13 @@ public partial class Commander : Node
 
     /// <summary>What a gate does now, for the tag and the float.</summary>
     public static string GateWord(Gateway g) =>
-        g.Broken ? "прорублены — щелчок: починить"
+        g.Broken ? "прорублены, щелчок — починить"
         : !g.Ready ? "навешивают"
         : g.Mode switch
         {
             GateMode.Open => "стоят открытыми",
-            GateMode.Shut => "на засове: никого не пускают",
-            _ => "открываются своим, перед ордой закрыты",
+            GateMode.Shut => "на засове",
+            _ => "открываются сами",
         };
 
     public void Motion(InputEventMouseMotion mm)
@@ -341,10 +341,9 @@ public partial class Commander : Node
         _m.Hud.Refresh();
     }
 
-    public const string AlarmTip = "Тревога ({Alarm})\nМирные бросают работу и уходят в ближайшее убежище: в цитадель — там их не достать — или на участок, " +
-        "отмеченный убежищем (8, «убежище»). Солдаты бегут на посты и держат их. Посланные по приказу идут, куда посланы. Ещё раз — отбой; " +
-        "после отбитой волны отбой трубят сами. Рабочие и без тревоги бегут в убежище, когда враг подходит ближе 9 м.";
-    public const string StandDownTip = "Отбой ({Alarm})\nМирные выходят из убежищ и возвращаются к работе, солдаты — к своим делам.";
+    public const string AlarmTip = "Тревога ({Alarm})\nРабочие уходят в цитадель или ближайшее убежище, солдаты встают на посты. Ещё раз — отбой. " +
+        "После волны отбой наступает сам. Рабочие и без тревоги убегают, если враг ближе 9 м.";
+    public const string StandDownTip = "Отбой ({Alarm})\nВсе возвращаются к своим делам.";
 
     /// <summary>Takes one on at once (scripted scenes).</summary>
     public Unit Hire(UnitType t)
@@ -394,7 +393,7 @@ public partial class Commander : Node
         var w = _m.Sim.Waves;
         if (w.Active || _m.Sim.Over) return;
         // in the tutorial the horde comes when the lesson comes to it
-        if (_m.Tutor is { Over: false }) { _m.Hud.Float("в обучении орда придёт, когда до неё дойдёт урок", Ornament.Aged); return; }
+        if (_m.Tutor is { Over: false }) { _m.Hud.Float("в обучении орду вызвать нельзя", Ornament.Aged); return; }
         w.StartNow(_m.Sim);
         _m.Hud.Refresh();
     }

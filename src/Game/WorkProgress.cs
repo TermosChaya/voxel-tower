@@ -107,8 +107,7 @@ public partial class WorkProgress : CanvasLayer
         if (sim.Time - _idleSince < 30 || sim.Time - _toldIdle < 240) return;
         _toldIdle = sim.Time;
         if (sim.Orders.Total == 0)
-            _m.Hud.Log($"Рабочим нечего делать ({idle} без дела). Разметьте работу: кисть {{ToolBrush}}, линия {{ToolLine}}, прямоугольник {{ToolBox}} — " +
-                "или делянку {ToolGather}: из неё свободные пешки сами берут лес, камень и землю.", Hud.Kind.Warn);
+            _m.Hud.Log($"Рабочие без дела ({idle}). Разметьте работу кистями или делянкой ({{ToolGather}}).", Hud.Kind.Warn);
         else if (why != "")
             _m.Hud.Log($"Рабочие стоят без дела ({idle}): {why}.", Hud.Kind.Warn);
     }

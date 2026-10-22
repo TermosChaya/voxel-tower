@@ -462,7 +462,7 @@ public sealed partial class Sim
         foreach (var (x, y, z) in block)
         {
             if (!Footed(x, y, z)) continue;
-            if (ck != Stockpile.None && !Stock.Take(ck, 1)) { Say("Нечего класть: нет — " + Stockpile.Name(ck) + ".", 2); WishLay = false; return; }
+            if (ck != Stockpile.None && !Stock.Take(ck, 1)) { Say("Запас пуст: " + Stockpile.Name(ck) + ".", 2); WishLay = false; return; }
             byte m = Shapes.Lay(LayMat, x, y, z);
             World.Set(x, y, z, m);
             Remember(x, y, z, m);

@@ -61,8 +61,8 @@ public sealed partial class Sim
         if (Recruits.Count >= RecruitsMax) return "очередь полна";
         int spoken = Spoken();
         if (spoken + t.Room > Places) return t.Room > 1 && spoken < Places
-            ? $"нужно {t.Room} {PlacesWord(t.Room)}, свободно {Places - spoken} — постройте жилой дом"
-            : $"мест нет: занято {spoken} из {Places} — постройте жилой дом";
+            ? $"нужно {t.Room} {PlacesWord(t.Room)}, свободно {Places - spoken}: постройте жилой дом"
+            : $"мест нет: занято {spoken} из {Places}, постройте жилой дом";
         int cost = HireCost(t);
         if (Stock.Gold < cost) return $"нужно {cost} золота";
         return null;

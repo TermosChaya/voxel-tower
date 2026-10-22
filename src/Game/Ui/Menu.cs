@@ -113,9 +113,9 @@ public partial class GameMenu : Control
         _page.AddChild(Hud.CapsLabel("Сложность", 10));
         string[] about =
         {
-            "Ватаги меньше, налётчики слабее и бьют мягче, цитадель держится дольше. Чтобы спокойно освоиться.",
-            "Осада, как она задумана.",
-            "Ватаги больше, налётчики крепче и бьют сильнее. Для тех, кто уже выстоял.",
+            "Ватаги меньше, налётчики слабее, цитадель крепче. Для первой игры.",
+            "Обычная сложность.",
+            "Ватаги больше, налётчики крепче и бьют сильнее.",
         };
         for (int i = 0; i < 3; i++)
         {
@@ -178,25 +178,25 @@ public partial class GameMenu : Control
             var sub = Hud.Text("Оборона крепости в долине из вокселей", Ornament.SerifItalic, 15, Ornament.Aged);
             sub.HorizontalAlignment = HorizontalAlignment.Center;
             _page.AddChild(sub);
-            _page.AddChild(Big("Новая игра", "Осада: двенадцать волн орды, раз в десять минут. Старая крепость вокруг цитадели наполовину разрушена.", Hardness_));
-            _page.AddChild(Big("Обучение", "Отдельный режим: шаг за шагом, за руку — через всё, что умеет игра. Орда не придёт, пока не дойдёт до неё урок.", () => Begin(true)));
-            _page.AddChild(Big("Загрузить игру", "Продолжить сохранённую игру: из ячейки, быстрого сохранения или автосохранения после отбитой волны.", Loading));
-            _page.AddChild(Big("Управление", "Все клавиши и кнопки мыши и что они делают; любую клавишу можно переназначить.", Controls_));
-            _page.AddChild(Big("Настройки", "Размер интерфейса, громкость, тряска, замедление, обводка вокселей.", Settings_));
+            _page.AddChild(Big("Новая игра", "12 волн орды, по одной каждые 10 минут.", Hardness_));
+            _page.AddChild(Big("Обучение", "Пошаговое знакомство с игрой.", () => Begin(true)));
+            _page.AddChild(Big("Загрузить игру", "Ячейки, быстрое сохранение и автосохранение после каждой волны.", Loading));
+            _page.AddChild(Big("Управление", "Все клавиши. Любую можно переназначить.", Controls_));
+            _page.AddChild(Big("Настройки", "Интерфейс, звук, графика.", Settings_));
             _page.AddChild(Big("Выйти из игры", "", () => _m.GetTree().Quit()));
             var credits = Hud.Text("Значки: game-icons.net, CC BY 3.0 · шрифты PT Serif и Cormorant Garamond, OFL", Ornament.Serif, 11, Ornament.Fade(Ornament.Aged, .8f));
             credits.HorizontalAlignment = HorizontalAlignment.Center;
             _page.AddChild(credits);
             return;
         }
-        _page.AddChild(Big("Продолжить", "Вернуться к осаде (Esc).", Close));
-        _page.AddChild(Big("Сохранить игру", "Записать игру в одну из трёх ячеек. Быстро — {QuickSave}.", Saving));
-        _page.AddChild(Big("Загрузить игру", "Продолжить сохранённую игру: из ячейки, быстрого сохранения ({QuickLoad}) или автосохранения после отбитой волны.", Loading));
-        _page.AddChild(Big("Управление", "Все клавиши и кнопки мыши и что они делают; любую клавишу можно переназначить ({Help}).", Controls_));
-        _page.AddChild(Big("Настройки", "Размер интерфейса, громкость, тряска, замедление, обводка вокселей.", Settings_));
-        _page.AddChild(Big("Новая игра", "Начать новую осаду. Несохранённое здесь пропадёт.", Hardness_));
-        _page.AddChild(Big(_m.Tutor is { Over: false } ? "Обучение сначала" : "Обучение", "Отдельный режим: за руку через всё, что умеет игра. Несохранённое здесь пропадёт.", () => _m.NewGame(tutorial: true)));
-        _page.AddChild(Big("Выйти из игры", "Закрыть игру. Несохранённое пропадёт (автосохранение пишется после каждой отбитой волны).", () => _m.GetTree().Quit()));
+        _page.AddChild(Big("Продолжить", "Вернуться к игре (Esc).", Close));
+        _page.AddChild(Big("Сохранить игру", "Три ячейки. Быстрое сохранение — {QuickSave}.", Saving));
+        _page.AddChild(Big("Загрузить игру", "Ячейки, быстрое сохранение ({QuickLoad}) и автосохранение после каждой волны.", Loading));
+        _page.AddChild(Big("Управление", "Все клавиши. Любую можно переназначить ({Help}).", Controls_));
+        _page.AddChild(Big("Настройки", "Интерфейс, звук, графика.", Settings_));
+        _page.AddChild(Big("Новая игра", "Несохранённый прогресс пропадёт.", Hardness_));
+        _page.AddChild(Big(_m.Tutor is { Over: false } ? "Обучение сначала" : "Обучение", "Пошаговое знакомство с игрой. Несохранённый прогресс пропадёт.", () => _m.NewGame(tutorial: true)));
+        _page.AddChild(Big("Выйти из игры", "Несохранённый прогресс пропадёт. Автосохранение делается после каждой волны.", () => _m.GetTree().Quit()));
     }
 
     /// <summary>"Перед волной 3 · 22:40 игры · 18.10, 14:32", or "пусто".</summary>
@@ -264,34 +264,28 @@ public partial class GameMenu : Control
         Clear();
         PageName = "settings";
         _page.AddChild(Hud.CapsLabel("Настройки", 10));
-        var scale = new Stepper("Размер интерфейса", "Размер интерфейса\nКрупнее или мельче балка, консоль, панели и подсказки. Ctrl и + или − в игре — то же, Ctrl+0 — как был.",
+        var scale = new Stepper("Размер интерфейса", "Размер интерфейса\nВ игре то же делают Ctrl и + или −, Ctrl+0 — обычный размер.",
             () => $"{Math.Round(Settings.UiScale * 100)} %", d => Settings.Step(_m.GetTree().Root, d));
         scale.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
         _page.AddChild(scale);
-        var volume = new Stepper("Громкость", "Громкость\nКак громко слышна долина: кирки, тетивы, мечи, рог, огонь, дождь, заклинания. Звуки делает сама игра; " +
-            "слышно то, что ближе к середине экрана.", () => Settings.Volume <= 0 ? "без звука" : $"{Math.Round(Settings.Volume * 100)} %", d => Settings.StepVolume(d));
+        var volume = new Stepper("Громкость", "Громкость\nГромче слышно то, что ближе к центру экрана.", () => Settings.Volume <= 0 ? "без звука" : $"{Math.Round(Settings.Volume * 100)} %", d => Settings.StepVolume(d));
         volume.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
         _page.AddChild(volume);
-        var shake = new Stepper("Тряска и вспышки", "Тряска и вспышки\nКак сильно взрыв, обвал или тяжёлое падение рядом встряхивают вид, и вспыхивает ли " +
-            "экран от большого взрыва или молнии: никак, слабо или в полную силу.",
+        var shake = new Stepper("Тряска и вспышки", "Тряска и вспышки\nТряска экрана от взрывов и обвалов, вспышки от больших взрывов и молний.",
             () => Settings.Shake <= 0 ? "нет" : Settings.Shake < 1 ? "слабая" : "сильная", d => Settings.StepShake(d));
         shake.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
         _page.AddChild(shake);
-        var slow = new Stepper("Замедление", "Замедление\nПосле большого взрыва или обвала рядом с серединой вида время на миг замедляется, чтобы разглядеть, " +
-            "как летят обломки, — и возвращается само.", () => Settings.SlowMo ? "да" : "нет", d => Settings.ToggleSlowMo());
+        var slow = new Stepper("Замедление", "Замедление\nКороткое замедление времени после большого взрыва или обвала.", () => Settings.SlowMo ? "да" : "нет", d => Settings.ToggleSlowMo());
         slow.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
         _page.AddChild(slow);
-        var edge = new Stepper("Прокрутка у края", "Прокрутка у края\nПодведите мышь к краю экрана — вид поедет в ту сторону, как от WASD. " +
-            "Если мешает (например, в окне), выключите.", () => Settings.EdgeScroll ? "да" : "нет", d => Settings.ToggleEdgeScroll());
+        var edge = new Stepper("Прокрутка у края", "Прокрутка у края\nВид сдвигается, когда мышь у края экрана. В окне это может мешать.", () => Settings.EdgeScroll ? "да" : "нет", d => Settings.ToggleEdgeScroll());
         edge.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
         _page.AddChild(edge);
-        var lines = new Stepper("Обводка вокселей", "Обводка вокселей\nТонкая тёмная линия по краю каждого вокселя, когда он на экране достаточно крупный, " +
-            "чтобы её было видно: мир смотрится сложенным из кубиков. Без неё земля, камень и дерево глаже, а трава, листва и кора " +
-            "всё равно прорисованы мельче вокселей.", () => Settings.Lines ? "да" : "нет", d => Settings.ToggleLines());
+        var lines = new Stepper("Обводка вокселей", "Обводка вокселей\nТонкая тёмная линия по краям вокселей вблизи.", () => Settings.Lines ? "да" : "нет", d => Settings.ToggleLines());
         lines.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
         _page.AddChild(lines);
         _page.AddChild(new Rule(false));
-        _page.AddChild(Big("Графика", "Графика\nКачество картинки: тени, сглаживание, чёткость, трава, — для слабого или сильного компьютера.", Picture_));
+        _page.AddChild(Big("Графика", "Графика\nТени, сглаживание, чёткость, трава.", Picture_));
         _page.AddChild(Big("Назад", "", Main_));
     }
 
@@ -308,22 +302,20 @@ public partial class GameMenu : Control
             st.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
             _page.AddChild(st);
         }
-        Row("Качество", "Всё сразу: низкое — для слабого ноутбука (без теней и травы, мир рисуется с меньшей чёткостью), " +
-            "среднее — для встроенной видеокарты, высокое — как задумано, наивысшее — мягчайшие тени, четырёхкратное сглаживание " +
-            "и затенение в углах. Ниже можно поменять что-то одно.", () => Settings.Qualities[Settings.Quality], Settings.StepQuality, whole: true);
+        Row("Качество", "Общая настройка. Низкое — для слабого ноутбука, среднее — для встроенной видеокарты, высокое — обычное, " +
+            "наивысшее — для мощного компьютера. Ниже можно изменить отдельные параметры.", () => Settings.Qualities[Settings.Quality], Settings.StepQuality, whole: true);
         _page.AddChild(new Rule(false));
-        Row("Тени", "Тени от солнца и луны: нет, простые (с резким краем), мягкие, мягчайшие. Самое дорогое в картинке.",
+        Row("Тени", "Тени от солнца и луны. Сильнее всего влияют на скорость.",
             () => Settings.Shadows switch { 0 => "нет", 1 => "простые", 2 => "мягкие", _ => "мягчайшие" }, Settings.StepShadows);
-        Row("Сглаживание", "Сглаживание лесенки по краям: нет, быстрое (FXAA, чуть размывает), двойное и четверное (MSAA).",
+        Row("Сглаживание", "Сглаживание краёв. FXAA быстрее, но слегка размывает.",
             () => Settings.Smoothing switch { 0 => "нет", 1 => "FXAA", 2 => "MSAA 2×", _ => "MSAA 4×" }, Settings.StepSmoothing);
-        Row("Чёткость", "С какой долей точек экрана рисуется мир (интерфейс — всегда в полную): меньше — быстрее, а до экрана " +
-            "картинку дотягивает FSR.", () => $"{Math.Round(Settings.Details[Settings.Detail] * 100)} %", Settings.StepDetail);
-        Row("Трава", "Травинки на лугах: нет (луг остаётся цветным), только вблизи, вся.",
+        Row("Чёткость", "Разрешение, в котором рисуется мир. Меньше — быстрее, картинку растягивает FSR. Интерфейс всегда чёткий.", () => $"{Math.Round(Settings.Details[Settings.Detail] * 100)} %", Settings.StepDetail);
+        Row("Трава", "Травинки на лугах: нет, только вблизи или везде.",
             () => Settings.Grass switch { 0 => "нет", 1 => "вблизи", _ => "вся" }, Settings.StepGrass);
-        Row("Затенение в углах", "Мягкая тень в углах и щелях, у подножия стен и между вокселями (SSAO).",
+        Row("Затенение в углах", "Мягкая тень в углах и щелях (SSAO).",
             () => Settings.Occlusion ? "да" : "нет", _ => Settings.ToggleOcclusion());
-        Row("Свечение", "Ореол вокруг огня, факелов, искр и заклинаний.", () => Settings.Glow ? "да" : "нет", _ => Settings.ToggleGlow());
-        Row("Счётчик кадров", "Сколько кадров в секунду и самый долгий из последних — мелко в левом верхнем углу.",
+        Row("Свечение", "Свечение огня, факелов и заклинаний.", () => Settings.Glow ? "да" : "нет", _ => Settings.ToggleGlow());
+        Row("Счётчик кадров", "Кадры в секунду в левом верхнем углу.",
             () => Settings.ShowFps ? "да" : "нет", _ => Settings.ToggleFps());
         _page.AddChild(new Rule(false));
         _page.AddChild(Big("Назад", "", Settings_));

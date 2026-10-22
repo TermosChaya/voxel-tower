@@ -208,7 +208,7 @@ public sealed partial class Sim
                 c.Defuser = runner; runner.Defusing = c; runner.Shunning = null;
                 ReleaseSite(runner); StopBuild(runner);
                 runner.Target = null; runner.Prey = null;
-                if (Time - _runSaid > 10) { _runSaid = Time; Say($"{runner.T.Name} бежит к фитилю заряда — резать, пока не рвануло.", 1, c.X, c.Z); }
+                if (Time - _runSaid > 10) { _runSaid = Time; Say($"{runner.T.Name} бежит перерезать фитиль.", 1, c.X, c.Z); }
             }
             else if (!c.Abandoned)
             {
@@ -475,7 +475,7 @@ public sealed partial class Sim
         if (Time - _plantSaid > 15)
         {
             _plantSaid = Time;
-            Say("Сапёр орды заложил заряд под стену: через шесть секунд рванёт! Успеть к фитилю — перерезать; нет — уводите своих от стены.", 3, u);
+            Say("Сапёр заложил заряд под стену, взрыв через 6 секунд. Перережьте фитиль или уведите своих от стены.", 3, u);
         }
         return true;
     }

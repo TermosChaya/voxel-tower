@@ -41,8 +41,8 @@ public partial class KindTile : Control
         string why = sim.CantEnlist(Kind);
         string room = Kind.Room > 1 ? $", занимает {Kind.Room} {Places(Kind.Room)}" : "";
         string time = Fmt.One(sim.TrainTime(Kind));
-        string foot = why == null ? $"Щелчок — набрать за {sim.HireCost(Kind)} золота: готов через {time} с{room}." : $"Нельзя: {why}.";
-        if (!sim.Unlocked(Kind)) foot = $"Открывается знанием «{Sim.LoreOf(Kind.Lore)?.Name ?? Kind.Lore}» (вкладка «Знания», страница «Войско»).";
+        string foot = why == null ? $"Щелчок — нанять за {sim.HireCost(Kind)} золота, готов через {time} с{room}." : $"Нельзя: {why}.";
+        if (!sim.Unlocked(Kind)) foot = $"Нужно знание «{Sim.LoreOf(Kind.Lore)?.Name ?? Kind.Lore}» (вкладка «Знания», страница «Войско»).";
         return $"{Kind.Name} · {sim.HireCost(Kind)} золота · {time} с{room}\n{Retinue.About(Kind)}\n{foot}";
     }
 
@@ -110,9 +110,9 @@ public partial class RecruitFace : Control
     public override string _GetTooltip(Vector2 at)
     {
         var r = Here;
-        if (r == null) return "Свободное место в очереди\nЩёлкните по лицу справа, чтобы набрать.";
+        if (r == null) return "Свободное место в очереди\nЩёлкните по портрету справа, чтобы нанять.";
         string state = _i == 0 ? $"готовится: ещё {Math.Ceiling(_m.Sim.TrainTime(r.Kind) - r.Done)} с" : $"ждёт очереди ({_i + 1}-й)";
-        return $"{r.Kind.Name} — {state}\nЩелчок — отпустить, {r.Paid} золота вернутся.";
+        return $"{r.Kind.Name}: {state}\nЩелчок — отменить, {r.Paid} золота вернутся.";
     }
 
     public override void _Draw()

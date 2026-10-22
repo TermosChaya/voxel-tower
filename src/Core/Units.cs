@@ -577,7 +577,7 @@ public sealed class Unit
     public float Alive => Dead ? 0 : Hp / MaxHp;
 
     /// <summary>"Орк-рубака", or "Вожак — орк-рубака" for the one who leads a warband.</summary>
-    public string Name => Champion == 4 ? $"{Title} — вождь орды" : Champion > 0 ? $"{Title} — вожак главы {Sim.Roman(Champion)} ({T.Name.ToLowerInvariant()})"
+    public string Name => Champion == 4 ? $"{Title}, вождь орды" : Champion > 0 ? $"{Title}, вожак главы {Sim.Roman(Champion)} ({T.Name.ToLowerInvariant()})"
         : Leader ? "Вожак — " + T.Name.ToLowerInvariant() : T.Name;
     /// <summary>A chapter's champion (1–3) or the horde's chief (4), and his name; 0 for the rest.</summary>
     public byte Champion;

@@ -22,35 +22,34 @@ public partial class Hud : CanvasLayer
     /// <summary>How much of the top edge the beam covers.</summary>
     public const float TopBand = TopBeam.Height;
 
-    const string HelpTip = "Управление ({Help})\nВсе клавиши и кнопки мыши и что они делают, по группам: камера, кисти, приказы, время, от первого лица. " +
-        "Любую клавишу можно переназначить. Щелчок — открыть.";
+    const string HelpTip = "Управление ({Help})\nВсе клавиши и кнопки мыши. Любую клавишу можно переназначить.";
 
     public static readonly (Tool tool, Icons.Painter icon, Act act, string tip)[] ToolDefs =
     {
-        (Tool.Brush, Icons.Brush, Act.ToolBrush, "Кисть ({ToolBrush})\nВедите по земле — рабочие выложат столб материала до заданной высоты: так рисуют стены от руки. Шар налипает на поверхность. С киркой кисть размечает, что копать, а шар пробивает ходы. {Form} — форма, Shift — кирка на один мазок."),
-        (Tool.Line, Icons.StraightLine, Act.ToolLine, "Линия ({ToolLine})\nЗажмите и протяните: прямая стена заданной толщины и высоты. С киркой — ров или траншея. {Grid} — сетка: концы встают в её узлы."),
-        (Tool.Box, Icons.Box, Act.ToolBox, "Прямоугольник ({ToolBox})\nОт угла до угла. Сплошной — помост или основание, стенки — двор или квадратная башня. С киркой — котлован. {Form} — сплошной или стенки."),
-        (Tool.Circle, Icons.Circle, Act.ToolCircle, "Круг ({ToolCircle})\nИз центра к краю. Кольцо — круглая башня, сплошной — бастион. С киркой — круглая яма или кольцевой ров. {Form} — сплошной или кольцо."),
-        (Tool.Extrude, Icons.Extrude, Act.ToolExtrude, "Выдавить ({ToolExtrude})\nЩелчок по ровной грани: она нарастёт на шаг выбранным материалом. С киркой — грань вынут на шаг вглубь: ступени в склоне, проход в скале."),
-        (Tool.Unmark, Icons.Erase, Act.ToolUnmark, "Снять разметку ({ToolUnmark})\nРамка снимает всю разметку внутри, щелчок — разметку поблизости. Что уже сделано, остаётся."),
-        (Tool.Ladder, Icons.Ladder, Act.ToolLadder, "Лестница ({ToolLadder})\nЩелчок по боковой грани стены, башни или обрыва: рабочие приставят лестницу от земли до верха. По лестницам ваши пешки поднимаются на стены. Орда тоже ими пользуется — и ставит свои."),
-        (Tool.Gather, Icons.Gather, Act.ToolGather, "Делянка ({ToolGather})\nРамкой отметьте участок, откуда брать ресурс: {MatStone} — камень (скалы и валуны), {MatWood} — лес, {MatEarth} — земля; у камня и земли — глубина. Размечать каждое дерево не нужно: свободные пешки сами берут оттуда работу понемногу, а разметка стен и рвов идёт первой. В консоли можно выбрать и «убежище»: участок, куда по тревоге ({Alarm}) уходят мирные, — «святилище», где днём молятся жрецы, — и «жилой дом»: закрытую комнату с воротами, где рабочие поставят лежанки, а каждая лежанка — место в войске."),
-        (Tool.Gate, Icons.GateIcon, Act.ToolGate, "Ворота ({ToolGate})\nЩелчок по боковой грани стены: рабочие прорубят проём в два метра шириной и три высотой и навесят дубовые створки на железе. Свои открывают их на ходу, перед ордой они закрыты, и рубить их ей не легче камня. Щелчок по воротам без кисти — держать открытыми, на засов или снова сами."),
-        (Tool.Repair, Icons.Mend, Act.ToolRepair, "Починка ({ToolRepair})\nЩелчок по разрушенной постройке: рабочие вернут ей прежний вид — разберут завал, где он лёг на кладку, доложат недостающее тем же камнем, навесят ворота. Помнится всё, что вы построили, и старая крепость тоже. Рамка чинит только то, что в ней."),
-        (Tool.Bridge, Icons.BridgeIcon, Act.ToolBridge, "Мост ({ToolBridge})\nЗажмите на одном берегу и протяните до другого: рабочие перекинут мост, который идёт аркой, а не плоско. Каменный ({MatStone}) — на арке, с парапетами; деревянный ({MatWood}) — настил на гнутых рёбрах, с перилами. Строят от берегов, стоя на уже уложенном. Пролёт — от 2 до 25 м. Подъёмный («Вид» в консоли) — дубовый настил над рвом от 2 до 6 м на петлях у берега, что ближе к цитадели: опущен, пока не подойдёт орда, тогда поднимается сам и сбрасывает в ров тех, кто на нём. Щелчок по нему без кисти — сам / опущен / поднят."),
-        (Tool.Capture, Icons.Scroll, Act.ToolCapture, "Снять чертёж ({ToolCapture})\nОбведите рамкой свою постройку — она станет чертежом. Копии ставятся из свитков во вкладке «Чертежи», {Rotate} поворачивает."),
+        (Tool.Brush, Icons.Brush, Act.ToolBrush, "Кисть ({ToolBrush})\nРисует стену от руки до заданной высоты. Шар налипает на поверхность. С киркой кисть размечает, что копать. {Form} меняет форму, Shift даёт кирку на один мазок."),
+        (Tool.Line, Icons.StraightLine, Act.ToolLine, "Линия ({ToolLine})\nПрямая стена заданной толщины и высоты. С киркой — ров. {Grid} включает сетку."),
+        (Tool.Box, Icons.Box, Act.ToolBox, "Прямоугольник ({ToolBox})\nТянется от угла до угла: сплошной помост или одни стенки. С киркой — котлован. {Form} переключает сплошной и стенки."),
+        (Tool.Circle, Icons.Circle, Act.ToolCircle, "Круг ({ToolCircle})\nТянется от центра к краю: кольцо башни или сплошной бастион. С киркой — яма или кольцевой ров. {Form} переключает сплошной и кольцо."),
+        (Tool.Extrude, Icons.Extrude, Act.ToolExtrude, "Выдавить ({ToolExtrude})\nЩелчок по ровной грани наращивает её на шаг. С киркой грань углубляется: так делают ступени в склоне и проходы в скале."),
+        (Tool.Unmark, Icons.Erase, Act.ToolUnmark, "Снять разметку ({ToolUnmark})\nРамка снимает всю разметку внутри, щелчок — рядом с курсором. Сделанное остаётся."),
+        (Tool.Ladder, Icons.Ladder, Act.ToolLadder, "Лестница ({ToolLadder})\nЩелчок по стене, башне или обрыву. Рабочие поставят лестницу от земли до верха. Орда тоже лазит по лестницам и ставит свои."),
+        (Tool.Gather, Icons.Gather, Act.ToolGather, "Делянка ({ToolGather})\nУчасток, где рабочие сами добывают ресурс: {MatStone} — камень, {MatWood} — лес, {MatEarth} — землю. Для камня и земли задаётся глубина. Стены и рвы рабочие делают в первую очередь.\nВ нижней панели делянку можно сделать убежищем (туда уходят по тревоге {Alarm}), святилищем (там молятся жрецы) или жилым домом (закрытая комната с воротами, каждая лежанка в нём даёт место в войске)."),
+        (Tool.Gate, Icons.GateIcon, Act.ToolGate, "Ворота ({ToolGate})\nЩелчок по стене. Рабочие прорубят проём 2 × 3 м и навесят дубовые створки. Свои проходят, перед ордой ворота закрыты. Щелчок по воротам без кисти: открываются сами, открыты или на засове."),
+        (Tool.Repair, Icons.Mend, Act.ToolRepair, "Починка ({ToolRepair})\nЩелчок по разрушенной постройке. Рабочие уберут завалы, восстановят кладку и ворота. Чинится всё, что вы построили, и старая крепость. Рамкой можно чинить по частям."),
+        (Tool.Bridge, Icons.BridgeIcon, Act.ToolBridge, "Мост ({ToolBridge})\nПротяните от берега до берега, пролёт от 2 до 25 м. Каменный ({MatStone}) идёт аркой и с парапетами, деревянный ({MatWood}) — настил с перилами.\nПодъёмный мост (вид выбирают в нижней панели) — настил над рвом от 2 до 6 м. Когда подходит орда, он поднимается сам и сбрасывает в ров тех, кто на нём. Щелчок по нему без кисти: сам, опущен или поднят."),
+        (Tool.Capture, Icons.Scroll, Act.ToolCapture, "Снять чертёж ({ToolCapture})\nОбведите постройку рамкой, и она сохранится во вкладке «Чертежи». {Rotate} поворачивает копию."),
     };
 
     public static readonly (byte mat, Act act, int store, string tip)[] MatDefs =
     {
-        (Mat.Stone, Act.MatStone, Stockpile.Stone, "Камень ({MatStone})\nКладётся бутом — неровными камнями на растворе, дольше всего и крепче всего. Его ломают киркой в скалах и валунах; разобранная кладка возвращает три четверти."),
-        (Mat.Wood, Act.MatWood, Stockpile.Wood, "Брёвна ({MatWood})\nРубят в лесу: кирка, щелчок по дереву. Ложатся быстрее камня, но топор орка берёт их легко."),
-        (Mat.Rammed, Act.MatEarth, Stockpile.Earth, "Земля ({MatEarth})\nЕё даёт любой ров и котлован. Насыпь кладётся быстрее всего, а гоблину без кирки сквозь неё не пройти."),
+        (Mat.Stone, Act.MatStone, Stockpile.Stone, "Камень ({MatStone})\nСамый прочный, но кладётся дольше всего. Добывают киркой в скалах и валунах. Разобранная кладка возвращает 75 % камня."),
+        (Mat.Wood, Act.MatWood, Stockpile.Wood, "Брёвна ({MatWood})\nРубят в лесу. Кладутся быстрее камня, но орки легко их рубят, и они горят."),
+        (Mat.Rammed, Act.MatEarth, Stockpile.Earth, "Земля ({MatEarth})\nДаёт любой ров и котлован. Кладётся быстрее всего. Гоблин без кирки сквозь насыпь не пройдёт."),
     };
 
-    public const string UndoTip = "Отменить — Ctrl+Z (на Mac ⌘Z)\nСнимает последнюю разметку, как не бывало: стену, ров, лестницу, мост, делянку, ворота, починку — и возвращает снятую. До сорока шагов назад. Что уже построено или выкопано, остаётся.";
+    public const string UndoTip = "Отменить: Ctrl+Z (на Mac ⌘Z)\nСнимает последнюю разметку или возвращает снятую, до 40 шагов назад. Построенное и выкопанное остаётся.";
 
-    public const string PickTip = "Кирка ({Pick})\nКисти размечают не кладку, а работу кирки: выкопать ров, срубить лес, наломать камня, разобрать свою стену. Всё добытое идёт в запасы.";
+    public const string PickTip = "Кирка ({Pick})\nС киркой кисти размечают раскопки: рвы, рубку леса, добычу камня, разборку стен. Всё добытое идёт в запасы.";
 
     Main _m;
     Control _root;
@@ -121,7 +120,7 @@ public partial class Hud : CanvasLayer
             int dot = text[1].IndexOf(". ", StringComparison.Ordinal);
             return Bindings.Fill(dot > 0 ? text[1][..(dot + 1)] : text[1]);
         }
-        return t == Tool.Paste ? Bindings.Fill("Щелчок по земле — разметить копию; {Rotate} — повернуть.") : "";
+        return t == Tool.Paste ? Bindings.Fill("Щелчок по земле ставит копию, {Rotate} поворачивает.") : "";
     }
 
     public void Init(Main m)
@@ -210,19 +209,19 @@ public partial class Hud : CanvasLayer
         _goals = new VBoxContainer();
         _goals.AddThemeConstantOverride("separation", 3);
         goalsBox.AddChild(_goals);
-        _goalsTab = Tab("goals", Icons.Of("checklist"), "Задачи", "Задачи\nПоручения — что сделать дальше, за каждое награда: одно главное и два малых. Под ними цели всей осады: починить крепость, " +
-            "занять рудники и держать их — они платят золотом на наём — и выстоять все волны.", goalsBox, 400);
+        _goalsTab = Tab("goals", Icons.Of("checklist"), "Задачи", "Задачи\nПоручения: одно главное и два малых, за каждое награда. Ниже цели на всю осаду: починить крепость, занять рудники, " +
+            "выстоять все волны.", goalsBox, 400);
         var chronicle = new VBoxContainer();
         chronicle.AddThemeConstantOverride("separation", 4);
         chronicle.AddChild(CapsLabel("Летопись"));
         _history = new VBoxContainer();
         _history.AddThemeConstantOverride("separation", 4);
         chronicle.AddChild(_history);
-        var chronicleTab = _chronicleTab = Tab("chronicle", Icons.Scroll, "Летопись", "Летопись\nВсё, что было: подсказки начала, вести о волнах, рудниках, павших и сделанном. Последние строки и так видны на минуту над консолью.", chronicle, 440);
+        var chronicleTab = _chronicleTab = Tab("chronicle", Icons.Scroll, "Летопись", "Летопись\nВсе события игры. Последние строки минуту видны над нижней панелью.", chronicle, 440);
         var bpBox = new VBoxContainer();
         bpBox.AddThemeConstantOverride("separation", 8);
         var bpHead = new HBoxContainer();
-        var bpTitle = CapsLabel("Свитки чертежей");
+        var bpTitle = CapsLabel("Чертежи");
         bpTitle.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         bpHead.AddChild(bpTitle);
         _bpCount = CapsLabel("", 10, Ornament.Faded);
@@ -231,20 +230,20 @@ public partial class Hud : CanvasLayer
         _bpList = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         _bpList.AddThemeConstantOverride("separation", 6);
         bpBox.AddChild(_bpList);
-        var blueprintsTab = _blueprintsTab = Tab("blueprints", Icons.Of("tied-scroll"), "Чертежи", "Свитки чертежей\nСнятые постройки: щелчок по свитку — разметить копию. {ToolCapture} — снять новый чертёж рамкой.", bpBox, 380);
+        var blueprintsTab = _blueprintsTab = Tab("blueprints", Icons.Of("tied-scroll"), "Чертежи", "Чертежи\nЩелчок по чертежу ставит копию. {ToolCapture} снимает новый.", bpBox, 380);
         _works = new WorkTable();
         _works.Init(m);
-        var worksTab = _worksTab = Tab("works", Icons.Pick, "Работы", "Работы\nКто из дружины какую работу делает и в каком порядке, как в RimWorld: 1 — первым делом, 4 — в последнюю очередь, пусто — никогда. И кто что добывает сам, кто в ополчении.", _works, WorkTable.Width);
+        var worksTab = _worksTab = Tab("works", Icons.Pick, "Работы", "Работы\nКто какую работу делает и в каком порядке: 1 — первым делом, 4 — в последнюю очередь, пусто — никогда. Здесь же: кто добывает сам и кто в ополчении.", _works, WorkTable.Width);
         _horde = new HordeInfo();
-        _hordeTab = Tab("horde", Icons.Of("goblin-head"), "Орда", "Орда\nВатаги грядущей волны (или той, что в долине): из кого, кто ведёт, откуда войдут; их пути — на поле и на карте ({Trails}). И брёвна с землёй орды на осадные работы.", _horde, 360);
+        _hordeTab = Tab("horde", Icons.Of("goblin-head"), "Орда", "Орда\nВатаги ближайшей волны: состав, вожак, откуда придут. Их пути видны на поле и на карте ({Trails}). Ниже запасы орды на осадные работы.", _horde, 360);
         _horde.Init(m);
         _lore = new LorePanel();
         _lore.Init(m);
-        _loreTab = Tab("lore", Icons.Tome, "Знания", "Знания\nДрево крепости на трёх страницах: «Умения» (луки, кладка, труд, дружина, ловушки), «Войско» (какие воины набираются в цитадели и что их усиливает) и «Вмешательство» (заклинания четырёх кругов и благодать). Умения и войско платятся знаниями — их дают отбитые волны, и на всё их за осаду не хватит: выбирайте. Вмешательство платится тем, что дают старые силы. Цифра на вкладке — сколько знаний ждёт, когда есть чему учиться; ✦ — можно постичь заклинание или благодать.", _lore, LorePanel.Width);
+        _loreTab = Tab("lore", Icons.Tome, "Знания", "Знания\nДрево улучшений на трёх страницах: «Умения», «Войско» и «Вмешательство». Умения и войско покупают за знания, их дают за отбитые волны. Заклинания покупают за вмешательство и откровения. Число на вкладке — сколько знаний можно потратить, ✦ — можно изучить заклинание.", _lore, LorePanel.Width);
         _mysteries = new MysteryPanel();
         _mysteries.Init(m);
-        _magicTab = Tab("magic", Icons.Skull, "Таинства", "Таинства\nВмешательство старых сил и откровения; где молятся жрецы и как их слышат; жертвы — пленного, тушу с охоты или своего. " +
-            "Цифра на вкладке — сколько пленных ждёт в цитадели.", _mysteries, MysteryPanel.Width);
+        _magicTab = Tab("magic", Icons.Skull, "Таинства", "Таинства\nВмешательство и откровения, святилища и жрецы, жертвы: пленные, туши с охоты или свои люди. " +
+            "Число на вкладке — сколько пленных ждёт в цитадели.", _mysteries, MysteryPanel.Width);
         _squeeze.AddRange(new[] { blueprintsTab, chronicleTab, worksTab, _goalsTab, _hordeTab, _loreTab, _magicTab });
 
         _stores = new Stores();
@@ -255,7 +254,7 @@ public partial class Hud : CanvasLayer
         _help = new Medallion(Icons.Question, HelpTip) { Size = new Vector2(38, 38) };
         _help.Clicked += () => OpenMenu("controls");
         root.AddChild(_help);
-        _menuButton = new Medallion(Icons.Menu, "Меню (Esc)\nСохранить и загрузить игру, управление, настройки, обучение, выйти. Быстрое сохранение — {QuickSave}, загрузить его — {QuickLoad}.") { Size = new Vector2(38, 38) };
+        _menuButton = new Medallion(Icons.Menu, "Меню (Esc)\nСохранение, загрузка, управление, настройки, обучение, выход. Быстрое сохранение {QuickSave}, загрузка {QuickLoad}.") { Size = new Vector2(38, 38) };
         _menuButton.Clicked += OpenMenu;
         root.AddChild(_menuButton);
         _colonists = new ColonistBar();
@@ -475,13 +474,13 @@ public partial class Hud : CanvasLayer
             if (u == null && t.HoverGate is { } gate)
             {
                 _tag.Show("Ворота · " + Commander.GateWord(gate), gate.Broken ? Ornament.Blood : Ornament.EmberGlow,
-                    gate.Broken || !gate.Ready ? "" : "щелчок — сменить: открываются сами / стоят открытыми / на засове");
+                    gate.Broken || !gate.Ready ? "" : "щелчок: открываются сами / открыты / на засове");
                 return;
             }
             if (u == null && t.HoverBridge is { } draw)
             {
                 _tag.Show("Подъёмный мост · " + Commander.BridgeWord(draw), draw.Broken ? Ornament.Blood : Ornament.EmberGlow,
-                    draw.Broken || !draw.Ready ? "" : "щелчок — сменить: сам / опущен / поднят");
+                    draw.Broken || !draw.Ready ? "" : "щелчок: сам / опущен / поднят");
                 return;
             }
             if (u == null && t.HoverKeep)
@@ -521,7 +520,7 @@ public partial class Hud : CanvasLayer
             }
             var (meant, standing) = _sound;
             int whole = meant == 0 ? 100 : (int)(standing * 100L / meant);
-            yield return standing >= meant - meant / 200 ? ("Крепость цела", true) : ($"Починить крепость ({{ToolRepair}} — починка): цела на {whole} %", false);
+            yield return standing >= meant - meant / 200 ? ("Крепость цела", true) : ($"Починить крепость ({{ToolRepair}}): цела на {whole} %", false);
             if (sim.FortGate is { } g)
                 yield return g.Ready && !g.Broken ? ("Ворота навешены", true) : g.Broken ? ("Навесить ворота: починкой по проёму", false) : ("Ворота навешивают", false);
         }
@@ -568,7 +567,7 @@ public partial class Hud : CanvasLayer
             }
             var line = _errandLines[i++];
             string pay = Sim.Pay(e);
-            line.Text = (e.Main ? "▶ " : "◇ ") + Bindings.Fill(e.Text) + (pay == "" ? "" : $" — {pay}");
+            line.Text = (e.Main ? "▶ " : "◇ ") + Bindings.Fill(e.Text) + (pay == "" ? "" : $" (награда: {pay})");
             line.AddThemeFontOverride("font", e.Main ? Ornament.SerifBold : Ornament.Serif);
             line.AddThemeFontSizeOverride("font_size", e.Main ? 14 : 13);
             line.AddThemeColorOverride("font_color", e.Main ? Ornament.EmberGlow : Ornament.Parchment);
@@ -638,27 +637,27 @@ public partial class Hud : CanvasLayer
     /// <summary>What the tag says over a mine, a ruin or a place of power.</summary>
     (string head, string sub, Color color) PlaceTag(Landmark l)
     {
-        if (l.Kind == LandmarkKind.Ruin) return (l.Name, "старая кладка: её можно поднять как стояла ({ToolRepair} — починка) или разобрать на камень ({ToolGather} и {MatStone})", Ornament.Aged);
+        if (l.Kind == LandmarkKind.Ruin) return (l.Name, "старая кладка: починить ({ToolRepair}) или разобрать на камень ({ToolGather}, {MatStone})", Ornament.Aged);
         var m = _m.Sim.Mines.Find(x => x.Place == l);
         if (m == null) return (l.Name, "", Ornament.Aged);
         if (m.Power)
         {
-            const string why = "святилище на нём ({ToolGather} → «святилище») слышат втрое лучше";
+            const string why = "святилище здесь даёт втрое больше вмешательства ({ToolGather} → «святилище»)";
             if (m.Ours > 0 && m.Theirs > 0) return ($"{m.Name} · место силы · за него бьются", why, Ornament.EmberGlow);
             return m.Holder switch
             {
-                Holder.Ours => ($"{m.Name} · место силы · ваше", why + "; держите его — орда придёт осквернить", Ornament.Moss),
-                Holder.Horde => ($"{m.Name} · место силы · осквернено", "перебейте орду у него и встаньте там сами: пока оно у орды, святилище на нём молчит", Ornament.Blood),
-                _ => ($"{m.Name} · место силы · ничьё", "пошлите людей или жрецов — займут за несколько секунд; " + why, Ornament.EmberGlow),
+                Holder.Ours => ($"{m.Name} · место силы · ваше", why + "; орда придёт его осквернить, держите здесь людей", Ornament.Moss),
+                Holder.Horde => ($"{m.Name} · место силы · осквернено", "перебейте орду и займите его: пока оно у орды, святилище здесь не работает", Ornament.Blood),
+                _ => ($"{m.Name} · место силы · ничьё", "пошлите сюда людей, займут за несколько секунд; " + why, Ornament.EmberGlow),
             };
         }
         string pay = $"+{m.Income} зол./мин";
         if (m.Ours > 0 && m.Theirs > 0) return ($"{m.Name} · за него бьются", pay, Ornament.EmberGlow);
         return m.Holder switch
         {
-            Holder.Ours => ($"{m.Name} · ваш · {pay}", "держите людей у входа: орда придёт его отбивать. Руда в жиле — ещё золото", Ornament.Moss),
-            Holder.Horde => ($"{m.Name} · у орды", $"перебейте её у входа и встаньте там сами · {pay}", Ornament.Blood),
-            _ => ($"{m.Name} · ничей", $"пошлите людей к входу — займут за несколько секунд · {pay}", Ornament.EmberGlow),
+            Holder.Ours => ($"{m.Name} · ваш · {pay}", "держите людей у входа: орда придёт его отбивать", Ornament.Moss),
+            Holder.Horde => ($"{m.Name} · у орды", $"перебейте орду у входа и займите его · {pay}", Ornament.Blood),
+            _ => ($"{m.Name} · ничей", $"пошлите людей к входу, займут за несколько секунд · {pay}", Ornament.EmberGlow),
         };
     }
 
@@ -691,7 +690,7 @@ public partial class Hud : CanvasLayer
         _bpCount.Text = _m.Blueprints.Count > 0 ? $"{_m.Blueprints.Count}" : "";
         if (_m.Blueprints.Count == 0)
         {
-            var empty = Text("Свитков пока нет. Постройте стену или башню, нажмите B и обведите её рамкой — получится чертёж, который размечается снова одним щелчком.",
+            var empty = Text(Bindings.Fill("Чертежей пока нет. Постройте что-нибудь, нажмите {ToolCapture} и обведите постройку рамкой."),
                 Ornament.SerifItalic, 13, Ornament.Aged, wrap: true);
             empty.CustomMinimumSize = new Vector2(280, 0);
             _bpList.AddChild(empty);
@@ -702,7 +701,7 @@ public partial class Hud : CanvasLayer
             var b = bp;
             var row = new HBoxContainer();
             row.AddThemeConstantOverride("separation", 8);
-            var icon = new Slot(Icons.Of("tied-scroll"), null, $"{bp.Name}\nЩелчок — разметить копию. R поворачивает, Esc отменяет.", 42) { Selected = _m.Tools.PasteBp == bp };
+            var icon = new Slot(Icons.Of("tied-scroll"), null, $"{bp.Name}\nЩелчок ставит копию. R поворачивает, Esc отменяет.", 42) { Selected = _m.Tools.PasteBp == bp };
             icon.Clicked += () => _m.Tools.StartPaste(b);
             row.AddChild(icon);
             var info = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
@@ -711,7 +710,7 @@ public partial class Hud : CanvasLayer
             info.AddChild(Text($"{Inspector.Len(bp.W)} × {Inspector.Len(bp.D)} × {Inspector.Len(bp.H)}", Ornament.Serif, 12, Ornament.Aged));
             info.AddChild(Text(bp.Describe(), Ornament.Serif, 12, Ornament.BronzeLight));
             row.AddChild(info);
-            var del = new Button { Text = "×", FocusMode = Control.FocusModeEnum.None, TooltipText = "Сжечь свиток", CustomMinimumSize = new Vector2(26, 26), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
+            var del = new Button { Text = "×", FocusMode = Control.FocusModeEnum.None, TooltipText = "Удалить чертёж", CustomMinimumSize = new Vector2(26, 26), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
             del.Pressed += () => _m.RemoveBlueprint(b);
             row.AddChild(del);
             _bpList.AddChild(row);
@@ -739,7 +738,7 @@ public partial class Hud : CanvasLayer
             float px = x, pz = z;
             l.MouseFilter = Control.MouseFilterEnum.Stop;
             l.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
-            l.TooltipText = "Где это было\nЩелчок — посмотреть на это место.";
+            l.TooltipText = "Показать место";
             l.MouseEntered += () => l.AddThemeColorOverride("font_color", color.Lightened(.3f));
             l.MouseExited += () => l.AddThemeColorOverride("font_color", color);
             l.GuiInput += e =>

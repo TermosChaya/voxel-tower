@@ -61,7 +61,7 @@ public sealed partial class Sim
         u.Pastime = Pastime.Bound;
         // bound, and its wounds bound with it: it is wanted alive
         if (u.Wounds != null) u.Wounds.Bleed = 0;
-        Say($"{by.T.Name} сбил с ног и связал: {u.Name.ToLowerInvariant()}. Свободный рабочий отведёт пленного в цитадель.", 1, u);
+        Say($"{by.T.Name} связал: {u.Name.ToLowerInvariant()}. Рабочий отведёт пленного в цитадель.", 1, u);
     }
 
     /// <summary>A raider lying bound: it goes where it is led; left alone long enough, it works itself free and runs.</summary>
@@ -73,7 +73,7 @@ public sealed partial class Sim
         if (Time - u.BoundAt < WrigglesFree) return;
         u.Bound = false; u.Pastime = Pastime.None;
         u.Routed = true;
-        Say($"Связанный {u.T.Name.ToLowerInvariant()} распутался и бежит на запад!", 2, u);
+        Say($"Связанный {u.T.Name.ToLowerInvariant()} развязался и бежит на запад.", 2, u);
     }
 
     /// <summary>
@@ -172,7 +172,7 @@ public sealed partial class Sim
         u.Inside = false; u.Bound = false; u.Pastime = Pastime.None; u.Routed = true; u.Unguarded = 0;
         int cell = Spread(Gate, 1 + Rng.Next(4), u.T.Move.Height);
         u.Cell = cell; (u.X, u.Y, u.Z) = Nav.Feet(cell);
-        Say($"Пленный {u.T.Name.ToLowerInvariant()} выбрался из цитадели: её никто не сторожил. Перехватите его!", 3, u);
+        Say($"Пленный {u.T.Name.ToLowerInvariant()} сбежал из цитадели: её никто не охранял.", 3, u);
     }
 
     double _guardLook = -99;
