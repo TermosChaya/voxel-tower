@@ -40,7 +40,7 @@ public partial class GameMenu : Control
         var col = new VBoxContainer();
         col.AddThemeConstantOverride("separation", 10);
         box.AddChild(col);
-        var title = Hud.Text("Сумрачный вал", Ornament.Display, 30, Ornament.EmberGlow);
+        var title = Hud.Text("Voxel Tower", Ornament.Display, 30, Ornament.EmberGlow);
         title.HorizontalAlignment = HorizontalAlignment.Center;
         col.AddChild(title);
         col.AddChild(new Rule(false));

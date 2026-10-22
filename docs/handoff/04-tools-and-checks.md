@@ -186,7 +186,7 @@ python3 tools/trailer/score.py out.wav --length 110 --cue 0:intro --cue 8:build 
 cd voxel-tower && mkdir -p ../voxel-tower-builds/windows
 export DOTNET_ROOT=/opt/homebrew/opt/dotnet/libexec
 sandbox-exec -p '(version 1)(allow default)(deny file-read* (subpath "/usr/local/share/dotnet"))' \
-  /Applications/Godot_mono.app/Contents/MacOS/Godot --headless --path . --export-release "Windows Desktop" ../voxel-tower-builds/windows/SumrachnyVal.exe
+  /Applications/Godot_mono.app/Contents/MacOS/Godot --headless --path . --export-release "Windows Desktop" ../voxel-tower-builds/windows/VoxelTower.exe
 ```
 
 Почему `sandbox-exec`: на этом Mac есть старая .NET 8 в `/usr/local/share/dotnet`, а инструменты Godot на macOS
@@ -196,5 +196,5 @@ sandbox-exec -p '(version 1)(allow default)(deny file-read* (subpath "/usr/local
 придётся один раз докачать с разрешения автора:
 `dotnet restore VoxelTower.csproj -r win-x64 -p:GodotTargetPlatform=windows -p:Configuration=ExportRelease --source https://api.nuget.org/v3/index.json --source /Applications/Godot_mono.app/Contents/Resources/GodotSharp/Tools/nupkgs`.
 
-Архив для друзей: папка `SumrachnyVal` (exe, папка data, `README.txt` с тем, как запустить, `licenses/` со шрифтами
-и значками) → `../voxel-tower-builds/SumrachnyVal-Windows.zip`. На самой Windows сборку здесь запустить нечем.
+Архив для друзей: папка `VoxelTower` (exe, папка data, `README.txt` с тем, как запустить, `licenses/` со шрифтами
+и значками) → `../voxel-tower-builds/VoxelTower-Windows.zip`. На самой Windows сборку здесь запустить нечем.
