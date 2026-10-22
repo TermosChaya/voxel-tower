@@ -924,7 +924,7 @@ public partial class Main : Node3D
         KeyPress(Key.Key2);
         if (!Tools.Opt.Dig) KeyPress(Key.V);
         KeyPress(Key.N);
-        Check("N snaps to the grid", Tools.Opt.Grid == 8);
+        Check("N snaps to the grid", Tools.Opt.Grid == 8, $"grid {Tools.Opt.Grid}, last {Tools.Opt.GridLast}, tool {Tools.Tool}, menu {Hud.MenuOpen}");
         await Look(640, 500);
         int r3 = Removals();
         await Drag((641, 441), (646, 558));

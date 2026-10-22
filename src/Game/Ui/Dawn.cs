@@ -62,10 +62,19 @@ public partial class DawnCard : Control
 
     static Icons.Painter Sign(Gift g) => g.Kind switch
     {
-        GiftKind.Newcomers => g.Key switch { "workers" => Icons.Shovel, "archers" => Icons.Bow, "priest" => Icons.Tome, _ => Icons.Sword },
-        GiftKind.Caravan => g.Key == "earth" ? Icons.Earth : Icons.Coin,
-        GiftKind.Omen => Icons.Eye,
-        GiftKind.Relic => g.Key switch { "drum" or "horn" => Icons.Horn, "eye" => Icons.Eye, "staff" => Icons.Tome, "shield" => Icons.GateIcon, _ => Icons.Skull },
+        GiftKind.Newcomers => g.Key switch
+        {
+            "workers" => Icons.Of("wheelbarrow"), "archers" => Icons.Bow, "priest" => Icons.Of("prayer"), "knight" => Icons.Of("black-knight-helm"),
+            _ => Icons.Sword,
+        },
+        GiftKind.Caravan => g.Key switch { "stone" => Icons.Material(Mat.Stone), "wood" => Icons.Material(Mat.Wood), "earth" => Icons.Earth, _ => Icons.Coin },
+        GiftKind.Omen => g.Key == "favour" ? Icons.Of("raven") : Icons.Eye,
+        GiftKind.Trophy => Icons.SigilFor(g.Key),
+        GiftKind.Relic => g.Key switch
+        {
+            "jaw" => Icons.Of("jawbone"), "hide" => Icons.Of("animal-hide"), "drum" => Icons.Of("drum"), "horn" => Icons.Horn,
+            "eye" => Icons.Eye, "staff" => Icons.Of("wizard-staff"), _ => Icons.Of("cross-shield"),
+        },
         _ => Icons.Skull,
     };
 

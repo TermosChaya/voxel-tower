@@ -210,7 +210,7 @@ public partial class Hud : CanvasLayer
         _goals = new VBoxContainer();
         _goals.AddThemeConstantOverride("separation", 3);
         goalsBox.AddChild(_goals);
-        _goalsTab = Tab("goals", Icons.Scroll, "Задачи", "Задачи\nПоручения — что сделать дальше, за каждое награда: одно главное и два малых. Под ними цели всей осады: починить крепость, " +
+        _goalsTab = Tab("goals", Icons.Of("checklist"), "Задачи", "Задачи\nПоручения — что сделать дальше, за каждое награда: одно главное и два малых. Под ними цели всей осады: починить крепость, " +
             "занять рудники и держать их — они платят золотом на наём — и выстоять все волны.", goalsBox, 400);
         var chronicle = new VBoxContainer();
         chronicle.AddThemeConstantOverride("separation", 4);
@@ -218,7 +218,7 @@ public partial class Hud : CanvasLayer
         _history = new VBoxContainer();
         _history.AddThemeConstantOverride("separation", 4);
         chronicle.AddChild(_history);
-        var chronicleTab = _chronicleTab = Tab("chronicle", Icons.Horn, "Летопись", "Летопись\nВсё, что было: подсказки начала, вести о волнах, рудниках, павших и сделанном. Последние строки и так видны на минуту над консолью.", chronicle, 440);
+        var chronicleTab = _chronicleTab = Tab("chronicle", Icons.Scroll, "Летопись", "Летопись\nВсё, что было: подсказки начала, вести о волнах, рудниках, павших и сделанном. Последние строки и так видны на минуту над консолью.", chronicle, 440);
         var bpBox = new VBoxContainer();
         bpBox.AddThemeConstantOverride("separation", 8);
         var bpHead = new HBoxContainer();
@@ -231,12 +231,12 @@ public partial class Hud : CanvasLayer
         _bpList = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         _bpList.AddThemeConstantOverride("separation", 6);
         bpBox.AddChild(_bpList);
-        var blueprintsTab = _blueprintsTab = Tab("blueprints", Icons.Box, "Чертежи", "Свитки чертежей\nСнятые постройки: щелчок по свитку — разметить копию. {ToolCapture} — снять новый чертёж рамкой.", bpBox, 380);
+        var blueprintsTab = _blueprintsTab = Tab("blueprints", Icons.Of("tied-scroll"), "Чертежи", "Свитки чертежей\nСнятые постройки: щелчок по свитку — разметить копию. {ToolCapture} — снять новый чертёж рамкой.", bpBox, 380);
         _works = new WorkTable();
         _works.Init(m);
         var worksTab = _worksTab = Tab("works", Icons.Pick, "Работы", "Работы\nКто из дружины какую работу делает и в каком порядке, как в RimWorld: 1 — первым делом, 4 — в последнюю очередь, пусто — никогда. И кто что добывает сам, кто в ополчении.", _works, WorkTable.Width);
         _horde = new HordeInfo();
-        _hordeTab = Tab("horde", Icons.Sword, "Орда", "Орда\nВатаги грядущей волны (или той, что в долине): из кого, кто ведёт, откуда войдут; их пути — на поле и на карте ({Trails}). И брёвна с землёй орды на осадные работы.", _horde, 360);
+        _hordeTab = Tab("horde", Icons.Of("goblin-head"), "Орда", "Орда\nВатаги грядущей волны (или той, что в долине): из кого, кто ведёт, откуда войдут; их пути — на поле и на карте ({Trails}). И брёвна с землёй орды на осадные работы.", _horde, 360);
         _horde.Init(m);
         _lore = new LorePanel();
         _lore.Init(m);
@@ -702,7 +702,7 @@ public partial class Hud : CanvasLayer
             var b = bp;
             var row = new HBoxContainer();
             row.AddThemeConstantOverride("separation", 8);
-            var icon = new Slot(Icons.Scroll, null, $"{bp.Name}\nЩелчок — разметить копию. R поворачивает, Esc отменяет.", 42) { Selected = _m.Tools.PasteBp == bp };
+            var icon = new Slot(Icons.Of("tied-scroll"), null, $"{bp.Name}\nЩелчок — разметить копию. R поворачивает, Esc отменяет.", 42) { Selected = _m.Tools.PasteBp == bp };
             icon.Clicked += () => _m.Tools.StartPaste(b);
             row.AddChild(icon);
             var info = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };

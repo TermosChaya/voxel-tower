@@ -149,7 +149,7 @@ public partial class WorkTable : Control
                 var cell = new Rect2(WorkX(k) + 6, y + 3, CellW - 12, Row - 6);
                 byte p = u.Priority[k];
                 Ornament.Well(this, cell, r == _hoverRow && _hoverCol == k + 1, p == 1, false);
-                if (p > 0) DrawString(Ornament.Display, new Vector2(cell.Position.X, cell.End.Y - 5), p.ToString(), HorizontalAlignment.Center, cell.Size.X, 19, PriorityCell.InkOf(p));
+                if (p > 0) DrawString(Ornament.SerifBold, new Vector2(cell.Position.X, cell.End.Y - 5), p.ToString(), HorizontalAlignment.Center, cell.Size.X, 19, PriorityCell.InkOf(p));
             }
             int duty = Math.Max(0, Array.IndexOf(Duties, u.Duty));
             DrawString(Ornament.Serif, new Vector2(DutyX + 6, y + 19), DutyNames[duty], HorizontalAlignment.Left, DutyW - 8, 13, duty == 0 ? Ornament.Faded : Ornament.BronzeLight);

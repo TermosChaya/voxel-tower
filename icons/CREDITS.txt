@@ -1,0 +1,5 @@
+Иконки интерфейса взяты с game-icons.net, лицензия CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/).
+Авторы: Lorc (https://lorcblog.blogspot.com), Delapouite (https://delapouite.com), Sbed, Skoll, Carl Olsen,
+Cathelineau, Caro Asercion, Willdabeast. Каждая иконка лежит в папке своего автора в репозитории
+https://github.com/game-icons/icons под тем же именем файла.
+Изменения: убран чёрный фон, контур белый, чтобы игра красила иконку в цвет интерфейса.

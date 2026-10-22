@@ -174,7 +174,7 @@ public partial class GameMenu : Control
         PageName = "main";
         if (_title)
         {
-            Fit(W, 430);
+            Fit(W, 452);
             var sub = Hud.Text("Оборона крепости в долине из вокселей", Ornament.SerifItalic, 15, Ornament.Aged);
             sub.HorizontalAlignment = HorizontalAlignment.Center;
             _page.AddChild(sub);
@@ -184,6 +184,9 @@ public partial class GameMenu : Control
             _page.AddChild(Big("Управление", "Все клавиши и кнопки мыши и что они делают; любую клавишу можно переназначить.", Controls_));
             _page.AddChild(Big("Настройки", "Размер интерфейса, громкость, тряска, замедление, обводка вокселей.", Settings_));
             _page.AddChild(Big("Выйти из игры", "", () => _m.GetTree().Quit()));
+            var credits = Hud.Text("Значки: game-icons.net, CC BY 3.0 · шрифты PT Serif и Cormorant Garamond, OFL", Ornament.Serif, 11, Ornament.Fade(Ornament.Aged, .8f));
+            credits.HorizontalAlignment = HorizontalAlignment.Center;
+            _page.AddChild(credits);
             return;
         }
         _page.AddChild(Big("Продолжить", "Вернуться к осаде (Esc).", Close));

@@ -780,7 +780,7 @@ public partial class PriorityCell : Control
         var r = new Rect2(Vector2.Zero, Size);
         Ornament.Well(this, r, _hover, p == 1, false);
         IconOf(_k)(this, new Rect2(5, 5, Size.Y - 10, Size.Y - 10), p == 0 ? Ornament.Fade(Ornament.Faded, .6f) : Ornament.Bronze);
-        DrawString(Ornament.Display, new Vector2(Size.Y - 2, Size.Y / 2 + 8), p == 0 ? "—" : p.ToString(), HorizontalAlignment.Center, Size.X - Size.Y, 20, InkOf(p));
+        DrawString(Ornament.SerifBold, new Vector2(Size.Y - 2, Size.Y / 2 + 8), p == 0 ? "—" : p.ToString(), HorizontalAlignment.Center, Size.X - Size.Y, 20, InkOf(p));
     }
 
     public override GodotObject _MakeCustomTooltip(string forText) => Tooltip.Make(forText);

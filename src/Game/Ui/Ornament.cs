@@ -16,21 +16,23 @@ public static class Ornament
     public static readonly Color Ember = new("eb8a34"), EmberGlow = new("ffad4f"), EmberDim = new("3d2411");
     public static readonly Color Blood = new("d24a33"), Moss = new("94b46c");
 
-    // Alegreya for text and Cormorant Garamond for headings ship with the game (SIL OFL, see fonts/);
-    // the system serif only steps in for a glyph they lack.
+    // PT Serif for all the text and the figures, Cormorant Garamond for the large headings: both ship with the game
+    // (SIL OFL, see fonts/); the system serif only steps in for a glyph they lack.
     static readonly SystemFont SystemSerif = Sys(400, false, "PT Serif", "Georgia", "Times New Roman", "Noto Serif", "DejaVu Serif");
-    static readonly Font AlegreyaFile = Bundled("res://fonts/Alegreya-Variable.ttf");
-    static readonly Font AlegreyaItalicFile = Bundled("res://fonts/Alegreya-Italic-Variable.ttf");
+    static readonly Font SerifFile = Bundled("res://fonts/PTSerif-Regular.ttf");
+    static readonly Font SerifBoldFile = Bundled("res://fonts/PTSerif-Bold.ttf");
+    static readonly Font SerifItalicFile = Bundled("res://fonts/PTSerif-Italic.ttf");
     static readonly Font CormorantFile = Bundled("res://fonts/CormorantGaramond-Variable.ttf");
 
-    public static readonly Font Serif = Weight(AlegreyaFile, 400);
-    public static readonly Font SerifBold = Weight(AlegreyaFile, 700);
-    public static readonly Font SerifItalic = Weight(AlegreyaItalicFile, 400);
-    /// <summary>Headings: tool names, the treasury, the wave clock.</summary>
+    public static readonly Font Serif = Plain(SerifFile);
+    public static readonly Font SerifBold = Plain(SerifBoldFile);
+    public static readonly Font SerifItalic = Plain(SerifItalicFile);
+    /// <summary>Large headings: the title, the tool's name over its options. Its figures stand on the line like the text's.</summary>
     public static readonly Font Display = Weight(CormorantFile, 650);
-    public static readonly SystemFont Mono = Sys(400, false, "PT Mono", "Menlo", "Consolas", "DejaVu Sans Mono");
-    /// <summary>Spaced capitals for captions, like letters cut into a plaque.</summary>
-    public static readonly FontVariation Caps = Weight(AlegreyaFile, 700, spacing: 2);
+    /// <summary>Small figures and keys: the text's own serif in bold, so a number is never in another face than its words.</summary>
+    public static readonly Font Mono = Plain(SerifBoldFile);
+    /// <summary>Spaced capitals for captions.</summary>
+    public static readonly FontVariation Caps = Plain(SerifBoldFile, spacing: 1);
 
     static SystemFont Sys(int weight, bool italic, params string[] names) => new()
     {
@@ -48,10 +50,21 @@ public static class Ornament
 
     static FontVariation Weight(Font font, int wght, int spacing = 0)
     {
-        var v = new FontVariation { BaseFont = font, SpacingGlyph = spacing };
+        var v = Plain(font, spacing);
         if (font is FontFile)
             v.VariationOpentype = new Godot.Collections.Dictionary { { TextServerManager.GetPrimaryInterface().NameToTag("wght"), wght } };
         return v;
+    }
+
+    /// <summary>A face as it is, its figures lining (all of a height with the capitals), not old-style.</summary>
+    static FontVariation Plain(Font font, int spacing = 0)
+    {
+        var ts = TextServerManager.GetPrimaryInterface();
+        return new FontVariation
+        {
+            BaseFont = font, SpacingGlyph = spacing,
+            OpentypeFeatures = new Godot.Collections.Dictionary { { ts.NameToTag("lnum"), 1 }, { ts.NameToTag("onum"), 0 } },
+        };
     }
 
     /// <summary>Hammered-metal grain laid faintly over every plate.</summary>

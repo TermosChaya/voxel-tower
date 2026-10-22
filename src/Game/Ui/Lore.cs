@@ -400,7 +400,7 @@ public partial class LorePanel : VBoxContainer
             }
             Icons.PageMark(page)(this, new Rect2(C - new Vector2(10, 23), new Vector2(20, 20)), Ornament.Fade(Ornament.Bronze, .9f));
             string big = page == 2 ? $"{sim.Favour:0}" : $"{sim.Knowledge:0}";
-            Ornament.Lettering(this, Ornament.Display, C + new Vector2(-Heart, 10), big, 20, Ornament.Parchment, HorizontalAlignment.Center, 2 * Heart);
+            Ornament.Lettering(this, Ornament.SerifBold, C + new Vector2(-Heart, 10), big, 20, Ornament.Parchment, HorizontalAlignment.Center, 2 * Heart);
             string small = page == 2 ? $"откр. {sim.Revelations}" : "знаний";
             Ornament.Lettering(this, Ornament.Caps, C + new Vector2(-Heart, 21), small.ToUpperInvariant(), 7, Ornament.Aged, HorizontalAlignment.Center, 2 * Heart);
         }

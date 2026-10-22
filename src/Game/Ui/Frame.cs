@@ -383,7 +383,7 @@ public partial class Stores : Control
             if (g > 0) Ornament.Diamond(this, new Vector2(x, Size.Y / 2), 3.2f, Ornament.Fade(Ornament.BronzeLight, .85f));
             Groups[g].icon(this, new Rect2(x + 10, (Size.Y - 22) / 2, 22, 22), Ornament.BronzeLight);
             int size = Cell < 96 ? 18 : 21;
-            DrawString(Ornament.Display, new Vector2(x + 36, Size.Y / 2 + size * .36f), Values[g], HorizontalAlignment.Left, Cell - 38, size, Short[g] ? Ornament.Blood : Ornament.Parchment);
+            DrawString(Ornament.SerifBold, new Vector2(x + 36, Size.Y / 2 + size * .36f), Values[g], HorizontalAlignment.Left, Cell - 38, size, Short[g] ? Ornament.Blood : Ornament.Parchment);
         }
     }
 
