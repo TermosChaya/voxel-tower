@@ -619,7 +619,11 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `Tier` (с нуля) < `TierOpen`. Рассвет после гибели вожака главы — `RelicGifts` (три из `RelicPool`, `GiftKind.Relic`),
   взятые — `Relics`/`HasRelic`: jaw (`FearOfUs`), hide (`HideHack` в рубке камня), drum (`Drum` в перезарядке наших),
   horn (награда в `Kill`), eye (`RangeAt` наших), staff (`CostOf` заклинаний), shield (`KeepHurt`). Малое поручение
-  «champion» вытесняет последнее малое. Сохраняется в `WriteChapters/ReadChapters`, у юнитов, ватаг и бежавших —
+  «champion» вытесняет последнее малое. Малые поручения (`GiveSmall`, по порядку): leader (вожак ватаги этой ночи,
+  `_slainBands`/`LostLeader`), weak (сторона из `SideBands`), thief (`_thiefAway` из `ThiefGone`), copper, stone,
+  silver, wood, hunt (`Hunted`), alive (`Prisoners`), sanctum, gold; `Failed` снимает невыполнимые малые. Развилки
+  древа: `Lore.Rival` (пары ставит `MakeLores`), `RivalShut` (своя осада), `Opened` — потребность из пары соперников
+  закрыта любым из них. Сохраняется в `WriteChapters/ReadChapters`, у юнитов, ватаг и бежавших —
   `Champion/Title` (версия 23). Вид: золотой стяг крупнее (`GoldRag`); имя — `Unit.Name`.
 - `Sim.Wounds.cs` — раны: `WeaponOf` (вид удара, глубина в полувокселях, ширина), `Toughness` (плоть,
   кость, кольчуга, сталь), `Wound` вырезает воксели, `Sever` отделяет то, что не связано гранями с шарниром

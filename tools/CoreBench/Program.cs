@@ -5475,6 +5475,29 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--errands")
     simE.Waves.StartNow(simE);
     Check("gifts not taken by the next horn are gone", waitingE >= 3 && simE.Gifts.Count == 0, $"{waitingE} waiting at dawn, {simE.Gifts.Count} after the horn");
     simE.Waves.CallOff(simE);
+
+    // the errands of the day follow the coming night: a band's leader to kill, the side the chief means to take; the
+    // leader killed in the night pays
+    simE.Errands.RemoveAll(e => !e.Main);
+    RunE(1.2);
+    var smallE = simE.Errands.FindAll(e => !e.Main).ConvertAll(e => e.Key);
+    var leaderErr = simE.Errands.Find(e => e.Key == "leader");
+    int doneBefore = simE.ErrandsDone;
+    bool slain = false;
+    if (leaderErr != null)
+    {
+        var bandL = simE.Bands.Find(b => b.Id == (int)leaderErr.From);
+        simE.Waves.StartNow(simE);
+        simE.Waves._queue.Clear();
+        var lead = simE.SpawnRaider(bandL.Roster[0], bandL);
+        simE.Hurt(lead, bowE, 100000, "test");
+        RunE(1.2);
+        // (the night may well be over by now, and the next night's leader asked for already)
+        slain = !simE.Errands.Exists(e => e.Key == "leader" && (int)e.From == bandL.Id) && simE.ErrandsDone > doneBefore;
+        simE.Waves.CallOff(simE);
+    }
+    Check("the day's errands follow the coming night — a band's leader to kill, the side the chief means to take — and the leader killed pays",
+        smallE.Contains("leader") && slain, $"small: {string.Join(", ", smallE)}; the leader killed and paid {slain}");
 }
 
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--chapters")
@@ -5523,6 +5546,16 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--chapters")
         bossHp >= Kinds.Orc.Hp * 4 && bossH.Champion == 1 && bossH.Name.Contains("Гнилозуб") && shut && simH.TierOpen == 2 && simH.CanLearn(tier2) && relics && took && simH.HasRelic(firstRelic),
         $"{bossH.Name}: {bossHp:0} hp of an orc's {Kinds.Orc.Hp}; tier II shut before {shut}, open after {simH.TierOpen}, «{tier2.Name}» learnable {simH.CanLearn(tier2)}; " +
         $"legendary trophies {relics}, took «{firstRelic}» {took}");
+
+    // a branch forks at its third tier: one way shuts the other, and what rests on both opens with either
+    simH.TierOpen = 4; simH.Knowledge = 100;
+    foreach (var k in new[] { "yew", "barbs", "braziers" }) simH.Learnt.Add(k);
+    bool both = simH.CanLearn(Sim.LoreOf("volley")) && simH.CanLearn(Sim.LoreOf("owleye"));
+    bool learnt = simH.Learn("volley");
+    bool shutOther = !simH.CanLearn(Sim.LoreOf("owleye")) && simH.RivalShut(Sim.LoreOf("owleye"));
+    bool topOpen = simH.CanLearn(Sim.LoreOf("longbows"));
+    Check("in a siege of one's own a branch forks at its third tier: one way taken shuts the other, and the branch's crown opens with either",
+        both && learnt && shutOther && topOpen, $"both open before {both}; «Частая стрельба» learnt {learnt}; «Совиный глаз» shut {shutOther}; «Длинные луки» open {topOpen}");
 
     // a champion who got away comes back crowned
     var backH = new Survivor { Kind = Kinds.Troll, Look = 0, Hp = Kinds.Troll.Hp * .5f, Champion = 2, Title = "Камнелом" };

@@ -53,6 +53,7 @@ public sealed partial class Sim
     {
         if (Gifts.Count > 0) { Gifts.Clear(); Say("Дар рассвета так и не выбран: обоз ушёл, пришлые разошлись.", 2); }
         _night0Kills = Kills; _nightLost = 0; _nightLeaders = bands; _nightLeadersKilled = 0; _nightChampion = 0;
+        _slainBands.Clear(); _thiefAway = false;
         _nightKeep0 = KeepHp;
         _nightFelled.Clear();
     }
@@ -63,7 +64,7 @@ public sealed partial class Sim
         if (!Waves.Active) return;
         if (u.Team == Team.Player && u.T != Kinds.Risen) _nightLost++;
         if (u.Team != Team.Horde || u.T == Kinds.Thrall) return;
-        if (u.Leader) _nightLeadersKilled++;
+        if (u.Leader) { _nightLeadersKilled++; if (u.Band != null) _slainBands.Add(u.Band.Id); }
         if (by is { Team: Team.Player }) _nightFelled[by.Id] = _nightFelled.GetValueOrDefault(by.Id) + 1;
     }
 

@@ -24,6 +24,11 @@ public sealed class Lore
     public int Page;
     /// <summary>The spell this is the learning of, when it is one.</summary>
     public SpellKind? Spell;
+    /// <summary>
+    /// The other way of its branch at this tier: in a siege of one's own only one of the two is learnt — a
+    /// specialisation — and what rests on both rests on either.
+    /// </summary>
+    public string Rival;
 }
 
 /// <summary>
@@ -65,6 +70,12 @@ public sealed partial class Sim
         var all = new List<Lore>(Skills);
         all.AddRange(Troops);
         all.AddRange(Rites());
+        // each branch of the household's skills forks at its third tier: one way or the other
+        foreach (var (a, b) in new[] { ("volley", "owleye"), ("granite", "bastion"), ("carts", "hides"), ("mail", "sergeants"), ("naphtha", "firestorm") })
+        {
+            all.Find(l => l.Key == a).Rival = b;
+            all.Find(l => l.Key == b).Rival = a;
+        }
         return all.ToArray();
     }
 
@@ -197,10 +208,13 @@ public sealed partial class Sim
     public double Wallet(Coin c) => c switch { Coin.Favour => Favour, Coin.Revelations => Revelations, _ => Knowledge };
 
     /// <summary>Whether all a lore rests on is known.</summary>
-    public bool Opened(Lore l) => Array.TrueForAll(l.Needs, Knows);
+    public bool Opened(Lore l) => Array.TrueForAll(l.Needs, n => Knows(n) || OwnSiege && LoreOf(n)?.Rival is { } r && Array.IndexOf(l.Needs, r) >= 0 && Knows(r));
+
+    /// <summary>In a siege of one's own, the other way of a fork already taken: this one is shut.</summary>
+    public bool RivalShut(Lore l) => OwnSiege && l.Rival != null && Knows(l.Rival);
 
     /// <summary>Whether a lore can be learnt now: not known yet, all it rests on known, what it costs at hand.</summary>
-    public bool CanLearn(Lore l) => !Knows(l.Key) && Opened(l) && Wallet(l.Coin) >= l.Cost && TierAllows(l);
+    public bool CanLearn(Lore l) => !Knows(l.Key) && Opened(l) && Wallet(l.Coin) >= l.Cost && TierAllows(l) && !RivalShut(l);
 
     /// <summary>In a siege of one's own the lore bought with knowledge opens tier by tier, as the chapters' champions fall.</summary>
     public bool TierAllows(Lore l) => !OwnSiege || l.Coin != Coin.Knowledge || l.Tier < TierOpen;

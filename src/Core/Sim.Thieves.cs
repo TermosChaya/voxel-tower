@@ -197,6 +197,7 @@ public sealed partial class Sim
     /// <summary>A thief gets out of the valley: what it carried is gone, and the one it led off.</summary>
     void ThiefGone(Unit u)
     {
+        if (u.Loot > 0 || u.Captive is { Dead: false }) _thiefAway = true;
         if (u.Loot > 0) { Say($"Грабитель ушёл из долины с добычей: {LootText(u)}.", 3, u); u.Loot = 0; u.LootKind = -1; }
         if (u.Captive is { Dead: false } c)
         {
