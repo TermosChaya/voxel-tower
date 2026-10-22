@@ -147,6 +147,8 @@ public partial class Main : Node3D
 
     public override void _Ready()
     {
+        // the window is named for the game; the project keeps its old name, which is where the player's saves live
+        GetWindow().Title = "Сумрачный вал";
         foreach (var a in OS.GetCmdlineUserArgs())
         {
             if (a.StartsWith("--shot=")) _shot = a["--shot=".Length..];

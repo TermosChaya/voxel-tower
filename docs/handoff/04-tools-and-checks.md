@@ -174,3 +174,27 @@ python3 tools/trailer/score.py out.wav --length 110 --cue 0:intro --cue 8:build 
 не сохраняется). Окно должно быть видно. На M1 Pro в сцене `troops` (80 бойцов): низкое ~64, среднее ~60, высокое ~58,
 наивысшее ~44 кадра/с; в окне macOS кадры, видимо, упираются в 60, поэтому смотреть надо и на остальные числа.
 Больше всего вызовов — куски мира (`WorldView`, ~2250 с тенью) и фигуры; тени дают около тысячи вызовов.
+
+## Сборка для друзей (Windows)
+
+Сделана 22.10.2026 с разрешения автора. Шаблоны экспорта Godot 4.7.2 .NET (Windows и macOS) стоят в
+`~/Library/Application Support/Godot/export_templates/4.7.2.stable.mono/`, среда .NET под Windows
+(`Microsoft.NETCore.App.Runtime.win-x64`, `Microsoft.AspNetCore.App.Runtime.win-x64`) — в кэше `~/.nuget/packages`.
+Пресет — `export_presets.cfg` («Windows Desktop», ресурсы вшиты в exe, код — в `data_VoxelTower_windows_x86_64`).
+
+```
+cd voxel-tower && mkdir -p ../voxel-tower-builds/windows
+export DOTNET_ROOT=/opt/homebrew/opt/dotnet/libexec
+sandbox-exec -p '(version 1)(allow default)(deny file-read* (subpath "/usr/local/share/dotnet"))' \
+  /Applications/Godot_mono.app/Contents/MacOS/Godot --headless --path . --export-release "Windows Desktop" ../voxel-tower-builds/windows/SumrachnyVal.exe
+```
+
+Почему `sandbox-exec`: на этом Mac есть старая .NET 8 в `/usr/local/share/dotnet`, а инструменты Godot на macOS
+берут dotnet именно оттуда (путь прописан в `GodotTools.dll`), и сборка проекта на .NET 10 падает с «System.Runtime
+10.0.0.0 не найден». Песочница только прячет эту папку от Godot, и он берёт dotnet из Homebrew; система не меняется.
+Проектный `nuget.config` намеренно знает лишь пакеты, вшитые в Godot; если обновится .NET, пакеты среды под Windows
+придётся один раз докачать с разрешения автора:
+`dotnet restore VoxelTower.csproj -r win-x64 -p:GodotTargetPlatform=windows -p:Configuration=ExportRelease --source https://api.nuget.org/v3/index.json --source /Applications/Godot_mono.app/Contents/Resources/GodotSharp/Tools/nupkgs`.
+
+Архив для друзей: папка `SumrachnyVal` (exe, папка data, `README.txt` с тем, как запустить, `licenses/` со шрифтами
+и значками) → `../voxel-tower-builds/SumrachnyVal-Windows.zip`. На самой Windows сборку здесь запустить нечем.
