@@ -211,12 +211,19 @@ public sealed partial class Sim
         if (l.Coin == Coin.Favour) Favour -= l.Cost;
         else if (l.Coin == Coin.Revelations) Revelations -= l.Cost;
         else Knowledge -= l.Cost;
+        Grant(l);
+        return true;
+    }
+
+    /// <summary>A lore known from now on, paid for or not (a leader's trophy): what it does to the household done at once.</summary>
+    internal void Grant(Lore l)
+    {
+        string key = l.Key;
         Learnt.Add(key);
         if (key == "gambesons")
             foreach (var u in Units)
                 if (!u.Dead && Soldier(u)) { u.MaxHp *= 1.2f; u.Hp *= 1.2f; }
         Say($"Изучено: «{l.Name}». {l.About}", 1);
-        return true;
     }
 
     /// <summary>A wave beaten back: gold and knowledge for it, more the later the wave.</summary>

@@ -161,6 +161,7 @@ public sealed partial class Sim
     {
         // what dies of its wounds dies by the hand that dealt them
         by ??= u.HurtBy;
+        NightFell(u, by);
         u.Dead = true; u.DiedAt = Time; u.State = UnitState.Dead; u.Hp = 0;
         u.KilledBy = cause ?? by?.T.Name ?? "";
         if (u.Team == Team.Horde && u.T != Kinds.Thrall) Kills++;

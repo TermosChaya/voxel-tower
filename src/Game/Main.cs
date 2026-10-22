@@ -719,8 +719,19 @@ public partial class Main : Node3D
         int errandLines = Hud.ErrandsShown;
         bool duskCard = Hud.DuskShown, mainFirst = Sim.Errands.Count > 0 && Sim.Errands[0].Main;
         Sim.Waves.Countdown = dusk0;
+        // and the dawn after a night held: its card with the gifts to choose from
+        Sim.NightBegins(1);
+        Sim.Dawn(1);
+        Hud.Refresh();
+        await Frames(2);
+        bool dawnCard = Hud.DawnShown;
+        int giftsShown = Sim.Gifts.Count;
+        Sim.Gifts.Clear();
         Sim.NoErrands = true; Sim.Errands.Clear();
         Hud.Refresh();
+        await Frames(2);
+        Check("after a night held the dawn's card offers gifts to choose from, and goes with them",
+            dawnCard && giftsShown >= 3 && !Hud.DawnShown, $"the card {dawnCard} with {giftsShown} gifts, after {Hud.DawnShown}");
         Check("in a siege of one's own the errands stand first on the panel, the main one first, and at dusk a card says what comes tonight",
             errandLines >= 2 && mainFirst && duskCard && !Hud.DuskShown, $"{errandLines} errand lines, main first {mainFirst}; the card at dusk {duskCard}, after {Hud.DuskShown}");
 
@@ -1500,6 +1511,7 @@ public partial class Main : Node3D
         if (_pose == "blood") { Bloodshed(); return; }
         if (_pose == "works") { Works(); return; }
         if (_pose == "dusk") { Dusk(); return; }
+        if (_pose == "dawn") { DawnPose(); return; }
         if (_pose == "troops") { Troops(); return; }
         if (_pose == "faith") { Faith(); return; }
         if (_pose == "captives") { Captives(); return; }
@@ -3190,6 +3202,30 @@ public partial class Main : Node3D
             float over = (World.WY(World.SurfAt((int)cx, (int)cz) + 8) - 4) / MathF.Tan(pitch);
             Rig.Set(World.WX(cx) - sin * over, World.WZ(cz) - cos * over, yaw, pitch, 3.4f, snap: true);
         }
+        Hud.Refresh();
+    }
+
+    /// <summary>
+    /// The dawn after a first night as a player of one's own sees it (--pose=dawn): a band of three with its leader
+    /// cut down by the archer and the swordsman, nobody of ours lost, and the gifts to choose from.
+    /// </summary>
+    void DawnPose()
+    {
+        Sim.BeginErrands();
+        Sim.Waves.Number = 1;
+        Sim.NightBegins(1);
+        var archer = Sim.Units.Find(u => u.T == Kinds.Archer);
+        var sword = Sim.Units.Find(u => u.T == Kinds.Swordsman);
+        var (gx, _, gz) = Sim.Nav.Feet(Sim.Gate);
+        Sim.Waves.Active = true;
+        for (int i = 0; i < 3; i++)
+        {
+            var g = Sim.Spawn(Kinds.Goblin, Sim.NearestStand((int)gx - 60, (int)gz + i * 6, 2));
+            if (i == 0) g.Leader = true;
+            Sim.Hurt(g, i == 1 ? sword : archer, 1000, null);
+        }
+        Sim.Waves.Active = false;
+        Sim.Dawn(1);
         Hud.Refresh();
     }
 

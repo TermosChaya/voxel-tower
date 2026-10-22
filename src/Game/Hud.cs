@@ -70,6 +70,7 @@ public partial class Hud : CanvasLayer
     GameMenu _menu;
     EnvoyCard _envoy;
     DuskCard _dusk;
+    DawnCard _dawn;
     ColonistBar _colonists;
     BottomConsole _console;
     MapRing _ring;
@@ -272,6 +273,9 @@ public partial class Hud : CanvasLayer
         _dusk = new DuskCard();
         root.AddChild(_dusk);
         _dusk.Init(m);
+        _dawn = new DawnCard();
+        root.AddChild(_dawn);
+        _dawn.Init(m);
         // the menu over everything
         _menu = new GameMenu();
         root.AddChild(_menu);
@@ -315,6 +319,7 @@ public partial class Hud : CanvasLayer
         _inspector.Refresh();
         _envoy.Refresh();
         _dusk.Refresh();
+        _dawn.Refresh();
     }
 
     /// <summary>In first person: the frame of the game is put away; the chronicle's toasts, the floats and the menu stay.</summary>
@@ -323,7 +328,7 @@ public partial class Hud : CanvasLayer
     public void FirstPerson(bool on)
     {
         InFirstPerson = on;
-        foreach (CanvasItem c in new CanvasItem[] { _overlay, _console, _drop, _beam, _help, _menuButton, _tag, _envoy, _dusk }) c.Visible = !on;
+        foreach (CanvasItem c in new CanvasItem[] { _overlay, _console, _drop, _beam, _help, _menuButton, _tag, _envoy, _dusk, _dawn }) c.Visible = !on;
         _clockPanel.Visible = !on && !_hidden.Contains(Part.Clock);
         _colonists.Visible = !on && !_hidden.Contains(Part.Faces);
         if (on) _drop.Close();
@@ -441,7 +446,9 @@ public partial class Hud : CanvasLayer
         _help.Position = new Vector2(vp.X - 50, 1);
         _menuButton.Position = new Vector2(vp.X - 92, 1);
         _envoy.Position = new Vector2(vp.X - EnvoyCard.W - 14, WaveClock.H + 10);
-        _dusk.Position = new Vector2(MathF.Round((vp.X - DuskCard.W) / 2), TopBand + 10);
+        // the dawn's gifts under the beam in the middle, and the dusk's card under them if the gifts still wait
+        _dawn.Position = new Vector2(MathF.Round((vp.X - DawnCard.W) / 2), TopBand + 10);
+        _dusk.Position = new Vector2(MathF.Round((vp.X - DuskCard.W) / 2), TopBand + 10 + (_dawn.Visible ? _dawn.Size.Y + 8 : 0));
         Squeeze(_clockPanel.Position.X);
         float tabsEnd = _tabs.Position.X + _tabs.Size.X;
         // on a narrow screen (or a large interface) the stores close up rather than go under the clock
@@ -540,6 +547,7 @@ public partial class Hud : CanvasLayer
     /// <summary>The errands' lines shown now, and whether the card of what comes tonight hangs (the self-test asks).</summary>
     public int ErrandsShown { get { int n = 0; foreach (var l in _errandLines) if (l.Visible) n++; return n; } }
     public bool DuskShown => _dusk.Visible;
+    public bool DawnShown => _dawn.Visible;
     VBoxContainer _errands;
     Label _errandsHead, _goalsHead;
 

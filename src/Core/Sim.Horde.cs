@@ -533,6 +533,7 @@ public sealed class Waves
             s.Bands.RemoveAll(b => b.State != BandState.Coming);
             s.Say($"Волна {Number} отбита. Светает: до следующей десять минут.", 1);
             s.Reward(Number);
+            s.Dawn(Number);
             s.StandDown(beaten: true);
             if (Number >= Total) { s.Won = true; s.Over = true; s.Say("Осада снята: долина устояла.", 1); }
             else s.PlanWave(Number + 1);
@@ -578,6 +579,7 @@ public sealed class Waves
             total += b.Size; back += b.Veterans.Count;
         }
         s.Escaped.Clear();
+        s.NightBegins(bands.Count);
         // timber for ladders and bridges, earth for fills, brought along
         s.HordeStock[Stockpile.Wood] += (2.4 + 1 * n) * VoxelWorld.PerM3;
         s.HordeStock[Stockpile.Earth] += (3.2 + 2 * n) * VoxelWorld.PerM3;

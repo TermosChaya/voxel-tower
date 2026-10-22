@@ -5430,6 +5430,51 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--errands")
     Check("the hardness and the errands are kept in a save",
         simE2.Hardness == Hardness.Cruel && !simE2.NoErrands && simE2.Errands.Count == simE.Errands.Count && simE2.Errands.ConvertAll(e => e.Key).SequenceEqual(simE.Errands.ConvertAll(e => e.Key)) && simE2.ErrandsDone == simE.ErrandsDone,
         $"hardness {simE2.Hardness}, errands {string.Join(", ", simE2.Errands.ConvertAll(e => e.Key))} (were {string.Join(", ", simE.Errands.ConvertAll(e => e.Key))}), {simE2.ErrandsDone} done");
+
+    // a night held: its report and stars, and the dawn's gifts — a leader killed leaves a trophy; one taken, the rest go;
+    // what is not taken is gone at the next horn
+    simE.SetHardness(Hardness.Normal);
+    simE.Waves.StartNow(simE);
+    simE.Waves._queue.Clear();
+    var leaderE = simE.Spawn(Kinds.Goblin, simE.NearestStand(fx0 - 60, fz0 + 30, 2));
+    leaderE.Leader = true;
+    simE.Hurt(leaderE, bowE, 1000, "test");
+    for (int t = 0; t < 20 && simE.Waves.Active; t++) RunE(.5);
+    var nightE = simE.LastNight;
+    int giftsE = simE.Gifts.Count;
+    bool trophyE = simE.Gifts.Exists(g => g.Kind == GiftKind.Trophy);
+    int caravanE = simE.Gifts.FindIndex(g => g.Kind == GiftKind.Caravan);
+    double stoneE = simE.Stock[Stockpile.Stone], woodE = simE.Stock[Stockpile.Wood], earthE = simE.Stock[Stockpile.Earth], goldE = simE.Stock.Gold;
+    bool tookE = caravanE >= 0 && simE.TakeGift(caravanE);
+    bool paidE = simE.Stock[Stockpile.Stone] > stoneE || simE.Stock[Stockpile.Wood] > woodE || simE.Stock[Stockpile.Earth] > earthE || simE.Stock.Gold > goldE;
+    Check("a night held has its report and stars, and the dawn offers gifts — a leader killed leaves a trophy; one taken, the rest go",
+        nightE != null && nightE.LeadersKilled >= 1 && nightE.Killed >= 1 && giftsE >= 3 && trophyE && tookE && paidE && simE.Gifts.Count == 0,
+        $"night {nightE?.Number}: {nightE?.Killed} felled, {nightE?.LeadersKilled} of {nightE?.Leaders} leaders, {nightE?.Stars} stars; {giftsE} gifts, a trophy {trophyE}; taken {tookE}, paid {paidE}, {simE.Gifts.Count} left");
+    // the next dawn's gifts left untaken are gone at the horn
+    simE.Waves.StartNow(simE);
+    simE.Waves._queue.Clear();
+    for (int t = 0; t < 20 && simE.Waves.Active; t++) RunE(.5);
+    int waitingE = simE.Gifts.Count;
+    // kept in a save: the gifts waiting, and the night's report
+    var msD = new System.IO.MemoryStream();
+    simE.Save(msD, mpE.Seed, "test", "");
+    msD.Position = 0;
+    var wD = new VoxelWorld(mpE.SizeX, mpE.SizeY, mpE.SizeZ);
+    Sim simD;
+    using (var reader = new SaveReader(msD))
+    {
+        var siteD = MapGen.Generate(wD, new MapParams { Seed = reader.Seed });
+        wD.Compact();
+        reader.Valley(wD, siteD);
+        simD = new Sim(wD, siteD);
+        simD.Load(reader);
+    }
+    Check("the dawn's gifts and the night's report are kept in a save",
+        simD.Gifts.Count == waitingE && simD.Gifts.ConvertAll(g => g.Key).SequenceEqual(simE.Gifts.ConvertAll(g => g.Key)) && simD.LastNight?.Number == simE.LastNight?.Number && simD.LastNight?.Stars == simE.LastNight?.Stars,
+        $"{simD.Gifts.Count} gifts of {waitingE}, night {simD.LastNight?.Number} with {simD.LastNight?.Stars} stars");
+    simE.Waves.StartNow(simE);
+    Check("gifts not taken by the next horn are gone", waitingE >= 3 && simE.Gifts.Count == 0, $"{waitingE} waiting at dawn, {simE.Gifts.Count} after the horn");
+    simE.Waves.CallOff(simE);
 }
 
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--labour")
