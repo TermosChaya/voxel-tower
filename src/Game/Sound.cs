@@ -70,7 +70,10 @@ public partial class Sound : Node
     /// <summary>Every button of the frame ticks when pressed, the ones made later too.</summary>
     void Hook(Node n)
     {
-        if (n is BaseButton b) b.Pressed += () => Ui("tick");
+        // a button taken off and put back (a panel let down again) is hooked once
+        if (n is not BaseButton b || b.HasMeta("tick_hooked")) return;
+        b.SetMeta("tick_hooked", true);
+        b.Pressed += () => Ui("tick");
     }
 
     public void Init(Main m)

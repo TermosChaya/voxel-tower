@@ -76,13 +76,19 @@ public static class Prof
     public static bool On;
     static readonly System.Collections.Generic.Dictionary<string, long> _ticks = new();
 
+    /// <summary>A part of the frame timed, and named to the watchdog while it runs (Diag.Section).</summary>
     public readonly struct Scope : IDisposable
     {
-        readonly string _name;
+        readonly string _name, _outer;
         readonly long _t0;
-        public Scope(string name) { _name = name; _t0 = On ? System.Diagnostics.Stopwatch.GetTimestamp() : 0; }
+        public Scope(string name)
+        {
+            _name = name; _outer = Diag.Section; Diag.Section = name;
+            _t0 = On ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+        }
         public void Dispose()
         {
+            Diag.Section = _outer;
             if (!On || _t0 == 0) return;
             long d = System.Diagnostics.Stopwatch.GetTimestamp() - _t0;
             _ticks[_name] = _ticks.GetValueOrDefault(_name) + d;

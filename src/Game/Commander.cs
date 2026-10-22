@@ -419,6 +419,7 @@ public partial class Commander : Node
         if (!Raycast.Cast(w, (o.X - w.OriginX) / VoxelWorld.Vox, o.Y / VoxelWorld.Vox, (o.Z - w.OriginZ) / VoxelWorld.Vox, d.X, d.Y, d.Z, out var hit, skipVeg: true)) return;
         var g = hit.Ground(w);
         bool ok = _m.Sim.Summon(g.x, g.z, heavy) != null;
+        Diag.Note($"песочница: {(heavy ? "тяжёлая ватага" : "ватага")} у {g.x},{g.z}{(ok ? "" : " — некуда встать")}");
         _m.Hud.Float(!ok ? "здесь некуда встать" : heavy ? "тяжёлая ватага" : "ватага", ok ? Ornament.EmberGlow : Ornament.Blood);
     }
 

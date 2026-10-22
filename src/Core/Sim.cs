@@ -163,42 +163,48 @@ public sealed partial class Sim
         finally { Orders.Writing = hand; }
     }
 
+    /// <summary>The stage of the step at work, and the unit in hand, for the game's watchdog to tell where a hang is.</summary>
+    public static volatile string Stage = "";
+    public static volatile int StageUnit;
+
     void StepWorld(float dt)
     {
         if (Over) return;
         Time += dt;
         if (Sandbox) Fill();
-        TickWater(dt);
-        TickFire(dt);
-        TickCharges(dt);
-        TickLight();
-        TickSpells();
-        TickCurses();
-        TickCollapse(dt);
-        TickStrays(dt);
-        TickFlight(dt);
-        TickGates(dt);
-        TickDrawbridges(dt);
-        TickDecor();
-        TickMines(dt);
-        TickErrands();
-        if (Nav.PendingEdits > 0) Nav.Flush();
-        UpdateFields();
-        Waves.Tick(this, dt);
-        TickBands();
-        TickTrails();
-        TendWildlife();
-        TendTurf();
-        TickShelter();
-        TickMuster(dt);
-        TickDwellings();
-        TickTraps();
-        TickEventsHalf(Time);
-        CountBodies();
+        Stage = "TickWater"; TickWater(dt);
+        Stage = "TickFire"; TickFire(dt);
+        Stage = "TickCharges"; TickCharges(dt);
+        Stage = "TickLight"; TickLight();
+        Stage = "TickSpells"; TickSpells();
+        Stage = "TickCurses"; TickCurses();
+        Stage = "TickCollapse"; TickCollapse(dt);
+        Stage = "TickStrays"; TickStrays(dt);
+        Stage = "TickFlight"; TickFlight(dt);
+        Stage = "TickGates"; TickGates(dt);
+        Stage = "TickDrawbridges"; TickDrawbridges(dt);
+        Stage = "TickDecor"; TickDecor();
+        Stage = "TickMines"; TickMines(dt);
+        Stage = "TickErrands"; TickErrands();
+        Stage = "NavFlush"; if (Nav.PendingEdits > 0) Nav.Flush();
+        Stage = "UpdateFields"; UpdateFields();
+        Stage = "Waves"; Waves.Tick(this, dt);
+        Stage = "TickBands"; TickBands();
+        Stage = "TickTrails"; TickTrails();
+        Stage = "TendWildlife"; TendWildlife();
+        Stage = "TendTurf"; TendTurf();
+        Stage = "TickShelter"; TickShelter();
+        Stage = "TickMuster"; TickMuster(dt);
+        Stage = "TickDwellings"; TickDwellings();
+        Stage = "TickTraps"; TickTraps();
+        Stage = "TickEventsHalf"; TickEventsHalf(Time);
+        Stage = "CountBodies"; CountBodies();
+        Stage = "Units";
         for (int n = 0; n < Units.Count; n++)
         {
             var u = Units[n];
             if (u.Dead) continue;
+            StageUnit = u.Id;
             // in the citadel: out of the world till it comes out
             if (u.Inside) { if (u.Team == Team.Horde) Imprisoned(u, dt); else Indoors(u, dt); continue; }
             u.Swing = Math.Max(0, u.Swing - dt * 3);
@@ -214,12 +220,14 @@ public sealed partial class Sim
             else if (u.Team == Team.Horde) RaiderTick(u, dt);
             else WildTick(u, dt);
         }
-        Separate();
-        Unstack();
-        TickArrows(dt);
-        KeepPossession();
-        TickBleeding(dt);
+        StageUnit = 0;
+        Stage = "Separate"; Separate();
+        Stage = "Unstack"; Unstack();
+        Stage = "TickArrows"; TickArrows(dt);
+        Stage = "KeepPossession"; KeepPossession();
+        Stage = "TickBleeding"; TickBleeding(dt);
         Units.RemoveAll(u => u.Dead && Time - u.DiedAt > 30);
+        Stage = "";
         if (KeepHp <= 0 && !Over) { Over = true; Say("Цитадель пала.", 3); }
     }
 

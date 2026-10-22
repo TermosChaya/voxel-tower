@@ -740,6 +740,7 @@ public partial class Hud : CanvasLayer
     {
         if (_toasts == null) return;
         text = Bindings.Fill(text);
+        Diag.Note(text);
         var color = kind switch { Kind.Ok => Ornament.Moss, Kind.Warn => Ornament.BronzeLight, Kind.Bad => Ornament.Blood, _ => Ornament.Parchment };
         if (toast) _toasts.Push(text, color);
         Lines.Add((text, kind, x, z));
@@ -765,7 +766,14 @@ public partial class Hud : CanvasLayer
         }
         _history.AddChild(l);
         _history.MoveChild(l, 0);
-        while (_history.GetChildCount() > 80) _history.GetChild(_history.GetChildCount() - 1).QueueFree();
+        // the oldest lines go at once: one only queued for freeing still counts among the children till the frame's
+        // end, and a loop waiting for the count to drop waited for ever (the game hung at the 81st line)
+        while (_history.GetChildCount() > 80)
+        {
+            var old = _history.GetChild(_history.GetChildCount() - 1);
+            _history.RemoveChild(old);
+            old.QueueFree();
+        }
     }
 
     /// <summary>A short message that rises from the cursor and fades.</summary>
@@ -856,6 +864,8 @@ public partial class Hud : CanvasLayer
     /// <summary>Esc with the menu open: back a page, or out of it.</summary>
     public void MenuBack() => _menu?.Back();
     public ColonistBar Colonists => _colonists;
+    /// <summary>How many lines the chronicle's tab holds.</summary>
+    public int HistoryCount => _history.GetChildCount();
     public WorkTable Works => _works;
 }
 

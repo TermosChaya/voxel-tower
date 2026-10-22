@@ -16,7 +16,7 @@ public partial class GameMenu : Control
     VBoxContainer _page;
     Control _panel, _dim;
     bool _wasPaused;
-    const float W = 600, H = 560;
+    const float W = 600, H = 610;
 
     public void Init(Main m)
     {
@@ -64,14 +64,20 @@ public partial class GameMenu : Control
 
     public void Open(string page = null)
     {
-        if (Visible) return;
+        if (Visible) { if (page != null) Go(page); return; }
         _wasPaused = _m.Paused;
         _m.Paused = true;
         Visible = true;
         Juice.FadeIn(_dim, .2);
         Juice.Appear(_panel, .95f, .22);
+        Go(page);
+    }
+
+    void Go(string page)
+    {
         switch (page)
         {
+            case "report": Report_(); break;
             case "save": Saving(); break;
             case "load": Loading(); break;
             case "settings": Settings_(); break;
@@ -178,7 +184,7 @@ public partial class GameMenu : Control
         PageName = "main";
         if (_title)
         {
-            Fit(W, 452);
+            Fit(W, 498);
             var sub = Hud.Text("Оборона крепости в долине из вокселей", Ornament.SerifItalic, 15, Ornament.Aged);
             sub.HorizontalAlignment = HorizontalAlignment.Center;
             _page.AddChild(sub);
@@ -187,6 +193,7 @@ public partial class GameMenu : Control
             _page.AddChild(Big("Загрузить игру", "Ячейки, быстрое сохранение и автосохранение после каждой волны.", Loading));
             _page.AddChild(Big("Управление", "Все клавиши. Любую можно переназначить.", Controls_));
             _page.AddChild(Big("Настройки", "Интерфейс, звук, графика.", Settings_));
+            _page.AddChild(Big("Отчёт об ошибке", "Собрать логи игры в файл, чтобы прислать автору.", Report_));
             _page.AddChild(Big("Выйти из игры", "", () => _m.GetTree().Quit()));
             var credits = Hud.Text("Значки: game-icons.net, CC BY 3.0 · шрифты PT Serif и Cormorant Garamond, OFL", Ornament.Serif, 11, Ornament.Fade(Ornament.Aged, .8f));
             credits.HorizontalAlignment = HorizontalAlignment.Center;
@@ -200,7 +207,42 @@ public partial class GameMenu : Control
         _page.AddChild(Big("Настройки", "Интерфейс, звук, графика.", Settings_));
         _page.AddChild(Big("Новая игра", "Несохранённый прогресс пропадёт.", Hardness_));
         _page.AddChild(Big(_m.Tutor is { Over: false } ? "Обучение сначала" : "Обучение", "Пошаговое знакомство с игрой. Несохранённый прогресс пропадёт.", () => _m.NewGame(tutorial: true)));
+        _page.AddChild(Big("Отчёт об ошибке", "Собрать логи игры в файл, чтобы прислать автору.", Report_));
         _page.AddChild(Big("Выйти из игры", "Несохранённый прогресс пропадёт. Автосохранение делается после каждой волны.", () => _m.GetTree().Quit()));
+    }
+
+    /// <summary>The report of what went wrong: one text file on the desktop, with the logs, for the author.</summary>
+    void Report_()
+    {
+        _onMain = false;
+        Clear();
+        PageName = "report";
+        _page.AddChild(Hud.CapsLabel("Отчёт об ошибке", 10));
+        if (Diag.LastEndedBadly) _page.AddChild(Para("Прошлый раз игра закрылась аварийно: зависла или упала. Отчёт поможет найти причину.", Ornament.EmberGlow));
+        _page.AddChild(Para("В файл попадут логи игры, записи о зависаниях и сведения о компьютере и видеокарте. " +
+            "Он сохранится на рабочий стол. Пришлите его автору.", Ornament.Parchment));
+        var done = Para("", Ornament.Moss);
+        _page.AddChild(Big("Создать отчёт", "", () =>
+        {
+            try
+            {
+                string path = Diag.Report(_m);
+                done.Text = $"Готово: {path}";
+                OS.ShellShowInFileManager(path);
+            }
+            catch (Exception e) { done.Text = $"Не получилось: {e.Message}"; done.AddThemeColorOverride("font_color", Ornament.Blood); }
+        }));
+        _page.AddChild(done);
+        _page.AddChild(new Rule(false));
+        _page.AddChild(Big("Назад", "", Main_));
+    }
+
+    static Label Para(string text, Color color)
+    {
+        var l = Hud.Text(text, Ornament.Serif, 14, color, wrap: true);
+        l.CustomMinimumSize = new Vector2(W - 90, 0);
+        l.HorizontalAlignment = HorizontalAlignment.Center;
+        return l;
     }
 
     /// <summary>"Перед волной 3 · 22:40 игры · 18.10, 14:32", or "пусто".</summary>

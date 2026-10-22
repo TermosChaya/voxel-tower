@@ -428,6 +428,16 @@ public partial class Main : Node3D
         if (_perf > 0) Perf(_perf);
         // a hidden or minimised window never draws a frame: don't let scripted runs hang
         if (_shot != null || _selfTest) GetTree().CreateTimer(120).Timeout += () => { GD.PrintErr("[voxel-tower] gave up waiting for a frame"); GetTree().Quit(2); };
+        // from here on a frame that does not come is a hang, and is written down
+        Diag.Start(Sim, Scripted || _trailer >= 0);
+        if (_startTitle && Diag.LastEndedBadly) Hud.OpenMenu("report");
+    }
+
+    public override void _ExitTree() => Diag.Stop();
+
+    public override void _Notification(int what)
+    {
+        if (what == NotificationWMCloseRequest) Diag.Stop();
     }
 
     bool _startTutorial, _startTitle;
@@ -536,6 +546,7 @@ public partial class Main : Node3D
 
     public override void _Process(double delta)
     {
+        Diag.Beat(GetWindow().HasFocus());
         if (_frames > 5) _slowest = Math.Max(_slowest, delta);
         if (_trailer >= 0) Roll();
         // under the title the valley turns slowly round the citadel
@@ -544,12 +555,13 @@ public partial class Main : Node3D
         {
             double dt = Math.Min(delta, .1) * Speed * Slow * Pace;
             long t0 = Stopwatch.GetTimestamp();
-            while (dt > 1e-6)
-            {
-                float step = (float)Math.Min(dt, .05);
-                Sim.Step(step);
-                dt -= step;
-            }
+            using (Prof.Time("Sim"))
+                while (dt > 1e-6)
+                {
+                    float step = (float)Math.Min(dt, .05);
+                    Sim.Step(step);
+                    dt -= step;
+                }
             _simTicks += Stopwatch.GetTimestamp() - t0;
         }
         // a wave beaten back is written down by itself
@@ -1482,6 +1494,18 @@ public partial class Main : Node3D
         Check("a wave beaten back: the night stays night, the sun under the horizon, the morning taken up at once; lightning dies away while the game is stopped",
             highest < -5 && shownDay < .01f && struck > .05f && struckAfter < .01f,
             $"the sky's sun at most {highest:0.0}° over two seconds, the day shown {shownDay:0.00}; lightning {struck:0.00} → {struckAfter:0.00}");
+        // a long game's chronicle: past its 80 lines the oldest go, and the game goes on (it used to hang right there)
+        for (int i = 0; i < 120; i++) Hud.Log($"проверка летописи {i}", toast: false);
+        await Frames(2);
+        Check("the chronicle keeps its last 80 lines and the game goes on past them", Hud.HistoryCount == 80 && Hud.Lines.Count == 80,
+            $"{Hud.HistoryCount} in the tab, {Hud.Lines.Count} kept");
+        // the report for the author: one file with the system, the hangs, the last events and the logs
+        string report = Diag.Report(this, ProjectSettings.GlobalizePath("user://logs"));
+        string body = System.IO.File.Exists(report) ? System.IO.File.ReadAllText(report) : "";
+        System.IO.File.Delete(report);
+        Check("«Отчёт об ошибке» writes one file with the system, the video card, the hangs, the last events and the logs",
+            body.Contains("Видеокарта:") && body.Contains("===== Зависания") && body.Contains("===== Последние события") && body.Contains("===== Лог "),
+            $"{body.Length} characters in {System.IO.Path.GetFileName(report)}");
         GD.Print($"[selftest] {(fails == 0 ? "all passed" : fails + " failed")}");
         if (_shot == null) GetTree().Quit(fails == 0 ? 0 : 1);
     }

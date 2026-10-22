@@ -5806,5 +5806,83 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--sandbox")
         $"band {called?.Name} of {called?.Members.Count}, state {called?.State}; citadel {keep0:0} → {simS.KeepHp:0}");
 }
 
+if (args.Length > 0 && args[0] == "--stress")
+{
+    // not in the usual run: a long sandbox under fire, to find a step that takes too long or never ends. Every second
+    // and a half a spell at a random spot near the citadel, every twenty seconds a band called up, telekinesis thrown;
+    // each step timed, and one that has not ended in twenty seconds told with the stage and the unit it is stuck in
+    Console.WriteLine();
+    int seed = args.Length > 1 && int.TryParse(args[1], out int sd) ? sd : 7;
+    double minutes = args.Length > 2 && double.TryParse(args[2], out double mn) ? mn : 15;
+    var mpX = new MapParams();
+    var wX = new VoxelWorld(mpX.SizeX, mpX.SizeY, mpX.SizeZ);
+    var siteX = MapGen.Generate(wX, mpX);
+    wX.Compact();
+    var simX = new Sim(wX, siteX);
+    StartingFort.Raise(simX);
+    simX.BeginSandbox();
+    foreach (var t in new[] { Kinds.Worker, Kinds.Worker, Kinds.Archer, Kinds.Archer, Kinds.Swordsman, Kinds.Swordsman }) simX.Spawn(t, simX.Gate);
+    var rnd = new Random(seed);
+    var kinds = new[] { SpellKind.Explosion, SpellKind.Meteor, SpellKind.Quake, SpellKind.Fall, SpellKind.Rift, SpellKind.FireRain, SpellKind.Thunder,
+        SpellKind.BlackWind, SpellKind.Whirlwind, SpellKind.Hand, SpellKind.Mire, SpellKind.Plague, SpellKind.Chains, SpellKind.Raise, SpellKind.DeadFog,
+        SpellKind.Dread, SpellKind.Telekinesis };
+    string doing = "";
+    long stepStart = 0;
+    var stepping = new System.Threading.ManualResetEventSlim(false);
+    var dog = new System.Threading.Thread(() =>
+    {
+        while (true)
+        {
+            System.Threading.Thread.Sleep(1000);
+            if (!stepping.IsSet) continue;
+            double took = (System.Diagnostics.Stopwatch.GetTimestamp() - System.Threading.Interlocked.Read(ref stepStart)) / (double)System.Diagnostics.Stopwatch.Frequency;
+            if (took < 20) continue;
+            Console.WriteLine($"FAIL a step has not ended in {took:0} s: stage {Sim.Stage}, unit {Sim.StageUnit}; at {simX.Time:0.0} s after «{doing}»");
+            Environment.Exit(3);
+        }
+    }) { IsBackground = true };
+    dog.Start();
+    var slow = new List<(double ms, double at, string after, string stage)>();
+    double nextSpell = 1, nextBand = 2, holdUntil = -1, total = 0, worst = 0;
+    var clock = System.Diagnostics.Stopwatch.StartNew();
+    while (simX.Time < minutes * 60)
+    {
+        if (simX.Time >= nextSpell)
+        {
+            nextSpell = simX.Time + 1.5;
+            var k = kinds[rnd.Next(kinds.Length)];
+            double ang = rnd.NextDouble() * Math.Tau, r = 60 + rnd.NextDouble() * 160;
+            int x = Math.Clamp(siteX.KeepX + (int)(Math.Cos(ang) * r), 4, wX.SX - 5), z = Math.Clamp(siteX.KeepZ + (int)(Math.Sin(ang) * r), 4, wX.SZ - 5);
+            int y = wX.SurfAt(x, z) + 1;
+            string why = simX.Cast(k, x, y, z, x + 40, z + 10);
+            doing = $"{k} at {x},{y},{z}" + (why != null ? $" (refused: {why})" : "");
+            if (k == SpellKind.Telekinesis && why == null) { holdUntil = simX.Time + 2; simX.HoldAt(x, y + 60, z); }
+        }
+        if (holdUntil > 0 && simX.Time >= holdUntil) { simX.LetGo(); holdUntil = -1; doing = "telekinesis let go"; }
+        if (simX.Time >= nextBand)
+        {
+            nextBand = simX.Time + 20;
+            double ang = rnd.NextDouble() * Math.Tau;
+            int x = Math.Clamp(siteX.KeepX + (int)(Math.Cos(ang) * 150), 4, wX.SX - 5), z = Math.Clamp(siteX.KeepZ + (int)(Math.Sin(ang) * 150), 4, wX.SZ - 5);
+            bool heavy = rnd.Next(3) == 0;
+            simX.Summon(x, z, heavy);
+            doing = $"{(heavy ? "heavy band" : "band")} at {x},{z}";
+        }
+        System.Threading.Interlocked.Exchange(ref stepStart, System.Diagnostics.Stopwatch.GetTimestamp());
+        stepping.Set();
+        long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+        simX.Step(.05f);
+        double ms = (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        stepping.Reset();
+        total += ms; worst = Math.Max(worst, ms);
+        if (ms > 150) slow.Add((ms, simX.Time, doing, Sim.Stage));
+    }
+    slow.Sort((p1, p2) => p2.ms.CompareTo(p1.ms));
+    Console.WriteLine($"stress: {minutes} min of the sandbox in {clock.Elapsed.TotalSeconds:0} s, a step {total / (minutes * 1200):0.0} ms on average, the worst {worst:0} ms; " +
+        $"{simX.Units.Count} bodies, {simX.Bands.Count} bands at the end");
+    foreach (var (ms, at, after, stage) in slow.GetRange(0, Math.Min(12, slow.Count))) Console.WriteLine($"  {ms,7:0} ms at {at,6:0.0} s after {after}");
+    Check("the sandbox under fire: no step takes as long as a second", worst < 1000, $"worst {worst:0} ms");
+}
+
 Console.WriteLine(failures == 0 ? "\nall checks passed" : $"\n{failures} check(s) failed");
 return failures == 0 ? 0 : 1;
