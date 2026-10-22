@@ -16,7 +16,7 @@ namespace VoxelTower.Core;
 public sealed partial class Sim
 {
     /// <summary>20: the bodies sculpted finer, their half-voxels (and so a wounded body's) not what they were.</summary>
-    public const int SaveVersion = 20;
+    public const int SaveVersion = 21;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -147,6 +147,7 @@ public sealed partial class Sim
         foreach (var wh in Whirls) { w.Write(wh.X); w.Write(wh.Z); w.Write(wh.VX); w.Write(wh.VZ); w.Write(wh.R); w.Write(wh.Until); w.Write(wh.Next); }
         w.Write(Recruits.Count);
         foreach (var m in Recruits) { w.Write(m.Kind.Key); w.Write(m.Done); w.Write(m.Paid); }
+        WriteProgress(w);
         w.Write(extra ?? "");
     }
 
@@ -418,6 +419,7 @@ public sealed partial class Sim
             var kind = KindOf(r.ReadString()); float done = r.ReadSingle(); int paid = r.ReadInt32();
             if (kind != null) Recruits.Add(new Recruit { Kind = kind, Done = done, Paid = paid });
         }
+        ReadProgress(r);
         string extra = r.ReadString();
         // the ways of the horde are worked out again for the valley as it now is, and the stones to throw down found again
         _fieldVersion = -1;

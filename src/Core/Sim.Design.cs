@@ -158,6 +158,7 @@ public sealed partial class Sim
     /// <summary>Marks a mending for the workers; returns the voxels marked.</summary>
     public int Mend(VoxelList lay, VoxelList clear)
     {
+        Mended++;
         for (int i = 0; i < clear.Count; i++)
         {
             int p = WaterPlanner.Pack(clear.X(i), clear.Y(i), clear.Z(i));

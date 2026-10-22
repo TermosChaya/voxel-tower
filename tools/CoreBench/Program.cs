@@ -5344,6 +5344,94 @@ static int OverLand(VoxelWorld w, Site site)
 }
 
 // ---- felling: trees round the fort felled by the household of a new game, crowns and all, nothing left up in the air
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--errands")
+{
+    // the siege as hard as chosen: fewer and softer raiders, or more and harder ones; and the errands of the first day,
+    // one after another, each paid when it is done, kept in a save
+    Console.WriteLine();
+    int Peace(int n) => Sim.Roster(n, .6f).Count; int Usual(int n) => Sim.Roster(n, 1).Count; int Cruel(int n) => Sim.Roster(n, 1.35f).Count;
+    var mpE = new MapParams();
+    var wE = new VoxelWorld(mpE.SizeX, mpE.SizeY, mpE.SizeZ);
+    var siteE = MapGen.Generate(wE, mpE);
+    wE.Compact();
+    var simE = new Sim(wE, siteE);
+    simE.WildTarget = 0;
+    var gateE = StartingFort.Raise(simE);
+    simE.SeedMines();
+    void RunE(double seconds) { for (double t = 0; t < seconds; t += .05) simE.Step(.05f); }
+    simE.SetHardness(Hardness.Cruel);
+    var hardGob = simE.Spawn(Kinds.Goblin, simE.Gate);
+    float cruelHp = hardGob.MaxHp;
+    hardGob.Dead = true; hardGob.DiedAt = -999;
+    simE.SetHardness(Hardness.Peaceful);
+    int planned = 0; foreach (var b in simE.Bands) if (b.State == BandState.Coming) planned += b.Roster.Count;
+    Check("a peaceful siege brings fewer raiders, a cruel one more and hardier, and the first night's bands are planned for it",
+        Peace(1) < Usual(1) && Usual(1) < Cruel(1) && Peace(6) < Usual(6) && Usual(6) < Cruel(6) && cruelHp > Kinds.Goblin.Hp * 1.1f && planned == Peace(1),
+        $"wave 1: {Peace(1)} / {Usual(1)} / {Cruel(1)}, wave 6: {Peace(6)} / {Usual(6)} / {Cruel(6)}; a cruel goblin {cruelHp:0} hp of {Kinds.Goblin.Hp}; {planned} planned for the first night");
+    simE.SetHardness(Hardness.Normal);
+
+    simE.BeginErrands();
+    var road = new List<string>();
+    string Main() => simE.Errands.Count > 0 && simE.Errands[0].Main ? simE.Errands[0].Key : "-";
+    road.Add(Main());
+    double gold0 = simE.Stock.Gold, know0 = simE.Knowledge;
+    int done0 = simE.ErrandsDone, smalls = simE.Errands.FindAll(e => !e.Main).Count;
+    // begin mending
+    var (fx0, fz0, fx1, fz1) = simE.FortArea;
+    simE.Mend(new VoxelList(), new VoxelList());
+    RunE(1.2); road.Add(Main());
+    // an archer on the wall: set him there
+    Unit bowE = null;
+    int topX = -1, topZ = -1, topY = 0;
+    for (int z = fz0; z <= fz1 && topX < 0; z += 2)
+        for (int x = fx0; x <= fx1 && topX < 0; x += 2)
+        {
+            int g = wE.SurfAt(x, z);
+            if (g - siteE.HTop[z * wE.SX + x] >= 20 && simE.Nav.Stand(x >> NavGrid.Shift, g >> NavGrid.Shift, z >> NavGrid.Shift, 2)) { topX = x; topZ = z; topY = g; }
+        }
+    if (topX >= 0)
+    {
+        int c = simE.Nav.CellOf(topX, topY, topZ);
+        bowE = simE.Spawn(Kinds.Archer, c);
+        simE.Command(new[] { bowE }, c);
+    }
+    RunE(1.2); road.Add(Main());
+    // a quarry set aside
+    simE.AddZone(fx0 - 120, fz0 - 40, fx0 - 80, fz0, Stockpile.Stone, 8);
+    RunE(1.2); road.Add(Main());
+    // the gate hung
+    if (simE.FortGate != null) { simE.InstantLabour = true; simE.MendGate(simE.FortGate); simE.InstantLabour = false; }
+    RunE(1.2); road.Add(Main());
+    // the first night lived through
+    simE.Waves.StartNow(simE);
+    RunE(1);
+    simE.Waves.CallOff(simE);
+    simE.Waves.Number = Math.Max(simE.Waves.Number, 1);
+    RunE(1.2); road.Add(Main());
+    Check("the first day's errands come one after another — mend, an archer on the wall, a quarry, the gate, the night — each paid when done, with two small ones beside",
+        string.Join(" ", road) == "mend post quarry gate night night" && simE.ErrandsDone - done0 >= 5 && simE.Stock.Gold > gold0 + 40 && simE.Knowledge >= know0 + 4 && smalls == 2,
+        $"{string.Join(" → ", road)}; {simE.ErrandsDone - done0} done, gold +{simE.Stock.Gold - gold0:0}, knowledge +{simE.Knowledge - know0:0}; {smalls} small beside the first");
+
+    // kept in a save
+    simE.SetHardness(Hardness.Cruel);
+    var msE = new System.IO.MemoryStream();
+    simE.Save(msE, mpE.Seed, "test", "");
+    msE.Position = 0;
+    var wE2 = new VoxelWorld(mpE.SizeX, mpE.SizeY, mpE.SizeZ);
+    Sim simE2;
+    using (var reader = new SaveReader(msE))
+    {
+        var siteE2 = MapGen.Generate(wE2, new MapParams { Seed = reader.Seed });
+        wE2.Compact();
+        reader.Valley(wE2, siteE2);
+        simE2 = new Sim(wE2, siteE2);
+        simE2.Load(reader);
+    }
+    Check("the hardness and the errands are kept in a save",
+        simE2.Hardness == Hardness.Cruel && !simE2.NoErrands && simE2.Errands.Count == simE.Errands.Count && simE2.Errands.ConvertAll(e => e.Key).SequenceEqual(simE.Errands.ConvertAll(e => e.Key)) && simE2.ErrandsDone == simE.ErrandsDone,
+        $"hardness {simE2.Hardness}, errands {string.Join(", ", simE2.Errands.ConvertAll(e => e.Key))} (were {string.Join(", ", simE.Errands.ConvertAll(e => e.Key))}), {simE2.ErrandsDone} done");
+}
+
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--labour")
 {
     // the pace of the work: a block of rock broken out by one worker, and a wall of stone laid by one, each in about the

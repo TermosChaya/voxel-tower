@@ -242,7 +242,7 @@ public partial class HordeInfo : VBoxContainer
         Refresh();
     }
 
-    static string Kinds(Warband b)
+    public static string Kinds(Warband b)
     {
         var counts = new Dictionary<string, int>();
         var list = b.State == BandState.Coming ? b.Roster : b.Members.FindAll(u => !u.Dead).ConvertAll(u => u.T);

@@ -69,6 +69,7 @@ public partial class Hud : CanvasLayer
     Medallion _help, _menuButton;
     GameMenu _menu;
     EnvoyCard _envoy;
+    DuskCard _dusk;
     ColonistBar _colonists;
     BottomConsole _console;
     MapRing _ring;
@@ -197,11 +198,19 @@ public partial class Hud : CanvasLayer
         }
         var goalsBox = new VBoxContainer();
         goalsBox.AddThemeConstantOverride("separation", 5);
-        goalsBox.AddChild(CapsLabel("Задачи"));
+        // what to do next, with its reward; under it what the whole siege asks
+        _errandsHead = CapsLabel("Поручения", 10, Ornament.EmberGlow);
+        goalsBox.AddChild(_errandsHead);
+        _errands = new VBoxContainer();
+        _errands.AddThemeConstantOverride("separation", 4);
+        goalsBox.AddChild(_errands);
+        _goalsHead = CapsLabel("Цели осады");
+        goalsBox.AddChild(_goalsHead);
         _goals = new VBoxContainer();
         _goals.AddThemeConstantOverride("separation", 3);
         goalsBox.AddChild(_goals);
-        _goalsTab = Tab("goals", Icons.Scroll, "Задачи", "Задачи\nЧем заняться: починить крепость, занять рудники и держать их — они платят золотом на наём — и выстоять все волны.", goalsBox, 380);
+        _goalsTab = Tab("goals", Icons.Scroll, "Задачи", "Задачи\nПоручения — что сделать дальше, за каждое награда: одно главное и два малых. Под ними цели всей осады: починить крепость, " +
+            "занять рудники и держать их — они платят золотом на наём — и выстоять все волны.", goalsBox, 400);
         var chronicle = new VBoxContainer();
         chronicle.AddThemeConstantOverride("separation", 4);
         chronicle.AddChild(CapsLabel("Летопись"));
@@ -260,6 +269,9 @@ public partial class Hud : CanvasLayer
         _envoy = new EnvoyCard();
         root.AddChild(_envoy);
         _envoy.Init(m);
+        _dusk = new DuskCard();
+        root.AddChild(_dusk);
+        _dusk.Init(m);
         // the menu over everything
         _menu = new GameMenu();
         root.AddChild(_menu);
@@ -302,6 +314,7 @@ public partial class Hud : CanvasLayer
         _clockPanel.Refresh();
         _inspector.Refresh();
         _envoy.Refresh();
+        _dusk.Refresh();
     }
 
     /// <summary>In first person: the frame of the game is put away; the chronicle's toasts, the floats and the menu stay.</summary>
@@ -310,7 +323,7 @@ public partial class Hud : CanvasLayer
     public void FirstPerson(bool on)
     {
         InFirstPerson = on;
-        foreach (CanvasItem c in new CanvasItem[] { _overlay, _console, _drop, _beam, _help, _menuButton, _tag, _envoy }) c.Visible = !on;
+        foreach (CanvasItem c in new CanvasItem[] { _overlay, _console, _drop, _beam, _help, _menuButton, _tag, _envoy, _dusk }) c.Visible = !on;
         _clockPanel.Visible = !on && !_hidden.Contains(Part.Clock);
         _colonists.Visible = !on && !_hidden.Contains(Part.Faces);
         if (on) _drop.Close();
@@ -428,6 +441,7 @@ public partial class Hud : CanvasLayer
         _help.Position = new Vector2(vp.X - 50, 1);
         _menuButton.Position = new Vector2(vp.X - 92, 1);
         _envoy.Position = new Vector2(vp.X - EnvoyCard.W - 14, WaveClock.H + 10);
+        _dusk.Position = new Vector2(MathF.Round((vp.X - DuskCard.W) / 2), TopBand + 10);
         Squeeze(_clockPanel.Position.X);
         float tabsEnd = _tabs.Position.X + _tabs.Size.X;
         // on a narrow screen (or a large interface) the stores close up rather than go under the clock
@@ -510,7 +524,8 @@ public partial class Hud : CanvasLayer
         if (sim.Waves.Number > 0 || sim.Zones.Exists(z => z.Kind == Zone.Sanctum))
             yield return heard ? ("Святилище на месте силы", true) : ("Святилище на месте силы ({ToolGather} → «святилище») и жрецы в нём", false);
         foreach (var m in sim.Mines)
-            if (!m.Power) yield return m.Holder switch
+            // (one an errand already asks for is not said twice)
+            if (!m.Power && !sim.Errands.Exists(e => e.Text.Contains(m.Name.ToLowerInvariant()))) yield return m.Holder switch
             {
                 Holder.Ours => ($"{m.Name} ваш: +{m.Income} зол./мин", true),
                 Holder.Horde => ($"Отбить у орды: {m.Name}, +{m.Income} зол./мин", false),
@@ -521,9 +536,43 @@ public partial class Hud : CanvasLayer
         yield return sim.Won ? ("Осада снята", true) : ($"Выстоять: отбито волн {held} из {Waves.Total}", false);
     }
 
+    readonly List<Label> _errandLines = new();
+    /// <summary>The errands' lines shown now, and whether the card of what comes tonight hangs (the self-test asks).</summary>
+    public int ErrandsShown { get { int n = 0; foreach (var l in _errandLines) if (l.Visible) n++; return n; } }
+    public bool DuskShown => _dusk.Visible;
+    VBoxContainer _errands;
+    Label _errandsHead, _goalsHead;
+
+    /// <summary>The errands: the main one large and bright, the small ones under it, each with its reward.</summary>
+    int RefreshErrands()
+    {
+        var list = _m.Sim.Errands;
+        _errandsHead.Visible = _errands.Visible = list.Count > 0;
+        _goalsHead.Visible = list.Count > 0;
+        int i = 0;
+        foreach (var e in list)
+        {
+            if (i >= _errandLines.Count)
+            {
+                var l = Text("", Ornament.Serif, 13, Ornament.Parchment, wrap: true);
+                _errands.AddChild(l);
+                _errandLines.Add(l);
+            }
+            var line = _errandLines[i++];
+            string pay = Sim.Pay(e);
+            line.Text = (e.Main ? "▶ " : "◇ ") + Bindings.Fill(e.Text) + (pay == "" ? "" : $" — {pay}");
+            line.AddThemeFontOverride("font", e.Main ? Ornament.SerifBold : Ornament.Serif);
+            line.AddThemeFontSizeOverride("font_size", e.Main ? 14 : 13);
+            line.AddThemeColorOverride("font_color", e.Main ? Ornament.EmberGlow : Ornament.Parchment);
+            line.Visible = true;
+        }
+        for (; i < _errandLines.Count; i++) _errandLines[i].Visible = false;
+        return list.Count;
+    }
+
     void RefreshGoals()
     {
-        int i = 0, open = 0;
+        int i = 0, open = RefreshErrands();
         foreach (var (text, done) in Goals())
         {
             if (i >= _goalLines.Count)

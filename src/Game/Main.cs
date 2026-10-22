@@ -95,6 +95,8 @@ public partial class Main : Node3D
     public static string PendingLoad;
     /// <summary>What the next start of the scene begins with, asked from the menu: "game" — a new siege, "tutorial" — the tutorial; none — the title.</summary>
     public static string PendingStart;
+    /// <summary>How hard the siege begun from the menu in play is to be (the scene begins again for it).</summary>
+    public static Hardness? PendingHardness;
     /// <summary>The tutorial, while this game is one.</summary>
     public Tutorial Tutor { get; private set; }
     /// <summary>--tutorial or --tutorial=N: the tutorial from its Nth step; --title: the title over the valley (screenshots, tests).</summary>
@@ -330,6 +332,8 @@ public partial class Main : Node3D
         FP.Init(this);
 
         Sim.Said += (text, kind, x, z) => Hud.Log(text, (Hud.Kind)Math.Clamp(kind, 0, 3), x, z);
+        // an errand done rings the small bell
+        Sim.ErrandDone += _ => Sound.Ui("done");
         // the chronicle in the self-test's log, for when something goes wrong
         if (_selfTest) Sim.Said += (text, kind, x, z) => GD.Print($"[chronicle] {Sim.Time:0} s: {text}");
         // (added to, not set: the sounds hear these too)
@@ -358,6 +362,7 @@ public partial class Main : Node3D
         _startTutorial = PendingStart == "tutorial" || _tutorialAt >= 0;
         _startTitle = !_startTutorial && (_titleArg || (PendingStart == null && !Scripted));
         PendingStart = null;
+        if (PendingHardness is { } hard) { Sim.SetHardness(hard); PendingHardness = null; }
         if (!_startTutorial && !_startTitle) Welcome();
         GD.Print($"[voxel-tower] world {genMs:0} ms, navigation {navMs:0} ms, mesh {View.LastFullMeshMs:0} ms, {View.Triangles()} triangles");
 
@@ -481,6 +486,14 @@ public partial class Main : Node3D
     /// <summary>The tips of the start, into the chronicle: a game of one's own begins with them.</summary>
     public void Welcome()
     {
+        // a siege of one's own: what to do next is in the errands from the first minute
+        if (!Scripted)
+        {
+            Sim.BeginErrands();
+            Hud.Log("Крепость наполовину разрушена, а с запада идёт орда: она придёт на закате, через десять минут.", Hud.Kind.Warn);
+            Hud.Log("Что делать — слева, в «Поручениях»: одно главное и два малых, за каждое награда. {Help} — всё управление.", Hud.Kind.Ok);
+            return;
+        }
         Hud.Log("{CallWave} — позвать орду раньше: золота за это нет, зато она меньше узнает о вашей обороне.");
         Hud.Log("Между волнами охотьтесь: выберите лучника и щёлкните ПКМ по зверю — добыча приносит золото.");
         Hud.Log("Кисти размечают работу, пешки её делают: кладут из запасов, копают, рубят. {Pick} — кирка, {ToolLadder} — лестница, {ToolGather} — делянка: ресурс с участка. {Help} — всё управление.");
@@ -696,6 +709,20 @@ public partial class Main : Node3D
         await Frames(2);
         Check("the pawns and the beasts are drawn", Units.Drawn() >= 5 + Sim.WildAlive() && Sim.WildAlive() >= 15, $"{Units.Drawn()} figures, {Sim.WildAlive()} beasts");
         Check("the river and the ponds are drawn", View.WaterChunks() >= 20, $"{View.WaterChunks()} chunks with water");
+
+        // a siege of one's own: the errands on the panel, the main one first; at dusk the card of what comes tonight
+        Sim.BeginErrands();
+        double dusk0 = Sim.Waves.Countdown;
+        Sim.Waves.Countdown = 30;
+        Hud.Refresh();
+        await Frames(2);
+        int errandLines = Hud.ErrandsShown;
+        bool duskCard = Hud.DuskShown, mainFirst = Sim.Errands.Count > 0 && Sim.Errands[0].Main;
+        Sim.Waves.Countdown = dusk0;
+        Sim.NoErrands = true; Sim.Errands.Clear();
+        Hud.Refresh();
+        Check("in a siege of one's own the errands stand first on the panel, the main one first, and at dusk a card says what comes tonight",
+            errandLines >= 2 && mainFirst && duskCard && !Hud.DuskShown, $"{errandLines} errand lines, main first {mainFirst}; the card at dusk {duskCard}, after {Hud.DuskShown}");
 
 
         // a stone wall is marked, not built
@@ -1472,6 +1499,7 @@ public partial class Main : Node3D
         if (_pose == "reel") { Reeling(); return; }
         if (_pose == "blood") { Bloodshed(); return; }
         if (_pose == "works") { Works(); return; }
+        if (_pose == "dusk") { Dusk(); return; }
         if (_pose == "troops") { Troops(); return; }
         if (_pose == "faith") { Faith(); return; }
         if (_pose == "captives") { Captives(); return; }
@@ -3162,6 +3190,17 @@ public partial class Main : Node3D
             float over = (World.WY(World.SurfAt((int)cx, (int)cz) + 8) - 4) / MathF.Tan(pitch);
             Rig.Set(World.WX(cx) - sin * over, World.WZ(cz) - cos * over, yaw, pitch, 3.4f, snap: true);
         }
+        Hud.Refresh();
+    }
+
+    /// <summary>
+    /// The siege's first dusk as a player of one's own sees it (--pose=dusk; --at=seconds before the horn, 40 by itself):
+    /// the errands on the left, the card of what comes tonight under the beam.
+    /// </summary>
+    void Dusk()
+    {
+        Sim.BeginErrands();
+        Sim.Waves.Countdown = _poseSeconds > 0 ? _poseSeconds : 40;
         Hud.Refresh();
     }
 

@@ -100,26 +100,7 @@ public sealed partial class Sim
     public void PlanWave(int n)
     {
         Bands.RemoveAll(b => b.State == BandState.Coming);
-        var list = new List<UnitType>();
-        // the horde feels its wounds, breaks and goes down: it comes the more of it for that
-        for (int i = 0; i < (int)((2 + n) * 1.8f); i++) list.Add(Kinds.Goblin);
-        for (int i = 0; i < (int)((n / 2 + 1) * 1.8f); i++) list.Add(Kinds.Orc);
-        for (int i = 0; i < (n + 1) / 3; i++) list.Add(Kinds.Miner);
-        for (int i = 0; i < (int)((1 + n / 3) * 1.5f); i++) list.Add(Kinds.Sapper);
-        for (int i = 0; i < (n >= 5 ? (n - 3) / 3 : 0); i++) list.Add(Kinds.Troll);
-        // thieves from the second wave, one more every third
-        for (int i = 0; i < (n >= 2 ? 1 + (n - 2) / 3 : 0); i++) list.Add(Kinds.Thief);
-        // a shaman from the fourth wave, another from the eighth; a witch from the sixth and another from the tenth; a
-        // necromancer from the eighth and another from the eleventh
-        for (int i = 0; i < (n >= 8 ? 2 : n >= 4 ? 1 : 0); i++) list.Add(Kinds.Shaman);
-        for (int i = 0; i < (n >= 10 ? 2 : n >= 6 ? 1 : 0); i++) list.Add(Kinds.Witch);
-        for (int i = 0; i < (n >= 11 ? 2 : n >= 8 ? 1 : 0); i++) list.Add(Kinds.Necromancer);
-        // engines: a ram from the third wave and another from the seventh, a catapult from the fourth and another from the eighth
-        for (int i = 0; i < (n >= 7 ? 2 : n >= 3 ? 1 : 0); i++) list.Add(Kinds.Ram);
-        for (int i = 0; i < (n >= 8 ? 2 : n >= 4 ? 1 : 0); i++) list.Add(Kinds.Catapult);
-        // mantlets before the bands from the fifth, a siege tower from the sixth and another from the tenth
-        for (int i = 0; i < (n >= 9 ? 2 : n >= 5 ? 1 : 0); i++) list.Add(Kinds.Mantlet);
-        for (int i = 0; i < (n >= 10 ? 2 : n >= 6 ? 1 : 0); i++) list.Add(Kinds.SiegeTower);
+        var list = Roster(n, HordeMany);
         int count = Math.Clamp((list.Count + 5) / 7, 1, 5);
         // the strongest are dealt out first, one to a band, and lead it
         for (int i = list.Count - 1; i > 0; i--) { int j = Rng.Next(i + 1); (list[i], list[j]) = (list[j], list[i]); }
@@ -142,6 +123,35 @@ public sealed partial class Sim
         Bands.AddRange(planned);
         ChooseSides(Waves.IntelNow);
         _nextTrails = 0;
+    }
+
+    /// <summary>
+    /// Who comes with wave n, as many of the common ones as the siege's hardness brings (<paramref name="many"/>), in no
+    /// order yet: the horde feels its wounds, breaks and goes down, and comes the more of it for that.
+    /// </summary>
+    public static List<UnitType> Roster(int n, float many)
+    {
+        var list = new List<UnitType>();
+        int Many(float k) => Math.Max(0, (int)(k * many));
+        for (int i = 0; i < Math.Max(1, Many((2 + n) * 1.8f)); i++) list.Add(Kinds.Goblin);
+        for (int i = 0; i < Many((n / 2 + 1) * 1.8f); i++) list.Add(Kinds.Orc);
+        for (int i = 0; i < Many((n + 1) / 3); i++) list.Add(Kinds.Miner);
+        for (int i = 0; i < Many((1 + n / 3) * 1.5f); i++) list.Add(Kinds.Sapper);
+        for (int i = 0; i < Many(n >= 5 ? (n - 3) / 3 : 0); i++) list.Add(Kinds.Troll);
+        // thieves from the second wave, one more every third
+        for (int i = 0; i < (n >= 2 ? 1 + (n - 2) / 3 : 0); i++) list.Add(Kinds.Thief);
+        // a shaman from the fourth wave, another from the eighth; a witch from the sixth and another from the tenth; a
+        // necromancer from the eighth and another from the eleventh
+        for (int i = 0; i < (n >= 8 ? 2 : n >= 4 ? 1 : 0); i++) list.Add(Kinds.Shaman);
+        for (int i = 0; i < (n >= 10 ? 2 : n >= 6 ? 1 : 0); i++) list.Add(Kinds.Witch);
+        for (int i = 0; i < (n >= 11 ? 2 : n >= 8 ? 1 : 0); i++) list.Add(Kinds.Necromancer);
+        // engines: a ram from the third wave and another from the seventh, a catapult from the fourth and another from the eighth
+        for (int i = 0; i < (n >= 7 ? 2 : n >= 3 ? 1 : 0); i++) list.Add(Kinds.Ram);
+        for (int i = 0; i < (n >= 8 ? 2 : n >= 4 ? 1 : 0); i++) list.Add(Kinds.Catapult);
+        // mantlets before the bands from the fifth, a siege tower from the sixth and another from the tenth
+        for (int i = 0; i < (n >= 9 ? 2 : n >= 5 ? 1 : 0); i++) list.Add(Kinds.Mantlet);
+        for (int i = 0; i < (n >= 10 ? 2 : n >= 6 ? 1 : 0); i++) list.Add(Kinds.SiegeTower);
+        return list;
     }
 
     /// <summary>The sides of the citadel the chief weighs: eight, round by south from the east.</summary>

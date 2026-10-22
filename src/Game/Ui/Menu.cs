@@ -73,6 +73,7 @@ public partial class GameMenu : Control
             case "save": Saving(); break;
             case "load": Loading(); break;
             case "settings": Settings_(); break;
+            case "hardness": Hardness_(); break;
             case "graphics": Picture_(); break;
             case "controls": Controls_(); break;
             default: Main_(); break;
@@ -103,6 +104,41 @@ public partial class GameMenu : Control
     }
 
     /// <summary>The title left for a game: the siege or the tutorial begins.</summary>
+    /// <summary>How hard the new siege is: the three, each with what it means.</summary>
+    void Hardness_()
+    {
+        _onMain = false;
+        Clear();
+        PageName = "hardness";
+        _page.AddChild(Hud.CapsLabel("Сложность", 10));
+        string[] about =
+        {
+            "Ватаги меньше, налётчики слабее и бьют мягче, цитадель держится дольше. Чтобы спокойно освоиться.",
+            "Осада, как она задумана.",
+            "Ватаги больше, налётчики крепче и бьют сильнее. Для тех, кто уже выстоял.",
+        };
+        for (int i = 0; i < 3; i++)
+        {
+            var h = (Hardness)i;
+            _page.AddChild(Big(Sim.HardnessNames[i], Sim.HardnessNames[i] + "\n" + about[i], () => Start(h)));
+            var note = Hud.Text(about[i], Ornament.SerifItalic, 12, Ornament.Aged, wrap: true);
+            note.HorizontalAlignment = HorizontalAlignment.Center;
+            note.CustomMinimumSize = new Vector2(320, 0);
+            note.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+            _page.AddChild(note);
+        }
+        _page.AddChild(new Rule(false));
+        _page.AddChild(Big("Назад", "", Main_));
+    }
+
+    /// <summary>A new siege as hard as chosen: on the title the valley under it goes on as it is; in play the scene begins again.</summary>
+    void Start(Hardness h)
+    {
+        if (_title) { _m.Sim.SetHardness(h); Begin(false); return; }
+        Main.PendingHardness = h;
+        _m.NewGame();
+    }
+
     void Begin(bool tutorial)
     {
         _title = false;
@@ -142,7 +178,7 @@ public partial class GameMenu : Control
             var sub = Hud.Text("Оборона крепости в долине из вокселей", Ornament.SerifItalic, 15, Ornament.Aged);
             sub.HorizontalAlignment = HorizontalAlignment.Center;
             _page.AddChild(sub);
-            _page.AddChild(Big("Новая игра", "Осада: двенадцать волн орды, раз в десять минут. Старая крепость вокруг цитадели наполовину разрушена.", () => Begin(false)));
+            _page.AddChild(Big("Новая игра", "Осада: двенадцать волн орды, раз в десять минут. Старая крепость вокруг цитадели наполовину разрушена.", Hardness_));
             _page.AddChild(Big("Обучение", "Отдельный режим: шаг за шагом, за руку — через всё, что умеет игра. Орда не придёт, пока не дойдёт до неё урок.", () => Begin(true)));
             _page.AddChild(Big("Загрузить игру", "Продолжить сохранённую игру: из ячейки, быстрого сохранения или автосохранения после отбитой волны.", Loading));
             _page.AddChild(Big("Управление", "Все клавиши и кнопки мыши и что они делают; любую клавишу можно переназначить.", Controls_));
@@ -155,7 +191,7 @@ public partial class GameMenu : Control
         _page.AddChild(Big("Загрузить игру", "Продолжить сохранённую игру: из ячейки, быстрого сохранения ({QuickLoad}) или автосохранения после отбитой волны.", Loading));
         _page.AddChild(Big("Управление", "Все клавиши и кнопки мыши и что они делают; любую клавишу можно переназначить ({Help}).", Controls_));
         _page.AddChild(Big("Настройки", "Размер интерфейса, громкость, тряска, замедление, обводка вокселей.", Settings_));
-        _page.AddChild(Big("Новая игра", "Начать новую осаду. Несохранённое здесь пропадёт.", () => _m.NewGame()));
+        _page.AddChild(Big("Новая игра", "Начать новую осаду. Несохранённое здесь пропадёт.", Hardness_));
         _page.AddChild(Big(_m.Tutor is { Over: false } ? "Обучение сначала" : "Обучение", "Отдельный режим: за руку через всё, что умеет игра. Несохранённое здесь пропадёт.", () => _m.NewGame(tutorial: true)));
         _page.AddChild(Big("Выйти из игры", "Закрыть игру. Несохранённое пропадёт (автосохранение пишется после каждой отбитой волны).", () => _m.GetTree().Quit()));
     }

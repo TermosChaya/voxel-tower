@@ -119,6 +119,8 @@ public sealed partial class Sim
     public Unit Spawn(UnitType t, int cell)
     {
         var u = new Unit { Id = _nextId++, T = t, Hp = t.Hp, MaxHp = t.Hp, Cell = cell };
+        // the horde as hardy as the siege was chosen hard
+        if (t.Team == Team.Horde && HordeHardy != 1) u.Hp = u.MaxHp = t.Hp * HordeHardy;
         u.Look = Bodies.LookOf(t, u.Id);
         (u.X, u.Y, u.Z) = Nav.Feet(cell);
         float lane = Math.Max(.5f, NavGrid.CS / 2f - t.BodyR - .5f);
@@ -178,6 +180,7 @@ public sealed partial class Sim
         TickDrawbridges(dt);
         TickDecor();
         TickMines(dt);
+        TickErrands();
         if (Nav.PendingEdits > 0) Nav.Flush();
         UpdateFields();
         Waves.Tick(this, dt);
