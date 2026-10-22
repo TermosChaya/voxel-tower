@@ -227,7 +227,7 @@ public partial class LorePanel : VBoxContainer
                 0 => hue.Lerp(Ornament.Parchment, .35f),
                 1 => Ornament.EmberGlow,
                 2 => Ornament.Aged,
-                _ => Ornament.Fade(Ornament.Faded, .62f),
+                _ => Ornament.Faded,
             };
             if (hover && State != 0) ink = ink.Lightened(.15f);
             float s = R * 1.22f;

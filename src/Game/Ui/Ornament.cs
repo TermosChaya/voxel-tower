@@ -12,7 +12,7 @@ public static class Ornament
 {
     public static readonly Color IronDark = new("0b080d"), Iron = new("16111a"), IronMid = new("201922"), IronLight = new("2b2330");
     public static readonly Color Bronze = new("b0864a"), BronzeLight = new("e2bb72"), BronzeDark = new("5b4122"), BronzeDeep = new("33240f");
-    public static readonly Color Parchment = new("ecdfc2"), Aged = new("b4a181"), Faded = new("766a5a");
+    public static readonly Color Parchment = new("ecdfc2"), Aged = new("b9a789"), Faded = new("8c806e");
     public static readonly Color Ember = new("eb8a34"), EmberGlow = new("ffad4f"), EmberDim = new("3d2411");
     public static readonly Color Blood = new("d24a33"), Moss = new("94b46c");
 
@@ -137,10 +137,11 @@ public static class Ornament
     }
 
     /// <summary>An iron plate with an inlaid bronze rule; ornate plates get corner brackets and rivets.</summary>
-    public static void Plate(CanvasItem c, Rect2 r, float alpha = .96f, bool ornate = true)
+    public static void Plate(CanvasItem c, Rect2 r, float alpha = 1, bool ornate = true)
     {
+        // a shadow under it, so the plate stands off the valley behind
         for (int i = 3; i >= 1; i--)
-            c.DrawRect(new Rect2(r.Position + new Vector2(0, 3), r.Size).Grow(i * 2.5f), new Color(0, 0, 0, .1f * alpha));
+            c.DrawRect(new Rect2(r.Position + new Vector2(0, 3), r.Size).Grow(i * 2.5f), new Color(0, 0, 0, .17f * alpha));
         c.DrawRect(r, Fade(IronDark, alpha));
         var inner = r.Grow(-2);
         Gradient(c, inner, Fade(IronLight, alpha), Fade(Iron, alpha));

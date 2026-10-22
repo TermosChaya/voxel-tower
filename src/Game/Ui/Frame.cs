@@ -79,7 +79,7 @@ public partial class TabPlaque : Control
     {
         var r = new Rect2(Vector2.Zero, Size);
         Craft.Plaque(this, r, _hover, Selected);
-        var ink = Selected ? Ornament.EmberGlow : _hover ? Ornament.BronzeLight : Ornament.Bronze;
+        var ink = Selected ? Ornament.EmberGlow : _hover ? Ornament.Parchment : Ornament.BronzeLight;
         _icon?.Invoke(this, new Rect2(7, 5, Size.Y - 10, Size.Y - 10), ink);
         if (!_compact)
             DrawString(Ornament.Caps, new Vector2(Size.Y + 2, Size.Y / 2 + 4), _caption.ToUpperInvariant(), HorizontalAlignment.Left, -1, 10,
@@ -402,7 +402,7 @@ public partial class KeepBar : Control
     public override void _Draw()
     {
         float x0 = 64, h = 5, y = (Size.Y - h) / 2;
-        DrawString(Ornament.Caps, new Vector2(0, y + h), "ЦИТАДЕЛЬ", HorizontalAlignment.Left, -1, 7, Ornament.Aged);
+        DrawString(Ornament.Caps, new Vector2(0, y + h), "ЦИТАДЕЛЬ", HorizontalAlignment.Left, -1, 9, Ornament.Aged);
         var r = new Rect2(x0, y, Size.X - x0, h);
         DrawRect(r, new Color(0, 0, 0, .6f));
         var fill = Value > .6f ? Ornament.Moss : Value > .3f ? Ornament.Ember : Ornament.Blood;

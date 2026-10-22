@@ -213,7 +213,7 @@ public static class Craft
     /// <summary>A frame of boards round a dark well, with iron at its corners: the panels that hang from the beam.</summary>
     public static void Framed(CanvasItem c, Rect2 r, float border = 9)
     {
-        for (int i = 3; i >= 1; i--) c.DrawRect(new Rect2(r.Position + new Vector2(0, 4), r.Size).Grow(i * 2.5f), new Color(0, 0, 0, .12f));
+        for (int i = 3; i >= 1; i--) c.DrawRect(new Rect2(r.Position + new Vector2(0, 4), r.Size).Grow(i * 2.5f), new Color(0, 0, 0, .18f));
         Wood(c, r, .9f);
         c.DrawRect(r, OakDark, false, 1.5f);
         var well = r.Grow(-border);

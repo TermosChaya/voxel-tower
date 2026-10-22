@@ -120,7 +120,7 @@ public partial class WorkTable : Control
         if (_m == null) return;
         float w = Size.X;
         // the heads of the columns
-        DrawString(Ornament.Caps, new Vector2(6, Head - 11), "ДРУЖИНА", HorizontalAlignment.Left, -1, 9, Ornament.Aged);
+        DrawString(Ornament.Caps, new Vector2(6, Head - 11), "ДРУЖИНА", HorizontalAlignment.Left, -1, 10, Ornament.Aged);
         for (int k = 0; k < Work.Kinds; k++)
         {
             float x = WorkX(k);
@@ -128,9 +128,9 @@ public partial class WorkTable : Control
             PriorityCell.IconOf((WorkKind)k)(this, new Rect2(x + 4, 4, 16, 16), hot ? Ornament.BronzeLight : Ornament.Bronze);
             DrawString(Ornament.Caps, new Vector2(x + 22, Head - 11), Work.Names[k].ToUpperInvariant(), HorizontalAlignment.Left, CellW - 22, 8, hot ? Ornament.BronzeLight : Ornament.Aged);
         }
-        DrawString(Ornament.Caps, new Vector2(DutyX + 4, Head - 11), "ДОБЫВАТЬ", HorizontalAlignment.Left, -1, 8, Ornament.Aged);
-        DrawString(Ornament.Caps, new Vector2(MilitiaX + 4, Head - 11), "ОПОЛЧЕНИЕ", HorizontalAlignment.Left, -1, 8, Ornament.Aged);
-        DrawString(Ornament.Caps, new Vector2(DoingX + 4, Head - 11), "ЧЕМ ЗАНЯТ", HorizontalAlignment.Left, -1, 8, Ornament.Aged);
+        DrawString(Ornament.Caps, new Vector2(DutyX + 4, Head - 11), "ДОБЫВАТЬ", HorizontalAlignment.Left, -1, 9, Ornament.Aged);
+        DrawString(Ornament.Caps, new Vector2(MilitiaX + 4, Head - 11), "ОПОЛЧЕНИЕ", HorizontalAlignment.Left, -1, 9, Ornament.Aged);
+        DrawString(Ornament.Caps, new Vector2(DoingX + 4, Head - 11), "ЧЕМ ЗАНЯТ", HorizontalAlignment.Left, -1, 9, Ornament.Aged);
         Ornament.Divider(this, new Vector2(4, Head - 3), new Vector2(w - 4, Head - 3), .7f);
         for (int r = 0; r < _rows.Count; r++)
         {

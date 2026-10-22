@@ -168,7 +168,11 @@ public partial class Main
                     foreach (var l in Sim.LoresOn(0)) if (Sim.CanLearn(l)) { Sim.Learn(l.Key); break; }
                     break;
                 case "Таинства": Hud.OpenPanel("magic"); break;
-                case "Вселиться": Choose(First(Kinds.Swordsman)); Command.Possess(); break;
+                case "Вселиться":
+                    // one hurt in the drill lies up in the citadel, where none can be gone into: wait till he is out
+                    for (int t = 0; t < 60 && !Sim.CanPossess(First(Kinds.Swordsman)); t++) await Frames(30);
+                    Choose(First(Kinds.Swordsman)); Command.Possess();
+                    break;
                 case "Выйти": FP.Exit(); break;
                 case "Меню и управление": Hud.OpenMenu("controls"); await Frames(3); Hud.CloseMenu(); break;
                 default: Tutor.Next(); break;

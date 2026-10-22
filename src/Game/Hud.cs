@@ -93,7 +93,8 @@ public partial class Hud : CanvasLayer
     {
         var l = new Label { Text = text.ToUpperInvariant(), MouseFilter = Control.MouseFilterEnum.Ignore };
         l.AddThemeFontOverride("font", Ornament.Caps);
-        l.AddThemeFontSizeOverride("font_size", size);
+        // no caption smaller than this: spaced capitals below it are no longer read at a glance
+        l.AddThemeFontSizeOverride("font_size", Math.Max(size, 9));
         l.AddThemeColorOverride("font_color", color ?? Ornament.Aged);
         return l;
     }
@@ -458,6 +459,12 @@ public partial class Hud : CanvasLayer
         _colonists.From = Math.Max(14, _drop.RightEdge + 12);
         _colonists.To = _clockPanel.Position.X - 12;
         _colonists.Top = TopBeam.Height + 5;
+        // a wide panel let down leaves the faces no room before the clock: they go down under it instead
+        if (_colonists.To - _colonists.From < 240)
+        {
+            _colonists.To = vp.X - 14;
+            _colonists.Top = _clockPanel.Position.Y + _clockPanel.Size.Y + 6;
+        }
         _toasts.Position = new Vector2((vp.X - _toasts.Size.X) / 2, vp.Y - BottomConsole.Band - 14 - _toasts.Size.Y);
         Unit first = null;
         foreach (var u in _m.Selected) if (!u.Dead && (first == null || u.Id < first.Id)) first = u;

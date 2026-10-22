@@ -9,7 +9,7 @@ namespace VoxelTower.Game;
 public partial class OrnatePanel : MarginContainer
 {
     public bool Ornate = true;
-    public float Alpha = .96f;
+    public float Alpha = 1;
 
     public OrnatePanel() : this(14) { }
 
@@ -271,7 +271,7 @@ public partial class Medallion : Control
 /// <summary>The latest lines of the chronicle, briefly, above the console; the whole of it is in its tab.</summary>
 public partial class Toasts : VBoxContainer
 {
-    readonly List<(Label label, double born)> _lines = new();
+    readonly List<(Control line, double born)> _lines = new();
     double _clock;
     public const int Most = 3;
     const double Life = 9;
@@ -282,14 +282,31 @@ public partial class Toasts : VBoxContainer
         AddThemeConstantOverride("separation", 2);
     }
 
+    /// <summary>The dark band under each line: it is read over bright grass as well as over the night.</summary>
+    static readonly StyleBoxFlat Band = MakeBand();
+
+    static StyleBoxFlat MakeBand()
+    {
+        var b = new StyleBoxFlat { BgColor = new Color(.035f, .027f, .045f, .72f), AntiAliasing = true };
+        b.SetCornerRadiusAll(5);
+        b.ContentMarginLeft = b.ContentMarginRight = 12;
+        b.ContentMarginTop = 3; b.ContentMarginBottom = 4;
+        return b;
+    }
+
     public void Push(string text, Color color)
     {
-        var l = Hud.Text(text, Ornament.Serif, 14, color, wrap: true, outline: 6);
-        l.CustomMinimumSize = new Vector2(620, 0);
+        var l = Hud.Text(text, Ornament.Serif, 14, color, wrap: true, outline: 3);
+        // as wide as the words, up to a line of 620
+        float w = Ornament.Serif.GetStringSize(text, HorizontalAlignment.Left, -1, 14).X;
+        l.CustomMinimumSize = new Vector2(Math.Min(620, w + 4), 0);
         l.HorizontalAlignment = HorizontalAlignment.Center;
-        AddChild(l);
-        _lines.Add((l, _clock));
-        while (_lines.Count > Most) { _lines[0].label.QueueFree(); _lines.RemoveAt(0); }
+        var band = new PanelContainer { MouseFilter = MouseFilterEnum.Ignore, SizeFlagsHorizontal = SizeFlags.ShrinkCenter };
+        band.AddThemeStyleboxOverride("panel", Band);
+        band.AddChild(l);
+        AddChild(band);
+        _lines.Add((band, _clock));
+        while (_lines.Count > Most) { _lines[0].line.QueueFree(); _lines.RemoveAt(0); }
     }
 
     public override void _Process(double delta)
