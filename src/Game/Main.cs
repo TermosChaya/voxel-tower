@@ -3222,10 +3222,12 @@ public partial class Main : Node3D
         {
             var g = Sim.Spawn(Kinds.Goblin, Sim.NearestStand((int)gx - 60, (int)gz + i * 6, 2));
             if (i == 0) g.Leader = true;
+            // --look=1: the first chapter's champion among them
+            if (i == 0 && _look == 1) { g.Champion = 1; g.Title = "Гнилозуб"; }
             Sim.Hurt(g, i == 1 ? sword : archer, 1000, null);
         }
         Sim.Waves.Active = false;
-        Sim.Dawn(1);
+        Sim.Dawn(_look == 1 ? 3 : 1);
         Hud.Refresh();
     }
 
@@ -3236,6 +3238,12 @@ public partial class Main : Node3D
     void Dusk()
     {
         Sim.BeginErrands();
+        // --look=n: the dusk before night n (3 — the first chapter's champion comes)
+        if (_look > 1)
+        {
+            Sim.Waves.Number = _look - 1;
+            Sim.PlanWave(_look);
+        }
         Sim.Waves.Countdown = _poseSeconds > 0 ? _poseSeconds : 40;
         Hud.Refresh();
     }

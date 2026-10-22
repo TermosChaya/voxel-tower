@@ -86,7 +86,13 @@ public sealed partial class Sim
 
     void GiveSmall()
     {
-        foreach (string key in new[] { "copper", "stone", "sanctum", "silver", "gold" })
+        // a champion coming makes room for himself among the small ones
+        if (!Errands.Exists(e => e.Key == "champion") && Make("champion", main: false) is { } ch && !Met(ch))
+        {
+            if (Errands.Count >= 3 && Errands.FindLastIndex(e => !e.Main) is var last and >= 0) Errands.RemoveAt(last);
+            Errands.Add(ch);
+        }
+        foreach (string key in new[] { "champion", "copper", "stone", "sanctum", "silver", "gold" })
         {
             if (Errands.Count >= 3) return;
             if (Errands.Exists(e => e.Key == key)) continue;
@@ -142,6 +148,17 @@ public sealed partial class Sim
             }
             case "stone":
                 return new Errand { Key = key, Main = main, From = Stock[Stockpile.Stone], Text = "Добудьте 6 м³ камня", Knowledge = 2 };
+            case "champion":
+            {
+                // a champion coming tonight, or come back: kill him
+                var b = Bands.Find(x => x.Champion > 0 && !ChampionsKilled.Contains(x.Champion));
+                byte c = b?.Champion ?? 0;
+                if (c == 0) foreach (var u in Units) if (!u.Dead && u.Champion > 0 && !ChampionsKilled.Contains(u.Champion)) c = u.Champion;
+                if (c == 0) foreach (var v in Escaped) if (v.Champion > 0 && !ChampionsKilled.Contains(v.Champion)) c = v.Champion;
+                if (c == 0) return null;
+                var (_, of, _, _) = Champion(c);
+                return new Errand { Key = key, Main = main, From = c, Text = c == 4 ? $"Убейте Вождя орды {of}: его падение обратит орду в бегство" : $"Убейте вожака главы {Roman(c)} — {of}: его трофей откроет ярус знаний", Gold = 40, Knowledge = 3 };
+            }
             case "sanctum":
                 if (Waves.Number < 1 || !Mines.Exists(m => m.Power)) return null;
                 return new Errand { Key = key, Main = main, Text = "Поставьте святилище на месте силы: {ToolGather} → «святилище»", Knowledge = 2 };
@@ -176,6 +193,7 @@ public sealed partial class Sim
                 return rank >= mines.Count || mines[rank].Holder == Holder.Ours;
             }
             case "stone": return Stock[Stockpile.Stone] - e.From >= 6 * VoxelWorld.PerM3;
+            case "champion": return ChampionsKilled.Contains((int)e.From);
             case "sanctum":
                 foreach (var z in Zones) if (z.Kind == Zone.Sanctum && PowerUnder(z) is { Holder: Holder.Ours }) return true;
                 return false;

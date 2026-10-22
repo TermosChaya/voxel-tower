@@ -65,10 +65,11 @@ public partial class DawnCard : Control
         GiftKind.Newcomers => g.Key switch { "workers" => Icons.Shovel, "archers" => Icons.Bow, "priest" => Icons.Tome, _ => Icons.Sword },
         GiftKind.Caravan => g.Key == "earth" ? Icons.Earth : Icons.Coin,
         GiftKind.Omen => Icons.Eye,
+        GiftKind.Relic => g.Key switch { "drum" or "horn" => Icons.Horn, "eye" => Icons.Eye, "staff" => Icons.Tome, "shield" => Icons.GateIcon, _ => Icons.Skull },
         _ => Icons.Skull,
     };
 
-    static string KindName(GiftKind k) => k switch { GiftKind.Newcomers => "Пришлые", GiftKind.Caravan => "Обоз", GiftKind.Omen => "Знамение", _ => "Трофей" };
+    static string KindName(GiftKind k) => k switch { GiftKind.Newcomers => "Пришлые", GiftKind.Caravan => "Обоз", GiftKind.Omen => "Знамение", GiftKind.Relic => "Легендарный трофей", _ => "Трофей" };
 
     public void Refresh()
     {
@@ -78,7 +79,8 @@ public partial class DawnCard : Control
         if (due != Visible) Visible = due;
         if (!due) return;
         var r = sim.LastNight;
-        _head.Text = $"Рассвет после ночи {r.Number}".ToUpperInvariant();
+        bool legend = sim.Gifts.Exists(g => g.Kind == GiftKind.Relic);
+        _head.Text = (legend ? $"Рассвет после ночи {r.Number} · трофеи вожака главы" : $"Рассвет после ночи {r.Number}").ToUpperInvariant();
         _stars.Lit = r.Stars;
         _stars.QueueRedraw();
         _fold.Text = _folded ? "+" : "–";
@@ -100,7 +102,7 @@ public partial class DawnCard : Control
             $"Пало налётчиков: {r.Killed} · наших: {r.Lost} · цитадель потеряла {r.KeepLost * 100:0} % · вожаков убито: {r.LeadersKilled} из {r.Leaders}",
         };
         if (r.Best.Count > 0) lines.Add("Отличились: " + string.Join(", ", r.Best.ConvertAll(b => $"{b.who.ToLowerInvariant()} — {b.felled}")));
-        lines.Add("Выберите один дар:");
+        lines.Add(legend ? "Выберите один трофей — он останется до конца осады:" : "Выберите один дар:");
         _night.Text = string.Join("\n", lines);
         _cards.Visible = true;
         // the plates laid out anew only when the gifts change

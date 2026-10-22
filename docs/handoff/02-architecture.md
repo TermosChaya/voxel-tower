@@ -609,6 +609,18 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   бесплатно), пришлые (по местам `Places − Household`), обоз, знамение; выбор — `DawnDraw` (хэш, не `Rng`).
   `TakeGift(i)`. Сохраняется в `WriteDawn/ReadDawn` (версия 22). Интерфейс: `Ui/Dawn.cs` — `DawnCard` (итог,
   звёзды `StarRow`, плашки `GiftPlate`; сворачивается), над карточкой сумерек.
+- `Sim.Chapters.cs` — главы (`ChapterOf`: ночи по три, `ChapterNames/About`), вожаки (`Champion(c)`: имя, родительный
+  падеж, вид, охрана; `Unit/Warband/Survivor.Champion` 1–3, Вождь — 4, и `Title`). `PlanWave` в своей осаде (`OwnSiege`
+  = `!NoErrands`) добавляет на 3, 6, 9, 12-ю ночь `ChampionBand` (вход — середина западного края, без `Rng`).
+  `SpawnRaider`: первый в такой ватаге — `Crown` (здоровье ×3, у Вождя ×6, поверх вожацкого ×1,5); вернувшийся
+  `Survivor` с `Champion` тоже. Удар — `ChampionArm` (×1,3 / ×1,5); от боли вожак главы не бежит. `Kill` →
+  `ChampionFell`: `ChampionsKilled`, у Вождя — `Routed` всей орде. `OpenTiers` (в `Dawn`): `TierOpen` = больше из
+  «(ночь − 1) / 3 + 1» и «убитая глава + 1», до 4; `TierAllows` (в `CanLearn`): в своей осаде знание за знания — если
+  `Tier` (с нуля) < `TierOpen`. Рассвет после гибели вожака главы — `RelicGifts` (три из `RelicPool`, `GiftKind.Relic`),
+  взятые — `Relics`/`HasRelic`: jaw (`FearOfUs`), hide (`HideHack` в рубке камня), drum (`Drum` в перезарядке наших),
+  horn (награда в `Kill`), eye (`RangeAt` наших), staff (`CostOf` заклинаний), shield (`KeepHurt`). Малое поручение
+  «champion» вытесняет последнее малое. Сохраняется в `WriteChapters/ReadChapters`, у юнитов, ватаг и бежавших —
+  `Champion/Title` (версия 23). Вид: золотой стяг крупнее (`GoldRag`); имя — `Unit.Name`.
 - `Sim.Wounds.cs` — раны: `WeaponOf` (вид удара, глубина в полувокселях, ширина), `Toughness` (плоть,
   кость, кольчуга, сталь), `Wound` вырезает воксели, `Sever` отделяет то, что не связано гранями с шарниром
   (рука, кисть, нога, голова), кровотечение, мозг и сердце, застрявшие стрелы, `Remnants`. Две перегрузки `Wound`:

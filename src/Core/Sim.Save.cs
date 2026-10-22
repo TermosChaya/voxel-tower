@@ -16,7 +16,7 @@ namespace VoxelTower.Core;
 public sealed partial class Sim
 {
     /// <summary>20: the bodies sculpted finer, their half-voxels (and so a wounded body's) not what they were.</summary>
-    public const int SaveVersion = 22;
+    public const int SaveVersion = 23;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -149,6 +149,7 @@ public sealed partial class Sim
         foreach (var m in Recruits) { w.Write(m.Kind.Key); w.Write(m.Done); w.Write(m.Paid); }
         WriteProgress(w);
         WriteDawn(w);
+        WriteChapters(w);
         w.Write(extra ?? "");
     }
 
@@ -194,6 +195,7 @@ public sealed partial class Sim
         w.Write(u.Envoy);
         w.Write(u.TakeAlive); w.Write(u.Bound); w.Write(u.BoundAt); w.Write(u.Unguarded); w.Write(u.ChainedUntil); w.Write(u.CrumbleAt);
         w.Write(u.PlagueUntil); w.Write(u.OathUntil); w.Write(u.NextHeal); w.Write(u.NextCurse); w.Write(u.Charge);
+        w.Write(u.Champion); w.Write(u.Title ?? "");
         // a sacrifice under way
         w.Write(u.Rite != null);
         if (u.Rite is { } rite)
@@ -207,7 +209,7 @@ public sealed partial class Sim
     {
         w.Write(s != null);
         if (s == null) return;
-        w.Write(s.Kind.Key); w.Write(s.Look); w.Write(s.Hp);
+        w.Write(s.Kind.Key); w.Write(s.Look); w.Write(s.Hp); w.Write(s.Champion); w.Write(s.Title ?? "");
         WriteBody(w, s.Wounds);
     }
 
@@ -233,7 +235,7 @@ public sealed partial class Sim
 
     void WriteBand(BinaryWriter w, Warband b)
     {
-        w.Write(b.Id); w.Write(b.Name); w.Write((byte)b.State); w.Write(b.Since); w.Write(b.Entry);
+        w.Write(b.Id); w.Write(b.Name); w.Write((byte)b.State); w.Write(b.Since); w.Write(b.Entry); w.Write(b.Champion); w.Write(b.Title ?? "");
         w.Write(b.Roster.Count); foreach (var t in b.Roster) w.Write(t.Key);
         w.Write(b.Veterans.Count); foreach (var v in b.Veterans) WriteSurvivor(w, v);
         var members = b.Members.FindAll(u => !u.Dead);
@@ -422,6 +424,7 @@ public sealed partial class Sim
         }
         ReadProgress(r);
         ReadDawn(r);
+        ReadChapters(r);
         string extra = r.ReadString();
         // the ways of the horde are worked out again for the valley as it now is, and the stones to throw down found again
         _fieldVersion = -1;
@@ -455,6 +458,7 @@ public sealed partial class Sim
         u.Envoy = r.ReadBoolean();
         u.TakeAlive = r.ReadBoolean(); u.Bound = r.ReadBoolean(); u.BoundAt = r.ReadDouble(); u.Unguarded = r.ReadDouble(); u.ChainedUntil = r.ReadDouble(); u.CrumbleAt = r.ReadDouble();
         u.PlagueUntil = r.ReadDouble(); u.OathUntil = r.ReadDouble(); u.NextHeal = r.ReadDouble(); u.NextCurse = r.ReadDouble(); u.Charge = r.ReadBoolean();
+        u.Champion = r.ReadByte(); u.Title = r.ReadString(); if (u.Title.Length == 0) u.Title = null;
         if (r.ReadBoolean())
         {
             var rite = new Rite { Kind = (RiteKind)r.ReadByte() };
@@ -476,9 +480,9 @@ public sealed partial class Sim
     {
         if (!r.ReadBoolean()) return null;
         var t = KindOf(r.ReadString());
-        int look = r.ReadInt32(); float hp = r.ReadSingle();
+        int look = r.ReadInt32(); float hp = r.ReadSingle(); byte champion = r.ReadByte(); string title = r.ReadString();
         var body = ReadBody(r, t, look);
-        return t == null ? null : new Survivor { Kind = t, Look = look, Hp = hp, Wounds = body };
+        return t == null ? null : new Survivor { Kind = t, Look = look, Hp = hp, Wounds = body, Champion = champion, Title = title.Length > 0 ? title : null };
     }
 
     static BodyState ReadBody(BinaryReader r, UnitType t, int look)
@@ -520,7 +524,8 @@ public sealed partial class Sim
 
     Warband ReadBand(BinaryReader r, Dictionary<int, Unit> byId)
     {
-        var b = new Warband { Id = r.ReadInt32(), Name = r.ReadString(), State = (BandState)r.ReadByte(), Since = r.ReadDouble(), Entry = r.ReadInt32() };
+        var b = new Warband { Id = r.ReadInt32(), Name = r.ReadString(), State = (BandState)r.ReadByte(), Since = r.ReadDouble(), Entry = r.ReadInt32(), Champion = r.ReadByte() };
+        b.Title = r.ReadString(); if (b.Title.Length == 0) b.Title = null;
         int n = r.ReadInt32();
         for (int i = 0; i < n; i++) { var t = KindOf(r.ReadString()); if (t != null) b.Roster.Add(t); }
         n = r.ReadInt32();

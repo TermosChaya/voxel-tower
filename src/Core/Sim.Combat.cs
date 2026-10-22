@@ -130,7 +130,7 @@ public sealed partial class Sim
         a.NextStroke = Choose(a, b);
         a.StrokeFor = b;
         float dmg = a.T.Damage * (.8f + (float)Rng.NextDouble() * .4f) * share * Oath(a) * SergeantArm(a) * TroopArm(a, b, out bool charge) * ShieldWall(b)
-            * (a.Team == Team.Horde ? HordeHarm : 1);
+            * (a.Team == Team.Horde ? HordeHarm * ChampionArm(a) : 1);
         // told to take them alive: the blow that would bring a raider down to a quarter of itself (three fifths in
         // chains), or kill it, fells it instead, to be bound where it lies
         if (a.TakeAlive && !b.Dead && Takeable(b) && b.Hp - dmg <= TakeAt(b))
@@ -178,7 +178,8 @@ public sealed partial class Sim
         StopCarve(u); StopBuild(u);
         u.Path = null; u.Target = null; u.Prey = null;
         // a leader is worth thrice its kind
-        if (u.Team == Team.Horde) Stock.Gold += u.T.Bounty * (u.Leader ? 3 : 1);
+        if (u.Team == Team.Horde) Stock.Gold += u.T.Bounty * (u.Leader ? 3 : 1) * (HasRelic("horn") ? 1.5 : 1);
+        if (u.Champion > 0) ChampionFell(u);
         else if (u.Team == Team.Wild)
         {
             if (by?.Team == Team.Player)
@@ -285,7 +286,7 @@ public sealed partial class Sim
             bool marching = u.Hold && u.Dest >= 0 && CellsApart(u.Cell, u.Dest) > 1 && u.Path != null && u.PathI < u.Path.Count;
             if (!marching) { u.State = UnitState.Fight; u.Path = null; u.Facing = MathF.Atan2(t.Z - u.Z, t.X - u.X); }
             // a fire arrow takes a moment to light
-            if (u.Cooldown <= 0) { Shoot(u, t); u.Cooldown = u.T.AttackTime * ShotPace(u) * (u.FireArrows ? Knows("soaked") ? 1.1f : 1.35f : 1) * (.9f + (float)Rng.NextDouble() * .2f); }
+            if (u.Cooldown <= 0) { Shoot(u, t); u.Cooldown = u.T.AttackTime * ShotPace(u) * (u.FireArrows ? Knows("soaked") ? 1.1f : 1.35f : 1) * (.9f + (float)Rng.NextDouble() * .2f) / Drum; }
             return !marching;
         }
         // swordsmen hold the ground round themselves or their post
@@ -325,7 +326,7 @@ public sealed partial class Sim
         {
             u.Path = null;
             u.Facing = MathF.Atan2(foe.Z - u.Z, foe.X - u.X);
-            if (u.Cooldown <= 0) { Strike(u, foe); u.Cooldown = u.T.AttackTime * (.9f + (float)Rng.NextDouble() * .2f) / PainPace(u); }
+            if (u.Cooldown <= 0) { Strike(u, foe); u.Cooldown = u.T.AttackTime * (.9f + (float)Rng.NextDouble() * .2f) / (PainPace(u) * Drum); }
             Footwork(u, foe, dt);
             return true;
         }
@@ -386,7 +387,7 @@ public sealed partial class Sim
     public float DarkRange(Unit a) => ShotRange(a) * FogRange * (1 - .45f * Waves.Darkness * ShotDark(a));
 
     /// <summary>How far a bow carries to a spot: all the way by day or where it is light, little more than half in the dark.</summary>
-    public float RangeAt(Unit a, float x, float z) => Waves.Darkness <= 0 || Lit(x, z) ? ShotRange(a) * FogRange : DarkRange(a);
+    public float RangeAt(Unit a, float x, float z) => Waves.Darkness <= 0 || Lit(x, z) || HasRelic("eye") && a.Team == Team.Player ? ShotRange(a) * FogRange : DarkRange(a);
 
     /// <summary>A raider in range and in sight; the ones hacking walls or battering the citadel come first.</summary>
     Unit BestTarget(Unit u)

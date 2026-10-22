@@ -5477,6 +5477,94 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--errands")
     simE.Waves.CallOff(simE);
 }
 
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--chapters")
+{
+    // the chapters: a champion on each chapter's third night in a siege of one's own, harder than any leader; killed,
+    // he opens the next tier of the lore and leaves three legendary trophies to choose from; the chief's fall breaks the
+    // horde; one who got away comes back crowned; all of it kept in a save
+    Console.WriteLine();
+    var mpH = new MapParams();
+    var wH = new VoxelWorld(mpH.SizeX, mpH.SizeY, mpH.SizeZ);
+    var siteH = MapGen.Generate(wH, mpH);
+    wH.Compact();
+    var simH = new Sim(wH, siteH);
+    simH.WildTarget = 0;
+    StartingFort.Raise(simH);
+    void RunH(double seconds) { for (double t = 0; t < seconds; t += .05) simH.Step(.05f); }
+    simH.PlanWave(3);
+    bool noneByItself = !simH.Bands.Exists(b => b.Champion > 0);
+    simH.BeginErrands();
+    simH.PlanWave(3);
+    RunH(1.2);
+    var bossBand = simH.Bands.Find(b => b.Champion > 0);
+    Check("a chapter's champion comes on its third night in a siege of one's own, and not in the bench's by itself",
+        noneByItself && bossBand is { Champion: 1, Title: "Гнилозуб" } && bossBand.Roster.Count >= 5 && simH.Errands.Exists(e => e.Key == "champion"),
+        $"by itself {(noneByItself ? "none" : "one")}; in one's own: {bossBand?.Name} with {bossBand?.Roster.Count}, an errand {simH.Errands.Exists(e => e.Key == "champion")}");
+
+    // the lore shut beyond its first tier until the champion falls
+    var tier2 = Sim.Lores.First(l => l.Coin == Coin.Knowledge && l.Tier == 1 && l.Spell == null);
+    foreach (var need in tier2.Needs) simH.Learnt.Add(need);
+    simH.Knowledge = 100;
+    bool shut = !simH.CanLearn(tier2);
+    // the night: the champion with his band, killed by one of ours
+    var (gxH, _, gzH) = simH.Nav.Feet(simH.Gate);
+    simH.Waves.Number = 2;
+    simH.Waves.StartNow(simH);
+    simH.Waves._queue.Clear();
+    var bossH = simH.SpawnRaider(bossBand.Roster[0], bossBand);
+    float bossHp = bossH.MaxHp;
+    var bowH = simH.Spawn(Kinds.Archer, simH.Gate);
+    simH.Hurt(bossH, bowH, 100000, "test");
+    for (int t = 0; t < 20 && simH.Waves.Active; t++) RunH(.5);
+    bool relics = simH.Gifts.Count == 3 && simH.Gifts.TrueForAll(g => g.Kind == GiftKind.Relic);
+    string firstRelic = simH.Gifts.Count > 0 ? simH.Gifts[0].Key : "";
+    bool took = simH.TakeGift(0);
+    Check("a champion is far harder than a leader; killed, he opens the next tier of the lore and leaves three legendary trophies to choose from",
+        bossHp >= Kinds.Orc.Hp * 4 && bossH.Champion == 1 && bossH.Name.Contains("Гнилозуб") && shut && simH.TierOpen == 2 && simH.CanLearn(tier2) && relics && took && simH.HasRelic(firstRelic),
+        $"{bossH.Name}: {bossHp:0} hp of an orc's {Kinds.Orc.Hp}; tier II shut before {shut}, open after {simH.TierOpen}, «{tier2.Name}» learnable {simH.CanLearn(tier2)}; " +
+        $"legendary trophies {relics}, took «{firstRelic}» {took}");
+
+    // a champion who got away comes back crowned
+    var backH = new Survivor { Kind = Kinds.Troll, Look = 0, Hp = Kinds.Troll.Hp * .5f, Champion = 2, Title = "Камнелом" };
+    var bandH = new Warband { Id = 999, Name = "Ватага Проверки", State = BandState.Coming, Entry = simH.NearestStand(siteH.SpawnStrip / 2, wH.SZ / 2, 3) };
+    simH.Bands.Add(bandH);
+    var backU = simH.SpawnRaider(Kinds.Orc, bandH);
+    var backC = simH.SpawnRaider(Kinds.Troll, bandH, backH);
+    Check("a champion who got away comes back as champion", backC.Champion == 2 && backC.Title == "Камнелом" && backC.MaxHp >= Kinds.Troll.Hp * 3,
+        $"{backC.Name}, {backC.MaxHp:0} hp");
+
+    // the chief falls, and the whole horde breaks
+    simH.Waves.Active = true;
+    var chief = simH.Spawn(Kinds.Orc, simH.NearestStand((int)gxH - 80, (int)gzH, 2));
+    chief.Champion = 4; chief.Title = "Гарм"; chief.Leader = true;
+    var rest = new List<Unit>();
+    for (int i = 0; i < 4; i++) rest.Add(simH.Spawn(Kinds.Goblin, simH.NearestStand((int)gxH - 90, (int)gzH + i * 8, 2)));
+    simH.Hurt(chief, bowH, 100000, "test");
+    Check("the horde's chief killed, the whole horde breaks and runs", chief.Dead && rest.TrueForAll(u => u.Routed) && simH.ChampionsKilled.Contains(4),
+        $"the chief dead {chief.Dead}; {rest.Count(u => u.Routed)} of {rest.Count} running");
+    foreach (var u in rest) { u.Dead = true; u.DiedAt = -999; }
+    backU.Dead = backC.Dead = true; backU.DiedAt = backC.DiedAt = -999;
+    simH.Waves.Active = false;
+
+    // kept in a save
+    var msH = new System.IO.MemoryStream();
+    simH.Save(msH, mpH.Seed, "test", "");
+    msH.Position = 0;
+    var wH2 = new VoxelWorld(mpH.SizeX, mpH.SizeY, mpH.SizeZ);
+    Sim simH2;
+    using (var reader = new SaveReader(msH))
+    {
+        var siteH2 = MapGen.Generate(wH2, new MapParams { Seed = reader.Seed });
+        wH2.Compact();
+        reader.Valley(wH2, siteH2);
+        simH2 = new Sim(wH2, siteH2);
+        simH2.Load(reader);
+    }
+    Check("the chapters are kept in a save: the tier open, the champions killed, the trophies taken",
+        simH2.TierOpen == simH.TierOpen && simH2.ChampionsKilled.SetEquals(simH.ChampionsKilled) && simH2.Relics.SequenceEqual(simH.Relics),
+        $"tier {simH2.TierOpen}, killed {string.Join(",", simH2.ChampionsKilled)}, trophies {string.Join(",", simH2.Relics)}");
+}
+
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--labour")
 {
     // the pace of the work: a block of rock broken out by one worker, and a wall of stone laid by one, each in about the

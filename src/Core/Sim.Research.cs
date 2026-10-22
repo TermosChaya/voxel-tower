@@ -200,7 +200,10 @@ public sealed partial class Sim
     public bool Opened(Lore l) => Array.TrueForAll(l.Needs, Knows);
 
     /// <summary>Whether a lore can be learnt now: not known yet, all it rests on known, what it costs at hand.</summary>
-    public bool CanLearn(Lore l) => !Knows(l.Key) && Opened(l) && Wallet(l.Coin) >= l.Cost;
+    public bool CanLearn(Lore l) => !Knows(l.Key) && Opened(l) && Wallet(l.Coin) >= l.Cost && TierAllows(l);
+
+    /// <summary>In a siege of one's own the lore bought with knowledge opens tier by tier, as the chapters' champions fall.</summary>
+    public bool TierAllows(Lore l) => !OwnSiege || l.Coin != Coin.Knowledge || l.Tier < TierOpen;
 
     /// <summary>Learns a lore, paying for it; what it does to those already in the household is done at once.</summary>
     public bool Learn(string key)
@@ -295,7 +298,7 @@ public sealed partial class Sim
     float PrayerMore => Knows("rosary") ? 1.5f : 1;
     float SacrificeMore => Knows("altar") ? 1.5f : 1;
     /// <summary>What casting a spell takes now, and how long before it can be cast again.</summary>
-    public double CostOf(Spell s) => s.Cost * (Knows("litany") ? .8 : 1);
+    public double CostOf(Spell s) => s.Cost * (Knows("litany") ? .8 : 1) * (HasRelic("staff") ? .67 : 1);
     public double CooldownOf(Spell s) => s.Cooldown * (Knows("vigil") ? .7 : 1);
     /// <summary>How much harder the spells strike and how much longer they last, with the strength of faith.</summary>
     float Might => Knows("might") ? 1.3f : 1;

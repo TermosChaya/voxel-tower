@@ -1362,7 +1362,8 @@ public partial class UnitView : Node3D
     }
 
     static readonly Color Pole = new(.24f, .16f, .1f), Rag = new(.55f, .07f, .06f), RagDark = new(.3f, .04f, .04f),
-        WhiteRag = new(.82f, .8f, .74f), WhiteRagDark = new(.55f, .53f, .48f);
+        WhiteRag = new(.82f, .8f, .74f), WhiteRagDark = new(.55f, .53f, .48f),
+        GoldRag = new(.78f, .55f, .12f), GoldRagDark = new(.45f, .3f, .06f);
 
     /// <summary>The standards of the warbands' leaders: a pole up the back, a red rag stirring from its top.</summary>
     void DrawStandards(Sim sim)
@@ -1383,8 +1384,10 @@ public partial class UnitView : Node3D
             var top = new Vector3(0, h * 1.18f, back);
             var cloth = b * new Transform3D(new Basis(Vector3.Up, sway), top);
             // an envoy's rag is white: it comes to talk
-            Box(ref i, cloth, new Vector3(0, -2.4f, -2.8f), new Vector3(.35f, 5f, 5.4f), 0, u.Envoy ? WhiteRag : Rag);
-            Box(ref i, cloth, new Vector3(0, -5.4f, -1.6f), new Vector3(.35f, 1.2f, 3f), 0, u.Envoy ? WhiteRagDark : RagDark);
+            // a chapter's champion and the horde's chief fly gold, the chief's the larger
+            float big = u.Champion == 4 ? 1.5f : u.Champion > 0 ? 1.25f : 1;
+            Box(ref i, cloth, new Vector3(0, -2.4f * big, -2.8f * big), new Vector3(.35f, 5f * big, 5.4f * big), 0, u.Envoy ? WhiteRag : u.Champion > 0 ? GoldRag : Rag);
+            Box(ref i, cloth, new Vector3(0, -5.4f * big, -1.6f * big), new Vector3(.35f, 1.2f * big, 3f * big), 0, u.Envoy ? WhiteRagDark : u.Champion > 0 ? GoldRagDark : RagDark);
         }
         RenderingServer.MultimeshSetBuffer(mm.GetRid(), _standardBuf);
         mm.VisibleInstanceCount = i;

@@ -86,13 +86,18 @@ public partial class DuskCard : Control
         if (due != Visible) Visible = due;
         if (!due) return;
         int n = Night;
-        _head.Text = $"Ночь {n} из {Waves.Total} · что идёт".ToUpperInvariant();
+        int ch = Sim.ChapterOf(n);
+        _head.Text = $"Глава {Sim.Roman(ch)} · {Sim.ChapterNames[ch]} · ночь {n} из {Waves.Total} · что идёт".ToUpperInvariant();
         // the bands, each with its leader and what it brings
         var lines = new List<string>();
+        // a chapter's first night: what it brings
+        if ((n - 1) % 3 == 0) lines.Add(Sim.ChapterAbout[ch]);
         foreach (var b in sim.Bands)
         {
             if (b.State != BandState.Coming && !sim.Waves.Active) continue;
-            lines.Add($"{b.Name}: {HordeInfo.Kinds(b)}");
+            lines.Add(b.Champion == 4 ? $"{b.Name}: сам Вождь орды {b.Title} с отборной охраной — {HordeInfo.Kinds(b)}. Падёт он — побежит вся орда."
+                : b.Champion > 0 ? $"{b.Name}: вожак главы {b.Title} с охраной — {HordeInfo.Kinds(b)}. Падёт — его трофей откроет ярус знаний."
+                : $"{b.Name}: {HordeInfo.Kinds(b)}");
         }
         int side = -1, most = 0;
         for (int i = 0; i < Sim.Sides; i++) if (sim.SideBands[i] > most) { most = sim.SideBands[i]; side = i; }
@@ -109,7 +114,8 @@ public partial class DuskCard : Control
         else
         {
             var then = Sim.NewAt(n + 1);
-            _next.Text = then.Count == 0 ? $"Следующей ночью — те же, только больше." : $"Следующей ночью впервые: {string.Join(", ", then.ConvertAll(t => t.Name.ToLowerInvariant()))}.";
+            string boss = (n + 1) % 3 == 0 ? (n + 1 == Waves.Total ? " И придёт сам Вождь орды." : $" И придёт вожак главы {Sim.Roman(Sim.ChapterOf(n + 1))}.") : "";
+            _next.Text = (then.Count == 0 ? "Следующей ночью — те же, только больше." : $"Следующей ночью впервые: {string.Join(", ", then.ConvertAll(t => t.Name.ToLowerInvariant()))}.") + boss;
         }
     }
 }

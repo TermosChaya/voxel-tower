@@ -16,6 +16,9 @@ public sealed class Warband
     public int Id;
     /// <summary>"Ватага Гаррука": named after the one who leads it.</summary>
     public string Name = "";
+    /// <summary>A chapter's champion's band (1–3) or the chief's (4): who leads it, and his name.</summary>
+    public byte Champion;
+    public string Title;
     public BandState State;
     /// <summary>When the present state began, in game seconds.</summary>
     public double Since;
@@ -118,6 +121,8 @@ public sealed partial class Sim
             // the tail of the shuffle beyond the leader: kinds come mixed
             for (int k = b.Roster.Count - 1; k > 1; k--) { int j = 1 + Rng.Next(k); (b.Roster[k], b.Roster[j]) = (b.Roster[j], b.Roster[k]); }
         }
+        // a chapter's third night: its champion with his own guard
+        if (ChampionBand(n) is { } champion) planned.Add(champion);
         // those who got away from the last wave alive come back with this one, shared among the bands
         for (int i = 0; i < Escaped.Count; i++) planned[i % count].Veterans.Add(Escaped[i]);
         Bands.AddRange(planned);
@@ -346,6 +351,8 @@ public sealed partial class Sim
             u.Wounds = back.Wounds;
             u.Hp = Math.Min(u.MaxHp, back.Hp + (u.MaxHp - back.Hp) * .5f);
             u.Returned = true;
+            // a champion who got away comes back as he went
+            if (back.Champion > 0) { float share = u.Hp / u.MaxHp; Crown(u, back.Champion, back.Title); u.Hp = u.MaxHp * share; }
         }
         u.Band = b;
         u.Raid = b.Target;
@@ -353,6 +360,7 @@ public sealed partial class Sim
         if (b.Spawned++ == 0)
         {
             MakeLeader(b, u);
+            if (b.Champion > 0 && u.Champion == 0) Crown(u, b.Champion, b.Title);
             Enter(b, BandState.Forming);
         }
         return u;

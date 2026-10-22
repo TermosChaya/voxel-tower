@@ -308,7 +308,7 @@ public sealed partial class Sim
                 }
         // the citadel takes it on its own stone
         float kd = MathF.Sqrt((x - Site.KeepX) * (x - Site.KeepX) + (z - Site.KeepZ) * (z - Site.KeepZ));
-        if (kd < Site.KeepR + 6) KeepHp -= 10 * KeepGuard * HordeHarm;
+        if (kd < Site.KeepR + 6) KeepHp -= 10 * KeepGuard * KeepHurt;
         foreach (var o in Units)
         {
             if (o.Dead || o.Inside || o == f.By || o.Airborne != null) continue;

@@ -116,7 +116,7 @@ public sealed partial class Sim
         // hurt to a quarter of itself, a raider has had enough (a leader leads to the end, a guard keeps its camp)
         if (!u.Routed && !u.Leader && !u.Guard && u.Hp < u.MaxHp * .25f) u.Routed = true;
         // or hurt past bearing: it breaks (a leader holds on longer)
-        if (!u.Routed && !u.Guard && u.Pain >= (u.Leader ? LeaderBreak : BreakPain)) u.Routed = true;
+        if (!u.Routed && !u.Guard && u.Champion == 0 && u.Pain >= (u.Leader ? LeaderBreak : BreakPain) * FearOfUs) u.Routed = true;
         // the horde's envoy comes to bargain, and fights nobody
         if (u.Envoy && EnvoyTick(u, dt)) return;
         // the horde's engines go about their own work, and never run
@@ -158,7 +158,7 @@ public sealed partial class Sim
         {
             u.State = UnitState.Siege;
             u.Facing = MathF.Atan2(Site.KeepZ - u.Z, Site.KeepX - u.X);
-            if (u.Cooldown <= 0) { KeepHp -= u.T.KeepDamage * KeepGuard * HordeHarm; u.Swing = 1; u.Cooldown = u.T.AttackTime; }
+            if (u.Cooldown <= 0) { KeepHp -= u.T.KeepDamage * KeepGuard * KeepHurt; u.Swing = 1; u.Cooldown = u.T.AttackTime; }
             return;
         }
         if (u.CarveCell >= 0) { Carve(u, dt); return; }
@@ -241,7 +241,7 @@ public sealed partial class Sim
             if (Armed(u) && !u.Guard)
             {
                 if (u.Wounds != null) { u.Wounds.Bleed = 0; u.Wounds.Arrows.Clear(); }
-                Escaped.Add(new Survivor { Kind = u.T, Look = u.Look, Hp = u.Hp, Wounds = u.Wounds });
+                Escaped.Add(new Survivor { Kind = u.T, Look = u.Look, Hp = u.Hp, Wounds = u.Wounds, Champion = u.Champion, Title = u.Title });
                 Say($"{u.T.Name} ушёл живым — вернётся со следующей волной.", 2, u);
             }
             u.Dead = true; u.DiedAt = -999; u.State = UnitState.Dead;
@@ -308,7 +308,7 @@ public sealed partial class Sim
             if (g < 0 || rate == null || rate[g] <= 0) { StopCarve(u); return; }
             // stone in lime mortar holds out a third longer; what a shaman cursed gives twice as fast
             // under a stone skin three times as long
-            float cost = 1f / (rate[g] * (g == 2 ? StoneHack : 1) * (Curses.Count > 0 ? CurseHack(x, y, z) : 1) * (Skins.Count > 0 ? SkinHack(x, y, z) : 1));
+            float cost = 1f / (rate[g] * (g == 2 ? StoneHack * HideHack : 1) * (Curses.Count > 0 ? CurseHack(x, y, z) : 1) * (Skins.Count > 0 ? SkinHack(x, y, z) : 1));
             if (u.CarveEffort < cost) break;
             u.CarveEffort -= cost;
             u.CarveI++;
@@ -466,6 +466,8 @@ public sealed class Survivor
     public int Look;
     public float Hp;
     public BodyState Wounds;
+    public byte Champion;
+    public string Title;
 }
 
 /// <summary>

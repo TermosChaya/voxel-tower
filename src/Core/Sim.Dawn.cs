@@ -18,7 +18,7 @@ public sealed class NightReport
 }
 
 /// <summary>What a dawn's gift is: people come to the fort, a caravan's goods, a sign of the old powers, a leader's trophy.</summary>
-public enum GiftKind : byte { Newcomers, Caravan, Omen, Trophy }
+public enum GiftKind : byte { Newcomers, Caravan, Omen, Trophy, Relic }
 
 /// <summary>One gift a dawn offers: one of three (or four) is taken, the rest go.</summary>
 public sealed class Gift
@@ -52,7 +52,7 @@ public sealed partial class Sim
     internal void NightBegins(int bands)
     {
         if (Gifts.Count > 0) { Gifts.Clear(); Say("Дар рассвета так и не выбран: обоз ушёл, пришлые разошлись.", 2); }
-        _night0Kills = Kills; _nightLost = 0; _nightLeaders = bands; _nightLeadersKilled = 0;
+        _night0Kills = Kills; _nightLost = 0; _nightLeaders = bands; _nightLeadersKilled = 0; _nightChampion = 0;
         _nightKeep0 = KeepHp;
         _nightFelled.Clear();
     }
@@ -88,6 +88,7 @@ public sealed partial class Sim
             if (u != null) r.Best.Add(($"{u.T.Name} №{id}", n));
         }
         LastNight = r;
+        OpenTiers(night);
         // (the stars' reward and the gifts are a siege of one's own: not the tutorial's, nor the bench's unless asked)
         if (NoErrands) return;
         // each star adds to the wave's reward
@@ -99,6 +100,13 @@ public sealed partial class Sim
         }
         if (night >= Waves.Total) return;
         Gifts.Clear();
+        // a champion fell this night: his trophies, the legendary ones, are the dawn's gifts
+        if (_nightChampion > 0)
+        {
+            Gifts.AddRange(RelicGifts(night));
+            _nightChampion = 0;
+            if (Gifts.Count > 0) { Say("Рассвет: трофеи вожака главы — выберите один из трёх, до следующего рога.", 1); return; }
+        }
         var trophy = Trophy(night);
         var deal = new List<Gift>();
         if (trophy != null) deal.Add(trophy);
@@ -208,6 +216,9 @@ public sealed partial class Sim
                 break;
             case GiftKind.Trophy:
                 if (LoreOf(g.Key) is { } l && !Knows(l.Key)) Grant(l);
+                break;
+            case GiftKind.Relic:
+                if (!HasRelic(g.Key)) Relics.Add(g.Key);
                 break;
         }
         Say($"Дар рассвета: {g.Title.ToLowerInvariant()}.", 1);

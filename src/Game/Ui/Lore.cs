@@ -103,7 +103,7 @@ public partial class LorePanel : VBoxContainer
     int StateOf(Lore l)
     {
         var sim = _m.Sim;
-        return sim.Knows(l.Key) ? 0 : sim.CanLearn(l) ? 1 : sim.Opened(l) ? 2 : 3;
+        return sim.Knows(l.Key) ? 0 : sim.CanLearn(l) ? 1 : sim.Opened(l) && sim.TierAllows(l) ? 2 : 3;
     }
 
     static string CoinWord(Coin c, int n) => c switch
@@ -127,7 +127,7 @@ public partial class LorePanel : VBoxContainer
             return;
         }
         if (sim.Learn(l.Key)) { Refresh(); _m.Hud.Refresh(); return; }
-        _m.Hud.Float(StateOf(l) == 3 ? "сначала то, на чём оно стоит" : $"нужно {l.Cost} {CoinWord(l.Coin, l.Cost)}", Ornament.Blood);
+        _m.Hud.Float(!sim.TierAllows(l) ? $"ярус {Sim.Roman(l.Tier + 1)} ещё закрыт" : StateOf(l) == 3 ? "сначала то, на чём оно стоит" : $"нужно {l.Cost} {CoinWord(l.Coin, l.Cost)}", Ornament.Blood);
     }
 
     public void Refresh()
@@ -147,7 +147,9 @@ public partial class LorePanel : VBoxContainer
                 0 => l.Spell != null ? "Постигнуто. Щелчок — взять в руку." : "Изучено.",
                 1 => $"Щелчок — {(l.Spell != null ? "постичь" : "изучить")} за {l.Cost} {CoinWord(l.Coin, l.Cost)}.",
                 2 => $"Нужно {l.Cost} {CoinWord(l.Coin, l.Cost)}, есть {Math.Floor(sim.Wallet(l.Coin)):0}.",
-                _ => "Сначала: " + string.Join(", ", Array.ConvertAll(Array.FindAll(l.Needs, n => !sim.Knows(n)), n => $"«{Sim.LoreOf(n)?.Name ?? n}»")) + ".",
+                _ => !sim.TierAllows(l)
+                    ? $"Ярус {Sim.Roman(l.Tier + 1)} закрыт: откроется, когда падёт вожак главы {Sim.Roman(l.Tier)}, — или на ночь позже."
+                    : "Сначала: " + string.Join(", ", Array.ConvertAll(Array.FindAll(l.Needs, n => !sim.Knows(n)), n => $"«{Sim.LoreOf(n)?.Name ?? n}»")) + ".",
             };
             string rests = l.Needs.Length == 0 ? "" : "\nСтоит на: " + string.Join(", ", Array.ConvertAll(l.Needs, n => $"«{Sim.LoreOf(n)?.Name ?? n}»")) + ".";
             string cost = state == 0 ? "" : $" · {l.Cost} {CoinWord(l.Coin, l.Cost)}";
