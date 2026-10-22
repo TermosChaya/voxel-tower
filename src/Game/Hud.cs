@@ -127,6 +127,7 @@ public partial class Hud : CanvasLayer
     public void Init(Main m)
     {
         _m = m;
+        Juice.HookButtons(m.GetTree());
         var root = _root = new Control { MouseFilter = Control.MouseFilterEnum.Ignore, Theme = Ornament.MakeTheme(), TextureRepeat = CanvasItem.TextureRepeatEnum.Enabled };
         root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         AddChild(root);
@@ -292,20 +293,22 @@ public partial class Hud : CanvasLayer
 
     // ---------------------------------------------------------------- state
 
+    static readonly Func<double, string> Whole = v => Fmt.Int(Math.Floor(v)), Cubic = v => Fmt.M3(v);
+
     public void Refresh()
     {
         if (_stores == null) return;
         RefreshGoals();
         var st = _m.Sim.Stock;
-        _stores.Values[0] = Fmt.Int(Math.Floor(st.Gold));
-        _stores.Values[4] = Fmt.Int(Math.Floor(_m.Sim.Favour));
+        _stores.Set(0, Math.Floor(st.Gold), Whole, 5);
+        _stores.Set(4, Math.Floor(_m.Sim.Favour), Whole, 5);
         int have = _m.Sim.Household(), places = _m.Sim.Places;
         _stores.Values[5] = $"{have}/{places}";
         _stores.Short[5] = have >= places;
         var t = _m.Tools;
         for (int k = 1; k <= 3; k++)
         {
-            _stores.Values[k] = Fmt.M3(st[k]);
+            _stores.Set(k, st[k], Cubic, 2 * VoxelWorld.PerM3);
             _stores.Short[k] = t.Tool != Tool.None && t.PlanText != null && !t.PlanIsDig && t.PlanNeeds[k] > st[k] + .5;
         }
         foreach (var (mat, _, store, _) in MatDefs)
@@ -574,7 +577,10 @@ public partial class Hud : CanvasLayer
             }
             var line = _errandLines[i++];
             string pay = Sim.Pay(e);
-            line.Text = (e.Main ? "▶ " : "◇ ") + Bindings.Fill(e.Text) + (pay == "" ? "" : $" (награда: {pay})");
+            string text = (e.Main ? "▶ " : "◇ ") + Bindings.Fill(e.Text) + (pay == "" ? "" : $" (награда: {pay})");
+            // a new errand in the place of one done fades in
+            if (line.Text != text && line.Text != "" && line.IsVisibleInTree()) Juice.FadeIn(line, .45);
+            line.Text = text;
             line.AddThemeFontOverride("font", e.Main ? Ornament.SerifBold : Ornament.Serif);
             line.AddThemeFontSizeOverride("font_size", e.Main ? 14 : 13);
             line.AddThemeColorOverride("font_color", e.Main ? Ornament.EmberGlow : Ornament.Parchment);

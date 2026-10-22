@@ -32,7 +32,7 @@ public partial class KindTile : Control
 
     public override void _GuiInput(InputEvent e)
     {
-        if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true }) { Press(); AcceptEvent(); }
+        if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true }) { Juice.Press(this); Press(); AcceptEvent(); }
     }
 
     public override string _GetTooltip(Vector2 at)

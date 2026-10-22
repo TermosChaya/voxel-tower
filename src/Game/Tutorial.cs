@@ -74,6 +74,7 @@ public partial class Tutorial : Node
         for (int k = 0; k <= i; k++) LetOut(k);
         s.Enter?.Invoke();
         _card.Show(s, i, _steps.Count, Chapters(i));
+        Juice.Appear(_card, .97f, .22);
     }
 
     /// <summary>What step k lets out of the frame: every step names it in its own Enter; these are the parts by step.</summary>

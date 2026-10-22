@@ -53,7 +53,9 @@ public partial class EnvoyCard : Control
     public void Refresh()
     {
         var sim = _m.Sim; var d = sim.Offer;
-        Visible = d != null && d.Kind != DealKind.None && d.Envoy is { Dead: false };
+        bool show = d != null && d.Kind != DealKind.None && d.Envoy is { Dead: false };
+        if (show && !Visible) Juice.Appear(this);
+        Visible = show;
         if (!Visible) return;
         _words.Text = Sim.OfferText(d);
         _wait.Text = $"Ждёт ответа ещё {Math.Max(0, d.Until - sim.Time):0} с. Если убить посла, следующая волна будет сильнее.";

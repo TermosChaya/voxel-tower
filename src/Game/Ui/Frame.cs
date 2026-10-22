@@ -72,7 +72,7 @@ public partial class TabPlaque : Control
 
     public override void _GuiInput(InputEvent e)
     {
-        if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true }) { if (Clicked != null) Sound.Ui("tick"); Clicked?.Invoke(); AcceptEvent(); }
+        if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true }) { if (Clicked != null) { Sound.Ui("tick"); Juice.Press(this); } Clicked?.Invoke(); AcceptEvent(); }
     }
 
     public override void _Draw()
@@ -349,6 +349,53 @@ public partial class Stores : Control
     public readonly bool[] Short = new bool[6];
     public const float W = 610, MinW = 440;
 
+    // the figures as they count toward what is in the stores, and what came in at once lately, sinking off the beam
+    readonly double[] _target = new double[6], _shown = new double[6], _notable = new double[6];
+    readonly float[] _glow = new float[6];
+    readonly bool[] _seen = new bool[6];
+    readonly Func<double, string>[] _fmt = new Func<double, string>[6];
+    readonly List<(int cell, string text, float age)> _gains = new();
+    const float GainLife = 1.6f;
+
+    /// <summary>
+    /// A store's figure. A gain of <paramref name="notable"/> or more at once is counted up to, with "+N" sinking off
+    /// its cell and the cell glowing a moment; a trickle, as the work brings it in, shows as it is.
+    /// </summary>
+    public void Set(int i, double value, Func<double, string> fmt, double notable)
+    {
+        _fmt[i] = fmt; _notable[i] = notable;
+        if (!_seen[i]) { _seen[i] = true; _target[i] = _shown[i] = value; Values[i] = fmt(value); return; }
+        double gain = value - _target[i];
+        _target[i] = value;
+        if (gain >= notable) { _gains.Add((i, "+" + fmt(gain), 0)); _glow[i] = 1; }
+        else if (Math.Abs(value - _shown[i]) < notable) _shown[i] = value;
+        Values[i] = fmt(_shown[i]);
+    }
+
+    public override void _Process(double delta)
+    {
+        bool moving = false;
+        for (int i = 0; i < Values.Length; i++)
+        {
+            if (_fmt[i] != null && _shown[i] != _target[i])
+            {
+                _shown[i] += (_target[i] - _shown[i]) * (1 - Math.Exp(-delta * 7));
+                if (Math.Abs(_target[i] - _shown[i]) < _notable[i] * .01) _shown[i] = _target[i];
+                Values[i] = _fmt[i](_shown[i]);
+                moving = true;
+            }
+            if (_glow[i] > 0) { _glow[i] = Math.Max(0, _glow[i] - (float)delta * 1.4f); moving = true; }
+        }
+        for (int g = _gains.Count - 1; g >= 0; g--)
+        {
+            var (cell, text, age) = _gains[g];
+            age += (float)delta;
+            if (age > GainLife) _gains.RemoveAt(g); else _gains[g] = (cell, text, age);
+            moving = true;
+        }
+        if (moving) QueueRedraw();
+    }
+
     static readonly (Icons.Painter icon, string tip)[] Groups =
     {
         (Icons.Coin, "Золото\nНа него набирают войско. Золото дают рудники, убитые налётчики, охота и отбитые волны."),
@@ -378,9 +425,17 @@ public partial class Stores : Control
         {
             float x = 6 + g * Cell;
             if (g > 0) Ornament.Diamond(this, new Vector2(x, Size.Y / 2), 3.2f, Ornament.Fade(Ornament.BronzeLight, .85f));
+            if (_glow[g] > 0) DrawRect(new Rect2(x + 3, 3, Cell - 6, Size.Y - 6), new Color(Ornament.EmberGlow, .22f * _glow[g]));
             Groups[g].icon(this, new Rect2(x + 10, (Size.Y - 22) / 2, 22, 22), Ornament.BronzeLight);
             int size = Cell < 96 ? 18 : 21;
             DrawString(Ornament.SerifBold, new Vector2(x + 36, Size.Y / 2 + size * .36f), Values[g], HorizontalAlignment.Left, Cell - 38, size, Short[g] ? Ornament.Blood : Ornament.Parchment);
+        }
+        foreach (var (cell, text, age) in _gains)
+        {
+            float k = age / GainLife, a = k < .12f ? k / .12f : 1 - (k - .12f) / .88f;
+            var at = new Vector2(6 + cell * Cell + 36, Size.Y + 16 + k * 18);
+            DrawStringOutline(Ornament.SerifBold, at, text, HorizontalAlignment.Left, -1, 16, 5, new Color(0, 0, 0, .8f * a));
+            DrawString(Ornament.SerifBold, at, text, HorizontalAlignment.Left, -1, 16, new Color(Ornament.Moss.Lightened(.25f), a));
         }
     }
 

@@ -85,7 +85,7 @@ public partial class DawnCard : Control
         var sim = _m.Sim;
         bool taking = sim.Gifts.Count > 0, justTaken = sim.Time - _takenAt < 2.5;
         bool due = (taking || justTaken) && sim.LastNight != null && _m.Tutor == null && !_m.FP.On && !sim.NoErrands;
-        if (due != Visible) Visible = due;
+        if (due != Visible) { Visible = due; if (due) Juice.Appear(this); }
         if (!due) return;
         var r = sim.LastNight;
         bool legend = sim.Gifts.Exists(g => g.Kind == GiftKind.Relic);
@@ -205,6 +205,7 @@ public partial class GiftPlate : Control
     {
         if (e is not InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true } || Clicked == null) return;
         Sound.Ui("tick");
+        Juice.Press(this);
         Clicked();
         AcceptEvent();
     }

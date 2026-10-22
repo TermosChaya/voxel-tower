@@ -14,7 +14,7 @@ public partial class GameMenu : Control
 {
     Main _m;
     VBoxContainer _page;
-    Control _panel;
+    Control _panel, _dim;
     bool _wasPaused;
     const float W = 600, H = 560;
 
@@ -24,7 +24,7 @@ public partial class GameMenu : Control
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Stop;
         Visible = false;
-        var dim = new ColorRect { Color = new Color(0, 0, 0, .55f), MouseFilter = MouseFilterEnum.Ignore };
+        var dim = _dim = new ColorRect { Color = new Color(0, 0, 0, .55f), MouseFilter = MouseFilterEnum.Ignore };
         dim.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         AddChild(dim);
         var panel = new BottomConsole.Plate(c => Craft.Framed(c, new Rect2(Vector2.Zero, c.Size), 12)) { MouseFilter = MouseFilterEnum.Stop };
@@ -68,6 +68,8 @@ public partial class GameMenu : Control
         _wasPaused = _m.Paused;
         _m.Paused = true;
         Visible = true;
+        Juice.FadeIn(_dim, .2);
+        Juice.Appear(_panel, .95f, .22);
         switch (page)
         {
             case "save": Saving(); break;
@@ -153,6 +155,8 @@ public partial class GameMenu : Control
     void Clear()
     {
         foreach (var c in _page.GetChildren()) c.QueueFree();
+        // a page put in place of another fades in where it stands
+        if (Visible) Juice.FadeIn(_page, .18);
         _capture = null;
         Fit(W, H);
     }

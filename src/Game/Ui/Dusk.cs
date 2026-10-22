@@ -83,7 +83,7 @@ public partial class DuskCard : Control
         var sim = _m.Sim;
         if (sim.Waves.Active && _hornFor != sim.Waves.Number) { _hornFor = sim.Waves.Number; _hornAt = sim.Time; }
         bool due = Due();
-        if (due != Visible) Visible = due;
+        if (due != Visible) { Visible = due; if (due) Juice.Appear(this); }
         if (!due) return;
         int n = Night;
         int ch = Sim.ChapterOf(n);

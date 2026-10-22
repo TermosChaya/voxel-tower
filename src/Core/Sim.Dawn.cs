@@ -179,7 +179,7 @@ public sealed partial class Sim
         foreach (var l in Lores) if (l.Coin == Coin.Knowledge && l.Spell == null && !Knows(l.Key) && Opened(l)) can.Add(l);
         if (can.Count == 0) return null;
         var lore = can[(int)(DawnDraw(night, 23) * can.Count) % can.Count];
-        return new Gift { Kind = GiftKind.Trophy, Key = lore.Key, Title = "Трофей вожака", About = $"Знание «{lore.Name}» без оплаты: {lore.About}" };
+        return new Gift { Kind = GiftKind.Trophy, Key = lore.Key, Title = "Трофей вожака", About = $"Знание «{lore.Name}» без оплаты. {lore.About}" };
     }
 
     /// <summary>Takes one of the dawn's gifts; the rest go. False if there is no such gift.</summary>
