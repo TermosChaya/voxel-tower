@@ -515,12 +515,16 @@ if (args.Length == 0 || args[0] == "--sim")
         var grove2 = sim.AddZone(wood2.x - G, wood2.z - G, wood2.x + G, wood2.z + G, Stockpile.Wood, 0);
         var sent = crew[0];
         sim.Command(new[] { sent }, sim.NearestStand(wood2.x, wood2.z, sent.T.Move.Height), stay: false);
-        bool heldOnTheWay = sent.Hold;
-        Run(60);
-        int sc = sent.Site;
-        bool inGrove = sc >= 0 && Math.Abs((sc % sim.Nav.NX << NavGrid.Shift) + 4 - wood2.x) <= G + 8 && Math.Abs((sc / sim.Nav.NX << NavGrid.Shift) + 4 - wood2.z) <= G + 8;
+        bool heldOnTheWay = sent.Hold, inGrove = false;
+        // (the work is quick: the grove may be all felled before the minute is out)
+        for (int t = 0; t < 60; t++)
+        {
+            Run(1);
+            int sc = sent.Site;
+            if (!sent.Hold && (sent.Focus == grove2 || sc >= 0 && Math.Abs((sc % sim.Nav.NX << NavGrid.Shift) + 4 - wood2.x) <= G + 8 && Math.Abs((sc / sim.Nav.NX << NavGrid.Shift) + 4 - wood2.z) <= G + 8)) inGrove = true;
+        }
         Check("a worker sent into a grove goes there and fells it by itself, no «За работу» needed",
-            heldOnTheWay && !sent.Hold && (inGrove || sent.Focus == grove2),
+            heldOnTheWay && !sent.Hold && inGrove,
             $"held on the way {heldOnTheWay}, held now {sent.Hold}, at work in the grove {inGrove}, focus {(sent.Focus == grove2 ? "the grove" : "none")}; {sent.Why}");
         sim.RemoveZones(wood2.x - G, wood2.z - G, wood2.x + G, wood2.z + G);
         sim.CancelArea(wood2.x - 70, wood2.z - 70, wood2.x + 70, wood2.z + 70);
@@ -1127,7 +1131,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--life")
         mason.Dead = true; mason.DiedAt = -999;
 
         // a plot taken back goes with the felling it had begun to mark; what it marks while the hand is on
-        // something else is not the hand's (a big tree, still being felled twenty seconds on)
+        // something else is not the hand's (a big tree, still being felled eight seconds on)
         (int x, int z) tree = (-1, -1);
         for (int r = 60; r < 500 && tree.x < 0; r += 8)
             for (int a = 0; a < 360 && tree.x < 0; a += 4)
@@ -1141,10 +1145,10 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--life")
         sim.BeginMarking();
         var plot = sim.AddZone(tree.x - 20, tree.z - 20, tree.x + 20, tree.z + 20, Stockpile.Wood, 0);
         sim.EndMarking("Делянка");
-        Run(10);
+        Run(4);
         sim.BeginMarking();
         int heap = sim.DesignateBuild(Shapes.Line(w4, site4, ux, uz - 6, ux, uz + 6, earthWall, Shapes.LevelTop(w4, ux, uz, 12)));
-        Run(10);
+        Run(4);
         sim.EndMarking("Насыпь");
         int fed = plot.Marked;
         var un6 = sim.UndoMarking(out _);
@@ -3887,10 +3891,6 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
     simS.Learn("mortar");
     simS.Revelations = 2; simS.Carcasses.Add(Kinds.Boar); simS.Favour = 17;
     simS.Known.Add(SpellKind.Hand); simS.Known.Add(SpellKind.Eye);
-    // two taken on at the citadel, one of them half made ready
-    simS.Stock.Gold += 200;
-    simS.Enlist(Kinds.Archer); simS.Enlist(Kinds.Worker);
-    simS.Recruits[0].Done = 11.5f;
     // a ball of rock rolling, and a stone high in the air
     int rxS = kxS - 200, rzS = kzS - 100;
     simS.Hurl(Sim.Ball(3.6f, Mat.Rock), rxS + .5f, wS.SurfAt(rxS, rzS) + 4.5f, rzS + .5f, 3 * VoxelWorld.PerMetre, 0, 0, "test");
@@ -3977,9 +3977,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
         && simL.Waves.Coming == simS.Waves.Coming && simL.Mines.TrueForAll(m => m.Holder == simS.Mines[simL.Mines.IndexOf(m)].Holder) && extra == "the screen's own"
         && simL.Knowledge == 2 && simL.Knows("mortar") && simL.Learnt.Count == 1
         && simL.Revelations == 2 && simL.Carcasses.Count == 1 && simL.Carcasses[0] == Kinds.Boar && Math.Abs(simL.Favour - simS.Favour) < 1e-9
-        && simL.Known.SetEquals(simS.Known)
-        && simL.Recruits.Count == 2 && simL.Recruits[0].Kind == Kinds.Archer && simL.Recruits[1].Kind == Kinds.Worker
-        && simL.Recruits[0].Done == simS.Recruits[0].Done && simL.Recruits[1].Paid == simS.Recruits[1].Paid;
+        && simL.Known.SetEquals(simS.Known);
     // and what was in the air, or rolling, goes on its way as it was
     var piecesS = simS.Fliers.FindAll(f => f.Unit == null);
     var piecesL = simL.Fliers.FindAll(f => f.Unit == null);
@@ -4243,46 +4241,48 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--muster")
     void RunM(double seconds) { for (double t = 0; t < seconds; t += .05) simM.Step(.05f); }
     int Ours() => simM.Units.FindAll(u => !u.Dead && u.Team == Team.Player).Count;
     simM.Stock.Gold = 1000;
-    // a worker enlisted: paid at once, out of the door only when its time is up
+    // a worker enlisted: paid, and out of the citadel's door at once
+    int before = Ours();
     bool took = simM.Enlist(Kinds.Worker);
     double paid = 1000 - simM.Stock.Gold;
-    float train = simM.TrainTime(Kinds.Worker);
-    RunM(train - 1);
-    int before = Ours();
-    RunM(2);
-    var fresh = simM.Units.Find(u => !u.Dead && u.T == Kinds.Worker);
+    int at = Ours();
     RunM(4);
-    Check("one enlisted at the citadel is paid for at once and comes out of its door when its time is up, not before",
-        took && paid == Kinds.Worker.Cost && before == 0 && fresh != null && simM.Recruits.Count == 0 && !fresh.Inside,
-        $"paid {paid}, {train} s to make ready; ours a second before {before}, after: {(fresh == null ? "none" : fresh.Inside ? "inside" : "out of the door")}");
-    // only the first in the line is made ready; the one sent away gets its gold back
-    simM.Enlist(Kinds.Archer); simM.Enlist(Kinds.Swordsman);
-    RunM(10);
-    float second = simM.Recruits[1].Done;
-    double gold0 = simM.Stock.Gold;
-    bool sent = simM.Dismiss(1);
-    Check("only the first in the citadel's line is made ready; one sent away from the line gets its gold back whole",
-        simM.Recruits.Count == 1 && simM.Recruits[0].Done >= 9.9f && second == 0 && sent && simM.Stock.Gold == gold0 + Kinds.Swordsman.Cost,
-        $"first {simM.Recruits[0].Done:0.0} s along, second {second} s; gold {gold0} → {simM.Stock.Gold}");
-    simM.Dismiss(0);
+    var fresh = simM.Units.Find(u => !u.Dead && u.T == Kinds.Worker);
+    Check("one enlisted at the citadel is paid for and comes out of its door at once",
+        took && paid == Kinds.Worker.Cost && before == 0 && at == 1 && fresh != null && !fresh.Inside,
+        $"paid {paid}; ours {before} → {at} at the word, then {(fresh == null ? "none" : fresh.Inside ? "inside" : "out of the door")}");
     // the places: the citadel's ten, and no more taken on past them
     for (int i = Ours(); i < Sim.CitadelPlaces - 1; i++) simM.Spawn(Kinds.Worker, simM.Gate);
     bool lastOne = simM.Enlist(Kinds.Worker);
     string full = simM.CantEnlist(Kinds.Worker);
-    var giant = new UnitType { Key = "testgiant", Name = "Великан", Team = Team.Player, Move = Kinds.Worker.Move, Hp = 600, Cost = 10, Train = 5, Room = 4 };
-    var locked = new UnitType { Key = "testknight", Name = "Рыцарь", Team = Team.Player, Move = Kinds.Worker.Move, Hp = 200, Cost = 10, Train = 5, Lore = "knights" };
+    var giant = new UnitType { Key = "testgiant", Name = "Великан", Team = Team.Player, Move = Kinds.Worker.Move, Hp = 600, Cost = 10, Room = 4 };
+    var locked = new UnitType { Key = "testknight", Name = "Рыцарь", Team = Team.Player, Move = Kinds.Worker.Move, Hp = 200, Cost = 10, Lore = "knights" };
     string shut = simM.CantEnlist(locked);
     simM.Learnt.Add("knights");
     string open = simM.CantEnlist(locked);
     simM.Learnt.Add("barracks");
     string roomy = simM.CantEnlist(giant);
-    Check("the citadel takes on no more than it has places for, counting the line; a kind waits for its lore; barracks make room, a giant takes four",
+    Check("the citadel takes on no more than it has places for; a kind waits for its lore; barracks make room, a giant takes four",
         lastOne && full != null && full.Contains("мест") && shut != null && shut.Contains("изучите") && open != null && open.Contains("мест") && roomy == null && simM.Places == Sim.CitadelPlaces + 4,
-        $"household {simM.Household()} + line {simM.Recruits.Count} of {Sim.CitadelPlaces}: «{full}»; locked: «{shut}», then «{open}»; with barracks {simM.Places} places, the giant: «{roomy ?? "taken"}»");
-    // the drill yard makes them ready sooner
-    float plain = simM.TrainTime(Kinds.Archer);
-    simM.Learnt.Add("drillyard");
-    Check("a drill yard makes the citadel's recruits ready sooner", simM.TrainTime(Kinds.Archer) < plain * .75f, $"{plain} s → {simM.TrainTime(Kinds.Archer)} s");
+        $"household {simM.Household()} of {Sim.CitadelPlaces}: «{full}»; locked: «{shut}», then «{open}»; with barracks {simM.Places} places, the giant: «{roomy ?? "taken"}»");
+    // the drill yard: soldiers on their feet a seventh faster, workers as they were
+    float Walked(UnitType kind, bool drilled)
+    {
+        if (drilled) simM.Learnt.Add("drillyard"); else simM.Learnt.Remove("drillyard");
+        var u = simM.Spawn(kind, simM.NearestStand(siteM.KeepX + siteM.KeepR + 60, siteM.KeepZ + 40, 2));
+        u.Pace = 1;
+        float x0 = u.X, z0 = u.Z;
+        simM.GoTo(u, simM.NearestStand(siteM.KeepX + siteM.KeepR + 220, siteM.KeepZ + 40, 2));
+        u.Hold = true;
+        RunM(4);
+        float d = MathF.Sqrt((u.X - x0) * (u.X - x0) + (u.Z - z0) * (u.Z - z0));
+        u.Dead = true; u.DiedAt = -999;
+        return d;
+    }
+    float plainSword = Walked(Kinds.Swordsman, false), drilledSword = Walked(Kinds.Swordsman, true), drilledWorker = Walked(Kinds.Worker, true), plainWorker = Walked(Kinds.Worker, false);
+    Check("a drill yard puts soldiers on their feet a seventh faster, and the workers as they were",
+        drilledSword > plainSword * 1.1f && Math.Abs(drilledWorker - plainWorker) < plainWorker * .03f,
+        $"a swordsman in 4 s {plainSword:0} → {drilledSword:0} voxels, a worker {plainWorker:0} → {drilledWorker:0}");
 }
 
 // ---- dwellings: a room closed all round, roofed, with a door, furnished by the workers, and a place for each bunk
@@ -4922,13 +4922,13 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troops")
     for (int i = 0; i < Kinds.Troops.Length; i++)
     {
         var t = Kinds.Troops[i];
-        if (t.Team != Team.Player || !(t.Work < 1) || t.Lore != loresT[i] || t.Train <= 0 || t.Room < 1 || t.Cost <= 0 || Bodies.Looks(t) < 2
+        if (t.Team != Team.Player || !(t.Work < 1) || t.Lore != loresT[i] || t.Room < 1 || t.Cost <= 0 || Bodies.Looks(t) < 2
             || Bodies.Plan(t, 0) == Bodies.Plan(Kinds.Worker, 0)) wrongT.Add(t.Key);
     }
     bool orderT = Kinds.PlayerKinds.Length == 17 && Kinds.Troops.Length == 13 && Kinds.Troops.SequenceEqual(Kinds.PlayerKinds.Skip(4));
-    Check("thirteen new kinds of ours in the citadel's order, each waiting on its lore, with its time to make ready and the places it fills, each in a body of its own",
+    Check("thirteen new kinds of ours in the citadel's order, each waiting on its lore, with the places it fills, each in a body of its own",
         orderT && wrongT.Count == 0,
-        $"{Kinds.PlayerKinds.Length} kinds of ours; wrong: {string.Join(", ", wrongT)}; " + string.Join(", ", Kinds.Troops.Select(t => $"{t.Key} {t.Lore} {t.Train:0} s ×{t.Room}")));
+        $"{Kinds.PlayerKinds.Length} kinds of ours; wrong: {string.Join(", ", wrongT)}; " + string.Join(", ", Kinds.Troops.Select(t => $"{t.Key} {t.Lore} ×{t.Room}")));
 
     // every piece of every body hangs together with its part by a face (else the first wound would knock it off), and
     // nothing of the inside shows; a man's chest in each, but the horse's neck has no heart in it
@@ -5921,6 +5921,36 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--escape")
         $"pit at {pit}: {deep} voxels marked, {simQ.Orders.Total} left, the pit dug {bottom}; the digger free {FreeQ(digger)}, way out marked {(digger.WayOutMarked > 0 ? $"at {digger.WayOutMarked:0} s" : "never")}; {digger.Why}");
 }
 
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--pace")
+{
+    // the pace of the work: four workers raise a stone wall twenty metres long and two high, and dig a trench as long
+    // and a metre deep, from the citadel's gate; how long each takes (the game is not about waiting on them)
+    Console.WriteLine();
+    var mpP = new MapParams();
+    var wP = new VoxelWorld(mpP.SizeX, mpP.SizeY, mpP.SizeZ);
+    var siteP = MapGen.Generate(wP, mpP);
+    wP.Compact();
+    var simP = new Sim(wP, siteP);
+    simP.Waves.Countdown = 1e9; simP.WildTarget = 0;
+    StartingFort.Raise(simP);
+    simP.CancelArea(0, 0, wP.SX, wP.SZ);
+    var crewP = new List<Unit>();
+    for (int i = 0; i < 4; i++) crewP.Add(simP.Spawn(Kinds.Worker, simP.Gate));
+    simP.Stock[Stockpile.Stone] += 200.0 * VoxelWorld.PerM3;
+    int px = siteP.KeepX + siteP.KeepR + 40, pz = siteP.KeepZ - 80;
+    int wallP = simP.DesignateBuild(Shapes.Line(wP, siteP, px, pz, px, pz + 160, new Stroke { Mat = Mat.Stone, Width = 8, Height = 16, Level = true }, Shapes.LevelTop(wP, px, pz, 16)));
+    double t0 = simP.Time;
+    for (int t = 0; t < 900 * 20 && simP.Orders.Total > 0; t++) simP.Step(.05f);
+    double wallSecs = simP.Time - t0;
+    int ditchP = simP.DesignateRemove(Shapes.Line(wP, siteP, px + 40, pz, px + 40, pz + 160, new Stroke { Width = 8, Height = 8, Dig = true }, 0));
+    t0 = simP.Time;
+    for (int t = 0; t < 900 * 20 && simP.Orders.Total > 0; t++) simP.Step(.05f);
+    double ditchSecs = simP.Time - t0;
+    Check("four workers raise a stone wall 20 m long and 2 m high from the citadel's gate in about a minute, and dig a trench as long in half that",
+        wallP > 15000 && ditchP > 8000 && wallSecs < 70 && ditchSecs < 35,
+        $"a wall of {wallP} voxels in {wallSecs:0} s ({wallP / Math.Max(1, wallSecs):0} a second), a trench of {ditchP} voxels in {ditchSecs:0} s ({ditchP / Math.Max(1, ditchSecs):0} a second)");
+}
+
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--seal")
 {
     // building so that nobody is walled in: a worker raising a ring of wall round itself lays what it can from inside,
@@ -5964,7 +5994,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--seal")
     int marked1 = simB.DesignateBuild(Ring(one));
     for (int t = 0; t < 600 * 20 && simB.Orders.Total > 0; t++) simB.Step(.05f);
     int left1 = simB.Orders.Total, inside1 = Inside(one);
-    Check("a worker raising a ring of wall round itself lays what it can from inside, goes out through the last gap and shuts it from outside",
+    Check("a worker set to raise a ring of wall round itself goes out and builds it from outside, not walling itself in",
         one.x > 0 && marked1 > 3000 && left1 == 0 && FreeB(alone) && alone.WayOutMarked < 0 && inside1 < 240,
         $"ring at {one}: {marked1} voxels, {left1} left at {simB.Time:0} s; the worker free {FreeB(alone)}, a way out cut {(alone.WayOutMarked > 0 ? "yes" : "no")}, " +
         $"the ring shut {inside1 < 240} ({inside1} cells inside); {alone.Why}");

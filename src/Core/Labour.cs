@@ -28,7 +28,7 @@ public sealed class Stockpile
 /// </summary>
 public static class Labour
 {
-    public const double WorkPerSecond = 300;
+    public const double WorkPerSecond = 600;
     /// <summary>Gold a voxel of ore gives when it is broken out.</summary>
     public const double OreGold = .05;
     /// <summary>How far from where they stand pawns reach: a cell to each side, 1.5 m down and 2.5 m up.</summary>
@@ -166,6 +166,12 @@ public sealed class Orders
     /// <summary>The voxels to take out by the work they are (indexed by <see cref="WorkKind"/>; Build holds every lay).</summary>
     public readonly int[][] ColWork = new int[Work.Kinds][];
     public readonly HashSet<int> Active = new();
+    /// <summary>
+    /// Voxels marked to be laid in each cell of the walking grid (index as <see cref="NavGrid.Id"/>) of what blocks the
+    /// way (not ladders nor gates): with what the cell holds, whether it will be shut once the work is done.
+    /// </summary>
+    public readonly ushort[] CellLay;
+    readonly int _ny;
     public int Total { get; private set; }
     public int BuildTotal { get; private set; }
     /// <summary>The player's marking being drawn, written down order by order for Ctrl+Z; null when the hand is off.</summary>
@@ -175,7 +181,8 @@ public sealed class Orders
     {
         _w = w; _site = site;
         Layer = new VoxelWorld(w.SX, w.SY, w.SZ);
-        _nx = w.SX >> NavGrid.Shift; _nz = w.SZ >> NavGrid.Shift;
+        _nx = w.SX >> NavGrid.Shift; _nz = w.SZ >> NavGrid.Shift; _ny = w.SY >> NavGrid.Shift;
+        CellLay = new ushort[_nx * _nz * _ny];
         ColCount = new int[_nx * _nz];
         ColDig = new int[_nx * _nz];
         for (int k = 0; k < 4; k++) ColLay[k] = new int[_nx * _nz];
@@ -184,9 +191,14 @@ public sealed class Orders
 
     public byte At(int x, int y, int z) => y < 0 ? (byte)0 : Layer.Get(x, y, z);
 
-    void Count(int x, int z, int d, byte order)
+    void Count(int x, int y, int z, int d, byte order)
     {
         int col = (z >> NavGrid.Shift) * _nx + (x >> NavGrid.Shift);
+        if (!IsRemove(order) && NavGrid.Blocks(order) && order != Mat.Gate)
+        {
+            int cell = (y >> NavGrid.Shift) * _nx * _nz + col;
+            CellLay[cell] = (ushort)(CellLay[cell] + d);
+        }
         ColCount[col] += d;
         if (ColCount[col] > 0) Active.Add(col); else Active.Remove(col);
         Total += d;
@@ -234,9 +246,9 @@ public sealed class Orders
         byte cur = Layer.Get(x, y, z);
         if (cur == o) return;
         Writing?.Note(WaterPlanner.Pack(x, y, z), cur, o);
-        if (cur != 0) Count(x, z, -1, cur);
+        if (cur != 0) Count(x, y, z, -1, cur);
         Layer.Set(x, y, z, o);
-        if (o != 0) Count(x, z, 1, o);
+        if (o != 0) Count(x, y, z, 1, o);
     }
 
     /// <summary>Whether an order could be marked at a voxel as the world stands now.</summary>
@@ -288,7 +300,7 @@ public sealed class Orders
                 int x = cx * VoxelWorld.CS + (i & 31), z = cz * VoxelWorld.CS + (i >> 5 & 31), y = cy * VoxelWorld.CS + (i >> 10);
                 if (Layer.Get(x, y, z) != 0) continue;
                 Layer.Set(x, y, z, o);
-                Count(x, z, 1, o);
+                Count(x, y, z, 1, o);
             }
         }
     }
@@ -299,7 +311,7 @@ public sealed class Orders
         byte cur = Layer.Get(x, y, z);
         if (cur == 0) return;
         Layer.Set(x, y, z, 0);
-        Count(x, z, -1, cur);
+        Count(x, y, z, -1, cur);
     }
 
     /// <summary>Takes back every order inside a ball; returns how many.</summary>

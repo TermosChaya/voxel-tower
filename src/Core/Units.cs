@@ -34,8 +34,6 @@ public sealed class UnitType
     public float TorchShare;
     /// <summary>A priest: it prays in a sanctuary by day and does no other work.</summary>
     public bool Prays;
-    /// <summary>Ours: seconds the citadel takes to make one ready, from the day it is enlisted to the day it walks out.</summary>
-    public float Train = 30;
     /// <summary>Ours: the lore that must be learnt before the citadel will take this kind on; none for those it always takes.</summary>
     public string Lore = "";
     /// <summary>Ours: how many of the household's places it takes — a man one, a horse and its rider two, a giant four.</summary>
@@ -53,27 +51,27 @@ public static class Kinds
         Key = "worker", Name = "Рабочий", Team = Team.Player,
         // pawns scramble up a ledge a head higher than themselves: out of a two-metre pit, onto a low wall
         Move = new Mover { Height = 2, Climb = 2, Speed = 2.8f },
-        Work = 1, Yield = 1, Hp = 60, Damage = 6, AttackTime = 1.1f, Cost = 25, Train = 20,
+        Work = 1, Yield = 1, Hp = 60, Damage = 6, AttackTime = 1.1f, Cost = 25,
         Tool = "pick",
     };
     public static readonly UnitType Archer = new()
     {
         Key = "archer", Name = "Лучник", Team = Team.Player,
         Move = new Mover { Height = 2, Climb = 2, Speed = 2.6f },
-        Work = .4f, Yield = .6f, Hp = 70, Damage = 18, AttackTime = 1.3f, Ranged = true, Range = 24 * VoxelWorld.PerMetre, Cost = 40, Train = 30, Tool = "bow",
+        Work = .4f, Yield = .6f, Hp = 70, Damage = 18, AttackTime = 1.3f, Ranged = true, Range = 24 * VoxelWorld.PerMetre, Cost = 40, Tool = "bow",
     };
     public static readonly UnitType Swordsman = new()
     {
         Key = "sword", Name = "Мечник", Team = Team.Player,
         Move = new Mover { Height = 2, Climb = 2, Speed = 2.4f },
-        Work = .4f, Yield = .6f, Hp = 140, Damage = 16, AttackTime = 1f, Cost = 35, Train = 30, Tool = "sword", BodyR = 2.5f, Reach = 11,
+        Work = .4f, Yield = .6f, Hp = 140, Damage = 16, AttackTime = 1f, Cost = 35, Tool = "sword", BodyR = 2.5f, Reach = 11,
     };
     /// <summary>A priest of the old powers: in a dark robe and hood, with a staff; it prays, and fights only for its life.</summary>
     public static readonly UnitType Priest = new()
     {
         Key = "priest", Name = "Жрец", Team = Team.Player,
         Move = new Mover { Height = 2, Climb = 2, Speed = 2.5f },
-        Work = 1, Yield = 0, Hp = 50, Damage = 4, AttackTime = 1.3f, Cost = 50, Train = 40, Tool = "staff", Prays = true,
+        Work = 1, Yield = 0, Hp = 50, Damage = 4, AttackTime = 1.3f, Cost = 50, Tool = "staff", Prays = true,
     };
 
     // the troops the citadel takes on once the household has learnt how to make them: men on foot with long arms and
@@ -84,42 +82,42 @@ public static class Kinds
     {
         Key = "spear", Name = "Копейщик", Team = Team.Player,
         Move = new Mover { Height = 2, Climb = 2, Speed = 2.5f },
-        Work = .4f, Yield = .6f, Hp = 100, Damage = 14, AttackTime = 1.1f, Reach = 15, Cost = 30, Train = 30, Lore = "spearmen", Tool = "spear",
+        Work = .4f, Yield = .6f, Hp = 100, Damage = 14, AttackTime = 1.1f, Reach = 15, Cost = 30, Lore = "spearmen", Tool = "spear",
     };
     /// <summary>A shieldbearer in mail behind a great tower shield, a mace in his other hand: slow to kill, and those beside him are covered too.</summary>
     public static readonly UnitType Shieldbearer = new()
     {
         Key = "shield", Name = "Щитоносец", Team = Team.Player,
         Move = new Mover { Height = 2, Climb = 2, Speed = 2.1f },
-        Work = .4f, Yield = .6f, Hp = 190, Damage = 10, AttackTime = 1.2f, Reach = 11, BodyR = 2.5f, Cost = 40, Train = 35, Lore = "shieldmen", Tool = "mace",
+        Work = .4f, Yield = .6f, Hp = 190, Damage = 10, AttackTime = 1.2f, Reach = 11, BodyR = 2.5f, Cost = 40, Lore = "shieldmen", Tool = "mace",
     };
     /// <summary>A halberdier in mail and a red tabard under a sallet: the axe on the end of his pole comes down deep.</summary>
     public static readonly UnitType Halberdier = new()
     {
         Key = "halberd", Name = "Алебардщик", Team = Team.Player,
         Move = new Mover { Height = 2, Climb = 2, Speed = 2.3f },
-        Work = .4f, Yield = .6f, Hp = 130, Damage = 24, AttackTime = 1.5f, Reach = 14, BodyR = 2.5f, Cost = 45, Train = 40, Lore = "halberds", Tool = "halberd",
+        Work = .4f, Yield = .6f, Hp = 130, Damage = 24, AttackTime = 1.5f, Reach = 14, BodyR = 2.5f, Cost = 45, Lore = "halberds", Tool = "halberd",
     };
     /// <summary>A knight in full plate under a great helm, a long sword and a heater shield: what a blade gets through is little.</summary>
     public static readonly UnitType Knight = new()
     {
         Key = "knight", Name = "Рыцарь", Team = Team.Player,
         Move = new Mover { Height = 2, Climb = 2, Speed = 2f },
-        Work = .4f, Yield = .6f, Hp = 240, Damage = 24, AttackTime = 1.1f, Reach = 12, BodyR = 2.5f, Cost = 90, Train = 60, Lore = "knights", Tool = "longsword",
+        Work = .4f, Yield = .6f, Hp = 240, Damage = 24, AttackTime = 1.1f, Reach = 12, BodyR = 2.5f, Cost = 90, Lore = "knights", Tool = "longsword",
     };
     /// <summary>A slinger, light and lean, a pouch of stones at his belt: cheap, quick, and his stones knock the wind out of a raider.</summary>
     public static readonly UnitType Slinger = new()
     {
         Key = "sling", Name = "Пращник", Team = Team.Player,
         Move = new Mover { Height = 2, Climb = 2, Speed = 2.8f },
-        Work = .4f, Yield = .6f, Hp = 55, Damage = 10, AttackTime = 1f, Ranged = true, Range = 18 * VoxelWorld.PerMetre, Cost = 20, Train = 20, Lore = "slingers", Tool = "sling",
+        Work = .4f, Yield = .6f, Hp = 55, Damage = 10, AttackTime = 1f, Ranged = true, Range = 18 * VoxelWorld.PerMetre, Cost = 20, Lore = "slingers", Tool = "sling",
     };
     /// <summary>A crossbowman in a brigandine: slow to span his bow, but a bolt of his goes through mail and far.</summary>
     public static readonly UnitType Crossbowman = new()
     {
         Key = "crossbow", Name = "Арбалетчик", Team = Team.Player,
         Move = new Mover { Height = 2, Climb = 2, Speed = 2.4f },
-        Work = .4f, Yield = .6f, Hp = 80, Damage = 34, AttackTime = 2.8f, Ranged = true, Range = 28 * VoxelWorld.PerMetre, Cost = 50, Train = 40, Lore = "crossbows", Tool = "crossbow",
+        Work = .4f, Yield = .6f, Hp = 80, Damage = 34, AttackTime = 2.8f, Ranged = true, Range = 28 * VoxelWorld.PerMetre, Cost = 50, Lore = "crossbows", Tool = "crossbow",
     };
     /// <summary>A bombardier in a leather apron with pots of powder: one bursts where it comes down, among the raiders and their ladders.</summary>
     public static readonly UnitType Bombardier = new()
@@ -127,28 +125,28 @@ public static class Kinds
         Key = "bombard", Name = "Бомбардир", Team = Team.Player,
         Move = new Mover { Height = 2, Climb = 2, Speed = 2.4f },
         // its damage is the pot's at the heart of the burst
-        Work = .4f, Yield = .6f, Hp = 70, Damage = 40, AttackTime = 4f, Ranged = true, Range = 16 * VoxelWorld.PerMetre, Cost = 60, Train = 50, Lore = "bombards", Tool = "bombard",
+        Work = .4f, Yield = .6f, Hp = 70, Damage = 40, AttackTime = 4f, Ranged = true, Range = 16 * VoxelWorld.PerMetre, Cost = 60, Lore = "bombards", Tool = "bombard",
     };
     /// <summary>A war hound, a great dog in a spiked collar: the swiftest of ours, it runs down whoever runs.</summary>
     public static readonly UnitType Hound = new()
     {
         Key = "hound", Name = "Боевой пёс", Team = Team.Player,
         Move = new Mover { Height = 1, Climb = 1, Drop = 3, Speed = 5.5f, Ladders = false },
-        Work = 0, Yield = 0, Hp = 45, Damage = 9, AttackTime = .7f, Reach = 9, BodyH = 8, BodyR = 2, Cost = 15, Train = 15, Lore = "hounds", Tool = "bite", NoHands = true,
+        Work = 0, Yield = 0, Hp = 45, Damage = 9, AttackTime = .7f, Reach = 9, BodyH = 8, BodyR = 2, Cost = 15, Lore = "hounds", Tool = "bite", NoHands = true,
     };
     /// <summary>A rider with a sword on a horse a metre and a half at the withers: quick, and a blow from the gallop is a charge.</summary>
     public static readonly UnitType Rider = new()
     {
         Key = "rider", Name = "Всадник", Team = Team.Player,
         Move = new Mover { Height = 3, Climb = 1, Drop = 2, Speed = 5f, Ladders = false },
-        Work = 0, Yield = 0, Hp = 160, Damage = 16, AttackTime = 1f, Reach = 13, BodyH = 21, BodyR = 3.5f, Cost = 70, Train = 50, Room = 2, Lore = "riders", Tool = "sword", Mounted = true,
+        Work = 0, Yield = 0, Hp = 160, Damage = 16, AttackTime = 1f, Reach = 13, BodyH = 21, BodyR = 3.5f, Cost = 70, Room = 2, Lore = "riders", Tool = "sword", Mounted = true,
     };
     /// <summary>A horse archer: he looses from the saddle and is gone before the horde comes up.</summary>
     public static readonly UnitType HorseArcher = new()
     {
         Key = "horsearcher", Name = "Конный лучник", Team = Team.Player,
         Move = new Mover { Height = 3, Climb = 1, Drop = 2, Speed = 5.2f, Ladders = false },
-        Work = 0, Yield = 0, Hp = 120, Damage = 16, AttackTime = 1.4f, Ranged = true, Range = 20 * VoxelWorld.PerMetre, BodyH = 21, BodyR = 3.5f, Cost = 80, Train = 55, Room = 2,
+        Work = 0, Yield = 0, Hp = 120, Damage = 16, AttackTime = 1.4f, Ranged = true, Range = 20 * VoxelWorld.PerMetre, BodyH = 21, BodyR = 3.5f, Cost = 80, Room = 2,
         Lore = "horsearchers", Tool = "bow", Mounted = true,
     };
     /// <summary>A knight on a barded horse with a lance couched: every blow of his is a charge.</summary>
@@ -156,21 +154,21 @@ public static class Kinds
     {
         Key = "lancer", Name = "Конный рыцарь", Team = Team.Player,
         Move = new Mover { Height = 3, Climb = 1, Drop = 2, Speed = 4.2f, Ladders = false },
-        Work = 0, Yield = 0, Hp = 280, Damage = 30, AttackTime = 1.3f, Reach = 15, BodyH = 22, BodyR = 3.5f, Cost = 140, Train = 80, Room = 3, Lore = "lancers", Tool = "lance", Mounted = true,
+        Work = 0, Yield = 0, Hp = 280, Damage = 30, AttackTime = 1.3f, Reach = 15, BodyH = 22, BodyR = 3.5f, Cost = 140, Room = 3, Lore = "lancers", Tool = "lance", Mounted = true,
     };
     /// <summary>A troll tamed and bought from the hill folk, in our blue, an iron collar on it and a broken chain: it mends as trolls do.</summary>
     public static readonly UnitType TameTroll = new()
     {
         Key = "tametroll", Name = "Ручной тролль", Team = Team.Player,
         Move = new Mover { Height = 3, Climb = 2, Drop = 5, Speed = 1.7f },
-        Work = .6f, Yield = .6f, Hp = 420, Damage = 30, AttackTime = 1.6f, Reach = 14, BodyH = 24, BodyR = 3.5f, Cost = 110, Train = 70, Room = 3, Lore = "trolls", Tool = "club",
+        Work = .6f, Yield = .6f, Hp = 420, Damage = 30, AttackTime = 1.6f, Reach = 14, BodyH = 24, BodyR = 3.5f, Cost = 110, Room = 3, Lore = "trolls", Tool = "club",
     };
     /// <summary>A giant, a man of three metres in furs with a beard to his chest and a great maul: whoever it strikes flies.</summary>
     public static readonly UnitType Giant = new()
     {
         Key = "giant", Name = "Великан", Team = Team.Player,
         Move = new Mover { Height = 3, Climb = 2, Drop = 4, Speed = 1.8f },
-        Work = .6f, Yield = .6f, Hp = 600, Damage = 40, AttackTime = 1.8f, Reach = 18, BodyH = 24, BodyR = 3.5f, Cost = 160, Train = 90, Room = 4, Lore = "giants", Tool = "maul",
+        Work = .6f, Yield = .6f, Hp = 600, Damage = 40, AttackTime = 1.8f, Reach = 18, BodyH = 24, BodyR = 3.5f, Cost = 160, Room = 4, Lore = "giants", Tool = "maul",
     };
     /// <summary>The troops the lore opens, in the order the citadel offers them.</summary>
     public static readonly UnitType[] Troops = { Spearman, Shieldbearer, Halberdier, Knight, Slinger, Crossbowman, Bombardier, Hound, Rider, HorseArcher, Lancer, TameTroll, Giant };

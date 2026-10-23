@@ -670,12 +670,12 @@ public partial class Tutorial : Node
         Add(new Step
         {
             Chapter = lore, Title = "Цитадель",
-            Text = "В цитадели ({Keep} или щелчок по ней) набирают войско за золото. Новобранцы готовятся по очереди. " +
+            Text = "В цитадели ({Keep} или щелчок по ней) набирают войско за золото. Нанятый сразу выходит из цитадели. " +
                 "Сколько мест в войске, видно на верхней панели справа.",
             Task = "Наймите кого-нибудь",
             Point = "console",
-            Enter = () => { house0 = m.Sim.Household() + m.Sim.Recruits.Count; if (m.Sim.Stock.Gold < 200) m.Sim.Stock.Gold = 200; },
-            Done = () => m.Sim.Household() + m.Sim.Recruits.Count > house0,
+            Enter = () => { house0 = m.Sim.Household(); if (m.Sim.Stock.Gold < 200) m.Sim.Stock.Gold = 200; },
+            Done = () => m.Sim.Household() > house0,
         });
         int dwellings0 = 0;
         Add(new Step

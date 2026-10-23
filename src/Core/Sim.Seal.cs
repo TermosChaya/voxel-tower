@@ -4,21 +4,23 @@ using System.Collections.Generic;
 namespace VoxelTower.Core;
 
 /// <summary>
-/// Building so that nobody is walled in. Before a pawn lays the voxel that shuts a cell of the way — a course of a
-/// wall grown past what the legs climb, the last of a gap — it tries the wall as it will stand: whether each of ours
-/// near it could still walk out to the open valley, or to the citadel's door, with that cell shut. If the pawn itself
-/// would be shut in, it lays all the rest first, goes out through the gap left and fills it from outside; if another
-/// would be, the gap waits till that one is out, and a pawn with nothing more to do in a space being walled shut walks
-/// out of it by itself. So a ring of wall goes up all round, and its last gap is shut from outside. Shut in is as in
-/// Sim.Escape.cs: fewer cells to walk to than <see cref="RoomEnough"/>, and the citadel's door not among them. Nothing
-/// of it is kept in a save: the wall is tried again as it goes up.
+/// Building so that nobody is walled in. A pawn about to lay into a cell of the way that the work will shut tries the
+/// wall as it will stand once all that is marked is laid: whether each of ours near it could still walk out to the open
+/// valley, or to the citadel's door. If the finished wall would shut the pawn itself in, it lays nothing of it from
+/// inside: it goes out and builds it from outside; if it would shut another in, the wall waits till that one is out,
+/// and a pawn with nothing more to do in a space being walled shut walks out of it by itself. So a ring of wall is
+/// raised from outside, by those who stay outside. Shut in is as in Sim.Escape.cs: fewer cells to walk to than
+/// <see cref="RoomEnough"/>, and the citadel's door not among them. A cell is tried before the first of it is laid (its
+/// floor rising past what the legs climb shuts a way as surely as the cell filling), every few seconds while it fills,
+/// and at the voxel that shuts it. Nothing of it is kept in a save: the wall is tried again as it goes up.
 /// </summary>
 public sealed partial class Sim
 {
     // the spaces being walled shut, cell by cell, and till when: nobody stays in them, nor stands in them to build
     readonly Dictionary<int, double> _closing = new();
-    // the cells whose shutting waits, till when, and why (the worker's word)
+    // the cells whose filling waits, till when, and why (the worker's word); and those tried and let be filled, till when
     readonly Dictionary<int, (double until, string why)> _gaps = new();
+    readonly Dictionary<int, double> _cleared = new();
     readonly List<int> _shutRoom = new();
     // what blocks each cell the pawns lay into this step: the grid counts the work a step late, and one blow of a tool
     // can lay a hundred voxels
@@ -26,6 +28,8 @@ public sealed partial class Sim
     double _fillingAt = -1;
     readonly HashSet<int> _freeCells = new(), _walked = new();
     readonly Queue<int> _walk = new();
+    // the walk tried in the world as it will stand, all that is marked laid (or as it stands now)
+    bool _finished;
 
     bool Closing(int c) => _closing.Count > 0 && _closing.TryGetValue(c, out double until) && Time < until;
 
@@ -38,17 +42,21 @@ public sealed partial class Sim
     }
 
     /// <summary>
-    /// Whether laying this voxel now would shut one of ours in: it is the voxel that shuts its cell, and with that cell
-    /// shut someone near could no longer walk out. Then the cell waits a little, and the space is marked to be left.
+    /// Whether laying this voxel now would help shut one of ours in: its cell will be shut when the work is done, and
+    /// with the work done someone near, free now, could no longer walk out. Then the cell waits a little, and the space
+    /// is marked to be left.
     /// </summary>
     bool ShutsIn(Unit u, int x, int y, int z, byte m)
     {
         if (!NavGrid.Blocks(m) || m == Mat.Gate) return false;
         int c = Nav.CellOf(x, y, z);
         if (Held(c, out _)) return true;
-        // only the voxel that tips the cell from open to shut counts
         int now = Filling(c);
-        if (now + 1 < NavGrid.SolidT || now >= NavGrid.SolidT) return false;
+        // shut already, or never to be (a floor laid thin)
+        if (now >= NavGrid.SolidT || now + Orders.CellLay[c] < NavGrid.SolidT) return false;
+        if (now + 1 < NavGrid.SolidT && _cleared.TryGetValue(c, out double until) && Time < until) return false;
+        if (_cleared.Count > 4000) _cleared.Clear();
+        _cleared[c] = Time + 4;
         return WouldShut(u, c);
     }
 
@@ -67,7 +75,7 @@ public sealed partial class Sim
         _filling[c] = Filling(c) + (Mat.IsLeaf(m) ? 2 : 1);
     }
 
-    /// <summary>Whether shutting cell c would shut the one laying, or one of ours near it, in; if so the cell is held and the space marked.</summary>
+    /// <summary>Whether the work done would shut the one laying, or one of ours near it, in; if so the cell is held and the space marked.</summary>
     bool WouldShut(Unit u, int c)
     {
         int ci = Nav.I(c), ck = Nav.K(c), cy = Nav.Y(c);
@@ -86,17 +94,23 @@ public sealed partial class Sim
         // the old marks go: a space shut long since, a gap filled
         if (_closing.Count > 2000) _closing.Clear();
         foreach (int r in _shutRoom) _closing[r] = Time + 30;
-        _gaps[c] = (Time + 3, shut == u ? "оставляет проход, чтобы не замуровать себя" : $"оставляет проход: внутри {shut.T.Name.ToLowerInvariant()}");
+        _gaps[c] = (Time + 3, shut == u ? "строит снаружи, чтобы не замуровать себя" : $"не закрывает стену: внутри {shut.T.Name.ToLowerInvariant()}");
         if (_gaps.Count > 200) foreach (var key in new List<int>(_gaps.Keys)) if (Time >= _gaps[key].until) _gaps.Remove(key);
         return true;
     }
 
-    /// <summary>Whether cell c shut would shut this one in, as nothing shuts it in now; the space it would be left in, in _shutRoom.</summary>
+    /// <summary>
+    /// Whether the work done, with cell c in it, would shut this one in, as nothing shuts it in now; the space it would be
+    /// left in, in _shutRoom.
+    /// </summary>
     bool ShutBy(Unit o, int c)
     {
         _shutRoom.Clear();
-        if (WalksOut(o.Cell, o.T.Move, c, _shutRoom)) { foreach (int r in _shutRoom) _freeCells.Add(r); return false; }
-        // shut in already (a pit, a tower): not this voxel's doing, and Sim.Escape.cs sees to it
+        _finished = true;
+        bool after = WalksOut(o.Cell, o.T.Move, c, _shutRoom);
+        _finished = false;
+        if (after) { foreach (int r in _shutRoom) _freeCells.Add(r); return false; }
+        // shut in already (a pit, a tower): not this work's doing, and Sim.Escape.cs sees to it
         return WalksOut(o.Cell, o.T.Move, -1, null);
     }
 
@@ -145,13 +159,25 @@ public sealed partial class Sim
     {
         if (!Nav.In(i, y, k) || y < 1) return false;
         int c = Nav.Id(i, y, k);
-        if (c == shut || Nav.Water[c] >= NavGrid.DeepT) return false;
-        if (!(m.Ladders && Nav.Ladder[c] != 0) && c - Nav.Layer != shut && !Nav.Ground(i, y - 1, k, true)) return false;
+        if (Shut(c, shut) || Nav.Water[c] >= NavGrid.DeepT) return false;
+        if (!(m.Ladders && Nav.Ladder[c] != 0) && !Shut(c - Nav.Layer, shut) && !Nav.Ground(i, y - 1, k, true)) return false;
         for (int d = 0; d < m.Height; d++) if (!Air(i, y + d, k, shut)) return false;
         return true;
     }
 
-    bool Air(int i, int y, int k, int shut) => Nav.Open(i, y, k, true) && !(y < Nav.NY && Nav.In(i, y, k) && Nav.Id(i, y, k) == shut);
+    bool Air(int i, int y, int k, int shut) => Nav.Open(i, y, k, true) && !(y < Nav.NY && Nav.In(i, y, k) && Shut(Nav.Id(i, y, k), shut));
+
+    /// <summary>
+    /// The cell tried shut; or one shut already this step, which the grid will know only at the next; or, in the world
+    /// as it will stand, one the work marked will shut.
+    /// </summary>
+    bool Shut(int c, int shut)
+    {
+        if (c == shut) return true;
+        if (c < 0) return false;
+        int n = Filling(c);
+        return (_finished ? n + Orders.CellLay[c] : n) >= NavGrid.SolidT;
+    }
 
     bool Clear(int i, int k, int y0, int y1, int shut)
     {
@@ -160,11 +186,11 @@ public sealed partial class Sim
     }
 
     /// <summary>Where the feet rest in a cell; on a cell shut under it, at its foot.</summary>
-    int FeetAt(int c, int shut) => c - Nav.Layer == shut ? Nav.Y(c) << NavGrid.Shift : Nav.Floor[c];
+    int FeetAt(int c, int shut) => Shut(c - Nav.Layer, shut) ? Nav.Y(c) << NavGrid.Shift : Nav.Floor[c];
 
     /// <summary>
-    /// A pawn with nothing in hand in a space being walled shut walks out of it, to where it is not shut in by the gap
-    /// filled; true when it is on its way.
+    /// A pawn with nothing in hand in a space being walled shut walks out of it, to where the wall finished would not
+    /// shut it in; true when it is on its way.
     /// </summary>
     bool GetOut(Unit u)
     {
@@ -173,7 +199,7 @@ public sealed partial class Sim
         var path = Paths.Find(u.Cell, c => !Closing(c) && !Held(c, out _) && !Held(c - Nav.Layer, out _), _ => 0, u.T.Move, 3000, gates: true);
         if (path == null || path.Count == 0) return false;
         u.Path = path; u.PathI = 0;
-        u.Why = "выходит, пока проход не заложен";
+        u.Why = "выходит, пока стену не закрыли";
         return true;
     }
 }

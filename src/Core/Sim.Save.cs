@@ -16,7 +16,7 @@ namespace VoxelTower.Core;
 public sealed partial class Sim
 {
     /// <summary>20: the bodies sculpted finer, their half-voxels (and so a wounded body's) not what they were.</summary>
-    public const int SaveVersion = 26;
+    public const int SaveVersion = 27;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -145,8 +145,6 @@ public sealed partial class Sim
         foreach (var s in Escaped) WriteSurvivor(w, s);
         w.Write(Whirls.Count);
         foreach (var wh in Whirls) { w.Write(wh.X); w.Write(wh.Z); w.Write(wh.VX); w.Write(wh.VZ); w.Write(wh.R); w.Write(wh.Until); w.Write(wh.Next); }
-        w.Write(Recruits.Count);
-        foreach (var m in Recruits) { w.Write(m.Kind.Key); w.Write(m.Done); w.Write(m.Paid); }
         WriteProgress(w);
         WriteDawn(w);
         WriteChapters(w);
@@ -419,12 +417,6 @@ public sealed partial class Sim
         Whirls.Clear();
         for (int i = r.ReadInt32(); i > 0; i--)
             Whirls.Add(new Whirl { X = r.ReadSingle(), Z = r.ReadSingle(), VX = r.ReadSingle(), VZ = r.ReadSingle(), R = r.ReadSingle(), Until = r.ReadDouble(), Next = r.ReadDouble() });
-        Recruits.Clear();
-        for (int i = r.ReadInt32(); i > 0; i--)
-        {
-            var kind = KindOf(r.ReadString()); float done = r.ReadSingle(); int paid = r.ReadInt32();
-            if (kind != null) Recruits.Add(new Recruit { Kind = kind, Done = done, Paid = paid });
-        }
         ReadProgress(r);
         ReadDawn(r);
         ReadChapters(r);

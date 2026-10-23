@@ -529,10 +529,6 @@ public partial class Inspector : Control
             "прямоугольником с заливкой «дом»; ещё можно обвести закрытую комнату с воротами делянкой «жилой дом». Всадник занимает 2 места, великан 4.";
         note.MouseFilter = MouseFilterEnum.Stop;
         left.AddChild(note);
-        var line = new HBoxContainer();
-        line.AddThemeConstantOverride("separation", 3);
-        for (int i = 0; i < Sim.RecruitsMax; i++) line.AddChild(new RecruitFace(_m, i) { CustomMinimumSize = new Vector2(30, 37) });
-        left.AddChild(line);
         row.AddChild(left);
         row.AddChild(new Rule(true));
         var kinds = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
@@ -549,7 +545,7 @@ public partial class Inspector : Control
         _refresh.Add(() =>
         {
             int have = sim.Household(), places = sim.Places, beds = places - Sim.CitadelPlaces - (sim.Knows("barracks") ? 4 : 0);
-            head.Text = $"Войско: {have} из {places} мест" + (sim.Recruits.Count > 0 ? $" · в очереди {sim.Recruits.Count}" : "");
+            head.Text = $"Войско: {have} из {places} мест";
             head.AddThemeColorOverride("font_color", have >= places ? Ornament.Ember : Ornament.Parchment);
             note.Text = beds > 0 ? $"места: цитадель {places - beds}, жилые дома {beds}" : Bindings.Fill("места дают цитадель и жилые дома ({ToolGather})");
             foreach (var k in _tiles) k.QueueRedraw();

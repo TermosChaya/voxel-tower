@@ -65,8 +65,8 @@ public sealed partial class Sim
     /// <summary>How much harder our shafts strike with faceted heads: arrows and bolts, not stones.</summary>
     float ShotHarm(Unit a) => a.Team == Team.Player && a.T.Tool is "bow" or "crossbow" ? ArrowHarm : 1;
 
-    /// <summary>A third faster after one that flees, for a hound or a rider with the hunt.</summary>
-    float TroopPace(Unit u) => Hunter(u.T) && Knows("hunt") && u.Target is { Routed: true, Dead: false } ? 1.33f : 1;
+    /// <summary>A third faster after one that flees, for a hound or a rider with the hunt; a soldier drilled on the drill yard, a seventh faster always.</summary>
+    float TroopPace(Unit u) => (Hunter(u.T) && Knows("hunt") && u.Target is { Routed: true, Dead: false } ? 1.33f : 1) * (Soldier(u) && Knows("drillyard") ? 1.15f : 1);
 
     // ------------------------------------------------------------ every tick
 

@@ -496,9 +496,7 @@ public partial class Hud : CanvasLayer
             if (u == null && t.HoverKeep)
             {
                 var sim = _m.Sim;
-                string line = sim.Recruits.Count == 0 ? Bindings.Fill("щелчок или {Keep} — набор войска")
-                    : $"готовится: {sim.Recruits[0].Kind.Name.ToLowerInvariant()}, ещё {Math.Ceiling(sim.TrainTime(sim.Recruits[0].Kind) - sim.Recruits[0].Done)} с" + (sim.Recruits.Count > 1 ? $" · в очереди {sim.Recruits.Count}" : "");
-                _tag.Show($"Цитадель · войско {sim.Household()} из {sim.Places}", Ornament.EmberGlow, line);
+                _tag.Show($"Цитадель · войско {sim.Household()} из {sim.Places}", Ornament.EmberGlow, Bindings.Fill("щелчок или {Keep} — набор войска"));
                 return;
             }
             if (u == null && t.HoverPlace is { } place)

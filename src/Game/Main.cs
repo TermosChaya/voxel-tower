@@ -38,6 +38,7 @@ namespace VoxelTower.Game;
 /// --top looks straight down, --look=N at the Nth named place of the valley, --seed=N makes another valley; --select[=N]
 /// chooses our pawns (or the first N), --tab=key lets a panel down from the beam, --tool=N takes up the Nth tool,
 /// --ui-scale=S draws the interface at that size instead of the player's own, --inspect looks at the first raider (or beast),
+/// --keep opens the citadel's muster,
 /// --day=F starts at that time of the day (0 dawn, 1 sunset), --alarm=S raises the alarm and runs on S seconds,
 /// --weather=rain|fog|wind brings that weather at once, --envoy sends the horde's envoy and waits for its offer,
 /// --lore=N,key,… puts N knowledge in hand with that lore learnt, --sounds=folder writes every sound out as a .wav and quits,
@@ -117,7 +118,7 @@ public partial class Main : Node3D
 
     string _shot;
     int _shotFrames = 45, _frames;
-    bool _demo, _calm, _selfTest, _finale, _top, _inspect;
+    bool _demo, _calm, _selfTest, _finale, _top, _inspect, _keep;
     int _look = -1;
     /// <summary>--cam=x,z,yaw,pitch,zoom: where the camera looks for a screenshot, x and z in voxels.</summary>
     float[] _cam;
@@ -178,6 +179,7 @@ public partial class Main : Node3D
             else if (a.StartsWith("--cam=")) _cam = Array.ConvertAll(a["--cam=".Length..].Split(','), v => float.Parse(v, System.Globalization.CultureInfo.InvariantCulture));
             else if (a == "--selftest") _selfTest = true;
             else if (a == "--inspect") _inspect = true;
+            else if (a == "--keep") _keep = true;
             else if (a.StartsWith("--load=")) PendingLoad = a["--load=".Length..];
             else if (a == "--tutorial") _tutorialAt = 0;
             else if (a.StartsWith("--tutorial=") && int.TryParse(a["--tutorial=".Length..], out int ta)) _tutorialAt = ta;
@@ -421,6 +423,7 @@ public partial class Main : Node3D
             Inspected = seen;
             Rig.Set(World.WX(seen.X), World.WZ(seen.Z), -.66f, .62f, 2.2f, snap: true);
         }
+        if (_keep) Command.OpenKeep();
         if (_tool >= 0 && _tool < Hud.ToolDefs.Length) Tools.SetTool(Hud.ToolDefs[_tool].tool);
         if (_grid >= 0) Tools.SetGrid(_grid);
         if (_cam is { Length: 5 }) Rig.Set(World.WX(_cam[0]), World.WZ(_cam[1]), _cam[2], _cam[3], _cam[4], snap: true);
@@ -1475,10 +1478,10 @@ public partial class Main : Node3D
         string instead = Inspected != null ? $" ({Inspected.T.Name} looked at instead)" : "";
         foreach (var u in Selected) instead = $" ({u.T.Name} chosen instead)";
         Hud.Inspector.TileOf(Kinds.Worker)?.Press();
-        bool paidNow = Math.Abs(Sim.Stock.Gold - (500 - Kinds.Worker.Cost)) < .01 && Sim.Recruits.Count == 1 && Sim.Count(Kinds.Worker) == w0;
-        Advance(Sim.TrainTime(Kinds.Worker) + 8);
-        Check("a click on the citadel opens its muster; a worker taken on is paid for at once and comes out when made ready",
-            keepOpen && paidNow && Sim.Count(Kinds.Worker) == w0 + 1 && Sim.Recruits.Count == 0 && Sim.Places == Sim.CitadelPlaces,
+        bool paidNow = Math.Abs(Sim.Stock.Gold - (500 - Kinds.Worker.Cost)) < .01 && Sim.Count(Kinds.Worker) == w0 + 1;
+        Advance(8);
+        Check("a click on the citadel opens its muster; a worker taken on is paid for and comes out at once",
+            keepOpen && paidNow && Sim.Count(Kinds.Worker) == w0 + 1 && Sim.Places == Sim.CitadelPlaces,
             $"muster {(keepOpen ? "open" : "not open")}{instead}, paid at once {paidNow}, {Sim.Stock.Gold:0} gold left, workers {w0} → {Sim.Count(Kinds.Worker)}");
         KeyPress(Key.Escape);
         Check("Esc lets the citadel go", !KeepChosen && !Hud.KeepShown);

@@ -198,7 +198,7 @@ public sealed partial class Sim
             Worked?.Invoke(hit.x, hit.y, hit.z, dig ? World.Get(hit.x, hit.y, hit.z) : hit.m, dig);
         }
         int guard = 0;
-        while (u.JobI < u.Jobs.Count && guard++ < 256)
+        while (u.JobI < u.Jobs.Count && guard++ < 4096)
         {
             var j = u.Jobs[u.JobI];
             float cost = Orders.IsRemove(j.m) ? Labour.Dig(World.Get(j.x, j.y, j.z)) / DigPace : Labour.Lay(j.m) / LayPace;
@@ -289,10 +289,10 @@ public sealed partial class Sim
                         if (Nav.I(bc) == Nav.I(u.Cell) && Nav.K(bc) == Nav.K(u.Cell) && Nav.Y(bc) >= Nav.Y(u.Cell) && Nav.Y(bc) < Nav.Y(u.Cell) + u.T.Move.Height) _inTheWay = true;
                         continue;
                     }
-                    // nothing yet to lay it on: what is under it first (it is gathered again once that is laid)
-                    if (o != Mat.Pitch && !Footed(x, y, z) && !builds.Exists(b => Math.Abs(b.x - x) + Math.Abs(b.y - y) + Math.Abs(b.z - z) == 1)) { unfooted = true; continue; }
                     builds.Add((x, y, z, o));
                 }
+        // nothing yet to lay it on, nor anything laid first from here to lay it on: it waits for its footing
+        if (builds.Count > 0 && Footing(builds)) unfooted = true;
         float ux = u.X, uz = u.Z;
         float Near((int x, int y, int z, byte m) j) => (j.x + .5f - ux) * (j.x + .5f - ux) + (j.z + .5f - uz) * (j.z + .5f - uz);
         // a tree is cut at its foot, so that it goes over whole on its stump; everything else is dug from the top down
@@ -308,6 +308,36 @@ public sealed partial class Sim
         u.Jobs.AddRange(digs);
         u.Jobs.AddRange(builds);
         if (u.Jobs.Count == 0) u.Why = missing != "" ? "нет: " + missing : held != "" ? held : crowded ? "на месте кладки стоят" : unfooted ? "ждёт опоры: класть не на что" : "";
+    }
+
+    readonly HashSet<int> _toLay = new(), _footed = new();
+    readonly Queue<int> _footing = new();
+    static readonly (int dx, int dy, int dz)[] Borne = { (0, 1, 0), (1, 0, 0), (-1, 0, 0), (0, 0, 1), (0, 0, -1) };
+
+    /// <summary>
+    /// Keeps of the voxels to lay from here those that stand on something already, or will once what is under them or
+    /// beside them here is laid first (in the order the work goes, bottom up): so a wall is laid from one footing all the
+    /// height in reach, not a course at a time. Pitch is poured, it needs nothing under it. True if any had to be left.
+    /// </summary>
+    bool Footing(List<(int x, int y, int z, byte m)> builds)
+    {
+        _toLay.Clear(); _footed.Clear(); _footing.Clear();
+        foreach (var b in builds) _toLay.Add(WaterPlanner.Pack(b.x, b.y, b.z));
+        foreach (var b in builds)
+            if ((b.m == Mat.Pitch || Footed(b.x, b.y, b.z)) && _footed.Add(WaterPlanner.Pack(b.x, b.y, b.z))) _footing.Enqueue(WaterPlanner.Pack(b.x, b.y, b.z));
+        // what each one laid will bear: the voxel over it and those beside it
+        while (_footing.Count > 0)
+        {
+            var (x, y, z) = WaterPlanner.Unpack(_footing.Dequeue());
+            foreach (var (dx, dy, dz) in Borne)
+            {
+                int n = WaterPlanner.Pack(x + dx, y + dy, z + dz);
+                if (_toLay.Contains(n) && _footed.Add(n)) _footing.Enqueue(n);
+            }
+        }
+        int had = builds.Count;
+        builds.RemoveAll(b => !_footed.Contains(WaterPlanner.Pack(b.x, b.y, b.z)));
+        return builds.Count < had;
     }
 
     /// <summary>
