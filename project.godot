@@ -35,7 +35,7 @@ anti_aliasing/quality/msaa_3d=2
 lights_and_shadows/directional_shadow/size=4096
 lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3
 environment/defaults/default_clear_color=Color(0.043, 0.035, 0.055, 1)
-textures/canvas_textures/default_texture_filter=3
+textures/canvas_textures/default_texture_filter=2
 
 [shader_globals]
 
