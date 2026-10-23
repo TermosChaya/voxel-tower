@@ -81,7 +81,7 @@ public partial class BuildTools : Node3D
         (Tool.Unmark, _) => "Рамка снимает всю разметку и делянки внутри. Щелчок снимает разметку рядом и делянку под курсором.",
         (Tool.Capture, _) => "Обведите постройку рамкой, чтобы сохранить чертёж.",
         (Tool.Paste, _) => "Щелчок ставит копию. R поворачивает, Esc отменяет.",
-        _ => "ЛКМ — выбрать, рамкой — нескольких, ПКМ — послать. {ToolBrush}–{ToolExtrude} — кисти, {Pick} — кирка, {Help} — все клавиши.",
+        _ => "{Lmb} — выбрать, рамкой — нескольких, {Rmb} — послать. {ToolBrush}–{ToolExtrude} — кисти, {Pick} — кирка, {Help} — все клавиши.",
     };
 
     const int MaxExtrudeFaces = 6000;
@@ -375,7 +375,7 @@ public partial class BuildTools : Node3D
                 if (Tool == Tool.None) _m.Command.Motion(mm);
                 else if (_lmb && _paint) PaintTo();
                 break;
-            case InputEventMouseButton mb when mb.ButtonIndex == MouseButton.Left && !mb.AltPressed:
+            case InputEventMouseButton mb when mb.ButtonIndex == Bindings.First && !mb.AltPressed:
                 _mouse = mb.Position;
                 Pick(mb.Position);
                 if (Tool == Tool.None && !_lmb) { _m.Command.Button(mb); break; }
@@ -603,7 +603,7 @@ public partial class BuildTools : Node3D
     {
         if (_m.Sim.HeldNow == null) { _holding = false; return; }
         // the button let up anywhere at all, over the panels too (a script has no hand on the mouse: it lets go by its own events)
-        if (!_lmb || !_m.Scripted && !Input.IsMouseButtonPressed(MouseButton.Left)) { Throw(); return; }
+        if (!_lmb || !_m.Scripted && !Input.IsMouseButtonPressed(Bindings.First)) { Throw(); return; }
         // picked again every frame: the view may move under a still cursor
         Pick(_mouse);
         if (!_hasHover) return;

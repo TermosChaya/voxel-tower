@@ -117,7 +117,7 @@ public sealed partial class Sim
                 if (FortArea == default) return null;
                 return new Errand { Key = key, Main = main, Text = "Начните чинить крепость: {ToolRepair} и щелчок по разрушенной стене", Knowledge = 2 };
             case "post":
-                return new Errand { Key = key, Main = main, Text = "Поставьте лучника на стену: выберите его и щёлкните ПКМ по верху стены", Gold = 20 };
+                return new Errand { Key = key, Main = main, Text = "Поставьте лучника на стену: выберите его и щёлкните {Rmb} по верху стены", Gold = 20 };
             case "quarry":
                 return new Errand { Key = key, Main = main, Text = "Устройте каменоломню: {ToolGather}, {MatStone} и рамка по скалам или валунам", Knowledge = 2 };
             case "gate":
@@ -133,7 +133,7 @@ public sealed partial class Sim
             {
                 var m = MineOf(0);
                 if (m == null || m.Holder == Holder.Ours) return null;
-                return new Errand { Key = key, Main = main, Text = $"Займите {m.Name.ToLowerInvariant()}: пошлите туда людей (ПКМ). Даёт +{m.Income} золота в минуту", Gold = 20 };
+                return new Errand { Key = key, Main = main, Text = $"Займите {m.Name.ToLowerInvariant()}: пошлите туда людей ({{Rmb}}). Даёт +{m.Income} золота в минуту", Gold = 20 };
             }
             case "silver":
             {
@@ -176,7 +176,7 @@ public sealed partial class Sim
             }
             case "hunt":
                 if (Waves.Active || WildAlive() == 0) return null;
-                return new Errand { Key = key, Main = main, From = Hunted, Text = "Добудьте зверя: выберите лучника и щёлкните ПКМ по оленю или кабану", Gold = 15 };
+                return new Errand { Key = key, Main = main, From = Hunted, Text = "Добудьте зверя: выберите лучника и щёлкните {Rmb} по оленю или кабану", Gold = 15 };
             case "alive":
                 if (Waves.Number < 2 || !Units.Exists(u => !u.Dead && u.Team == Team.Player && Fighter(u) && !u.T.Ranged)) return null;
                 return new Errand { Key = key, Main = main, From = Prisoners(), Text = "Возьмите пленного: выберите бойца и включите «Живьём» в нижней панели", Knowledge = 2 };

@@ -20,9 +20,10 @@ public enum Act
 /// The keys of the game, the player's own: every command with its name, what it does, the key it starts on (and a
 /// second one some have, the arrows beside WASD) and the group it is shown in on the page of the controls. A key is
 /// bound once among the commands of the field and once among those of the eyes (first person); put on a key another
-/// command had, that one takes the key this one leaves. Kept in user://settings.cfg with the other settings; a
-/// scripted run (a test, a screenshot) keeps to the keys the game starts with. A tooltip or a line of the chronicle
-/// names a key as {Act}, and is shown with the key it is on now.
+/// command had, that one takes the key this one leaves. The two mouse buttons can be swapped on the field and in the
+/// eyes (the panels keep to the left one). Kept in user://settings.cfg with the other settings; a scripted run (a test,
+/// a screenshot) keeps to the keys the game starts with. A tooltip or a line of the chronicle names a key as {Act}, and
+/// the buttons of the field as {Lmb} and {Rmb} ({LmbBy} and {RmbBy}: «левой кнопкой»), shown as they are now.
 /// </summary>
 public static class Bindings
 {
@@ -100,34 +101,34 @@ public static class Bindings
         D(Act.FpUp, Eyes, "Вверх по лестнице", "Держать у лестницы.", Key.Space),
         D(Act.FpDown, Eyes, "Вниз по лестнице", "Держать у лестницы.", Key.C, Key.Ctrl),
         D(Act.FpFire, Eyes, "Огненные стрелы", "Лучник зажигает или гасит стрелы, если огонь изучен.", Key.F),
-        D(Act.FpStone, Eyes, "Класть камень", "Правая кнопка кладёт камень.", Key.Key1),
-        D(Act.FpWood, Eyes, "Класть брёвна", "Правая кнопка кладёт брёвна.", Key.Key2),
-        D(Act.FpEarth, Eyes, "Класть землю", "Правая кнопка кладёт землю.", Key.Key3),
+        D(Act.FpStone, Eyes, "Класть камень", "{Rmb} кладёт камень.", Key.Key1),
+        D(Act.FpWood, Eyes, "Класть брёвна", "{Rmb} кладёт брёвна.", Key.Key2),
+        D(Act.FpEarth, Eyes, "Класть землю", "{Rmb} кладёт землю.", Key.Key3),
     };
 
     /// <summary>What the mouse and the held keys do, which are not bound: shown on the page with the group they belong to.</summary>
     public static readonly (string group, string what, string about)[] Fixed =
     {
         (Camera, "Колесо мыши", "Приблизить и отдалить. На тачпаде — щипок или два пальца."),
-        (Camera, "ПКМ и тянуть", "Сдвинуть вид."),
-        (Camera, "СКМ или Alt+ЛКМ и тянуть", "Повернуть и наклонить вид."),
+        (Camera, "{Rmb} и тянуть", "Сдвинуть вид."),
+        (Camera, "СКМ или Alt+{Lmb} и тянуть", "Повернуть и наклонить вид."),
         (Camera, "ЛКМ по миникарте", "Перенести туда вид."),
         (Camera, "Мышь у края экрана", "Сдвинуть вид (выключается в настройках)."),
-        (Brushes, "ЛКМ", "Рисовать: зажать и вести."),
-        (Brushes, "ПКМ", "Отменить штрих и убрать кисть."),
+        (Brushes, "{Lmb}", "Рисовать: зажать и вести."),
+        (Brushes, "{Rmb}", "Отменить штрих и убрать кисть."),
         (Brushes, "Esc", "Убрать кисть."),
         (Brushes, "Ctrl+Z (⌘Z)", "Отменить последнюю разметку, до 40 шагов."),
         (BrushOptions, "Shift с кистью", "Кирка на один мазок."),
-        (Orders, "ЛКМ", "Выбрать человека, рамкой — нескольких. С Shift — добавить или убрать."),
+        (Orders, "{Lmb}", "Выбрать человека, рамкой — нескольких. С Shift — добавить или убрать."),
         (Orders, "ЛКМ по портрету", "Выбрать человека, ещё раз — показать его."),
-        (Orders, "ПКМ", "По земле — идти, по зверю — охотиться, по врагу — атаковать."),
+        (Orders, "{Rmb}", "По земле — идти, по зверю — охотиться, по врагу — атаковать."),
         (Orders, "Ctrl+1…5", "Запомнить выбранных отрядом."),
         (Orders, "Shift+1…5", "Выбрать отряд, дважды — показать."),
         (Orders, "Esc", "Снять выбор. Если ничего не выбрано — меню."),
         (Game, "Ctrl и + или −", "Интерфейс крупнее или мельче, Ctrl+0 — обычный размер (на Mac ⌘)."),
         (Eyes, "Мышь", "Смотреть"),
-        (Eyes, "ЛКМ", "Удар, выстрел или кирка"),
-        (Eyes, "ПКМ", "Положить блок выбранного материала"),
+        (Eyes, "{Lmb}", "Удар, выстрел или кирка"),
+        (Eyes, "{Rmb}", "Положить блок выбранного материала"),
         (Eyes, "Esc", "Выйти"),
     };
 
@@ -203,11 +204,35 @@ public static class Bindings
 
     static readonly Regex Token = new(@"\{([A-Za-z]+)\}", RegexOptions.Compiled);
 
-    /// <summary>The text with every {Act} in it put as the key it is on now; anything else in braces stays.</summary>
+    /// <summary>The text with every {Act} in it put as the key it is on now, and the mouse's buttons as they are; anything else in braces stays.</summary>
     public static string Fill(string text)
     {
         if (string.IsNullOrEmpty(text) || text.IndexOf('{') < 0) return text;
-        return Token.Replace(text, m => Enum.TryParse<Act>(m.Groups[1].Value, out var a) ? Label(a) : m.Value);
+        return Token.Replace(text, m => m.Groups[1].Value switch
+        {
+            "Lmb" => Mouse(First), "Rmb" => Mouse(Second), "LmbBy" => MouseBy(First), "RmbBy" => MouseBy(Second),
+            var s => Enum.TryParse<Act>(s, out var a) ? Label(a) : m.Value,
+        });
+    }
+
+    /// <summary>
+    /// The mouse's buttons as the player has them on the field and in the eyes: the first chooses, draws and strikes;
+    /// the second sends, takes the brush away, drags the view and lays. Swapped at the player's wish.
+    /// </summary>
+    public static bool SwapMouse { get; private set; }
+    public static MouseButton First => SwapMouse ? MouseButton.Right : MouseButton.Left;
+    public static MouseButton Second => SwapMouse ? MouseButton.Left : MouseButton.Right;
+
+    static string Mouse(MouseButton b) => b == MouseButton.Left ? "ЛКМ" : "ПКМ";
+    static string MouseBy(MouseButton b) => b == MouseButton.Left ? "левой кнопкой" : "правой кнопкой";
+
+    /// <summary>The mouse's buttons swapped, or put back.</summary>
+    public static void SetSwapMouse(bool on)
+    {
+        if (SwapMouse == on) return;
+        SwapMouse = on;
+        Save();
+        Changed?.Invoke();
     }
 
     /// <summary>Why this key cannot be had by this command, or null when it can.</summary>
@@ -237,6 +262,7 @@ public static class Bindings
     public static void Reset()
     {
         foreach (var d in Defs) _keys[d.Act] = d.Key;
+        SwapMouse = false;
         Save();
         Changed?.Invoke();
     }
@@ -244,7 +270,7 @@ public static class Bindings
     /// <summary>Whether any command is on a key of the player's own.</summary>
     public static bool Customised
     {
-        get { foreach (var d in Defs) if (_keys[d.Act] != d.Key) return true; return false; }
+        get { foreach (var d in Defs) if (_keys[d.Act] != d.Key) return true; return SwapMouse; }
     }
 
     /// <summary>Reads the player's keys, if he set any; what is not there, or is no key, starts where it starts.</summary>
@@ -256,6 +282,7 @@ public static class Bindings
             long v = cfg.GetValue("keys", d.Act.ToString(), (long)d.Key).AsInt64();
             if (v > 0) _keys[d.Act] = (Key)v;
         }
+        SwapMouse = cfg.GetValue("keys", "SwapMouse", false).AsBool();
     }
 
     static void Save()
@@ -265,6 +292,7 @@ public static class Bindings
         cfg.Load(File);
         if (cfg.HasSection("keys")) cfg.EraseSection("keys");
         foreach (var d in Defs) if (_keys[d.Act] != d.Key) cfg.SetValue("keys", d.Act.ToString(), (long)_keys[d.Act]);
+        if (SwapMouse) cfg.SetValue("keys", "SwapMouse", true);
         cfg.Save(File);
     }
 }

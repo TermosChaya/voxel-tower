@@ -324,10 +324,10 @@ public partial class Tutorial : Node
         Add(new Step
         {
             Chapter = folk, Title = "Послать",
-            Text = "В нижней панели видно, кто выбран и чем занят. Правая кнопка по земле посылает выбранных туда. " +
+            Text = "В нижней панели видно, кто выбран и чем занят. {Rmb} по земле посылает выбранных туда. " +
                 "Рабочий дойдёт и сам вернётся к работе, а посланный на делянку будет работать на ней. Солдат " +
                 "займёт это место как пост.",
-            Task = "Пошлите выбранного правой кнопкой",
+            Task = "Пошлите выбранного {RmbBy}",
             Point = "console",
             Enter = () => n0 = m.Command.Sent,
             Done = () => m.Command.Sent > n0,
@@ -365,7 +365,7 @@ public partial class Tutorial : Node
         {
             Chapter = folk, Title = "Охота",
             Text = "За каждого убитого зверя дают золото, а на золото набирают войско. Выберите лучника и щёлкните " +
-                "правой кнопкой по зверю.",
+                "{RmbBy} по зверю.",
             Task = "Пошлите лучника на охоту",
             Point = "faces",
             Mark = () => prey is { Dead: false } b ? ((int)b.X, (int)b.Z) : null,
@@ -425,7 +425,7 @@ public partial class Tutorial : Node
         Add(new Step
         {
             Chapter = stores, Title = "Убрать кисть",
-            Text = "Esc или правая кнопка мыши убирает кисть. Без кисти левая кнопка снова выбирает людей.",
+            Text = "Esc или {Rmb} убирает кисть. Без кисти {Lmb} снова выбирает людей.",
             Task = "Уберите кисть",
             Done = () => m.Tools.Tool == Tool.None,
         });
@@ -635,7 +635,7 @@ public partial class Tutorial : Node
         {
             Chapter = horde, Title = "Учебная ватага",
             Text = "С запада идут трое налётчиков. Лучник стреляет сам, мечник защищает свой пост. Чтобы приказать " +
-                "атаковать, выберите солдат и щёлкните правой кнопкой по врагу. Ожидание можно ускорить клавишей " +
+                "атаковать, выберите солдат и щёлкните {RmbBy} по врагу. Ожидание можно ускорить клавишей " +
                 "{Speed}.",
             Task = "Перебейте ватагу",
             Point = "faces",
@@ -654,7 +654,7 @@ public partial class Tutorial : Node
             Done = () => !m.Sim.Waves.Active && m.Sim.Waves.Number > 0,
             // a raider the posts do not reach is to be gone after: told so once the fight has gone on a while
             Status = () => !m.Sim.Waves.Active ? null : $"налётчиков в долине: {Raiders() + m.Sim.Waves.Coming}" +
-                (_clock - fought > 75 ? ". Выберите солдат (портреты вверху) и щёлкните правой кнопкой по налётчику" : ""),
+                (_clock - fought > 75 ? Bindings.Fill(". Выберите солдат (портреты вверху) и щёлкните {RmbBy} по налётчику") : ""),
         });
         Add(new Step
         {
@@ -718,8 +718,8 @@ public partial class Tutorial : Node
         {
             Chapter = eyes, Title = "Вселиться",
             Text = "Выберите мечника и нажмите {Possess}, чтобы управлять им от первого лица. " +
-                "{FpForward}{FpLeft}{FpBack}{FpRight} — идти, {FpRun} — бежать, мышь — смотреть, левая кнопка — " +
-                "удар, правая — положить блок.",
+                "{FpForward}{FpLeft}{FpBack}{FpRight} — идти, {FpRun} — бежать, мышь — смотреть, {Lmb} — " +
+                "удар, {Rmb} — положить блок.",
             Task = "Вселитесь в мечника",
             Point = "faces",
             Done = () => m.FP.On,

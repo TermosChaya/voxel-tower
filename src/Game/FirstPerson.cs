@@ -167,8 +167,8 @@ void fragment() {
                 break;
             case InputEventMouseButton mb:
                 if (Input.MouseMode != Input.MouseModeEnum.Captured && !_m.Scripted && mb.Pressed) Input.MouseMode = Input.MouseModeEnum.Captured;
-                if (mb.ButtonIndex == MouseButton.Left) sim.WishStrike = mb.Pressed;
-                else if (mb.ButtonIndex == MouseButton.Right) sim.WishLay = mb.Pressed && _u.T.Work > 0;
+                if (mb.ButtonIndex == Bindings.First) sim.WishStrike = mb.Pressed;
+                else if (mb.ButtonIndex == Bindings.Second) sim.WishLay = mb.Pressed && _u.T.Work > 0;
                 break;
             case InputEventKey { Pressed: true, Echo: false } k:
                 if (k.PhysicalKeycode == Key.Escape) { Exit(); break; }
@@ -264,8 +264,8 @@ void fragment() {
             : sim.LookedAt(u, 4 * VoxelWorld.PerMetre, out var hit) ? Mat.NameOf(hit.M) : "";
         _aim.Text = aim;
         _aim.Position = new Vector2((vp.X - _aim.Size.X) / 2, vp.Y / 2 + 26);
-        _hint.Text = Bindings.Fill("{FpForward}{FpLeft}{FpBack}{FpRight} — идти, {FpRun} — бежать · мышь — смотреть · ЛКМ — " + (u.T.Ranged ? "выстрел" : u.T.Work > 0 ? "удар или кирка" : "удар")
-            + (u.T.Work > 0 ? " · ПКМ — класть ({FpStone} камень, {FpWood} брёвна, {FpEarth} земля)" : "") + (Sim.Kindles(u.T) ? " · {FpFire} — огненные стрелы" : "")
+        _hint.Text = Bindings.Fill("{FpForward}{FpLeft}{FpBack}{FpRight} — идти, {FpRun} — бежать · мышь — смотреть · {Lmb} — " + (u.T.Ranged ? "выстрел" : u.T.Work > 0 ? "удар или кирка" : "удар")
+            + (u.T.Work > 0 ? " · {Rmb} — класть ({FpStone} камень, {FpWood} брёвна, {FpEarth} земля)" : "") + (Sim.Kindles(u.T) ? " · {FpFire} — огненные стрелы" : "")
             + " · {FpUp} / {FpDown} — вверх и вниз по лестнице · Esc — выйти");
         _hint.Position = new Vector2((vp.X - _hint.Size.X) / 2, vp.Y - 34);
         _sights.Foe = sim.FoeInSight(u);

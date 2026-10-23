@@ -375,8 +375,8 @@ public partial class Inspector : Control
         row.AddChild(Btn("Стоять", "Стоять здесь\nВыбранные остаются на месте. Для солдат это место становится постом.", () => _m.Command.HoldSelected(), 70));
         row.AddChild(AlarmButton(70));
         if (chosen.Count == 1)
-            row.AddChild(Btn($"Вселиться · {Bindings.Label(Act.Possess)}", "Вселиться ({Possess})\nУправлять им от первого лица. {FpForward}{FpLeft}{FpBack}{FpRight} — идти, мышь — смотреть, ЛКМ — удар, " +
-                "выстрел или кирка, ПКМ — положить блок, Esc — выйти.", () => _m.FP.Enter(chosen[0]), 104));
+            row.AddChild(Btn($"Вселиться · {Bindings.Label(Act.Possess)}", "Вселиться ({Possess})\nУправлять им от первого лица. {FpForward}{FpLeft}{FpBack}{FpRight} — идти, мышь — смотреть, {Lmb} — удар, " +
+                "выстрел или кирка, {Rmb} — положить блок, Esc — выйти.", () => _m.FP.Enter(chosen[0]), 104));
         var duty = new List<Button>();
         // priests bring nothing in
         bool labour = chosen.Exists(u => !u.T.Prays);
@@ -407,7 +407,7 @@ public partial class Inspector : Control
         {
             row.AddChild(new Rule(true));
             fire = Btn("Огонь", "Огненные стрелы\nПоджигают лестницы и настилы орды, смолу и налётчиков. Лучники стреляют реже. " +
-                "ПКМ по дереву или смоле — поджечь. Ещё раз — обычные стрелы.",
+                "{Rmb} по дереву или смоле — поджечь. Ещё раз — обычные стрелы.",
                 () => _m.Command.FireArrowsSelected(), 60);
             fire.ToggleMode = true;
             row.AddChild(fire);
@@ -468,13 +468,13 @@ public partial class Inspector : Control
         about.AddThemeConstantOverride("separation", 2);
         about.AddChild(Hud.CapsLabel(u.Team == Team.Horde ? "Налётчик" : "Зверь", 8));
         string note = u.Team == Team.Wild
-            ? $"{u.T.Bounty} зол. за добычу. Убегает от людей. Выберите своих и щёлкните по нему ПКМ."
+            ? $"{u.T.Bounty} зол. за добычу. Убегает от людей. Выберите своих и щёлкните по нему {{Rmb}}."
             : (u.Leader ? $"Вожак: {u.T.Bounty * 3} зол. за голову. " : $"{u.T.Bounty} зол. за голову. ")
-              + (u.Returned ? "Сбежал в прошлый раз и вернулся. " : "") + "Выберите своих и щёлкните по нему ПКМ.";
+              + (u.Returned ? "Сбежал в прошлый раз и вернулся. " : "") + "Выберите своих и щёлкните по нему {Rmb}.";
         if (u.Bound)
             note = u.Inside ? "Пленный в цитадели. Его можно принести в жертву (вкладка «Таинства») или отдать послу орды за выкуп. Ночью без стражи он сбежит."
                 : "Связан. Свободный рабочий отведёт его в цитадель. Если оставить надолго, развяжется и убежит.";
-        var noteLabel = Hud.Text(note, Ornament.Serif, 12, Ornament.Aged, wrap: true);
+        var noteLabel = Hud.Text(Bindings.Fill(note), Ornament.Serif, 12, Ornament.Aged, wrap: true);
         noteLabel.CustomMinimumSize = new Vector2(330, 0);
         about.AddChild(noteLabel);
         top.AddChild(about);

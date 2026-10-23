@@ -7,8 +7,9 @@ namespace VoxelTower.Game;
 /// <summary>
 /// The page of the controls: every command of the game by its group — the camera, the brushes, the material and the
 /// brush's settings, the household and the orders, the time and the game, the eyes of one gone into — with what it
-/// does and the key it is on, and what the mouse does beside them. A click on a key and then another key puts the
-/// command there; the command that had that key takes the old one. Hovering a row tells it in full.
+/// does and the key it is on, and what the mouse does beside them, its two buttons swapped if the player likes. A click
+/// on a key and then another key puts the command there; the command that had that key takes the old one. Hovering a
+/// row tells it in full.
 /// </summary>
 public partial class GameMenu
 {
@@ -41,6 +42,7 @@ public partial class GameMenu
         var list = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         list.AddThemeConstantOverride("separation", 3);
         scroll.AddChild(list);
+        list.AddChild(MouseRow());
         foreach (string group in Bindings.Groups)
         {
             var head = Hud.CapsLabel(group, 11, Ornament.BronzeLight);
@@ -86,7 +88,7 @@ public partial class GameMenu
         name.CustomMinimumSize = new Vector2(220, 0);
         name.VerticalAlignment = VerticalAlignment.Center;
         row.AddChild(name);
-        var about = Hud.Text(d.About, Ornament.Serif, 13, Ornament.Aged, wrap: true);
+        var about = Hud.Text(Bindings.Fill(d.About), Ornament.Serif, 13, Ornament.Aged, wrap: true);
         about.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         about.VerticalAlignment = VerticalAlignment.Center;
         row.AddChild(about);
@@ -112,16 +114,45 @@ public partial class GameMenu
         var name = Hud.Text("", Ornament.SerifBold, 14, Ornament.Parchment);
         name.CustomMinimumSize = new Vector2(220, 0);
         row.AddChild(name);
-        var text = Hud.Text(about, Ornament.Serif, 13, Ornament.Aged, wrap: true);
+        var text = Hud.Text(Bindings.Fill(about), Ornament.Serif, 13, Ornament.Aged, wrap: true);
         text.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         text.VerticalAlignment = VerticalAlignment.Center;
         row.AddChild(text);
         // the mouse and the held keys are no keys to put elsewhere: told in the key's place, not on a button
-        var key = Hud.Text(what, Ornament.SerifBold, 13, Ornament.BronzeLight);
+        var key = Hud.Text(Bindings.Fill(what), Ornament.SerifBold, 13, Ornament.BronzeLight);
         key.CustomMinimumSize = new Vector2(118 + 12 + 64, 30);
         key.HorizontalAlignment = HorizontalAlignment.Left;
         key.VerticalAlignment = VerticalAlignment.Center;
         row.AddChild(key);
+        return row;
+    }
+
+    /// <summary>The mouse's two buttons, as they are or swapped: the page is drawn again with them, every row saying them anew.</summary>
+    Control MouseRow()
+    {
+        var row = new TipRow { TooltipText = "Кнопки мыши\nПоменять местами левую и правую кнопку на поле и от первого лица. Панели и меню работают от левой.",
+            MouseFilter = MouseFilterEnum.Pass };
+        row.AddThemeConstantOverride("separation", 12);
+        var name = Hud.Text("Кнопки мыши", Ornament.SerifBold, 14, Ornament.Parchment);
+        name.CustomMinimumSize = new Vector2(220, 0);
+        name.VerticalAlignment = VerticalAlignment.Center;
+        row.AddChild(name);
+        var about = Hud.Text(Bindings.Fill("{Lmb} выбирает людей, рисует и бьёт. {Rmb} посылает, убирает кисть, двигает вид и кладёт блок."),
+            Ornament.Serif, 13, Ornament.Aged, wrap: true);
+        about.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        about.VerticalAlignment = VerticalAlignment.Center;
+        row.AddChild(about);
+        var swap = new Button { Text = Bindings.SwapMouse ? "Поменяны" : "Как обычно", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(118 + 12 + 64, 30),
+            MouseDefaultCursorShape = CursorShape.PointingHand, ToggleMode = true, ButtonPressed = Bindings.SwapMouse };
+        swap.AddThemeFontOverride("font", Ornament.SerifBold);
+        swap.AddThemeFontSizeOverride("font_size", 15);
+        swap.Pressed += () =>
+        {
+            Bindings.SetSwapMouse(!Bindings.SwapMouse);
+            Controls_();
+            _note.Text = Bindings.SwapMouse ? "Кнопки мыши поменяны: правая выбирает и рисует, левая посылает." : "Кнопки мыши как обычно.";
+        };
+        row.AddChild(swap);
         return row;
     }
 

@@ -112,9 +112,10 @@ public partial class CameraRig : Node3D
             if (mb.ButtonIndex == MouseButton.WheelUp && mb.Pressed) _zoom = Math.Clamp(_zoom * 1.12f, MinZoom, MaxZoom);
             else if (mb.ButtonIndex == MouseButton.WheelDown && mb.Pressed) _zoom = Math.Clamp(_zoom / 1.12f, MinZoom, MaxZoom);
             else if (mb.ButtonIndex == MouseButton.Middle) _rotating = mb.Pressed;
-            else if (mb.ButtonIndex == MouseButton.Left && mb.AltPressed) _rotating = mb.Pressed;
-            else if (mb.ButtonIndex == MouseButton.Left && !mb.Pressed) _rotating = false;
-            else if (mb.ButtonIndex == MouseButton.Right)
+            // the buttons as the player has them (Bindings.SwapMouse): the first with Alt turns, the second drags and sends
+            else if (mb.ButtonIndex == Bindings.First && mb.AltPressed) _rotating = mb.Pressed;
+            else if (mb.ButtonIndex == Bindings.First && !mb.Pressed) _rotating = false;
+            else if (mb.ButtonIndex == Bindings.Second)
             {
                 if (mb.Pressed) { _panning = true; _rmbMoved = false; _rmbFrom = mb.Position; }
                 else { _panning = false; if (!_rmbMoved) RightClick?.Invoke(mb.Position); }

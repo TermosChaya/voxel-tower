@@ -1060,6 +1060,26 @@ public partial class Main : Node3D
         Command.ReleaseSelected();
         Check("«За работу» lets it go", !worker.Hold);
         Command.ClearSelection();
+        // the mouse's buttons swapped on the controls page: the right one picks, the left one sends; and back
+        Bindings.SetSwapMouse(true);
+        await Look(worker.X, worker.Z);
+        var onIt = Command.Screen(worker, .5f);
+        Move(onIt); await Frames(2);
+        Tools._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true, Position = onIt });
+        Tools._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = false, Position = onIt });
+        await Frames(2);
+        bool pickedByRight = Selected.Count == 1 && Selected.Contains(worker);
+        var there = Screen(kx - 40, kz + 40);
+        Rig._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = there });
+        Rig._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = there });
+        bool sentByLeft = worker.Hold && worker.Path != null;
+        string said = Bindings.Fill("{Lmb} {Rmb}");
+        Bindings.SetSwapMouse(false);
+        Check("with the mouse's buttons swapped the right one picks a pawn, the left one sends it, and the hints say so",
+            pickedByRight && sentByLeft && said == "ПКМ ЛКМ" && Bindings.First == MouseButton.Left,
+            $"picked {pickedByRight}, sent {sentByLeft}, the hints «{said}»");
+        Command.ReleaseSelected();
+        Command.ClearSelection();
 
         // the faces of the household along the top pick a pawn; the work table sets what it does first
         await Frames(2);
