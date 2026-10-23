@@ -151,6 +151,8 @@ public sealed partial class Sim
         if (u.Site < 0)
         {
             u.State = UnitState.Idle;
+            // in a space being walled shut: out of it before anything (Sim.Seal.cs)
+            if (Time >= u.NextSearch && GetOut(u)) { Busy(u); return; }
             if (Time >= u.NextSearch) FindWork(u);
             if (u.Site >= 0) { Busy(u); return; }
             Idle(u, dt, stay: false);
@@ -233,9 +235,12 @@ public sealed partial class Sim
         if (!Brushes.Free(cur) || cur == j.m) { Orders.Clear(j.x, j.y, j.z); return false; }
         // pitch is poured, not laid: it needs nothing under it, it runs down
         if (_bodies[Nav.CellOf(j.x, j.y, j.z)] > 0 || j.m != Mat.Pitch && !Footed(j.x, j.y, j.z)) return false;
+        // the voxel that would wall one of ours in waits, to be laid from outside once nobody is in (Sim.Seal.cs)
+        if (ShutsIn(u, j.x, j.y, j.z, j.m)) return false;
         int ck = Labour.CostKind(j.m);
         if (ck != Stockpile.None && !Stock.Take(ck, 1)) { u.Why = "нет: " + Stockpile.Name(ck); return false; }
         World.Set(j.x, j.y, j.z, j.m);
+        Filled(j.x, j.y, j.z, j.m);
         Remember(j.x, j.y, j.z, j.m);
         Orders.Clear(j.x, j.y, j.z);
         return true;
@@ -263,7 +268,7 @@ public sealed partial class Sim
         int y0 = Math.Max(0, feet - Labour.ReachDown), y1 = Math.Min(World.SY, feet + Labour.ReachUp);
         var digs = new List<(int x, int y, int z, byte m)>();
         var builds = new List<(int x, int y, int z, byte m)>();
-        string missing = "";
+        string missing = "", held = "";
         bool crowded = false, unfooted = false;
         for (int y = y1 - 1; y >= y0 && digs.Count < 2048; y--)
             for (int z = z0; z < z1; z++)
@@ -275,6 +280,8 @@ public sealed partial class Sim
                     int ck = Labour.CostKind(o);
                     if (ck != Stockpile.None && Stock[ck] < 1) { missing = Stockpile.Name(ck); continue; }
                     int bc = Nav.CellOf(x, y, z);
+                    // a gap left open so that nobody is walled in waits a while (Sim.Seal.cs)
+                    if (Held(bc, out string why)) { held = why; continue; }
                     if (_bodies[bc] > 0)
                     {
                         crowded = true;
@@ -300,7 +307,7 @@ public sealed partial class Sim
         builds.Sort((a, b) => a.y != b.y ? a.y.CompareTo(b.y) : Near(a).CompareTo(Near(b)));
         u.Jobs.AddRange(digs);
         u.Jobs.AddRange(builds);
-        if (u.Jobs.Count == 0) u.Why = missing != "" ? "нет: " + missing : crowded ? "на месте кладки стоят" : unfooted ? "ждёт опоры: класть не на что" : "";
+        if (u.Jobs.Count == 0) u.Why = missing != "" ? "нет: " + missing : held != "" ? held : crowded ? "на месте кладки стоят" : unfooted ? "ждёт опоры: класть не на что" : "";
     }
 
     /// <summary>
@@ -418,7 +425,9 @@ public sealed partial class Sim
                 bool Goal(int c) => Math.Abs(Nav.I(c) - ci) <= 1 && Math.Abs(Nav.K(c) - ck) <= 1
                     && Nav.Floor[c] - Labour.ReachDown <= y1 && Nav.Floor[c] + Labour.ReachUp > y0
                     && !(Nav.I(c) == ci && Nav.K(c) == ck && BuildsInBody(c, h))
-                    && _bodies[c] - (c == self ? 1 : 0) <= 0;
+                    && _bodies[c] - (c == self ? 1 : 0) <= 0
+                    // not inside a space being walled shut: its gap is filled from outside (Sim.Seal.cs)
+                    && !Closing(c);
                 List<int> path = Goal(u.Cell) ? new List<int>() : Paths.Find(u.Cell, Goal, c => H(c, ci, ck), u.T.Move, 30000, gates: true);
                 if (path == null) { u.Unreachable[col] = Time + 12; continue; }
                 u.Site = col; _claims[col]++;

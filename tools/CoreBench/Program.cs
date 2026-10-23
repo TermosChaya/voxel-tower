@@ -5921,6 +5921,69 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--escape")
         $"pit at {pit}: {deep} voxels marked, {simQ.Orders.Total} left, the pit dug {bottom}; the digger free {FreeQ(digger)}, way out marked {(digger.WayOutMarked > 0 ? $"at {digger.WayOutMarked:0} s" : "never")}; {digger.Why}");
 }
 
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--seal")
+{
+    // building so that nobody is walled in: a worker raising a ring of wall round itself lays what it can from inside,
+    // goes out through the last gap and shuts it from outside; of two inside a ring and one outside, none is shut in
+    Console.WriteLine();
+    var mpB = new MapParams();
+    var wB = new VoxelWorld(mpB.SizeX, mpB.SizeY, mpB.SizeZ);
+    var siteB = MapGen.Generate(wB, mpB);
+    wB.Compact();
+    var simB = new Sim(wB, siteB);
+    simB.WildTarget = 0;
+    StartingFort.Raise(simB);
+    bool FreeB(Unit u) { var cells = new List<int>(); return simB.Paths.Reach(u.Cell, u.T.Move, 240, true, cells) >= 240 || cells.Contains(simB.Gate); }
+    // a flat, open spot of the plateau away from the fort
+    (int x, int z) FlatB(int fromX, int fromZ)
+    {
+        for (int r = 0; r < 200; r += 8)
+            for (int a = 0; a < 16; a++)
+            {
+                int x = fromX + (int)(Math.Cos(a * Math.Tau / 16) * r), z = fromZ + (int)(Math.Sin(a * Math.Tau / 16) * r);
+                if (x < 60 || z < 60 || x > wB.SX - 60 || z > wB.SZ - 60) continue;
+                int y = wB.SurfAt(x, z), lo = y, hi = y;
+                for (int dx = -32; dx <= 32; dx += 8) for (int dz = -32; dz <= 32; dz += 8) { int h = wB.SurfAt(x + dx, z + dz); lo = Math.Min(lo, h); hi = Math.Max(hi, h); }
+                if (hi - lo <= 3 && !siteB.Forbidden(x, z) && Math.Abs(x - siteB.KeepX) + Math.Abs(z - siteB.KeepZ) > 140) return (x, z);
+            }
+        return (-1, -1);
+    }
+    simB.Stock[Stockpile.Wood] += 400.0 * VoxelWorld.PerM3;
+    // a ring of logs three metres high round a space three metres across, its walls whole cells of the grid (a thinner
+    // wall across two cells is no wall to the feet): higher than the legs climb
+    VoxelList Ring((int x, int z) at)
+    {
+        int x0 = (at.x - 20) >> 3 << 3, z0 = (at.z - 20) >> 3 << 3;
+        return Shapes.Box(wB, siteB, x0, z0, x0 + 39, z0 + 39, new Stroke { Mat = Mat.Wood, Width = 8, Height = 24, Level = true, Hollow = true },
+            Shapes.LevelTop(wB, at.x, at.z, 24));
+    }
+    // the inside of a ring, walked from: few cells when the ring is shut
+    int Inside((int x, int z) at) { simB.Nav.Flush(); return simB.Paths.Reach(simB.NearestStand(at.x, at.z, 2), Kinds.Worker.Move, 240, true); }
+    var one = FlatB(siteB.KeepX + 170, siteB.KeepZ - 70);
+    var alone = simB.Spawn(Kinds.Worker, simB.NearestStand(one.x, one.z, 2));
+    int marked1 = simB.DesignateBuild(Ring(one));
+    for (int t = 0; t < 600 * 20 && simB.Orders.Total > 0; t++) simB.Step(.05f);
+    int left1 = simB.Orders.Total, inside1 = Inside(one);
+    Check("a worker raising a ring of wall round itself lays what it can from inside, goes out through the last gap and shuts it from outside",
+        one.x > 0 && marked1 > 3000 && left1 == 0 && FreeB(alone) && alone.WayOutMarked < 0 && inside1 < 240,
+        $"ring at {one}: {marked1} voxels, {left1} left at {simB.Time:0} s; the worker free {FreeB(alone)}, a way out cut {(alone.WayOutMarked > 0 ? "yes" : "no")}, " +
+        $"the ring shut {inside1 < 240} ({inside1} cells inside); {alone.Why}");
+    var two = FlatB(siteB.KeepX - 170, siteB.KeepZ + 70);
+    var crew = new[]
+    {
+        simB.Spawn(Kinds.Worker, simB.NearestStand(two.x - 4, two.z, 2)), simB.Spawn(Kinds.Worker, simB.NearestStand(two.x + 4, two.z + 4, 2)),
+        simB.Spawn(Kinds.Worker, simB.NearestStand(two.x + 40, two.z, 2)),
+    };
+    double from2 = simB.Time;
+    int marked2 = simB.DesignateBuild(Ring(two));
+    for (int t = 0; t < 600 * 20 && simB.Orders.Total > 0; t++) simB.Step(.05f);
+    int left2 = simB.Orders.Total, inside2 = Inside(two);
+    Check("…and of two inside a ring and one outside, all come out before it is shut",
+        two.x > 0 && marked2 > 3000 && left2 == 0 && crew.All(FreeB) && crew.All(u => u.WayOutMarked < 0) && inside2 < 240,
+        $"ring at {two}: {marked2} voxels, {left2} left in {simB.Time - from2:0} s; free {string.Join(", ", crew.Select(FreeB))}, ways cut {crew.Count(u => u.WayOutMarked > 0)}, " +
+        $"the ring shut {inside2 < 240} ({inside2} cells inside); {string.Join("; ", crew.Select(u => u.Why))}");
+}
+
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--house")
 {
     // a house drawn with the rectangle: walls, a roof of logs, the door cut and the gate hung once the wall stands,

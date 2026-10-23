@@ -124,6 +124,9 @@ public sealed class NavGrid
 
     public bool Deep(int c) => Water[c] >= DeepT;
 
+    /// <summary>Whether a material blocks the way once a cell holds enough of it (earth, wood, masonry, rock, leaves; not grass, ladders, water).</summary>
+    public static bool Blocks(byte m) => Cls[m] != 0;
+
     /// <summary>The cell a voxel position belongs to.</summary>
     public int CellOf(float x, float y, float z) => Id(Math.Clamp((int)x >> Shift, 0, NX - 1), Math.Clamp((int)y >> Shift, 0, NY - 1), Math.Clamp((int)z >> Shift, 0, NZ - 1));
 
