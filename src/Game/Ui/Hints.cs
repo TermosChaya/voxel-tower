@@ -1,0 +1,167 @@
+using System;
+using System.Collections.Generic;
+using Godot;
+
+namespace VoxelTower.Game;
+
+/// <summary>
+/// The line over the console of what the mouse's buttons and the keys do now: with nothing in hand and nobody chosen,
+/// with people chosen, with each tool in hand (the pick's version where it differs), with a blueprint or a spell. Each
+/// key on a small plate, what it does after it; the keys as they are bound now. Whatever does not fit between the map
+/// and the tools is left off from the end. The settings can turn it off.
+/// </summary>
+public partial class Hints : Control
+{
+    Main _m;
+    readonly List<(string key, string what)> _items = new();
+    readonly List<(string key, string what)> _want = new();
+    string _shown = "";
+    /// <summary>How wide it may be: the room between the map and the tools.</summary>
+    public float Room = 900;
+
+    const int KeySize = 12, TextSize = 13, Gap = 18, Pad = 7;
+    public const float H = 24;
+
+    public void Init(Main m)
+    {
+        _m = m;
+        MouseFilter = MouseFilterEnum.Ignore;
+    }
+
+    public override void _Process(double delta)
+    {
+        if (_m == null) return;
+        _want.Clear();
+        Collect(_want);
+        // laid out again only when what it says changes
+        string said = Room.ToString();
+        foreach (var (k, w) in _want) said += k + w;
+        if (said == _shown) return;
+        _shown = said;
+        _items.Clear();
+        float width = 0;
+        foreach (var it in _want)
+        {
+            float w = Width(it);
+            if (width + w > Room) break;
+            _items.Add(it);
+            width += w + Gap;
+        }
+        Size = new Vector2(Math.Max(0, width - Gap), H);
+        QueueRedraw();
+    }
+
+    static float Width((string key, string what) it) =>
+        Ornament.SerifBold.GetStringSize(it.key, HorizontalAlignment.Left, -1, KeySize).X + 2 * Pad + 6
+        + Ornament.Serif.GetStringSize(it.what, HorizontalAlignment.Left, -1, TextSize).X;
+
+    static string L(Act a) => Bindings.Label(a);
+    static string Lmb => Bindings.Fill("{Lmb}");
+    static string Rmb => Bindings.Fill("{Rmb}");
+
+    /// <summary>What to tell for what the player is doing now, the most needed first.</summary>
+    void Collect(List<(string, string)> o)
+    {
+        var t = _m.Tools;
+        bool dig = t.Opt.Dig;
+        string size = $"{L(Act.WidthLess)} {L(Act.WidthMore)}", height = $"{L(Act.HeightLess)} {L(Act.HeightMore)}";
+        switch (t.Tool)
+        {
+            case Tool.None when _m.Selected.Count > 0:
+                o.Add((Rmb, "идти, охотиться, атаковать"));
+                o.Add((Lmb, "выбрать других"));
+                if (_m.Selected.Count == 1) o.Add((L(Act.Possess), "вселиться"));
+                o.Add(("Ctrl+1…5", "запомнить отряд"));
+                o.Add(("Esc", "снять выбор"));
+                return;
+            case Tool.None:
+                o.Add((Lmb, "выбрать людей"));
+                o.Add(($"{L(Act.ToolBrush)}…{L(Act.ToolRepair)}", "инструменты"));
+                o.Add(($"{Rmb} и тянуть", "сдвинуть вид"));
+                o.Add(("Колесо", "приблизить"));
+                o.Add((L(Act.Help), "все клавиши"));
+                return;
+            case Tool.Brush:
+                o.Add((Lmb, dig ? "копать" : "рисовать"));
+                o.Add((size, "размер"));
+                o.Add((height, dig ? "глубина" : "высота"));
+                o.Add((L(Act.Form), "столб или шар"));
+                if (!dig) o.Add(("Shift", "кирка на мазок"));
+                break;
+            case Tool.Line:
+                o.Add((Lmb, dig ? "тянуть ров" : "тянуть стену"));
+                o.Add((size, dig ? "ширина" : "толщина"));
+                o.Add((height, dig ? "глубина" : "высота"));
+                o.Add((L(Act.Pick), dig ? "стена" : "ров"));
+                o.Add((L(Act.Grid), "сетка"));
+                break;
+            case Tool.Box:
+                o.Add((Lmb, dig ? "котлован от угла до угла" : "от угла до угла"));
+                o.Add((L(Act.Form), "помост, стенки или дом"));
+                o.Add((height, dig ? "глубина" : "высота"));
+                o.Add((L(Act.Pick), dig ? "стройка" : "котлован"));
+                o.Add((L(Act.Grid), "сетка"));
+                break;
+            case Tool.Circle:
+                o.Add((Lmb, "от центра к краю"));
+                o.Add((L(Act.Form), "кольцо или сплошной"));
+                o.Add((size, "толщина"));
+                o.Add((height, dig ? "глубина" : "высота"));
+                o.Add((L(Act.Pick), dig ? "стройка" : "яма"));
+                break;
+            case Tool.Extrude:
+                o.Add((Lmb, dig ? "углубить грань" : "нарастить грань"));
+                o.Add((L(Act.Pick), dig ? "наращивать" : "углублять"));
+                break;
+            case Tool.Unmark:
+                o.Add((Lmb, "снять разметку рамкой или щелчком"));
+                break;
+            case Tool.Ladder:
+                o.Add((Lmb, "по стене или обрыву"));
+                break;
+            case Tool.Gate:
+                o.Add((Lmb, "по стене"));
+                break;
+            case Tool.Repair:
+                o.Add((Lmb, "по разрушенной постройке"));
+                break;
+            case Tool.Bridge:
+                o.Add((Lmb, "от берега до берега"));
+                break;
+            case Tool.Gather:
+                o.Add((Lmb, "обвести участок"));
+                o.Add(($"{L(Act.MatStone)} {L(Act.MatWood)} {L(Act.MatEarth)}", "камень, лес, земля"));
+                break;
+            case Tool.Capture:
+                o.Add((Lmb, "обвести постройку"));
+                break;
+            case Tool.Paste:
+                o.Add((Lmb, "поставить копию"));
+                o.Add((L(Act.Rotate), "повернуть"));
+                o.Add((Rmb, "убрать"));
+                return;
+            case Tool.Spell:
+                o.Add((Lmb, "применить"));
+                o.Add((Rmb, "убрать"));
+                return;
+        }
+        // every tool that marks: put it away, and take back what was marked
+        o.Add((Rmb, "убрать инструмент"));
+        o.Add(("Ctrl+Z", "отменить"));
+    }
+
+    public override void _Draw()
+    {
+        float x = 0;
+        foreach (var (key, what) in _items)
+        {
+            float kw = Ornament.SerifBold.GetStringSize(key, HorizontalAlignment.Left, -1, KeySize).X + 2 * Pad;
+            var plate = new Rect2(x, 2, kw, H - 4);
+            Craft.Plate(this, plate, .9f);
+            DrawString(Ornament.SerifBold, new Vector2(x + Pad, H / 2 + KeySize * .36f), key, HorizontalAlignment.Left, -1, KeySize, Ornament.BronzeLight);
+            x += kw + 6;
+            Ornament.Lettering(this, Ornament.Serif, new Vector2(x, H / 2 + TextSize * .36f), what, TextSize, Ornament.Parchment);
+            x += Ornament.Serif.GetStringSize(what, HorizontalAlignment.Left, -1, TextSize).X + Gap;
+        }
+    }
+}

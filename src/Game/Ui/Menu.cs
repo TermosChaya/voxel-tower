@@ -369,6 +369,9 @@ public partial class GameMenu : Control
         var edge = new Stepper("Прокрутка у края", "Прокрутка у края\nВид сдвигается, когда мышь у края экрана. В окне это может мешать.", () => Settings.EdgeScroll ? "да" : "нет", d => Settings.ToggleEdgeScroll());
         edge.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
         _page.AddChild(edge);
+        var hints = new Stepper("Подсказки внизу", "Подсказки внизу\nСтрока над нижней панелью: что сейчас делают кнопки мыши и клавиши.", () => Settings.Hints ? "да" : "нет", d => Settings.ToggleHints());
+        hints.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+        _page.AddChild(hints);
         var lines = new Stepper("Обводка вокселей", "Обводка вокселей\nТонкая тёмная линия по краям вокселей вблизи.", () => Settings.Lines ? "да" : "нет", d => Settings.ToggleLines());
         lines.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
         _page.AddChild(lines);

@@ -54,6 +54,7 @@ public partial class Hud : CanvasLayer
     Main _m;
     Control _root;
     Toasts _toasts;
+    Hints _hints;
     VBoxContainer _history, _goals;
     readonly List<Label> _goalLines = new();
     TopBeam _beam;
@@ -182,6 +183,10 @@ public partial class Hud : CanvasLayer
         // the latest lines of the chronicle, briefly, above the console
         _toasts = new Toasts();
         root.AddChild(_toasts);
+        // and under them what the mouse and the keys do now
+        _hints = new Hints();
+        root.AddChild(_hints);
+        _hints.Init(m);
 
         // what hangs from the beam goes behind it
         _drop = new DropPanel { Position = new Vector2(10, TopBeam.Height - 3) };
@@ -435,12 +440,13 @@ public partial class Hud : CanvasLayer
         _clock += delta;
         _refreshAt -= delta;
         var vp = GetViewport().GetVisibleRect().Size;
-        if (TitleOpen) return;
+        if (TitleOpen) { _hints.Visible = false; return; }
         if (InFirstPerson)
         {
             // only the toasts, in the upper corner, out of the sight
             _toasts.Position = new Vector2(24, 20);
             _tag.Visible = false;
+            _hints.Visible = false;
             if (_refreshAt <= 0) _refreshAt = .2;
             return;
         }
@@ -468,7 +474,12 @@ public partial class Hud : CanvasLayer
             _colonists.To = vp.X - 14;
             _colonists.Top = _clockPanel.Position.Y + _clockPanel.Size.Y + 6;
         }
-        _toasts.Position = new Vector2((vp.X - _toasts.Size.X) / 2, vp.Y - BottomConsole.Band - 14 - _toasts.Size.Y);
+        // the hints just over the console between the map and the tools, the toasts over them
+        _hints.Visible = Settings.Hints && _console.Visible;
+        _hints.Room = vp.X - BottomConsole.LeftW - BottomConsole.RightW - 40;
+        _hints.Position = new Vector2(MathF.Round((vp.X - _hints.Size.X) / 2), vp.Y - BottomConsole.Band - 8 - Hints.H);
+        float hinted = _hints.Visible ? Hints.H + 8 : 0;
+        _toasts.Position = new Vector2((vp.X - _toasts.Size.X) / 2, vp.Y - BottomConsole.Band - 14 - hinted - _toasts.Size.Y);
         Unit first = null;
         foreach (var u in _m.Selected) if (!u.Dead && (first == null || u.Id < first.Id)) first = u;
         _portrait.Unit = _inspector.One ?? first;

@@ -827,6 +827,10 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   вида — `Icons.TopView` (горит, пока вид сверху) и `Icons.HomeView`, `TopButton`/`HomeButton` для обучения), `PortraitFrame`
   (портрет или герб); `Portraits.cs` — портреты лучами по мелким ячейкам тела и снаряжения (ячейка есть, пока есть её полувоксель в
   раненом теле; кэш по облику, у раненых — по `Rev`);
+  `Hints.cs` — строка над консолью: что делают кнопки мыши и клавиши в том, что игрок делает сейчас (`Collect` по
+  `Tools.Tool`, `Opt.Dig`, `Main.Selected`), клавиши через `Bindings.Label`/`Fill`, что не влезает между картой и
+  инструментами (`Room`), отбрасывается с конца; `Settings.Hints`, в настройках «Подсказки внизу»; всплывающие
+  строки летописи стоят над ней.
   `Colonists.cs` — полоса лиц под балкой; `Inspector.cs` — середина консоли (кисть / одна пешка / группа / дружина / набор цитадели
   `KeepPane`: места, лица видов `KindTile`; `TileOf(t)` для самотеста; `KeyNow`),
   `HealthBar`, `BodyChart`, `PriorityCell`, `MiniCard`, `KindFace`; `WorkTable.cs` — таблица работ (рисуется
