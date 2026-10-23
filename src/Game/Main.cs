@@ -628,6 +628,7 @@ public partial class Main : Node3D
             // the valley a level coarser from far off: a voxel under two pixels or so (the grass reckons them the same way)
             View.ChooseLevel(GetTree().Root.Size.Y * Settings.Details[Settings.Detail] / Math.Max(.01f, Rig.Cam.Size) * VoxelWorld.Vox, FP.On);
             View.RemeshDirty();
+            View.RemeshShadows();
             View.RemeshFar();
         }
         using (Prof.Time("Flow")) View.UpdateFlow(Sim);

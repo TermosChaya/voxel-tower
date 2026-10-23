@@ -25,6 +25,9 @@ public partial class WorldView : Node3D
     MeshInstance3D[] _far, _farShade;
     int _rx, _ry, _rz;
     readonly HashSet<int> _farDirty = new();
+    // the chunks whose shadow is to be made again, a little after the chunk itself
+    readonly HashSet<int> _shadeDirty = new();
+    readonly List<int> _shadeBatch = new();
     readonly List<int> _farBatch = new();
     bool _coarse, _showSolid = true;
     /// <summary>Whether the valley is drawn at the coarse level now.</summary>
@@ -149,17 +152,40 @@ public partial class WorldView : Node3D
         if (_w.DirtyCount == 0) return 0;
         _batch.Clear();
         _w.TakeDirty(_batch, maxChunks);
-        var results = new (MeshBuffers solid, MeshBuffers water, Sward sward, MeshBuffers shadow)[_batch.Count];
+        // the picture at once; its shadow a little after (RemeshShadows), so a great blast is not made twice in one frame
+        var results = new (MeshBuffers solid, MeshBuffers water, Sward sward)[_batch.Count];
         if (_batch.Count <= 2)
-            for (int i = 0; i < _batch.Count; i++) results[i].solid = _mesher.MeshChunk(_w, _batch[i], _pad, _wet, out results[i].water, out results[i].sward, out results[i].shadow);
+            for (int i = 0; i < _batch.Count; i++) results[i].solid = _mesher.MeshChunk(_w, _batch[i], _pad, _wet, out results[i].water, out results[i].sward);
         else
             Parallel.For(0, _batch.Count, () => (new GreedyMesher(), new byte[34 * 34 * 34], new byte[34 * 34 * 34]), (i, _, loc) =>
             {
-                results[i].solid = loc.Item1.MeshChunk(_w, _batch[i], loc.Item2, loc.Item3, out results[i].water, out results[i].sward, out results[i].shadow);
+                results[i].solid = loc.Item1.MeshChunk(_w, _batch[i], loc.Item2, loc.Item3, out results[i].water, out results[i].sward);
                 return loc;
             }, _ => { });
-        for (int i = 0; i < _batch.Count; i++) { Apply(_batch[i], results[i]); _farDirty.Add(RegionOf(_batch[i])); }
+        for (int i = 0; i < _batch.Count; i++)
+        {
+            int ci = _batch[i];
+            Put(_inst, ci, results[i].solid, _mat, GeometryInstance3D.ShadowCastingSetting.Off, _showSolid && !_coarse);
+            Put(_water, ci, results[i].water, _waterMat, GeometryInstance3D.ShadowCastingSetting.Off, true);
+            Grass.Take(ci, results[i].sward);
+            _shadeDirty.Add(ci);
+            _farDirty.Add(RegionOf(ci));
+        }
         return _batch.Count;
+    }
+
+    /// <summary>The shadows of the chunks made again lately, eight a frame at most.</summary>
+    public void RemeshShadows()
+    {
+        if (_shadeDirty.Count == 0) return;
+        _shadeBatch.Clear();
+        foreach (int ci in _shadeDirty) { _shadeBatch.Add(ci); if (_shadeBatch.Count >= 8) break; }
+        foreach (int ci in _shadeBatch) _shadeDirty.Remove(ci);
+        var made = new MeshBuffers[_shadeBatch.Count];
+        if (made.Length <= 2) for (int i = 0; i < made.Length; i++) made[i] = _mesher.MeshShadow(_w, _shadeBatch[i], _pad);
+        else Parallel.For(0, made.Length, () => (new GreedyMesher(), new byte[34 * 34 * 34]), (i, _, loc) => { made[i] = loc.Item1.MeshShadow(_w, _shadeBatch[i], loc.Item2); return loc; }, _ => { });
+        for (int i = 0; i < made.Length; i++)
+            Put(_shade, _shadeBatch[i], made[i], null, GeometryInstance3D.ShadowCastingSetting.ShadowsOnly, _showSolid && !_coarse);
     }
 
     /// <summary>

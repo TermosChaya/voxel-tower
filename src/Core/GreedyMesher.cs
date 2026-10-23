@@ -93,13 +93,30 @@ public sealed class GreedyMesher
     /// meshed: they hide no face of the turf under them and shade none of its corners, for the game draws them in blades.
     /// </summary>
     public MeshBuffers MeshChunk(VoxelWorld w, int ci, byte[] pad, byte[] wet, out MeshBuffers water, out Sward sward) =>
-        MeshChunk(w, ci, pad, wet, out water, out sward, out _);
+        MeshChunk(w, ci, pad, wet, out water, out sward, false, out _);
 
     /// <summary>
     /// A world chunk as above, and its shadow: the same solid voxels as the fewest faces that hold their shape, every
-    /// face of them one, whatever it is of and however its corners are shaded (see <see cref="Shadow"/>).
+    /// face of them one, whatever it is of and however its corners are shaded (see <see cref="_shadow"/>).
     /// </summary>
-    public MeshBuffers MeshChunk(VoxelWorld w, int ci, byte[] pad, byte[] wet, out MeshBuffers water, out Sward sward, out MeshBuffers shadow)
+    public MeshBuffers MeshChunk(VoxelWorld w, int ci, byte[] pad, byte[] wet, out MeshBuffers water, out Sward sward, out MeshBuffers shadow) =>
+        MeshChunk(w, ci, pad, wet, out water, out sward, true, out shadow);
+
+    /// <summary>A world chunk's shadow alone (null when nothing of it can be seen), as <see cref="MeshChunk(VoxelWorld, int, byte[], byte[], out MeshBuffers, out Sward, out MeshBuffers)"/> makes it.</summary>
+    public MeshBuffers MeshShadow(VoxelWorld w, int ci, byte[] pad)
+    {
+        if (w.IsEmpty(ci) || w.IsBuried(ci)) return null;
+        w.CopyPadded(ci, pad);
+        w.ChunkCoords(ci, out int cx, out int cy, out int cz);
+        // as the picture has it: no water, no tufts nor flowers
+        for (int i = 0; i < pad.Length; i++) if (pad[i] == Mat.Water || Mat.IsSprig(pad[i])) pad[i] = Mat.Air;
+        _shadow = true;
+        var sb = Mesh(pad, VoxelWorld.CS, VoxelWorld.CS, VoxelWorld.CS, cx * VoxelWorld.CS, cy * VoxelWorld.CS, cz * VoxelWorld.CS);
+        _shadow = false;
+        return sb.Quads > 0 ? sb : null;
+    }
+
+    MeshBuffers MeshChunk(VoxelWorld w, int ci, byte[] pad, byte[] wet, out MeshBuffers water, out Sward sward, bool withShadow, out MeshBuffers shadow)
     {
         water = null;
         sward = null;
@@ -128,9 +145,12 @@ public sealed class GreedyMesher
         var mb = Mesh(pad, VoxelWorld.CS, VoxelWorld.CS, VoxelWorld.CS, ox, oy, oz);
         _banks = false;
         if (mb.Quads == 0) return null;
-        _shadow = true;
-        shadow = Mesh(pad, VoxelWorld.CS, VoxelWorld.CS, VoxelWorld.CS, ox, oy, oz);
-        _shadow = false;
+        if (withShadow)
+        {
+            _shadow = true;
+            shadow = Mesh(pad, VoxelWorld.CS, VoxelWorld.CS, VoxelWorld.CS, ox, oy, oz);
+            _shadow = false;
+        }
         return mb;
     }
 
