@@ -80,6 +80,7 @@ public partial class Hints : Control
                 o.Add(($"{Rmb} и тянуть", "сдвинуть вид"));
                 o.Add(("Колесо", "приблизить"));
                 o.Add((L(Act.Help), "все клавиши"));
+                o.Add(("Alt", "клавиши на кнопках"));
                 return;
             case Tool.Brush:
                 o.Add((Lmb, dig ? "копать" : "рисовать"));

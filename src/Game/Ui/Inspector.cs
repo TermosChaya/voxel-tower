@@ -127,6 +127,7 @@ public partial class Inspector : Control
     Button AlarmGlyph()
     {
         var b = new Glyph(Icons.Horn, Commander.AlarmTip, () => _m.Command.Alarm(), toggle: true);
+        KeyTags.Tag(b, Act.Alarm);
         void Show()
         {
             bool up = _m.Sim.Alarm;
@@ -142,6 +143,7 @@ public partial class Inspector : Control
     Button AlarmButton(float w)
     {
         var b = Btn("", "", () => _m.Command.Alarm(), w);
+        KeyTags.Tag(b, Act.Alarm);
         void Show()
         {
             bool up = _m.Sim.Alarm;
@@ -174,6 +176,7 @@ public partial class Inspector : Control
         hint.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         head.AddChild(hint);
         var undo = Btn("Отменить · Ctrl+Z", Hud.UndoTip, () => _m.Tools.Undo());
+        KeyTags.Tag(undo, () => "Ctrl+Z");
         undo.Disabled = _m.Sim.UndoDepth == 0;
         _refresh.Add(() => undo.Disabled = _m.Sim.UndoDepth == 0);
         head.AddChild(undo);
@@ -259,16 +262,20 @@ public partial class Inspector : Control
         const string depthTip = "Глубина\nГлубина от поверхности. Клавиши {HeightLess} и {HeightMore}.";
         const string levelTip = "Верх\nРовный — на одной высоте с началом штриха, по рельефу — повторяет землю. Клавиша {Level}.";
         const string floorTip = "Дно\nРовное — на одной глубине с началом штриха, по рельефу — повторяет поверхность. Клавиша {Level}.";
-        Control Width(string caption = "Толщина") => new Stepper(caption, widthTip, () => Len(o.Width), d => t.StepWidth(d));
-        Control Height() => dig ? new Stepper("Глубина", depthTip, () => Len(o.Depth), d => t.StepHeight(d)) : new Stepper("Высота", heightTip, () => Len(o.Height), d => t.StepHeight(d));
-        Control Level() => dig
+        // (each with its keys, shown on it while Alt is held)
+        static Control Keyed(Control c, Func<string> keys) { KeyTags.Tag(c, keys); return c; }
+        static string Pair(Act a, Act b) => $"{Bindings.Label(a)} {Bindings.Label(b)}";
+        Control Width(string caption = "Толщина") => Keyed(new Stepper(caption, widthTip, () => Len(o.Width), d => t.StepWidth(d)), () => Pair(Act.WidthLess, Act.WidthMore));
+        Control Height() => Keyed(dig ? new Stepper("Глубина", depthTip, () => Len(o.Depth), d => t.StepHeight(d)) : new Stepper("Высота", heightTip, () => Len(o.Height), d => t.StepHeight(d)),
+            () => Pair(Act.HeightLess, Act.HeightMore));
+        Control Level() => Keyed(dig
             ? new Choice("Дно", floorTip, new[] { "ровное", "по рельефу" }, o.Level ? 0 : 1, i => { if ((i == 0) != o.Level) t.ToggleLevel(); })
-            : new Choice("Верх", levelTip, new[] { "ровный", "по рельефу" }, o.Level ? 0 : 1, i => { if ((i == 0) != o.Level) t.ToggleLevel(); });
+            : new Choice("Верх", levelTip, new[] { "ровный", "по рельефу" }, o.Level ? 0 : 1, i => { if ((i == 0) != o.Level) t.ToggleLevel(); }), () => Bindings.Label(Act.Level));
         switch (t.Tool)
         {
             case Tool.Brush:
-                opts.AddChild(new Choice("Форма", "Форма кисти\nСтолб рисует стену заданной высоты, шар налипает на поверхность. С киркой столб копает полосу, шар вынимает ком. Клавиша {Form}.",
-                    new[] { "столб", "шар" }, (int)o.Form, i => { o.Form = (BrushForm)i; t.Changed(); }));
+                opts.AddChild(Keyed(new Choice("Форма", "Форма кисти\nСтолб рисует стену заданной высоты, шар налипает на поверхность. С киркой столб копает полосу, шар вынимает ком. Клавиша {Form}.",
+                    new[] { "столб", "шар" }, (int)o.Form, i => { o.Form = (BrushForm)i; t.Changed(); }), () => Bindings.Label(Act.Form)));
                 opts.AddChild(Width("Размер"));
                 if (o.Form == BrushForm.Column) { opts.AddChild(Height()); opts.AddChild(Level()); }
                 break;
@@ -319,8 +326,8 @@ public partial class Inspector : Control
                 break;
         }
         if (t.Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Paste or Tool.Gather or Tool.Repair or Tool.Capture or Tool.Unmark or Tool.Bridge)
-            opts.AddChild(new Choice("Сетка", "Сетка\nКонцы штрихов встают в узлы сетки, линии идут вдоль осей или под 45°. Сетка отсчитывается от центра цитадели. Клавиша {Grid}.",
-                new[] { "нет", "50 см", "1 м", "2 м" }, Array.IndexOf(ToolOptions.Grids, o.Grid), i => t.SetGrid(ToolOptions.Grids[i])));
+            opts.AddChild(Keyed(new Choice("Сетка", "Сетка\nКонцы штрихов встают в узлы сетки, линии идут вдоль осей или под 45°. Сетка отсчитывается от центра цитадели. Клавиша {Grid}.",
+                new[] { "нет", "50 см", "1 м", "2 м" }, Array.IndexOf(ToolOptions.Grids, o.Grid), i => t.SetGrid(ToolOptions.Grids[i])), () => Bindings.Label(Act.Grid)));
     }
 
     public static string Len(int voxels)
@@ -462,8 +469,12 @@ public partial class Inspector : Control
         row.AddChild(new Glyph(Icons.Of("knight-banner"), "Стоять здесь\nВыбранные остаются на месте. Для солдат это место становится постом.", () => _m.Command.HoldSelected()));
         row.AddChild(AlarmGlyph());
         if (chosen.Count == 1)
-            row.AddChild(new Glyph(Icons.Eye, "Вселиться ({Possess})\nУправлять им от первого лица. {FpForward}{FpLeft}{FpBack}{FpRight} — идти, мышь — смотреть, {Lmb} — удар, " +
-                "выстрел или кирка, {Rmb} — положить блок, Esc — выйти.", () => _m.FP.Enter(chosen[0])));
+        {
+            var possess = new Glyph(Icons.Eye, "Вселиться ({Possess})\nУправлять им от первого лица. {FpForward}{FpLeft}{FpBack}{FpRight} — идти, мышь — смотреть, {Lmb} — удар, " +
+                "выстрел или кирка, {Rmb} — положить блок, Esc — выйти.", () => _m.FP.Enter(chosen[0]));
+            KeyTags.Tag(possess, Act.Possess);
+            row.AddChild(possess);
+        }
         var duty = new List<Button>();
         // priests bring nothing in
         bool labour = chosen.Exists(u => !u.T.Prays);

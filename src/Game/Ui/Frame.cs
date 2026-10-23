@@ -231,6 +231,7 @@ public partial class WaveClock : Control
         };
         _call.AddThemeFontSizeOverride("font_size", 12);
         _call.Pressed += () => _m.Command.CallWave();
+        KeyTags.Tag(_call, Act.CallWave);
         row.AddChild(_call);
         string[] labels = { "II", "×1", "×2", "×3" };
         for (int i = 0; i < labels.Length; i++)
@@ -245,6 +246,7 @@ public partial class WaveClock : Control
             b.AddThemeFontSizeOverride("font_size", 12);
             b.Pressed += () => { if (k == 0) _m.Command.TogglePause(); else _m.Command.SetSpeed(k); };
             _speeds.Add(b);
+            if (i <= 1) KeyTags.Tag(b, i == 0 ? Act.Pause : Act.Speed);
             row.AddChild(b);
         }
         _trails = new Button
@@ -256,6 +258,7 @@ public partial class WaveClock : Control
         };
         _trails.AddThemeFontSizeOverride("font_size", 12);
         _trails.Pressed += () => _m.Command.ToggleTrails();
+        KeyTags.Tag(_trails, Act.Trails);
         row.AddChild(_trails);
         col.AddChild(row);
         _keep = new KeepBar();
@@ -580,11 +583,14 @@ public partial class MapRing : Control
             var b = Knob(text, tip, angle);
             float f = factor;
             b.Pressed += () => _m.Rig.ZoomBy(f);
+            KeyTags.Tag(b, f > 1 ? Act.CamZoomIn : Act.CamZoomOut);
         }
         _top = ViewKnob(Icons.TopView, "Вид сверху ({CamTop})\nЕщё раз — обычный вид.", 2.3f);
         _top.Clicked += () => _m.Rig.ToggleTopDown();
+        KeyTags.Tag(_top, Act.CamTop);
         var home = ViewKnob(Icons.HomeView, "Вернуть вид к крепости ({CamHome})", .84f);
         home.Clicked += () => _m.Rig.Home();
+        KeyTags.Tag(home, Act.CamHome);
         HomeButton = home;
     }
 

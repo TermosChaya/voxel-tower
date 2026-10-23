@@ -276,9 +276,11 @@ public partial class Hud : CanvasLayer
         _help = new Medallion(Icons.Question, HelpTip) { Size = new Vector2(38, 38) };
         _help.Clicked += () => OpenMenu("controls");
         root.AddChild(_help);
+        KeyTags.Tag(_help, Act.Help);
         _menuButton = new Medallion(Icons.Menu, "Меню (Esc)\nСохранение, загрузка, управление, настройки, обучение, выход. Быстрое сохранение {QuickSave}, загрузка {QuickLoad}.") { Size = new Vector2(38, 38) };
         _menuButton.Clicked += OpenMenu;
         root.AddChild(_menuButton);
+        KeyTags.Tag(_menuButton, () => "Esc");
         _colonists = new ColonistBar();
         root.AddChild(_colonists);
         _colonists.Init(m);
@@ -301,6 +303,8 @@ public partial class Hud : CanvasLayer
         _menu = new GameMenu();
         root.AddChild(_menu);
         _menu.Init(m);
+        // and over all of it the keys on the buttons, while Alt is held
+        root.AddChild(new KeyTags());
 
         OnToolChanged();
         Refresh();
