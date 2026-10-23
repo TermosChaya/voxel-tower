@@ -24,6 +24,14 @@ public sealed partial class Sim
     public float WishX, WishZ, LookYaw, LookPitch;
     public bool WishRun, WishStrike, WishLay;
     public int WishClimb;
+    /// <summary>
+    /// The bow of a bowman gone into: a shot asked for and not yet loosed, and how far the string is drawn for it (0 to
+    /// 1). At one of the horde in its sight the bow is up and drawn already and the arrow goes at once; at anything else
+    /// the string comes back to the jaw first, in <see cref="DrawTime"/>, and the arrow goes then.
+    /// </summary>
+    public bool ShotAsked;
+    public float Drawn;
+    public const float DrawTime = .35f;
     public byte LayMat = Mat.Stone;
     /// <summary>The player left it, and why (a word for the screen); null for leaving of the player's own will.</summary>
     public event Action<string> Unpossessed;
@@ -57,6 +65,7 @@ public sealed partial class Sim
         Possessed = u;
         LookYaw = u.Facing; LookPitch = 0;
         WishX = WishZ = 0; WishRun = WishStrike = WishLay = false; WishClimb = 0;
+        ShotAsked = false; Drawn = 0;
         _swingRight = _swingDown = 0; _lookYaw0 = float.NaN;
         _handFoe = null;
         return true;
@@ -72,6 +81,7 @@ public sealed partial class Sim
         if (u == null) return;
         Possessed = null;
         WishX = WishZ = 0; WishStrike = WishLay = false; WishClimb = 0;
+        ShotAsked = false; Drawn = 0;
         _handFoe = null;
         u.Why = "";
         u.Effort = 0;
@@ -122,7 +132,8 @@ public sealed partial class Sim
         u.State = moving || climbed ? UnitState.Walk : UnitState.Idle;
         u.Pastime = Pastime.None;
         if (_handFoe != null && Time >= _handLands) Land(u);
-        if (WishStrike && u.Cooldown <= 0) Blow(u);
+        if (Bow(u.T)) Draw(u, dt);
+        else if (WishStrike && u.Cooldown <= 0) Blow(u);
         else if (WishStrike && u.T.Work > 0 && !u.T.Ranged) Pick(u, dt);
         if (WishLay && u.T.Work > 0) Trowel(u, dt);
     }
@@ -353,6 +364,28 @@ public sealed partial class Sim
         for (int p = 0; p < BodyPlan.Parts; p++)
             if (plan.Grid[p] is { } g && g.In(x, y, z) && g.M[g.Index(x, y, z)] != 0) return true;
         return false;
+    }
+
+    /// <summary>
+    /// A bow drawn and loosed: a click asks for a shot (held, one after another), the string comes back while it is
+    /// asked for or held and eases off when not, and the arrow goes when the string is at the jaw — at once at one of
+    /// the horde in sight, whom the bow is up and drawn for already.
+    /// </summary>
+    void Draw(Unit u, float dt)
+    {
+        if (WishStrike && u.Cooldown <= 0) ShotAsked = true;
+        Drawn = ShotAsked || WishStrike ? Math.Min(1, Drawn + dt / DrawTime) : Math.Max(0, Drawn - dt / .5f);
+        if (!ShotAsked || u.Cooldown > 0 || Drawn < 1 && !FoeInSight(u)) return;
+        ShotAsked = false;
+        Drawn = 0;
+        Blow(u);
+    }
+
+    /// <summary>One of the horde or a beast before the eyes of one gone into, within its shot: what the bow is raised for.</summary>
+    public bool FoeInSight(Unit u)
+    {
+        var seen = Sighted(u, 40 * VoxelWorld.PerMetre, out float along);
+        return seen != null && seen.Team != Team.Player && along <= (u.T.Ranged ? BowRange(u) : u.T.Reach + seen.T.BodyR + 2);
     }
 
     /// <summary>

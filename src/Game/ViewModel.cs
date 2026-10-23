@@ -104,7 +104,8 @@ public partial class ViewModel : Node3D
         var rig = new Basis(Vector3.Up, _lagY) * new Basis(Vector3.Right, -_lagP + Mathf.DegToRad(.6f) * breath) * new Basis(Vector3.Back, roll);
         Transform = new Transform3D(rig, sway * M);
 
-        if (_bow) { Bow(u, sdt, dt, foe, snap); return; }
+        // the bow comes up and is drawn for one of the horde before it, and for a shot asked at anything else
+        if (_bow) { Bow(u, sdt, dt, foe || sim.ShotAsked || sim.WishStrike, snap); return; }
 
         // the eyes' swing of the last fifth of a second: the stroke the next blow is leant toward
         float fade = MathF.Exp(-dt / .2f);
@@ -398,8 +399,9 @@ public partial class ViewModel : Node3D
     }
 
     /// <summary>
-    /// A bowman: the bow out on the left, the string drawn to the jaw while one of the horde is before it and the shot is
-    /// ready; loosed, the string snaps straight and the hand flies back, goes down for another arrow, nocks it and draws.
+    /// A bowman: the bow out on the left, the string drawn to the jaw while one of the horde is before it or a shot is
+    /// asked for, and the shot is ready; loosed, the string snaps straight and the hand flies back, goes down for another
+    /// arrow, nocks it and draws.
     /// </summary>
     void Bow(Unit u, float sdt, float dt, bool foe, bool snap)
     {

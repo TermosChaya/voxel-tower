@@ -2086,7 +2086,8 @@ public partial class Main : Node3D
 
     /// <summary>
     /// First person: one of ours gone into on the field west of the citadel, a band coming at it — a swordsman with his
-    /// sword up; with --look=1 an archer drawing on a goblin; with --look=2 a worker with the pick at the ground.
+    /// sword up; with --look=1 an archer drawing on a goblin; with --look=2 a worker with the pick at the ground; with
+    /// --look=3 the archer turned from the band, drawing for a shot at the sky.
     /// </summary>
     void Eyes()
     {
@@ -2094,9 +2095,9 @@ public partial class Main : Node3D
         sim.Waves.Countdown = 1e9;
         int cx = Site.KeepX - Site.KeepR - 150, cz = Site.KeepZ + 10;
         Unit Raider(UnitType t, int dx, int dz) { var u = sim.Spawn(t, sim.NearestStand(cx + dx, cz + dz, t.Move.Height)); u.Guard = true; u.Home = u.Cell; return u; }
-        var kind = _look == 1 ? Kinds.Archer : _look == 2 ? Kinds.Worker : Kinds.Swordsman;
+        var kind = _look is 1 or 3 ? Kinds.Archer : _look == 2 ? Kinds.Worker : Kinds.Swordsman;
         var me = sim.Spawn(kind, sim.NearestStand(cx + 40, cz, 2));
-        foreach (var (t, dx, dz) in _look == 1
+        foreach (var (t, dx, dz) in _look is 1 or 3
             ? new[] { (Kinds.Goblin, -90, 6), (Kinds.Orc, -110, -20), (Kinds.Goblin, -120, 24), (Kinds.Troll, -150, 0) }
             : new[] { (Kinds.Goblin, 26, 4), (Kinds.Orc, 12, -12), (Kinds.Goblin, 6, 16), (Kinds.Troll, -14, 2), (Kinds.Goblin, -4, -26) })
             Raider(t, dx, dz);
@@ -2107,7 +2108,8 @@ public partial class Main : Node3D
         // the swordsman looks the goblin in the face, which is well below his own
         float face = MathF.Atan2(aim.Y + aim.T.BodyH * .75f - (me.Y + me.T.BodyH * .88f), MathF.Sqrt(tdx * tdx + tdz * tdz));
         FP.Face(MathF.Atan2(tdz, tdx), _look == 2 ? -.62f : _look == 1 ? .02f : Math.Clamp(face, -.6f, .05f));
-        if (_look == 2) { sim.WishStrike = true; Advance(1.2); }
+        if (_look == 3) { FP.Face(MathF.Atan2(tdz, tdx) + MathF.PI, .25f); sim.WishStrike = true; Advance(.2); }
+        else if (_look == 2) { sim.WishStrike = true; Advance(1.2); }
         else if (_look == 1) { sim.WishStrike = true; Advance(.35); sim.WishStrike = false; Advance(.08); }
         else { sim.WishStrike = true; Advance(.2); }
         Paused = true;

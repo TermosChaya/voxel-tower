@@ -268,7 +268,7 @@ void fragment() {
             + (u.T.Work > 0 ? " · ПКМ — класть ({FpStone} камень, {FpWood} брёвна, {FpEarth} земля)" : "") + (Sim.Kindles(u.T) ? " · {FpFire} — огненные стрелы" : "")
             + " · {FpUp} / {FpDown} — вверх и вниз по лестнице · Esc — выйти");
         _hint.Position = new Vector2((vp.X - _hint.Size.X) / 2, vp.Y - 34);
-        _sights.Foe = seen != null && seen.Team != Team.Player && along <= (u.T.Ranged ? sim.BowRange(u) : u.T.Reach + seen.T.BodyR + 2);
+        _sights.Foe = sim.FoeInSight(u);
         _sights.Work = !_sights.Foe && u.T.Work > 0 && sim.LookedAt(u, 4 * VoxelWorld.PerMetre, out var h2) && Labour.Diggable(h2.M);
         _sights.Health = Math.Clamp(u.Hp / u.MaxHp, 0, 1);
     }

@@ -4193,6 +4193,18 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--possess")
     Check("an archer gone into looses along its eyes, and the arrow strikes the goblin it looks at; letting go of the swordsman before",
         letGo && simQ.Shots > shots0 && (mark.Dead || mark.Hp < mark.MaxHp), $"let go {letGo}; {simQ.Shots - shots0} arrows, the goblin {(mark.Dead ? "dead" : $"{mark.Hp:0} of {mark.MaxHp:0}")}; sighted {(sighted == mark ? "the goblin" : sighted?.T.Key ?? "nothing")} {along / VoxelWorld.PerMetre:0.0} m");
     mark.Dead = true; mark.DiedAt = -999;
+    // at nothing of the horde the bow is drawn first: a click brings the string back to the jaw, and the arrow goes up
+    // into the air where it looks a third of a second later
+    simQ.LookYaw += MathF.PI; simQ.LookPitch = .3f;
+    RunQ(2);
+    int shots1 = simQ.Shots;
+    simQ.WishStrike = true;
+    simQ.Step(.05f);
+    simQ.WishStrike = false;
+    bool notYet = simQ.Shots == shots1;
+    RunQ(.5);
+    Check("…and at nothing it draws first: a click looses the arrow when the string is at the jaw, a third of a second on",
+        notYet && simQ.Shots == shots1 + 1, $"at the click {(notYet ? "nothing yet" : "loosed")}, half a second on {simQ.Shots - shots1} arrows");
     // a worker: the pick takes out the earth it looks at, the trowel lays stone where it looks
     var dig = simQ.Spawn(Kinds.Worker, simQ.NearestStand(ox, oz - 60, 2));
     simQ.Possess(dig);
