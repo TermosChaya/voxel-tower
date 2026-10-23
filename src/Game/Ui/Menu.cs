@@ -6,8 +6,8 @@ namespace VoxelTower.Game;
 
 /// <summary>
 /// The game's own menu, over a darkened field: go on, save into a slot, read one back (a slot, the quick save, the
-/// autosave), the controls, the settings, a new siege, the tutorial, quit. At the start of the game it is the title:
-/// a new siege, the tutorial, a saved game, the controls, the settings, quit. The siege stands still while it is open. Esc or the medallion by the
+/// autosave), the controls, the settings, a new siege, the sandbox, the tutorial, quit. At the start of the game it is
+/// the title: a new siege, the sandbox, the tutorial, a saved game, the controls, the settings, quit. The siege stands still while it is open. Esc or the medallion by the
 /// clock opens it; the help medallion and {Help} open it on the controls.
 /// </summary>
 public partial class GameMenu : Control
@@ -82,6 +82,7 @@ public partial class GameMenu : Control
             case "load": Loading(); break;
             case "settings": Settings_(); break;
             case "hardness": Hardness_(); break;
+            case "sandbox": Sandbox_(); break;
             case "graphics": Picture_(); break;
             case "controls": Controls_(); break;
             default: Main_(); break;
@@ -142,18 +143,57 @@ public partial class GameMenu : Control
     /// <summary>A new siege as hard as chosen: on the title the valley under it goes on as it is; in play the scene begins again.</summary>
     void Start(Hardness h)
     {
-        if (_title) { _m.Sim.SetHardness(h); Begin(false); return; }
+        if (_title) { _m.Sim.SetHardness(h); Begin(_m.Welcome); return; }
         Main.PendingHardness = h;
         _m.NewGame();
     }
 
-    void Begin(bool tutorial)
+    /// <summary>The sandbox, the horde in it coming only when called: with everything open, or a siege of one's own with the clock standing.</summary>
+    void Sandbox_()
+    {
+        _onMain = false;
+        Clear();
+        Fit(W, 500);
+        PageName = "sandbox";
+        _page.AddChild(Hud.CapsLabel("Песочница", 10));
+        var about = Hud.Text(Bindings.Fill("Орда приходит, только когда её позовёте: {CallWave} или кнопка «На штурм» у часов. {Summon} вызывает " +
+            "ватагу орды под курсором, Shift+{Summon} — тяжёлую."), Ornament.Serif, 14, Ornament.Parchment, wrap: true);
+        about.HorizontalAlignment = HorizontalAlignment.Center;
+        about.CustomMinimumSize = new Vector2(420, 0);
+        about.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+        _page.AddChild(about);
+        (string name, string note, bool open)[] kinds =
+        {
+            ("Всё открыто", "Всё изучено, запасы не кончаются, заклинания бесплатные, цитадель не падает. Волны идут и после двенадцатой.", true),
+            ("Своими силами", "Обычная осада: изучать, добывать и строить самим, цитадель может пасть. Стоят только часы.", false),
+        };
+        foreach (var (name, note, open) in kinds)
+        {
+            _page.AddChild(Big(name, name + "\n" + note, () => Sandbox(open)));
+            var line = Hud.Text(note, Ornament.SerifItalic, 12, Ornament.Aged, wrap: true);
+            line.HorizontalAlignment = HorizontalAlignment.Center;
+            line.CustomMinimumSize = new Vector2(320, 0);
+            line.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+            _page.AddChild(line);
+        }
+        _page.AddChild(new Rule(false));
+        _page.AddChild(Big("Назад", "", Main_));
+    }
+
+    /// <summary>The sandbox begun: on the title in the valley under it; in play the scene begins again.</summary>
+    void Sandbox(bool open)
+    {
+        if (_title) Begin(() => _m.StartSandbox(open));
+        else _m.NewSandbox(open);
+    }
+
+    void Begin(Action start)
     {
         _title = false;
         Close();
         _m.Paused = false;
         _m.Hud.EndTitle();
-        if (tutorial) _m.StartTutorial(); else _m.Welcome();
+        start();
     }
 
     bool _onMain;
@@ -184,12 +224,13 @@ public partial class GameMenu : Control
         PageName = "main";
         if (_title)
         {
-            Fit(W, 498);
+            Fit(W, 544);
             var sub = Hud.Text("Оборона крепости в долине из вокселей", Ornament.SerifItalic, 15, Ornament.Aged);
             sub.HorizontalAlignment = HorizontalAlignment.Center;
             _page.AddChild(sub);
             _page.AddChild(Big("Новая игра", "12 волн орды, по одной каждые 10 минут.", Hardness_));
-            _page.AddChild(Big("Обучение", "Пошаговое знакомство с игрой.", () => Begin(true)));
+            _page.AddChild(Big("Песочница", "Орда приходит, только когда её позовёте.", Sandbox_));
+            _page.AddChild(Big("Обучение", "Пошаговое знакомство с игрой.", () => Begin(() => _m.StartTutorial())));
             _page.AddChild(Big("Загрузить игру", "Ячейки, быстрое сохранение и автосохранение после каждой волны.", Loading));
             _page.AddChild(Big("Управление", "Все клавиши. Любую можно переназначить.", Controls_));
             _page.AddChild(Big("Настройки", "Интерфейс, звук, графика.", Settings_));
@@ -206,6 +247,7 @@ public partial class GameMenu : Control
         _page.AddChild(Big("Управление", "Все клавиши. Любую можно переназначить ({Help}).", Controls_));
         _page.AddChild(Big("Настройки", "Интерфейс, звук, графика.", Settings_));
         _page.AddChild(Big("Новая игра", "Несохранённый прогресс пропадёт.", Hardness_));
+        _page.AddChild(Big("Песочница", "Орда приходит, только когда её позовёте. Несохранённый прогресс пропадёт.", Sandbox_));
         _page.AddChild(Big(_m.Tutor is { Over: false } ? "Обучение сначала" : "Обучение", "Пошаговое знакомство с игрой. Несохранённый прогресс пропадёт.", () => _m.NewGame(tutorial: true)));
         _page.AddChild(Big("Отчёт об ошибке", "Собрать логи игры в файл, чтобы прислать автору.", Report_));
         _page.AddChild(Big("Выйти из игры", "Несохранённый прогресс пропадёт. Автосохранение делается после каждой волны.", () => _m.GetTree().Quit()));

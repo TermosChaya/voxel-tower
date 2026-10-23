@@ -41,8 +41,8 @@ namespace VoxelTower.Game;
 /// --day=F starts at that time of the day (0 dawn, 1 sunset), --alarm=S raises the alarm and runs on S seconds,
 /// --weather=rain|fog|wind brings that weather at once, --envoy sends the horde's envoy and waits for its offer,
 /// --lore=N,key,… puts N knowledge in hand with that lore learnt, --sounds=folder writes every sound out as a .wav and quits,
-/// --load=file.sav reads a saved game back, --sandbox opens a game with everything learnt and plenty of all (O calls up
-/// a band of the horde under the pointer), --trailer=N stages and films the Nth shot of the trailer (Main.Trailer.cs).
+/// --load=file.sav reads a saved game back, --sandbox opens the sandbox with everything learnt and plenty of all (the
+/// horde on call, O calls up a band of it under the pointer), --trailer=N stages and films the Nth shot of the trailer (Main.Trailer.cs).
 /// </summary>
 public partial class Main : Node3D
 {
@@ -94,7 +94,10 @@ public partial class Main : Node3D
 
     /// <summary>A saved game to read back when the scene starts (set, then the scene started again: <see cref="Saves.Read"/>).</summary>
     public static string PendingLoad;
-    /// <summary>What the next start of the scene begins with, asked from the menu: "game" — a new siege, "tutorial" — the tutorial; none — the title.</summary>
+    /// <summary>
+    /// What the next start of the scene begins with, asked from the menu: "game" — a new siege, "tutorial" — the tutorial,
+    /// "sandbox" — the sandbox with everything open, "sandbox-own" — a siege of one's own with the horde on call; none — the title.
+    /// </summary>
     public static string PendingStart;
     /// <summary>How hard the siege begun from the menu in play is to be (the scene begins again for it).</summary>
     public static Hardness? PendingHardness;
@@ -103,7 +106,7 @@ public partial class Main : Node3D
     /// <summary>--tutorial or --tutorial=N: the tutorial from its Nth step; --title: the title over the valley (screenshots, tests).</summary>
     int _tutorialAt = -1;
     bool _titleArg;
-    /// <summary>--sandbox: a game with everything open and plenty of all, to try every part of it at once (Sim.Sandbox.cs).</summary>
+    /// <summary>--sandbox: the sandbox with everything open and plenty of all, to try every part of it at once (Sim.Sandbox.cs).</summary>
     bool _sandbox;
     /// <summary>The seed the valley was made from: what a save keeps of it.</summary>
     public uint Seed => _seed;
@@ -364,12 +367,13 @@ public partial class Main : Node3D
 
         // a game of one's own opens on the title over the valley; the tutorial, asked for, on its first step
         _startTutorial = PendingStart == "tutorial" || _tutorialAt >= 0;
-        _startTitle = !_startTutorial && !_sandbox && (_titleArg || (PendingStart == null && !Scripted));
+        string sandbox = _sandbox ? "sandbox" : PendingStart is "sandbox" or "sandbox-own" ? PendingStart : null;
+        _startTitle = !_startTutorial && sandbox == null && (_titleArg || (PendingStart == null && !Scripted));
         PendingStart = null;
         if (PendingHardness is { } hard) { Sim.SetHardness(hard); PendingHardness = null; }
         if (!_startTutorial && !_startTitle)
         {
-            if (_sandbox) StartSandbox();
+            if (sandbox != null) StartSandbox(open: sandbox == "sandbox");
             else Welcome();
         }
         GD.Print($"[voxel-tower] world {genMs:0} ms, navigation {navMs:0} ms, mesh {View.LastFullMeshMs:0} ms, {View.Triangles()} triangles");
@@ -501,12 +505,24 @@ public partial class Main : Node3D
         GetTree().Quit();
     }
 
-    /// <summary>The sandbox: everything open, the stores never short, and the horde called up by hand.</summary>
-    void StartSandbox()
+    /// <summary>
+    /// The sandbox: the horde comes only when called. Open, everything is learnt and the stores are never short; else it
+    /// is a siege of one's own, errands and all, with only the clock standing.
+    /// </summary>
+    public void StartSandbox(bool open)
     {
-        Sim.BeginSandbox();
-        Hud.Log("Песочница: всё изучено, запасы не кончаются, заклинания бесплатные и без перезарядки, цитадель не падает.", Hud.Kind.Ok);
-        Hud.Log("O — ватага орды под курсором, Shift+O — тяжёлая ватага. Пробел — позвать волну.", Hud.Kind.Ok);
+        if (open)
+        {
+            Sim.BeginSandbox();
+            Hud.Log("Песочница: всё изучено, запасы не кончаются, заклинания бесплатные и без перезарядки, цитадель не падает.", Hud.Kind.Ok);
+        }
+        else
+        {
+            Sim.Waves.OnCall = true;
+            if (!Scripted) Sim.BeginErrands();
+            Hud.Log("Песочница своими силами: всё как в осаде, только орда не придёт, пока её не позовёте.", Hud.Kind.Ok);
+        }
+        Hud.Log("{CallWave} — позвать волну. {Summon} — ватага орды под курсором, Shift+{Summon} — тяжёлая ватага.", Hud.Kind.Ok);
         Hud.Refresh();
     }
 
@@ -537,6 +553,13 @@ public partial class Main : Node3D
     public void NewGame(bool tutorial = false)
     {
         PendingStart = tutorial ? "tutorial" : "game";
+        GetTree().ReloadCurrentScene();
+    }
+
+    /// <summary>The sandbox begun from the menu in play: the scene begins again for it.</summary>
+    public void NewSandbox(bool open)
+    {
+        PendingStart = open ? "sandbox" : "sandbox-own";
         GetTree().ReloadCurrentScene();
     }
 

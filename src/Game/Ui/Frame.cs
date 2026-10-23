@@ -203,6 +203,8 @@ public partial class WaveClock : Control
     KeepBar _keep;
     DayDial _dial;
     const string CallTip = "Позвать орду сейчас ({CallWave})\nНаграды за это нет, но орда хуже знает вашу оборону: процент — сколько она успела разведать. Сразу наступит ночь.";
+    const string CallTipOnCall = "Позвать орду ({CallWave})\nВ песочнице орда сама не приходит. Сразу наступит ночь, после волны снова день. " +
+        "{Summon} вызывает ватагу под курсором, Shift+{Summon} — тяжёлую.";
     public const float W = 470, H = 70;
 
     public void Init(Main m)
@@ -294,6 +296,9 @@ public partial class WaveClock : Control
         Craft.Corner(this, r.End, new Vector2(-1, -1), 14);
     }
 
+    /// <summary>"of twelve" after the wave's number, but in the sandbox with everything open, whose waves go on past the twelfth.</summary>
+    static string Of(Sim sim) => sim.Sandbox ? "" : $" ИЗ {Waves.Total}";
+
     public void Refresh()
     {
         if (_m == null) return;
@@ -307,7 +312,7 @@ public partial class WaveClock : Control
         }
         else if (w.Active)
         {
-            _title.Text = $"ВОЛНА {w.Number} ИЗ {Waves.Total} · РАЗВЕДКА {w.Intel * 100:0} %" +
+            _title.Text = $"ВОЛНА {w.Number}{Of(sim)}" + (w.OnCall ? "" : $" · РАЗВЕДКА {w.Intel * 100:0} %") +
                 (sim.Weather != Weather.Clear ? " · " + Sim.WeatherName(sim.Weather).ToUpperInvariant() : "");
             _time.Text = (sim.RaidersAlive() + w.Coming).ToString();
             _unit.Text = "В ДОЛИНЕ";
@@ -318,14 +323,14 @@ public partial class WaveClock : Control
         else
         {
             int bands = sim.Bands.FindAll(b => b.State == BandState.Coming).Count;
-            _title.Text = $"ВОЛНА {w.Number + 1} ИЗ {Waves.Total}" + (bands > 0 ? $" · ВАТАГ {bands}" : "") +
+            _title.Text = $"ВОЛНА {w.Number + 1}{Of(sim)}" + (bands > 0 ? $" · ВАТАГ {bands}" : "") +
                 (w.DawnLeft > 0 ? " · РАССВЕТ" : w.Countdown < Waves.Dusk ? " · ЗАКАТ" : "") +
                 (sim.Weather != Weather.Clear ? " · " + Sim.WeatherName(sim.Weather).ToUpperInvariant() : "");
-            _time.Text = w.Countdown < 100 * 60 ? Fmt.Clock(w.Countdown) : "—";
-            _unit.Text = "ДО ОРДЫ";
-            _call.Text = $"На штурм · {w.IntelNow * 100:0} %";
+            _time.Text = w.OnCall || w.Countdown >= 100 * 60 ? "—" : Fmt.Clock(w.Countdown);
+            _unit.Text = w.OnCall ? "ПО ЗОВУ" : "ДО ОРДЫ";
+            _call.Text = w.OnCall ? "На штурм" : $"На штурм · {w.IntelNow * 100:0} %";
             _call.Disabled = false;
-            _call.TooltipText = CallTip;
+            _call.TooltipText = w.OnCall ? CallTipOnCall : CallTip;
         }
         if (_m.Atmos != null) { _dial.Day = _m.Atmos.ShownDay; _dial.Dark = _m.Atmos.ShownDark; }
         _dial.QueueRedraw();

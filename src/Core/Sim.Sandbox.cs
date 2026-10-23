@@ -3,10 +3,12 @@ using System;
 namespace VoxelTower.Core;
 
 /// <summary>
-/// The sandbox, for trying the whole game at once (--sandbox): every lore learnt and every spell known, the stores and
-/// the intervention full and kept full, spells free and ready again at once, recruits ready as soon as they are taken,
-/// room for a hundred more in the army, and a citadel nothing breaks. Bands of the horde can be called up anywhere in
-/// the valley to try things on. No errands, chapters or gifts: it is no siege of one's own. Not kept in a save.
+/// The sandbox, for trying the whole game at once (the title's «Песочница», or --sandbox): every lore learnt and every
+/// spell known, the stores and the intervention full and kept full, spells free and ready again at once, recruits ready
+/// as soon as they are taken, room for a hundred more in the army, and a citadel nothing breaks. The horde comes only
+/// when called, wave after wave past the twelfth, and bands of it can be called up anywhere in the valley to try things
+/// on. No errands, chapters or gifts: it is no siege of one's own. A siege of one's own can have the horde on call too
+/// (the sandbox «своими силами»): only the clock stands still in it.
 /// </summary>
 public sealed partial class Sim
 {
@@ -15,6 +17,7 @@ public sealed partial class Sim
     public void BeginSandbox()
     {
         Sandbox = true;
+        Waves.OnCall = true;
         NoErrands = true;
         Errands.Clear();
         foreach (var l in Lores)

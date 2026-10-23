@@ -5830,6 +5830,28 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--sandbox")
     Check("…a band called up where it is pointed at comes whole and goes at the citadel, which takes no harm",
         called != null && called.Members.Count == 6 && called.Members.Exists(u => u.T == Kinds.Troll) && simS.KeepHp >= keep0 && !simS.Over,
         $"band {called?.Name} of {called?.Members.Count}, state {called?.State}; citadel {keep0:0} → {simS.KeepHp:0}");
+
+    // the horde on call: the day runs on to noon and stands there; called, the horde comes knowing all; and a save
+    // keeps the sandbox a sandbox
+    for (int i = 0; i < 900; i++) simS.Waves.Tick(simS, 1);
+    bool stood = !simS.Waves.Active && simS.Waves.Number == 0 && Math.Abs(simS.Waves.Countdown - Waves.Prep / 2) < 1e-6;
+    var msS = new System.IO.MemoryStream();
+    simS.Save(msS, mpS.Seed, "test", "");
+    msS.Position = 0;
+    var wS2 = new VoxelWorld(mpS.SizeX, mpS.SizeY, mpS.SizeZ);
+    Sim simS2;
+    using (var reader = new SaveReader(msS))
+    {
+        var siteS2 = MapGen.Generate(wS2, new MapParams { Seed = reader.Seed });
+        wS2.Compact();
+        reader.Valley(wS2, siteS2);
+        simS2 = new Sim(wS2, siteS2);
+        simS2.Load(reader);
+    }
+    double intel = simS.Waves.StartNow(simS);
+    Check("…the horde comes only when called: the day stands at noon for 15 minutes, called it comes knowing all, and a save keeps the sandbox so",
+        stood && simS.Waves.Active && simS.Waves.Number == 1 && intel == 1 && simS2.Sandbox && simS2.Waves.OnCall,
+        $"wave {simS.Waves.Number}, countdown {simS.Waves.Countdown:0}, intel {intel:0.00}; read back: sandbox {simS2.Sandbox}, on call {simS2.Waves.OnCall}");
 }
 
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--escape")

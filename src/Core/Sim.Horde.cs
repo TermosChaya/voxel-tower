@@ -485,6 +485,11 @@ public sealed class Waves
     /// <summary>The dusk before the horn and the dawn after a wave beaten back, in seconds; how much of the dawn is left.</summary>
     public const double Dusk = 60, Dawn = 30;
     public double DawnLeft;
+    /// <summary>
+    /// The horde comes only when called (the sandbox): the day runs on to noon and stands there, and called, the horde
+    /// comes knowing all it would have learnt by sunset.
+    /// </summary>
+    public bool OnCall;
 
     /// <summary>How dark it is: 0 by day, 1 at night — while a wave is in the valley — and between at dusk and at dawn.</summary>
     public float Darkness => Active ? 1 : DawnLeft > 0 ? (float)(DawnLeft / Dawn) : Countdown < Dusk ? (float)(1 - Countdown / Dusk) : 0;
@@ -500,11 +505,17 @@ public sealed class Waves
     public int Coming => _queue.Count;
 
     /// <summary>What the horde would know if it were called now.</summary>
-    public double IntelNow => Math.Clamp(1 - Countdown / Prep, 0, 1);
+    public double IntelNow => OnCall ? 1 : Math.Clamp(1 - Countdown / Prep, 0, 1);
 
     public void Tick(Sim s, float dt)
     {
         if (s.Over) return;
+        if (!Active && OnCall)
+        {
+            Countdown = Math.Max(Prep / 2, Countdown - dt);
+            DawnLeft = Math.Max(0, DawnLeft - dt);
+            return;
+        }
         if (!Active)
         {
             double was = Countdown;
@@ -533,11 +544,12 @@ public sealed class Waves
             Countdown = Prep;
             DawnLeft = Dawn;
             s.Bands.RemoveAll(b => b.State != BandState.Coming);
-            s.Say($"Волна {Number} отбита. До следующей 10 минут.", 1);
+            s.Say(OnCall ? $"Волна {Number} отбита. Следующая придёт, когда её позовёте." : $"Волна {Number} отбита. До следующей 10 минут.", 1);
             s.Reward(Number);
             s.Dawn(Number);
             s.StandDown(beaten: true);
-            if (Number >= Total) { s.Won = true; s.Over = true; s.Say("Осада снята. Вы выстояли.", 1); }
+            // the sandbox with everything open goes on as long as the horde is called
+            if (Number >= Total && !s.Sandbox) { s.Won = true; s.Over = true; s.Say("Осада снята. Вы выстояли.", 1); }
             else s.PlanWave(Number + 1);
         }
     }

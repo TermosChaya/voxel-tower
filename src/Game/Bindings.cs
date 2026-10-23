@@ -12,7 +12,7 @@ public enum Act
     ToolBrush, ToolLine, ToolBox, ToolCircle, ToolExtrude, ToolUnmark, ToolLadder, ToolGather, ToolGate, ToolRepair, ToolBridge, ToolCapture,
     MatStone, MatWood, MatEarth, Pick, WidthLess, WidthMore, HeightLess, HeightMore, Form, Level, Grid, Rotate,
     Keep, Alarm, Possess,
-    CallWave, Pause, Speed, Trails, QuickSave, QuickLoad, Help,
+    CallWave, Summon, Pause, Speed, Trails, QuickSave, QuickLoad, Help,
     FpForward, FpBack, FpLeft, FpRight, FpRun, FpUp, FpDown, FpFire, FpStone, FpWood, FpEarth,
 }
 
@@ -83,7 +83,8 @@ public static class Bindings
         D(Act.Alarm, Orders, "Тревога", "Рабочие уходят в убежища и цитадель, солдаты встают на посты. Ещё раз — отбой.", Key.T),
         D(Act.Possess, Orders, "Вселиться", "Управлять выбранным от первого лица. Выход — Esc.", Key.I),
 
-        D(Act.CallWave, Game, "Позвать орду", "Начать волну раньше срока. Награды нет, но орда хуже знает вашу оборону.", Key.Space),
+        D(Act.CallWave, Game, "Позвать орду", "Начать волну раньше срока. Награды нет, но орда хуже знает вашу оборону. В песочнице орда приходит только так.", Key.Space),
+        D(Act.Summon, Game, "Ватага орды", "Только в песочнице: ватага орды под курсором, с Shift — тяжёлая ватага.", Key.O),
         D(Act.Pause, Game, "Пауза", "Размечать можно и на паузе.", Key.P),
         D(Act.Speed, Game, "Скорость", "×1, ×2, ×3 по кругу.", Key.Tab),
         D(Act.Trails, Game, "Пути орды", "Показать или скрыть пути ватаг.", Key.J),

@@ -549,7 +549,8 @@ public partial class Hud : CanvasLayer
             };
         var w = sim.Waves;
         int held = Math.Max(0, w.Number - (w.Active ? 1 : 0));
-        yield return sim.Won ? ("Осада снята", true) : ($"Выстоять: отбито волн {held} из {Waves.Total}", false);
+        // (the sandbox with everything open has no end to stand till)
+        if (!sim.Sandbox) yield return sim.Won ? ("Осада снята", true) : ($"Выстоять: отбито волн {held} из {Waves.Total}", false);
     }
 
     readonly List<Label> _errandLines = new();

@@ -144,7 +144,7 @@ public static class Diag
         {
             if (_sim is { } sim)
                 s.AppendLine($"  Игра: {sim.Time:0} с, волна {sim.Waves.Number} ({(sim.Waves.Active ? "идёт" : "ещё нет")}), всех тел {sim.Units.Count}, ватаг {sim.Bands.Count}" +
-                    $"{(sim.Sandbox ? ", песочница" : "")}{(sim.Over ? ", осада окончена" : "")}.");
+                    $"{(sim.Sandbox ? ", песочница" : sim.Waves.OnCall ? ", песочница своими силами" : "")}{(sim.Over ? ", осада окончена" : "")}.");
         }
         catch (Exception) { }
         if (!_focused) s.AppendLine("  Окно было не в фокусе: возможно, система просто притормозила игру в фоне.");
@@ -186,7 +186,7 @@ public static class Diag
         s.AppendLine($"Язык системы: {OS.GetLocale()}; кадров в секунду: {Engine.GetFramesPerSecond()}");
         if (m?.Sim is { } sim)
             s.AppendLine($"Игра: {sim.Time:0} с, волна {sim.Waves.Number} из {Waves.Total}, сложность {sim.Hardness}, всех тел {sim.Units.Count}, ватаг {sim.Bands.Count}" +
-                $"{(sim.Sandbox ? ", песочница" : "")}{(m.Tutor != null ? ", обучение" : "")}");
+                $"{(sim.Sandbox ? ", песочница" : sim.Waves.OnCall ? ", песочница своими силами" : "")}{(m.Tutor != null ? ", обучение" : "")}");
         s.AppendLine($"Прошлый запуск: {(LastEndedBadly ? "закрылся аварийно (завис, упал или был снят)" : "закрылся как обычно")}");
 
         Part(s, "Зависания", FileTail(Path.Combine(Dir, "hangs.txt"), 60_000) ?? "не было");

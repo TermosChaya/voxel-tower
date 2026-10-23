@@ -430,7 +430,7 @@ public partial class Commander : Node
         if (Bindings.Is(k, Act.QuickSave) && !k.CtrlPressed && !k.MetaPressed) { if (Saves.Write(_m, Saves.Quick)) _m.Hud.Float("быстрое сохранение", Ornament.Moss); GetViewport().SetInputAsHandled(); return; }
         if (Bindings.Is(k, Act.QuickLoad) && !k.CtrlPressed && !k.MetaPressed) { Saves.Read(_m, Saves.Quick); GetViewport().SetInputAsHandled(); return; }
         // the sandbox: a band of the horde called up where the pointer is, a heavy one with Shift
-        if (_m.Sim.Sandbox && k.PhysicalKeycode == Key.O && !k.CtrlPressed && !k.MetaPressed) { Summon(k.ShiftPressed); GetViewport().SetInputAsHandled(); return; }
+        if (_m.Sim.Waves.OnCall && Bindings.Is(k, Act.Summon) && !k.CtrlPressed && !k.MetaPressed) { Summon(k.ShiftPressed); GetViewport().SetInputAsHandled(); return; }
         // squads: Ctrl and a digit remembers the chosen, Shift and the digit calls them up
         if (k.PhysicalKeycode is >= Key.Key1 and <= Key.Key5 && (k.CtrlPressed || k.MetaPressed || k.ShiftPressed))
         {
@@ -452,6 +452,7 @@ public partial class Commander : Node
         switch (Bindings.Find(k.PhysicalKeycode, Bindings.Scope.Field))
         {
             case Act.CallWave: CallWave(); break;
+            case Act.Summon: _m.Hud.Float("ватагу можно вызвать только в песочнице", Ornament.Aged); break;
             case Act.Pause: TogglePause(); break;
             case Act.Speed: CycleSpeed(); break;
             case Act.Alarm: Alarm(); break;
