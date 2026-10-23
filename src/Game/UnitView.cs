@@ -312,6 +312,8 @@ public partial class UnitView : Node3D
             if (!_looks.TryGetValue(u.Id, out var look)) _looks[u.Id] = look = new Look();
             Track(u, look, dt);
             var tint = Pose(u, k.Fig, look);
+            // the dead go limp: their bones as the body falls and lies (UnitView.Corpse.cs)
+            if (u.Dead) Limp(u, k.Fig, look);
             if (u.Id == HiddenId)
             {
                 // its own wounded body put away, and shown again (and drawn as its wounds are by then) when it is drawn again
@@ -336,6 +338,8 @@ public partial class UnitView : Node3D
         foreach (int id in _gone)
         {
             _looks.Remove(id);
+            _rags.Remove(id);
+            _felling.Remove(id);
             if (_own.Remove(id, out var own)) Free(own);
         }
         DrawArrows(sim);
@@ -414,7 +418,8 @@ public partial class UnitView : Node3D
         else if (u.Dead)
         {
             float since = (float)(_m.Sim.Time - u.DiedAt);
-            fall = Math.Clamp(since / .45f, 0, 1);
+            // (a man or a beast of four legs on the ground falls as a body, from the pose it stood in: UnitView.Corpse.cs)
+            fall = (f.Jointed || f.Legged) && u.Airborne == null ? 0 : Math.Clamp(since / .45f, 0, 1);
             fall = 1 - (1 - fall) * (1 - fall);
             sink = Math.Max(0, since - 18) * 1.4f;
             main = f.Beast ? .5f : -.4f; off = f.Beast ? .4f : f.Shield ? -.2f : .3f;

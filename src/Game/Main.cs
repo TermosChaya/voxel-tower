@@ -34,7 +34,8 @@ namespace VoxelTower.Game;
 /// running out over it, 6 a whirlwind crossing it, 7 and 8 those two close; --pose=people: every figure in every look,
 /// --look=0..9 choosing a row), --pose=troops: the troops the lore opens out before the walls meeting a band (--at=
 /// seconds into it, --look=1 closer), --pose=beasts: the beasts going by close, at a walk, bolting and grazing (--look=1..3
-/// one of them closer), --pose=walk: people walking over a step of stone,
+/// one of them closer), --pose=walk: people walking over a step of stone (--look=1 felled on its edge, 2 a blast among
+/// them as they lie),
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
 /// --top looks straight down, --look=N at the Nth named place of the valley, --seed=N makes another valley; --select[=N]
 /// chooses our pawns (or the first N), --tab=key lets a panel down from the beam, --tool=N takes up the Nth tool,
@@ -3195,13 +3196,19 @@ public partial class Main : Node3D
     /// <summary>
     /// People going by close (--pose=walk), to look at how their feet are set down: a worker, a swordsman, an archer, a
     /// spearman and a knight walking across a step of stone half a metre high, each before the camera 1.3 s on
-    /// (--frames=80).
+    /// (--frames=80). --look=1 they and a deer, a boar and an orc are felled where they stand on the step's edge and fall
+    /// off it limp; --look=2 a blast goes off among them as they lie (--frames=150).
     /// </summary>
     void Walkers()
     {
         var sim = Sim;
         sim.Waves.Countdown = 1e9;
-        foreach (var w in sim.Units) if (w.Team == Team.Wild) { w.Dead = true; w.DiedAt = -999; }
+        foreach (var w in sim.Units)
+        {
+            if (w.Team == Team.Wild) { w.Dead = true; w.DiedAt = -999; }
+            // the household kept in, out of the way of the dead
+            else if (_look is 1 or 2 && w.Team == Team.Player) w.Inside = true;
+        }
         const float yaw = -.3f, pitch = .42f, gap = 14;
         float sin = MathF.Sin(yaw), cos = MathF.Cos(yaw);
         var (gx, gz) = GroveAt;
@@ -3216,6 +3223,30 @@ public partial class Main : Node3D
             }
         sim.Nav.Flush();
         var kinds = new[] { Kinds.Worker, Kinds.Swordsman, Kinds.Archer, Kinds.Spearman, Kinds.Knight };
+        if (_look is 1 or 2)
+        {
+            // felled on the step's edge, one after another, each struck from its side so that it goes over the edge
+            var felled = new[] { Kinds.Worker, Kinds.Swordsman, Kinds.Deer, Kinds.Orc, Kinds.Knight, Kinds.Boar, Kinds.Archer };
+            var down = new List<Unit>();
+            for (int i = 0; i < felled.Length; i++)
+            {
+                var t = felled[i];
+                float x = cx - 30 + i * 10, z = cz + 5;
+                var u = sim.Spawn(t, sim.NearestStand((int)x, (int)z, t.Move.Height));
+                u.X = x; u.Z = z; u.Y = World.SurfAt((int)x, (int)z) + 1;
+                u.Facing = MathF.PI / 2;
+                u.Hold = true;
+                down.Add(u);
+            }
+            Advance(.4);
+            foreach (var u in down) sim.Hurt(u, null, 9999, "test");
+            // the blast a second on, with the bodies down, on the step behind them (it is seen by the frames, not stepped past)
+            if (_look == 2) GetTree().CreateTimer(1).Timeout += () => sim.Detonate(cx, World.SurfAt((int)cx, (int)cz - 2) + 1, cz - 2, 1.2f * VoxelWorld.PerMetre, 0, "test", always: true);
+            float overF = (World.WY(World.SurfAt((int)cx, (int)cz) + 4) - 4) / MathF.Tan(pitch);
+            Rig.Set(World.WX(cx) - sin * overF, World.WZ(cz + 5) - cos * overF, yaw, pitch, 4.5f, snap: true);
+            Hud.Refresh();
+            return;
+        }
         for (int i = 0; i < kinds.Length; i++)
         {
             var t = kinds[i];
