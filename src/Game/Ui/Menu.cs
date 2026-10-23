@@ -287,11 +287,11 @@ public partial class GameMenu : Control
         return l;
     }
 
-    /// <summary>"Перед волной 3 · 22:40 игры · 18.10, 14:32", or "пусто".</summary>
+    /// <summary>"Перед волной 3 · 22:40 игры · 18.10, 14:32", or "пусто", or what an earlier version of the game left.</summary>
     static string About(string slot)
     {
         var p = Saves.Peek(slot);
-        return p is { } v ? $"{v.label} · {Fmt.Clock(v.time)} игры · {v.when:dd.MM, HH:mm}" : "пусто";
+        return p is { } v ? $"{v.label} · {Fmt.Clock(v.time)} игры · {v.when:dd.MM, HH:mm}" : Saves.Stale(slot) ? "от прежней версии игры, не загружается" : "пусто";
     }
 
     Control Row(string slot, string button, Action act, bool enabled)

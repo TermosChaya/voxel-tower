@@ -42,6 +42,9 @@ public static class Saves
         catch { return null; }
     }
 
+    /// <summary>A slot that holds a file the game cannot read: written by an earlier version of it, whose saves are not read.</summary>
+    public static bool Stale(string slot) => File.Exists(PathOf(slot)) && Peek(slot) == null;
+
     /// <summary>What the screen keeps beside the sim: the camera, the speed, the squads and the chronicle.</summary>
     sealed class Screen
     {
