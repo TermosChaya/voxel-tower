@@ -645,10 +645,13 @@ public partial class BuildTools : Node3D
     }
 
     /// <summary>What mending these meant voxels takes, and the broken gates in the rectangle with them.</summary>
+    // how much of the mending in view is marked already and waits for the workers
+    int _mendWaiting;
+
     void PlanMend(List<int> voxels, int x0, int z0, int x1, int z1)
     {
         _mendLay.Clear(); _mendClear.Clear(); _mendGhost.Clear();
-        _m.Sim.MendPlan(voxels, _mendLay, _mendClear);
+        _mendWaiting = _m.Sim.MendPlan(voxels, _mendLay, _mendClear);
         _mendGates = _m.Sim.BrokenGatesIn(x0, z0, x1, z1);
         for (int i = 0; i < _mendLay.Count; i++) _mendGhost.Add(_mendLay.X(i), _mendLay.Y(i), _mendLay.Z(i), _mendLay.M(i));
         foreach (var g in _mendGates) _m.Sim.GateLeaves(g, _mendGhost);
@@ -704,7 +707,12 @@ public partial class BuildTools : Node3D
 
     void Mend()
     {
-        if (_mendGhost.Count == 0 && _mendClear.Count == 0) { Refuse("цело: чинить нечего"); return; }
+        if (_mendGhost.Count == 0 && _mendClear.Count == 0)
+        {
+            if (_mendWaiting > 0) { _m.Hud.Float("починка уже размечена: рабочие придут, когда освободятся", Ornament.Moss); return; }
+            Refuse("цело: чинить нечего");
+            return;
+        }
         string text = MendSummary(out _);
         _markName = "Починка";
         int n = _m.Sim.Mend(_mendLay, _mendClear);
@@ -1235,7 +1243,7 @@ public partial class BuildTools : Node3D
             if (drag) PlanMend(_m.Sim.MeantIn(_startPt.x, _startPt.z, _dragPt.x, _dragPt.z), _startPt.x, _startPt.z, _dragPt.x, _dragPt.z);
             else { var (x0, z0, x1, z1) = _bldBox; PlanMend(bld, x0 - 8, z0 - 8, x1 + 8, z1 + 8); }
             PlanIsDig = false;
-            if (_mendGhost.Count == 0 && _mendClear.Count == 0) { _ghost.Visible = false; PlanText = "Цело: чинить нечего"; PlanAffordable = true; return; }
+            if (_mendGhost.Count == 0 && _mendClear.Count == 0) { _ghost.Visible = false; PlanText = _mendWaiting > 0 ? "Починка уже размечена: ждёт рабочих" : "Цело: чинить нечего"; PlanAffordable = true; return; }
             PlanText = "Починка: " + MendSummary(out bool ok);
             PlanAffordable = ok;
             _ghost.Mesh = MeshPlan(_mendGhost, false);

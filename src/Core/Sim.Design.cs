@@ -142,17 +142,23 @@ public sealed partial class Sim
     /// What mending some meant voxels takes: what to lay where they are missing, and what to clear first where something
     /// else lies in the way (rubble, a siege fill, moss on a broken course). What is already marked is left out.
     /// </summary>
-    public void MendPlan(List<int> voxels, VoxelList lay, VoxelList clear)
+    /// <summary>
+    /// What a building wants to be whole again: the voxels to lay, and the rubble to clear first. What is marked for it
+    /// already is left out, and counted: the result is how much of the mending waits for the workers.
+    /// </summary>
+    public int MendPlan(List<int> voxels, VoxelList lay, VoxelList clear)
     {
+        int waiting = 0;
         foreach (int p in voxels)
         {
             var (x, y, z) = WaterPlanner.Unpack(p);
             byte want = Design.Get(x, y, z), cur = World.Get(x, y, z);
             if (want == 0 || Stands(cur, want) || Site.Forbidden(x, z)) continue;
             byte o = Orders.At(x, y, z);
-            if (Brushes.Free(cur)) { if (o != want) lay.Add(x, y, z, want); }
-            else if (Labour.Diggable(cur) && !Mat.IsLeaf(cur) && !Orders.IsRemove(o)) clear.Add(x, y, z, Mat.Air);
+            if (Brushes.Free(cur)) { if (o != want) lay.Add(x, y, z, want); else waiting++; }
+            else if (Labour.Diggable(cur) && !Mat.IsLeaf(cur)) { if (!Orders.IsRemove(o)) clear.Add(x, y, z, Mat.Air); else waiting++; }
         }
+        return waiting;
     }
 
     /// <summary>Marks a mending for the workers; returns the voxels marked.</summary>

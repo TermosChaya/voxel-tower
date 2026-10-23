@@ -446,7 +446,12 @@ public sealed partial class Sim
     /// Sends pawns to a spot and keeps them there; soldiers make it their post. A group goes as one: each to a place
     /// of its own in ranks across the way they go, keeping to its own line on the way, so they walk side by side.
     /// </summary>
-    public int Command(IEnumerable<Unit> units, int target)
+    /// <summary>
+    /// Sends pawns somewhere and has them stand there; a soldier takes the spot as its post. Not told to stay (the
+    /// player's right-click), a worker goes and then gets back to work by itself, from the area set aside there if the
+    /// spot is in one.
+    /// </summary>
+    public int Command(IEnumerable<Unit> units, int target, bool stay = true)
     {
         var group = new List<Unit>();
         foreach (var u in units) if (!u.Dead && u.Team == Team.Player) group.Add(u);
@@ -462,6 +467,8 @@ public sealed partial class Sim
             Busy(u);
             int spot = spots[n];
             u.Hold = true;
+            u.Back = !stay && u.T.Work >= 1;
+            u.Focus = null;
             u.Dest = spot;
             u.Prey = null;
             if (u.T.Work < 1) u.Post = spot;
@@ -562,7 +569,7 @@ public sealed partial class Sim
             // sent to bring it in, it does that work, whatever else it was set to
             if (kind != Stockpile.None && !Work.Does(u, Work.For(kind))) u.Priority[(int)Work.For(kind)] = Work.Usual;
             u.DutyZone = null;
-            u.Hold = false; u.Dest = -1; u.Prey = null;
+            u.Hold = false; u.Back = false; u.Focus = null; u.Dest = -1; u.Prey = null;
             u.NextSearch = 0;
             Busy(u);
         }
@@ -577,7 +584,7 @@ public sealed partial class Sim
     /// <summary>Lets pawns go back to work by themselves.</summary>
     public void ReleaseHold(IEnumerable<Unit> units)
     {
-        foreach (var u in units) { u.Hold = false; u.Dest = -1; u.Prey = null; u.NextSearch = 0; Busy(u); }
+        foreach (var u in units) { u.Hold = false; u.Back = false; u.Dest = -1; u.Prey = null; u.NextSearch = 0; Busy(u); }
     }
 
     /// <summary>The horn: soldiers drop the hunt and whatever else they were at and hurry to their posts.</summary>

@@ -372,8 +372,12 @@ public sealed class Unit
     // movement
     public List<int> Path;
     public int PathI;
-    /// <summary>The player sent it here and it stays until told to work again.</summary>
+    /// <summary>The player sent it here and it stays until told to work again (a worker only on its way, see Back).</summary>
     public bool Hold;
+    /// <summary>A worker sent somewhere: there it goes back to work by itself, the area it was sent to first (Focus).</summary>
+    public bool Back;
+    /// <summary>The area set aside a worker was sent into: it takes its work from there first, till it is spent.</summary>
+    public Zone Focus;
     /// <summary>Where the player sent it; it keeps finding its way there if the way breaks.</summary>
     public int Dest = -1;
     /// <summary>Where a soldier goes when the horn sounds; -1 for none.</summary>

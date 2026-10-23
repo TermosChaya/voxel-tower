@@ -16,7 +16,7 @@ namespace VoxelTower.Core;
 public sealed partial class Sim
 {
     /// <summary>20: the bodies sculpted finer, their half-voxels (and so a wounded body's) not what they were.</summary>
-    public const int SaveVersion = 23;
+    public const int SaveVersion = 24;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -184,6 +184,7 @@ public sealed partial class Sim
         w.Write(u.X); w.Write(u.Y); w.Write(u.Z); w.Write(u.Facing); w.Write(u.Cell); w.Write(u.OffX); w.Write(u.OffZ); w.Write(u.Pace);
         w.Write(u.Hp); w.Write(u.MaxHp);
         w.Write(u.Hold); w.Write(u.Dest); w.Write(u.Post); w.Write(u.Home);
+        w.Write(u.Back); w.Write(u.Focus?.Id ?? -1);
         w.Write(u.Duty); w.Write(u.DutyZone?.Id ?? -1); w.Write(u.Militia); w.Write(u.Inside);
         w.Write((byte)u.Priority.Length); foreach (byte p in u.Priority) w.Write(p);
         w.Write(u.FireArrows); w.Write(u.KindleAt); w.Write(u.Torch); w.Write(u.Burn); w.Write(u.BurnHeat);
@@ -445,6 +446,7 @@ public sealed partial class Sim
         u.OffX = r.ReadSingle(); u.OffZ = r.ReadSingle(); u.Pace = r.ReadSingle();
         u.Hp = r.ReadSingle(); u.MaxHp = r.ReadSingle();
         u.Hold = r.ReadBoolean(); u.Dest = r.ReadInt32(); u.Post = r.ReadInt32(); u.Home = r.ReadInt32();
+        u.Back = r.ReadBoolean(); int focus = r.ReadInt32();
         u.Duty = r.ReadInt32(); int zone = r.ReadInt32(); u.Militia = r.ReadBoolean(); u.Inside = r.ReadBoolean();
         if (u.Inside) u.Refuge = Gate;
         int np = r.ReadByte();
@@ -472,6 +474,7 @@ public sealed partial class Sim
         if (t == null) return null;
         u.Wounds = body;
         u.DutyZone = Zones.Find(z => z.Id == zone);
+        u.Focus = Zones.Find(z => z.Id == focus);
         u.Raid = raid >= 0 && raid < Mines.Count ? Mines[raid] : null;
         return u;
     }

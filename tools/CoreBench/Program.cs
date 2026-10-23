@@ -460,8 +460,8 @@ if (args.Length == 0 || args[0] == "--sim")
     // pawns sent to one spot don't stand inside each other
     {
         int spot = sim.NearestStand(px - 30, pz - 30, 2);
-        sim.Command(new[] { crew[0], crew[1] }, spot);
-        sim.Command(new[] { crew[2] }, spot);
+        sim.Command(new[] { crew[0], crew[1] }, spot, stay: true);
+        sim.Command(new[] { crew[2] }, spot, stay: true);
         Run(6);
         float gap = MathF.Sqrt((crew[0].X - crew[2].X) * (crew[0].X - crew[2].X) + (crew[0].Z - crew[2].Z) * (crew[0].Z - crew[2].Z));
         Check("pawns sent to one spot keep apart", gap >= crew[0].T.BodyR * 2 - .2f, $"{gap:0.0} voxels between two of them");
@@ -500,6 +500,32 @@ if (args.Length == 0 || args[0] == "--sim")
             $"{trees0} → {trees1} trees round {wood}, wood +{Fmt.M3(sim.Stock[Stockpile.Wood] - w0)} m³, {grove.Marked} voxels marked so far");
         sim.RemoveZones(wood.x - G, wood.z - G, wood.x + G, wood.z + G);
         sim.CancelArea(wood.x - 70, wood.z - 70, wood.x + 70, wood.z + 70);
+
+        // a worker sent with a right-click goes and then works by itself: into a grove, the grove's work first (another
+        // grove than the one felled above)
+        (int x, int z) wood2 = (-1, -1); int most2 = 0;
+        for (int cz = 80; cz < w4.SZ - 80; cz += 40)
+            for (int cx = 80; cx < w4.SX - 80; cx += 40)
+            {
+                float dk = MathF.Sqrt((cx - site4.KeepX) * (cx - site4.KeepX) + (cz - site4.KeepZ) * (cz - site4.KeepZ));
+                if (dk < 150 || dk > 460 || w4.SurfAt(cx, cz) < 70 || Math.Abs(cx - wood.x) < 2 * G + 30 && Math.Abs(cz - wood.z) < 2 * G + 30) continue;
+                int t = sim.Survey(cx - G, cz - G, cx + G, cz + G, Stockpile.Wood, 0).trees;
+                if (t > most2) { most2 = t; wood2 = (cx, cz); }
+            }
+        var grove2 = sim.AddZone(wood2.x - G, wood2.z - G, wood2.x + G, wood2.z + G, Stockpile.Wood, 0);
+        var sent = crew[0];
+        sim.Command(new[] { sent }, sim.NearestStand(wood2.x, wood2.z, sent.T.Move.Height), stay: false);
+        bool heldOnTheWay = sent.Hold;
+        Run(60);
+        int sc = sent.Site;
+        bool inGrove = sc >= 0 && Math.Abs((sc % sim.Nav.NX << NavGrid.Shift) + 4 - wood2.x) <= G + 8 && Math.Abs((sc / sim.Nav.NX << NavGrid.Shift) + 4 - wood2.z) <= G + 8;
+        Check("a worker sent into a grove goes there and fells it by itself, no «За работу» needed",
+            heldOnTheWay && !sent.Hold && (inGrove || sent.Focus == grove2),
+            $"held on the way {heldOnTheWay}, held now {sent.Hold}, at work in the grove {inGrove}, focus {(sent.Focus == grove2 ? "the grove" : "none")}; {sent.Why}");
+        sim.RemoveZones(wood2.x - G, wood2.z - G, wood2.x + G, wood2.z + G);
+        sim.CancelArea(wood2.x - 70, wood2.z - 70, wood2.x + 70, wood2.z + 70);
+        sim.ReleaseHold(crew);
+
 
         var rock = Find((x, z) => w4.Get(x, w4.SurfAt(x, z) - 1, z) == Mat.Rock && w4.SurfAt(x, z) > site4.HTop[z * w4.SX + x] + 4 && w4.SurfAt(x, z) > 70);
         double s0 = sim.Stock[Stockpile.Stone];
@@ -639,7 +665,7 @@ if (args.Length == 0 || args[0] == "--sim")
         int outside = sim.NearestStand(yx, fz + 40, 4), inside = sim.NearestStand(yx, yz, 4);
         var porter = sim.Spawn(Kinds.Worker, outside);
         bool shutAtFirst = gate != null && gate.Open == 0 && !sim.Nav.Open(sim.Nav.I(gate.Cells.First()), sim.Nav.Y(gate.Cells.First()), sim.Nav.K(gate.Cells.First()));
-        sim.Command(new[] { porter }, inside);
+        sim.Command(new[] { porter }, inside, stay: true);
         float widest = 0;
         for (int t = 0; t < 40 * 20 && porter.Cell != inside; t++) { sim.Step(.05f); widest = Math.Max(widest, gate?.Open ?? 0); }
         bool got = porter.Cell == inside;
@@ -649,7 +675,7 @@ if (args.Length == 0 || args[0] == "--sim")
 
         sim.SetGateMode(gate, GateMode.Shut);
         Run(1);
-        int barred = sim.Command(new[] { porter }, outside);
+        int barred = sim.Command(new[] { porter }, outside, stay: true);
         sim.SetGateMode(gate, GateMode.Auto);
         porter.Dead = true; porter.DiedAt = -999;
 

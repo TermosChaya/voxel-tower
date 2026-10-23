@@ -1024,10 +1024,16 @@ public partial class Main : Node3D
         var dest = Screen(kx - 60, kz + 60);
         Rig._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true, Position = dest });
         Rig._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = false, Position = dest });
-        Check("a right click sends it and it stays", worker.Hold && worker.Path != null, $"hold {worker.Hold}, path {worker.Path?.Count}");
-        Advance(15);
-        var (fx, _, fz) = Sim.Nav.Feet(worker.Cell);
-        Check("…and it gets there", MathF.Abs(fx - (kx - 60)) < 24 && MathF.Abs(fz - (kz + 60)) < 24, $"at {fx:0},{fz:0}");
+        Check("a right click sends it on its way", worker.Hold && worker.Back && worker.Path != null, $"hold {worker.Hold}, back to work after {worker.Back}, path {worker.Path?.Count}");
+        // it gets there, and there goes back to work by itself (no «За работу» wanted)
+        float nearest = float.MaxValue, fx = 0, fz = 0;
+        for (int t = 0; t < 30; t++)
+        {
+            Advance(.5);
+            (fx, _, fz) = Sim.Nav.Feet(worker.Cell);
+            nearest = Math.Min(nearest, Math.Max(MathF.Abs(fx - (kx - 60)), MathF.Abs(fz - (kz + 60))));
+        }
+        Check("…and it gets there, then back to work by itself", nearest < 24 && !worker.Hold, $"came within {nearest:0} voxels, held now {worker.Hold}, at {fx:0},{fz:0}");
         Command.ReleaseSelected();
         Check("«За работу» lets it go", !worker.Hold);
         Command.ClearSelection();

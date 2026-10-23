@@ -310,7 +310,7 @@ public partial class Commander : Node
         var g = hit.Ground(w);
         int cell = _m.Sim.StandNear(g.x, g.y, g.z, 2);
         if (cell < 0) { _m.Hud.Float("туда не встать", Ornament.Blood); return; }
-        int ok = _m.Sim.Command(_m.Selected, cell);
+        int ok = _m.Sim.Command(_m.Selected, cell, stay: false);
         if (ok == 0) _m.Hud.Float("туда не дойти", Ornament.Blood);
         else _m.Hud.Float(ok == 1 ? "иду" : $"идут: {ok}", Ornament.EmberGlow);
         _m.Hud.OnSelectionChanged();

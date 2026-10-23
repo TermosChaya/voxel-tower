@@ -104,6 +104,13 @@ public sealed partial class Sim
         if (!soldier && !u.T.Prays && FetchCaptive(u, dt)) { Busy(u); return; }
         if (soldier && handy && HasMainHand(u) && PushLadders(u, dt)) { Busy(u); return; }
         if (u.Path != null && u.PathI < u.Path.Count && (u.Hold || u.Site < 0) && u.Pastime != Pastime.Stroll) { Walk(u, dt); return; }
+        // a worker sent somewhere is there (or as near as it gets): back to work, from the area it was sent into first
+        if (u.Hold && u.Back && (u.Dest < 0 || CellsApart(u.Cell, u.Dest) <= 1 || u.Path == null || u.PathI >= u.Path.Count))
+        {
+            u.Hold = false; u.Back = false;
+            if (u.Dest >= 0) u.Focus = SetAsideAt(u.Dest);
+            u.Dest = -1; u.NextSearch = 0;
+        }
         if (u.Hold)
         {
             u.Why = "";
@@ -336,12 +343,43 @@ public sealed partial class Sim
     {
         u.NextSearch = Time + .3 + Rng.NextDouble() * .4;
         if ((Work.Allowed(u) & Work.Marked) == 0) { u.Why = "все работы отключены"; return; }
+        // sent into an area set aside: its work first, a little more of it marked near the pawn, till it is spent
+        if (u.Focus != null)
+        {
+            if (!Zones.Contains(u.Focus) || !Work.Does(u, Work.For(u.Focus.Kind))) u.Focus = null;
+            else
+            {
+                Feed(u.Focus, u, out bool spent);
+                if (spent) u.Focus = null;
+                else if (Seek(u, u.Focus)) return;
+            }
+        }
+        Seek(u, null);
+    }
+
+    /// <summary>A gather area (not a shelter, a sanctum or a house) at a cell, if the cell lies in one.</summary>
+    Zone SetAsideAt(int cell)
+    {
+        int x = Nav.I(cell) << NavGrid.Shift, z = Nav.K(cell) << NavGrid.Shift;
+        foreach (var zone in Zones)
+            if (zone.Kind is not (Zone.Shelter or Zone.Sanctum or Zone.Dwelling) && !zone.Auto
+                && x + 4 >= zone.X0 && x + 4 <= zone.X1 && z + 4 >= zone.Z0 && z + 4 <= zone.Z1) return zone;
+        return null;
+    }
+
+    /// <summary>
+    /// The nearest marked work this pawn can get to, the work it puts first before the next (inside an area only, when
+    /// one is given); true when it is on its way to some.
+    /// </summary>
+    bool Seek(Unit u, Zone only)
+    {
         if (Orders.Active.Count == 0)
         {
+            if (only != null) return false;
             u.Why = "";
             // nothing marked: do what it was told to, or take a little more out of an area the player set aside
             if (DutyWork(u) || FeedFromZone(u)) u.NextSearch = Time;
-            return;
+            return false;
         }
         int ui = Nav.I(u.Cell), uk = Nav.K(u.Cell), h = u.T.Move.Height, starved = 0;
         bool unreached = false;
@@ -357,6 +395,7 @@ public sealed partial class Sim
                 // nothing there to dig, and nothing to lay that the stores hold: don't even go
                 if (!Workable(col, mask)) { starved++; continue; }
                 if (_claims[col] >= 2) continue;
+                if (only != null && !Inside(only, col)) continue;
                 // what another pawn was sent to bring in is its work
                 if (u.Duty != Stockpile.None && ZoneAt((col % Nav.NX << NavGrid.Shift) + 4, (col / Nav.NX << NavGrid.Shift) + 4) is { Auto: true } other && other != u.DutyZone) continue;
                 if (u.Unreachable.TryGetValue(col, out double until) && Time < until) continue;
@@ -384,15 +423,23 @@ public sealed partial class Sim
                 u.SiteWork = mask;
                 u.Path = path.Count > 0 ? path : null; u.PathI = 0;
                 u.Jobs.Clear(); u.JobI = 0; u.Why = "";
-                return;
+                return true;
             }
             if (near.Count > 0) unreached = true;
         }
+        if (only != null) return false;
         if (unreached) u.Why = "до работы не дойти";
         else if (starved > 0) u.Why = "ждёт: " + Wanting();
         else if (Barred(u) is { Length: > 0 } barred) u.Why = "не велено: " + barred;
         // nothing marked that this one can get to: take a little more out of an area set aside for it
         if (DutyWork(u) || FeedFromZone(u)) { u.Why = ""; u.NextSearch = Time; }
+        return false;
+    }
+
+    bool Inside(Zone z, int col)
+    {
+        int x = ((col % Nav.NX) << NavGrid.Shift) + 4, zz = ((col / Nav.NX) << NavGrid.Shift) + 4;
+        return x >= z.X0 && x <= z.X1 && zz >= z.Z0 && zz <= z.Z1;
     }
 
     /// <summary>The marked work there is that this pawn is set never to do: "копать, рубить".</summary>
