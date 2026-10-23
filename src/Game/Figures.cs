@@ -13,8 +13,10 @@ public enum Part { Body, Main, Off, LegR, LegL }
 
 /// <summary>
 /// What a figure is drawn in: the parts the blows cut (<see cref="Part"/>) cut again at the joints a man moves at — the
-/// trunk and the head at the neck, each arm at the elbow, each leg at the knee. A beast, a horse with its rider and an
-/// engine keep their parts whole (Torso, UpperR, UpperL, ThighR, ThighL), the rest of their bones empty.
+/// trunk and the head at the neck, each arm at the elbow, each leg at the knee. A beast is cut so too, its forelegs
+/// taking the arms' bones: each leg at its knee (a hind leg at the hock), and the neck with the head off the trunk over
+/// the shoulders. A horse with its rider and an engine keep their parts whole (Torso, UpperR, UpperL, ThighR, ThighL),
+/// the rest of their bones empty.
 /// </summary>
 public enum Bone { Torso, Head, UpperR, LowerR, UpperL, LowerL, ThighR, ShinR, ThighL, ShinL }
 
@@ -30,8 +32,17 @@ public sealed class Figure
     public static readonly Part[] PartOf = { Part.Body, Part.Body, Part.Main, Part.Main, Part.Off, Part.Off, Part.LegR, Part.LegR, Part.LegL, Part.LegL };
     /// <summary>Knees, elbows and a neck: a man, a goblin, an orc, a troll (not a beast, a rider or an engine).</summary>
     public bool Jointed;
+    /// <summary>Four legs with knees and a neck that turns: a beast (not a rider's horse).</summary>
+    public bool Legged;
     /// <summary>The half-voxel rows of its part each bone is drawn from: [Lo, Hi).</summary>
     public readonly int[] Lo = new int[Bones], Hi = new int[Bones];
+    /// <summary>
+    /// A beast's neck cut: a bone with +1 is drawn of what lies before half-voxel z <see cref="FrontZ"/> and over y
+    /// <see cref="FrontY"/> (the neck and the head), one with −1 of the rest (the trunk), one with 0 of all its rows.
+    /// </summary>
+    public readonly int[] FrontZ = new int[Bones], FrontY = new int[Bones], Front = new int[Bones];
+    /// <summary>A beast's legs (front right, front left, hind right, hind left): from the shoulder or the hip to the knee or the hock, and from there to the sole, in figure voxels.</summary>
+    public readonly float[] LegUpper = new float[4], LegLower = new float[4];
     /// <summary>Where each bone turns, in figure voxels: the hips, the neck, the shoulders, the elbows, the hips again, the knees.</summary>
     public readonly Vector3[] Pivot = new Vector3[Bones];
     /// <summary>Each bone's meshes near, at the middle distance and far (null where it has none).</summary>
@@ -101,34 +112,55 @@ public sealed class Figure
     static void Bones_(Figure f, BodyPlan plan)
     {
         f.Jointed = !plan.Beast && !plan.Mounted && plan.HeadY1 > plan.HeadY0 && plan.Grid[(int)Part.LegR] is { Count: > 0 } && plan.Grid[(int)Part.Main] is { Count: > 0 };
+        f.Legged = plan.Beast && !plan.Mounted && plan.NeckZ != int.MinValue && plan.Grid[(int)Part.LegR] is { Count: > 0 } && plan.Grid[(int)Part.Main] is { Count: > 0 };
         const int S = BodyPlan.Sub;
         // a part whole: every row of it
         for (int b = 0; b < Bones; b++) { f.Lo[b] = int.MinValue; f.Hi[b] = int.MaxValue; f.Pivot[b] = f.Joint[(int)PartOf[b]]; }
+        // the rows of a part's own body (not what it holds), lowest and highest
+        (int lo, int hi) Rows(Part p)
+        {
+            var g = plan.Grid[(int)p]; var own = plan.Owner[(int)p];
+            int lo = int.MaxValue, hi = int.MinValue;
+            for (int y = 0; y < g.SY; y++)
+                for (int z = 0; z < g.SZ; z++)
+                    for (int x = 0; x < g.SX; x++)
+                    {
+                        int i = (y * g.SZ + z) * g.SX + x;
+                        if (g.M[i] == 0 || own != null && own[i] != 0) continue;
+                        lo = Math.Min(lo, g.Y0 + y); hi = Math.Max(hi, g.Y0 + y);
+                    }
+            return (lo, hi);
+        }
+        void Cut(Bone upper, Bone lower, int row, Vector3 joint)
+        {
+            f.Lo[(int)upper] = row; f.Hi[(int)lower] = row;
+            f.Pivot[(int)lower] = new Vector3(joint.X, row / (float)S, joint.Z);
+        }
+        if (f.Legged)
+        {
+            // each leg at its knee: a foreleg's a little under half way up it, a hind leg's hock lower
+            var legs = new[] { (Part.Main, Bone.UpperR, Bone.LowerR, .46f), (Part.Off, Bone.UpperL, Bone.LowerL, .46f), (Part.LegR, Bone.ThighR, Bone.ShinR, .38f), (Part.LegL, Bone.ThighL, Bone.ShinL, .38f) };
+            for (int l = 0; l < 4; l++)
+            {
+                var (part, upper, lower, share) = legs[l];
+                var (lo, hi) = Rows(part);
+                int knee = lo + Math.Max(1, (int)MathF.Round((hi - lo + 1) * share));
+                Cut(upper, lower, knee, f.Joint[(int)part]);
+                f.LegUpper[l] = f.Joint[(int)part].Y - knee / (float)S;
+                f.LegLower[l] = (knee - lo) / (float)S;
+            }
+            // the neck with the head off the trunk, turning at the neck's root over the shoulders
+            foreach (var (bone, side) in new[] { (Bone.Head, 1), (Bone.Torso, -1) })
+            {
+                f.FrontZ[(int)bone] = plan.NeckZ; f.FrontY[(int)bone] = plan.NeckY; f.Front[(int)bone] = side;
+            }
+            f.Pivot[(int)Bone.Head] = new Vector3(0, plan.NeckY / (float)S, plan.NeckZ / (float)S);
+        }
         if (f.Jointed)
         {
-            // the rows of a part's own body (not what it holds), lowest and highest
-            (int lo, int hi) Rows(Part p)
-            {
-                var g = plan.Grid[(int)p]; var own = plan.Owner[(int)p];
-                int lo = int.MaxValue, hi = int.MinValue;
-                for (int y = 0; y < g.SY; y++)
-                    for (int z = 0; z < g.SZ; z++)
-                        for (int x = 0; x < g.SX; x++)
-                        {
-                            int i = (y * g.SZ + z) * g.SX + x;
-                            if (g.M[i] == 0 || own != null && own[i] != 0) continue;
-                            lo = Math.Min(lo, g.Y0 + y); hi = Math.Max(hi, g.Y0 + y);
-                        }
-                return (lo, hi);
-            }
             var (legLo, legHi) = Rows(Part.LegR);
             var (armLo, armHi) = Rows(Part.Main);
             int knee = legLo + (legHi - legLo + 1) / 2, elbow = armLo + (armHi - armLo + 1) * 11 / 20, neck = plan.HeadY0;
-            void Cut(Bone upper, Bone lower, int row, Vector3 joint)
-            {
-                f.Lo[(int)upper] = row; f.Hi[(int)lower] = row;
-                f.Pivot[(int)lower] = new Vector3(joint.X, row / (float)S, joint.Z);
-            }
             Cut(Bone.UpperR, Bone.LowerR, elbow, f.Joint[(int)Part.Main]);
             Cut(Bone.UpperL, Bone.LowerL, elbow, f.Joint[(int)Part.Off]);
             Cut(Bone.ThighR, Bone.ShinR, knee, f.Joint[(int)Part.LegR]);
@@ -166,9 +198,9 @@ public sealed class Figure
         {
             var bone = (Bone)b;
             int p = (int)PartOf[b];
-            if (!f.Jointed && bone is Bone.Head or Bone.LowerR or Bone.LowerL or Bone.ShinR or Bone.ShinL) continue;
-            f.BoneNear[b] = GodotMesh.From(NearOf(plan, p, plan.Grid[p], out _, f.Lo[b], f.Hi[b]));
-            f.BoneMid[b] = GodotMesh.From(MidOf(plan, p, plan.Grid[p], 0, out _, f.Lo[b], f.Hi[b]));
+            if (!f.Jointed && !f.Legged && bone is Bone.Head or Bone.LowerR or Bone.LowerL or Bone.ShinR or Bone.ShinL) continue;
+            f.BoneNear[b] = GodotMesh.From(f.NearOf(plan, b, plan.Grid[p]));
+            f.BoneMid[b] = GodotMesh.From(f.MidOf(plan, b, plan.Grid[p]));
             f.BoneFar[b] = CoarseOf(f.Keep(plan, bone, plan.Seen(p, plan.Grid[p])));
         }
     }
@@ -180,15 +212,27 @@ public sealed class Figure
         Part.LegR => (Bone.ThighR, Bone.ShinR), _ => (Bone.ThighL, Bone.ShinL),
     };
 
-    /// <summary>The bone of a part a point of it (in figure voxels, its height) is drawn with.</summary>
-    public Bone BoneAt(Part p, float y)
+    /// <summary>The bone of a part a point of it (in figure voxels: its height, and how far forward) is drawn with.</summary>
+    public Bone BoneAt(Part p, float y, float z = 0)
     {
         var (upper, lower) = BonesOf(p);
-        if (!Jointed) return upper;
-        // the trunk's upper bone is below its cut, the head over it
-        if (p == Part.Body) return y * BodyPlan.Sub >= Lo[(int)Bone.Head] ? Bone.Head : Bone.Torso;
+        if (!Jointed && !Legged) return upper;
+        // a beast's neck and head are before the shoulders and over the back; a man's head over the neck's cut
+        if (p == Part.Body) return Legged ? (z * BodyPlan.Sub >= FrontZ[(int)Bone.Head] && y * BodyPlan.Sub >= FrontY[(int)Bone.Head] ? Bone.Head : Bone.Torso)
+            : y * BodyPlan.Sub >= Lo[(int)Bone.Head] ? Bone.Head : Bone.Torso;
         return y * BodyPlan.Sub >= Lo[(int)upper] ? upper : lower;
     }
+
+    /// <summary>Whether a half-voxel row and depth of a part is drawn with this bone: in its rows, and on its side of a beast's neck cut.</summary>
+    public bool Holds(int bone, int y, int z) => y >= Lo[bone] && y < Hi[bone] && (Front[bone] == 0 || (z >= FrontZ[bone] && y >= FrontY[bone]) == Front[bone] > 0);
+
+    /// <summary>One bone near, in cells of 3 cm, as much of it as <paramref name="now"/> holds.</summary>
+    public MeshBuffers NearOf(BodyPlan plan, int bone, PartGrid now) => Front[bone] == 0
+        ? NearOf(plan, (int)PartOf[bone], now, out _, Lo[bone], Hi[bone])
+        : Masked(plan.Fine[(int)PartOf[bone]], BodyPlan.K, now, plan.Grid[(int)PartOf[bone]], BodyPlan.FineSub, out _, 0, Lo[bone], Hi[bone], this, bone);
+
+    /// <summary>One bone at the middle distance, in half-voxels.</summary>
+    public MeshBuffers MidOf(BodyPlan plan, int bone, PartGrid now) => MidOf(plan, (int)PartOf[bone], now, 0, out _, Lo[bone], Hi[bone], this, bone);
 
     /// <summary>
     /// A part's half-voxels in whole voxels (or as wounds left them) cut to one bone: its own rows of the body, and the
@@ -200,15 +244,15 @@ public sealed class Figure
         int p = (int)PartOf[(int)bone];
         var own = plan.Owner[p];
         int lo = Lo[(int)bone], hi = Hi[(int)bone];
-        if (lo == int.MinValue && hi == int.MaxValue) return g;
+        if (lo == int.MinValue && hi == int.MaxValue && Front[(int)bone] == 0) return g;
         var k = g.Clone();
         int count = 0;
         for (int i = 0; i < k.M.Length; i++)
         {
             if (k.M[i] == 0) continue;
-            int row = k.Y0 + i / (k.SX * k.SZ);
+            int row = k.Y0 + i / (k.SX * k.SZ), depth = k.Z0 + i / k.SX % k.SZ;
             int d = own != null && own.Length == k.M.Length ? own[i] : 0;
-            bool keep = d == 0 ? row >= lo && row < hi : DressBone.Length >= d && DressBone[d - 1] == bone;
+            bool keep = d == 0 ? Holds((int)bone, row, depth) : DressBone.Length >= d && DressBone[d - 1] == bone;
             if (keep) count++; else { k.M[i] = 0; k.T[i] = 0; }
         }
         k.Count = count;
@@ -264,7 +308,7 @@ public sealed class Figure
     /// its index), and only what its cells fill enough of (<see cref="BodyPlan.Solid"/>), each showing what it shows
     /// (<see cref="BodyPlan.Shown"/>) where no wound has changed it.
     /// </summary>
-    public static MeshBuffers MidOf(BodyPlan plan, int part, PartGrid now, int owner, out int quads, int lo = int.MinValue, int hi = int.MaxValue)
+    public static MeshBuffers MidOf(BodyPlan plan, int part, PartGrid now, int owner, out int quads, int lo = int.MinValue, int hi = int.MaxValue, Figure cut = null, int bone = -1)
     {
         quads = 0;
         var own = plan.Owner[part];
@@ -281,6 +325,7 @@ public sealed class Figure
                 {
                     int i = (y * now.SZ + z) * now.SX + x;
                     if (now.M[i] == 0 || own[i] != owner || !solid[i] || now.Y0 + y < lo || now.Y0 + y >= hi) continue;
+                    if (cut != null && !cut.Holds(bone, now.Y0 + y, now.Z0 + z)) continue;
                     pad[((y + 1) * pz + (z + 1)) * px + (x + 1)] = shown != null && shown[i] != 0 && now.M[i] == was.M[i] ? shown[i] : now.M[i];
                     any = true;
                 }
@@ -297,7 +342,8 @@ public sealed class Figure
     /// <paramref name="now"/>. Where a wound has changed that half-voxel — blood on the skin — the cells take its colour;
     /// where it has opened one of flesh, bone, brain or heart to the air, they show that.
     /// </summary>
-    static MeshBuffers Masked(PartGrid fine, int per, PartGrid now, PartGrid was, int toVoxel, out int quads, byte without = 0, int lo = int.MinValue, int hi = int.MaxValue)
+    static MeshBuffers Masked(PartGrid fine, int per, PartGrid now, PartGrid was, int toVoxel, out int quads, byte without = 0, int lo = int.MinValue, int hi = int.MaxValue,
+        Figure cut = null, int bone = -1)
     {
         quads = 0;
         if (fine == null || now == null || now.Count == 0 || was == null || now.M.Length != was.M.Length) return null;
@@ -320,7 +366,7 @@ public sealed class Figure
                     byte m = fine.M[(y * fine.SZ + z) * fine.SX + x];
                     if (m == 0 || m == without) continue;
                     int cx = Down(fine.X0 + x, per);
-                    if (!now.In(cx, cy, cz)) continue;
+                    if (!now.In(cx, cy, cz) || cut != null && !cut.Holds(bone, cy, cz)) continue;
                     int ci = now.Index(cx, cy, cz);
                     byte cm = now.M[ci];
                     if (cm == 0) continue;

@@ -33,7 +33,8 @@ namespace VoxelTower.Game;
 /// usual view to as close as it goes, 4 through a swordsman's eyes with a band wading through it, 5 a blast's wave
 /// running out over it, 6 a whirlwind crossing it, 7 and 8 those two close; --pose=people: every figure in every look,
 /// --look=0..9 choosing a row), --pose=troops: the troops the lore opens out before the walls meeting a band (--at=
-/// seconds into it, --look=1 closer),
+/// seconds into it, --look=1 closer), --pose=beasts: the beasts going by close, at a walk, bolting and grazing (--look=1..3
+/// one of them closer), --pose=walk: people walking over a step of stone,
 /// --selftest drives the tools and the pawns and checks the results, --calm stops the embers and the flicker,
 /// --top looks straight down, --look=N at the Nth named place of the valley, --seed=N makes another valley; --select[=N]
 /// chooses our pawns (or the first N), --tab=key lets a panel down from the beam, --tool=N takes up the Nth tool,
@@ -221,7 +222,7 @@ public partial class Main : Node3D
         World = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         Site = MapGen.Generate(World, mp);
         if (_demo && _pose == "trees") Grove();
-        if (_demo && _pose is "people" or "duel" or "reel" or "blood") ClearGrove();
+        if (_demo && _pose is "people" or "duel" or "reel" or "blood" or "beasts" or "walk") ClearGrove();
         // the field of the traps cleared of trees, so they are to be seen
         if (_demo && _pose == "engines") ClearTrees(Site.KeepX - Site.KeepR - 420, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 20, Site.KeepZ + 140);
         if (_demo && _pose == "drawbridge") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 120);
@@ -1587,6 +1588,8 @@ public partial class Main : Node3D
         if (_pose == "trees") { LookAtGrove(); return; }
         if (_pose == "grass") { Meadow(); return; }
         if (_pose == "people") { People(); return; }
+        if (_pose == "beasts") { Beasts(); return; }
+        if (_pose == "walk") { Walkers(); return; }
         if (_pose == "duel") { Duel(); return; }
         if (_pose == "reel") { Reeling(); return; }
         if (_pose == "blood") { Bloodshed(); return; }
@@ -3126,6 +3129,104 @@ public partial class Main : Node3D
         float zoom = Math.Clamp(248 / (width / 1.6f + 12), 1.2f, 9);
         Rig.Set(World.WX(cx) - sin * over, World.WZ(cz) - cos * over, yaw, pitch, one ? zoom : 1.6f, snap: true);
         GD.Print($"[voxel-tower] the figures stand round {cx:0},{cz:0}, {gap:0} voxels a row; closer: --cam={cx - sin * over / VoxelWorld.Vox:0},{cz - cos * over / VoxelWorld.Vox:0},-0.3,0.42,6");
+        Hud.Refresh();
+    }
+
+    /// <summary>
+    /// The beasts close up and going (--pose=beasts): deer at a walk, a white stag with them, deer and a hare bolting,
+    /// boars trotting, and deer grazing in front; each set off so far back that it is before the camera 1.3 s on
+    /// (--frames=80). The household waits in the citadel, so that nothing takes fright at it. --look=1 the stag walking
+    /// close, 2 a deer bolting close, 3 a boar trotting close.
+    /// </summary>
+    void Beasts()
+    {
+        var sim = Sim;
+        sim.Waves.Countdown = 1e9;
+        sim.WildTarget = 0;
+        foreach (var w in sim.Units)
+        {
+            if (w.Team == Team.Wild) { w.Dead = true; w.DiedAt = -999; }
+            else if (w.Team == Team.Player) w.Inside = true;
+        }
+        const float yaw = -.3f, pitch = .42f, gap = 20;
+        float sin = MathF.Sin(yaw), cos = MathF.Cos(yaw);
+        var (gx, gz) = GroveAt;
+        float cx = gx + 150, cz = gz + 110;
+        // (kind, look, how it goes: 0 at a walk, 1 bolting, 2 grazing), a row to each, going along the rows
+        var rows = new[]
+        {
+            new[] { (Kinds.Deer, 0, 0), (Kinds.Deer, 1, 0), (Kinds.WhiteStag, 0, 0), (Kinds.Deer, 2, 0) },
+            new[] { (Kinds.Deer, 0, 1), (Kinds.Deer, 1, 1), (Kinds.Hare, 0, 1), (Kinds.Hare, 0, 0) },
+            new[] { (Kinds.Boar, 0, 0), (Kinds.Hare, 0, 0), (Kinds.WhiteStag, 0, 1), (Kinds.Boar, 0, 1) },
+            new[] { (Kinds.Deer, 1, 2), (Kinds.Deer, 0, 2), (Kinds.Boar, 0, 2), (Kinds.Hare, 0, 2) },
+        };
+        (float x, float z) close = (cx, cz);
+        for (int r = 0; r < rows.Length; r++)
+            for (int i = 0; i < rows[r].Length; i++)
+            {
+                var (t, look, how) = rows[r][i];
+                float speed = how == 2 ? 0 : t.Move.Speed * NavGrid.CS * (how == 0 && t.Team == Team.Wild ? .35f : 1);
+                float along = (i - 1.5f) * 15 - speed * 1.3f, back = (r - 1.5f) * gap;
+                float x = cx + along * cos - back * sin, z = cz - along * sin - back * cos;
+                // where it will be 1.3 s on, for the camera close up
+                if ((_look, r, i) is (1, 0, 0) or (2, 1, 0) or (3, 2, 0)) close = (x + speed * 1.3f * cos, z - speed * 1.3f * sin);
+                var u = sim.Spawn(t, sim.NearestStand((int)x, (int)z, t.Move.Height));
+                u.Look = look;
+                u.Facing = MathF.Atan2(-sin, cos);
+                if (how == 2) { u.Home = u.Cell; u.NextSearch = 1e9; continue; }
+                int to = sim.NearestStand((int)(x + 400 * cos), (int)(z - 400 * sin), t.Move.Height);
+                if (t.Team == Team.Player) { sim.Command(new[] { u }, to); continue; }
+                sim.GoTo(u, to, budget: 20000);
+                u.Home = to;
+                if (how == 1) { u.State = UnitState.Flee; u.LastHurt = sim.Time + 60; u.NextSearch = 1e9; }
+            }
+        // (the view on the rows' middle, a row nearer than the middle of them)
+        float over = (World.WY(World.SurfAt((int)cx, (int)cz) + 8) - 4) / MathF.Tan(pitch), near = gap * 1.6f;
+        if (_look is >= 1 and <= 3)
+        {
+            float overClose = (World.WY(World.SurfAt((int)close.x, (int)close.z) + 5) - 4) / MathF.Tan(pitch);
+            Rig.Set(World.WX(close.x) - sin * overClose, World.WZ(close.z) - cos * overClose, yaw, pitch, 9, snap: true);
+        }
+        else Rig.Set(World.WX(cx + near * sin) - sin * over, World.WZ(cz + near * cos) - cos * over, yaw, pitch, 3.4f, snap: true);
+        GD.Print($"[voxel-tower] the beasts go by {cx:0},{cz:0}; the walking deer close: --cam={cx + gap * 1.5f * sin - sin * over / VoxelWorld.Vox:0},{cz + gap * 1.5f * cos - cos * over / VoxelWorld.Vox:0},-0.3,0.42,8");
+        Hud.Refresh();
+    }
+
+    /// <summary>
+    /// People going by close (--pose=walk), to look at how their feet are set down: a worker, a swordsman, an archer, a
+    /// spearman and a knight walking across a step of stone half a metre high, each before the camera 1.3 s on
+    /// (--frames=80).
+    /// </summary>
+    void Walkers()
+    {
+        var sim = Sim;
+        sim.Waves.Countdown = 1e9;
+        foreach (var w in sim.Units) if (w.Team == Team.Wild) { w.Dead = true; w.DiedAt = -999; }
+        const float yaw = -.3f, pitch = .42f, gap = 14;
+        float sin = MathF.Sin(yaw), cos = MathF.Cos(yaw);
+        var (gx, gz) = GroveAt;
+        float cx = gx + 150, cz = gz + 110;
+        // the step: a slab of stone four voxels high across the way, a metre and a half along it, on the ground
+        for (int x = (int)cx - 50; x <= (int)cx + 50; x++)
+            for (int z = (int)cz - 6; z <= (int)cz + 6; z++)
+            {
+                int top = World.SurfAt(x, z);
+                while (top > 0 && !NavGrid.Blocks(World.Get(x, top, z))) top--;
+                for (int y = top + 1; y <= top + 4; y++) World.Set(x, y, z, Mat.Stone);
+            }
+        sim.Nav.Flush();
+        var kinds = new[] { Kinds.Worker, Kinds.Swordsman, Kinds.Archer, Kinds.Spearman, Kinds.Knight };
+        for (int i = 0; i < kinds.Length; i++)
+        {
+            var t = kinds[i];
+            float speed = t.Move.Speed * NavGrid.CS, along = -speed * 1.3f + 4, back = (i - 2) * gap;
+            float x = cx + along * cos - back * sin, z = cz - along * sin - back * cos;
+            var u = sim.Spawn(t, sim.NearestStand((int)x, (int)z, t.Move.Height));
+            u.Facing = MathF.Atan2(-sin, cos);
+            sim.Command(new[] { u }, sim.NearestStand((int)(x + 300 * cos), (int)(z - 300 * sin), t.Move.Height));
+        }
+        float over = (World.WY(World.SurfAt((int)cx, (int)cz) + 8) - 4) / MathF.Tan(pitch);
+        Rig.Set(World.WX(cx) - sin * over, World.WZ(cz) - cos * over, yaw, pitch, 4.5f, snap: true);
         Hud.Refresh();
     }
 

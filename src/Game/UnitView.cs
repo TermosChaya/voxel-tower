@@ -39,6 +39,9 @@ public partial class UnitView : Node3D
         public float Breath, Exert, HeadYaw, HeadPitch, IdleYaw, IdlePitch;
         /// <summary>How far down it is (0 on its feet, 1 lying), eased so it goes down and gets up.</summary>
         public float Down;
+        /// <summary>A beast's gait now and the one it is changing from, how far through the change, its strides walked, how far down to the grass its head is (UnitView.Gait.cs).</summary>
+        public int Gait, GaitWas;
+        public float GaitMix = 1, GaitPhase, Graze;
         public double GazeNext;
         public Unit GazeAt;
         public bool Seen;
@@ -416,6 +419,7 @@ public partial class UnitView : Node3D
             sink = Math.Max(0, since - 18) * 1.4f;
             main = f.Beast ? .5f : -.4f; off = f.Beast ? .4f : f.Shield ? -.2f : .3f;
             if (f.Beast) { legR = -.4f; legL = -.3f; }
+            if (f.Legged) Stiff(u, f, 0);
             // a horse down on its side, its legs stretched out stiff
             if (f.Mounted) { legR = -.5f; legL = .45f; main = -.9f; off = -.6f; }
         }
@@ -425,7 +429,10 @@ public partial class UnitView : Node3D
             float flail = MathF.Sin((float)_t * 11 + seed);
             main = f.Beast ? .6f * flail : -2.4f + flail * .5f; off = f.Beast ? -.6f * flail : -2.2f - flail * .5f;
             legR = .5f + flail * .4f; legL = -.5f - flail * .4f;
+            if (f.Legged) Stiff(u, f, flail);
         }
+        // a beast with knees and a neck: its gait worked out step by step (UnitView.Gait.cs)
+        else if (f.Legged) bob = Strides(u, f, look);
         else if (f.Beast)
         {
             // diagonal pairs of legs together; a gallop when bolting or charging
@@ -555,6 +562,11 @@ public partial class UnitView : Node3D
                     }
                     break;
             }
+            // the feet on the ground under them, as the stride sets them down (UnitView.Gait.cs): walking, and standing
+            // where the ground is not level; not at work, in a fight, sitting or bound
+            if (u.State is not (UnitState.Work or UnitState.Carve or UnitState.Siege or UnitState.Fight) && !u.Bound
+                && u.Pastime is not (Pastime.Sit or Pastime.Bound))
+                bob = Footing(u, f, look, bob, ref legR, ref legL, ref kneeR, ref kneeL);
         }
         else
         {
@@ -629,6 +641,12 @@ public partial class UnitView : Node3D
         var turns = StrokeTurns(u, f, look, main, off, lean, ref legR, ref legL, root);
         var hips = turns.Step == Vector3.Zero ? root : root * new Transform3D(Basis.Identity, turns.Step);
         var tint = Tint(u);
+        if (f.Legged)
+        {
+            PoseLegs(f, hips, u.Dead ? 0 : MathF.Sin((float)_t * (look.Run > .3f ? 4.5f : 1.6f) + seed));
+            look.Body = _xf[(int)Bone.Torso];
+            return tint;
+        }
         if (!f.Jointed)
         {
             var body0 = hips * TurnAt(f, Part.Body, turns.Body);
@@ -1011,9 +1029,8 @@ public partial class UnitView : Node3D
             made = new Made { Dress = new Mesh[plan.Dress.Count] };
             if (own.Hurt[p])
             {
-                int lo = fig.Lo[b], hi = fig.Hi[b];
                 bool has = fig.BoneNear[b] != null || fig.BoneMid[b] != null || fig.BoneFar[b] != null;
-                made.Body = !has ? null : lod == 0 ? GodotMesh.From(Figure.NearOf(plan, p, g, out _, lo, hi)) : lod == 1 ? GodotMesh.From(Figure.MidOf(plan, p, g, 0, out _, lo, hi))
+                made.Body = !has ? null : lod == 0 ? GodotMesh.From(fig.NearOf(plan, b, g)) : lod == 1 ? GodotMesh.From(fig.MidOf(plan, b, g))
                     : Figure.CoarseOf(fig.Keep(plan, (Bone)b, plan.Seen(p, g)));
                 for (int d = 0; d < plan.Dress.Count && lod < 2; d++)
                     if ((int)fig.DressBone[d] == b)
@@ -1092,7 +1109,7 @@ public partial class UnitView : Node3D
             var fig = Figure.For(u.Wounds.Plan);
             foreach (var (part, x, y, z, dx, dy, dz) in u.Wounds.Arrows)
             {
-                if (!look_xf.TryGetValue(u.Id * Figure.Bones + (int)fig.BoneAt((Part)part, y), out var px)) continue;
+                if (!look_xf.TryGetValue(u.Id * Figure.Bones + (int)fig.BoneAt((Part)part, y, z), out var px)) continue;
                 var d = new Vector3(dx, dy, dz).Normalized();
                 var side = Vector3.Up.Cross(d);
                 side = side.LengthSquared() < 1e-6f ? Vector3.Right : side.Normalized();
