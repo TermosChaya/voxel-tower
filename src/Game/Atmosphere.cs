@@ -380,8 +380,12 @@ public partial class Atmosphere : Node3D
             {
                 // a wave beaten back starts the day over in the dark: the morning is taken up at once, under the moon's
                 // light, and the dawn comes in the dark's own time; easing back over the sky would bring the sun up over
-                // the south and down again in the night
-                _day = day < _day - .5f ? day : Mathf.MoveToward(_day, day, Math.Max(k, Math.Abs(day - _day) * k * 2));
+                // the south and down again in the night. Nor is the sun ever seen to fly over the sky when the clock
+                // jumps (the horde called early, the tutorial holding its noon): while the sky is light it goes no
+                // faster than a walk, and hurries only as the dark hides it
+                float hidden = Smooth((_dark - .5f) / .4f);
+                float pace = Mathf.Lerp(.012f * (float)delta, Math.Max(k, Math.Abs(day - _day) * k * 2), hidden);
+                _day = day < _day - .5f ? day : Mathf.MoveToward(_day, day, pace);
                 _dark = Mathf.MoveToward(_dark, dark, k);
             }
             _snap = false;
@@ -529,7 +533,11 @@ public partial class Atmosphere : Node3D
         var vp = GetViewport().GetVisibleRect().Size;
 
         void G(SkyGlobal g, Vector4 v) { RenderingServer.GlobalShaderParameterSet(g.Id, v); Told[g.Name] = v; }
-        G(SkySun, new Vector4(sun.X, sun.Y, sun.Z, (1 - .85f * _wet) * (1 - .7f * _fog)));
+        // a sun still high when the dark has come (the day taken up at once after a wave, the night fallen early) is not
+        // to be seen in the night sky, nor one hurried down under it in the dark: it shows again as the dark goes. A sun
+        // setting as it should is down before the dark is deep
+        float shown = 1 - Math.Max(Smooth((dark - .25f) / .35f) * Smooth((e - 4) / 8), Smooth((dark - .6f) / .3f));
+        G(SkySun, new Vector4(sun.X, sun.Y, sun.Z, (1 - .85f * _wet) * (1 - .7f * _fog) * shown));
         G(SkyMoon, new Vector4(MoonDir.X, MoonDir.Y, MoonDir.Z, _blood));
         G(SkyMood, new Vector4(day, dark, _wet, _fog));
         G(SkyZenith, new Vector4(tone.Zenith.X, tone.Zenith.Y, tone.Zenith.Z, stars));
