@@ -843,6 +843,10 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   дела, совет после 6 с), места — `CantEnlist`/`HireCost`, знания — `CanLearn` по `Coin.Knowledge`; щелчок —
   действие (выбрать и показать, инструмент, панель, `OpenKeep`), крестик прячет ключ совета на 300 с;
   `Settings.Advice`; в обучении скрыт.
+  `FirstLook.cs` — карточка при первой встрече с инструментом или вкладкой (`Hud.Meet` из `OnToolChanged` и при
+  смене `OpenTab`): текст — подсказка этой вещи, «Понятно», сама уходит через 20 с; встреченное хранится в
+  `settings.cfg` (`interface/met`, `Settings.Meet`); в обучении вещи только отмечаются встреченными; скриптовые
+  прогоны ничего не встречают; выключается вместе с советами (`Settings.Advice`).
   `Colonists.cs` — полоса лиц под балкой; `Inspector.cs` — середина консоли (кисть / одна пешка / группа / дружина / набор цитадели
   `KeepPane`: места, лица видов `KindTile`; `TileOf(t)` для самотеста; `KeyNow`),
   `HealthBar`, `BodyChart`, `PriorityCell`, `MiniCard`, `KindFace`; `WorkTable.cs` — таблица работ (рисуется

@@ -372,7 +372,8 @@ public partial class GameMenu : Control
         var hints = new Stepper("Подсказки внизу", "Подсказки внизу\nСтрока над нижней панелью: что сейчас делают кнопки мыши и клавиши.", () => Settings.Hints ? "да" : "нет", d => Settings.ToggleHints());
         hints.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
         _page.AddChild(hints);
-        var advice = new Stepper("Советы", "Советы\nНад картой: что сейчас не так и что с этим сделать. Щелчок по совету делает это, крестик прячет его на 5 минут.", () => Settings.Advice ? "да" : "нет", d => Settings.ToggleAdvice());
+        var advice = new Stepper("Советы", "Советы\nНад картой: что сейчас не так и что с этим сделать. Щелчок по совету делает это, крестик прячет его на 5 минут. " +
+            "Ещё карточка, когда впервые берёте инструмент или открываете вкладку.", () => Settings.Advice ? "да" : "нет", d => Settings.ToggleAdvice());
         advice.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
         _page.AddChild(advice);
         var lines = new Stepper("Обводка вокселей", "Обводка вокселей\nТонкая тёмная линия по краям вокселей вблизи.", () => Settings.Lines ? "да" : "нет", d => Settings.ToggleLines());

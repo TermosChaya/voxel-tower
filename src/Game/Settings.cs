@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Godot;
 
 namespace VoxelTower.Game;
@@ -26,8 +27,10 @@ public static class Settings
     public static bool EdgeScroll { get; private set; } = true;
     /// <summary>Whether the line over the console tells what the mouse and the keys do now.</summary>
     public static bool Hints { get; private set; } = true;
-    /// <summary>Whether advice on what is amiss shows over the map.</summary>
+    /// <summary>Whether advice on what is amiss shows over the map, and a card the first time a tool or a tab is met.</summary>
     public static bool Advice { get; private set; } = true;
+    /// <summary>The tools and tabs met already, that want no card again.</summary>
+    static readonly HashSet<string> _met = new();
     /// <summary>Whether every voxel is drawn with a thin dark line round its edge, where it is big enough on screen to read.</summary>
     public static bool Lines { get; private set; }
     /// <summary>What the player chose for the lines, kept apart from a run that draws them for itself (--lines).</summary>
@@ -131,6 +134,7 @@ public static class Settings
         EdgeScroll = cfg.GetValue("view", "edge_scroll", true).AsBool();
         Hints = cfg.GetValue("interface", "hints", true).AsBool();
         Advice = cfg.GetValue("interface", "advice", true).AsBool();
+        foreach (string k in cfg.GetValue("interface", "met", new string[0]).AsStringArray()) _met.Add(k);
         Lines = _keptLines = cfg.GetValue("view", "lines", false).AsBool();
         int grid = cfg.GetValue("tools", "grid", 0).AsInt32();
         Grid = Array.IndexOf(ToolOptions.Grids, grid) > 0 ? grid : 0;
@@ -150,6 +154,9 @@ public static class Settings
         cfg.SetValue("view", "edge_scroll", EdgeScroll);
         cfg.SetValue("interface", "hints", Hints);
         cfg.SetValue("interface", "advice", Advice);
+        var met = new string[_met.Count];
+        _met.CopyTo(met);
+        cfg.SetValue("interface", "met", met);
         cfg.SetValue("view", "lines", _keptLines);
         cfg.SetValue("tools", "grid", Grid);
         cfg.SetValue("graphics", "quality", Quality);
@@ -224,6 +231,14 @@ public static class Settings
     {
         Hints = !Hints;
         Save();
+    }
+
+    /// <summary>A tool or a tab met: true the first time, and kept so; a scripted run meets nothing.</summary>
+    public static bool Meet(string key)
+    {
+        if (_scripted || !_met.Add(key)) return false;
+        Save();
+        return true;
     }
 
     /// <summary>The advice over the map, on or off; kept for next time.</summary>

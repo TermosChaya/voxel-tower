@@ -65,6 +65,8 @@ public partial class Hud : CanvasLayer
     Toasts _toasts;
     Hints _hints;
     Advisor _advisor;
+    FirstLook _first;
+    string _lastTab;
     VBoxContainer _history, _goals;
     readonly List<Label> _goalLines = new();
     TopBeam _beam;
@@ -210,6 +212,9 @@ public partial class Hud : CanvasLayer
         _advisor = new Advisor();
         root.AddChild(_advisor);
         _advisor.Init(m);
+        // and the card the first time a tool or a tab is met
+        _first = new FirstLook();
+        root.AddChild(_first);
 
         // what hangs from the beam goes behind it
         _drop = new DropPanel { Position = new Vector2(10, TopBeam.Height - 3) };
@@ -450,13 +455,13 @@ public partial class Hud : CanvasLayer
         _clock += delta;
         _refreshAt -= delta;
         var vp = GetViewport().GetVisibleRect().Size;
-        if (TitleOpen) { _hints.Visible = _advisor.Visible = false; return; }
+        if (TitleOpen) { _hints.Visible = _advisor.Visible = _first.Visible = false; return; }
         if (InFirstPerson)
         {
             // only the toasts, in the upper corner, out of the sight
             _toasts.Position = new Vector2(24, 20);
             _tag.Visible = false;
-            _hints.Visible = _advisor.Visible = false;
+            _hints.Visible = _advisor.Visible = _first.Visible = false;
             if (_refreshAt <= 0) _refreshAt = .2;
             return;
         }
@@ -491,6 +496,14 @@ public partial class Hud : CanvasLayer
         float hinted = _hints.Visible ? Hints.H + 8 : 0;
         _advisor.Visible = Settings.Advice && _console.Visible && (_m.Tutor == null || _m.Tutor.Over);
         _advisor.Position = new Vector2(14, vp.Y - BottomConsole.Wing - 10 - _advisor.Size.Y);
+        if (!_console.Visible) _first.Visible = false;
+        _first.Position = new Vector2(vp.X - _first.Size.X - 14, vp.Y - BottomConsole.Wing - 10 - _first.Size.Y);
+        if (OpenTab != _lastTab)
+        {
+            _lastTab = OpenTab;
+            // (the mysteries are a page of the lore, met with it)
+            if (_lastTab is not (null or "magic") && Target("tab:" + _lastTab) is TabPlaque tab) Meet("tab:" + _lastTab, tab.TooltipText);
+        }
         _toasts.Position = new Vector2((vp.X - _toasts.Size.X) / 2, vp.Y - BottomConsole.Band - 14 - hinted - _toasts.Size.Y);
         Unit first = null;
         foreach (var u in _m.Selected) if (!u.Dead && (first == null || u.Id < first.Id)) first = u;
@@ -704,6 +717,15 @@ public partial class Hud : CanvasLayer
         foreach (var (mat, s) in _matSlots) s.Selected = !t.Opt.Dig && mat == t.Opt.Material;
         _pickSlot.Selected = t.Opt.Dig;
         _inspector.Refresh(rebuild: true);
+        foreach (var (tool, _, _, tip) in ToolDefs) if (tool == t.Tool) Meet("tool:" + tool, tip);
+    }
+
+    /// <summary>A tool or a tab met: the first time, outside the tutorial, its card; in the tutorial it is only counted as met.</summary>
+    void Meet(string key, string tip)
+    {
+        bool tutorial = _m.Tutor != null && !_m.Tutor.Over;
+        if (!tutorial && !Settings.Advice) return;
+        if (Settings.Meet(key) && !tutorial) _first.Show(tip);
     }
 
     public void OnSelectionChanged() => _inspector?.Refresh();
