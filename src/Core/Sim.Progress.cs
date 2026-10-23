@@ -179,7 +179,7 @@ public sealed partial class Sim
                 return new Errand { Key = key, Main = main, From = Hunted, Text = "Добудьте зверя: выберите лучника и щёлкните {Rmb} по оленю или кабану", Gold = 15 };
             case "alive":
                 if (Waves.Number < 2 || !Units.Exists(u => !u.Dead && u.Team == Team.Player && Fighter(u) && !u.T.Ranged)) return null;
-                return new Errand { Key = key, Main = main, From = Prisoners(), Text = "Возьмите пленного: выберите бойца и включите «Живьём» в нижней панели", Knowledge = 2 };
+                return new Errand { Key = key, Main = main, From = Prisoners(), Text = "Возьмите пленного: выберите бойца и включите в нижней панели «Брать живым» (кандалы)", Knowledge = 2 };
             case "champion":
             {
                 // a champion coming tonight, or come back: kill him

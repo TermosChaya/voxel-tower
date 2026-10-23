@@ -97,7 +97,7 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   вида `LandmarkKind.Power` (`Landmarks.Barrow`, `BlackStone`, `DeadSpring` в `MapGen` после мостов) и `Mine` с
   `Power = true` в общем списке `Mines`: держатся тем же `TickMines`, золота не платят (`Income` 0), орда ходит к ним
   `SendRaid` и `Muster`. Жрец — `Kinds.Priest` (`UnitType.Prays`, работы все 0, нет в таблице работ).
-- `Sim.Captives.cs` — пленные: `Unit.TakeAlive` (приказ «Живьём»; `TakesAlive`), в `Strike` — `Takeable`/`TakeAt`
+- `Sim.Captives.cs` — пленные: `Unit.TakeAlive` (приказ «Брать живым»; `TakesAlive`), в `Strike` — `Takeable`/`TakeAt`
   (¼ сил, ⅗ в цепях `ChainedUntil`) → `Subdue` (связан, раны перевязаны, вышел из ватаги); `BoundTick` (лежит или
   идёт за `Captor`; через `WrigglesFree` 150 с — распутался); `FetchCaptive` (свободный рабочий, `Unit.Fetching`, если
   орды нет ближе `FetchSafe` 16 м) → `Imprison` (`Inside` + `Bound`, в цитадели); `Imprisoned` (ночью без
@@ -843,6 +843,9 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   дела, совет после 6 с), места — `CantEnlist`/`HireCost`, знания — `CanLearn` по `Coin.Knowledge`; щелчок —
   действие (выбрать и показать, инструмент, панель, `OpenKeep`), крестик прячет ключ совета на 300 с;
   `Settings.Advice`; в обучении скрыт.
+  Приказы выбранным в нижней панели — квадратные кнопки-значки `Inspector.Glyph` (значок набора, название и что
+  делает — в подсказке через `Tooltip.Make`, ember, пока включено): за работу, стоять, тревога (`AlarmGlyph`),
+  вселиться, что добывать (прочерк `Nothing`, камень, брёвна, земля), огненные стрелы, брать живым, ополчение.
   `FirstLook.cs` — карточка при первой встрече с инструментом или вкладкой (`Hud.Meet` из `OnToolChanged` и при
   смене `OpenTab`): текст — подсказка этой вещи, «Понятно», сама уходит через 20 с; встреченное хранится в
   `settings.cfg` (`interface/met`, `Settings.Meet`); в обучении вещи только отмечаются встреченными; скриптовые

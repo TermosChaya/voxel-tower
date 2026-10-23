@@ -89,6 +89,55 @@ public partial class Inspector : Control
         return b;
     }
 
+    /// <summary>
+    /// A square button with an icon of the set, its name and what it does in its tooltip; the icon in bronze, lighter
+    /// under the pointer, ember while it is on.
+    /// </summary>
+    partial class Glyph : Button
+    {
+        readonly Icons.Painter _icon;
+
+        public Glyph() { }
+
+        public Glyph(Icons.Painter icon, string tip, Action act, bool toggle = false)
+        {
+            _icon = icon;
+            TooltipText = Bindings.Fill(tip);
+            FocusMode = FocusModeEnum.None;
+            ToggleMode = toggle;
+            CustomMinimumSize = new Vector2(32, 28);
+            MouseDefaultCursorShape = CursorShape.PointingHand;
+            Pressed += act;
+        }
+
+        public override void _Draw()
+        {
+            float s = Math.Min(Size.X, Size.Y) - 9;
+            var ink = Disabled ? Ornament.Faded : ButtonPressed ? Ornament.EmberGlow : IsHovered() ? Ornament.BronzeLight : Ornament.Bronze;
+            _icon?.Invoke(this, new Rect2((Size - new Vector2(s, s)) / 2, new Vector2(s, s)), ink);
+        }
+
+        public override GodotObject _MakeCustomTooltip(string forText) => Tooltip.Make(forText);
+    }
+
+    /// <summary>Nothing: a short stroke, for «bring in nothing».</summary>
+    static void Nothing(CanvasItem c, Rect2 r, Color ink) => c.DrawLine(new Vector2(r.Position.X + r.Size.X * .25f, r.GetCenter().Y), new Vector2(r.End.X - r.Size.X * .25f, r.GetCenter().Y), ink, 2);
+
+    /// <summary>The alarm's horn: lit while the alarm is up, the stand-down then in its tooltip.</summary>
+    Button AlarmGlyph()
+    {
+        var b = new Glyph(Icons.Horn, Commander.AlarmTip, () => _m.Command.Alarm(), toggle: true);
+        void Show()
+        {
+            bool up = _m.Sim.Alarm;
+            b.SetPressedNoSignal(up);
+            b.TooltipText = up ? Commander.StandDownTip : Commander.AlarmTip;
+        }
+        Show();
+        _refresh.Add(Show);
+        return b;
+    }
+
     /// <summary>The alarm's button: "Тревога", or "Отбой" while it is up, glowing then.</summary>
     Button AlarmButton(float w)
     {
@@ -194,7 +243,7 @@ public partial class Inspector : Control
         "столкнёт их вниз. Камни катятся по склону и сбивают всех на пути.\nБрёвна: так же, вдоль края стены. " +
         "Скатываются на налётчиков у подножия. Горят.\nПорох: бочки с порохом, селитру делают из запаса земли. " +
         "Бочка взрывается от огня через полсекунды, соседние рвутся следом, по дорожке пороха огонь бежит дальше. " +
-        "Подорвать можно огненной стрелой: выберите лучника, включите «Огонь» и щёлкните по бочкам. Рабочие порох " +
+        "Подорвать можно огненной стрелой: выберите лучника, включите огненные стрелы и щёлкните по бочкам. Рабочие порох " +
         "не тушат.";
 
     const string MaterialTip = "Материал\nКамень ({MatStone}), брёвна ({MatWood}) и земля ({MatEarth}) берутся из запасов. Смолу варят из " +
@@ -409,12 +458,12 @@ public partial class Inspector : Control
     {
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 4);
-        row.AddChild(Btn("За работу", "За работу\nВыбранные снова сами ищут работу.", () => _m.Command.ReleaseSelected(), 92));
-        row.AddChild(Btn("Стоять", "Стоять здесь\nВыбранные остаются на месте. Для солдат это место становится постом.", () => _m.Command.HoldSelected(), 70));
-        row.AddChild(AlarmButton(70));
+        row.AddChild(new Glyph(Icons.Pick, "За работу\nВыбранные снова сами ищут работу.", () => _m.Command.ReleaseSelected()));
+        row.AddChild(new Glyph(Icons.Of("knight-banner"), "Стоять здесь\nВыбранные остаются на месте. Для солдат это место становится постом.", () => _m.Command.HoldSelected()));
+        row.AddChild(AlarmGlyph());
         if (chosen.Count == 1)
-            row.AddChild(Btn($"Вселиться · {Bindings.Label(Act.Possess)}", "Вселиться ({Possess})\nУправлять им от первого лица. {FpForward}{FpLeft}{FpBack}{FpRight} — идти, мышь — смотреть, {Lmb} — удар, " +
-                "выстрел или кирка, {Rmb} — положить блок, Esc — выйти.", () => _m.FP.Enter(chosen[0]), 104));
+            row.AddChild(new Glyph(Icons.Eye, "Вселиться ({Possess})\nУправлять им от первого лица. {FpForward}{FpLeft}{FpBack}{FpRight} — идти, мышь — смотреть, {Lmb} — удар, " +
+                "выстрел или кирка, {Rmb} — положить блок, Esc — выйти.", () => _m.FP.Enter(chosen[0])));
         var duty = new List<Button>();
         // priests bring nothing in
         bool labour = chosen.Exists(u => !u.T.Prays);
@@ -424,17 +473,16 @@ public partial class Inspector : Control
         var cap = Hud.CapsLabel("Добывать", 8);
         cap.VerticalAlignment = VerticalAlignment.Center;
         row.AddChild(cap);
-        foreach (var (text, kind, tip) in new[]
+        foreach (var (icon, kind, tip) in new (Icons.Painter, int, string)[]
         {
-            ("—", Stockpile.None, "Ничего не добывать самим\nТолько размеченная работа и делянки."),
-            ("камень", Stockpile.Stone, "Добывать камень\nБез размеченной работы выбранные сами ломают ближайшие валуны и руины."),
-            ("брёвна", Stockpile.Wood, "Добывать брёвна\nБез размеченной работы выбранные сами рубят ближайшие деревья."),
-            ("землю", Stockpile.Earth, "Добывать землю\nБез размеченной работы выбранные копают общую яму в стороне от крепости."),
+            (Nothing, Stockpile.None, "Ничего не добывать самим\nТолько размеченная работа и делянки."),
+            (Icons.Of("stone-block"), Stockpile.Stone, "Добывать камень\nБез размеченной работы выбранные сами ломают ближайшие валуны и руины."),
+            (Icons.Of("wood-pile"), Stockpile.Wood, "Добывать брёвна\nБез размеченной работы выбранные сами рубят ближайшие деревья."),
+            (Icons.Of("dig-hole"), Stockpile.Earth, "Добывать землю\nБез размеченной работы выбранные копают общую яму в стороне от крепости."),
         })
         {
             int k = kind;
-            var b = Btn(text, tip, () => _m.Command.DutySelected(k));
-            b.ToggleMode = true;
+            var b = new Glyph(icon, tip, () => _m.Command.DutySelected(k), toggle: true);
             duty.Add(b);
             row.AddChild(b);
         }
@@ -444,25 +492,22 @@ public partial class Inspector : Control
         if (archers)
         {
             row.AddChild(new Rule(true));
-            fire = Btn("Огонь", "Огненные стрелы\nПоджигают лестницы и настилы орды, смолу и налётчиков. Лучники стреляют реже. " +
+            fire = new Glyph(Icons.Of("flaming-arrow"), "Огненные стрелы\nПоджигают лестницы и настилы орды, смолу и налётчиков. Лучники стреляют реже. " +
                 "{Rmb} по дереву или смоле — поджечь. Ещё раз — обычные стрелы.",
-                () => _m.Command.FireArrowsSelected(), 60);
-            fire.ToggleMode = true;
+                () => _m.Command.FireArrowsSelected(), toggle: true);
             row.AddChild(fire);
         }
         if (melee)
         {
             row.AddChild(new Rule(true));
-            alive = Btn("Живьём", "Брать живым\nМечники и ополчение связывают налётчика, когда у него остаётся 25 % здоровья (скованного Цепями — 60 %). " +
-                "Свободный рабочий отведёт пленного в цитадель. Пленных приносят в жертву или отдают послу орды за выкуп. Ещё раз — снова бить насмерть.", () => _m.Command.TakeAliveSelected(), 70);
-            alive.ToggleMode = true;
+            alive = new Glyph(Icons.Of("manacles"), "Брать живым\nМечники и ополчение связывают налётчика, когда у него остаётся 25 % здоровья (скованного Цепями — 60 %). " +
+                "Свободный рабочий отведёт пленного в цитадель. Пленных приносят в жертву или отдают послу орды за выкуп. Ещё раз — снова бить насмерть.", () => _m.Command.TakeAliveSelected(), toggle: true);
             row.AddChild(alive);
         }
         if (workers)
         {
             row.AddChild(new Rule(true));
-            militia = Btn("Ополчение", "Ополчение\nРабочие не убегают от орды, а дерутся кирками. Ещё раз — снова убегают.", () => _m.Command.MilitiaSelected(), 92);
-            militia.ToggleMode = true;
+            militia = new Glyph(Icons.Of("war-pick"), "Ополчение\nРабочие не убегают от орды, а дерутся кирками. Ещё раз — снова убегают.", () => _m.Command.MilitiaSelected(), toggle: true);
             row.AddChild(militia);
         }
         _refresh.Add(() =>
