@@ -5832,6 +5832,61 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--sandbox")
         $"band {called?.Name} of {called?.Members.Count}, state {called?.State}; citadel {keep0:0} → {simS.KeepHp:0}");
 }
 
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--escape")
+{
+    // a worker shut in by the work cuts its own way out: walled round in a ring of stone, and at the bottom of a pit
+    // it dug itself, four metres deep with sheer sides
+    Console.WriteLine();
+    var mpQ = new MapParams();
+    var wQ = new VoxelWorld(mpQ.SizeX, mpQ.SizeY, mpQ.SizeZ);
+    var siteQ = MapGen.Generate(wQ, mpQ);
+    wQ.Compact();
+    var simQ = new Sim(wQ, siteQ);
+    simQ.WildTarget = 0;
+    StartingFort.Raise(simQ);
+    void RunQ(double seconds) { for (double t = 0; t < seconds; t += .05) simQ.Step(.05f); }
+    bool FreeQ(Unit u) { var cells = new List<int>(); return simQ.Paths.Reach(u.Cell, u.T.Move, 240, true, cells) >= 240 || cells.Contains(simQ.Gate); }
+    // a flat, open spot of the plateau away from the fort
+    (int x, int z) Flat(int fromX, int fromZ)
+    {
+        for (int r = 0; r < 200; r += 8)
+            for (int a = 0; a < 16; a++)
+            {
+                int x = fromX + (int)(Math.Cos(a * Math.Tau / 16) * r), z = fromZ + (int)(Math.Sin(a * Math.Tau / 16) * r);
+                if (x < 60 || z < 60 || x > wQ.SX - 60 || z > wQ.SZ - 60) continue;
+                int y = wQ.SurfAt(x, z), lo = y, hi = y;
+                for (int dx = -40; dx <= 40; dx += 8) for (int dz = -40; dz <= 40; dz += 8) { int h = wQ.SurfAt(x + dx, z + dz); lo = Math.Min(lo, h); hi = Math.Max(hi, h); }
+                if (hi - lo <= 3 && !siteQ.Forbidden(x, z) && Math.Abs(x - siteQ.KeepX) + Math.Abs(z - siteQ.KeepZ) > 140) return (x, z);
+            }
+        return (-1, -1);
+    }
+
+    var ring = Flat(siteQ.KeepX + 160, siteQ.KeepZ + 60);
+    var walled = simQ.Spawn(Kinds.Worker, simQ.NearestStand(ring.x, ring.z, 2));
+    simQ.InstantLabour = true;
+    simQ.DesignateBuild(Shapes.Box(wQ, siteQ, ring.x - 24, ring.z - 24, ring.x + 24, ring.z + 24, new Stroke { Mat = Mat.Wood, Width = 8, Height = 32, Level = true, Hollow = true }, Shapes.LevelTop(wQ, ring.x, ring.z, 32)));
+    simQ.InstantLabour = false;
+    simQ.Nav.Flush();
+    bool shutAtFirst = !FreeQ(walled);
+    double cutAt = -1;
+    for (int t = 0; t < 400 * 20 && !FreeQ(walled); t++) { simQ.Step(.05f); if (cutAt < 0 && walled.WayOutMarked > 0) cutAt = simQ.Time; }
+    Check("a worker walled round in a ring of its own logs marks a way out and cuts through by itself",
+        ring.x > 0 && shutAtFirst && FreeQ(walled) && cutAt > 0,
+        $"ring at {ring}: shut in at first {shutAtFirst}, way out marked at {cutAt:0} s, free now {FreeQ(walled)}; looked last at {walled.NextWayOut:0}, " +
+        $"reach {simQ.Paths.Reach(walled.Cell, walled.T.Move, 240, true)}, state {walled.State}, hold {walled.Hold}, inside {walled.Inside}, orders {simQ.Orders.Total}; {walled.Why}");
+    walled.Dead = true; walled.DiedAt = -999;
+
+    var pit = Flat(siteQ.KeepX - 160, siteQ.KeepZ + 120);
+    var digger = simQ.Spawn(Kinds.Worker, simQ.NearestStand(pit.x, pit.z, 2));
+    int deep = simQ.DesignateRemove(Shapes.Box(wQ, siteQ, pit.x - 20, pit.z - 20, pit.x + 20, pit.z + 20, new Stroke { Height = 32, Dig = true }, 0));
+    for (int t = 0; t < 900 * 20 && simQ.Orders.Total > 0; t++) simQ.Step(.05f);
+    RunQ(120);
+    bool bottom = wQ.SurfAt(pit.x, pit.z) < wQ.SurfAt(pit.x + 60, pit.z) - 24;
+    Check("a worker who dug a pit four metres deep comes up out of it by itself, cutting steps up its side",
+        ring.x > 0 && pit.x > 0 && deep > 20000 && bottom && FreeQ(digger),
+        $"pit at {pit}: {deep} voxels marked, {simQ.Orders.Total} left, the pit dug {bottom}; the digger free {FreeQ(digger)}, way out marked {(digger.WayOutMarked > 0 ? $"at {digger.WayOutMarked:0} s" : "never")}; {digger.Why}");
+}
+
 if (args.Length > 0 && args[0] == "--stress")
 {
     // not in the usual run: a long sandbox under fire, to find a step that takes too long or never ends. Every second

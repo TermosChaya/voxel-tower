@@ -169,10 +169,14 @@ public partial class Main
                     break;
                 case "Таинства": Hud.OpenPanel("magic"); break;
                 case "Вселиться":
-                    // one hurt in the drill lies up in the citadel, where none can be gone into: wait till he is out
-                    for (int t = 0; t < 60 && !Sim.CanPossess(First(Kinds.Swordsman)); t++) await Frames(30);
-                    Choose(First(Kinds.Swordsman)); Command.Possess();
+                {
+                    // the swordsman, as the step says; hurt in the drill and lying up in the citadel (where none can be
+                    // gone into), any other of ours (the step is done by going into anyone)
+                    Unit Into() => Sim.CanPossess(First(Kinds.Swordsman)) ? First(Kinds.Swordsman) : Sim.Units.Find(u => !u.Dead && u.Team == Team.Player && Sim.CanPossess(u));
+                    for (int t = 0; t < 60 && Into() == null; t++) await Frames(30);
+                    Choose(Into()); Command.Possess();
                     break;
+                }
                 case "Выйти": FP.Exit(); break;
                 case "Меню и управление": Hud.OpenMenu("controls"); await Frames(3); Hud.CloseMenu(); break;
                 default: Tutor.Next(); break;

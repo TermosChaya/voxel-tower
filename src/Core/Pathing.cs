@@ -132,6 +132,14 @@ public sealed class PathFinder
         return null;
     }
 
+    /// <summary>How many cells can be walked to from a start, counted up to so many, with the steps Find takes; the cells into a list if one is given.</summary>
+    public int Reach(int start, Mover m, int most, bool gates, List<int> cells = null)
+    {
+        int n = 0;
+        Find(start, c => { cells?.Add(c); return ++n >= most; }, _ => 0, m, most + 8, gates);
+        return n;
+    }
+
     bool _gates;
     Func<int, float> _lane;
 

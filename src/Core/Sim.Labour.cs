@@ -133,6 +133,8 @@ public sealed partial class Sim
         }
         // a hound or a rider has no work of the pawns': between waves it idles about its post
         if (u.T.Work <= 0) { ReleaseSite(u); u.Why = ""; Idle(u, dt, stay: false); return; }
+        // shut in by its own work (a pit, a walled tower): a way out is marked, and it is the nearest work there is
+        LookForWayOut(u);
         WorkTick(u, dt);
     }
 
