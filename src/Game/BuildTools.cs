@@ -22,6 +22,8 @@ public sealed class ToolOptions
     public int Step = 4;
     public BrushForm Form = BrushForm.Column;
     public bool Hollow;
+    /// <summary>The rectangle draws a house: walls, a roof of logs and a door, a dwelling once it stands.</summary>
+    public bool House;
     public bool Level = true;
     /// <summary>The bridge tool hangs a drawbridge instead of throwing an arch across.</summary>
     public bool DrawBridge;
@@ -65,7 +67,7 @@ public partial class BuildTools : Node3D
         (Tool.Brush, true) => "Ведите по земле: рабочие выкопают полосу на заданную глубину. Шар ({Form}) вынимает ком. Щелчок по дереву — срубить.",
         (Tool.Line, false) => "Зажмите и протяните: стена заданной толщины и высоты.",
         (Tool.Line, true) => "Протяните: ров заданной ширины и глубины. Деревья на пути срубят.",
-        (Tool.Box, false) => "От угла до угла. {Form} — сплошной или только стенки.",
+        (Tool.Box, false) => "От угла до угла. {Form} — сплошной, стенки или дом.",
         (Tool.Box, true) => "От угла до угла: котлован. {Level} — ровное дно или по рельефу.",
         (Tool.Circle, false) => "От центра к краю. {Form} — кольцо или сплошной.",
         (Tool.Circle, true) => "От центра к краю: круглая яма или кольцевой ров ({Form}).",
@@ -300,6 +302,8 @@ public partial class BuildTools : Node3D
     public void ToggleForm()
     {
         if (Tool == Tool.Brush) Opt.Form = Opt.Form == BrushForm.Column ? BrushForm.Ball : BrushForm.Column;
+        // the rectangle goes solid, walls, house and round again
+        else if (Tool == Tool.Box) { if (Opt.House) { Opt.House = false; Opt.Hollow = false; } else if (Opt.Hollow) Opt.House = true; else Opt.Hollow = true; }
         else Opt.Hollow = !Opt.Hollow;
         Changed();
     }
@@ -527,6 +531,7 @@ public partial class BuildTools : Node3D
             if (Tool == Tool.Repair) { RepairIn(a, b); return; }
             if (Tool == Tool.Bridge && Opt.DrawBridge) { HangDrawbridge(a, b); return; }
             if (Tool == Tool.Bridge && BridgeRefusal(a, b) is { } why) { Refuse(why); return; }
+            if (Tool == Tool.Box && Opt.House && !dig) { MarkHouse(a, b); return; }
             Designate(PlanDrag(a, b, dig), dig, ToolName(Tool), arched: Tool == Tool.Bridge);
             return;
         }
@@ -825,12 +830,25 @@ public partial class BuildTools : Node3D
         var plan = Tool switch
         {
             Tool.Line => Shapes.Line(w, site, a.x, a.z, b.x, b.z, st, _level),
+            Tool.Box when Opt.House && !dig => Shapes.House(w, site, a.x, a.z, b.x, b.z, st, _level, out _, out _),
             Tool.Box => Shapes.Box(w, site, a.x, a.z, b.x, b.z, st, _level),
             Tool.Circle => Shapes.Circle(w, site, a.x, a.z, Radius(a, b), st, _level),
             Tool.Bridge => Bridges.Plan(w, site, a.x, a.z, b.x, b.z, Opt.Width, BridgeMat),
             _ => null,
         };
         return dig ? Shapes.WithTrees(_m.World, plan) : plan;
+    }
+
+    /// <summary>A house from corner to corner: its walls and roof marked, its door to be cut once the wall stands, its floor a dwelling.</summary>
+    void MarkHouse((int x, int y, int z) a, (int x, int y, int z) b)
+    {
+        var st = StrokeNow();
+        st.Dig = false;
+        var plan = Shapes.House(_m.World, _m.Site, a.x, a.z, b.x, b.z, st, _level, out var door, out string why);
+        if (plan == null) { Refuse(why); return; }
+        Designate(plan, false, "Дом");
+        _m.Sim.PlanHouse(door, Math.Min(a.x, b.x), Math.Min(a.z, b.z), Math.Max(a.x, b.x), Math.Max(a.z, b.z));
+        _m.Hud.Log("Дом: когда стены встанут, рабочие прорубят дверь и навесят ворота, потом поставят лежанки. Каждая лежанка — место в войске.", Hud.Kind.Ok);
     }
 
     /// <summary>A drawbridge from the bank at A over the gap to B, hinged on the bank nearer the citadel.</summary>
@@ -1202,7 +1220,7 @@ public partial class BuildTools : Node3D
         var st = _m.Sim.Stock;
         string stock = $"{(int)(st[1] / 400)}|{(int)(st[2] / 400)}|{(int)(st[3] / 400)}";
         bool dig = DigNow;
-        string opts = $"{dig}|{Opt.Material}|{Opt.Width}|{Opt.Height}|{Opt.Depth}|{Opt.Step}|{Opt.Level}|{Opt.Hollow}|{Opt.Form}|{_rev}|{stock}";
+        string opts = $"{dig}|{Opt.Material}|{Opt.Width}|{Opt.Height}|{Opt.Depth}|{Opt.Step}|{Opt.Level}|{Opt.Hollow}|{Opt.House}|{Opt.Form}|{_rev}|{stock}";
         string key = "";
         bool dragging = Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Bridge && _lmb && _hasStart && _hasDrag;
         if (Tool == Tool.Spell)

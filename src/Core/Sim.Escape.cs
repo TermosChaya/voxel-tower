@@ -8,7 +8,8 @@ namespace VoxelTower.Core;
 /// deep — sees that by itself and marks a way out to cut: steps a metre high up the side of a pit, or a way through a
 /// wall at its own level, whichever is the least to cut (its own masonry is cut less gladly than the ground). So a pit
 /// is left with a way up out of it, and nobody stands walled in waiting for the player. Shut in is when the cells it
-/// can walk to are few and the citadel's door is not among them.
+/// can walk to are few and the citadel's door is not among them, twenty seconds on end: a gate being hung or a ladder
+/// being set shuts a worker in for a moment only.
 /// </summary>
 public sealed partial class Sim
 {
@@ -22,14 +23,18 @@ public sealed partial class Sim
     {
         if (Time < u.NextWayOut) return;
         u.NextWayOut = Time + 4 + (u.Id % 10) * .2;
-        if (u.Hold || u.Inside || u.Airborne != null || u.Down || u.Captor != null || Time < u.WayOutMarked + 40) return;
+        if (u.Hold || u.Inside || u.Airborne != null || u.Down || u.Captor != null || Time < u.WayOutMarked + 40) { u.ShutSince = -1; return; }
         _room.Clear();
-        if (Paths.Reach(u.Cell, u.T.Move, RoomEnough, true, _room) >= RoomEnough || _room.Contains(Gate)) return;
+        if (Paths.Reach(u.Cell, u.T.Move, RoomEnough, true, _room) >= RoomEnough || _room.Contains(Gate)) { u.ShutSince = -1; return; }
+        // shut in for a moment (a gate being hung across the only way): wait and see
+        if (u.ShutSince < 0) { u.ShutSince = Time; return; }
+        if (Time - u.ShutSince < 20) return;
         _roomSet.Clear();
         foreach (int c in _room) _roomSet.Add(c);
         var cut = WayOut(u);
         if (cut == null) return;
         u.WayOutMarked = Time;
+        u.ShutSince = -1;
         if (DesignateRemove(cut) > 0) Say($"{u.T.Name} оказался взаперти и прорубает себе выход.", 2, u);
     }
 

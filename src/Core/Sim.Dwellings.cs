@@ -44,6 +44,72 @@ public sealed partial class Sim
     readonly Dictionary<int, Furnishing> _furnishing = new();
     double _nextDwellings;
 
+    /// <summary>
+    /// The doors of houses drawn with the rectangle, waiting for their wall. When the wall stands where the door goes,
+    /// up over the doorway, what is still marked to be laid in the doorway is let go, and the gateway is cut and the
+    /// gate hung as the gate tool does. A door whose house is taken back (nothing stands or is marked there) is let go.
+    /// </summary>
+    public readonly List<(Shapes.HouseDoor door, double since)> HouseDoors = new();
+    double _nextDoors;
+
+    /// <summary>A house drawn: its door waits for the wall, and its floor is a dwelling to furnish once it is closed.</summary>
+    public void PlanHouse(Shapes.HouseDoor door, int x0, int z0, int x1, int z1)
+    {
+        HouseDoors.Add((door, Time));
+        AddZone(x0, z0, x1, z1, Zone.Dwelling, 0);
+    }
+
+    void WriteHouseDoors(System.IO.BinaryWriter w)
+    {
+        w.Write(HouseDoors.Count);
+        foreach (var (d, since) in HouseDoors) { w.Write(d.X); w.Write(d.Y); w.Write(d.Z); w.Write(d.NX); w.Write(d.NZ); w.Write(d.Thick); w.Write(since); }
+    }
+
+    void ReadHouseDoors(System.IO.BinaryReader r)
+    {
+        HouseDoors.Clear();
+        for (int i = r.ReadInt32(); i > 0; i--)
+            HouseDoors.Add((new Shapes.HouseDoor { X = r.ReadInt32(), Y = r.ReadInt32(), Z = r.ReadInt32(), NX = r.ReadInt32(), NZ = r.ReadInt32(), Thick = r.ReadInt32() }, r.ReadDouble()));
+    }
+
+    void TickHouseDoors()
+    {
+        if (HouseDoors.Count == 0 || Time < _nextDoors) return;
+        _nextDoors = Time + 2;
+        for (int i = HouseDoors.Count - 1; i >= 0; i--)
+        {
+            var (d, since) = HouseDoors[i];
+            int ax = -d.NX, az = -d.NZ;
+            bool stands = true, meant = false;
+            // the wall through its thickness at the door's middle, from the threshold to over the lintel
+            for (int k = 0; k < d.Thick && stands; k++)
+                for (int y = d.Y - 8; y < d.Y - 8 + Gateway.Height + 4; y++)
+                {
+                    int x = d.X + ax * k, z = d.Z + az * k;
+                    if (Orders.At(x, y, z) != 0) meant = true;
+                    if (World.Get(x, y, z) == Mat.Air) { stands = false; break; }
+                }
+            if (!stands)
+            {
+                // nothing standing and nothing marked there for a long while: the house was taken back
+                if (!meant && Orders.At(d.X, d.Y, d.Z) == 0 && Time - since > 60) HouseDoors.RemoveAt(i);
+                continue;
+            }
+            var plan = GatePlan.At(World, Site, new VoxelHit { X = d.X, Y = d.Y, Z = d.Z, NX = d.NX, NZ = d.NZ });
+            if (plan == null) continue;
+            // the doorway is not to be laid any more: what is marked in it is let go before it is cut
+            for (int k = 0; k < d.Thick; k++)
+                for (int u = plan.U0; u < plan.U0 + Gateway.Width; u++)
+                    for (int y = plan.Y; y < plan.Y + Gateway.Height; y++)
+                    {
+                        int x = d.NX != 0 ? d.X + ax * k : u, z = d.NX != 0 ? u : d.Z + az * k;
+                        if (Orders.At(x, y, z) != 0 && !Orders.IsRemove(Orders.At(x, y, z))) Orders.Clear(x, y, z);
+                    }
+            AddGate(plan);
+            HouseDoors.RemoveAt(i);
+        }
+    }
+
     /// <summary>The bunks standing whole in closed dwellings: the household's places beyond the citadel's.</summary>
     public int DwellingBeds()
     {

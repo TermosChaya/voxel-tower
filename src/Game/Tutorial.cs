@@ -677,6 +677,18 @@ public partial class Tutorial : Node
             Enter = () => { house0 = m.Sim.Household() + m.Sim.Recruits.Count; if (m.Sim.Stock.Gold < 200) m.Sim.Stock.Gold = 200; },
             Done = () => m.Sim.Household() + m.Sim.Recruits.Count > house0,
         });
+        int dwellings0 = 0;
+        Add(new Step
+        {
+            Chapter = lore, Title = "Жилой дом",
+            Text = "Мест в войске столько, сколько лежанок: их дают цитадель и жилые дома. Возьмите прямоугольник ({ToolBox}) " +
+                "и в нижней панели выберите заливку «дом» ({Form} переключает). Получатся стены, крыша из брёвен и ворота. " +
+                "Когда дом встанет, рабочие поставят лежанки, каждая даёт место в войске.",
+            Task = "Нарисуйте дом прямоугольником",
+            Point = "tool:Box",
+            Enter = () => dwellings0 = m.Sim.Zones.FindAll(z => z.Kind == Zone.Dwelling).Count,
+            Done = () => m.Sim.Zones.FindAll(z => z.Kind == Zone.Dwelling).Count > dwellings0,
+        });
         Opens(Hud.Part.Lore);
         Add(new Step
         {

@@ -105,6 +105,18 @@ public partial class Main
                 case "Сетка": Tools.SetGrid(8); await Drag((kx - 130, kz + 80), (kx - 100, kz + 80)); break;
                 case "Материал": Tools.SetMaterial(Mat.Wood); break;
                 case "Прямоугольник и круг": Tools.SetTool(Tool.Circle); await Drag((kx - 120, kz + 100), (kx - 110, kz + 100)); break;
+                case "Жилой дом":
+                {
+                    // a flat spot in sight, a little way west of the fort
+                    // (the pick, taken up for the moat, is put down: with it the rectangle digs)
+                    Tools.SetTool(Tool.Box); Tools.SetDig(false); Tools.Opt.House = true; Tools.Opt.Hollow = true;
+                    int hx = kx - 150, hz = kz + 110;
+                    await Look(hx + 20, hz + 17);
+                    await Drag((hx, hz), (hx + 40, hz + 34));
+                    GD.Print($"[tutorial]      house: dwellings {Sim.Zones.FindAll(z => z.Kind == Zone.Dwelling).Count}, doors waiting {Sim.HouseDoors.Count}");
+                    Tools.Opt.House = false; Tools.Opt.Hollow = false;
+                    break;
+                }
                 case "Отменить": Tools.Undo(); break;
                 case "Ров": Tools.SetTool(Tool.Line); Tools.SetDig(true); await Drag((kx - 140, kz + 40), (kx - 140, kz + 70)); break;
                 case "Снять разметку": Tools.SetTool(Tool.Unmark); await Drag((kx - 146, kz + 36), (kx - 134, kz + 74)); break;

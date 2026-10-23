@@ -190,8 +190,17 @@ public partial class Inspector : Control
                 break;
             case Tool.Box:
             case Tool.Circle:
-                opts.AddChild(new Choice("Заливка", "Заливка\nСплошная фигура или только стенки заданной толщины. Клавиша {Form}.",
-                    new[] { "сплошной", t.Tool == Tool.Box ? "стенки" : "кольцо" }, o.Hollow ? 1 : 0, i => { if ((i == 1) != o.Hollow) t.ToggleForm(); }));
+                if (t.Tool == Tool.Box)
+                    opts.AddChild(new Choice("Заливка", "Заливка\nСплошная фигура, только стенки заданной толщины или дом: стены, крыша из брёвен и ворота. " +
+                        "Дом сам становится жилым: рабочие поставят лежанки, каждая даёт место в войске. Клавиша {Form}.",
+                        new[] { "сплошной", "стенки", "дом" }, o.House ? 2 : o.Hollow ? 1 : 0, i =>
+                        {
+                            o.Hollow = i >= 1; o.House = i == 2;
+                            t.Changed();
+                        }));
+                else
+                    opts.AddChild(new Choice("Заливка", "Заливка\nСплошная фигура или только стенки заданной толщины. Клавиша {Form}.",
+                        new[] { "сплошной", "кольцо" }, o.Hollow ? 1 : 0, i => { if ((i == 1) != o.Hollow) t.ToggleForm(); }));
                 if (o.Hollow) opts.AddChild(Width());
                 opts.AddChild(Height()); opts.AddChild(Level());
                 break;
@@ -515,8 +524,8 @@ public partial class Inspector : Control
         var head = Hud.Text("", Ornament.SerifBold, 14, Ornament.Parchment);
         left.AddChild(head);
         var note = Hud.Text("", Ornament.Serif, 12, Ornament.Aged);
-        note.TooltipText = "Места в войске\nЦитадель даёт 10 мест (с «Казармами» 14). Каждая лежанка в жилом доме даёт ещё одно: обведите закрытую комнату " +
-            "с воротами делянкой («жилой дом»). Всадник занимает 2 места, великан 4.";
+        note.TooltipText = "Места в войске\nЦитадель даёт 10 мест (с «Казармами» 14). Каждая лежанка в жилом доме даёт ещё одно. Дом проще всего нарисовать " +
+            "прямоугольником с заливкой «дом»; ещё можно обвести закрытую комнату с воротами делянкой «жилой дом». Всадник занимает 2 места, великан 4.";
         note.MouseFilter = MouseFilterEnum.Stop;
         left.AddChild(note);
         var line = new HBoxContainer();

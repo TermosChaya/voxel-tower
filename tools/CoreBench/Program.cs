@@ -5887,6 +5887,48 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--escape")
         $"pit at {pit}: {deep} voxels marked, {simQ.Orders.Total} left, the pit dug {bottom}; the digger free {FreeQ(digger)}, way out marked {(digger.WayOutMarked > 0 ? $"at {digger.WayOutMarked:0} s" : "never")}; {digger.Why}");
 }
 
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--house")
+{
+    // a house drawn with the rectangle: walls, a roof of logs, the door cut and the gate hung once the wall stands,
+    // and bunks set in it, each a place in the household
+    Console.WriteLine();
+    var mpU = new MapParams();
+    var wU = new VoxelWorld(mpU.SizeX, mpU.SizeY, mpU.SizeZ);
+    var siteU = MapGen.Generate(wU, mpU);
+    wU.Compact();
+    var simU = new Sim(wU, siteU);
+    simU.WildTarget = 0;
+    StartingFort.Raise(simU);
+    // a flat spot of the plateau a walk from the citadel
+    (int x, int z) spot = (-1, -1);
+    for (int r = 120; r < 400 && spot.x < 0; r += 8)
+        for (int a = 0; a < 24 && spot.x < 0; a++)
+        {
+            int x = siteU.KeepX + (int)(Math.Cos(a * Math.Tau / 24) * r), z = siteU.KeepZ + (int)(Math.Sin(a * Math.Tau / 24) * r);
+            if (x < 80 || z < 80 || x > wU.SX - 80 || z > wU.SZ - 80) continue;
+            int lo = int.MaxValue, hi = 0;
+            for (int dx = -32; dx <= 32; dx += 4) for (int dz = -32; dz <= 32; dz += 4) { int h = wU.SurfAt(x + dx, z + dz); lo = Math.Min(lo, h); hi = Math.Max(hi, h); if (Mat.IsTrunk(wU.Get(x + dx, h + 2, z + dz))) hi = 999; }
+            if (hi - lo <= 2 && !siteU.Forbidden(x, z)) spot = (x, z);
+        }
+    var crewU = new List<Unit>();
+    for (int i = 0; i < 6; i++) crewU.Add(simU.Spawn(Kinds.Worker, simU.Gate));
+    simU.Stock[Stockpile.Wood] += 400.0 * VoxelWorld.PerM3;
+    int places0 = simU.Places, gates0 = simU.Gates.Count;
+    var st = new Stroke { Mat = Mat.Wood, Width = 4, Height = 32, Level = true };
+    var house = Shapes.House(wU, siteU, spot.x - 28, spot.z - 16, spot.x + 28, spot.z + 16, st, Shapes.LevelTop(wU, spot.x, spot.z, 32), out var door, out string houseWhy);
+    simU.InstantLabour = true;
+    simU.DesignateBuild(house);
+    simU.InstantLabour = false;
+    simU.PlanHouse(door, spot.x - 28, spot.z - 16, spot.x + 28, spot.z + 16);
+    for (int t = 0; t < 900 * 20 && simU.Places == places0; t++) simU.Step(.05f);
+    var dwelling = simU.Zones.Find(z => z.Kind == Zone.Dwelling);
+    Check("a house drawn with the rectangle stands, its door is cut and its gate hung, and bunks are set in it",
+        spot.x > 0 && house != null && simU.Gates.Count > gates0 && dwelling is { Closed: true } && simU.Places > places0,
+        $"at {spot}: {house?.Count} voxels{(houseWhy != null ? $" ({houseWhy})" : "")}, gates {gates0} → {simU.Gates.Count}, doors waiting {simU.HouseDoors.Count}, " +
+        $"the dwelling closed {dwelling?.Closed} ({simU.CheckDwelling(spot.x - 28, spot.z - 16, spot.x + 28, spot.z + 16).Why}), gate ready {simU.Gates[^1].Ready}, " +
+        $"orders left {simU.Orders.Total}, places {places0} → {simU.Places} at {simU.Time:0} s");
+}
+
 if (args.Length > 0 && args[0] == "--stress")
 {
     // not in the usual run: a long sandbox under fire, to find a step that takes too long or never ends. Every second

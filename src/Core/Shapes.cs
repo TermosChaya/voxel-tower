@@ -196,6 +196,52 @@ public static class Shapes
         return !st.Dig && st.Mat == Mat.Stone ? Recess(w, L) : L;
     }
 
+    /// <summary>A house's door: the outer face of its wall in the middle of the side facing the citadel, a metre over the ground, the way it faces, and how thick the wall is.</summary>
+    public struct HouseDoor { public int X, Y, Z, NX, NZ, Thick; }
+
+    /// <summary>
+    /// A house drawn as a rectangle: walls of the stroke's material round it, half a metre thick whatever the brush's
+    /// width, up to a flat top
+    /// at least four metres over the highest ground under them (a door three metres high and a lintel over it), and a
+    /// roof of logs over the room flush with the walls' top. Logs span two metres from a wall, so the room is under four
+    /// metres across, and the door goes in an end wall (the one nearer the citadel): the long walls carry all the roof,
+    /// and the lintel over the door none of it. The door is not left out of the wall: once the wall stands there, the
+    /// gateway is cut and the gate hung (Sim.PlanHouse). Null, and why, when the room is too small to sleep in or too
+    /// wide to roof.
+    /// </summary>
+    public static VoxelList House(VoxelWorld w, Site site, int ax, int az, int bx, int bz, in Stroke st, int levelTop, out HouseDoor door, out string why)
+    {
+        door = default; why = null;
+        const int t = 4;
+        int x0 = Math.Min(ax, bx), x1 = Math.Max(ax, bx), z0 = Math.Min(az, bz), z1 = Math.Max(az, bz);
+        int inX = x1 - x0 + 1 - 2 * t, inZ = z1 - z0 + 1 - 2 * t;
+        if (Math.Min(inX, inZ) < 16 || Math.Max(inX, inZ) < 24) { why = "дом мал: внутри нужно хотя бы 2 × 3 м"; return null; }
+        if (Math.Min(inX, inZ) > 30) { why = "дом широк: брёвна крыши перекрывают меньше 4 м, рисуйте поуже"; return null; }
+        if (Math.Max(x1 - x0, z1 - z0) > 150) { why = "дом велик: не длиннее 18 м"; return null; }
+        int ground = 0;
+        for (int z = z0; z <= z1; z++) for (int x = x0; x <= x1; x++) if (x >= 0 && z >= 0 && x < w.SX && z < w.SZ) ground = Math.Max(ground, w.SurfAt(x, z));
+        int top = Math.Max(levelTop, ground + 32);
+        var wall = st; wall.Width = t; wall.Level = true; wall.Hollow = true; wall.Dig = false;
+        var L = new VoxelList();
+        for (int z = z0; z <= z1; z++)
+            for (int x = x0; x <= x1; x++)
+            {
+                bool room = x - x0 >= t && x1 - x >= t && z - z0 >= t && z1 - z >= t;
+                if (!room) { Column(w, site, L, x, z, wall, top); continue; }
+                if (x < 0 || z < 0 || x >= w.SX || z >= w.SZ || site.Forbidden(x, z)) continue;
+                if (Brushes.Free(w.Get(x, top - 1, z))) L.Add(x, top - 1, z, Mat.Wood);
+            }
+        if (L.Count == 0) { why = "здесь не построить"; return null; }
+        // the door: in the middle of the end wall nearer the citadel (of a square house, the side facing it)
+        int cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, dx = site.KeepX - cx, dz = site.KeepZ - cz;
+        bool endsAlongX = inX > inZ || inX == inZ && Math.Abs(dx) > Math.Abs(dz);
+        if (endsAlongX) door = new HouseDoor { X = dx > 0 ? x1 : x0, Z = cz, NX = dx > 0 ? 1 : -1 };
+        else door = new HouseDoor { X = cx, Z = dz > 0 ? z1 : z0, NZ = dz > 0 ? 1 : -1 };
+        door.Y = w.SurfAt(door.X, door.Z) + 8;
+        door.Thick = t;
+        return L;
+    }
+
     /// <summary>A disc around a centre, solid or as a ring Width thick: round towers, wells, bastions.</summary>
     public static VoxelList Circle(VoxelWorld w, Site site, int cx, int cz, double radius, in Stroke st, int levelTop)
     {
