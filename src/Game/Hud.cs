@@ -37,7 +37,7 @@ public partial class Hud : CanvasLayer
         (Tool.Gate, Icons.GateIcon, Act.ToolGate, "Ворота ({ToolGate})\nЩелчок по стене. Рабочие прорубят проём 2 × 3 м и навесят дубовые створки. Свои проходят, перед ордой ворота закрыты. Щелчок по воротам без кисти: открываются сами, открыты или на засове."),
         (Tool.Repair, Icons.Mend, Act.ToolRepair, "Починка ({ToolRepair})\nЩелчок по разрушенной постройке. Рабочие уберут завалы, восстановят кладку и ворота. Чинится всё, что вы построили, и старая крепость. Рамкой можно чинить по частям."),
         (Tool.Bridge, Icons.BridgeIcon, Act.ToolBridge, "Мост ({ToolBridge})\nПротяните от берега до берега, пролёт от 2 до 25 м. Каменный ({MatStone}) идёт аркой и с парапетами, деревянный ({MatWood}) — настил с перилами.\nПодъёмный мост (вид выбирают в нижней панели) — настил над рвом от 2 до 6 м. Когда подходит орда, он поднимается сам и сбрасывает в ров тех, кто на нём. Щелчок по нему без кисти: сам, опущен или поднят."),
-        (Tool.Capture, Icons.Scroll, Act.ToolCapture, "Снять чертёж ({ToolCapture})\nОбведите постройку рамкой, и она сохранится во вкладке «Чертежи». {Rotate} поворачивает копию."),
+        (Tool.Capture, Icons.Scroll, Act.ToolCapture, "Снять чертёж ({ToolCapture})\nОбведите постройку рамкой, и она сохранится в нижней панели этого инструмента. {Rotate} поворачивает копию."),
     };
 
     /// <summary>The tools on the belt, a row to each purpose: building, the works of the fort, marking out.</summary>
@@ -70,7 +70,7 @@ public partial class Hud : CanvasLayer
     TopBeam _beam;
     HBoxContainer _tabs;
     DropPanel _drop;
-    TabPlaque _goalsTab, _hordeTab, _loreTab, _magicTab, _chronicleTab, _blueprintsTab, _worksTab;
+    TabPlaque _goalsTab, _hordeTab, _loreTab, _worksTab;
     VBoxContainer _toolGrid;
     LorePanel _lore;
     MysteryPanel _mysteries;
@@ -91,8 +91,6 @@ public partial class Hud : CanvasLayer
     readonly Dictionary<Tool, Slot> _toolSlots = new();
     readonly Dictionary<byte, Slot> _matSlots = new();
     Slot _pickSlot;
-    VBoxContainer _bpList;
-    Label _bpCount;
     CursorTag _tag;
     Control _floats;
     UnitOverlay _overlay;
@@ -230,7 +228,7 @@ public partial class Hud : CanvasLayer
         }
         var goalsBox = new VBoxContainer();
         goalsBox.AddThemeConstantOverride("separation", 5);
-        // what to do next, with its reward; under it what the whole siege asks
+        // what to do next, with its reward; under it what the whole siege asks, and under that all that happened
         _errandsHead = CapsLabel("Поручения", 10, Ornament.EmberGlow);
         goalsBox.AddChild(_errandsHead);
         _errands = new VBoxContainer();
@@ -241,28 +239,15 @@ public partial class Hud : CanvasLayer
         _goals = new VBoxContainer();
         _goals.AddThemeConstantOverride("separation", 3);
         goalsBox.AddChild(_goals);
-        _goalsTab = Tab("goals", Icons.Of("checklist"), "Задачи", "Задачи\nПоручения: одно главное и два малых, за каждое награда. Ниже цели на всю осаду: починить крепость, занять рудники, " +
-            "выстоять все волны.", goalsBox, 400);
-        var chronicle = new VBoxContainer();
-        chronicle.AddThemeConstantOverride("separation", 4);
-        chronicle.AddChild(CapsLabel("Летопись"));
+        var chronicleHead = CapsLabel("Летопись");
+        chronicleHead.CustomMinimumSize = new Vector2(0, 30);
+        chronicleHead.VerticalAlignment = VerticalAlignment.Bottom;
+        goalsBox.AddChild(chronicleHead);
         _history = new VBoxContainer();
         _history.AddThemeConstantOverride("separation", 4);
-        chronicle.AddChild(_history);
-        var chronicleTab = _chronicleTab = Tab("chronicle", Icons.Scroll, "Летопись", "Летопись\nВсе события игры. Последние строки минуту видны над нижней панелью.", chronicle, 440);
-        var bpBox = new VBoxContainer();
-        bpBox.AddThemeConstantOverride("separation", 8);
-        var bpHead = new HBoxContainer();
-        var bpTitle = CapsLabel("Чертежи");
-        bpTitle.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        bpHead.AddChild(bpTitle);
-        _bpCount = CapsLabel("", 10, Ornament.Faded);
-        bpHead.AddChild(_bpCount);
-        bpBox.AddChild(bpHead);
-        _bpList = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        _bpList.AddThemeConstantOverride("separation", 6);
-        bpBox.AddChild(_bpList);
-        var blueprintsTab = _blueprintsTab = Tab("blueprints", Icons.Of("tied-scroll"), "Чертежи", "Чертежи\nЩелчок по чертежу ставит копию. {ToolCapture} снимает новый.", bpBox, 380);
+        goalsBox.AddChild(_history);
+        _goalsTab = Tab("goals", Icons.Of("checklist"), "Задачи", "Задачи\nПоручения: одно главное и два малых, за каждое награда. Ниже цели на всю осаду: починить крепость, занять рудники, " +
+            "выстоять все волны. Ещё ниже летопись: все события игры, последние строки минуту видны над нижней панелью.", goalsBox, 440);
         _works = new WorkTable();
         _works.Init(m);
         var worksTab = _worksTab = Tab("works", Icons.Pick, "Работы", "Работы\nКто какую работу делает и в каком порядке: 1 — первым делом, 4 — в последнюю очередь, пусто — никогда. Здесь же: кто добывает сам и кто в ополчении.", _works, WorkTable.Width);
@@ -271,12 +256,12 @@ public partial class Hud : CanvasLayer
         _horde.Init(m);
         _lore = new LorePanel();
         _lore.Init(m);
-        _loreTab = Tab("lore", Icons.Tome, "Знания", "Знания\nДрево улучшений на трёх страницах: «Умения», «Войско» и «Вмешательство». Умения и войско покупают за знания, их дают за отбитые волны. Заклинания покупают за вмешательство и откровения. Число на вкладке — сколько знаний можно потратить, ✦ — можно изучить заклинание.", _lore, LorePanel.Width);
+        _loreTab = Tab("lore", Icons.Tome, "Знания", "Знания\nДрево улучшений на трёх страницах: «Умения», «Войско» и «Вмешательство». Умения и войско покупают за знания, их дают за отбитые волны. Заклинания покупают за вмешательство и откровения. На четвёртой странице «Таинства»: вмешательство, святилища, жертвы. Число на вкладке — сколько знаний можно потратить, ✦ — можно изучить заклинание.", _lore, LorePanel.Width);
         _mysteries = new MysteryPanel();
         _mysteries.Init(m);
-        _magicTab = Tab("magic", Icons.Skull, "Таинства", "Таинства\nВмешательство и откровения, святилища и жрецы, жертвы: пленные, туши с охоты или свои люди. " +
-            "Число на вкладке — сколько пленных ждёт в цитадели.", _mysteries, MysteryPanel.Width);
-        _squeeze.AddRange(new[] { blueprintsTab, chronicleTab, worksTab, _goalsTab, _hordeTab, _loreTab, _magicTab });
+        _lore.AddMysteries(_mysteries, "Таинства\nВмешательство и откровения, святилища и жрецы, жертвы: пленные, туши с охоты или свои люди. " +
+            "Число на вкладке — сколько пленных ждёт в цитадели.");
+        _squeeze.AddRange(new[] { worksTab, _goalsTab, _hordeTab, _loreTab });
 
         _stores = new Stores();
         _beam.AddChild(_stores);
@@ -312,7 +297,6 @@ public partial class Hud : CanvasLayer
         root.AddChild(_menu);
         _menu.Init(m);
 
-        RebuildBlueprints();
         OnToolChanged();
         Refresh();
         Bindings.Changed += Rebound;
@@ -370,7 +354,7 @@ public partial class Hud : CanvasLayer
     // ---------------------------------------------------------------- the frame let out part by part
 
     /// <summary>The parts of the frame the tutorial lets out one by one; in a game of one's own all of them are out from the start.</summary>
-    public enum Part { Map, Faces, Console, Stores, Clock, Goals, Chronicle, Blueprints, Works, Horde, Lore, Magic }
+    public enum Part { Map, Faces, Console, Stores, Clock, Goals, Works, Horde, Lore, Magic }
 
     readonly HashSet<Part> _hidden = new();
     readonly HashSet<Tool> _lockedTools = new();
@@ -412,20 +396,21 @@ public partial class Hud : CanvasLayer
             case Part.Console: _portrait.Visible = _inspector.Visible = on; break;
             case Part.Stores: _stores.Visible = on; break;
             case Part.Clock: _clockPanel.Visible = on && !InFirstPerson; break;
+            case Part.Magic: _lore.ShowMysteries(on); break;
             default: if (TabOf(p) is { } tab) { tab.Visible = on; if (!on && _drop.OpenKey == KeyOf(p)) _drop.Close(); } break;
         }
     }
 
     static string KeyOf(Part p) => p switch
     {
-        Part.Goals => "goals", Part.Chronicle => "chronicle", Part.Blueprints => "blueprints", Part.Works => "works",
-        Part.Horde => "horde", Part.Lore => "lore", Part.Magic => "magic", _ => null,
+        Part.Goals => "goals", Part.Works => "works",
+        Part.Horde => "horde", Part.Lore => "lore", _ => null,
     };
 
     TabPlaque TabOf(Part p) => p switch
     {
-        Part.Goals => _goalsTab, Part.Chronicle => _chronicleTab, Part.Blueprints => _blueprintsTab, Part.Works => _worksTab,
-        Part.Horde => _hordeTab, Part.Lore => _loreTab, Part.Magic => _magicTab, _ => null,
+        Part.Goals => _goalsTab, Part.Works => _worksTab,
+        Part.Horde => _hordeTab, Part.Lore => _loreTab, _ => null,
     };
 
     public void Unlock(Tool t)
@@ -452,8 +437,8 @@ public partial class Hud : CanvasLayer
         _ when key.StartsWith("mat:") && byte.TryParse(key[4..], out var m) && _matSlots.TryGetValue(m, out var ms) => ms,
         _ when key.StartsWith("tab:") => key[4..] switch
         {
-            "goals" => _goalsTab, "chronicle" => _chronicleTab, "blueprints" => _blueprintsTab, "works" => _worksTab,
-            "horde" => _hordeTab, "lore" => _loreTab, "magic" => _magicTab, _ => null,
+            "goals" => _goalsTab, "works" => _worksTab,
+            "horde" => _hordeTab, "lore" => _loreTab, "magic" => _loreTab, _ => null,
         },
         _ => null,
     };
@@ -653,11 +638,11 @@ public partial class Hud : CanvasLayer
         string hb = bands > 0 ? bands.ToString() : "";
         if (_hordeTab.Badge != hb) { _hordeTab.Badge = hb; _hordeTab.QueueRedraw(); }
         _horde.Refresh();
+        // the lore's tab tells what can be learnt, or else what the mysteries wait on
         string lb = _lore.Badge();
+        if (lb == "" && !Hidden(Part.Magic)) lb = _mysteries.Badge();
         if (_loreTab.Badge != lb) { _loreTab.Badge = lb; _loreTab.QueueRedraw(); }
         _lore.Refresh();
-        string mb = _mysteries.Badge();
-        if (_magicTab.Badge != mb) { _magicTab.Badge = mb; _magicTab.QueueRedraw(); }
         _mysteries.Refresh();
     }
 
@@ -719,7 +704,6 @@ public partial class Hud : CanvasLayer
         foreach (var (mat, s) in _matSlots) s.Selected = !t.Opt.Dig && mat == t.Opt.Material;
         _pickSlot.Selected = t.Opt.Dig;
         _inspector.Refresh(rebuild: true);
-        RebuildBlueprints();
     }
 
     public void OnSelectionChanged() => _inspector?.Refresh();
@@ -733,38 +717,10 @@ public partial class Hud : CanvasLayer
         _inspector.Refresh(rebuild: true);
     }
 
+    /// <summary>The blueprints changed: the bottom panel shows them again if it shows them now.</summary>
     public void RebuildBlueprints()
     {
-        if (_bpList == null) return;
-        foreach (var c in _bpList.GetChildren()) c.QueueFree();
-        _bpCount.Text = _m.Blueprints.Count > 0 ? $"{_m.Blueprints.Count}" : "";
-        if (_m.Blueprints.Count == 0)
-        {
-            var empty = Text(Bindings.Fill("Чертежей пока нет. Постройте что-нибудь, нажмите {ToolCapture} и обведите постройку рамкой."),
-                Ornament.SerifItalic, 13, Ornament.Aged, wrap: true);
-            empty.CustomMinimumSize = new Vector2(280, 0);
-            _bpList.AddChild(empty);
-            return;
-        }
-        foreach (var bp in _m.Blueprints)
-        {
-            var b = bp;
-            var row = new HBoxContainer();
-            row.AddThemeConstantOverride("separation", 8);
-            var icon = new Slot(Icons.Of("tied-scroll"), null, $"{bp.Name}\nЩелчок ставит копию. R поворачивает, Esc отменяет.", 42) { Selected = _m.Tools.PasteBp == bp };
-            icon.Clicked += () => _m.Tools.StartPaste(b);
-            row.AddChild(icon);
-            var info = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-            info.AddThemeConstantOverride("separation", 0);
-            info.AddChild(Text(bp.Name, Ornament.SerifBold, 14, Ornament.Parchment));
-            info.AddChild(Text($"{Inspector.Len(bp.W)} × {Inspector.Len(bp.D)} × {Inspector.Len(bp.H)}", Ornament.Serif, 12, Ornament.Aged));
-            info.AddChild(Text(bp.Describe(), Ornament.Serif, 12, Ornament.BronzeLight));
-            row.AddChild(info);
-            var del = new Button { Text = "×", FocusMode = Control.FocusModeEnum.None, TooltipText = "Удалить чертёж", CustomMinimumSize = new Vector2(26, 26), SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
-            del.Pressed += () => _m.RemoveBlueprint(b);
-            row.AddChild(del);
-            _bpList.AddChild(row);
-        }
+        if (_inspector != null && _m.Tools.Tool is Tool.Capture or Tool.Paste) _inspector.Refresh(rebuild: true);
     }
 
     // ---------------------------------------------------------------- messages
@@ -846,7 +802,8 @@ public partial class Hud : CanvasLayer
     public Minimap Map => _ring.Map;
 
     /// <summary>Which panel hangs from the beam (null for none), and who the console shows in full, for tests.</summary>
-    public string OpenTab => _drop?.OpenKey;
+    /// <summary>The panel let down, by its key: "magic" for the lore on its page of the mysteries.</summary>
+    public string OpenTab => _drop?.OpenKey == "lore" && _lore.Page == 3 ? "magic" : _drop?.OpenKey;
     public Unit Inspecting => _inspector?.One;
     /// <summary>The console's middle (the self-test presses its tiles); whether it shows the citadel's muster.</summary>
     public Inspector Inspector => _inspector;
@@ -855,6 +812,7 @@ public partial class Hud : CanvasLayer
     public void OpenPanel(string key)
     {
         if (key.StartsWith("lore:") && int.TryParse(key[5..], out int page)) { _drop.Open("lore"); _lore.ShowPage(page); return; }
+        if (key == "magic") { _drop.Open("lore"); _lore.ShowPage(3); return; }
         _drop.Open(key);
     }
     public void ClosePanel() => _drop.Close();

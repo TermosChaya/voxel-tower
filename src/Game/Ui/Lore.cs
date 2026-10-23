@@ -7,6 +7,7 @@ namespace VoxelTower.Game;
 
 /// <summary>
 /// The lore of the household as a tree drawn like an astrolabe: three pages — the skills, the troops, the intervention —
+/// and a fourth of the mysteries (Mysteries.cs), where the tree gives way to the priests, the sanctuaries and the rites;
 /// each a round plate with a medallion at its heart saying what there is to spend, and its branches going out from it
 /// as rays, each to a great emblem at its outer end. Along a ray stand the lores as round bronze medallions with their
 /// sigils, four rings deep: the first on the ray, two beside it, a further one beyond each, and the last back on the ray,
@@ -18,8 +19,10 @@ public partial class LorePanel : VBoxContainer
 {
     Main _m;
     int _page;
-    readonly TabPlaque[] _tabs = new TabPlaque[3];
+    readonly TabPlaque[] _tabs = new TabPlaque[4];
+    HBoxContainer _tabRow;
     RingCanvas _tree;
+    MysteryPanel _mysteries;
     readonly List<(Lore lore, Knot knot)> _knots = new();
     public const float Width = 960;
     /// <summary>The plate: its size, its heart, the rings the four tiers stand on (their half-heights; the plate is wider than tall by Wide).</summary>
@@ -39,7 +42,7 @@ public partial class LorePanel : VBoxContainer
     {
         _m = m;
         AddThemeConstantOverride("separation", 4);
-        var tabs = new HBoxContainer();
+        var tabs = _tabRow = new HBoxContainer();
         tabs.AddThemeConstantOverride("separation", 6);
         string[] tips =
         {
@@ -70,15 +73,37 @@ public partial class LorePanel : VBoxContainer
         ShowPage(0);
     }
 
-    /// <summary>The page shown: 0 the skills, 1 the troops, 2 the intervention.</summary>
+    /// <summary>The page shown: 0 the skills, 1 the troops, 2 the intervention, 3 the mysteries.</summary>
     public int Page => _page;
 
     public void ShowPage(int page)
     {
-        _page = Math.Clamp(page, 0, 2);
+        _page = Math.Clamp(page, 0, _mysteries != null ? 3 : 2);
+        _tree.Visible = _page < 3;
+        if (_mysteries != null) _mysteries.Visible = _page == 3;
         foreach (var (l, k) in _knots) k.Visible = l.Page == _page;
-        for (int i = 0; i < 3; i++) { _tabs[i].Selected = i == _page; _tabs[i].QueueRedraw(); }
+        for (int i = 0; i < 4; i++) if (_tabs[i] != null) { _tabs[i].Selected = i == _page; _tabs[i].QueueRedraw(); }
         Refresh();
+    }
+
+    /// <summary>The fourth page, the mysteries, after the three of the tree.</summary>
+    public void AddMysteries(MysteryPanel panel, string tip)
+    {
+        _mysteries = panel;
+        var t = new TabPlaque(Icons.Skull, "Таинства", tip);
+        t.Clicked += () => ShowPage(3);
+        _tabRow.AddChild(t);
+        _tabs[3] = t;
+        panel.Visible = false;
+        AddChild(panel);
+    }
+
+    /// <summary>The mysteries' tab shown or not (the tutorial lets it out in its turn).</summary>
+    public void ShowMysteries(bool on)
+    {
+        if (_tabs[3] == null) return;
+        _tabs[3].Visible = on;
+        if (!on && _page == 3) ShowPage(0);
     }
 
     // ---------------------------------------------------------------- where things stand
@@ -158,7 +183,8 @@ public partial class LorePanel : VBoxContainer
             k.TooltipText = $"{l.Name} · {l.Branch.ToLowerInvariant()}{cost}\n{l.About}{rests}\n{why}";
         }
         for (int i = 0; i < 3; i++) { _tabs[i].Badge = open[i] > 0 ? open[i].ToString() : ""; _tabs[i].QueueRedraw(); }
-        if (IsVisibleInTree()) _tree.QueueRedraw();
+        if (_tabs[3] != null && _mysteries.Badge() is var mb && _tabs[3].Badge != mb) { _tabs[3].Badge = mb; _tabs[3].QueueRedraw(); }
+        if (IsVisibleInTree() && _tree.Visible) _tree.QueueRedraw();
     }
 
     /// <summary>The medallion of a lore (the self-test presses it).</summary>

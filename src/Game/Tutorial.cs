@@ -550,13 +550,13 @@ public partial class Tutorial : Node
             Enter = () => n0 = m.Sim.MarkingsMade,
             Done = () => Marked(n0, Tool.Ladder, Tool.Gate, Tool.Bridge),
         });
-        Opens(Tool.Brush); Opens(Tool.Extrude); Opens(Tool.Capture); Opens(Hud.Part.Blueprints);
+        Opens(Tool.Brush); Opens(Tool.Extrude); Opens(Tool.Capture);
         Add(new Step
         {
             Chapter = build, Title = "Кисть, выдавить, чертёж",
             Text = "Кисть ({ToolBrush}) рисует стену от руки или шаром. Выдавливание ({ToolExtrude}) наращивает грань " +
                 "или углубляет её, так делают ступени и проходы в скале. {ToolCapture} сохраняет постройку как " +
-                "чертёж: обведите её рамкой. Чертежи лежат во вкладке «Чертежи», {Rotate} поворачивает копию.",
+                "чертёж: обведите её рамкой. Чертежи лежат в нижней панели этого инструмента, {Rotate} поворачивает копию.",
             Point = "tool:Capture",
         });
 
@@ -572,15 +572,15 @@ public partial class Tutorial : Node
             Point = "tab:works",
             Done = () => m.Hud.OpenTab == "works",
         });
-        Opens(Hud.Part.Chronicle);
         Add(new Step
         {
             Chapter = work, Title = "Летопись",
-            Text = "В летописи записаны все события. Последние строки видны над нижней панелью. Щелчок по строке со " +
-                "значком ◎ переносит вид на место события.",
-            Task = "Откройте «Летопись»",
-            Point = "tab:chronicle",
-            Done = () => m.Hud.OpenTab == "chronicle",
+            Text = "Внизу вкладки «Задачи» летопись: все события игры. Последние строки видны над нижней панелью. Щелчок " +
+                "по строке со значком ◎ переносит вид на место события.",
+            Task = "Откройте «Задачи»",
+            Point = "tab:goals",
+            Enter = () => m.Hud.ClosePanel(),
+            Done = () => m.Hud.OpenTab == "goals",
         });
 
         // ---- the time
@@ -706,9 +706,9 @@ public partial class Tutorial : Node
             Chapter = lore, Title = "Таинства",
             Text = "Жрецы молятся в святилище и копят вмешательство, а на него вы колдуете. Святилище размечают " +
                 "делянкой. На месте силы молитва даёт втрое больше. Вмешательство приносят и жертвы: пленные и " +
-                "туши с охоты.",
-            Task = "Откройте «Таинства»",
-            Point = "tab:magic",
+                "туши с охоты. Всё это на четвёртой странице «Знаний», «Таинства».",
+            Task = "Откройте в «Знаниях» страницу «Таинства»",
+            Point = "tab:lore",
             Done = () => m.Hud.OpenTab == "magic",
         });
 

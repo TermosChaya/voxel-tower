@@ -141,7 +141,7 @@ public partial class Main
                     break;
                 }
                 case "Работы": Hud.OpenPanel("works"); break;
-                case "Летопись": Hud.OpenPanel("chronicle"); break;
+                case "Летопись": Hud.OpenPanel("goals"); break;
                 case "Часы": Command.TogglePause(); await Frames(3); Command.SetSpeed(3); break;
                 case "Рудник":
                 {

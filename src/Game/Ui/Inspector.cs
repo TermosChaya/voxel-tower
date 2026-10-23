@@ -142,8 +142,46 @@ public partial class Inspector : Control
             mats.AddChild(new Choice("Ловушка", TrapTip, new[] { "колья", "настил", "камни", "брёвна", "порох" }, Array.IndexOf(Traps, o.Material), i => t.SetMaterial(Traps[i])));
             col.AddChild(mats);
         }
+        // the blueprints taken so far, with the tool that takes them and with a copy in hand
+        if (t.Tool is Tool.Capture or Tool.Paste) col.AddChild(Shelf());
         if (opts.GetChildCount() == 0) col.AddChild(Hud.Text(Bindings.Fill("Esc — убрать кисть. {Help} — все клавиши."), Ornament.SerifItalic, 12, Ornament.Faded));
         return col;
+    }
+
+    /// <summary>The blueprints taken so far, a button each: a click takes up a copy to place, the cross throws the blueprint away.</summary>
+    Control Shelf()
+    {
+        var t = _m.Tools;
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 6);
+        var head = Hud.CapsLabel("чертежи", 9);
+        head.VerticalAlignment = VerticalAlignment.Center;
+        head.CustomMinimumSize = new Vector2(0, 26);
+        row.AddChild(head);
+        if (_m.Blueprints.Count == 0)
+        {
+            var none = Hud.Text(Bindings.Fill("Чертежей пока нет. Обведите постройку рамкой ({ToolCapture})."), Ornament.SerifItalic, 12, Ornament.Aged);
+            none.VerticalAlignment = VerticalAlignment.Center;
+            row.AddChild(none);
+            return row;
+        }
+        var shelf = new HBoxContainer();
+        shelf.AddThemeConstantOverride("separation", 4);
+        foreach (var bp in _m.Blueprints)
+        {
+            var b = bp;
+            var take = Btn(bp.Name, $"{bp.Name}\n{Len(bp.W)} × {Len(bp.D)} × {Len(bp.H)}, {bp.Describe()}. Щелчок берёт копию: поставьте её щелчком по земле, {{Rotate}} поворачивает.",
+                () => t.StartPaste(b));
+            take.ToggleMode = true;
+            take.SetPressedNoSignal(t.PasteBp == b);
+            shelf.AddChild(take);
+            shelf.AddChild(Btn("×", "Удалить чертёж", () => _m.RemoveBlueprint(b)));
+            shelf.AddChild(new Control { CustomMinimumSize = new Vector2(6, 0) });
+        }
+        var scroll = new ScrollContainer { VerticalScrollMode = ScrollContainer.ScrollMode.Disabled, SizeFlagsHorizontal = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 28) };
+        scroll.AddChild(shelf);
+        row.AddChild(scroll);
+        return row;
     }
 
     static readonly byte[] Laid = { Mat.Stone, Mat.Wood, Mat.Rammed, Mat.Pitch };
