@@ -40,6 +40,15 @@ public partial class Hud : CanvasLayer
         (Tool.Capture, Icons.Scroll, Act.ToolCapture, "Снять чертёж ({ToolCapture})\nОбведите постройку рамкой, и она сохранится во вкладке «Чертежи». {Rotate} поворачивает копию."),
     };
 
+    /// <summary>The tools on the belt, a row to each purpose: building, the works of the fort, marking out.</summary>
+    static readonly Tool[][] Belt =
+    {
+        new[] { Tool.Brush, Tool.Line, Tool.Box, Tool.Circle, Tool.Extrude },
+        new[] { Tool.Gate, Tool.Bridge, Tool.Ladder, Tool.Repair },
+        new[] { Tool.Gather, Tool.Unmark, Tool.Capture },
+    };
+    const float SlotSize = 44;
+
     public static readonly (byte mat, Act act, int store, string tip)[] MatDefs =
     {
         (Mat.Stone, Act.MatStone, Stockpile.Stone, "Камень ({MatStone})\nСамый прочный, но кладётся дольше всего. Добывают киркой в скалах и валунах. Разобранная кладка возвращает 75 % камня."),
@@ -62,7 +71,7 @@ public partial class Hud : CanvasLayer
     HBoxContainer _tabs;
     DropPanel _drop;
     TabPlaque _goalsTab, _hordeTab, _loreTab, _magicTab, _chronicleTab, _blueprintsTab, _worksTab;
-    GridContainer _toolGrid;
+    VBoxContainer _toolGrid;
     LorePanel _lore;
     MysteryPanel _mysteries;
     Stores _stores;
@@ -157,29 +166,40 @@ public partial class Hud : CanvasLayer
         _inspector.OffsetRight = -BottomConsole.RightW - 12;
         _inspector.OffsetTop = 17; _inspector.OffsetBottom = -9;
         _inspector.Init(m);
-        var grid = _toolGrid = new GridContainer { Columns = 4, Position = new Vector2(18, 21) };
-        grid.AddThemeConstantOverride("h_separation", 6);
-        grid.AddThemeConstantOverride("v_separation", 6);
-        foreach (var (tool, icon, act, tip) in ToolDefs)
+        // the tools in rows by what they are for, a gap between the rows: building, the works of the fort, marking out
+        // what is to be taken or set aside, and the material with the pick
+        var belt = _toolGrid = new VBoxContainer { Position = new Vector2(14, 24) };
+        belt.AddThemeConstantOverride("separation", 12);
+        foreach (var row in Belt)
         {
-            var sl = new Slot(icon, Bindings.Label(act), tip, 52);
-            var t = tool;
-            sl.Clicked += () => _m.Tools.SetTool(t);
-            _toolSlots[tool] = sl;
-            grid.AddChild(sl);
+            var line = new HBoxContainer();
+            line.AddThemeConstantOverride("separation", 4);
+            belt.AddChild(line);
+            foreach (var tool in row)
+            {
+                var (_, icon, act, tip) = Array.Find(ToolDefs, d => d.tool == tool);
+                var sl = new Slot(icon, Bindings.Label(act), tip, SlotSize);
+                var t = tool;
+                sl.Clicked += () => _m.Tools.SetTool(t);
+                _toolSlots[tool] = sl;
+                line.AddChild(sl);
+            }
         }
+        var stuff = new HBoxContainer();
+        stuff.AddThemeConstantOverride("separation", 4);
+        belt.AddChild(stuff);
         foreach (var (mat, act, _, tip) in MatDefs)
         {
-            var sl = new Slot(Icons.Material(mat), Bindings.Label(act), tip, 52) { Caption = "" };
+            var sl = new Slot(Icons.Material(mat), Bindings.Label(act), tip, SlotSize) { Caption = "" };
             var mm = mat;
             sl.Clicked += () => _m.Tools.SetMaterial(mm);
             _matSlots[mat] = sl;
-            grid.AddChild(sl);
+            stuff.AddChild(sl);
         }
-        _pickSlot = new Slot(Icons.Pick, Bindings.Label(Act.Pick), PickTip, 52) { Caption = "копать" };
+        _pickSlot = new Slot(Icons.Pick, Bindings.Label(Act.Pick), PickTip, SlotSize) { Caption = "копать" };
         _pickSlot.Clicked += () => _m.Tools.SetDig(!_m.Tools.Opt.Dig);
-        grid.AddChild(_pickSlot);
-        _console.Right.AddChild(grid);
+        stuff.AddChild(_pickSlot);
+        _console.Right.AddChild(belt);
 
         // the latest lines of the chronicle, briefly, above the console
         _toasts = new Toasts();
