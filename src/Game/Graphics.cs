@@ -6,7 +6,8 @@ namespace VoxelTower.Game;
 
 /// <summary>
 /// The picture as the player set it in the settings (<see cref="Settings"/>), put to the renderer: the sun's shadows
-/// (none, plain on a smaller map with a hard edge, soft on a large one, or softer still), the edges smoothed (not at all, FXAA, or MSAA
+/// (none, plain on a smaller map with a hard edge, soft on a large one, or softest, their penumbra widening away from
+/// what casts them, which costs the most of all), the edges smoothed (not at all, FXAA, or MSAA
 /// two or four times over), the share of the screen's pixels the world is drawn at (filled out to the screen with FSR,
 /// the interface always drawn whole), the blades of grass (none, only close to, all), the corners darkened, the glow.
 /// A weak machine gets its frames back with the lower ones; the highest asks the most of it.
@@ -27,7 +28,12 @@ public static class Graphics
         {
             3 => RenderingServer.ShadowQuality.SoftHigh, 2 => RenderingServer.ShadowQuality.SoftMedium, _ => RenderingServer.ShadowQuality.Hard,
         });
-        if (m.Atmos?.Sun is { } sun) sun.ShadowEnabled = Settings.Shadows > 0;
+        if (m.Atmos?.Sun is { } sun)
+        {
+            sun.ShadowEnabled = Settings.Shadows > 0;
+            // the penumbra widening away from what casts it is the dearest part of a shadow: only the softest have it
+            sun.LightAngularDistance = Settings.Shadows >= 3 ? 1.2f : 0;
+        }
         if (m.Atmos?.Env is { } env)
         {
             env.GlowEnabled = Settings.Glow;

@@ -8,7 +8,7 @@ public sealed class MeshBuffers
     /// <summary>xyz per vertex.</summary>
     public float[] Pos;
     public float[] Nrm;
-    /// <summary>Linear rgb plus the material's colour variance in alpha.</summary>
+    /// <summary>Linear rgb plus the material's colour variance in alpha (none in a shadow's mesh, nor the uvs).</summary>
     public float[] Col;
     /// <summary>Corner shade (0..1) and glow strength.</summary>
     public float[] Uv;
@@ -54,6 +54,13 @@ public sealed class GreedyMesher
     /// grass like the turf above it (a bank a hand's breadth high is green all over, not a stripe of dirt).
     /// </summary>
     bool _banks;
+    /// <summary>
+    /// Meshing a shadow: every face of the solid one and the same (its material and its corners' shading are nothing to
+    /// a shadow), so they merge into a few large ones; only positions and normals are kept.
+    /// </summary>
+    bool _shadow;
+    /// <summary>The voxels a coarse block's cells are made from (<see cref="MeshCoarse"/>).</summary>
+    byte[] _cube;
     float[] _pos = Array.Empty<float>(), _nrm = Array.Empty<float>(), _col = Array.Empty<float>(), _uv = Array.Empty<float>(), _uv2 = Array.Empty<float>();
     int[] _idx = Array.Empty<int>();
     int _q, _capQ;
@@ -85,10 +92,18 @@ public sealed class GreedyMesher
     /// A world chunk as above, and what grows on its ground (null when nothing does). The tufts and the flowers are not
     /// meshed: they hide no face of the turf under them and shade none of its corners, for the game draws them in blades.
     /// </summary>
-    public MeshBuffers MeshChunk(VoxelWorld w, int ci, byte[] pad, byte[] wet, out MeshBuffers water, out Sward sward)
+    public MeshBuffers MeshChunk(VoxelWorld w, int ci, byte[] pad, byte[] wet, out MeshBuffers water, out Sward sward) =>
+        MeshChunk(w, ci, pad, wet, out water, out sward, out _);
+
+    /// <summary>
+    /// A world chunk as above, and its shadow: the same solid voxels as the fewest faces that hold their shape, every
+    /// face of them one, whatever it is of and however its corners are shaded (see <see cref="Shadow"/>).
+    /// </summary>
+    public MeshBuffers MeshChunk(VoxelWorld w, int ci, byte[] pad, byte[] wet, out MeshBuffers water, out Sward sward, out MeshBuffers shadow)
     {
         water = null;
         sward = null;
+        shadow = null;
         if (w.IsEmpty(ci) || w.IsBuried(ci)) return null;
         w.CopyPadded(ci, pad);
         sward = Gather(pad, out bool sprigs);
@@ -112,7 +127,69 @@ public sealed class GreedyMesher
         _banks = true;
         var mb = Mesh(pad, VoxelWorld.CS, VoxelWorld.CS, VoxelWorld.CS, ox, oy, oz);
         _banks = false;
-        return mb.Quads > 0 ? mb : null;
+        if (mb.Quads == 0) return null;
+        _shadow = true;
+        shadow = Mesh(pad, VoxelWorld.CS, VoxelWorld.CS, VoxelWorld.CS, ox, oy, oz);
+        _shadow = false;
+        return mb;
+    }
+
+    /// <summary>
+    /// A block of 2×2×2 chunks as it is seen from far off, every 2×2×2 voxels one cell: solid where at least 3 of its 8
+    /// are (water, tufts and flowers are not counted), of the material most of them are, the upper ones winning a tie so
+    /// that turf stays on top; meshed as the chunks are, at twice their size, and its shadow likewise. Null when nothing
+    /// of it shows. <paramref name="grid"/> is a 34³ block for the cells and their shell.
+    /// </summary>
+    public MeshBuffers MeshCoarse(VoxelWorld w, int rx, int ry, int rz, byte[] grid, out MeshBuffers shadow)
+    {
+        const int N = VoxelWorld.CS, P = N + 2;
+        shadow = null;
+        int ox = rx * 2 * N, oy = ry * 2 * N, oz = rz * 2 * N;
+        // nothing to see when every chunk of the block is empty, or buried whole
+        bool seen = false;
+        for (int k = 0; k < 8 && !seen; k++)
+        {
+            int cx = rx * 2 + (k & 1), cy = ry * 2 + (k >> 2 & 1), cz = rz * 2 + (k >> 1 & 1);
+            if (cx >= w.CX || cy >= w.CY || cz >= w.CZ) continue;
+            int ci = w.ChunkIndex(cx, cy, cz);
+            seen = !w.IsEmpty(ci) && !w.IsBuried(ci);
+        }
+        if (!seen) return null;
+        // the voxels of the cells and their shell at once (2·34 a side)
+        const int B = 2 * P;
+        if (_cube == null) _cube = new byte[B * B * B];
+        w.CopyCube(ox - 2, oy - 2, oz - 2, B, _cube);
+        Span<byte> mats = stackalloc byte[8];
+        Span<int> counts = stackalloc int[8];
+        for (int y = -1; y <= N; y++)
+            for (int z = -1; z <= N; z++)
+            {
+                int row = ((y + 1) * P + (z + 1)) * P + 1;
+                for (int x = -1; x <= N; x++)
+                {
+                    // the upper four first, so that a tie goes to them
+                    int n = 0;
+                    for (int k = 7; k >= 0; k--)
+                    {
+                        byte m = _cube[((2 * (y + 1) + (k >> 2 & 1)) * B + 2 * (z + 1) + (k >> 1 & 1)) * B + 2 * (x + 1) + (k & 1)];
+                        if (m == Mat.Air || m == Mat.Water || Mat.IsSprig(m)) continue;
+                        int j = 0;
+                        while (j < n && mats[j] != m) j++;
+                        if (j == n) { mats[n] = m; counts[n++] = 0; }
+                        counts[j]++;
+                    }
+                    int solid = 0, best = -1;
+                    for (int j = 0; j < n; j++) { solid += counts[j]; if (best < 0 || counts[j] > counts[best]) best = j; }
+                    grid[row + x] = solid >= 3 ? mats[best] : Mat.Air;
+                }
+            }
+        var mb = Mesh(grid, N, N, N, ox / 2, oy / 2, oz / 2);
+        if (mb.Quads == 0) return null;
+        _shadow = true;
+        shadow = Mesh(grid, N, N, N, ox / 2, oy / 2, oz / 2);
+        _shadow = false;
+        foreach (var b in new[] { mb, shadow }) for (int i = 0; i < b.Pos.Length; i++) b.Pos[i] *= 2;
+        return mb;
     }
 
     /// <summary>
@@ -193,6 +270,7 @@ public sealed class GreedyMesher
                             if (m == 0 || m == skip) { mask[n] = 0; continue; }
                             int q = idx + qoff;
                             if (grid[q] != 0) { mask[n] = 0; continue; }
+                            if (_shadow) { mask[n] = 1; continue; }
                             int s1u = grid[q + su] != 0 ? 1 : 0, s0u = grid[q - su] != 0 ? 1 : 0;
                             int s1v = grid[q + sv] != 0 ? 1 : 0, s0v = grid[q - sv] != 0 ? 1 : 0;
                             int c00 = grid[q - su - sv] != 0 ? 1 : 0, c10 = grid[q + su - sv] != 0 ? 1 : 0;
@@ -241,9 +319,9 @@ public sealed class GreedyMesher
             Quads = _q,
             Pos = _pos.AsSpan(0, _q * 12).ToArray(),
             Nrm = _nrm.AsSpan(0, _q * 12).ToArray(),
-            Col = _col.AsSpan(0, _q * 16).ToArray(),
-            Uv = _uv.AsSpan(0, _q * 8).ToArray(),
-            Uv2 = _uv2.AsSpan(0, _q * 8).ToArray(),
+            Col = _shadow ? null : _col.AsSpan(0, _q * 16).ToArray(),
+            Uv = _shadow ? null : _uv.AsSpan(0, _q * 8).ToArray(),
+            Uv2 = _shadow ? null : _uv2.AsSpan(0, _q * 8).ToArray(),
             Idx = _idx.AsSpan(0, _q * 6).ToArray(),
         };
     }

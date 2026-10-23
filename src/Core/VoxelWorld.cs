@@ -202,6 +202,31 @@ public sealed class VoxelWorld
         MarkChunk(cx, cy, cz);
     }
 
+    /// <summary>
+    /// Copies a cube of voxels, n a side from (x0, y0, z0), into a flat array, x fastest; what lies past the field as
+    /// <see cref="Get"/> has it (bedrock under, air beside and over). A chunk's row at a time: much quicker than a Get each.
+    /// </summary>
+    public void CopyCube(int x0, int y0, int z0, int n, byte[] into)
+    {
+        for (int y = 0; y < n; y++)
+            for (int z = 0; z < n; z++)
+            {
+                int row = (y * n + z) * n, wy = y0 + y, wz = z0 + z;
+                if (wy < 0 || wy >= SY || wz < 0 || wz >= SZ) { into.AsSpan(row, n).Fill(wy < 0 ? Mat.Bed : Mat.Air); continue; }
+                for (int x = 0; x < n;)
+                {
+                    int wx = x0 + x;
+                    if (wx < 0 || wx >= SX) { into[row + x++] = Mat.Air; continue; }
+                    int ci = ((wy >> Shift) * CZ + (wz >> Shift)) * CX + (wx >> Shift);
+                    int run = Math.Min(Math.Min(n - x, CS - (wx & Mask)), SX - wx);
+                    var d = _data[ci];
+                    if (d == null) into.AsSpan(row + x, run).Fill(_uniform[ci]);
+                    else d.AsSpan(Local(wx, wy, wz), run).CopyTo(into.AsSpan(row + x, run));
+                    x += run;
+                }
+            }
+    }
+
     /// <summary>Copies a chunk plus a one-voxel shell of its neighbours into a 34³ block for the mesher.</summary>
     public void CopyPadded(int ci, byte[] pad)
     {

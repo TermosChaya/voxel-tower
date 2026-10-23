@@ -8,14 +8,27 @@ using VoxelTower.Core;
 namespace VoxelTower.Game;
 
 /// <summary>
-/// One MeshInstance3D per 32³ chunk, and one more for the water in it. Vertices are in voxel units; this node scales them
+/// One MeshInstance3D per 32³ chunk, one more for the water in it, and one for its shadow: the chunk's solid voxels as
+/// the fewest faces that hold their shape (GreedyMesher.MeshChunk), drawn into the sun's shadow only, so the shadow
+/// pass draws a few large faces where the picture draws many. From far off (a voxel under 1,7 pixels on the screen) the
+/// valley is drawn a level coarser instead: a mesh and a shadow for every block of 2×2×2 chunks, every 2×2×2 voxels one
+/// cell (GreedyMesher.MeshCoarse), a quarter of the faces in an eighth of the draws; a block whose chunks changed is made
+/// again while the coarse level is drawn, or when it comes on. Vertices are in voxel units; this node scales them
 /// to metres and centres the field on the origin, so the shaders see whole-voxel coordinates.
 /// </summary>
 public partial class WorldView : Node3D
 {
     VoxelWorld _w;
     ShaderMaterial _mat, _waterMat;
-    MeshInstance3D[] _inst, _water;
+    MeshInstance3D[] _inst, _water, _shade;
+    // the coarse level: a block of 2×2×2 chunks each, its picture and its shadow; the blocks to make again
+    MeshInstance3D[] _far, _farShade;
+    int _rx, _ry, _rz;
+    readonly HashSet<int> _farDirty = new();
+    readonly List<int> _farBatch = new();
+    bool _coarse, _showSolid = true;
+    /// <summary>Whether the valley is drawn at the coarse level now.</summary>
+    public bool Coarse => _coarse;
     readonly GreedyMesher _mesher = new();
     readonly byte[] _pad = new byte[34 * 34 * 34], _wet = new byte[34 * 34 * 34];
     readonly List<int> _batch = new();
@@ -33,22 +46,101 @@ public partial class WorldView : Node3D
         _waterMat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/water.gdshader") };
         _inst = new MeshInstance3D[w.ChunkCount];
         _water = new MeshInstance3D[w.ChunkCount];
+        _shade = new MeshInstance3D[w.ChunkCount];
         Grass = new GrassView();
         AddChild(Grass);
         Grass.Init(w);
 
         var sw = Stopwatch.StartNew();
-        var results = new (MeshBuffers solid, MeshBuffers water, Sward sward)[w.ChunkCount];
+        var results = new (MeshBuffers solid, MeshBuffers water, Sward sward, MeshBuffers shadow)[w.ChunkCount];
         Parallel.For(0, w.ChunkCount, () => (new GreedyMesher(), new byte[34 * 34 * 34], new byte[34 * 34 * 34]), (ci, _, loc) =>
         {
-            results[ci].solid = loc.Item1.MeshChunk(w, ci, loc.Item2, loc.Item3, out results[ci].water, out results[ci].sward);
+            results[ci].solid = loc.Item1.MeshChunk(w, ci, loc.Item2, loc.Item3, out results[ci].water, out results[ci].sward, out results[ci].shadow);
             return loc;
         }, _ => { });
         for (int ci = 0; ci < w.ChunkCount; ci++) Apply(ci, results[ci]);
         _batch.Clear();
         w.TakeDirty(_batch);
         _batch.Clear();
+        _rx = (w.CX + 1) / 2; _ry = (w.CY + 1) / 2; _rz = (w.CZ + 1) / 2;
+        _far = new MeshInstance3D[_rx * _ry * _rz];
+        _farShade = new MeshInstance3D[_far.Length];
+        // the coarse level is wanted only from far off: made off the main thread, put in a few blocks a frame after
+        _farMade = Task.Run(() =>
+        {
+            var made = new (MeshBuffers solid, MeshBuffers shadow)[_far.Length];
+            Parallel.For(0, made.Length, () => (new GreedyMesher(), new byte[34 * 34 * 34]), (ri, _, loc) =>
+            {
+                made[ri].solid = loc.Item1.MeshCoarse(w, ri % _rx, ri / (_rx * _rz), ri / _rx % _rz, loc.Item2, out made[ri].shadow);
+                return loc;
+            }, _ => { });
+            return made;
+        });
         LastFullMeshMs = sw.Elapsed.TotalMilliseconds;
+    }
+
+    // the coarse level as the thread made it, and how much of it is put in so far
+    Task<(MeshBuffers solid, MeshBuffers shadow)[]> _farMade;
+    int _farPut;
+    bool FarReady => _farMade == null;
+
+    int RegionOf(int ci)
+    {
+        _w.ChunkCoords(ci, out int cx, out int cy, out int cz);
+        return ((cy >> 1) * _rz + (cz >> 1)) * _rx + (cx >> 1);
+    }
+
+    /// <summary>Makes these blocks of the coarse level again, over all the cores when there are more than two.</summary>
+    void MeshFar(List<int> blocks)
+    {
+        var made = new (MeshBuffers solid, MeshBuffers shadow)[blocks.Count];
+        void One(GreedyMesher m, byte[] grid, int i)
+        {
+            int ri = blocks[i];
+            made[i].solid = m.MeshCoarse(_w, ri % _rx, ri / (_rx * _rz), ri / _rx % _rz, grid, out made[i].shadow);
+        }
+        if (blocks.Count <= 2) for (int i = 0; i < blocks.Count; i++) One(_mesher, _pad, i);
+        else Parallel.For(0, blocks.Count, () => (new GreedyMesher(), new byte[34 * 34 * 34]), (i, _, loc) => { One(loc.Item1, loc.Item2, i); return loc; }, _ => { });
+        for (int i = 0; i < blocks.Count; i++)
+        {
+            Put(_far, blocks[i], made[i].solid, _mat, GeometryInstance3D.ShadowCastingSetting.Off, _showSolid && _coarse);
+            Put(_farShade, blocks[i], made[i].shadow, null, GeometryInstance3D.ShadowCastingSetting.ShadowsOnly, _showSolid && _coarse);
+        }
+    }
+
+    /// <summary>
+    /// The level the valley is drawn at, by how many pixels a voxel has on the screen (the coarse one under 1,7, back
+    /// over 1,9); always the fine one through someone's eyes. Every block changed is made again before the coarse comes on.
+    /// </summary>
+    public void ChooseLevel(float pxPerVoxel, bool close)
+    {
+        bool want = FarReady && !close && (_coarse ? pxPerVoxel < 1.9f : pxPerVoxel < 1.7f);
+        if (want == _coarse) return;
+        _coarse = want;
+        if (_coarse && _farDirty.Count > 0)
+        {
+            _farBatch.Clear();
+            _farBatch.AddRange(_farDirty);
+            _farDirty.Clear();
+            MeshFar(_farBatch);
+        }
+        ShowLevels();
+    }
+
+    void ShowLevels()
+    {
+        foreach (var mi in _inst) if (mi != null) mi.Visible = _showSolid && !_coarse;
+        foreach (var mi in _shade) if (mi != null) mi.Visible = _showSolid && !_coarse;
+        foreach (var mi in _far) if (mi != null) mi.Visible = _showSolid && _coarse;
+        foreach (var mi in _farShade) if (mi != null) mi.Visible = _showSolid && _coarse;
+    }
+
+    /// <summary>The ground and the water shown or not (--perf-without measures what each costs).</summary>
+    public void ShowParts(bool solid, bool water)
+    {
+        _showSolid = solid;
+        ShowLevels();
+        foreach (var mi in _water) if (mi != null) mi.Visible = water;
     }
 
     /// <summary>Re-meshes edited chunks; big edits are spread over all cores.</summary>
@@ -57,27 +149,55 @@ public partial class WorldView : Node3D
         if (_w.DirtyCount == 0) return 0;
         _batch.Clear();
         _w.TakeDirty(_batch, maxChunks);
-        var results = new (MeshBuffers solid, MeshBuffers water, Sward sward)[_batch.Count];
+        var results = new (MeshBuffers solid, MeshBuffers water, Sward sward, MeshBuffers shadow)[_batch.Count];
         if (_batch.Count <= 2)
-            for (int i = 0; i < _batch.Count; i++) results[i].solid = _mesher.MeshChunk(_w, _batch[i], _pad, _wet, out results[i].water, out results[i].sward);
+            for (int i = 0; i < _batch.Count; i++) results[i].solid = _mesher.MeshChunk(_w, _batch[i], _pad, _wet, out results[i].water, out results[i].sward, out results[i].shadow);
         else
             Parallel.For(0, _batch.Count, () => (new GreedyMesher(), new byte[34 * 34 * 34], new byte[34 * 34 * 34]), (i, _, loc) =>
             {
-                results[i].solid = loc.Item1.MeshChunk(_w, _batch[i], loc.Item2, loc.Item3, out results[i].water, out results[i].sward);
+                results[i].solid = loc.Item1.MeshChunk(_w, _batch[i], loc.Item2, loc.Item3, out results[i].water, out results[i].sward, out results[i].shadow);
                 return loc;
             }, _ => { });
-        for (int i = 0; i < _batch.Count; i++) Apply(_batch[i], results[i]);
+        for (int i = 0; i < _batch.Count; i++) { Apply(_batch[i], results[i]); _farDirty.Add(RegionOf(_batch[i])); }
         return _batch.Count;
     }
 
-    void Apply(int ci, (MeshBuffers solid, MeshBuffers water, Sward sward) mb)
+    /// <summary>
+    /// A few of the changed blocks of the coarse level made again while it is drawn; while it is not they wait, all made
+    /// at once when it comes on (<see cref="ChooseLevel"/>), so the work of the near view is never slowed by the far one.
+    /// </summary>
+    public void RemeshFar()
     {
-        Put(_inst, ci, mb.solid, _mat, true);
-        Put(_water, ci, mb.water, _waterMat, false);
+        // the first making of the coarse level, done off the main thread, put in a few dozen blocks a frame
+        if (_farMade != null)
+        {
+            if (!_farMade.IsCompleted) return;
+            var made = _farMade.Result;
+            for (int n = 0; n < 48 && _farPut < made.Length; n++, _farPut++)
+            {
+                Put(_far, _farPut, made[_farPut].solid, _mat, GeometryInstance3D.ShadowCastingSetting.Off, _showSolid && _coarse);
+                Put(_farShade, _farPut, made[_farPut].shadow, null, GeometryInstance3D.ShadowCastingSetting.ShadowsOnly, _showSolid && _coarse);
+            }
+            if (_farPut >= made.Length) _farMade = null;
+            return;
+        }
+        if (!_coarse || _farDirty.Count == 0) return;
+        _farBatch.Clear();
+        const int most = 4;
+        foreach (int ri in _farDirty) { _farBatch.Add(ri); if (_farBatch.Count >= most) break; }
+        foreach (int ri in _farBatch) _farDirty.Remove(ri);
+        MeshFar(_farBatch);
+    }
+
+    void Apply(int ci, (MeshBuffers solid, MeshBuffers water, Sward sward, MeshBuffers shadow) mb)
+    {
+        Put(_inst, ci, mb.solid, _mat, GeometryInstance3D.ShadowCastingSetting.Off, _showSolid && !_coarse);
+        Put(_water, ci, mb.water, _waterMat, GeometryInstance3D.ShadowCastingSetting.Off, true);
+        Put(_shade, ci, mb.shadow, null, GeometryInstance3D.ShadowCastingSetting.ShadowsOnly, _showSolid && !_coarse);
         Grass.Take(ci, mb.sward);
     }
 
-    void Put(MeshInstance3D[] slots, int ci, MeshBuffers mb, Material mat, bool shadows)
+    void Put(MeshInstance3D[] slots, int ci, MeshBuffers mb, Material mat, GeometryInstance3D.ShadowCastingSetting shadows, bool visible)
     {
         var mi = slots[ci];
         var mesh = GodotMesh.From(mb);
@@ -88,7 +208,7 @@ public partial class WorldView : Node3D
         }
         if (mi == null)
         {
-            mi = new MeshInstance3D { MaterialOverride = mat, CastShadow = shadows ? GeometryInstance3D.ShadowCastingSetting.On : GeometryInstance3D.ShadowCastingSetting.Off };
+            mi = new MeshInstance3D { MaterialOverride = mat, CastShadow = shadows, Visible = visible };
             AddChild(mi);
             slots[ci] = mi;
         }

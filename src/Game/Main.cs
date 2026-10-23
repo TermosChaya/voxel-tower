@@ -194,6 +194,7 @@ public partial class Main : Node3D
             else if (a.StartsWith("--pose=")) _pose = a["--pose=".Length..];
             else if (a.StartsWith("--quality=") && int.TryParse(a["--quality=".Length..], out int qa)) _quality = qa;
             else if (a.StartsWith("--perf=") && double.TryParse(a["--perf=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double pf)) _perf = pf;
+            else if (a.StartsWith("--perf-without=")) _perfWithout = a["--perf-without=".Length..].Split(',');
             else if (a.StartsWith("--at=") && double.TryParse(a["--at=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double at)) _poseSeconds = at;
             else if (a.StartsWith("--ui-scale=") && float.TryParse(a["--ui-scale=".Length..], System.Globalization.CultureInfo.InvariantCulture, out float us)) _uiScale = us;
             else if (a == "--lines") _lines = true;
@@ -456,6 +457,8 @@ public partial class Main : Node3D
     bool _startTutorial, _startTitle;
     int _quality = -1;
     double _perf;
+    /// <summary>--perf-without=world,water,grass,units,shadows,penumbra,filter,far,post: what the measurement is made without, to see what it costs.</summary>
+    string[] _perfWithout = Array.Empty<string>();
 
     /// <summary>
     /// How fast the picture is drawn (--perf=seconds; --quality=0…3 for the picture, --show to keep the window up): after
@@ -467,6 +470,22 @@ public partial class Main : Node3D
         // not held to the screen's refresh: as fast as it can be drawn
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         Engine.MaxFps = 0;
+        foreach (string part in _perfWithout)
+            switch (part)
+            {
+                case "world": View.ShowParts(solid: false, water: true); break;
+                case "water": View.ShowParts(solid: true, water: false); break;
+                case "grass": View.Grass.Visible = false; break;
+                case "units": Units.Visible = false; break;
+                case "shadows": Atmos.Sun.ShadowEnabled = false; break;
+                case "penumbra": Atmos.Sun.LightAngularDistance = 0; break;
+                case "filter": RenderingServer.DirectionalSoftShadowFilterSetQuality(RenderingServer.ShadowQuality.SoftLow); break;
+                case "msaa": GetViewport().Msaa3D = Viewport.Msaa.Disabled; break;
+                case "glow": if (GetViewport().World3D.Environment is { } glowEnv) glowEnv.GlowEnabled = false; break;
+                case "far": if (Atmos.Far != null) Atmos.Far.Visible = false; break;
+                case "post": GetViewport().Msaa3D = Viewport.Msaa.Disabled; if (GetViewport().World3D.Environment is { } env) { env.SsaoEnabled = false; env.GlowEnabled = false; env.SsilEnabled = false; } break;
+            }
+        if (_perfWithout.Length > 0) GD.Print($"[perf] without {string.Join(", ", _perfWithout)}");
         for (int i = 0; i < 180; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         ulong t0 = Time.GetTicksUsec(), last = t0;
         int frames = 0;
@@ -604,7 +623,13 @@ public partial class Main : Node3D
             _waveWasActive = Sim.Waves.Active;
         }
         Command.Prune();
-        using (Prof.Time("Remesh")) View.RemeshDirty();
+        using (Prof.Time("Remesh"))
+        {
+            // the valley a level coarser from far off: a voxel under two pixels or so (the grass reckons them the same way)
+            View.ChooseLevel(GetTree().Root.Size.Y * Settings.Details[Settings.Detail] / Math.Max(.01f, Rig.Cam.Size) * VoxelWorld.Vox, FP.On);
+            View.RemeshDirty();
+            View.RemeshFar();
+        }
         using (Prof.Time("Flow")) View.UpdateFlow(Sim);
         if (Sim.Over && !_finale)
         {
