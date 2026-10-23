@@ -55,6 +55,7 @@ public partial class Hud : CanvasLayer
     Control _root;
     Toasts _toasts;
     Hints _hints;
+    Advisor _advisor;
     VBoxContainer _history, _goals;
     readonly List<Label> _goalLines = new();
     TopBeam _beam;
@@ -187,6 +188,10 @@ public partial class Hud : CanvasLayer
         _hints = new Hints();
         root.AddChild(_hints);
         _hints.Init(m);
+        // what is amiss now, over the map
+        _advisor = new Advisor();
+        root.AddChild(_advisor);
+        _advisor.Init(m);
 
         // what hangs from the beam goes behind it
         _drop = new DropPanel { Position = new Vector2(10, TopBeam.Height - 3) };
@@ -440,13 +445,13 @@ public partial class Hud : CanvasLayer
         _clock += delta;
         _refreshAt -= delta;
         var vp = GetViewport().GetVisibleRect().Size;
-        if (TitleOpen) { _hints.Visible = false; return; }
+        if (TitleOpen) { _hints.Visible = _advisor.Visible = false; return; }
         if (InFirstPerson)
         {
             // only the toasts, in the upper corner, out of the sight
             _toasts.Position = new Vector2(24, 20);
             _tag.Visible = false;
-            _hints.Visible = false;
+            _hints.Visible = _advisor.Visible = false;
             if (_refreshAt <= 0) _refreshAt = .2;
             return;
         }
@@ -479,6 +484,8 @@ public partial class Hud : CanvasLayer
         _hints.Room = vp.X - BottomConsole.LeftW - BottomConsole.RightW - 40;
         _hints.Position = new Vector2(MathF.Round((vp.X - _hints.Size.X) / 2), vp.Y - BottomConsole.Band - 8 - Hints.H);
         float hinted = _hints.Visible ? Hints.H + 8 : 0;
+        _advisor.Visible = Settings.Advice && _console.Visible && (_m.Tutor == null || _m.Tutor.Over);
+        _advisor.Position = new Vector2(14, vp.Y - BottomConsole.Wing - 10 - _advisor.Size.Y);
         _toasts.Position = new Vector2((vp.X - _toasts.Size.X) / 2, vp.Y - BottomConsole.Band - 14 - hinted - _toasts.Size.Y);
         Unit first = null;
         foreach (var u in _m.Selected) if (!u.Dead && (first == null || u.Id < first.Id)) first = u;

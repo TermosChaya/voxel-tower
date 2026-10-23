@@ -26,6 +26,8 @@ public static class Settings
     public static bool EdgeScroll { get; private set; } = true;
     /// <summary>Whether the line over the console tells what the mouse and the keys do now.</summary>
     public static bool Hints { get; private set; } = true;
+    /// <summary>Whether advice on what is amiss shows over the map.</summary>
+    public static bool Advice { get; private set; } = true;
     /// <summary>Whether every voxel is drawn with a thin dark line round its edge, where it is big enough on screen to read.</summary>
     public static bool Lines { get; private set; }
     /// <summary>What the player chose for the lines, kept apart from a run that draws them for itself (--lines).</summary>
@@ -128,6 +130,7 @@ public static class Settings
         SlowMo = cfg.GetValue("view", "slowmo", true).AsBool();
         EdgeScroll = cfg.GetValue("view", "edge_scroll", true).AsBool();
         Hints = cfg.GetValue("interface", "hints", true).AsBool();
+        Advice = cfg.GetValue("interface", "advice", true).AsBool();
         Lines = _keptLines = cfg.GetValue("view", "lines", false).AsBool();
         int grid = cfg.GetValue("tools", "grid", 0).AsInt32();
         Grid = Array.IndexOf(ToolOptions.Grids, grid) > 0 ? grid : 0;
@@ -146,6 +149,7 @@ public static class Settings
         cfg.SetValue("view", "slowmo", SlowMo);
         cfg.SetValue("view", "edge_scroll", EdgeScroll);
         cfg.SetValue("interface", "hints", Hints);
+        cfg.SetValue("interface", "advice", Advice);
         cfg.SetValue("view", "lines", _keptLines);
         cfg.SetValue("tools", "grid", Grid);
         cfg.SetValue("graphics", "quality", Quality);
@@ -219,6 +223,13 @@ public static class Settings
     public static void ToggleHints()
     {
         Hints = !Hints;
+        Save();
+    }
+
+    /// <summary>The advice over the map, on or off; kept for next time.</summary>
+    public static void ToggleAdvice()
+    {
+        Advice = !Advice;
         Save();
     }
 
