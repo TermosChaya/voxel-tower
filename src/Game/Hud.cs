@@ -305,6 +305,7 @@ public partial class Hud : CanvasLayer
         _menu.Init(m);
         // and over all of it the keys on the buttons, while Alt is held
         root.AddChild(new KeyTags());
+        Unfold = new Unfold(m);
 
         OnToolChanged();
         Refresh();
@@ -367,6 +368,10 @@ public partial class Hud : CanvasLayer
 
     readonly HashSet<Part> _hidden = new();
     readonly HashSet<Tool> _lockedTools = new();
+    // the tools not yet let out in a siege that unfolds (Ui/Unfold.cs): not on the belt at all, their keys refused
+    readonly HashSet<Tool> _notYet = new();
+    /// <summary>The frame unfolding in a siege of one's own.</summary>
+    public Unfold Unfold { get; private set; }
     bool _matsLocked, _pickLocked;
 
     /// <summary>The tutorial's start: only the field and the frame's bare boards; every tool slot empty and shut.</summary>
@@ -432,7 +437,29 @@ public partial class Hud : CanvasLayer
     public void UnlockPick() { _pickLocked = false; _pickSlot.Locked = false; }
 
     /// <summary>A tool, the materials or the pick not yet let out by the tutorial: its key does nothing either.</summary>
-    public bool Locked(Tool t) => _lockedTools.Contains(t);
+    public bool Locked(Tool t) => _lockedTools.Contains(t) || _notYet.Contains(t);
+    /// <summary>Why a tool's key does nothing.</summary>
+    public string LockedWhy => _notYet.Count > 0 && (_m.Tutor == null || _m.Tutor.Over) ? "это откроется позже" : "это откроется дальше в обучении";
+
+    /// <summary>A tool kept off the belt till the siege lets it out, or let out.</summary>
+    public void Withhold(Tool t, bool withheld)
+    {
+        if (withheld) _notYet.Add(t); else _notYet.Remove(t);
+        if (_toolSlots.TryGetValue(t, out var s)) s.Visible = !withheld;
+    }
+
+    /// <summary>A part of the frame kept hidden till the siege lets it out, or let out.</summary>
+    public void Withhold(Part p, bool withheld)
+    {
+        if (!withheld) { Reveal(p); return; }
+        if (_hidden.Add(p)) Shown(p, false);
+    }
+
+    /// <summary>Whether a tool's well wears the mark of new (the self-test reads it).</summary>
+    public bool Fresh(Tool t) => _toolSlots.TryGetValue(t, out var s) && s.Fresh;
+    /// <summary>The mark of new on a tool or a tab just let out.</summary>
+    public void Freshen(Tool t) { if (_toolSlots.TryGetValue(t, out var s)) s.Fresh = true; }
+    public void Freshen(Part p) { if (TabOf(p) is { } tab) { tab.Fresh = true; tab.QueueRedraw(); } }
     public bool MaterialsLocked => _matsLocked;
     public bool PickLocked => _pickLocked;
 
@@ -494,6 +521,7 @@ public partial class Hud : CanvasLayer
             _colonists.Top = _clockPanel.Position.Y + _clockPanel.Size.Y + 6;
         }
         // the hints just over the console between the map and the tools, the toasts over them
+        Unfold.Tick();
         _hints.Visible = Settings.Hints && _console.Visible;
         _hints.Room = vp.X - BottomConsole.LeftW - BottomConsole.RightW - 40;
         _hints.Position = new Vector2(MathF.Round((vp.X - _hints.Size.X) / 2), vp.Y - BottomConsole.Band - 8 - Hints.H);
@@ -721,6 +749,7 @@ public partial class Hud : CanvasLayer
         foreach (var (mat, s) in _matSlots) s.Selected = !t.Opt.Dig && mat == t.Opt.Material;
         _pickSlot.Selected = t.Opt.Dig;
         _inspector.Refresh(rebuild: true);
+        if (_toolSlots.TryGetValue(t.Tool, out var taken)) taken.Fresh = false;
         foreach (var (tool, _, _, tip) in ToolDefs) if (tool == t.Tool) Meet("tool:" + tool, tip);
     }
 

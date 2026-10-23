@@ -80,6 +80,9 @@ public partial class Slot : Control
     }
 
     public bool Selected { get => _selected; set { if (_selected == value) return; _selected = value; QueueRedraw(); } }
+    bool _fresh;
+    /// <summary>Just let out (Ui/Unfold.cs): an ember mark on it till it is first used.</summary>
+    public bool Fresh { get => _fresh; set { if (_fresh == value) return; _fresh = value; QueueRedraw(); } }
     public bool Disabled { get => _disabled; set { if (_disabled == value) return; _disabled = value; QueueRedraw(); } }
 
     public override void _GuiInput(InputEvent e)
@@ -87,7 +90,7 @@ public partial class Slot : Control
         if (e is not InputEventMouseButton mb || mb.ButtonIndex != MouseButton.Left) return;
         if (_locked) { AcceptEvent(); return; }
         if (mb.Pressed) _down = true;
-        else if (_down) { _down = false; if (_hover && !_disabled && Clicked != null) { Sound.Ui("tick"); Juice.Press(this); Clicked(); } }
+        else if (_down) { _down = false; if (_hover && !_disabled && Clicked != null) { Sound.Ui("tick"); Juice.Press(this); _fresh = false; Clicked(); } }
         QueueRedraw();
         AcceptEvent();
     }
@@ -111,6 +114,7 @@ public partial class Slot : Control
             Ornament.Lettering(this, Ornament.Mono, new Vector2(4, 13), _key, 11, _selected ? Ornament.EmberGlow : Ornament.Aged);
         if (Caption != null)
             Ornament.Lettering(this, Ornament.Mono, new Vector2(0, Size.Y - 5), Caption, 10, Ornament.Aged, HorizontalAlignment.Center, Size.X);
+        if (_fresh) { Ornament.FreshMark(this, new Vector2(Size.X - 6, 6)); QueueRedraw(); }
     }
 
     public override GodotObject _MakeCustomTooltip(string forText) => Tooltip.Make(_locked ? "Закрыто\nОткроется дальше в обучении." : forText);

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace VoxelTower.Core;
 
@@ -13,6 +14,13 @@ namespace VoxelTower.Core;
 public sealed partial class Sim
 {
     public bool Sandbox;
+    /// <summary>
+    /// Whether the frame unfolds in this siege: its main tools and tabs at the start, the rest let out as they are
+    /// wanted; and what has been let out so far, by the frame's keys ("tool:Bridge", "tab:lore"). Kept in a save; the
+    /// frame (Game/Ui/Unfold.cs) reads and writes them.
+    /// </summary>
+    public bool Unfolds;
+    public readonly HashSet<string> LetOut = new();
 
     public void BeginSandbox()
     {

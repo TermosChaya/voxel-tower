@@ -376,6 +376,12 @@ public partial class GameMenu : Control
             "Ещё карточка, когда впервые берёте инструмент или открываете вкладку.", () => Settings.Advice ? "да" : "нет", d => Settings.ToggleAdvice());
         advice.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
         _page.AddChild(advice);
+        var unfold = new Stepper("Инструменты", "Инструменты\nПостепенно: в начале осады видны главные инструменты и вкладки, остальные появляются, когда становятся нужны. " +
+            "Все сразу: всё с самого начала. Если выбрать «все сразу» во время игры, всё откроется сейчас.",
+            () => Settings.Unfold ? "постепенно" : "все сразу",
+            d => { Settings.ToggleUnfold(); if (!Settings.Unfold) _m.Hud.Unfold.OpenAll(); });
+        unfold.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+        _page.AddChild(unfold);
         var lines = new Stepper("Обводка вокселей", "Обводка вокселей\nТонкая тёмная линия по краям вокселей вблизи.", () => Settings.Lines ? "да" : "нет", d => Settings.ToggleLines());
         lines.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
         _page.AddChild(lines);

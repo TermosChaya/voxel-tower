@@ -31,6 +31,8 @@ public partial class TabPlaque : Control
     bool _hover;
     public bool Selected;
     public string Badge = "";
+    /// <summary>Just let out (Ui/Unfold.cs): an ember mark on it till it is first opened.</summary>
+    public bool Fresh;
     public event Action Clicked;
 
     public TabPlaque() { }
@@ -60,7 +62,7 @@ public partial class TabPlaque : Control
 
     public override void _GuiInput(InputEvent e)
     {
-        if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true }) { if (Clicked != null) { Sound.Ui("tick"); Juice.Press(this); } Clicked?.Invoke(); AcceptEvent(); }
+        if (e is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true }) { if (Clicked != null) { Sound.Ui("tick"); Juice.Press(this); } Fresh = false; Clicked?.Invoke(); AcceptEvent(); }
     }
 
     public override void _Draw()
@@ -79,6 +81,7 @@ public partial class TabPlaque : Control
             DrawArc(c, 7.5f, 0, MathF.Tau, 20, Ornament.Ember, 1.2f, true);
             DrawString(Ornament.Mono, c + new Vector2(-6, 3.6f), Badge, HorizontalAlignment.Center, 12, 9, Ornament.EmberGlow);
         }
+        if (Fresh) { Ornament.FreshMark(this, new Vector2(Size.Y - 7, 6)); QueueRedraw(); }
     }
 
     public override GodotObject _MakeCustomTooltip(string forText) => Tooltip.Make(forText);

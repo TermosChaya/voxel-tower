@@ -40,6 +40,7 @@ namespace VoxelTower.Game;
 /// --top looks straight down, --look=N at the Nth named place of the valley, --seed=N makes another valley; --select[=N]
 /// chooses our pawns (or the first N), --tab=key lets a panel down from the beam, --tool=N takes up the Nth tool,
 /// --ui-scale=S draws the interface at that size instead of the player's own, --inspect looks at the first raider (or beast),
+/// --unfold shows the frame as a new siege of one's own begins it, its later tools and the lore not yet let out,
 /// --keep opens the citadel's muster,
 /// --day=F starts at that time of the day (0 dawn, 1 sunset), --alarm=S raises the alarm and runs on S seconds,
 /// --weather=rain|fog|wind brings that weather at once, --envoy sends the horde's envoy and waits for its offer,
@@ -120,7 +121,7 @@ public partial class Main : Node3D
 
     string _shot;
     int _shotFrames = 45, _frames;
-    bool _demo, _calm, _selfTest, _finale, _top, _inspect, _keep;
+    bool _demo, _calm, _selfTest, _finale, _top, _inspect, _keep, _unfold;
     int _look = -1;
     /// <summary>--cam=x,z,yaw,pitch,zoom: where the camera looks for a screenshot, x and z in voxels.</summary>
     float[] _cam;
@@ -182,6 +183,7 @@ public partial class Main : Node3D
             else if (a == "--selftest") _selfTest = true;
             else if (a == "--inspect") _inspect = true;
             else if (a == "--keep") _keep = true;
+            else if (a == "--unfold") _unfold = true;
             else if (a.StartsWith("--load=")) PendingLoad = a["--load=".Length..];
             else if (a == "--tutorial") _tutorialAt = 0;
             else if (a.StartsWith("--tutorial=") && int.TryParse(a["--tutorial=".Length..], out int ta)) _tutorialAt = ta;
@@ -359,6 +361,7 @@ public partial class Main : Node3D
         {
             // a game read back: the screen as it was, and the chronicle up to where it was saved
             Saves.Apply(this, extra);
+            Hud.Unfold.Apply();
             Hud.Log($"Игра загружена: {Saves.NameOf(System.IO.Path.GetFileNameWithoutExtension(_loadedFrom ?? ""))}.", Hud.Kind.Ok);
             _waveWasActive = Sim.Waves.Active;
             GD.Print($"[voxel-tower] world {genMs:0} ms, navigation {navMs:0} ms, mesh {View.LastFullMeshMs:0} ms, {View.Triangles()} triangles; loaded");
@@ -426,6 +429,7 @@ public partial class Main : Node3D
             Rig.Set(World.WX(seen.X), World.WZ(seen.Z), -.66f, .62f, 2.2f, snap: true);
         }
         if (_keep) Command.OpenKeep();
+        if (_unfold) Hud.Unfold.Begin();
         if (_tool >= 0 && _tool < Hud.ToolDefs.Length) Tools.SetTool(Hud.ToolDefs[_tool].tool);
         if (_grid >= 0) Tools.SetGrid(_grid);
         if (_cam is { Length: 5 }) Rig.Set(World.WX(_cam[0]), World.WZ(_cam[1]), _cam[2], _cam[3], _cam[4], snap: true);
@@ -534,10 +538,11 @@ public partial class Main : Node3D
     /// <summary>The tips of the start, into the chronicle: a game of one's own begins with them.</summary>
     public void Welcome()
     {
-        // a siege of one's own: what to do next is in the errands from the first minute
+        // a siege of one's own: what to do next is in the errands from the first minute, the frame unfolding as it goes
         if (!Scripted)
         {
             Sim.BeginErrands();
+            Hud.Unfold.Begin();
             Hud.Log("Орда придёт через 10 минут.", Hud.Kind.Warn);
             Hud.Log("Что делать дальше, написано слева в «Поручениях». {Help} — все клавиши.", Hud.Kind.Ok);
             return;
@@ -1553,6 +1558,29 @@ public partial class Main : Node3D
         await Frames(2);
         Check("the chronicle keeps its last 80 lines and the game goes on past them", Hud.HistoryCount == 80 && Hud.Lines.Count == 80,
             $"{Hud.HistoryCount} in the tab, {Hud.Lines.Count} kept");
+        // the frame unfolding, from nothing done (what the test did before is set aside): at the start no circle on the
+        // belt nor its key, no lore tab, and so it stays while nothing is done; three markings let the circle out marked
+        // new, a beaten night the lore; and all at once again after
+        Tools.SetTool(Tool.None);
+        int markedWas = Sim.MarkingsMade, dugWas = Tools.DigMarkings, numberWas = Sim.Waves.Number;
+        double knewWas = Sim.Knowledge;
+        Sim.MarkingsMade = 0; Tools.DigMarkings = 0; Sim.Waves.Number = 0; Sim.Knowledge = 0;
+        Hud.Unfold.Begin();
+        bool hiddenAtFirst = Hud.Locked(Tool.Circle) && Hud.Hidden(Hud.Part.Lore) && !Hud.Locked(Tool.Brush);
+        Tools.SetTool(Tool.Circle);
+        bool refused = Tools.Tool != Tool.Circle;
+        // (it looks once a second, by the clock on the wall)
+        for (ulong from = Time.GetTicksMsec(); Time.GetTicksMsec() - from < 1300;) await Frames(1);
+        bool stays = Hud.Locked(Tool.Circle) && Hud.Hidden(Hud.Part.Lore);
+        Sim.MarkingsMade = 3; Sim.Waves.Number = 1;
+        for (ulong from = Time.GetTicksMsec(); Time.GetTicksMsec() - from < 1300;) await Frames(1);
+        bool letOut = !Hud.Locked(Tool.Circle) && Sim.LetOut.Contains("tool:Circle") && Hud.Fresh(Tool.Circle) && Hud.Locked(Tool.Bridge)
+            && !Hud.Hidden(Hud.Part.Lore);
+        Sim.MarkingsMade = markedWas; Tools.DigMarkings = dugWas; Sim.Waves.Number = numberWas; Sim.Knowledge = knewWas;
+        Hud.Unfold.OpenAll();
+        Check("the frame unfolds: no circle and no lore at the start, its key refused, so while nothing is done; three markings let the circle out marked new (not the bridge), a night the lore",
+            hiddenAtFirst && refused && stays && letOut,
+            $"hidden at first {hiddenAtFirst}, key refused {refused}, stays {stays}, let out {letOut}");
         // the report for the author: one file with the system, the hangs, the last events and the logs
         string report = Diag.Report(this, ProjectSettings.GlobalizePath("user://logs"));
         string body = System.IO.File.Exists(report) ? System.IO.File.ReadAllText(report) : "";

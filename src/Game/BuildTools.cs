@@ -211,7 +211,7 @@ public partial class BuildTools : Node3D
     public void SetTool(Tool t)
     {
         // what the tutorial has not come to yet stays shut
-        if (t != Tool.None && t != Tool.Paste && t != Tool.Spell && _m.Hud.Locked(t)) { Refuse("это откроется дальше в обучении"); return; }
+        if (t != Tool.None && t != Tool.Paste && t != Tool.Spell && _m.Hud.Locked(t)) { Refuse(_m.Hud.LockedWhy); return; }
         // what telekinesis holds is let go when the spell is put away
         Throw();
         Tool = Tool == t ? Tool.None : t;
@@ -442,10 +442,15 @@ public partial class BuildTools : Node3D
     /// <summary>What the marking being drawn is called, for the chronicle when it is taken back.</summary>
     string _markName;
 
+    /// <summary>How many markings of the pick the hand has made (a first ditch lets out the bridge: Ui/Unfold.cs).</summary>
+    public int DigMarkings;
+
     /// <summary>The hand is lifted: what it marked becomes one step for Ctrl+Z.</summary>
     void Lift()
     {
+        int made = _m.Sim.MarkingsMade;
         _m.Sim.EndMarking(_markName ?? ToolName(Tool));
+        if (Opt.Dig && _m.Sim.MarkingsMade > made) DigMarkings++;
         _markName = null;
     }
 

@@ -29,6 +29,8 @@ public static class Settings
     public static bool Hints { get; private set; } = true;
     /// <summary>Whether advice on what is amiss shows over the map, and a card the first time a tool or a tab is met.</summary>
     public static bool Advice { get; private set; } = true;
+    /// <summary>Whether a new siege of one's own unfolds its frame (the main tools and tabs at first) or shows all at once.</summary>
+    public static bool Unfold { get; private set; } = true;
     /// <summary>The tools and tabs met already, that want no card again.</summary>
     static readonly HashSet<string> _met = new();
     /// <summary>Whether every voxel is drawn with a thin dark line round its edge, where it is big enough on screen to read.</summary>
@@ -134,6 +136,7 @@ public static class Settings
         EdgeScroll = cfg.GetValue("view", "edge_scroll", true).AsBool();
         Hints = cfg.GetValue("interface", "hints", true).AsBool();
         Advice = cfg.GetValue("interface", "advice", true).AsBool();
+        Unfold = cfg.GetValue("interface", "unfold", true).AsBool();
         foreach (string k in cfg.GetValue("interface", "met", new string[0]).AsStringArray()) _met.Add(k);
         Lines = _keptLines = cfg.GetValue("view", "lines", false).AsBool();
         int grid = cfg.GetValue("tools", "grid", 0).AsInt32();
@@ -154,6 +157,7 @@ public static class Settings
         cfg.SetValue("view", "edge_scroll", EdgeScroll);
         cfg.SetValue("interface", "hints", Hints);
         cfg.SetValue("interface", "advice", Advice);
+        cfg.SetValue("interface", "unfold", Unfold);
         var met = new string[_met.Count];
         _met.CopyTo(met);
         cfg.SetValue("interface", "met", met);
@@ -239,6 +243,13 @@ public static class Settings
         if (_scripted || !_met.Add(key)) return false;
         Save();
         return true;
+    }
+
+    /// <summary>The frame unfolding in a new siege, or all at once; kept for next time.</summary>
+    public static void ToggleUnfold()
+    {
+        Unfold = !Unfold;
+        Save();
     }
 
     /// <summary>The advice over the map, on or off; kept for next time.</summary>

@@ -125,6 +125,14 @@ public static class Ornament
     public static void Diamond(CanvasItem c, Vector2 q, float s, Color col) =>
         c.DrawColoredPolygon(new[] { q + new Vector2(0, -s), q + new Vector2(s, 0), q + new Vector2(0, s), q + new Vector2(-s, 0) }, col);
 
+    /// <summary>The mark of something just let out: an ember dot with a glow, at a corner.</summary>
+    public static void FreshMark(CanvasItem c, Vector2 at)
+    {
+        float pulse = .6f + .4f * Mathf.Sin(Time.GetTicksMsec() / 1000f * 4);
+        c.DrawCircle(at, 6, new Color(EmberGlow, .25f * pulse), true, -1, true);
+        c.DrawCircle(at, 3.5f, EmberGlow, true, -1, true);
+    }
+
     /// <summary>A thin line between groups of things.</summary>
     public static void Divider(CanvasItem c, Vector2 a, Vector2 b, float alpha = 1) => c.DrawLine(a, b, Fade(Craft.Line, alpha), 1, true);
 
