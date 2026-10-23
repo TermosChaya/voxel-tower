@@ -5,26 +5,22 @@ using VoxelTower.Core;
 
 namespace VoxelTower.Game;
 
-/// <summary>A container drawn as an iron plate; its children sit inside the bronze rule.</summary>
-public partial class OrnatePanel : MarginContainer
+/// <summary>A container drawn as a plate, its children well inside its edge.</summary>
+public partial class PlatePanel : MarginContainer
 {
-    public bool Ornate = true;
-    public float Alpha = 1;
+    public PlatePanel() : this(14) { }
 
-    public OrnatePanel() : this(14) { }
-
-    public OrnatePanel(int pad, bool ornate = true)
+    public PlatePanel(int pad)
     {
-        Ornate = ornate;
         foreach (var side in new[] { "margin_left", "margin_right", "margin_top", "margin_bottom" })
             AddThemeConstantOverride(side, pad);
         MouseFilter = MouseFilterEnum.Stop;
     }
 
-    public override void _Draw() => Ornament.Plate(this, new Rect2(Vector2.Zero, Size), Alpha, Ornate);
+    public override void _Draw() => Ornament.Plate(this, new Rect2(Vector2.Zero, Size));
 }
 
-/// <summary>Tooltips in the same iron and parchment: a title in bronze, then the description.</summary>
+/// <summary>Tooltips on a plate: a title in bronze, then the description.</summary>
 public static class Tooltip
 {
     public static Control Make(string text)
@@ -33,9 +29,9 @@ public static class Tooltip
         // the keys named as they are bound now
         text = Bindings.Fill(text);
         var parts = text.Split('\n', 2);
-        var panel = new OrnatePanel(12, false);
+        var panel = new PlatePanel(14);
         var box = new VBoxContainer();
-        box.AddThemeConstantOverride("separation", 4);
+        box.AddThemeConstantOverride("separation", 6);
         var title = new Label { Text = parts[0] };
         title.AddThemeFontOverride("font", Ornament.SerifBold);
         title.AddThemeFontSizeOverride("font_size", 15);
@@ -209,17 +205,13 @@ public partial class CursorTag : Control
 
     public override void _Draw()
     {
-        var r = new Rect2(Vector2.Zero, Size);
-        DrawRect(new Rect2(r.Position + new Vector2(0, 3), r.Size), new Color(0, 0, 0, .35f));
-        Ornament.Gradient(this, r, Ornament.Fade(Ornament.IronLight, .94f), Ornament.Fade(Ornament.Iron, .94f));
-        DrawRect(r, Ornament.BronzeDark, false, 1);
-        DrawRect(r.Grow(-2), Ornament.Fade(Ornament.Bronze, .35f), false, 1);
+        Craft.Plate(this, new Rect2(Vector2.Zero, Size));
         float y = 8;
         foreach (var (t, col, f, size) in _lines) { y += size; DrawString(f, new Vector2(11, y), t, HorizontalAlignment.Left, -1, size, col); y += 6; }
     }
 }
 
-/// <summary>A round bronze medallion: the menu, and the help that opens the page of the controls.</summary>
+/// <summary>A round button with an icon: the menu, the help that opens the page of the controls, the views on the map's ring.</summary>
 public partial class Medallion : Control
 {
     readonly Icons.Painter _icon;
@@ -244,16 +236,9 @@ public partial class Medallion : Control
     public override void _Draw()
     {
         var c = Size / 2; float r = Math.Min(Size.X, Size.Y) / 2 - 2;
-        DrawCircle(c + new Vector2(1, 2), r + 1, new Color(0, 0, 0, .5f), true, -1, true);
-        DrawCircle(c, r, Ornament.IronDark, true, -1, true);
-        DrawCircle(c, r - 2, Ornament.IronMid, true, -1, true);
-        DrawArc(c, r - 1, 0, MathF.Tau, 40, _hover ? Ornament.BronzeLight : Ornament.Bronze, 1.6f, true);
-        DrawArc(c, r - 5, 0, MathF.Tau, 40, Ornament.BronzeDeep, 1f, true);
-        for (int i = 0; i < 8; i++)
-        {
-            float a = i * MathF.Tau / 8;
-            DrawCircle(c + new Vector2(MathF.Cos(a), MathF.Sin(a)) * (r - 3), 1.1f, Ornament.BronzeDark, true, -1, true);
-        }
+        DrawCircle(c + new Vector2(0, 2), r + 1, new Color(0, 0, 0, .3f), true, -1, true);
+        DrawCircle(c, r, _hover ? Craft.Raised : Craft.Fill, true, -1, true);
+        DrawArc(c, r - .5f, 0, MathF.Tau, 40, _hover ? Ornament.Fade(Ornament.BronzeLight, .7f) : Craft.Line, 1, true);
         _icon?.Invoke(this, new Rect2(c - new Vector2(r * .62f, r * .62f), new Vector2(r * 1.24f, r * 1.24f)), _lit ? Ornament.EmberGlow : _hover ? Ornament.BronzeLight : Ornament.Bronze);
     }
 

@@ -221,7 +221,6 @@ public partial class LorePanel : VBoxContainer
             DrawCircle(c, R - 2.5f, State == 0 ? Ornament.IronMid.Lerp(hue, .14f) : Ornament.IronMid, true, -1, true);
             var rim = hover ? Ornament.BronzeLight : State switch { 0 => hue, 1 => Ornament.EmberGlow, 2 => Ornament.BronzeDark, _ => Ornament.IronLight };
             DrawArc(c, R - 1, 0, MathF.Tau, 48, rim, State <= 1 || hover ? 2.4f : 1.5f, true);
-            DrawArc(c, R - 4.5f, 0, MathF.Tau, 40, Ornament.BronzeDeep, 1, true);
             var ink = State switch
             {
                 0 => hue.Lerp(Ornament.Parchment, .35f),
@@ -352,7 +351,6 @@ public partial class LorePanel : VBoxContainer
                 DrawCircle(at, 20, Ornament.IronDark, true, -1, true);
                 DrawCircle(at, 17, Ornament.IronMid.Lerp(hue, .12f * k), true, -1, true);
                 DrawArc(at, 19, 0, MathF.Tau, 48, k > 0 ? hue : Ornament.BronzeDark, 2.2f, true);
-                DrawArc(at, 14.5f, 0, MathF.Tau, 40, Ornament.BronzeDeep, 1, true);
                 // the share learnt, as an arc round it
                 if (k > 0) DrawArc(at, 22.5f, -MathF.PI / 2, -MathF.PI / 2 + MathF.Tau * k, 48, hue.Lightened(.2f), 2, true);
                 Icons.BranchMark(branches[b])(this, new Rect2(at - new Vector2(12, 12), new Vector2(24, 24)), k > 0 ? hue.Lerp(Ornament.Parchment, .3f) : Ornament.Aged);
@@ -390,12 +388,6 @@ public partial class LorePanel : VBoxContainer
             DrawCircle(C, Heart, Ornament.IronDark, true, -1, true);
             DrawCircle(C, Heart - 3, Ornament.IronMid, true, -1, true);
             DrawArc(C, Heart - 1, 0, MathF.Tau, 56, Ornament.Bronze, 2.2f, true);
-            DrawArc(C, Heart - 5.5f, 0, MathF.Tau, 48, Ornament.BronzeDeep, 1, true);
-            for (int i = 0; i < 12; i++)
-            {
-                float a = i * MathF.Tau / 12;
-                DrawCircle(C + new Vector2(MathF.Cos(a), MathF.Sin(a)) * (Heart - 3), 1.1f, Ornament.BronzeDark, true, -1, true);
-            }
             Icons.PageMark(page)(this, new Rect2(C - new Vector2(10, 23), new Vector2(20, 20)), Ornament.Fade(Ornament.Bronze, .9f));
             string big = page == 2 ? $"{sim.Favour:0}" : $"{sim.Knowledge:0}";
             Ornament.Lettering(this, Ornament.SerifBold, C + new Vector2(-Heart, 10), big, 20, Ornament.Parchment, HorizontalAlignment.Center, 2 * Heart);

@@ -31,7 +31,7 @@ public partial class DawnCard : Control
         Size = new Vector2(W, 10);
         MouseFilter = MouseFilterEnum.Stop;
         Visible = false;
-        var plate = new BottomConsole.Plate(c => Craft.Framed(c, new Rect2(Vector2.Zero, c.Size), 10)) { MouseFilter = MouseFilterEnum.Ignore };
+        var plate = new BottomConsole.Plate(c => Craft.Plate(c, new Rect2(Vector2.Zero, c.Size))) { MouseFilter = MouseFilterEnum.Ignore };
         plate.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         AddChild(plate);
         _col = new VBoxContainer { Position = new Vector2(18, 12) };

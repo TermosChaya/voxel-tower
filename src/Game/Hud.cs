@@ -189,7 +189,7 @@ public partial class Hud : CanvasLayer
         _beam = new TopBeam();
         root.AddChild(_beam);
         _tabs = new HBoxContainer { Position = new Vector2(16, 5) };
-        _tabs.AddThemeConstantOverride("separation", 6);
+        _tabs.AddThemeConstantOverride("separation", 10);
         _beam.AddChild(_tabs);
         TabPlaque Tab(string key, Icons.Painter icon, string caption, string tip, Control page, float width)
         {

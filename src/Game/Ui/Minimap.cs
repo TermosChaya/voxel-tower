@@ -6,8 +6,9 @@ using VoxelTower.Core;
 namespace VoxelTower.Game;
 
 /// <summary>
-/// The field from above, one pixel per voxel column: the colour of whatever tops it, lit from the north-west.
-/// Shows the citadel and what the camera sees; a click or a drag moves the view there.
+/// The field from above, one pixel per voxel column: the colour of whatever tops it, lit from the north-west; round the
+/// valley the land goes on, its edges mirrored out to the ring, so that the map is round. Shows the citadel and what the
+/// camera sees; a click or a drag moves the view there.
 /// </summary>
 public partial class Minimap : Control
 {
@@ -103,6 +104,15 @@ public partial class Minimap : Control
     {
         if (_m == null) return;
         var r = new Rect2(Vector2.Zero, Size);
+        // the land beyond, as far as the ring shows it: the valley turned over at each of its edges and corners, in shadow
+        for (int j = -1; j <= 1; j++)
+            for (int i = -1; i <= 1; i++)
+            {
+                if (i == 0 && j == 0) continue;
+                DrawSetTransform(new Vector2(i > 0 ? 2 * Size.X : 0, j > 0 ? 2 * Size.Y : 0), 0, new Vector2(i == 0 ? 1 : -1, j == 0 ? 1 : -1));
+                DrawTextureRect(_tex, r, false, new Color(.62f, .62f, .68f));
+            }
+        DrawSetTransformMatrix(Transform2D.Identity);
         DrawTextureRect(_tex, r, false);
         var w = _m.World;
         var pts = _m.Rig.GroundFootprint(3f);
@@ -121,8 +131,6 @@ public partial class Minimap : Control
         var keep = ToMap(_m.Site.KeepX, _m.Site.KeepZ);
         Ornament.Diamond(this, keep, 6.5f, new Color(0, 0, 0, .7f));
         Ornament.Diamond(this, keep, 5f, Ornament.EmberGlow);
-        DrawRect(r, new Color(0, 0, 0, .7f), false, 2);
-        DrawRect(r.Grow(1), Ornament.BronzeDark, false, 1);
     }
 
     static readonly Color Ours = new(.62f, .86f, 1f), Horde = new(1f, .3f, .22f), Beast = new(.66f, .47f, .28f), Rim = new(0, 0, 0, .75f);

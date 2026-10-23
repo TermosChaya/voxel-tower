@@ -30,7 +30,7 @@ public partial class Inspector : Control
         Refresh(true);
     }
 
-    public override void _Draw() => Craft.Inset(this, new Rect2(Vector2.Zero, Size));
+    public override void _Draw() => Craft.Well(this, new Rect2(Vector2.Zero, Size));
 
     /// <summary>Shows what should be shown now, made anew if that changed (or <paramref name="rebuild"/>); else brings it up to date.</summary>
     public void Refresh(bool rebuild = false)

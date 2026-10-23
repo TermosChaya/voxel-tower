@@ -4,9 +4,8 @@ using VoxelTower.Core;
 namespace VoxelTower.Game;
 
 /// <summary>
-/// The look of the in-game interface: blackened iron plates with an inlaid bronze rule, corner brackets and rivets,
-/// sunken wells for tools, parchment lettering, ember for whatever is selected and blood for what cannot be paid.
-/// Everything is drawn in code, so there are no texture files to keep in sync.
+/// The look of the in-game interface: plain dark plates with a thin bronze line, wells for the tools, parchment
+/// lettering, ember for whatever is selected and blood for what cannot be paid. Everything is drawn in code.
 /// </summary>
 public static class Ornament
 {
@@ -67,23 +66,6 @@ public static class Ornament
         };
     }
 
-    /// <summary>Hammered-metal grain laid faintly over every plate.</summary>
-    public static readonly ImageTexture Grain = MakeGrain();
-
-    static ImageTexture MakeGrain()
-    {
-        const int n = 128;
-        var img = Image.CreateEmpty(n, n, false, Image.Format.Rgba8);
-        var a = new ValueNoise(91); var b = new ValueNoise(57); var r = new Mulberry32(17);
-        for (int y = 0; y < n; y++)
-            for (int x = 0; x < n; x++)
-            {
-                float v = (float)(a.Sample(x * .11, y * .11) * .55 + b.Sample(x * .37 + 40, y * .37) * .25 + r.Next() * .2);
-                img.SetPixel(x, y, new Color(v, v, v));
-            }
-        return ImageTexture.CreateFromImage(img);
-    }
-
     public static Color Fade(Color c, float a) => new(c, c.A * a);
 
     /// <summary>A material's own colour, as the interface shows it.</summary>
@@ -94,11 +76,11 @@ public static class Ornament
         var t = new Theme { DefaultFont = Serif, DefaultFontSize = 15 };
         t.SetColor("font_color", "Label", Parchment);
         t.SetColor("font_outline_color", "Label", new Color(0, 0, 0, .85f));
-        t.SetStylebox("normal", "Button", Btn(IronMid, BronzeDark));
-        t.SetStylebox("hover", "Button", Btn(IronLight, Bronze));
+        t.SetStylebox("normal", "Button", Btn(new Color("221c27"), Fade(Bronze, .3f)));
+        t.SetStylebox("hover", "Button", Btn(Craft.Raised, Fade(BronzeLight, .6f)));
         t.SetStylebox("pressed", "Button", Btn(EmberDim, Ember));
         t.SetStylebox("hover_pressed", "Button", Btn(EmberDim, EmberGlow));
-        t.SetStylebox("disabled", "Button", Btn(Iron, IronLight));
+        t.SetStylebox("disabled", "Button", Btn(Fade(Iron, .7f), new Color(0, 0, 0, 0)));
         t.SetStylebox("focus", "Button", new StyleBoxEmpty());
         t.SetColor("font_color", "Button", Parchment);
         t.SetColor("font_hover_color", "Button", BronzeLight);
@@ -118,13 +100,13 @@ public static class Ornament
         return t;
     }
 
-    static StyleBoxFlat Btn(Color bg, Color border, int bw = 1, int radius = 2)
+    static StyleBoxFlat Btn(Color bg, Color border, int bw = 1, int radius = 4)
     {
         var b = new StyleBoxFlat { BgColor = bg, BorderColor = border, AntiAliasing = true };
         b.SetBorderWidthAll(bw);
         b.SetCornerRadiusAll(radius);
-        b.ContentMarginLeft = b.ContentMarginRight = 8;
-        b.ContentMarginTop = b.ContentMarginBottom = 3;
+        b.ContentMarginLeft = b.ContentMarginRight = 10;
+        b.ContentMarginTop = b.ContentMarginBottom = 4;
         return b;
     }
 
@@ -136,73 +118,29 @@ public static class Ornament
         c.DrawPolygon(p, new[] { top, top, bottom, bottom });
     }
 
-    /// <summary>An iron plate with an inlaid bronze rule; ornate plates get corner brackets and rivets.</summary>
-    public static void Plate(CanvasItem c, Rect2 r, float alpha = 1, bool ornate = true)
-    {
-        // a shadow under it, so the plate stands off the valley behind
-        for (int i = 3; i >= 1; i--)
-            c.DrawRect(new Rect2(r.Position + new Vector2(0, 3), r.Size).Grow(i * 2.5f), new Color(0, 0, 0, .17f * alpha));
-        c.DrawRect(r, Fade(IronDark, alpha));
-        var inner = r.Grow(-2);
-        Gradient(c, inner, Fade(IronLight, alpha), Fade(Iron, alpha));
-        c.DrawTextureRect(Grain, inner, true, new Color(1, 1, 1, .06f * alpha));
-        c.DrawLine(new Vector2(inner.Position.X, inner.Position.Y + .5f), new Vector2(inner.End.X, inner.Position.Y + .5f), new Color(1, .9f, .75f, .12f * alpha), 1);
-        c.DrawLine(new Vector2(inner.Position.X, inner.End.Y - .5f), new Vector2(inner.End.X, inner.End.Y - .5f), new Color(0, 0, 0, .5f * alpha), 1);
-        var f = r.Grow(-5);
-        c.DrawRect(f, Fade(BronzeDeep, alpha), false, 1);
-        c.DrawRect(f.Grow(-1), Fade(Bronze, .5f * alpha), false, 1);
-        if (!ornate) return;
-        Corner(c, f.Position, new Vector2(1, 1), alpha);
-        Corner(c, new Vector2(f.End.X, f.Position.Y), new Vector2(-1, 1), alpha);
-        Corner(c, new Vector2(f.Position.X, f.End.Y), new Vector2(1, -1), alpha);
-        Corner(c, f.End, new Vector2(-1, -1), alpha);
-    }
+    /// <summary>A plate: plain dark, a thin bronze line round it, a soft shadow under it (Craft.Plate).</summary>
+    public static void Plate(CanvasItem c, Rect2 r, float alpha = 1) => Craft.Plate(c, r, alpha);
 
-    static void Corner(CanvasItem c, Vector2 p, Vector2 d, float alpha)
-    {
-        var gold = Fade(BronzeLight, .85f * alpha);
-        var a = p + new Vector2(0, 15 * d.Y); var e = p + new Vector2(15 * d.X, 0);
-        c.DrawPolyline(new[] { a + new Vector2(.8f, 1), p + new Vector2(.8f, 1), e + new Vector2(.8f, 1) }, new Color(0, 0, 0, .6f * alpha), 3.2f, true);
-        c.DrawPolyline(new[] { a, p, e }, gold, 2f, true);
-        Diamond(c, p + d * 6, 2.6f, gold);
-        Rivet(c, p, 2.8f, alpha);
-    }
-
+    /// <summary>A lozenge: a mark on the map, an empty well's sign.</summary>
     public static void Diamond(CanvasItem c, Vector2 q, float s, Color col) =>
         c.DrawColoredPolygon(new[] { q + new Vector2(0, -s), q + new Vector2(s, 0), q + new Vector2(0, s), q + new Vector2(-s, 0) }, col);
 
-    public static void Rivet(CanvasItem c, Vector2 p, float rad, float alpha = 1)
-    {
-        c.DrawCircle(p + new Vector2(.7f, 1f), rad + .6f, new Color(0, 0, 0, .55f * alpha), true, -1, true);
-        c.DrawCircle(p, rad, Fade(BronzeDark, alpha), true, -1, true);
-        c.DrawCircle(p - new Vector2(rad * .3f, rad * .3f), rad * .55f, Fade(BronzeLight, .8f * alpha), true, -1, true);
-    }
+    /// <summary>A thin line between groups of things.</summary>
+    public static void Divider(CanvasItem c, Vector2 a, Vector2 b, float alpha = 1) => c.DrawLine(a, b, Fade(Craft.Line, alpha), 1, true);
 
-    /// <summary>A rule with a lozenge in the middle, between groups of things.</summary>
-    public static void Divider(CanvasItem c, Vector2 a, Vector2 b, float alpha = 1)
-    {
-        var mid = (a + b) / 2;
-        var dir = (b - a).Normalized();
-        c.DrawLine(a, mid - dir * 9, Fade(BronzeDark, alpha), 1, true);
-        c.DrawLine(mid + dir * 9, b, Fade(BronzeDark, alpha), 1, true);
-        Diamond(c, mid, 3.5f, Fade(BronzeLight, .9f * alpha));
-        c.DrawCircle(mid - dir * 7, 1.2f, Fade(Bronze, alpha), true, -1, true);
-        c.DrawCircle(mid + dir * 7, 1.2f, Fade(Bronze, alpha), true, -1, true);
-    }
-
-    /// <summary>A sunken well a tool or material sits in. Selected wells glow like embers.</summary>
+    /// <summary>A well a tool or material sits in: a little darker than its plate, its rim lit under the pointer, ember when selected.</summary>
     public static void Well(CanvasItem c, Rect2 r, bool hover, bool selected, bool disabled)
     {
         if (selected)
-            for (int i = 4; i >= 1; i--) c.DrawRect(r.Grow(i * 1.7f), new Color(Ember, .06f * (5 - i)), false, 1.7f);
-        c.DrawRect(r, IronDark);
-        var i1 = r.Grow(-1.5f);
-        if (selected) Gradient(c, i1, new Color("2b190d"), new Color("452814"));
-        else Gradient(c, i1, new Color("09070b"), hover ? new Color("251d29") : new Color("1a141d"));
-        c.DrawLine(new Vector2(i1.Position.X, i1.Position.Y + .8f), new Vector2(i1.End.X, i1.Position.Y + .8f), new Color(0, 0, 0, .7f), 1.6f);
-        c.DrawRect(r, selected ? Ember : hover ? BronzeLight : BronzeDark, false, selected ? 1.6f : 1f);
-        if (disabled) c.DrawRect(i1, new Color(0, 0, 0, .5f));
+            for (int i = 3; i >= 1; i--) c.DrawRect(r.Grow(i * 1.6f), new Color(Ember, .05f * (4 - i)), false, 1.6f);
+        _well.BgColor = selected ? new Color("3a2213") : hover ? Craft.Raised : Craft.Deep;
+        _well.BorderColor = selected ? Ember : hover ? Fade(BronzeLight, .7f) : Fade(Bronze, .28f);
+        _well.SetBorderWidthAll(selected ? 2 : 1);
+        c.DrawStyleBox(_well, r);
+        if (disabled) c.DrawRect(r.Grow(-1), new Color(0, 0, 0, .5f));
     }
+
+    static readonly StyleBoxFlat _well = new() { AntiAliasing = true, CornerRadiusTopLeft = 4, CornerRadiusTopRight = 4, CornerRadiusBottomLeft = 4, CornerRadiusBottomRight = 4 };
 
     /// <summary>Text with a dark halo, for lettering laid straight over the map.</summary>
     public static void Lettering(CanvasItem c, Font f, Vector2 at, string text, int size, Color col, HorizontalAlignment align = HorizontalAlignment.Left, float width = -1)

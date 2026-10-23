@@ -57,7 +57,6 @@ public partial class SigilGallery : Control
     {
         var whole = new Rect2(Vector2.Zero, Size);
         Ornament.Gradient(this, whole, Ornament.IronMid, Ornament.IronDark);
-        DrawTextureRect(Ornament.Grain, whole, true, new Color(1, 1, 1, .05f));
         float x = Margin, y = Margin;
         int page = 0;
         bool fresh = true;

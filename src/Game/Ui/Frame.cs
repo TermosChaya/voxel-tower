@@ -6,8 +6,8 @@ using VoxelTower.Core;
 namespace VoxelTower.Game;
 
 /// <summary>
-/// The beam along the top edge of the screen: oak boards bound with iron, a brass lip along its lower edge. The tabs
-/// sit on it at the left, the stores in the middle; the wave clock hangs from it on the right.
+/// The bar along the top edge of the screen, a thin line along its lower edge. The tabs sit on it at the left, the
+/// stores in the middle; the wave clock hangs under it on the right.
 /// </summary>
 public partial class TopBeam : Control
 {
@@ -20,22 +20,10 @@ public partial class TopBeam : Control
         OffsetBottom = Height;
     }
 
-    public override void _Draw()
-    {
-        float w = Size.X;
-        // its shadow on the field
-        Ornament.Gradient(this, new Rect2(0, Height, w, 12), new Color(0, 0, 0, .4f), new Color(0, 0, 0, 0));
-        Craft.Wood(this, new Rect2(0, 0, w, Height - 7), .95f);
-        Craft.Band(this, new Rect2(0, Height - 8, w, 8), 64);
-        Craft.BrassEdge(this, new Vector2(0, Height - 8.5f), new Vector2(w, Height - 8.5f), 1.6f);
-        // iron straps round the beam, and caps on its ends
-        for (float x = 230; x < w - 60; x += 330) Craft.Band(this, new Rect2(x, 0, 9, Height - 8), 14);
-        Craft.Band(this, new Rect2(0, 0, 8, Height), 14);
-        Craft.Band(this, new Rect2(w - 8, 0, 8, Height), 14);
-    }
+    public override void _Draw() => Craft.Bar(this, new Rect2(0, 0, Size.X, Height), lineBelow: true);
 }
 
-/// <summary>A tab on the beam: an engraved icon and its name, ember when its panel hangs open, a count of what is still to do.</summary>
+/// <summary>A tab on the bar: an icon and its name, underlined in ember when its panel hangs open, a count of what is still to do.</summary>
 public partial class TabPlaque : Control
 {
     readonly Icons.Painter _icon;
@@ -78,7 +66,7 @@ public partial class TabPlaque : Control
     public override void _Draw()
     {
         var r = new Rect2(Vector2.Zero, Size);
-        Craft.Plaque(this, r, _hover, Selected);
+        Craft.Tab(this, r, _hover, Selected);
         var ink = Selected ? Ornament.EmberGlow : _hover ? Ornament.Parchment : Ornament.BronzeLight;
         _icon?.Invoke(this, new Rect2(7, 5, Size.Y - 10, Size.Y - 10), ink);
         if (!_compact)
@@ -97,8 +85,8 @@ public partial class TabPlaque : Control
 }
 
 /// <summary>
-/// The panels that hang from the beam under its tabs: boards round a dark well with the page in it, let down when a
-/// tab is clicked and drawn up again on a second click. One hangs at a time.
+/// The panels that hang from the bar under its tabs: a plate with the page on it, let down when a tab is clicked and
+/// drawn up again on a second click. One hangs at a time.
 /// </summary>
 public partial class DropPanel : Control
 {
@@ -165,7 +153,7 @@ public partial class DropPanel : Control
 
     public override void _Process(double delta) { if (Visible) Lay(); }
 
-    const float Border = 12;
+    const float Border = 16;
 
     float _full;
 
@@ -185,12 +173,12 @@ public partial class DropPanel : Control
 
     public override void _Draw()
     {
-        if (_open != null) Craft.Framed(this, new Rect2(0, Size.Y - _full, _open.Width, _full));
+        if (_open != null) Craft.Plate(this, new Rect2(0, Size.Y - _full, _open.Width, _full));
     }
 }
 
 /// <summary>
-/// The wave clock, hanging from the beam on two chains: which wave is next and how long until it comes (or how many
+/// The wave clock, a plate under the bar: which wave is next and how long until it comes (or how many
 /// raiders are in the valley), the time of day, the early call, the speed of the game, the horde's ways, and how much
 /// of the citadel still stands.
 /// </summary>
@@ -278,22 +266,7 @@ public partial class WaveClock : Control
 
     public override void _Draw()
     {
-        // two chains up to the beam, the sign on them: boards edged with iron
-        foreach (float x in new[] { 34f, W - 34 })
-            for (float y = -8; y < 6; y += 5)
-            {
-                DrawArc(new Vector2(x, y + 2), 2.4f, 0, MathF.Tau, 10, new Color("0c0a0e"), 2.2f, true);
-                DrawArc(new Vector2(x, y + 2), 2.4f, 0, MathF.Tau, 10, new Color("4a4450"), 1, true);
-            }
-        var r = new Rect2(0, 4, W, H - 4);
-        for (int i = 3; i >= 1; i--) DrawRect(new Rect2(r.Position + new Vector2(0, 4), r.Size).Grow(i * 2), new Color(0, 0, 0, .12f));
-        Craft.Wood(this, r, .85f);
-        Craft.Inset(this, r.Grow(-5), .55f);
-        DrawRect(r, Craft.OakDark, false, 1.5f);
-        Craft.Corner(this, r.Position, new Vector2(1, 1), 14);
-        Craft.Corner(this, new Vector2(r.End.X, r.Position.Y), new Vector2(-1, 1), 14);
-        Craft.Corner(this, new Vector2(r.Position.X, r.End.Y), new Vector2(1, -1), 14);
-        Craft.Corner(this, r.End, new Vector2(-1, -1), 14);
+        Craft.Plate(this, new Rect2(0, 2, W, H - 2));
     }
 
     /// <summary>"of twelve" after the wave's number, but in the sandbox with everything open, whose waves go on past the twelfth.</summary>
@@ -425,11 +398,11 @@ public partial class Stores : Control
     public override void _Draw()
     {
         var r = new Rect2(Vector2.Zero, Size);
-        Craft.Inset(this, r, .9f);
+        Craft.Well(this, r, .9f);
         for (int g = 0; g < Groups.Length; g++)
         {
             float x = 6 + g * Cell;
-            if (g > 0) Ornament.Diamond(this, new Vector2(x, Size.Y / 2), 3.2f, Ornament.Fade(Ornament.BronzeLight, .85f));
+            if (g > 0) Ornament.Divider(this, new Vector2(x, 8), new Vector2(x, Size.Y - 8));
             if (_glow[g] > 0) DrawRect(new Rect2(x + 3, 3, Cell - 6, Size.Y - 6), new Color(Ornament.EmberGlow, .22f * _glow[g]));
             Groups[g].icon(this, new Rect2(x + 10, (Size.Y - 22) / 2, 22, 22), Ornament.BronzeLight);
             // a long figure (thousands of gold, an army of a hundred) is set smaller rather than cut off
@@ -520,9 +493,9 @@ public partial class DayDial : Control
 }
 
 /// <summary>
-/// The console along the bottom edge: a band of oak boards under an iron strap across the whole width, and at its ends
-/// two plinths of dressed stone rising higher — the map of the valley in its ring on the left, the tools on the right.
-/// Only what is drawn stops the mouse: the field between the plinths stays the field's.
+/// The console along the bottom edge: a bar across the whole width, and at its ends two plates rising higher, the map
+/// of the valley in its ring on the left, the tools on the right. Only what is drawn stops the mouse: the field between
+/// the two stays the field's.
 /// </summary>
 public partial class BottomConsole : Control
 {
@@ -549,30 +522,13 @@ public partial class BottomConsole : Control
         AddChild(Right);
     }
 
-    static void DrawBase(Control c)
-    {
-        float w = c.Size.X, h = c.Size.Y;
-        Ornament.Gradient(c, new Rect2(0, -12, w, 12), new Color(0, 0, 0, 0), new Color(0, 0, 0, .4f));
-        Craft.Wood(c, new Rect2(0, 8, w, h - 8), .9f);
-        Craft.Band(c, new Rect2(0, 0, w, 10), 64);
-        Craft.BrassEdge(c, new Vector2(0, 10.5f), new Vector2(w, 10.5f), 1.6f);
-        for (float x = 380; x < w - 300; x += 360) Craft.Band(c, new Rect2(x, 10, 8, h - 10), 18);
-    }
+    static void DrawBase(Control c) => Craft.Bar(c, new Rect2(0, 0, c.Size.X, c.Size.Y), lineBelow: false);
 
-    /// <summary>A stone plinth: courses of dressed stone with a coping along its top and iron at its inner edge.</summary>
+    /// <summary>A wing: a plate rising from the band, rounded only at its corner toward the field (the rest lie off the screen).</summary>
     static void DrawPlinth(Control c, bool left)
     {
         float w = c.Size.X, h = c.Size.Y;
-        var body = new Rect2(0, 14, w, h - 14);
-        Ornament.Gradient(c, new Rect2(left ? w : -12, 14, 12, h - 14), left ? new Color(0, 0, 0, .35f) : new Color(0, 0, 0, 0), left ? new Color(0, 0, 0, 0) : new Color(0, 0, 0, .35f));
-        Craft.Stone(c, body, .92f);
-        // the coping: a long stone with a rounded top, darker
-        var cope = new Rect2(-4, 2, w + 8, 16);
-        Craft.Stone(c, cope, .75f);
-        c.DrawLine(new Vector2(cope.Position.X, cope.Position.Y + .5f), new Vector2(cope.End.X, cope.Position.Y + .5f), new Color(1, .95f, .9f, .25f), 1);
-        c.DrawLine(new Vector2(cope.Position.X, cope.End.Y), new Vector2(cope.End.X, cope.End.Y), new Color(0, 0, 0, .55f), 1.5f);
-        // the edge toward the field, bound in iron
-        Craft.Band(c, new Rect2(left ? w - 8 : 0, 18, 8, h - 18), 22);
+        Craft.Plate(c, new Rect2(left ? -12 : 0, 14, w + 12, h));
     }
 
     /// <summary>A control that only draws what it is given.</summary>
@@ -586,8 +542,8 @@ public partial class BottomConsole : Control
 }
 
 /// <summary>
-/// The map of the valley set in a ring of iron and brass, the quarters of the world marked on it, with buttons to zoom
-/// and to look straight down. The map is cut to the ring; only the far corners of the valley fall outside it.
+/// The map of the valley in a ring, the quarters of the world lettered on it, with buttons to zoom and to look
+/// straight down. The map is round: cut to the ring, the land beyond the valley shown in shadow up to it.
 /// </summary>
 public partial class MapRing : Control
 {
@@ -674,40 +630,30 @@ public partial class MapRing : Control
         public override void _Draw() => DrawCircle(Size / 2, Inner, Colors.White, true, -1, true);
     }
 
-    /// <summary>The ring: a band of black iron between brass lips, riveted, with the quarters of the world on brass plates.</summary>
+    /// <summary>The ring: the map darkening toward it, a dark band with a thin line at each edge, the quarters of the world lettered on it.</summary>
     public partial class Ring : Control
     {
         public override void _Draw()
         {
             var c = Size / 2;
             float mid = (Outer + Inner) / 2, band = Outer - Inner;
-            DrawArc(c + new Vector2(1, 2), mid, 0, MathF.Tau, 96, new Color(0, 0, 0, .5f), band + 3, true);
-            DrawArc(c, mid, 0, MathF.Tau, 96, Craft.IronBlack, band, true);
-            DrawArc(c, mid - band * .18f, 0, MathF.Tau, 96, Craft.IronEdge, band * .35f, true);
-            DrawArc(c, Outer - .8f, 0, MathF.Tau, 96, Craft.Brass, 2.2f, true);
-            DrawArc(c, Outer - .2f, 0, MathF.Tau, 96, Craft.BrassDark, 1, true);
-            DrawArc(c, Inner + .6f, 0, MathF.Tau, 96, Craft.Brass, 2, true);
-            DrawArc(c, Inner - .3f, 0, MathF.Tau, 96, new Color(0, 0, 0, .7f), 1.2f, true);
-            for (int i = 0; i < 16; i++)
-            {
-                float a = i * MathF.Tau / 16 + MathF.Tau / 32;
-                Craft.Rivet(this, c + new Vector2(MathF.Cos(a), MathF.Sin(a)) * mid, 2);
-            }
+            for (int i = 0; i < 8; i++) DrawArc(c, Inner - 2 - i * 2.5f, 0, MathF.Tau, 96, new Color(0, 0, 0, .3f - i * .035f), 2.6f, true);
+            DrawArc(c + new Vector2(0, 2), mid, 0, MathF.Tau, 96, new Color(0, 0, 0, .3f), band + 4, true);
+            DrawArc(c, mid, 0, MathF.Tau, 96, Craft.Fill, band, true);
+            DrawArc(c, Outer - .5f, 0, MathF.Tau, 96, Craft.Line, 1, true);
+            DrawArc(c, Inner + .5f, 0, MathF.Tau, 96, Craft.Line, 1, true);
             // north up, the horde's west to the left
             foreach (var (letter, a) in new[] { ("С", -MathF.PI / 2), ("В", 0f), ("Ю", MathF.PI / 2), ("З", MathF.PI) })
             {
                 var p = c + new Vector2(MathF.Cos(a), MathF.Sin(a)) * mid;
-                Ornament.Diamond(this, p, 9, new Color(0, 0, 0, .5f));
-                Ornament.Diamond(this, p, 8, Craft.BrassDark);
-                Ornament.Diamond(this, p, 6.6f, Craft.Brass);
-                DrawString(Ornament.Caps, p + new Vector2(-6, 3.6f), letter, HorizontalAlignment.Center, 12, 9, letter == "З" ? Ornament.Blood.Darkened(.3f) : Craft.OakDark);
+                DrawString(Ornament.Caps, p + new Vector2(-6, 3.6f), letter, HorizontalAlignment.Center, 12, 10, letter == "З" ? Ornament.Blood : Ornament.Aged);
             }
         }
     }
 }
 
 /// <summary>
-/// The face of the one chosen (or of the first of many) in a brass frame on the console; with nobody chosen, the
+/// The face of the one chosen (or of the first of many) on the console, a thin line round it; with nobody chosen, the
 /// garrison's arms: a blue shield with a gold cross.
 /// </summary>
 public partial class PortraitFrame : Control
@@ -747,10 +693,7 @@ public partial class PortraitFrame : Control
             if (Unit.Leader) DrawRect(r.Grow(-2), Ornament.Blood, false, 1.5f);
         }
         else Arms(new Rect2(r.Position + new Vector2(18, 12), r.Size - new Vector2(36, 24)));
-        Craft.BrassRect(this, r, 2.5f);
-        DrawRect(r.Grow(-3), Craft.BrassDark, false, 1);
-        foreach (var p in new[] { r.Position, new Vector2(r.End.X, r.Position.Y), new Vector2(r.Position.X, r.End.Y), r.End })
-            Ornament.Rivet(this, p, 3.2f);
+        DrawRect(r, Craft.Line, false, 1);
     }
 
     /// <summary>The garrison's arms: a heater shield of blue with a gold cross, as on the banners.</summary>

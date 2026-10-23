@@ -27,7 +27,7 @@ public partial class GameMenu : Control
         var dim = _dim = new ColorRect { Color = new Color(0, 0, 0, .55f), MouseFilter = MouseFilterEnum.Ignore };
         dim.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         AddChild(dim);
-        var panel = new BottomConsole.Plate(c => Craft.Framed(c, new Rect2(Vector2.Zero, c.Size), 12)) { MouseFilter = MouseFilterEnum.Stop };
+        var panel = new BottomConsole.Plate(c => Craft.Plate(c, new Rect2(Vector2.Zero, c.Size))) { MouseFilter = MouseFilterEnum.Stop };
         panel.SetAnchorsPreset(LayoutPreset.Center);
         AddChild(panel);
         _panel = panel;

@@ -855,7 +855,7 @@ public partial class Tutorial : Node
             Visible = !_t._m.Hud.MenuOpen;
         }
 
-        public override void _Draw() => Craft.Framed(this, new Rect2(Vector2.Zero, Size), 10);
+        public override void _Draw() => Craft.Plate(this, new Rect2(Vector2.Zero, Size));
     }
 
     // ---------------------------------------------------------------- what it points at
