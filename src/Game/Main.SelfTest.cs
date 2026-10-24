@@ -690,16 +690,23 @@ public partial class Main
             await Frames(2);
             shot1 = GetViewport().GetTexture().GetImage();
         }
-        Settings.ScriptLines(true);
-        await Frames(2);
-        var shot2 = GetViewport().GetTexture().GetImage();
+        // the lines put on and off by turns, and each picture with them weighed against those without them on either
+        // side, so that whatever drifts by itself (smoke, a torch, the light) cancels out
+        var shots = new List<Image> { shot1 };
+        for (int t = 1; t <= 4; t++)
+        {
+            Settings.ScriptLines(t % 2 == 1);
+            await Frames(2);
+            shots.Add(GetViewport().GetTexture().GetImage());
+        }
         Settings.ScriptLines(false);
         View.Grass.Visible = true;
         Paused = wasPaused;
-        float idle = Darker(shot0, shot1), lined = Darker(shot1, shot2);
+        float lined = (Darker(shots[0], shots[1]) + Darker(shots[2], shots[1]) + Darker(shots[2], shots[3]) + Darker(shots[4], shots[3])) / 4;
+        float idle = Math.Max(Math.Abs(Darker(shots[0], shots[2])), Math.Abs(Darker(shots[2], shots[4])));
         Rig.Set(aim0.x, aim0.z, aim0.yaw, aim0.pitch, aim0.zoom, snap: true);
         Check("the lines round the voxels are off by default, and turned on in the settings they are drawn at once",
-            linesOff && lined > .6f && lined > Math.Abs(idle) * 3, $"the picture {lined:0.00} darker with the lines, {idle:0.00} by itself");
+            linesOff && lined > .6f && lined > idle * 2, $"the picture {lined:0.00} darker with the lines, {idle:0.00} by itself");
         // first person: one of ours chosen (a swordsman if one is about), I goes into it: the view is its eyes, the frame of
         // the game put away; it walks where it is told, and Esc lets it go, the view back over the valley and it chosen
         // one standing on the ground (not up on a wall, with nowhere to walk), a swordsman if there is one
