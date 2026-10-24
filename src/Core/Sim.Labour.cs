@@ -440,6 +440,8 @@ public sealed partial class Sim
                 // what another pawn was sent to bring in is its work
                 if (u.Duty != Stockpile.None && ZoneAt((col % Nav.NX << NavGrid.Shift) + 4, (col / Nav.NX << NavGrid.Shift) + 4) is { Auto: true } other && other != u.DutyZone) continue;
                 if (u.Unreachable.TryGetValue(col, out double until) && Time < until) continue;
+                // what one pawn found it could not get to, those standing about the same place do not try for again
+                if (_noWay.TryGetValue(col, out var nw) && Time < nw.until && CellsApart(u.Cell, nw.from) <= 6 && MathF.Abs(Nav.Floor[u.Cell] - Nav.Floor[nw.from]) <= 8) continue;
                 float d = PathFinder.Octile(col % Nav.NX - ui, col / Nav.NX - uk);
                 if (near.Count < 6) { near.Add((d, col)); continue; }
                 int worst = 0;
@@ -466,7 +468,13 @@ public sealed partial class Sim
                 if (_seekSpent >= SeekBudget) { u.NextSearch = Time; return false; }
                 List<int> path = Goal(u.Cell) ? new List<int>() : Paths.Find(u.Cell, Goal, c => H(c, ci, ck), MoverOf(u), 30000, gates: true);
                 if (!Goal(u.Cell)) _seekSpent += Paths.Expanded;
-                if (path == null) { u.Unreachable[col] = Time + 12; continue; }
+                if (path == null)
+                {
+                    u.Unreachable[col] = Time + 12;
+                    if (_noWay.Count > 4096) _noWay.Clear();
+                    _noWay[col] = (Time + 12, u.Cell);
+                    continue;
+                }
                 u.Site = col; _claims[col]++;
                 u.SiteWork = mask;
                 u.Path = path.Count > 0 ? path : null; u.PathI = 0;
@@ -487,7 +495,10 @@ public sealed partial class Sim
     // the cells the pawns' searches for work have looked beyond this step, and at what time the step is
     int _seekSpent;
     double _seekAt = -1;
-    const int SeekBudget = 40_000;
+    // a whole search that finds no way costs about this much: one of those a step, as many short ones as come
+    const int SeekBudget = 20_000;
+    // the work columns some pawn found it could not get to lately: till when, and from where it looked
+    readonly Dictionary<int, (double until, int from)> _noWay = new();
 
     bool Inside(Zone z, int col)
     {
