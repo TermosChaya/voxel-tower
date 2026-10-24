@@ -914,7 +914,17 @@ public partial class Main
     async Task SelfTestGiants(Action<string, bool, string> check)
     {
         async Task Frames(int n) { for (int i = 0; i < n; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
-        int gx = Site.KeepX - Site.KeepR - 220, gz = Site.KeepZ + 30;
+        // on level ground with no tree by it: torn out of a slope, the stone lets the rim slump in on the giant's feet
+        bool Level(int x, int z)
+        {
+            int h = World.SurfAt(x, z);
+            for (int dz = -16; dz <= 16; dz += 4)
+                for (int dx = -16; dx <= 16; dx += 4)
+                    if (!World.InBounds(x + dx, 1, z + dz) || Math.Abs(World.SurfAt(x + dx, z + dz) - h) > 1) return false;
+            return true;
+        }
+        var (gx, gz) = Nearest(Site.KeepX - Site.KeepR - 220, Site.KeepZ + 30, 120, Level);
+        ClearTrees(gx - 30, gz - 30, gx + 30, gz + 30);
         var g = Sim.Spawn(Kinds.HillGiant, Sim.NearestStand(gx, gz, 3));
         g.Guard = true; g.Home = g.Cell; g.Hp = g.MaxHp = 1e5f; g.NextHurl = 1e9;
         Rig.SetAt(World.WX(g.X), World.WY(g.Y + 14), World.WZ(g.Z), -.7f, .45f, 3f);
@@ -933,7 +943,7 @@ public partial class Main
         bool flying = Sim.Fliers.Exists(f => f.Cause == Sim.HurledCause && f.Carrier == null);
         check("a hill giant told to throw stoops to tear the stone out, the panel says so, and the stone goes off with the sound of it; the dusk card knows it",
             ordered && upright > .95f && stooped < .9f && doing == "выворачивает валун" && heaved && flying && Sim.GiantHurled > 0 && DuskCard.Against.ContainsKey("hillgiant"),
-            $"upright {upright:0.00}, stooping {stooped:0.00}; «{doing}»; heard {heaved}, in the air {flying}");
+            $"ordered {ordered}, upright {upright:0.00}, stooping {stooped:0.00}; «{doing}»; heard {heaved}, in the air {flying}, hurled {Sim.GiantHurled}, still in hand {g.Hefted != null}, down {g.Down}, bones {Sim.Broken(g)}");
         Advance(6);
         g.Dead = true; g.DiedAt = -999;
         await Frames(2);
