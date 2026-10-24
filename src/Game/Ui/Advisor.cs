@@ -6,7 +6,8 @@ using VoxelTower.Core;
 namespace VoxelTower.Game;
 
 /// <summary>
-/// Advice on what is amiss now, over the map at the lower left: work the workers cannot get to, a material run out,
+/// Advice on what is amiss now, over the map at the lower left: masonry of ours cracking under its load, work the
+/// workers cannot get to, a material run out,
 /// marks hanging in the air, workers with nothing to do or with all their work turned off, no place left in the
 /// household, knowledge or gold that could be spent. Two lines at most, the most pressing first. A click on one does
 /// what it says: chooses those people and shows them, takes up the tool, opens the panel; its cross hides it for 5
@@ -82,6 +83,22 @@ public partial class Advisor : VBoxContainer
         }
         foreach (int id in new List<int>(_idleSince.Keys)) if (!seen.Contains(id)) _idleSince.Remove(id);
 
+        // what of ours cracks under its load now: where the most of it is
+        int cracking = -1;
+        foreach (int p in sim.Cracking)
+        {
+            var (x, y, z) = WaterPlanner.Unpack(p);
+            if (Mat.IsPlayer[_m.World.Get(x, y, z)]) { cracking = p; break; }
+        }
+        if (cracking >= 0)
+            list.Add(new Advice("cracks", Icons.Mend, "Кладка трескается: засыпьте подкоп или почините",
+                "Кладка трескается\nПостройка несёт больше, чем держит: под ней подкоп, пролом или её разбили камни. Засыпьте яму кистью ({ToolBrush}) или подоприте, починка ({ToolRepair}) переложит треснувшие камни. Щелчок покажет место и возьмёт починку.",
+                () =>
+                {
+                    var (x, _, z) = WaterPlanner.Unpack(cracking);
+                    _m.Rig.Focus(_m.World.WX(x), _m.World.WZ(z));
+                    _m.Tools.SetTool(Tool.Repair);
+                }));
         if (stuck.Count > 0)
             list.Add(new Advice("stuck", Icons.Ladder, "Рабочим не дойти до разметки: нужна лестница или проход",
                 "Рабочим не дойти до разметки\nПоставьте лестницу ({ToolLadder}) или оставьте проход к месту стройки. Щелчок покажет, кому.", () => Show(stuck)));
