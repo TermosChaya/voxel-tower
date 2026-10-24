@@ -31,7 +31,7 @@ public partial class SigilGallery : Control
 
     public static readonly string[] BranchNames =
     {
-        "Пехота", "Стрелки", "Конница", "Великаны", "Круг земли", "Круг огня и неба", "Круг смерти", "Круг воли", "Благодать",
+        "Пехота", "Стрелки", "Конница", "Великаны", "Машины", "Круг земли", "Круг огня и неба", "Круг смерти", "Круг воли", "Благодать",
     };
 
     const float Margin = 16, Big = 64, Small = 28, Rim = 18, CellW = 156, CellH = 88, HeadH = 26;

@@ -34,7 +34,7 @@ public partial class LorePanel : VBoxContainer
     static readonly Color[][] Hues =
     {
         new[] { Ornament.Moss, new Color("9aa7b8"), new Color("c9a24a"), Ornament.Blood, Ornament.Ember },
-        new[] { new Color("9aa7b8"), Ornament.Moss, new Color("c9a24a"), Ornament.Blood },
+        new[] { new Color("9aa7b8"), Ornament.Moss, new Color("c9a24a"), Ornament.Blood, Ornament.Ember },
         new[] { new Color("b0875a"), Ornament.Ember, new Color("9b7fc4"), new Color("7f9fc4"), new Color("e8d48a") },
     };
 
