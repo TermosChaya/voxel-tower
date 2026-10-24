@@ -794,9 +794,10 @@ if (args.Length == 0 || args[0] == "--sim")
         int shots0 = sim.Shots;
         sim.Hunt(new[] { bowman }, stag);
         double hunted = 0;
-        for (; hunted < 60 && !stag.Dead; hunted += .5) Run(.5);
+        // (a minute and a half: a deer that runs well can take the tenth arrow)
+        for (; hunted < 90 && !stag.Dead; hunted += .5) Run(.5);
         Check("an archer sent after a running deer keeps it in range and brings it down", stag.Dead,
-            $"the deer {(stag.Dead ? $"taken in {hunted:0} s" : $"{stag.Hp:0} hp after a minute")}, {sim.Shots - shots0} shots");
+            $"the deer {(stag.Dead ? $"taken in {hunted:0} s" : $"{stag.Hp:0} hp after a minute and a half")}, {sim.Shots - shots0} shots");
         bowman.Dead = true; bowman.DiedAt = -999; stag.Dead = true; stag.DiedAt = -999;
     }
 
