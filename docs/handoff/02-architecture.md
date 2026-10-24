@@ -772,6 +772,11 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   факелы, стяги, бочки, ящики, мешки. `Sim.Mines.cs` — рудники и лагерь. `Sim.Wild.cs` — звери.
   `Sim.Life.cs` — досуг праздных.
 - `Bodies.HillGiant.cs` — лепка горного великана (`Bodies` теперь `partial`).
+- `Bodies` разнесён по файлам: `Bodies.cs` — типы, выбор облика, пропорции, ячейки и снаряжение (`Build`, `Cells`,
+  `Gear`); `Bodies.Sculpt.cs` — лепка (`Sculpt`) и общие черты лица и рук; `Bodies.Gear.cs` — что держат в руке;
+  `Bodies.People.cs` — наши люди, жрецы и костяки (и их тонкая лепка); `Bodies.Wear.cs` — доспехи и оружие войск;
+  `Bodies.Troops.cs` — войска из знаний и псы; `Bodies.Horde.cs` — орда и её машины; `Bodies.Beasts.cs` — звери;
+  `Bodies.Alchemist.cs`, `Bodies.HillGiant.cs` — алхимик и горный великан.
 - `Bodies.cs` — тела: `BodyPlan` на вид × облик, пять частей (`Body`, `Main`, `Off`, `LegR`, `LegL`; у зверя
   `Main/Off` — передние ноги), шарниры в вокселях. Координаты фигуры: начало между ступнями, +y вверх, +z — куда
   смотрит, правая рука (с орудием) на −x. Два разрешения:
