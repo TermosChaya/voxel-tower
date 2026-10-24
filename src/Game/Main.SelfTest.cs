@@ -665,13 +665,6 @@ public partial class Main
         Rig.SetAt(World.WX(Site.KeepX - 120), World.WY(World.SurfAt(Site.KeepX - 120, Site.KeepZ)), World.WZ(Site.KeepZ), aim0.yaw, .6f, 2.2f);
         await Frames(20);
         bool linesOff = !Settings.Lines;
-        var shot0 = GetViewport().GetTexture().GetImage();
-        await Frames(2);
-        var shot1 = GetViewport().GetTexture().GetImage();
-        Settings.ScriptLines(true);
-        await Frames(2);
-        var shot2 = GetViewport().GetTexture().GetImage();
-        Settings.ScriptLines(false);
         // how much darker the second picture is than the first, on average, in steps of 255
         float Darker(Image a, Image b)
         {
@@ -681,6 +674,21 @@ public partial class Main
                     d += a.GetPixel(x, y).Luminance - b.GetPixel(x, y).Luminance;
             return (float)(d / Math.Max(1, n) * 255);
         }
+        // the view settled first: on a busy machine the valley's meshes are still coming in a while after the move
+        var shot0 = GetViewport().GetTexture().GetImage();
+        await Frames(2);
+        var shot1 = GetViewport().GetTexture().GetImage();
+        for (int i = 0; i < 30 && Math.Abs(Darker(shot0, shot1)) > .3f; i++)
+        {
+            await Frames(4);
+            shot0 = shot1;
+            await Frames(2);
+            shot1 = GetViewport().GetTexture().GetImage();
+        }
+        Settings.ScriptLines(true);
+        await Frames(2);
+        var shot2 = GetViewport().GetTexture().GetImage();
+        Settings.ScriptLines(false);
         float idle = Darker(shot0, shot1), lined = Darker(shot1, shot2);
         Rig.Set(aim0.x, aim0.z, aim0.yaw, aim0.pitch, aim0.zoom, snap: true);
         Check("the lines round the voxels are off by default, and turned on in the settings they are drawn at once",

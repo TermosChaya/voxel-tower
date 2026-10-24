@@ -459,8 +459,14 @@ public partial class Main : Node3D
         if (_tutCheck) TutorialCheck();
         if (_perf > 0) Perf(_perf);
         else if (Hitches.Tell) Hitches.Start(GetViewport());
-        // a hidden or minimised window never draws a frame: don't let scripted runs hang
-        if (_shot != null || _selfTest) GetTree().CreateTimer(120).Timeout += () => { GD.PrintErr("[voxel-tower] gave up waiting for a frame"); GetTree().Quit(2); };
+        // a hidden or minimised window never draws a frame: don't let scripted runs hang (but a long self-test on a
+        // busy machine draws its frames all the while, and is let run)
+        int drawnAtStart = Engine.GetFramesDrawn();
+        if (_shot != null || _selfTest) GetTree().CreateTimer(120).Timeout += () =>
+        {
+            if (_selfTest && Engine.GetFramesDrawn() > drawnAtStart + 10) return;
+            GD.PrintErr("[voxel-tower] gave up waiting for a frame"); GetTree().Quit(2);
+        };
         // from here on a frame that does not come is a hang, and is written down
         Diag.Start(Sim, Scripted || _trailer >= 0);
         if (_startTitle && Diag.LastEndedBadly) Hud.OpenMenu("report");
