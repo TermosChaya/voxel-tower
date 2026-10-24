@@ -51,7 +51,8 @@ public partial class Main
         void Done(double most)
         {
             for (double t = 0; t < most && (sim.Orders.Total > 0 || sim.Storeys.Count > 0 || home is { Closed: false }); t += 1) Advance(1);
-            Advance(6);
+            // the workers gone from the door and it shut behind them, the chips of the doorway settled
+            Advance(20);
             sim.LookOver(home);
         }
         if (look == 4) Advance(_poseSeconds == 14 ? 25 : _poseSeconds);

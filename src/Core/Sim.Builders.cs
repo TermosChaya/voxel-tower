@@ -105,4 +105,18 @@ public sealed partial class Sim
         int span = SpanOf(m);
         return span != 0 && span != Free && ReachIfLaid(x, y, z, m) > span;
     }
+
+    /// <summary>
+    /// An arched voxel to come out with another to come out over it, a course up and up to two voxels aside (a roof's
+    /// slope steps two voxels in at each course): it waits for that one. So a roof is taken off from the ridge down;
+    /// cut out from under what is still over it, that is left joined to nothing and comes down on those below.
+    /// </summary>
+    bool ArchOver(int x, int y, int z)
+    {
+        for (int dz = -2; dz <= 2; dz++)
+            for (int dx = -2; dx <= 2; dx++)
+                if (Arched.Get(x + dx, y + 1, z + dz) != 0 && Orders.IsRemove(Orders.At(x + dx, y + 1, z + dz))
+                    && World.Get(x + dx, y + 1, z + dz) != Mat.Air) return true;
+        return false;
+    }
 }

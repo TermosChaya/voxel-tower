@@ -312,14 +312,16 @@ static class StrainBench
             sim.Collapsed = (n, x, y, z) => { if (x > bx - 40 && x < bx + 80 && z > bz - 40 && z < bz + 60) falls += n; };
             sim.GoingOver = f => overs++;
             sim.DesignateBuild(Shapes.Line(w, site, bx - 30, bz - 30, bx - 30, bz + 30, new Stroke { Mat = Mat.Stone, Width = 8, Height = 32, Level = true }, bgnd + 32));
-            var house = Shapes.House(w, site, bx + 10, bz - 16, bx + 60, bz + 12, new Stroke { Mat = Mat.Stone, Width = 4, Height = 32, Level = true }, bgnd + 32, out var door, out string why);
-            if (house != null) sim.DesignateBuild(house);
+            // the house as the house tool marks it: its roof and lintel standing as arches, its door hung once the wall
+            // stands round the doorway
+            var house = Shapes.House(w, site, bx + 10, bz - 16, bx + 60, bz + 12, new Stroke { Mat = Mat.Stone, Width = 4, Height = 32, Level = true }, bgnd + 32, out var door, out string why, out var arched);
+            if (house != null) { sim.DesignateBuild(house); sim.Arch(arched); sim.PlanHouse(door, bx + 10, bz - 16, bx + 60, bz + 12); }
             double built = 0;
-            for (int t = 0; t < 600 && sim.Orders.Total > 0; t++) { Run(1); built = t + 1; }
+            for (int t = 0; t < 600 && (sim.Orders.Total > 0 || sim.HouseDoors.Count > 0); t++) { Run(1); built = t + 1; }
             int laid = Count(m => Mat.IsMasonry(m) || m == Mat.Wood, bx - 40, bz - 40, bx + 80, bz + 60, bgnd, bgnd + 40);
             int builtCracks = CracksIn(bx - 40, bz - 40, bx + 80, bz + 60);
-            check("a stone wall and a house of stone roofed with logs, built by the workers in the usual order, neither crack nor crumble nor go over as they go up",
-                house != null && laid > 20000 && builtCracks == 0 && crumbs == 0 && overs == 0,
+            check("a stone wall and a house of stone roofed with logs, built by the workers in the usual order, neither crack nor crumble nor go over as they go up, and are done, the door hung",
+                house != null && laid > 20000 && builtCracks == 0 && crumbs == 0 && overs == 0 && sim.Orders.Total == 0,
                 $"{laid} voxels laid in {built:0} s{(why != null ? $" ({why})" : "")}, {sim.Orders.Total} still marked; {builtCracks} cracks, {crumbs} crumbled, went over {overs} times; {falls} came down by the overhang rule");
             sim.Crumbled = null; sim.Collapsed = null; sim.GoingOver = null;
             foreach (var u in crew) { u.Dead = true; u.DiedAt = -999; }

@@ -121,6 +121,17 @@ public sealed partial class Sim
             // the threshold at the top of the house's floor, whatever the ground outside
             var plan = GatePlan.At(World, Site, new VoxelHit { X = d.X, Y = d.Y, Z = d.Z, NX = d.NX, NZ = d.NZ }, d.Top > 0 ? d.Y - 8 : -1);
             if (plan == null) continue;
+            // the leaves hang on the face the door looks out of, their foot at the top of the floor, and that is a
+            // course or more over the ground outside: a doorstep of what the wall is of is laid under them down to the
+            // ground, so that the first course of them is set on something (laid on nothing, it would wait for ever, or
+            // come down whole on whoever is under it)
+            var step = new VoxelList();
+            byte sm = Labour.CostKind(World.Get(d.X, plan.Y - 1, d.Z)) == Stockpile.Stone ? Mat.Stone : Mat.Wood;
+            for (int j = 0; j < plan.Leaves.Count; j++)
+                if (plan.Leaves.Y(j) == plan.Y)
+                    for (int y = plan.Y - 1; y > 0 && plan.Y - y <= 16 && Brushes.Free(World.Get(plan.Leaves.X(j), y, plan.Leaves.Z(j))); y--)
+                        step.Add(plan.Leaves.X(j), y, plan.Leaves.Z(j), sm);
+            if (step.Count > 0) DesignateBuild(step);
             // the doorway is not to be laid any more: what is marked in it is let go before it is cut
             for (int k = 0; k < d.Thick; k++)
                 for (int u = plan.U0; u < plan.U0 + Gateway.Width; u++)

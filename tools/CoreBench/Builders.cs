@@ -98,35 +98,101 @@ static class BuildersBench
             sim.PlanHouse(door, hx0, hz0, hx1, hz1);
             double t0 = sim.Time;
             int Open() { int n = 0; for (int i = 0; i < house.Count; i++) if (sim.Orders.At(house.X(i), house.Y(i), house.Z(i)) != 0) n++; return n; }
-            while (sim.Time - t0 < 900 && (Open() > 0 || sim.Orders.Total > 0)) { Stock(); Run(1); }
+            // and its door after it, hung once the wall stands all round the doorway
+            while (sim.Time - t0 < 900 && (Open() > 0 || sim.Orders.Total > 0 || sim.HouseDoors.Count > 0)) { Stock(); Run(1); }
             took = sim.Time - t0; left = Open(); houseLeft = Left(house) + (sim.Orders.Total > 0 ? Marked() : "");
         }
         Run(30);
         var shut = crew.Where(u => !Free(u)).ToList();
-        check("four workers raise a house of stone roofed with logs: nothing they lay falls, and nobody is left shut in up on it",
-            house != null && left == 0 && fell == 0 && shut.Count == 0,
-            $"{house?.Count} voxels{(why != null ? $" ({why})" : "")} in {took:0} s, {left} left{houseLeft}; {fell} fell{FellWhat()}; shut in {shut.Count}: {string.Join("; ", shut.Select(Where))}");
+        // its door: a gate in the wall of the house, its leaves hung whole
+        string Door(int x0, int z0, int x1, int z1, out bool hung)
+        {
+            var g = sim.Gates.Find(g => { var (gx, _, gz) = g.Middle; return gx >= x0 - 8 && gx <= x1 + 8 && gz >= z0 - 8 && gz <= z1 + 8; });
+            var zone = sim.Zones.Find(z => z.Kind == Zone.Dwelling && z.X0 == x0 && z.Z0 == z0);
+            hung = g is { Ready: true, Broken: false } && g.Hacked == 0 && zone is { Closed: true };
+            return g == null ? "no door" : $"door ready {g.Ready}, broken {g.Broken}, {g.Hacked} of its leaves gone, the dwelling closed {zone?.Closed} «{zone?.Why}»";
+        }
+        string door1 = Door(hx0, hz0, hx1, hz1, out bool hung1);
+        check("four workers raise a house of stone roofed with logs: nothing they lay falls, nobody is left shut in up on it, its door is hung and nothing is left waiting",
+            house != null && left == 0 && fell == 0 && shut.Count == 0 && hung1 && sim.Orders.Total == 0,
+            $"{house?.Count} voxels{(why != null ? $" ({why})" : "")} in {took:0} s, {left} left{houseLeft}; {door1}; {sim.Orders.Total} voxels still marked{(sim.Orders.Total > 0 ? Marked() : "")}; {fell} fell{FellWhat()}; shut in {shut.Count}: {string.Join("; ", shut.Select(Where))}");
+
+        // one of ours standing on the doorstep as the door is shut on it: it is put out of the leaves' way beside them,
+        // not up on the wall over the doorway
+        {
+            var g = sim.Gates.Find(g => { var (gx, _, gz) = g.Middle; return gx >= hx0 - 8 && gx <= hx1 + 8 && gz >= hz0 - 8 && gz <= hz1 + 8; });
+            string said = "no door";
+            bool aside = false;
+            if (g is { Ready: true })
+            {
+                sim.SetGateMode(g, GateMode.Open);
+                Run(3);
+                int sill = door.Y - 8, at = sim.StandNear(door.X + door.NX * 2, sill, door.Z + door.NZ * 2, 2);
+                var by = sim.Spawn(Kinds.Worker, at);
+                sim.Command(new[] { by }, at);
+                Run(.5);
+                float y0 = by.Y;
+                sim.SetGateMode(g, GateMode.Shut);
+                Run(3);
+                aside = !by.Dead && g.Open == 0 && Math.Abs(by.Y - sill) <= 8;
+                said = $"stood at {y0 - fg:0} over the field, the threshold {sill - fg}; after the door shut: {Where(by)}, the door open {g.Open:0.0}";
+                by.Dead = true; by.DiedAt = -999;
+                sim.SetGateMode(g, GateMode.Auto);
+            }
+            check("one standing on the doorstep as the door shuts on it is put aside on the ground, not up on the wall over the doorway", aside, said);
+        }
 
         // a second house drawn on the first: its roof taken down, a floor and a ladder, a storey of walls and a roof
         var under = sim.HouseUnder(hx0, hz0, hx1, hz1);
         string no = under == null ? "no house under it" : sim.PlanStorey(under, hx0, hz0, hx1, hz1, Mat.Stone);
         fell = 0; fellAt.Clear();
         double s0 = sim.Time, still = s0;
-        int depth0 = under?.Depth ?? 0, marked = int.MaxValue;
-        // till what is marked stops going down for a minute (the house's gate is the houses' own business: what is
-        // marked of it is told, not waited for)
-        while (no == null && sim.Time - s0 < 1200 && (sim.Storeys.Count > 0 || sim.Time - still < 60))
+        int depth0 = under?.Depth ?? 0, marked = int.MaxValue, roofDown = 0;
+        var hp0 = crew.ToDictionary(u => u, u => u.Hp);
+        // till nothing is marked, or it stops going down for a minute; what of the old roof comes down as it is taken
+        // apart is told apart
+        while (no == null && sim.Time - s0 < 1200 && (sim.Storeys.Count > 0 || sim.Orders.Total > 0 && sim.Time - still < 60))
         {
-            Stock(); Run(1);
+            Stock();
+            int f0 = fell;
+            bool takingDown = sim.Storeys.Count > 0;
+            Run(1);
+            // (and what is marked is counted from when the storey itself is marked out)
+            if (takingDown) { roofDown += fell - f0; fell = f0; marked = int.MaxValue; }
             if (sim.Orders.Total < marked) { marked = sim.Orders.Total; still = sim.Time; }
         }
         took = still - s0;
         int storeyLeft = sim.Storeys.Count + (under != null && under.Depth > depth0 ? 0 : 1);
         Run(30);
         shut = crew.Where(u => !Free(u)).ToList();
-        check("a second storey raised on the house goes up too, nothing falls, and nobody is left shut in on top",
-            no == null && storeyLeft == 0 && fell == 0 && shut.Count == 0,
-            $"{(no ?? "planned")} in {took:0} s, the house {depth0} → {under?.Depth} high, {sim.Orders.Total} voxels still marked{(sim.Orders.Total > 0 ? Marked() : "")}; {fell} fell{FellWhat()}; shut in {shut.Count}: {string.Join("; ", shut.Select(Where))}");
+        var hurt = crew.Where(u => u.Dead || u.Hp < hp0[u] - .5f).ToList();
+        check("a second storey raised on the house goes up too, all of it: the old roof taken off from the ridge down with nothing of it coming down, nothing else falling, nobody hurt, and nobody left shut in on top",
+            no == null && storeyLeft == 0 && sim.Orders.Total == 0 && roofDown == 0 && fell == 0 && hurt.Count == 0 && shut.Count == 0,
+            $"{no ?? $"done in {took:0} s"}, the house {depth0} → {under?.Depth} high, {sim.Orders.Total} voxels still marked{(sim.Orders.Total > 0 ? Marked() : "")}; {roofDown} of the old roof came down; {fell} fell besides{(fell > 0 ? FellWhat() : "")}; hurt {hurt.Count}: {string.Join("; ", hurt.Select(Where))}; shut in {shut.Count}: {string.Join("; ", shut.Select(Where))}");
+
+        // a house all of logs elsewhere on the field: its door hung too, on a doorstep of logs, no leaf of it laid in the
+        // air to fall
+        {
+            int tx0 = fx0 + 76, tz0 = fz0 + 176, tx1 = tx0 + 36, tz1 = tz0 + 44;
+            var logs = Shapes.House(w, site, tx0, tz0, tx1, tz1, new Stroke { Mat = Mat.Wood, Width = 4, Height = 32, Level = true }, Shapes.LevelTop(w, tx0, tz0, 32), out var door3, out string why3, out var arched3);
+            fell = 0; fellAt.Clear();
+            double l0 = sim.Time, lstill = l0;
+            int lmarked = int.MaxValue;
+            if (logs != null)
+            {
+                sim.DesignateBuild(logs); sim.Arch(arched3); sim.PlanHouse(door3, tx0, tz0, tx1, tz1);
+                while (sim.Time - l0 < 900 && (sim.Orders.Total > 0 || sim.HouseDoors.Count > 0 || sim.Time - lstill < 20))
+                {
+                    Stock(); Run(1);
+                    if (sim.Orders.Total < lmarked) { lmarked = sim.Orders.Total; lstill = sim.Time; }
+                }
+            }
+            string door4 = Door(tx0, tz0, tx1, tz1, out bool hung2);
+            int died = crew.Count(u => u.Dead);
+            check("a house all of logs ends with its door hung on its doorstep, nothing fallen and nothing left waiting",
+                logs != null && hung2 && fell == 0 && sim.Orders.Total == 0 && died == 0,
+                $"{logs?.Count} voxels{(why3 != null ? $" ({why3})" : "")} in {lstill - l0:0} s; {door4}; {sim.Orders.Total} voxels still marked{(sim.Orders.Total > 0 ? Marked() : "")}; {fell} fell{FellWhat()}; {died} of the crew dead");
+        }
 
         tower:
         // a round stone tower eight metres high, three across

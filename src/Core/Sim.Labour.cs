@@ -286,7 +286,12 @@ public sealed partial class Sim
                 {
                     byte o = Orders.At(x, y, z);
                     if (o == 0 || (u.SiteWork >> (int)Work.Of(o) & 1) == 0) continue;
-                    if (Orders.IsRemove(o)) { digs.Add((x, y, z, o)); continue; }
+                    if (Orders.IsRemove(o))
+                    {
+                        // a roof comes off from the ridge down (Sim.Builders.cs)
+                        if (Arched.Get(x, y, z) == 0 || !ArchOver(x, y, z)) digs.Add((x, y, z, o));
+                        continue;
+                    }
                     int ck = Labour.CostKind(o);
                     if (ck != Stockpile.None && Stock[ck] < 1) { missing = Stockpile.Name(ck); continue; }
                     int bc = Nav.CellOf(x, y, z);

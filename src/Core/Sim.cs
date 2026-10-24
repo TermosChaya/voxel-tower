@@ -296,8 +296,9 @@ public sealed partial class Sim
         {
             // buried by what came down on it just now
             if (!Nav.Deep(u.Cell) && Time - u.StruckAt < 2 && TryPin(u)) return;
-            // walled in, or the water rose over it: out to the nearest free footing
-            int c = NearestStand((int)u.X, (int)u.Z, h);
+            // walled in (a gate shut on it), or the water rose over it: out to the nearest free footing about where it
+            // stands, beside it — not up on top of the wall that shut it in
+            int c = StandNear((int)u.X, (int)u.Y, (int)u.Z, h);
             if (c >= 0) { u.Cell = c; (u.X, u.Y, u.Z) = Nav.Feet(c); u.Path = null; StopCarve(u); StopBuild(u); }
             return;
         }
