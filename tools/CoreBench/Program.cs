@@ -4763,6 +4763,31 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--strokes")
     Check("a neck cut through takes the head off one with a quiver, a pack, a ladder or a sack on his back, and what is slung stays on the back", carriers.Select((t, ci) => headsOf[ci] == Bodies.Looks(t)).All(x => x) && slung == carriers.Sum(t => Bodies.Looks(t)),
         $"heads off: {string.Join(", ", carriers.Select((t, ci) => $"{t.Name} {headsOf[ci]} of {Bodies.Looks(t)}"))}; what is carried still on {slung} of them");
 
+    // a sliver off the fingers is no arm lost; cut through above the elbow, it is (a friend saw «отрублена левая рука»
+    // over an arm still there)
+    string CutArm(bool high)
+    {
+        var (a, b) = Pair(simK, Kinds.Knight, Kinds.Swordsman, 40);
+        var body = b.Wounds = new BodyState(Bodies.Plan(b.T, b.Look));
+        var g = body.Grid[(int)BodyPart.Off];
+        int lo = int.MaxValue, hi = int.MinValue;
+        for (int y = g.Y0; y < g.Y0 + g.SY; y++)
+            for (int z = g.Z0; z < g.Z0 + g.SZ; z++)
+                for (int x = g.X0; x < g.X0 + g.SX; x++)
+                    if (g.Mat(x, y, z) != 0 && g.Kind(x, y, z) != Tissue.Gear) { lo = Math.Min(lo, y); hi = Math.Max(hi, y); }
+        int at = high ? (lo + hi) / 2 + 2 : lo + 1;
+        for (int z = g.Z0; z < g.Z0 + g.SZ; z++)
+            for (int x = g.X0; x < g.X0 + g.SX; x++)
+                if (g.Mat(x, at, z) != 0 && g.Kind(x, at, z) != Tissue.Gear) g.Clear(x, at, z);
+        simK.Sever(b, body);
+        string said = string.Join(", ", body.Wounds);
+        Done(a, b);
+        return said;
+    }
+    string sliver = CutArm(false), arm = CutArm(true);
+    Check("a sliver off the fingers is not told as the arm cut off; the arm cut through above the elbow is",
+        !sliver.Contains("рука") && arm.Contains("отрублена левая рука"), $"the fingers: «{sliver}»; the arm: «{arm}»");
+
     // the same valley, the same blows: the strokes are chosen without the dice of the simulation
     List<(StrokeKind, float)> Bout(Sim s)
     {

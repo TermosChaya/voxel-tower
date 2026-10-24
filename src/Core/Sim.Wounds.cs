@@ -505,7 +505,9 @@ public sealed partial class Sim
                 if (head > 0 && offHead * 4 >= head * 3) { vital = true; Note(body, "отрублена голова"); }
                 else if (off * 4 >= g.Count + off) { vital = true; Note(body, "разрублен пополам"); }
             }
-            else Note(body, p switch
+            // a limb is said to be off only when a good part of it is: a sliver or the gear on it cut away is no limb
+            // lost, and the hand or the foot alone is told as that
+            else if (Flesh(piece) * 4 >= Flesh(plan.Grid[p])) Note(body, p switch
             {
                 (int)BodyPart.Main => plan.Beast ? "отрублена передняя нога" : "отрублена правая рука",
                 (int)BodyPart.Off => plan.Beast ? "отрублена передняя нога" : "отрублена левая рука",
@@ -513,6 +515,12 @@ public sealed partial class Sim
                 (int)BodyPart.LegR when plan.Mounted => "коню перерублена передняя нога",
                 _ when plan.Mounted => "коню перерублена задняя нога",
                 _ => "отрублена нога",
+            });
+            else if (!plan.Beast && !plan.Mounted && !Holds(body, (BodyPart)p)) Note(body, p switch
+            {
+                (int)BodyPart.Main => "отрублена правая кисть",
+                (int)BodyPart.Off => "отрублена левая кисть",
+                _ => "отрублена стопа",
             });
         }
         // what still works: the hand that holds (its lower quarter), the feet (their lower rows)
@@ -522,6 +530,15 @@ public sealed partial class Sim
         body.Legs = (Holds(body, BodyPart.LegR) ? 1 : 0) + (Holds(body, BodyPart.LegL) ? 1 : 0);
         if (plan.Beast) body.Legs = Math.Min(body.Legs, body.MainHand && body.OffHand ? 2 : body.MainHand || body.OffHand ? 1 : 0);
         return vital;
+    }
+
+    /// <summary>The cells of a part that are the body itself, not what it wears or carries.</summary>
+    static int Flesh(PartGrid g)
+    {
+        if (g == null) return 0;
+        int n = 0;
+        for (int i = 0; i < g.M.Length; i++) if (g.M[i] != 0 && g.T[i] != (byte)Tissue.Gear && g.T[i] != (byte)Tissue.Armor) n++;
+        return n;
     }
 
     /// <summary>The lower end of a limb (the hand, the foot) is mostly still there.</summary>
