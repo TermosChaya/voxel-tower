@@ -18,7 +18,7 @@ public partial class SigilGallery : Control
 
     public static readonly string[] TroopKeys =
     {
-        "spearmen", "shieldmen", "halberds", "shieldwall", "longshafts", "knights", "slingers", "crossbows", "leadshot", "bodkins", "firepots", "bombards",
+        "spearmen", "shieldmen", "halberds", "shieldwall", "longshafts", "knights", "slingers", "crossbows", "leadshot", "bodkins", "alchemists", "bombards",
         "hounds", "riders", "hunt", "horsearchers", "charge", "lancers", "barracks", "drillyard", "bunks", "trolls", "giants", "boulders",
     };
 

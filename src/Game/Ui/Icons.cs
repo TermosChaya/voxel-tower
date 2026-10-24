@@ -59,7 +59,7 @@ public static class Icons
         // the troops
         ["spearmen"] = "spears", ["shieldmen"] = "shield", ["halberds"] = "halberd", ["shieldwall"] = "attached-shield",
         ["longshafts"] = "barbed-spear", ["knights"] = "black-knight-helm", ["slingers"] = "sling", ["crossbows"] = "crossbow",
-        ["leadshot"] = "cannon-ball", ["bodkins"] = "broadhead-arrow", ["firepots"] = "fire-bomb", ["bombards"] = "cannon",
+        ["leadshot"] = "cannon-ball", ["bodkins"] = "broadhead-arrow", ["alchemists"] = "acid-flask", ["bombards"] = "cannon",
         ["hounds"] = "hound", ["riders"] = "horse-head", ["hunt"] = "sniffing-dog", ["horsearchers"] = "cloaked-figure-on-horseback",
         ["charge"] = "mounted-knight", ["lancers"] = "cavalry", ["barracks"] = "medieval-barracks", ["drillyard"] = "sword-clash",
         ["bunks"] = "bunk-beds", ["trolls"] = "troll", ["giants"] = "giant", ["boulders"] = "boulder-dash",

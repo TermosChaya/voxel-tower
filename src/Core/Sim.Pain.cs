@@ -22,7 +22,7 @@ public sealed partial class Sim
     public static float Agility(UnitType t) => t.Key switch
     {
         "sword" => .32f, "knight" => .34f, "halberd" => .22f, "spear" => .24f, "shield" => .2f, "worker" => .08f, "archer" => .13f,
-        "sling" => .14f, "crossbow" => .1f, "bombard" => .08f, "priest" => .06f, "goblin" => .2f, "sapper" => .14f, "miner" => .1f,
+        "sling" => .14f, "crossbow" => .1f, "bombard" => .08f, "ouralchemist" => .1f, "priest" => .06f, "goblin" => .2f, "sapper" => .14f, "miner" => .1f,
         "orc" => .14f, "thief" => .3f, "troll" => .03f, "shaman" => .1f, "witch" => .14f, "necro" => .1f, "alchemist" => .12f, "hound" => .18f,
         "giant" => .02f, "tametroll" => .03f, "boar" => .05f, "bear" => .06f, _ => 0f,
     };

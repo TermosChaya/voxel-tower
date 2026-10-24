@@ -55,6 +55,8 @@ public partial class AcidView : Node3D
             m.Debris.Spawn(Mat.Acid, ix, iy, iz, 8, 1.8f, .4f);
             for (int i = 0; i < 5; i++) Fume(x + R(-6, 6), y + R(0, 3), z + R(-6, 6), .22f);
         };
+        // a flask of fumes of ours: a cloud of them, thick and low (Sim.OurAlchemists.cs)
+        sim.Fumed += (x, y, z) => { for (int i = 0; i < 26; i++) Fume(x + R(-14, 14), y + R(-2, 8), z + R(-14, 14), .5f); };
         // eaten through: a fizz of chips of it, and a puff; lost in water: a puff of steam
         sim.Dissolved += (x, y, z, mat) =>
         {

@@ -127,6 +127,17 @@ public static class Kinds
         // its damage is the pot's at the heart of the burst
         Work = .4f, Yield = .6f, Hp = 70, Damage = 40, AttackTime = 4f, Ranged = true, Range = 16 * VoxelWorld.PerMetre, Cost = 60, Lore = "bombards", Tool = "bombard",
     };
+    /// <summary>
+    /// An alchemist of ours in a long leather apron, gloves and goggles, a satchel of flasks at his hip: he keeps out of the
+    /// press and lobs acid that eats the horde's ladders, decks and engines through (Sim.OurAlchemists.cs).
+    /// </summary>
+    public static readonly UnitType OurAlchemist = new()
+    {
+        Key = "ouralchemist", Name = "Алхимик", Team = Team.Player,
+        Move = new Mover { Height = 2, Climb = 2, Speed = 2.4f },
+        // its damage is a flask's on whoever it breaks on; its throws are AttackTime apart
+        Work = .4f, Yield = .6f, Hp = 60, Damage = 16, AttackTime = 3.6f, Ranged = true, Range = 18 * VoxelWorld.PerMetre, Cost = 55, Lore = "alchemists", Tool = "flask",
+    };
     /// <summary>A war hound, a great dog in a spiked collar: the swiftest of ours, it runs down whoever runs.</summary>
     public static readonly UnitType Hound = new()
     {
@@ -171,7 +182,7 @@ public static class Kinds
         Work = .6f, Yield = .6f, Hp = 600, Damage = 40, AttackTime = 1.8f, Reach = 18, BodyH = 24, BodyR = 3.5f, Cost = 160, Room = 4, Lore = "giants", Tool = "maul",
     };
     /// <summary>The troops the lore opens, in the order the citadel offers them.</summary>
-    public static readonly UnitType[] Troops = { Spearman, Shieldbearer, Halberdier, Knight, Slinger, Crossbowman, Bombardier, Hound, Rider, HorseArcher, Lancer, TameTroll, Giant };
+    public static readonly UnitType[] Troops = { Spearman, Shieldbearer, Halberdier, Knight, Slinger, Crossbowman, Bombardier, OurAlchemist, Hound, Rider, HorseArcher, Lancer, TameTroll, Giant };
 
     public static readonly UnitType Goblin = new()
     {
@@ -283,7 +294,7 @@ public static class Kinds
 
     public static readonly UnitType[] PlayerKinds =
     {
-        Worker, Archer, Swordsman, Priest, Spearman, Shieldbearer, Halberdier, Knight, Slinger, Crossbowman, Bombardier, Hound, Rider, HorseArcher, Lancer,
+        Worker, Archer, Swordsman, Priest, Spearman, Shieldbearer, Halberdier, Knight, Slinger, Crossbowman, Bombardier, OurAlchemist, Hound, Rider, HorseArcher, Lancer,
         TameTroll, Giant,
     };
     /// <summary>The horde's kinds that find their way by the field (the catapult goes its own way to where it throws from).</summary>

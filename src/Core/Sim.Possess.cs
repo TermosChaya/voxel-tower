@@ -406,7 +406,7 @@ public sealed partial class Sim
         float chance = Math.Clamp(.97f - d / range * .3f, .6f, .97f) * WeatherAim;
         var kind = ShotOf(u.T);
         float harm = kind == Shot.Stone && Knows("leadshot") ? 1.33f : 1;
-        if (kind == Shot.Stone && Knows("firepots") && Rng.NextDouble() < FirePotShare && (t == null || PotSafe(t))) kind = Shot.FirePot;
+        if (kind == Shot.Stone && Knows("leadshot") && Rng.NextDouble() < FirePotShare && (t == null || PotSafe(t))) kind = Shot.FirePot;
         // a pot thrown at one of the horde stood among ours is held back, as a bombardier holds it
         if (kind == Shot.Pot && t != null && !PotSafe(t)) { Say("Горшок не брошен: рядом с врагом свои.", 2); u.Cooldown = .5f; return; }
         u.Swing = 1;

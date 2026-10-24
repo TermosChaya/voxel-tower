@@ -4952,7 +4952,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troops")
 {
     Console.WriteLine();
     // thirteen kinds after the first four, in the citadel's order, each waiting on its lore, with its time and its places
-    string[] loresT = { "spearmen", "shieldmen", "halberds", "knights", "slingers", "crossbows", "bombards", "hounds", "riders", "horsearchers", "lancers", "trolls", "giants" };
+    string[] loresT = { "spearmen", "shieldmen", "halberds", "knights", "slingers", "crossbows", "bombards", "alchemists", "hounds", "riders", "horsearchers", "lancers", "trolls", "giants" };
     var wrongT = new System.Collections.Generic.List<string>();
     for (int i = 0; i < Kinds.Troops.Length; i++)
     {
@@ -4960,8 +4960,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troops")
         if (t.Team != Team.Player || !(t.Work < 1) || t.Lore != loresT[i] || t.Room < 1 || t.Cost <= 0 || Bodies.Looks(t) < 2
             || Bodies.Plan(t, 0) == Bodies.Plan(Kinds.Worker, 0)) wrongT.Add(t.Key);
     }
-    bool orderT = Kinds.PlayerKinds.Length == 17 && Kinds.Troops.Length == 13 && Kinds.Troops.SequenceEqual(Kinds.PlayerKinds.Skip(4));
-    Check("thirteen new kinds of ours in the citadel's order, each waiting on its lore, with the places it fills, each in a body of its own",
+    bool orderT = Kinds.PlayerKinds.Length == 18 && Kinds.Troops.Length == 14 && Kinds.Troops.SequenceEqual(Kinds.PlayerKinds.Skip(4));
+    Check("fourteen new kinds of ours in the citadel's order, each waiting on its lore, with the places it fills, each in a body of its own",
         orderT && wrongT.Count == 0,
         $"{Kinds.PlayerKinds.Length} kinds of ours; wrong: {string.Join(", ", wrongT)}; " + string.Join(", ", Kinds.Troops.Select(t => $"{t.Key} {t.Lore} ×{t.Room}")));
 
@@ -5263,8 +5263,9 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troops")
     simT.Learnt.Remove("leadshot");
     Gone(gobL);
 
-    // the fire pots: now and then a slinger throws a pot of burning pitch, and the raider and the ground by it burn
-    simT.Learnt.Add("firepots");
+    // the fire pots, with the lead shot since the alchemists took their place: now and then a slinger throws a pot of
+    // burning pitch, and the raider and the ground by it burn
+    simT.Learnt.Add("leadshot");
     var gobP = Put(Kinds.Orc, 14, 2, chained: true);
     gobP.Hp = gobP.MaxHp = 50000;
     flown.Clear();
@@ -5272,10 +5273,10 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troops")
     // a dozen throws at the least, and till the pot has burnt: a pot is one throw in four, by chance
     for (int i = 0; i < 1200 && !(simT.Pitched > 0 && burnt && flown.Count >= 12); i++) { Watch(.05); burnt |= gobP.Burn > 0; }
     int potsP = flown.Count(a => a.Kind == Shot.FirePot), stonesP = flown.Count(a => a.Kind == Shot.Stone);
-    Check("with the fire pots a slinger now and then throws a pot of burning pitch: the raider catches fire and so does the ground about it",
+    Check("with the lead shot and pots a slinger now and then throws a pot of burning pitch: the raider catches fire and so does the ground about it",
         potsP >= 1 && stonesP >= potsP && simT.Pitched > 0 && simT.Burning.Count > 0 && burnt,
         $"{stonesP} stones and {potsP} fire pots; the ground set alight {simT.Pitched} times, {simT.Burning.Count} voxels burning; the orc burnt {burnt}");
-    simT.Learnt.Remove("firepots");
+    simT.Learnt.Remove("leadshot");
     Gone(gobP); Gone(slingL);
     RunT(1);
 
@@ -6092,6 +6093,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--house")
 }
 
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--acid") AcidBench.Run((what, ok, detail) => Check(what, ok, detail));
+// the alchemists of ours (OurAlchemistBench.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--ouralchemist") OurAlchemistBench.Run((what, ok, detail) => Check(what, ok, detail));
 // the hill giant and the great ones' boulders (Giants.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--giants") GiantsBench.Run(Check);
 // the magic wand: what it takes, laying over again, its blueprint (WandBench.cs)

@@ -21,6 +21,8 @@ public sealed class Arrow
     public float Arc = .1f;
     /// <summary>A bodkin bolt gone through one raider into the next: it goes through no more.</summary>
     public bool Through;
+    /// <summary>A flask of ours of choking fumes rather than acid.</summary>
+    public bool Fumes;
 }
 
 public sealed partial class Sim
@@ -270,6 +272,8 @@ public sealed partial class Sim
     {
         if (u.T.Ranged)
         {
+            // an alchemist of ours throws at the horde's works first (Sim.OurAlchemists.cs)
+            if (u.T == Kinds.OurAlchemist) return OurAlchemistTick(u, dt);
             // what the player pointed at to set alight comes first
             if (u.KindleAt >= 0 && KindleShot(u, dt)) return true;
             var t = u.Target;
@@ -442,10 +446,10 @@ public sealed partial class Sim
         chance *= WeatherAim;
         u.Swing = 1;
         Shots++;
-        // a stone of lead strikes a third harder; now and then a slinger with the fire pots throws one of burning pitch
+        // a stone of lead strikes a third harder; now and then a slinger with the lead shot and pots throws one of burning pitch
         var kind = ShotOf(u.T);
         float harm = kind == Shot.Stone && Knows("leadshot") ? 1.33f : 1;
-        if (kind == Shot.Stone && Knows("firepots") && Rng.NextDouble() < FirePotShare && PotSafe(t)) kind = Shot.FirePot;
+        if (kind == Shot.Stone && Knows("leadshot") && Rng.NextDouble() < FirePotShare && PotSafe(t)) kind = Shot.FirePot;
         float scatter = kind is Shot.Pot or Shot.FirePot ? 10 : 4;
         Arrows.Add(new Arrow
         {
@@ -466,8 +470,8 @@ public sealed partial class Sim
             a.T += dt;
             if (a.T < a.Dur || a.Done) continue;
             a.Done = true;
-            // an alchemist's flask breaks and lets out its acid
-            if (a.Kind == Shot.Flask) { FlaskLands(a); continue; }
+            // an alchemist's flask breaks and lets out its acid; ours eats what the horde has raised (Sim.OurAlchemists.cs)
+            if (a.Kind == Shot.Flask) { if (a.From?.Team == Team.Player) OurFlaskLands(a); else FlaskLands(a); continue; }
             // a pot bursts, or breaks and burns, wherever it comes down, on the raider or by it
             if (a.Kind == Shot.Pot) { if (a.Hits) ShotHits++; var (px, py, pz) = PotDown(a); PotBurst(px, py, pz, a.Damage, a.From); continue; }
             if (a.Kind == Shot.FirePot) { if (a.Hits) ShotHits++; PitchLands(a); continue; }

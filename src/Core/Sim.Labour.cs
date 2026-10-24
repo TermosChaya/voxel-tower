@@ -790,7 +790,7 @@ public sealed partial class Sim
     static string Whom(UnitType t) => t.Key switch
     {
         "worker" => "рабочего", "archer" => "лучника", "sword" => "мечника", "spear" => "копейщика", "shield" => "щитоносца", "halberd" => "алебардщика",
-        "knight" => "рыцаря", "sling" => "пращника", "crossbow" => "арбалетчика", "bombard" => "бомбардира", "hound" => "боевого пса", "rider" => "всадника",
+        "knight" => "рыцаря", "sling" => "пращника", "crossbow" => "арбалетчика", "bombard" => "бомбардира", "ouralchemist" => "алхимика", "hound" => "боевого пса", "rider" => "всадника",
         "horsearcher" => "конного лучника", "lancer" => "конного рыцаря", "tametroll" => "ручного тролля", "giant" => "великана",
         _ => t.Name.ToLowerInvariant(),
     };

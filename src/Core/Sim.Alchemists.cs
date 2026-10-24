@@ -6,7 +6,8 @@ namespace VoxelTower.Core;
 /// The horde's alchemists. One goes with its band the goblins' way; with a mark within a throw of it, and none of ours
 /// near enough to come to blows, it stops where it is and throws its flasks of acid at it, one every few seconds, high
 /// over in an arc: into a knot of our people first, then at a gate of ours, then at the piece of our walls in its way to
-/// the citadel, then at a ladder of ours. It carries eight; with them thrown it is a goblin with a knife like any other.
+/// the citadel, then at a ladder of ours; an alchemist of ours in a throw before all of these. It carries eight; with them
+/// thrown it is a goblin with a knife like any other.
 /// Our archers shoot an alchemist before anyone else but the sorcerers.
 /// </summary>
 public sealed partial class Sim
@@ -56,6 +57,9 @@ public sealed partial class Sim
     int FlaskMark(Unit u, out Unit at)
     {
         at = null;
+        // an alchemist of ours within a throw before anything (Sim.OurAlchemists.cs)
+        foreach (var o in Units)
+            if (!o.Dead && !o.Inside && o.T == Kinds.OurAlchemist && o.Airborne == null && Dist(u, o) <= FlaskFar && Sight(u, o)) { at = o; return WaterPlanner.Pack((int)o.X, (int)o.Y, (int)o.Z); }
         // a knot of our people: the one with most of ours about it
         float best = 0;
         foreach (var o in Units)

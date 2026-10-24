@@ -47,7 +47,7 @@ public sealed partial class Sim
     /// <summary>Whether a kind can loose fire: a bow or a crossbow can, a sling or a pot of powder cannot.</summary>
     public static bool Kindles(UnitType t) => t.Ranged && t.Tool is "bow" or "crossbow";
     /// <summary>What a kind of ours throws or shoots.</summary>
-    static Shot ShotOf(UnitType t) => t.Tool switch { "crossbow" => Shot.Bolt, "sling" => Shot.Stone, "bombard" => Shot.Pot, _ => Shot.Arrow };
+    static Shot ShotOf(UnitType t) => t.Tool switch { "crossbow" => Shot.Bolt, "sling" => Shot.Stone, "bombard" => Shot.Pot, "flask" => Shot.Flask, _ => Shot.Arrow };
     /// <summary>A stone the great ones threw: it passes ours by.</summary>
     static bool Spares(Flier f, Unit u) => u.Team == Team.Player && f.Cause == BoulderCause;
 

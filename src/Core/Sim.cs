@@ -264,6 +264,7 @@ public sealed partial class Sim
         Stage = "Separate"; Separate();
         Stage = "Unstack"; Unstack();
         Stage = "TickArrows"; TickArrows(dt);
+        Stage = "TickOurAcid"; TickOurAcid(dt);
         Stage = "KeepPossession"; KeepPossession();
         Stage = "TickBleeding"; TickBleeding(dt);
         Stage = "TickTrauma"; TickTrauma(dt);

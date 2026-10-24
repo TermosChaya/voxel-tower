@@ -235,6 +235,16 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `ThrowFlask` раз в `AttackTime`; `FlaskMark` — кучка наших (на стене охотнее), наши ворота, первая стена на линии к
   цитадели, наша лестница; `Unit.Thrown` из `FlasksCarried` (8). В `Roster` — с 5-й волны, с 9-й двое; в `BestTarget`
   −110, как колдуны. Лепка — `Bodies.Alchemist.cs` (`Bodies` теперь `partial`).
+- `Sim.OurAlchemists.cs` — наши алхимики (`Kinds.OurAlchemist`, ключ `ouralchemist`, знание `alchemists`): из `Fight`
+  (`OurAlchemistTick` вместо обычного выстрела); цель (`OurMark`, раз в секунду): лестница под самым высоким лезущим
+  (`LadderUnder`), машина орды, настил под налётчиком (`DeckUnder`), лестница орды у нашей кладки без людей (`LadderIn` по
+  `_works`), иначе толпа (`Knot`); не туда, где рядом наши (`OursBy`); налётчик ближе 3,5 м — шаг назад (`StepBack`).
+  Склянка — `Shot.Flask` с `From` из наших (`TickArrows` → `OurFlaskLands`): обжигает только орду (`Hurt`, `Etch`,
+  машинам ×2,5), лестницы и настилы орды в 9 вокселях проедает за 1,2/1,8 с (`_oursEating`, ход — `TickOurAcid` после
+  `TickArrows`, рисуется через `Etched`, снос — `EatThrough`); свободная кислота (`LayOurAcid`, 8 вокселей) — только если
+  в 5 м нет нашей постройки (`OursNear`). С `bombards` — склянки дыма (`Arrow.Fumes`, `FumesBreak`: кашель, боль,
+  слабые бегут; событие `Fumed` → облако в `AcidView`). Алхимик орды бросает в нашего первым (`FlaskMark`). Лепка —
+  `Bodies.OurAlchemist.cs`.
 - `Sim.Shamans.cs` — шаманы орды: `Kinds.Shaman` (в `Kinds.Casters`, не в `HordeKinds`: путь — поле гоблина через
   `FieldOf`), `ShamanTick` из `RaiderTick` (`Unit.NextHeal` — лечит в 6 м, `NextCurse` — `CurseTarget` → `Curse` в
   `Curses` на 40 с, если не `Warded` — святилище или жрец ближе 20 м), `CurseHack` в `Carve` (×2), `TickCurses`;
@@ -244,7 +254,8 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   если это постижение заклинания), `Pages`, `PageBranches` (5 / 4 / 5 ветвей; ветви страницы 2 — это `Circles` и
   «Благодать»), `Branches` (= страница 0), `Lores` — ленивое свойство: `Skills` (30) + `Troops` (24: пехота, стрелки,
   конница, великаны; ключи видов — `spearmen` … `giants`, их читает `UnitType.Lore`; усиления — `shieldwall`,
-  `longshafts`, `leadshot`, `bodkins`, `firepots`, `hunt`, `charge`, `boulders`, `barracks`, `drillyard`, `bunks`) +
+  `longshafts`, `leadshot` (с 25.10.2026 и огненные горшки), `bodkins`, `hunt`, `charge`, `boulders`, `barracks`, `drillyard`,
+  `bunks`; набор `alchemists` — на месте бывших `firepots`) +
   `Rites()` (30: узлы заклинаний `spell.<Kind>` — из `Spells`, цена/валюта их же; `reap` за откровения; благодать
   `rosary`, `vessel`, `altar`, `litany`, `vigil`, `might` за вмешательство); `LoreOf` (словарь), `LoresOn(page)`,
   `SpellKey(kind)`; `Knows` — для узла заклинания смотрит `Known`, иначе `Learnt`; `Wallet(coin)`, `Opened`, `CanLearn`,
