@@ -233,14 +233,7 @@ public partial class GrassView : Node3D
             focus = new Vector3(_w.WX(_centre.X), 0, _w.WZ(_centre.Y));
             near = 1e6f;
             far = 2e6f;
-            if (grow > 0)
-            {
-                // copied out and let go here, not left to the collector's thread (see GodotMesh)
-                var planes = _m.Rig.Cam.GetFrustum();
-                frustum = new Plane[planes.Count];
-                planes.CopyTo(frustum, 0);
-                ((Godot.Collections.Array)planes).Dispose();
-            }
+            if (grow > 0) frustum = Frustum(_m.Rig.Cam);
         }
         RenderingServer.GlobalShaderParameterSet("sward_at", new Vector4(focus.X, focus.Y, focus.Z, eyes || grow > 0 ? grow : 0));
         RenderingServer.GlobalShaderParameterSet("sward_reach", new Vector2(near, far));
@@ -301,6 +294,16 @@ public partial class GrassView : Node3D
             foreach (int e in tf) { int y = y0 + Sward.Y(e) + 1; if (y < lo) lo = y; if (y > hi) hi = y; }
         });
         return (lo, hi);
+    }
+
+    /// <summary>The camera's frustum as planes of our own, the Godot array they came in let go at once.</summary>
+    static Plane[] Frustum(Camera3D cam)
+    {
+        var planes = cam.GetFrustum();
+        var all = new Plane[planes.Count];
+        for (int i = 0; i < all.Length; i++) all[i] = planes[i];
+        ((Godot.Collections.Array)planes).Dispose();
+        return all;
     }
 
     /// <summary>Whether a box (world) is at least partly inside the frustum: on the inner side of every one of its planes.</summary>

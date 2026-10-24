@@ -80,17 +80,20 @@ public partial class FrameMeter : Label
 public static class Prof
 {
     public static bool On;
-    static readonly System.Collections.Generic.Dictionary<string, long> _ticks = new();
+    static readonly System.Collections.Generic.Dictionary<string, long> _ticks = new(), _bytes = new();
+    /// <summary>The same for this frame alone, and what was done in it by count (chunks meshed…), for the late frames (<see cref="Hitches"/>).</summary>
+    public static readonly System.Collections.Generic.Dictionary<string, long> Frame = new(), Counts = new();
 
     /// <summary>A part of the frame timed, and named to the watchdog while it runs (Diag.Section).</summary>
     public readonly struct Scope : IDisposable
     {
         readonly string _name, _outer;
-        readonly long _t0;
+        readonly long _t0, _b0;
         public Scope(string name)
         {
             _name = name; _outer = Diag.Section; Diag.Section = name;
             _t0 = On ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+            _b0 = On ? GC.GetAllocatedBytesForCurrentThread() : 0;
         }
         public void Dispose()
         {
@@ -98,12 +101,31 @@ public static class Prof
             if (!On || _t0 == 0) return;
             long d = System.Diagnostics.Stopwatch.GetTimestamp() - _t0;
             _ticks[_name] = _ticks.GetValueOrDefault(_name) + d;
+            Frame[_name] = Frame.GetValueOrDefault(_name) + d;
+            _bytes[_name] = _bytes.GetValueOrDefault(_name) + GC.GetAllocatedBytesForCurrentThread() - _b0;
         }
     }
 
     public static Scope Time(string name) => new(name);
 
-    public static void Reset() => _ticks.Clear();
+    /// <summary>So much of something done this frame (chunks meshed, grass made…), told with a late frame.</summary>
+    public static void Count(string name, int n = 1)
+    {
+        if (On) Counts[name] = Counts.GetValueOrDefault(name) + n;
+    }
+
+    public static void Reset() { _ticks.Clear(); _bytes.Clear(); }
+
+    /// <summary>Who allocated the most on the main thread, in kilobytes a frame: "BuildTools 410, Hud 12 …".</summary>
+    public static string Allocating(int frames, int n = 8)
+    {
+        var all = new System.Collections.Generic.List<(string, long)>();
+        foreach (var (k, v) in _bytes) all.Add((k, v));
+        all.Sort((a, b) => b.Item2.CompareTo(a.Item2));
+        var parts = new System.Collections.Generic.List<string>();
+        for (int i = 0; i < Math.Min(n, all.Count); i++) parts.Add($"{all[i].Item1} {all[i].Item2 / 1024.0 / Math.Max(1, frames):0.0}");
+        return string.Join(", ", parts);
+    }
 
     /// <summary>The heaviest, in milliseconds a frame over so many frames: "UnitView 12.3, GrassView 4.1 …".</summary>
     public static string Heaviest(int frames, int n = 10)

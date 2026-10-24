@@ -163,9 +163,47 @@ public sealed partial class Sim
         finally { Orders.Writing = hand; }
     }
 
-    /// <summary>The stage of the step at work, and the unit in hand, for the game's watchdog to tell where a hang is.</summary>
-    public static volatile string Stage = "";
-    public static volatile int StageUnit;
+    /// <summary>
+    /// The stage of the step at work, and the unit in hand, for the game's watchdog to tell where a hang is; with
+    /// <see cref="StageTicks"/> set, the time each stage took is added up there under its name (for the late frames).
+    /// </summary>
+    public static string Stage
+    {
+        get => _stage;
+        set
+        {
+            if (StageTicks != null)
+            {
+                long now = System.Diagnostics.Stopwatch.GetTimestamp();
+                if (_stage.Length > 0) StageTicks[_stage] = StageTicks.GetValueOrDefault(_stage) + now - _stageAt;
+                _stageAt = now;
+            }
+            _stage = value;
+        }
+    }
+    static volatile string _stage = "";
+    static long _stageAt;
+    public static Dictionary<string, long> StageTicks;
+
+    /// <summary>The unit in hand; with <see cref="StageTicks"/> set, the one that took longest since they were last cleared is kept.</summary>
+    public static int StageUnit
+    {
+        get => _stageUnit;
+        set
+        {
+            if (StageTicks != null)
+            {
+                long now = System.Diagnostics.Stopwatch.GetTimestamp();
+                if (_stageUnit != 0 && now - _unitAt > SlowestUnitTicks) { SlowestUnitTicks = now - _unitAt; SlowestUnit = _stageUnit; }
+                _unitAt = now;
+            }
+            _stageUnit = value;
+        }
+    }
+    static volatile int _stageUnit;
+    static long _unitAt;
+    public static int SlowestUnit;
+    public static long SlowestUnitTicks;
 
     void StepWorld(float dt)
     {

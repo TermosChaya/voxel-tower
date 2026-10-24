@@ -195,6 +195,7 @@ public partial class Main : Node3D
             else if (a.StartsWith("--quality=") && int.TryParse(a["--quality=".Length..], out int qa)) _quality = qa;
             else if (a.StartsWith("--perf=") && double.TryParse(a["--perf=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double pf)) _perf = pf;
             else if (a.StartsWith("--perf-without=")) _perfWithout = a["--perf-without=".Length..].Split(',');
+            else if (a == "--spikes") Hitches.Tell = true;
             else if (a.StartsWith("--at=") && double.TryParse(a["--at=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double at)) _poseSeconds = at;
             else if (a.StartsWith("--ui-scale=") && float.TryParse(a["--ui-scale=".Length..], System.Globalization.CultureInfo.InvariantCulture, out float us)) _uiScale = us;
             else if (a == "--lines") _lines = true;
@@ -447,6 +448,7 @@ public partial class Main : Node3D
         if (_selfTest) SelfTest();
         if (_tutCheck) TutorialCheck();
         if (_perf > 0) Perf(_perf);
+        else if (Hitches.Tell) Hitches.Start(GetViewport());
         // a hidden or minimised window never draws a frame: don't let scripted runs hang
         if (_shot != null || _selfTest) GetTree().CreateTimer(120).Timeout += () => { GD.PrintErr("[voxel-tower] gave up waiting for a frame"); GetTree().Quit(2); };
         // from here on a frame that does not come is a hang, and is written down
@@ -474,8 +476,9 @@ public partial class Main : Node3D
     /// </summary>
     async void Perf(double seconds)
     {
-        // not held to the screen's refresh: as fast as it can be drawn
+        // not held to the screen's refresh: as fast as it can be drawn; water worked out off the main thread, as in play
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
+        Sim.WaterInBackground = true;
         Engine.MaxFps = 0;
         foreach (string part in _perfWithout)
             switch (part)
@@ -499,6 +502,7 @@ public partial class Main : Node3D
         double worst = 0, process = 0;
         _simTicks = 0;
         Prof.On = true; Prof.Reset();
+        Hitches.Start(GetViewport());
         var vpRid = GetViewport().GetViewportRid();
         RenderingServer.ViewportSetMeasureRenderTime(vpRid, true);
         double gpu = 0, cpu = 0;
@@ -537,6 +541,9 @@ public partial class Main : Node3D
         told.Sort((a, b) => int.Parse(b[(b.LastIndexOf(' ') + 1)..]).CompareTo(int.Parse(a[(a.LastIndexOf(' ') + 1)..])));
         GD.Print($"[perf] drawn: {string.Join(", ", told.GetRange(0, Math.Min(12, told.Count)))}");
         GD.Print($"[perf] ms a frame: drawing {cpu / Math.Max(1, frames):0.0} on the processor, {gpu / Math.Max(1, frames):0.0} on the graphics card; the views: {Prof.Heaviest(frames, 8)}");
+        GD.Print($"[perf] KB allocated a frame on the main thread by: {Prof.Allocating(frames)}");
+        GD.Print($"[perf] late frames: {Hitches.Over25} over 25 ms, {Hitches.Over50} over 50 ms of {Hitches.Frames}; {Hitches.Allocated / 1048576.0 / took:0.0} MB allocated a second; " +
+            $"{RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.VideoMemUsed) / 1048576} MB video memory ({RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.BufferMemUsed) / 1048576} in buffers, {RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.TextureMemUsed) / 1048576} in textures), {OS.GetStaticMemoryUsage() / 1048576} MB the engine's memory, {GC.GetTotalMemory(false) / 1048576} MB the managed heap, {System.Environment.WorkingSet / 1048576} MB in all");
         GetTree().Quit();
     }
 
@@ -606,6 +613,7 @@ public partial class Main : Node3D
     public override void _Process(double delta)
     {
         Diag.Beat(GetWindow().HasFocus());
+        Hitches.Frame(Sim);
         if (_frames > 5) _slowest = Math.Max(_slowest, delta);
         if (_trailer >= 0) Roll();
         // under the title the valley turns slowly round the citadel

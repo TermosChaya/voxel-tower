@@ -96,6 +96,7 @@ public partial class WorldView : Node3D
     /// <summary>Makes these blocks of the coarse level again, over all the cores when there are more than two.</summary>
     void MeshFar(List<int> blocks)
     {
+        Prof.Count("far blocks", blocks.Count);
         var made = new (MeshBuffers solid, MeshBuffers shadow)[blocks.Count];
         void One(GreedyMesher m, byte[] grid, int i)
         {
@@ -152,6 +153,7 @@ public partial class WorldView : Node3D
         if (_w.DirtyCount == 0) return 0;
         _batch.Clear();
         _w.TakeDirty(_batch, maxChunks);
+        Prof.Count("chunks", _batch.Count);
         // the picture at once; its shadow a little after (RemeshShadows), so a great blast is not made twice in one frame
         var results = new (MeshBuffers solid, MeshBuffers water, Sward sward)[_batch.Count];
         if (_batch.Count <= 2)
@@ -181,6 +183,7 @@ public partial class WorldView : Node3D
         _shadeBatch.Clear();
         foreach (int ci in _shadeDirty) { _shadeBatch.Add(ci); if (_shadeBatch.Count >= 8) break; }
         foreach (int ci in _shadeBatch) _shadeDirty.Remove(ci);
+        Prof.Count("shadows", _shadeBatch.Count);
         var made = new MeshBuffers[_shadeBatch.Count];
         if (made.Length <= 2) for (int i = 0; i < made.Length; i++) made[i] = _mesher.MeshShadow(_w, _shadeBatch[i], _pad);
         else Parallel.For(0, made.Length, () => (new GreedyMesher(), new byte[34 * 34 * 34]), (i, _, loc) => { made[i] = loc.Item1.MeshShadow(_w, _shadeBatch[i], loc.Item2); return loc; }, _ => { });
