@@ -70,7 +70,10 @@ public partial class Hints : Control
             case Tool.None when _m.Selected.Count > 0:
                 // over one of ours pinned or down for good: what a right click on it does (Sim.Carry.cs)
                 if (VoxelTower.Core.Sim.AidFor(_m.Command.UnitAt(GetViewport().GetMousePosition(), pawnsFirst: false)) is { } aid) o.Add((Rmb, aid));
-                o.Add((Rmb, "идти, охотиться, атаковать"));
+                // our engines chosen alone: the right button rolls them where it points
+                bool engines = true;
+                foreach (var u in _m.Selected) if (!VoxelTower.Core.Kinds.IsOurEngine(u.T)) { engines = false; break; }
+                o.Add((Rmb, engines ? "перекатить машину" : "идти, охотиться, атаковать"));
                 o.Add((Lmb, "выбрать других"));
                 if (_m.Selected.Count == 1) o.Add((L(Act.Possess), "вселиться"));
                 o.Add(("Ctrl+1…5", "запомнить отряд"));
