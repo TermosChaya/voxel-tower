@@ -890,7 +890,7 @@ public partial class Main
     /// A round stone tower of ours west of the citadel, eight metres high, a stretch of wall east of it; the horde's miners
     /// have dug the ground out from under the east two fifths of its foot (--at=seconds since, 1.6 by itself): it stands,
     /// cracking along that side; at about three seconds it goes over east, at five it comes down on the wall, and by ten
-    /// it lies in rubble, the wall broken. --look=1 close on the cracks.
+    /// it lies in rubble, the wall broken. --look=1 close on the cracks, 2 from the usual height of the view.
     /// </summary>
     void Undermine()
     {
@@ -916,13 +916,16 @@ public partial class Main
         Advance(_poseSeconds == 14 ? 1.6 : _poseSeconds);
         Paused = true;
         if (_look == 1) Rig.SetAt(w.WX(tx + 2), w.WY(g + 6), w.WZ(tz + 10), -.25f, .6f, 4.2f);
+        // as the game is usually seen: from the home height of the view
+        else if (_look == 2) Rig.SetAt(w.WX(tx + 24), w.WY(g + 10), w.WZ(tz + 4), .2f, .62f, 1f);
         else Rig.SetAt(w.WX(tx + 26), w.WY(g + 20), w.WZ(tz + 4), .2f, .42f, 2.1f);
         Hud.Refresh();
     }
 
     /// <summary>
     /// A stone wall of ours west of the citadel, three metres high, jarred at four places along it, harder and harder from
-    /// south to north, as by blows of a catapult's stones: its cracks from the first hairlines to cracked all but through.
+    /// south to north, as by blows of a catapult's stones: its cracks from the first hairlines to cracked all but through
+    /// (--look=1 from the usual height of the view).
     /// </summary>
     void Cracked()
     {
@@ -934,7 +937,8 @@ public partial class Main
         for (int i = 0; i < hard.Length; i++) Sim.Jar(face - 1, top - 12, kz + 8 - i * 16, 7, hard[i]);
         Advance(.2);
         Paused = true;
-        Rig.SetAt(w.WX(face), w.WY(top - 12), w.WZ(kz - 16), -1.45f, .3f, 3.2f);
+        if (_look == 1) Rig.SetAt(w.WX(face), w.WY(top - 12), w.WZ(kz - 16), -1.45f, .62f, 1f);
+        else Rig.SetAt(w.WX(face), w.WY(top - 12), w.WZ(kz - 16), -1.45f, .3f, 3.2f);
         Hud.Refresh();
     }
 

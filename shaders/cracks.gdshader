@@ -50,14 +50,23 @@ vec2 edge(vec2 x) {
 void fragment() {
 	vec3 a = abs(v_normal);
 	vec2 uv = a.x > a.y && a.x > a.z ? v_pos.zy : a.y > a.z ? v_pos.xz : v_pos.xy;
-	// the big cracks: cells of about three voxels; the fine ones between them, of about one
+	// how many voxels a pixel spans here: from the usual height of the view a voxel is a few pixels, and the cracks
+	// must still be seen
+	float px = max(fwidth(uv.x), fwidth(uv.y));
+	float far = smoothstep(0.06, 0.2, px);
+	// the big cracks: cells of about three voxels; the fine ones between them, of about one, only close
 	vec2 big = edge(uv / 3.1 + vec2(17.0, 3.0));
 	vec2 fine = edge(uv / 1.2 + vec2(5.0, 41.0));
 	float c = v_crack;
-	float wBig = 0.05 + 0.18 * c, wFine = 0.03 + 0.07 * c;
+	// a line never thinner than a pixel and a half
+	float wBig = max(0.05 + 0.18 * c, 1.5 * px / 3.1), wFine = 0.03 + 0.07 * c;
 	float lineBig = (1.0 - smoothstep(wBig * 0.6, wBig, big.x)) * step(big.y, c * 1.25);
-	float lineFine = (1.0 - smoothstep(wFine * 0.6, wFine, fine.x)) * step(fine.y, (c - 0.45) * 1.3);
+	float lineFine = (1.0 - smoothstep(wFine * 0.6, wFine, fine.x)) * step(fine.y, (c - 0.45) * 1.3) * (1.0 - far);
 	float line = max(lineBig, lineFine * 0.8);
-	ALBEDO = vec3(0.025, 0.02, 0.018);
-	ALPHA = max(line * 0.95, 0.42 * c * c);
+	// close, a faint darkening about the lines; from afar the cracked face goes pale with the dust and fresh broken
+	// stone of it, the more the further cracked, so that a wall about to give way shows from the usual height
+	float stain = mix(0.42 * c * c, 0.12 + 0.38 * c, far) * step(0.05, c);
+	vec3 dust = mix(vec3(0.025, 0.02, 0.018), vec3(0.4, 0.36, 0.31), far);
+	ALBEDO = mix(dust, vec3(0.025, 0.02, 0.018), step(stain, line * 0.95));
+	ALPHA = max(line * 0.95, stain);
 }
