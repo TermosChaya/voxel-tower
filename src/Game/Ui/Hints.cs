@@ -136,6 +136,12 @@ public partial class Hints : Control
             case Tool.Capture:
                 o.Add((Lmb, "обвести постройку"));
                 break;
+            case Tool.Wand:
+                o.Add((Lmb, t.Opt.WandCapture ? "снять чертёж" : dig ? "снести выделенное" : "переложить выделенное"));
+                o.Add(("Shift", "и по углам"));
+                o.Add((L(Act.Form), t.Opt.WandExact ? "любой оттенок" : "точно такой"));
+                o.Add((L(Act.Pick), dig ? "переложить" : "снести"));
+                break;
             case Tool.Paste:
                 o.Add((Lmb, "поставить копию"));
                 o.Add((L(Act.Rotate), "повернуть"));

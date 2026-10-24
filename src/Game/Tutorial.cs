@@ -550,13 +550,14 @@ public partial class Tutorial : Node
             Enter = () => n0 = m.Sim.MarkingsMade,
             Done = () => Marked(n0, Tool.Ladder, Tool.Gate, Tool.Bridge),
         });
-        Opens(Tool.Brush); Opens(Tool.Extrude); Opens(Tool.Capture);
+        Opens(Tool.Brush); Opens(Tool.Extrude); Opens(Tool.Capture); Opens(Tool.Wand);
         Add(new Step
         {
             Chapter = build, Title = "Кисть, выдавить, чертёж",
             Text = "Кисть ({ToolBrush}) рисует стену от руки или шаром. Выдавливание ({ToolExtrude}) наращивает грань " +
                 "или углубляет её, так делают ступени и проходы в скале. {ToolCapture} сохраняет постройку как " +
-                "чертёж: обведите её рамкой. Чертежи лежат в нижней панели этого инструмента, {Rotate} поворачивает копию.",
+                "чертёж: обведите её рамкой. Чертежи лежат в нижней панели этого инструмента, {Rotate} поворачивает копию. " +
+                "Волшебная палочка ({ToolWand}) выделяет всё прилегающее из одного материала: так сносят или перекладывают постройку целиком.",
             Point = "tool:Capture",
         });
 

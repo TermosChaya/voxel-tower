@@ -899,6 +899,7 @@ public partial class Main
         await AcidSelfTest((what, ok, detail) => Check(what, ok, detail));
         await SelfTestGiants(Check);
         await SelfTestTrauma(Check);
+        await SelfTestWand(Check);
         // the report for the author: one file with the system, the hangs, the last events and the logs
         string report = Diag.Report(this, ProjectSettings.GlobalizePath("user://logs"));
         string body = System.IO.File.Exists(report) ? System.IO.File.ReadAllText(report) : "";

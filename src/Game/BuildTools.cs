@@ -5,7 +5,7 @@ using VoxelTower.Core;
 
 namespace VoxelTower.Game;
 
-public enum Tool { None, Brush, Line, Box, Circle, Extrude, Ladder, Gate, Repair, Bridge, Gather, Unmark, Capture, Paste, Spell }
+public enum Tool { None, Brush, Line, Box, Circle, Extrude, Ladder, Gate, Repair, Bridge, Gather, Unmark, Capture, Paste, Spell, Wand }
 
 public enum BrushForm { Column, Ball }
 
@@ -27,6 +27,9 @@ public sealed class ToolOptions
     public bool Level = true;
     /// <summary>The bridge tool hangs a drawbridge instead of throwing an arch across.</summary>
     public bool DrawBridge;
+    /// <summary>The magic wand: takes exactly the same voxel only (not any shade of stone with its mortar); takes what touches
+    /// by an edge or a corner too; makes a blueprint of what it took instead of taking it down or laying it over again.</summary>
+    public bool WandExact, WandCorners, WandCapture;
     /// <summary>Snapping to a grid round the citadel's middle, its step in voxels (0: off); the step it had when it was last on.</summary>
     public int Grid, GridLast = 8;
 
@@ -56,7 +59,7 @@ public partial class BuildTools : Node3D
     {
         Tool.Brush => "Кисть", Tool.Line => "Линия", Tool.Box => "Прямоугольник", Tool.Circle => "Круг",
         Tool.Extrude => "Выдавить", Tool.Ladder => "Лестница", Tool.Gate => "Ворота", Tool.Repair => "Починка", Tool.Bridge => "Мост", Tool.Gather => "Делянка", Tool.Unmark => "Снять разметку", Tool.Capture => "Снять чертёж",
-        Tool.Paste => "Чертёж", Tool.Spell => "Заклинание", _ => "Без кисти",
+        Tool.Paste => "Чертёж", Tool.Spell => "Заклинание", Tool.Wand => "Волшебная палочка", _ => "Без кисти",
     };
 
     public static string Hint(Tool t, bool dig) => Bindings.Fill(HintText(t, dig));
@@ -81,6 +84,8 @@ public partial class BuildTools : Node3D
         (Tool.Unmark, _) => "Рамка снимает всю разметку и делянки внутри. Щелчок снимает разметку рядом и делянку под курсором.",
         (Tool.Capture, _) => "Обведите постройку рамкой, чтобы сохранить чертёж.",
         (Tool.Paste, _) => "Щелчок ставит копию. R поворачивает, Esc отменяет.",
+        (Tool.Wand, true) => "Наведите на постройку: подсветится всё прилегающее из того же материала. Щелчок: рабочие это снесут.",
+        (Tool.Wand, false) => "Наведите на постройку: подсветится всё прилегающее из того же материала. Щелчок: переложат из выбранного материала.",
         _ => "{Lmb} — выбрать, рамкой — нескольких, {Rmb} — послать. {ToolBrush}–{ToolExtrude} — кисти, {Pick} — кирка, {Help} — все клавиши.",
     };
 
@@ -266,7 +271,7 @@ public partial class BuildTools : Node3D
     public void SetMaterial(byte m)
     {
         if (_m.Hud.MaterialsLocked) { Refuse("материалы откроются дальше в обучении"); return; }
-        Opt.Material = m; Opt.Dig = false; Shelter = Sanctum = Dwelling = false; Changed();
+        Opt.Material = m; Opt.Dig = false; Opt.WandCapture = false; Shelter = Sanctum = Dwelling = false; Changed();
     }
 
     /// <summary>The area tool sets aside a shelter, not a resource to take.</summary>
@@ -284,6 +289,7 @@ public partial class BuildTools : Node3D
     {
         if (_m.Hud.PickLocked) { Refuse("кирка откроется дальше в обучении"); return; }
         Opt.Dig = dig;
+        if (dig) Opt.WandCapture = false;
         if (dig && Tool is Tool.None or Tool.Capture or Tool.Unmark or Tool.Paste or Tool.Ladder or Tool.Gate or Tool.Repair or Tool.Bridge or Tool.Gather) { Tool = Tool.Line; PasteBp = null; }
         Changed();
     }
@@ -307,6 +313,8 @@ public partial class BuildTools : Node3D
         if (Tool == Tool.Brush) Opt.Form = Opt.Form == BrushForm.Column ? BrushForm.Ball : BrushForm.Column;
         // the rectangle goes solid, walls, house and round again
         else if (Tool == Tool.Box) { if (Opt.House) { Opt.House = false; Opt.Hollow = false; } else if (Opt.Hollow) Opt.House = true; else Opt.Hollow = true; }
+        // the wand: any shade of the material, or exactly the one under the cursor
+        else if (Tool == Tool.Wand) Opt.WandExact = !Opt.WandExact;
         else Opt.Hollow = !Opt.Hollow;
         Changed();
     }
@@ -409,7 +417,7 @@ public partial class BuildTools : Node3D
         {
             Act.ToolBrush => Tool.Brush, Act.ToolLine => Tool.Line, Act.ToolBox => Tool.Box, Act.ToolCircle => Tool.Circle,
             Act.ToolExtrude => Tool.Extrude, Act.ToolUnmark => Tool.Unmark, Act.ToolLadder => Tool.Ladder, Act.ToolGather => Tool.Gather,
-            Act.ToolGate => Tool.Gate, Act.ToolRepair => Tool.Repair, Act.ToolCapture => Tool.Capture, Act.ToolBridge => Tool.Bridge,
+            Act.ToolGate => Tool.Gate, Act.ToolRepair => Tool.Repair, Act.ToolCapture => Tool.Capture, Act.ToolBridge => Tool.Bridge, Act.ToolWand => Tool.Wand,
             _ => Tool.None,
         };
         if (t != Tool.None) { SetTool(t); return true; }
@@ -568,6 +576,7 @@ public partial class BuildTools : Node3D
             Designate(plan, dig, dig ? "Вдавить" : "Выдавить");
         }
         else if (Tool == Tool.Paste && PasteBp != null) Designate(PlanPasteAtHover(), false, PasteBp.Name);
+        else if (Tool == Tool.Wand) WandAt();
     }
 
     /// <summary>
@@ -1257,6 +1266,16 @@ public partial class BuildTools : Node3D
             bool any = false;
             PlanText = gk.Length == 0 ? null : SurveyText(_startPt.x, _startPt.z, _dragPt.x, _dragPt.z, out any);
             PlanAffordable = any;
+            return;
+        }
+        if (Tool == Tool.Wand)
+        {
+            // the region under the cursor, shown as it is (and what will be laid in its place)
+            WandRegion();
+            string wk = _hasHover && _wandL.Count > 0 ? $"V|{_wandGen}|{dig}|{Opt.Material}|{Opt.WandCapture}|{stock}" : "";
+            if (wk == _planKey) return;
+            _planKey = wk; _planClock = _clock;
+            WandPlan(wk.Length > 0, dig, st);
             return;
         }
         if (Tool == Tool.Repair)

@@ -38,6 +38,9 @@ public partial class Hud : CanvasLayer
         (Tool.Repair, Icons.Mend, Act.ToolRepair, "Починка ({ToolRepair})\nЩелчок по разрушенной постройке. Рабочие уберут завалы, восстановят кладку и ворота, переложат треснувшие камни. Чинится всё, что вы построили, и старая крепость. Рамкой можно чинить по частям."),
         (Tool.Bridge, Icons.BridgeIcon, Act.ToolBridge, "Мост ({ToolBridge})\nПротяните от берега до берега, пролёт от 2 до 25 м. Каменный ({MatStone}) идёт аркой и с парапетами, деревянный ({MatWood}) — настил с перилами.\nПодъёмный мост (вид выбирают в нижней панели) — настил над рвом от 2 до 6 м. Когда подходит орда, он поднимается сам и сбрасывает в ров тех, кто на нём. Щелчок по нему без кисти: сам, опущен или поднят."),
         (Tool.Capture, Icons.Scroll, Act.ToolCapture, "Снять чертёж ({ToolCapture})\nОбведите постройку рамкой, и она сохранится в нижней панели этого инструмента. {Rotate} поворачивает копию."),
+        (Tool.Wand, Icons.WandIcon, Act.ToolWand, "Волшебная палочка ({ToolWand})\nНаведите на постройку: подсветится всё, что примыкает к ней из того же материала. Например, каменная стена без деревянного настила на ней. " +
+            "С киркой ({Pick}) щелчок сносит выделенное, с камнем, брёвнами или землёй перекладывает его из этого материала. В нижней панели с выделенного можно снять чертёж.\n" +
+            "{Form} берёт только воксели того же цвета. Shift берёт и то, что касается ребром или углом."),
     };
 
     /// <summary>The tools on the belt, a row to each purpose: building, the works of the fort, marking out.</summary>
@@ -45,7 +48,7 @@ public partial class Hud : CanvasLayer
     {
         new[] { Tool.Brush, Tool.Line, Tool.Box, Tool.Circle, Tool.Extrude },
         new[] { Tool.Gate, Tool.Bridge, Tool.Ladder, Tool.Repair },
-        new[] { Tool.Gather, Tool.Unmark, Tool.Capture },
+        new[] { Tool.Gather, Tool.Unmark, Tool.Wand, Tool.Capture },
     };
     const float SlotSize = 44;
 

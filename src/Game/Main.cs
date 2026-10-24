@@ -666,6 +666,8 @@ public partial class Main : Node3D
         // the cursor laid over a voxel for a screenshot, once the view has settled
         if (_shot != null && _aim is { Length: 2 } && _frames == Math.Max(2, _shotFrames - 8))
             Tools._UnhandledInput(new InputEventMouseMotion { Position = Rig.Cam.UnprojectPosition(new Vector3(World.WX(_aim[0] + .5f), World.WY(World.SurfAt((int)_aim[0], (int)_aim[1])), World.WZ(_aim[1] + .5f))) });
+        // what a staged scene does with the cursor once the view has settled (--pose=wand)
+        if (_shot != null && _poseLater != null && _frames == Math.Max(2, _shotFrames - 8)) { var later = _poseLater; _poseLater = null; later(); }
         if (_shot != null && ++_frames == _shotFrames) TakeShot();
     }
 

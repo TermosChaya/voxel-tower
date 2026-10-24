@@ -9,7 +9,7 @@ namespace VoxelTower.Game;
 public enum Act
 {
     CamForward, CamBack, CamLeft, CamRight, CamTurnLeft, CamTurnRight, CamTop, CamHome, CamZoomIn, CamZoomOut,
-    ToolBrush, ToolLine, ToolBox, ToolCircle, ToolExtrude, ToolUnmark, ToolLadder, ToolGather, ToolGate, ToolRepair, ToolBridge, ToolCapture,
+    ToolBrush, ToolLine, ToolBox, ToolCircle, ToolExtrude, ToolUnmark, ToolLadder, ToolGather, ToolGate, ToolRepair, ToolBridge, ToolCapture, ToolWand,
     MatStone, MatWood, MatEarth, Pick, WidthLess, WidthMore, HeightLess, HeightMore, Form, Level, Grid, Rotate,
     Keep, Alarm, Possess,
     CallWave, Summon, Pause, Speed, Trails, QuickSave, QuickLoad, Help,
@@ -66,6 +66,7 @@ public static class Bindings
         D(Act.ToolRepair, Brushes, "Починка", "Восстановить разрушенную постройку.", Key.Key0),
         D(Act.ToolBridge, Brushes, "Мост", "Мост от берега до берега, арочный или подъёмный.", Key.M),
         D(Act.ToolCapture, Brushes, "Снять чертёж", "Сохранить постройку как чертёж.", Key.B),
+        D(Act.ToolWand, Brushes, "Волшебная палочка", "Выбрать всё прилегающее из одного материала: снести, переложить или снять чертёж.", Key.U),
 
         D(Act.MatStone, BrushOptions, "Камень", "Класть камень; на делянке — добывать камень.", Key.Z),
         D(Act.MatWood, BrushOptions, "Брёвна", "Класть брёвна; на делянке — рубить лес.", Key.X),

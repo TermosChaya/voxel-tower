@@ -167,7 +167,7 @@ public partial class Inspector : Control
         head.AddThemeConstantOverride("separation", 14);
         head.AddChild(Hud.Text(t.Tool == Tool.Paste && t.PasteBp != null ? $"Чертёж «{t.PasteBp.Name}»" : BuildTools.ToolName(t.Tool), Ornament.Display, 22, Ornament.EmberGlow));
         var mat = Hud.CapsLabel((t.Tool == Tool.Gather ? (t.Shelter ? "убежище от орды" : t.Sanctum ? "святилище жрецов" : t.Dwelling ? "жилой дом" : "добывать: " + (t.GatherKind switch { Stockpile.Wood => "лес", Stockpile.Earth => "землю", _ => "камень" }))
-            : o.Dig ? "кирка: копать и рубить" : "материал: " + Mat.NameOf(o.Material).ToLowerInvariant()), 9);
+            : t.Tool == Tool.Wand && o.WandCapture ? "снять чертёж" : o.Dig ? "кирка: копать и рубить" : (t.Tool == Tool.Wand ? "переложить в: " : "материал: ") + Mat.NameOf(o.Material).ToLowerInvariant()), 9);
         mat.VerticalAlignment = VerticalAlignment.Center;
         head.AddChild(mat);
         var hint = Hud.Text(Hud.ToolHint(t.Tool), Ornament.SerifItalic, 12, Ornament.Aged);
@@ -194,8 +194,12 @@ public partial class Inspector : Control
             mats.AddChild(new Choice("Ловушка", TrapTip, new[] { "колья", "настил", "камни", "брёвна", "порох" }, Array.IndexOf(Traps, o.Material), i => t.SetMaterial(Traps[i])));
             col.AddChild(mats);
         }
+        // what the wand lays over again with
+        if (t.Tool == Tool.Wand && !o.Dig && !o.WandCapture)
+            col.AddChild(new Choice("Переложить в", "Переложить в\nРабочие разберут выделенное и сложат заново из этого материала. Разобранное вернётся в запас. Клавиши {MatStone}, {MatWood} и {MatEarth}.",
+                new[] { "камень", "брёвна", "земля" }, Array.IndexOf(Relaid, o.Material), i => t.SetMaterial(Relaid[i])));
         // the blueprints taken so far, with the tool that takes them and with a copy in hand
-        if (t.Tool is Tool.Capture or Tool.Paste) col.AddChild(Shelf());
+        if (t.Tool is Tool.Capture or Tool.Paste || t.Tool == Tool.Wand && o.WandCapture) col.AddChild(Shelf());
         if (opts.GetChildCount() == 0) col.AddChild(Hud.Text(Bindings.Fill("Esc — убрать кисть. {Help} — все клавиши."), Ornament.SerifItalic, 12, Ornament.Faded));
         return col;
     }
@@ -237,6 +241,7 @@ public partial class Inspector : Control
     }
 
     static readonly byte[] Laid = { Mat.Stone, Mat.Wood, Mat.Rammed, Mat.Pitch };
+    static readonly byte[] Relaid = { Mat.Stone, Mat.Wood, Mat.Rammed };
     static readonly byte[] Traps = { Mat.Stakes, Mat.TrapDeck, Mat.DropStone, Mat.DropLog, Mat.Powder };
 
     const string TrapTip = "Ловушки\nКолья: частокол заданной высоты. Кто идёт сквозь него, замедляется, ранится и понемногу его " +
@@ -320,6 +325,22 @@ public partial class Inspector : Control
                     i => { if (i == 3) t.SetShelter(true); else if (i == 4) t.SetSanctum(true); else if (i == 5) t.SetDwelling(true); else t.SetMaterial(new[] { Mat.Stone, Mat.Wood, Mat.Rammed }[i]); }));
                 if (t.GatherKind is Stockpile.Stone or Stockpile.Earth)
                     opts.AddChild(new Stepper("Глубина", "Глубина\nДо какой глубины брать камень или землю. Клавиши {HeightLess} и {HeightMore}.", () => Len(o.Depth), d => t.StepHeight(d)));
+                break;
+            case Tool.Wand:
+                opts.AddChild(Keyed(new Choice("Щелчок", "Что делает щелчок\nСнести: рабочие разберут выделенное, материал вернётся в запас. Кирка ({Pick}).\n" +
+                    "Переложить: разберут и сложат заново из камня, брёвен или земли ({MatStone}, {MatWood}, {MatEarth}).\nЧертёж: выделенное сохранится как чертёж, его копии ставят инструментом «Снять чертёж» ({ToolCapture}).",
+                    new[] { "снести", "переложить", "чертёж" }, o.WandCapture ? 2 : dig ? 0 : 1, i =>
+                    {
+                        if (i == 0) t.SetDig(true);
+                        else if (i == 1) t.SetMaterial(Array.IndexOf(Relaid, o.Material) >= 0 ? o.Material : Mat.Stone);
+                        else { o.Dig = false; o.WandCapture = true; t.Changed(); }
+                    }), () => Bindings.Label(Act.Pick)));
+                opts.AddChild(Keyed(new Choice("Материал", "Что считать тем же материалом\nЛюбой оттенок: камень любого цвета вместе с раствором, любые стволы, дёрн с землёй долины. " +
+                    "Точно: только воксели того же цвета, что под курсором. Клавиша {Form}.",
+                    new[] { "любой оттенок", "точно" }, o.WandExact ? 1 : 0, i => { o.WandExact = i == 1; t.Changed(); }), () => Bindings.Label(Act.Form)));
+                opts.AddChild(Keyed(new Choice("Соседи", "Соседи\nПо граням: только то, что касается гранью. С углами: и то, что касается ребром или углом, например стена под 45°. " +
+                    "Shift при наведении и щелчке тоже берёт с углами.",
+                    new[] { "по граням", "с углами" }, o.WandCorners ? 1 : 0, i => { o.WandCorners = i == 1; t.Changed(); }), () => "Shift"));
                 break;
             case Tool.Paste when t.PasteBp != null:
                 opts.AddChild(Hud.CapsLabel($"поворот {t.PasteRot * 90}° · {Bindings.Label(Act.Rotate)} — повернуть · {t.PasteBp.Describe()}", 10, Ornament.Aged));

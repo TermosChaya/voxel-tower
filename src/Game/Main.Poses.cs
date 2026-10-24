@@ -67,6 +67,7 @@ public partial class Main
         if (_pose == "drops") { Drops(); return; }
         if (_pose == "felling") { Felling(); return; }
         if (_pose == "acid") { Acid(); return; }
+        if (_pose == "wand") { WandPose(); return; }
         if (_pose == "sigils")
         {
             var layer = new CanvasLayer { Layer = 100 };

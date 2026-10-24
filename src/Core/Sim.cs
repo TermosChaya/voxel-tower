@@ -225,6 +225,7 @@ public sealed partial class Sim
         Stage = "TickDecor"; TickDecor();
         Stage = "TickMines"; TickMines(dt);
         Stage = "TickErrands"; TickErrands();
+        Stage = "TickRelay"; TickRelay(dt);
         Stage = "NavFlush"; if (Nav.PendingEdits > 0) Nav.Flush();
         Stage = "UpdateFields"; UpdateFields();
         Stage = "Waves"; Waves.Tick(this, dt);

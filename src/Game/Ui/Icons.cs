@@ -40,7 +40,7 @@ public static class Icons
         BridgeIcon = Of("stone-bridge"), Mend = Of("trowel"), Gather = Of("axe-in-stump"), Horn = Of("hunting-horn"),
         Scroll = Of("scroll-unfurled"), Skull = Of("death-skull"), Eye = Of("all-seeing-eye"), Tome = Of("spell-book"),
         Coin = Of("two-coins"), Earth = Of("dig-hole"), TopView = Of("treasure-map"), HomeView = Of("castle"), Question = Of("help"),
-        Helm = Of("visored-helm"), CrossedSwords = Of("crossed-swords");
+        Helm = Of("visored-helm"), CrossedSwords = Of("crossed-swords"), WandIcon = Of("magic-wand");
 
     /// <summary>A material: a block of stone, a pile of logs, a pit of earth, in the material's own colour.</summary>
     public static Painter Material(byte m) => (c, r, ink) =>

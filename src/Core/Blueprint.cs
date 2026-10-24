@@ -61,6 +61,49 @@ public sealed class Blueprint
         };
     }
 
+    /// <summary>
+    /// A blueprint of these voxels only (what the magic wand took), not of everything in their rectangle: of them what
+    /// is ours, in runs up each column as <see cref="Capture"/> keeps it. Null when none is ours.
+    /// </summary>
+    public static Blueprint FromVoxels(VoxelList L, int id, string name)
+    {
+        var cols = new Dictionary<(int x, int z), List<(int y, byte m)>>();
+        int x0 = int.MaxValue, z0 = int.MaxValue, x1 = int.MinValue, z1 = int.MinValue;
+        for (int i = 0; i < L.Count; i++)
+        {
+            byte m = L.M(i);
+            if (m == 0 || !Mat.IsPlayer[m]) continue;
+            int x = L.X(i), z = L.Z(i);
+            if (!cols.TryGetValue((x, z), out var col)) cols[(x, z)] = col = new List<(int, byte)>();
+            col.Add((L.Y(i), m));
+            x0 = Math.Min(x0, x); z0 = Math.Min(z0, z); x1 = Math.Max(x1, x); z1 = Math.Max(z1, z);
+        }
+        if (cols.Count == 0) return null;
+        var runs = new List<int>();
+        int ymin = int.MaxValue, ymax = 0, st = 0, wd = 0, ea = 0;
+        foreach (var ((x, z), col) in cols)
+        {
+            col.Sort((a, b) => a.y.CompareTo(b.y));
+            for (int k = 0; k < col.Count;)
+            {
+                var (y, m) = col[k];
+                int len = 1;
+                while (k + len < col.Count && col[k + len].y == y + len && col[k + len].m == m) len++;
+                runs.Add(x - x0); runs.Add(z - z0); runs.Add(y); runs.Add(len); runs.Add(m);
+                ymin = Math.Min(ymin, y); ymax = Math.Max(ymax, y + len);
+                if (Mat.IsMasonry(m)) st += len; else if (m == Mat.Wood) wd += len; else ea += len;
+                k += len;
+            }
+        }
+        for (int r = 2; r < runs.Count; r += 5) runs[r] -= ymin;
+        return new Blueprint
+        {
+            Id = id, Name = string.IsNullOrEmpty(name) ? $"Чертёж {id}" : name,
+            W = x1 - x0 + 1, D = z1 - z0 + 1, H = ymax - ymin,
+            Runs = runs.ToArray(), Stone = st, Wood = wd, Earth = ea,
+        };
+    }
+
     public int RotW(int rot) => (rot & 1) == 1 ? D : W;
     public int RotD(int rot) => (rot & 1) == 1 ? W : D;
 

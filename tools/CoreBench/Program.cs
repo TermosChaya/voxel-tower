@@ -6093,6 +6093,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--house")
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--acid") AcidBench.Run((what, ok, detail) => Check(what, ok, detail));
 // the hill giant and the great ones' boulders (Giants.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--giants") GiantsBench.Run(Check);
+// the magic wand: what it takes, laying over again, its blueprint (WandBench.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--wand") WandBench.Run(Check);
 
 if (args.Length > 0 && args[0] == "--stress")
 {
