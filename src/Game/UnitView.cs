@@ -91,11 +91,11 @@ public partial class UnitView : Node3D
     readonly Dictionary<int, Look> _looks = new();
     readonly HashSet<int> _alive = new();
     readonly List<int> _gone = new();
-    MultiMeshInstance3D _arrows, _rings, _standards, _stuck, _kegs, _bolts, _stones, _pots, _firePots, _flasks;
+    MultiMeshInstance3D _arrows, _rings, _standards, _stuck, _kegs, _bolts, _stones, _pots, _firePots, _flasks, _spears, _pitchKegs;
     float[] _kegBuf = Array.Empty<float>();
     float[] _ringBuf = Array.Empty<float>(), _standardBuf = Array.Empty<float>(), _stuckBuf = Array.Empty<float>();
     /// <summary>A buffer for each of what flies, by <see cref="Shot"/>.</summary>
-    readonly float[][] _shotBufs = { Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>() };
+    readonly float[][] _shotBufs = { Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>() };
     readonly Dictionary<int, Own> _own = new();
     readonly List<Fallen> _fallen = new();
     readonly Transform3D[] _xf = new Transform3D[Figure.Bones];
@@ -129,6 +129,12 @@ public partial class UnitView : Node3D
         var flask = new SphereMesh { Radius = .08f, Height = .15f, RadialSegments = 8, Rings = 4,
             Material = new StandardMaterial3D { AlbedoColor = new Color("5f9a3a"), Roughness = .15f, EmissionEnabled = true, Emission = new Color(.45f, .9f, .25f), EmissionEnergyMultiplier = 1.2f } };
         _flasks = Multi(flask, null, false);
+        // a ballista's bolt, near two metres of ash with an iron head; an engine's keg of burning pitch, half a metre
+        var spear = new BoxMesh { Size = new Vector3(.05f, .05f, .9f), Material = new StandardMaterial3D { AlbedoColor = new Color("4b3826"), Roughness = .8f, Metallic = .2f } };
+        _spears = Multi(spear, null, false);
+        var pitchKeg = new CylinderMesh { TopRadius = .11f, BottomRadius = .11f, Height = .26f, RadialSegments = 8, Rings = 1,
+            Material = new StandardMaterial3D { AlbedoColor = new Color("6e3a1e"), EmissionEnabled = true, Emission = new Color(1f, .42f, .1f), EmissionEnergyMultiplier = 2f } };
+        _pitchKegs = Multi(pitchKeg, null, false);
         // a sapper's charge: a keg of powder, a little under half a metre
         var keg = new BoxMesh { Size = new Vector3(.36f, .42f, .36f), Material = new StandardMaterial3D { AlbedoColor = new Color("6a3322"), Roughness = .85f } };
         _kegs = Multi(keg, null, false);
@@ -420,7 +426,12 @@ public partial class UnitView : Node3D
             // an engine does not walk: the ram's log swings as it batters, the catapult's arm flies up as it throws
             if (u.T == Kinds.Ram && u.State is UnitState.Carve or UnitState.Siege) main = MathF.Sin((float)_t * MathF.Tau / f.Chop + seed) * .28f;
             // thrown, the arm stands up against the beam a while, then is winched back down for the next
-            else if (u.T == Kinds.Catapult) main = u.Dead ? 0 : 1.9f * Math.Clamp(u.Cooldown / u.T.AttackTime * 1.5f, 0, 1);
+            else if (u.T == Kinds.Catapult || u.T == Kinds.Mangonel) main = u.Dead ? 0 : 1.9f * Math.Clamp(u.Cooldown / u.T.AttackTime * 1.5f, 0, 1);
+            // a trebuchet's beam lies with its long end down at the back; thrown, it swings up and over, and is hauled
+            // down again; packed for the road it lies level
+            else if (u.T == Kinds.Trebuchet) main = u.Dead ? 0 : u.Rig < 1 ? -.75f * Math.Max(0, u.Rig) : -.75f + 2.9f * Math.Clamp(u.Cooldown / u.T.AttackTime * 1.6f, 0, 1);
+            // a ballista's stock kicks a little as it looses
+            else if (u.T == Kinds.Ballista) main = u.Dead ? 0 : -.05f * Math.Clamp(u.Cooldown / u.T.AttackTime * 3 - 2, 0, 1);
             if (u.Dead) sink = Math.Max(0, (float)(_m.Sim.Time - u.DiedAt) - 18) * .8f;
         }
         else if (u.Dead)
@@ -1322,9 +1333,9 @@ public partial class UnitView : Node3D
     {
         DrawKegs(sim);
         // a shot that missed throws up bits of what it came down in: earth, grass, chips of stone, water
-        foreach (var a in sim.Arrows) if (a.Done && !a.Hits && a.Kind is not (Shot.Pot or Shot.FirePot or Shot.Flask) && _grounded.Add(a)) Thud(a);
+        foreach (var a in sim.Arrows) if (a.Done && !a.Hits && a.Kind is not (Shot.Pot or Shot.FirePot or Shot.Flask or Shot.Keg) && _grounded.Add(a)) Thud(a);
         if (_grounded.Count > 600) _grounded.RemoveWhere(a => !sim.Arrows.Contains(a));
-        var meshes = new[] { _arrows, _bolts, _stones, _pots, _firePots, _flasks };
+        var meshes = new[] { _arrows, _bolts, _stones, _pots, _firePots, _flasks, _spears, _pitchKegs };
         Span<int> counts = stackalloc int[meshes.Length];
         foreach (var a in sim.Arrows) if (Flying(a)) counts[(int)a.Kind]++;
         for (int k = 0; k < meshes.Length; k++)
@@ -1347,7 +1358,7 @@ public partial class UnitView : Node3D
             var at = new Vector3(_w.WX(p.X), _w.WY(p.Y), _w.WZ(p.Z));
             var z = dir.Normalized();
             // a stone or a pot turns over and over as it goes
-            if (a.Kind is Shot.Stone or Shot.Pot or Shot.FirePot or Shot.Flask) z = new Basis(Vector3.Up, a.T * 9) * (new Basis(Vector3.Right, a.T * 13) * Vector3.Back);
+            if (a.Kind is Shot.Stone or Shot.Pot or Shot.FirePot or Shot.Flask or Shot.Keg) z = new Basis(Vector3.Up, a.T * 9) * (new Basis(Vector3.Right, a.T * 13) * Vector3.Back);
             var x = Vector3.Up.Cross(z);
             x = x.LengthSquared() < 1e-6f ? Vector3.Right : x.Normalized();
             var y = z.Cross(x);
@@ -1382,7 +1393,7 @@ public partial class UnitView : Node3D
     }
 
     /// <summary>Whether a shot is drawn flying (or lying, an arrow or a bolt that missed).</summary>
-    static bool Flying(Arrow a) => !a.Done || !a.Hits && a.Kind is Shot.Arrow or Shot.Bolt;
+    static bool Flying(Arrow a) => !a.Done || !a.Hits && a.Kind is Shot.Arrow or Shot.Bolt or Shot.Spear;
 
     /// <summary>The charges the horde's sappers carry: a keg of powder on each one's back.</summary>
     void DrawKegs(Sim sim)

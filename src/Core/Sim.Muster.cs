@@ -40,6 +40,8 @@ public sealed partial class Sim
             : $"мест нет: занято {have} из {Places}, постройте жилой дом";
         int cost = HireCost(t);
         if (Stock.Gold < cost) return $"нужно {cost} золота";
+        // an engine is built of the stores' timber besides
+        if (t.Logs > 0 && Stock[Stockpile.Wood] + 1e-6 < t.Logs) return $"нужно {t.Logs:0.#} м³ брёвен";
         return null;
     }
 
@@ -50,7 +52,15 @@ public sealed partial class Sim
     {
         if (CantEnlist(t) != null) return false;
         Stock.Gold -= HireCost(t);
-        Arrive(t);
+        if (t.Logs > 0) Stock.Take(Stockpile.Wood, t.Logs);
+        var u = Arrive(t);
+        // an engine comes out with its crew (Sim.OurEngines.cs)
+        if (t.Crew > 0)
+        {
+            for (int i = 0; i < t.Crew; i++) Arrive(Kinds.Crewman).Escort = u;
+            Say($"{t.Name} собран и выходит из цитадели с расчётом.", 1);
+            return true;
+        }
         Say($"{t.Name} нанят и выходит из цитадели.", 1);
         return true;
     }

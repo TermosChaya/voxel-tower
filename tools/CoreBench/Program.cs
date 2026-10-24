@@ -3821,7 +3821,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--lore")
     }
     for (int wave = 1; wave <= Waves.Total; wave++) siege += 3 + wave;
     Check("the tree is four deep: the last of a branch wants both before it, the masters' guild wants the masons' too, and the skills and the troops together cost more than a siege gives",
-        skills == 30 && troops == 24 && rites == 30 && !longFirst && longK && MathF.Abs(reachK2 / reachK0 - 1.15f * 1.15f) < .01f && !guildFirst && guildK && treeCost > siege * 1.5f,
+        skills == 30 && troops == 30 && rites == 30 && !longFirst && longK && MathF.Abs(reachK2 / reachK0 - 1.15f * 1.15f) < .01f && !guildFirst && guildK && treeCost > siege * 1.5f,
         $"{skills} skills, {troops} of the troops, {rites} of the intervention; longbows on one {longFirst}, on both {longK}, reach ×{reachK2 / reachK0:0.000}; the guild without masons {guildFirst}, with {guildK}; skills and troops {treeCost}, a siege's knowledge {siege}");
     // every page's branches are its own, each branch a tier 0 to a tier 3, every root on its own page
     bool shaped = true;
@@ -4450,7 +4450,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bodies")
         {
             var plan = Bodies.Plan(t, l);
             // (an engine's timbers are not cut by blows)
-            bool engine = t.Key is "ram" or "catapult" or "mantlet" or "tower";
+            bool engine = Kinds.IsEngine(t);
             for (int p = 0; p < BodyPlan.Parts && !engine; p++)
             {
                 var g = plan.Grid[p];
@@ -4953,8 +4953,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--grass")
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troops")
 {
     Console.WriteLine();
-    // thirteen kinds after the first four, in the citadel's order, each waiting on its lore, with its time and its places
-    string[] loresT = { "spearmen", "shieldmen", "halberds", "knights", "slingers", "crossbows", "bombards", "alchemists", "hounds", "riders", "horsearchers", "lancers", "trolls", "giants" };
+    // seventeen kinds after the first four, in the citadel's order, each waiting on its lore, with its time and its places
+    string[] loresT = { "spearmen", "shieldmen", "halberds", "knights", "slingers", "crossbows", "bombards", "alchemists", "hounds", "riders", "horsearchers", "lancers", "trolls", "giants", "mangonels", "ballistas", "trebuchets" };
     var wrongT = new System.Collections.Generic.List<string>();
     for (int i = 0; i < Kinds.Troops.Length; i++)
     {
@@ -4962,8 +4962,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troops")
         if (t.Team != Team.Player || !(t.Work < 1) || t.Lore != loresT[i] || t.Room < 1 || t.Cost <= 0 || Bodies.Looks(t) < 2
             || Bodies.Plan(t, 0) == Bodies.Plan(Kinds.Worker, 0)) wrongT.Add(t.Key);
     }
-    bool orderT = Kinds.PlayerKinds.Length == 18 && Kinds.Troops.Length == 14 && Kinds.Troops.SequenceEqual(Kinds.PlayerKinds.Skip(4));
-    Check("fourteen new kinds of ours in the citadel's order, each waiting on its lore, with the places it fills, each in a body of its own",
+    bool orderT = Kinds.PlayerKinds.Length == 21 && Kinds.Troops.Length == 17 && Kinds.Troops.SequenceEqual(Kinds.PlayerKinds.Skip(4));
+    Check("seventeen new kinds of ours in the citadel's order, each waiting on its lore, with the places it fills, each in a body of its own",
         orderT && wrongT.Count == 0,
         $"{Kinds.PlayerKinds.Length} kinds of ours; wrong: {string.Join(", ", wrongT)}; " + string.Join(", ", Kinds.Troops.Select(t => $"{t.Key} {t.Lore} ×{t.Room}")));
 
@@ -5053,7 +5053,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troops")
     float hang0 = hanging.Y;
     RunT(.2);
     Check("horses and hounds take no ladder: a spearman finds his way up a ladder onto a pillar, a rider, a lancer and a hound none, and a horse set on the rungs comes down off them",
-        spearUp && !riderUp && !houndUp && !lancerUp && Kinds.Troops.All(t => t.Move.Ladders == !(t.Mounted || t.NoHands)) && hanging.Y < hang0 - 4 && simT.Nav.Ladder[climber.Cell] != 0,
+        spearUp && !riderUp && !houndUp && !lancerUp && Kinds.Troops.All(t => t.Move.Ladders == !(t.Mounted || t.NoHands || Kinds.IsEngine(t))) && hanging.Y < hang0 - 4 && simT.Nav.Ladder[climber.Cell] != 0,
         $"spearman up {spearUp}, rider {riderUp}, lancer {lancerUp}, hound {houndUp}; the horse on the rungs {hang0 - fg:0} → {hanging.Y - fg:0} voxels up, the spearman still on them {simT.Nav.Ladder[climber.Cell] != 0}");
     Gone(hanging); Gone(climber);
 
@@ -6099,6 +6099,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--acid") AcidBench.Run
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--ouralchemist") OurAlchemistBench.Run((what, ok, detail) => Check(what, ok, detail));
 // the hill giant and the great ones' boulders (Giants.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--giants") GiantsBench.Run(Check);
+// our engines: learnt, mustered, rolled, at their marks, a ballista's bolt, the kegs, the crew (OurEngines.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--ourengines") OurEnginesBench.Run(Check);
 // the magic wand: what it takes, laying over again, its blueprint (WandBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--wand") WandBench.Run(Check);
 // houses the workers build: roofed whole, floored, furnished, and a storey on a storey (Houses.cs)

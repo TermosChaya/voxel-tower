@@ -40,9 +40,10 @@ public partial class KindTile : Control
         var sim = _m.Sim;
         string why = sim.CantEnlist(Kind);
         string room = Kind.Room > 1 ? $", занимает {Kind.Room} {Places(Kind.Room)}" : "";
-        string foot = why == null ? $"Щелчок — нанять за {sim.HireCost(Kind)} золота{room}. Выходит из цитадели сразу." : $"Нельзя: {why}.";
+        string logs = Kind.Logs > 0 ? $" и {Kind.Logs:0.#} м³ брёвен" : "";
+        string foot = why == null ? $"Щелчок — нанять за {sim.HireCost(Kind)} золота{logs}{room}. Выходит из цитадели сразу." : $"Нельзя: {why}.";
         if (!sim.Unlocked(Kind)) foot = $"Нужно знание «{Sim.LoreOf(Kind.Lore)?.Name ?? Kind.Lore}» (вкладка «Знания», страница «Войско»).";
-        return $"{Kind.Name} · {sim.HireCost(Kind)} золота{room}\n{Retinue.About(Kind)}\n{foot}";
+        return $"{Kind.Name} · {sim.HireCost(Kind)} золота{logs}{room}\n{Retinue.About(Kind)}\n{foot}";
     }
 
     static string Places(int n) => n % 10 is >= 2 and <= 4 && n % 100 is < 12 or > 14 ? "места" : n % 10 == 1 && n % 100 != 11 ? "место" : "мест";

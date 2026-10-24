@@ -49,7 +49,7 @@ public sealed partial class Sim
     /// <summary>What a kind of ours throws or shoots.</summary>
     static Shot ShotOf(UnitType t) => t.Tool switch { "crossbow" => Shot.Bolt, "sling" => Shot.Stone, "bombard" => Shot.Pot, "flask" => Shot.Flask, _ => Shot.Arrow };
     /// <summary>A stone the great ones threw: it passes ours by.</summary>
-    static bool Spares(Flier f, Unit u) => u.Team == Team.Player && f.Cause == BoulderCause;
+    static bool Spares(Flier f, Unit u) => u.Team == Team.Player && (f.Cause == BoulderCause || OurStone(f.Cause));
 
     // ------------------------------------------------------------ reach, range and pace
 
@@ -343,10 +343,13 @@ public sealed partial class Sim
             Hurt(t, a.From, a.Damage * .5f, "горящая смола");
         }
         int lit = 0;
-        for (int i = 0; i < 5; i++)
+        // an engine's keg of it splashes three times as far about (Sim.OurEngines.cs)
+        bool keg = a.Kind == Shot.Keg;
+        for (int i = 0, n = keg ? 18 : 5; i < n; i++)
         {
             // where it broke, and a splash to each side
             int x = (int)px + (i == 0 ? 0 : i < 3 ? 2 * (i * 2 - 3) : 0) + Rng.Next(-1, 2), z = (int)pz + (i < 3 ? 0 : 2 * (i * 2 - 7)) + Rng.Next(-1, 2);
+            if (i >= 5) { float ang = i * 2.4f, rad = 2 + i * .4f; x = (int)(px + MathF.Cos(ang) * rad); z = (int)(pz + MathF.Sin(ang) * rad); }
             if (!World.InBounds(x, (int)py, z)) continue;
             // down to whatever is under it there, and onto it
             int y = Math.Min(World.SY - 2, (int)py + 2);

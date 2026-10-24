@@ -73,6 +73,8 @@ public sealed partial class Sim
     {
         // one of the dead raised: it goes for the horde, and does nothing else
         if (u.T == Kinds.Risen) { RisenTick(u, dt); return; }
+        // an engine of ours goes about its own work; its crew keeps by it (Sim.OurEngines.cs)
+        if (Kinds.IsEngine(u.T)) { OurEngineTick(u, dt); return; }
         TroopTick(u, dt);
         // bound and led off by a thief: it goes where it is led till it is freed
         if (u.Captor != null) { Led(u, dt); return; }
@@ -80,6 +82,7 @@ public sealed partial class Sim
         if ((u.Carrying != null || u.Propping != null) && Aid(u, dt)) { Busy(u); return; }
         // standing in the flames: out of them before anything
         if (EscapeFire(u, dt)) { Busy(u); return; }
+        if (CrewTick(u, dt)) { Busy(u); return; }
         // a sapper's fuse burning down: one runs to cut it, the rest near it get away from the wall
         if (u.Defusing != null && Defuse(u, dt)) { Busy(u); return; }
         if (u.Shunning != null && KeepClear(u, dt)) { Busy(u); return; }

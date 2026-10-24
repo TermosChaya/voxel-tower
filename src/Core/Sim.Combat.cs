@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace VoxelTower.Core;
 
 /// <summary>What flies at the horde: an arrow, a crossbow's bolt, a sling's stone, a pot of powder, a pot of burning pitch.</summary>
-public enum Shot : byte { Arrow, Bolt, Stone, Pot, FirePot, Flask }
+public enum Shot : byte { Arrow, Bolt, Stone, Pot, FirePot, Flask, Spear, Keg }
 
 /// <summary>An arrow (or a bolt, a stone, a pot) in flight, from bow to where the target was expected to be.</summary>
 public sealed class Arrow
@@ -23,6 +23,8 @@ public sealed class Arrow
     public bool Through;
     /// <summary>A flask of ours of choking fumes rather than acid.</summary>
     public bool Fumes;
+    /// <summary>A ballista's bolt: how many raiders it has gone through already.</summary>
+    public int Hops;
 }
 
 public sealed partial class Sim
@@ -35,10 +37,10 @@ public sealed partial class Sim
     const float ArrowSpeed = 15 * 16;   // voxels a second
     /// <summary>How fast the rest fly: a bolt faster than an arrow, a sling stone a little slower, a pot lobbed slow.</summary>
     const float BoltSpeed = 20 * 16, StoneSpeed = 13 * 16, PotSpeed = 8 * 16;
-    static float SpeedOf(Shot s) => s switch { Shot.Bolt => BoltSpeed, Shot.Stone => StoneSpeed, Shot.Pot or Shot.FirePot or Shot.Flask => PotSpeed, _ => ArrowSpeed };
-    static float ArcOf(Shot s) => s switch { Shot.Bolt => .04f, Shot.Stone => .08f, Shot.Pot or Shot.FirePot => .32f, Shot.Flask => .36f, _ => .1f };
+    static float SpeedOf(Shot s) => s switch { Shot.Bolt or Shot.Spear => BoltSpeed, Shot.Stone => StoneSpeed, Shot.Pot or Shot.FirePot or Shot.Flask or Shot.Keg => PotSpeed, _ => ArrowSpeed };
+    static float ArcOf(Shot s) => s switch { Shot.Bolt => .04f, Shot.Spear => .03f, Shot.Stone => .08f, Shot.Pot or Shot.FirePot or Shot.Keg => .32f, Shot.Flask => .36f, _ => .1f };
     /// <summary>What a shot that kills is put down as, for the chronicle.</summary>
-    static string CauseOf(Shot s) => s switch { Shot.Bolt => "арбалетный болт", Shot.Stone => "камень из пращи", _ => "стрела" };
+    static string CauseOf(Shot s) => s switch { Shot.Bolt => "арбалетный болт", Shot.Stone => "камень из пращи", Shot.Spear => SpearCause, _ => "стрела" };
 
     public bool AnyRaider()
     {
@@ -474,7 +476,7 @@ public sealed partial class Sim
             if (a.Kind == Shot.Flask) { if (a.From?.Team == Team.Player) OurFlaskLands(a); else FlaskLands(a); continue; }
             // a pot bursts, or breaks and burns, wherever it comes down, on the raider or by it
             if (a.Kind == Shot.Pot) { if (a.Hits) ShotHits++; var (px, py, pz) = PotDown(a); PotBurst(px, py, pz, a.Damage, a.From); continue; }
-            if (a.Kind == Shot.FirePot) { if (a.Hits) ShotHits++; PitchLands(a); continue; }
+            if (a.Kind is Shot.FirePot or Shot.Keg) { if (a.Hits) ShotHits++; PitchLands(a); continue; }
             if (a.Hits && a.Target != null && !a.Target.Dead)
             {
                 ShotHits++;
@@ -490,10 +492,12 @@ public sealed partial class Sim
                 var (cut, depth, reach) = WeaponOf(a.From?.T ?? Kinds.Archer);
                 if (a.From != null) t.HurtBy = a.From;
                 // a shaft goes in along a narrow channel; a stone strikes a little round, and does not stay in
-                float share = Kinds.IsEngine(t.T) ? EngineShare(true) : Wound(t, cut, depth, cut == Cut.Arrow ? 0 : reach, tx - dx / dl * 30, hy - dy / dl * 30, tz - dz / dl * 30, dx, dy, dz);
+                // (a ballista's bolt breaks into an engine as a blade would, and more)
+                float share = Kinds.IsEngine(t.T) ? (a.Kind == Shot.Spear ? 1.2f : EngineShare(true)) : Wound(t, cut, depth, cut == Cut.Arrow ? 0 : reach, tx - dx / dl * 30, hy - dy / dl * 30, tz - dz / dl * 30, dx, dy, dz);
                 Hurt(t, a.From, a.Damage * share * HideShare(t, a.Kind), CauseOf(a.Kind));
                 if (a.Kind == Shot.Stone) StoneStrikes(a, t);
                 if (a.Kind == Shot.Bolt && !Kinds.IsEngine(t.T)) Pierce(a, t);
+                if (a.Kind == Shot.Spear && !Kinds.IsEngine(t.T)) SpearOn(a, t);
             }
             if (a.Fire) FireArrowLands(a);
         }

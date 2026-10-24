@@ -148,6 +148,8 @@ public sealed partial class Sim
         if (!Armed(u) || u.Routed) { StopCarve(u); StopBuild(u); Retreat(u, dt); return; }
         KeepEscort(u);
         if (u.Guard) { GuardTick(u, dt); return; }
+        // an engine of ours near, with nobody of ours at hand: it goes for it and its crew (Sim.OurEngines.cs)
+        if (u.CarveCell < 0 && u.BuildCell < 0 && GoForEngine(u, dt)) return;
         // one of its own fighting close by: it goes to help
         if (u.CarveCell < 0 && u.BuildCell < 0 && u.Band is not { State: BandState.Forming } && Help(u, dt)) return;
         // a band gathers where it came in before it sets out

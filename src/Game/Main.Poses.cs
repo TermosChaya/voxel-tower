@@ -30,6 +30,7 @@ public partial class Main
         if (_pose == "drawbridge") { Drawn(); return; }
         if (_pose == "thieves") { Robbed(); return; }
         if (_pose == "engines") { Engines(); return; }
+        if (_pose == "ourengines") { OurEnginesPose(); return; }
         if (_pose == "wounds") { Wounded(); return; }
         if (_pose == "trauma") { Trauma(); return; }
         if (_pose == "carry") { CarryPose(); return; }

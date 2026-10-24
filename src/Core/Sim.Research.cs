@@ -35,9 +35,9 @@ public sealed class Lore
 /// What a wave beaten back gives: gold, and knowledge — what was learnt of the horde and of holding against it. The
 /// knowledge goes on lore, a tree of three pages. The household's skills: five branches — bows, masonry, labour, arms,
 /// traps — each four deep: the first of a branch, two that rest on it, a further one on each of those, and the last,
-/// resting on both; one rests on another branch besides its own. The troops: four branches of the same shape, where
+/// resting on both; one rests on another branch besides its own. The troops: five branches of the same shape, where
 /// the kinds the citadel will take on are learnt — spearmen to knights, slingers to bombardiers, hounds to mounted
-/// knights, barracks to giants — with what makes them better. And the intervention of the old powers: the four circles
+/// knights, barracks to giants, and in a fifth, our engines: catapults to trebuchets — with what makes them better. And the intervention of the old powers: the four circles
 /// of spells and a branch of grace, learnt not for knowledge but for what the powers give, intervention and revelations.
 /// There is more of the knowledge than a siege gives: what to learn is a choice. What is learnt is learnt for good.
 /// </summary>
@@ -55,7 +55,7 @@ public sealed partial class Sim
     public static readonly string[][] PageBranches =
     {
         new[] { "Луки", "Кладка", "Труд", "Дружина", "Ловушки" },
-        new[] { "Пехота", "Стрелки", "Конница", "Великаны" },
+        new[] { "Пехота", "Стрелки", "Конница", "Великаны", "Машины" },
         new[] { "Круг земли", "Круг огня и неба", "Круг смерти", "Круг воли", "Благодать" },
     };
     public static readonly string[] Branches = PageBranches[0];
@@ -142,6 +142,13 @@ public sealed partial class Sim
         U("trolls", "Великаны", "Ручные тролли", 6, 2, 0, "Цитадель набирает ручных троллей. Бьют сильно, вне боя быстро заживают.", "drillyard"),
         U("giants", "Великаны", "Великаны", 7, 2, 1, "Цитадель набирает великанов. Удар молота раскидывает налётчиков. Великан занимает 4 места.", "bunks"),
         U("boulders", "Великаны", "Глыбы", 6, 3, .5f, "Великаны и тролли бросают в орду камни, которые катятся сквозь ряды.", "trolls", "giants"),
+        // our engines (Sim.OurEngines.cs)
+        U("mangonels", "Машины", "Катапульты", 4, 0, .5f, "Цитадель набирает катапульты. Мечут камни на 46 м в машины и ватаги орды. Расчёт 2 человека, занимает 3 места."),
+        U("pitchkegs", "Машины", "Бочонки со смолой", 3, 1, 0, "Катапульты и требушеты через раз мечут бочонок горящей смолы: он поджигает машины, настилы и ватагу.", "mangonels"),
+        U("windlass", "Машины", "Вороты", 3, 1, 1, "Машины заряжаются на 25 % быстрее.", "mangonels"),
+        U("ballistas", "Машины", "Баллисты", 5, 2, 0, "Цитадель набирает баллисты. Копьё летит прямо на 50 м, пробивает ряд налётчиков и пригвождает великана.", "pitchkegs"),
+        U("heavystones", "Машины", "Тяжёлые камни", 4, 2, 1, "Камни машин на треть тяжелее, катапульта бьёт на 15 % дальше.", "windlass"),
+        U("trebuchets", "Машины", "Требушеты", 7, 3, .5f, "Цитадель набирает требушеты. Тяжёлые камни на 90 м, вдвое дальше камнемёта орды. На новом месте собирается 8 с. Расчёт 3 человека, занимает 5 мест.", "ballistas", "heavystones"),
     };
 
     /// <summary>The intervention: page three — the spells, circle by circle, and the boons of grace.</summary>
@@ -263,7 +270,7 @@ public sealed partial class Sim
     // what the lore does, where it is read
 
     /// <summary>One of our soldiers: an archer or a swordsman (not a worker, a priest or the risen dead).</summary>
-    static bool Soldier(Unit u) => u.Team == Team.Player && u.T.Work < 1 && u.T != Kinds.Risen;
+    static bool Soldier(Unit u) => u.Team == Team.Player && u.T.Work < 1 && u.T != Kinds.Risen && !Kinds.IsEngine(u.T);
 
     /// <summary>How far a bow carries by day: its own reach, 15 % more with yew and as much again with longbows — ours
     /// only; what the household learns is its own.</summary>

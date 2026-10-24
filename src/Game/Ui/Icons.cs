@@ -63,6 +63,8 @@ public static class Icons
         ["hounds"] = "hound", ["riders"] = "horse-head", ["hunt"] = "sniffing-dog", ["horsearchers"] = "cloaked-figure-on-horseback",
         ["charge"] = "mounted-knight", ["lancers"] = "cavalry", ["barracks"] = "medieval-barracks", ["drillyard"] = "sword-clash",
         ["bunks"] = "bunk-beds", ["trolls"] = "troll", ["giants"] = "giant", ["boulders"] = "boulder-dash",
+        ["mangonels"] = "catapult", ["pitchkegs"] = "pitch-keg", ["windlass"] = "winch", ["ballistas"] = "ballista",
+        ["heavystones"] = "heavy-stone", ["trebuchets"] = "trebuchet",
         // the rites
         ["spell.Hand"] = "earth-spit", ["spell.Rift"] = "earth-crack", ["spell.Mire"] = "swamp", ["spell.Skin"] = "rock-golem",
         ["spell.Fall"] = "falling-rocks", ["spell.Quake"] = "quake-stomp", ["spell.FireRain"] = "fire-wave",
@@ -82,7 +84,7 @@ public static class Icons
     public static Painter BranchMark(string branch) => branch switch
     {
         "Луки" => Bow, "Кладка" => Of("stone-wall"), "Труд" => Pick, "Дружина" => Sword, "Ловушки" => Of("spiky-pit"),
-        "Пехота" => Of("swordman"), "Стрелки" => Of("bowman"), "Конница" => Of("horse-head"), "Великаны" => Of("footprint"),
+        "Пехота" => Of("swordman"), "Стрелки" => Of("bowman"), "Конница" => Of("horse-head"), "Великаны" => Of("footprint"), "Машины" => Of("catapult"),
         "Круг земли" => Of("mountains"), "Круг огня и неба" => Of("fire"), "Круг смерти" => Skull, "Круг воли" => Of("magic-swirl"),
         "Благодать" => Of("angel-wings"),
         _ => Question,

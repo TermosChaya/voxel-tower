@@ -286,7 +286,7 @@ public sealed partial class Sim
         {
             foreach (var u in chosen)
             {
-                if (u == p || u.Dead || u.Inside || u.Team != Team.Player || u.T.NoHands || u.T.Mounted || Hands(u) < .2f) continue;
+                if (u == p || u.Dead || u.Inside || u.Team != Team.Player || u.T.NoHands || u.T.Mounted || Kinds.IsEngine(u.T) || Hands(u) < .2f) continue;
                 LetGoOf(u);
                 ReleaseSite(u); StopCarve(u); StopBuild(u);
                 u.Hold = false; u.Prey = null; u.Path = null; u.NextSearch = 0;
@@ -303,7 +303,7 @@ public sealed partial class Sim
         float near = float.MaxValue;
         foreach (var u in chosen)
         {
-            if (u == p || u.Dead || u.Inside || u.Team != Team.Player || u.T.NoHands || u.T.Mounted || BodyKg(p.T) > BodyKg(u.T) * 2.2f) continue;
+            if (u == p || u.Dead || u.Inside || u.Team != Team.Player || u.T.NoHands || u.T.Mounted || Kinds.IsEngine(u.T) || BodyKg(p.T) > BodyKg(u.T) * 2.2f) continue;
             float d = Dist(u, p);
             if (d < near) { near = d; best = u; }
         }

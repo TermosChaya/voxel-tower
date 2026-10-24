@@ -912,6 +912,7 @@ public partial class Main
         await SelfTestHouses(Check);
         await SelfTestScaffold(Check);
         await SelfTestCarry(Check);
+        await SelfTestOurEngines(Check);
         // the report for the author: one file with the system, the hangs, the last events and the logs
         string report = Diag.Report(this, ProjectSettings.GlobalizePath("user://logs"));
         string body = System.IO.File.Exists(report) ? System.IO.File.ReadAllText(report) : "";

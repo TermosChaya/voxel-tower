@@ -163,7 +163,8 @@ public static partial class Bodies
     {
         "worker" => 8, "archer" => 6, "sword" => 6, "priest" => 3, "risen" => 2, "thrall" => 2, "shaman" => 2, "witch" => 2, "necro" => 2, "goblin" => 8, "sapper" => 4, "orc" => 6, "miner" => 4, "troll" => 3, "thief" => 3, "deer" => 2, "ram" => 2, "catapult" => 2, "mantlet" => 2, "tower" => 1, "stag" => 1, "bear" => 1,
         "spear" => 4, "shield" => 3, "halberd" => 3, "knight" => 3, "sling" => 4, "crossbow" => 3, "bombard" => 3, "hound" => 3, "rider" => 4, "horsearcher" => 3,
-        "lancer" => 2, "tametroll" => 2, "giant" => 3, "alchemist" => 3, "hillgiant" => 2, "ouralchemist" => 3, _ => 1,
+        "lancer" => 2, "tametroll" => 2, "giant" => 3, "alchemist" => 3, "hillgiant" => 2, "ouralchemist" => 3,
+        "mangonel" => 2, "ballista" => 2, "trebuchet" => 2, "crew" => 8, _ => 1,
     };
 
     /// <summary>A look for a unit, from its number, so it keeps it.</summary>
@@ -231,6 +232,10 @@ public static partial class Bodies
         "catapult" => CatapultPlan(look),
         "mantlet" => MantletPlan(look),
         "tower" => TowerPlan(),
+        "mangonel" => MangonelPlan(look),
+        "ballista" => BallistaPlan(look),
+        "trebuchet" => TrebuchetPlan(look),
+        "crew" => Worker(look),
         "deer" => Deer(look),
         "stag" => Deer(0, white: true),
         "bear" => BearPlan(),

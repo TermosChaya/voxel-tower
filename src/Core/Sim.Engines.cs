@@ -231,6 +231,9 @@ public sealed partial class Sim
     /// </summary>
     int AimFor(Unit u)
     {
+        // an engine of ours within its reach and a little more: it answers that first (Sim.OurEngines.cs)
+        if (OurEngineNear(u, ThrowFar + 20 * VoxelWorld.PerMetre) is { } ours)
+            return WaterPlanner.Pack((int)ours.X, Math.Max(1, (int)MathF.Floor(ours.Y) - 1), (int)ours.Z);
         float dx = Site.KeepX - u.X, dz = Site.KeepZ - u.Z, len = MathF.Sqrt(dx * dx + dz * dz);
         if (len < 1) return WaterPlanner.Pack(Site.KeepX, World.SurfAt(Site.KeepX, Site.KeepZ) - 8, Site.KeepZ);
         dx /= len; dz /= len;

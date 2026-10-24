@@ -42,6 +42,10 @@ public sealed class UnitType
     public bool Mounted;
     /// <summary>A beast of ours, a war hound: it bites and does nothing a hand does — no ladder thrown down, no fuse cut, no wound bound.</summary>
     public bool NoHands;
+    /// <summary>An engine of ours: the timber it is built of, cubic metres from the stores besides the gold, and how many
+    /// men work it (they come with it, and its places are theirs too).</summary>
+    public float Logs;
+    public int Crew;
 }
 
 public static class Kinds
@@ -181,8 +185,47 @@ public static class Kinds
         Move = new Mover { Height = 3, Climb = 2, Drop = 4, Speed = 1.8f },
         Work = .6f, Yield = .6f, Hp = 600, Damage = 40, AttackTime = 1.8f, Reach = 18, BodyH = 24, BodyR = 3.5f, Cost = 160, Room = 4, Lore = "giants", Tool = "maul",
     };
+
+    // our engines (Sim.OurEngines.cs): timber on wheels like the horde's, slow and little hurt by arrows, each worked by a
+    // crew of its own that comes out of the citadel with it; their places in the household are the crew's
+    /// <summary>A catapult of ours, a mangonel: a throwing arm in a frame on wheels; stones in a high arc at the horde's engines and its bands.</summary>
+    public static readonly UnitType Mangonel = new()
+    {
+        Key = "mangonel", Name = "Катапульта", Team = Team.Player,
+        Move = new Mover { Height = 3, Climb = 1, Drop = 1, Speed = .8f, Ladders = false },
+        Work = 0, Yield = 0, Hp = 300, Damage = 0, AttackTime = 7, Range = 46 * VoxelWorld.PerMetre, BodyH = 20, BodyR = 6,
+        Cost = 110, Logs = 3, Crew = 2, Room = 3, Lore = "mangonels",
+    };
+    /// <summary>A ballista: a great crossbow on a wheeled stand; a bolt like a spear, straight, through a file of raiders, and into a giant.</summary>
+    public static readonly UnitType Ballista = new()
+    {
+        Key = "ballista", Name = "Баллиста", Team = Team.Player,
+        Move = new Mover { Height = 2, Climb = 1, Drop = 1, Speed = 1.1f, Ladders = false },
+        Work = 0, Yield = 0, Hp = 220, Damage = 90, AttackTime = 4.5f, Range = 50 * VoxelWorld.PerMetre, BodyH = 12, BodyR = 5,
+        Cost = 120, Logs = 2, Crew = 2, Room = 3, Lore = "ballistas",
+    };
+    /// <summary>A trebuchet: a counterweight on a long arm in a tall frame; heavy stones farther than anything of the horde's, and set up where it stands.</summary>
+    public static readonly UnitType Trebuchet = new()
+    {
+        Key = "trebuchet", Name = "Требушет", Team = Team.Player,
+        Move = new Mover { Height = 3, Climb = 1, Drop = 1, Speed = .55f, Ladders = false },
+        Work = 0, Yield = 0, Hp = 480, Damage = 0, AttackTime = 12, Range = 90 * VoxelWorld.PerMetre, BodyH = 40, BodyR = 8,
+        Cost = 220, Logs = 8, Crew = 3, Room = 5, Lore = "trebuchets",
+    };
+    /// <summary>One of an engine's crew, in a leather cap and apron: it winds the engine, loads it and pushes it; with its engine gone, a worker.</summary>
+    public static readonly UnitType Crewman = new()
+    {
+        Key = "crew", Name = "Механик", Team = Team.Player,
+        Move = new Mover { Height = 2, Climb = 2, Speed = 2.6f },
+        Work = 1, Yield = 1, Hp = 65, Damage = 6, AttackTime = 1.1f, Room = 0, Tool = "pick",
+    };
+    /// <summary>Our engines, in the citadel's order; and their crews' kind.</summary>
+    public static readonly UnitType[] OurEngines = { Mangonel, Ballista, Trebuchet };
+    public static readonly UnitType[] Crews = { Crewman };
+    public static bool IsOurEngine(UnitType t) => t == Mangonel || t == Ballista || t == Trebuchet;
+
     /// <summary>The troops the lore opens, in the order the citadel offers them.</summary>
-    public static readonly UnitType[] Troops = { Spearman, Shieldbearer, Halberdier, Knight, Slinger, Crossbowman, Bombardier, OurAlchemist, Hound, Rider, HorseArcher, Lancer, TameTroll, Giant };
+    public static readonly UnitType[] Troops = { Spearman, Shieldbearer, Halberdier, Knight, Slinger, Crossbowman, Bombardier, OurAlchemist, Hound, Rider, HorseArcher, Lancer, TameTroll, Giant, Mangonel, Ballista, Trebuchet };
 
     public static readonly UnitType Goblin = new()
     {
@@ -270,7 +313,7 @@ public static class Kinds
         Hp = 800, Damage = 0, AttackTime = 1, Bounty = 40, BodyH = 44, BodyR = 8,
     };
     public static readonly UnitType[] Engines = { Ram, Catapult, Mantlet, SiegeTower };
-    public static bool IsEngine(UnitType t) => t == Ram || t == Catapult || t == Mantlet || t == SiegeTower;
+    public static bool IsEngine(UnitType t) => t == Ram || t == Catapult || t == Mantlet || t == SiegeTower || IsOurEngine(t);
 
     // the valley's beasts: they graze and wander, bolt from anyone who comes near, and pay for the hunt
     public static readonly UnitType Deer = new()
@@ -295,7 +338,7 @@ public static class Kinds
     public static readonly UnitType[] PlayerKinds =
     {
         Worker, Archer, Swordsman, Priest, Spearman, Shieldbearer, Halberdier, Knight, Slinger, Crossbowman, Bombardier, OurAlchemist, Hound, Rider, HorseArcher, Lancer,
-        TameTroll, Giant,
+        TameTroll, Giant, Mangonel, Ballista, Trebuchet,
     };
     /// <summary>The horde's kinds that find their way by the field (the catapult goes its own way to where it throws from).</summary>
     public static readonly UnitType[] HordeKinds = { Goblin, Orc, Miner, Troll, Sapper, Thief, Ram, HillGiant };
@@ -652,6 +695,11 @@ public sealed class Unit
     public double HurlFrom = -99;
     public float HurlSX, HurlSY, HurlSZ, HurlTX, HurlTY, HurlTZ;
     public Unit HurlAt;
+    /// <summary>
+    /// An engine of ours (Sim.OurEngines.cs): how far it is set up where it stands, 0 packed to roll to 1 ready to
+    /// throw (−1 not yet known: read back from a save, it is set up if it stands where it was sent).
+    /// </summary>
+    public float Rig = -1;
 
     public float Alive => Dead ? 0 : Hp / MaxHp;
 

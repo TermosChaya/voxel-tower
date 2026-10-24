@@ -40,7 +40,7 @@ public sealed partial class Sim
     /// <summary>Called as a boulder is let go: where, and how many voxels it is (for the sound of the heave).</summary>
     public event Action<float, float, float, int> Heaved;
 
-    static bool IsBoulder(Flier f) => f.Cause is HurledCause or BoulderCause;
+    static bool IsBoulder(Flier f) => f.Cause is HurledCause or BoulderCause || OurStone(f.Cause);
 
     /// <summary>Whether one is at a throw: the stone in its hands, or just let go and the arms coming down.</summary>
     public bool Hurling(Unit u) => u.Hefted != null || Time - u.HurlFrom < HurlDone;
@@ -90,6 +90,8 @@ public sealed partial class Sim
             foreach (var p in Units)
                 if (!p.Dead && !p.Inside && p.Team == Team.Player && MathF.Abs(p.X - o.X) < Knot && MathF.Abs(p.Z - o.Z) < Knot && MathF.Abs(p.Y - o.Y) < 16) score++;
             if (o.T.Ranged) score += .5f;
+            // an engine of ours first: it breaks the horde's works
+            if (Kinds.IsOurEngine(o.T)) score += 3;
             if (o.Y > World.GroundTop((int)o.X, (int)o.Z) + VoxelWorld.PerMetre) score += 1;
             if (score <= best || !Sight(u, o)) continue;
             best = score; at = o;
@@ -417,7 +419,7 @@ public sealed partial class Sim
     /// </summary>
     bool BoulderStrikes(Flier f, float speed)
     {
-        bool ours = f.Cause == BoulderCause;
+        bool ours = f.Cause == BoulderCause || OurStone(f.Cause);
         float s = MathF.Max(.01f, speed), ux = f.VX / s, uy = f.VY / s, uz = f.VZ / s, kj = Kj(f, speed);
         // bodies in its way
         float slow = 1;
@@ -665,5 +667,5 @@ public sealed partial class Sim
 
     /// <summary>How much of a shot gets through a hill giant's hide: a fifth of an arrow, a quarter of a sling stone, under half a bolt.</summary>
     static float HideShare(Unit t, Shot kind) =>
-        t.T != Kinds.HillGiant ? 1 : kind switch { Shot.Arrow => .2f, Shot.Stone => .25f, Shot.Bolt => .45f, _ => 1 };
+        t.T != Kinds.HillGiant ? 1 : kind switch { Shot.Arrow => .2f, Shot.Stone => .25f, Shot.Bolt => .45f, Shot.Spear => .7f, _ => 1 };
 }

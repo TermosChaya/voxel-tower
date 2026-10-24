@@ -50,6 +50,14 @@ public static class Retinue
             "врага. Занимает 3 места. Щелчок — выбрать всех."),
         (Kinds.Giant, "Великан\nМолот отбрасывает врагов. С «Глыбами» бросает камни, которые катятся сквозь орду. Занимает 4 " +
             "места. Щелчок — выбрать всех."),
+        (Kinds.Mangonel, "Катапульта\nМечет камни на 46 м: сначала в машины орды, потом в гущу ватаги. Камень ломает лестницы и " +
+            "настилы и катится сквозь ряды, наших не задевает. Стоит 3 м³ брёвен. Выходит с расчётом из 2 человек, занимает 3 места. " +
+            "ПКМ — откатить на место. Щелчок — выбрать всех."),
+        (Kinds.Ballista, "Баллиста\nКопьё летит прямо на 50 м, пробивает до 4 налётчиков в ряд, останавливает великана. Стоит 2 м³ " +
+            "брёвен. Выходит с расчётом из 2 человек, занимает 3 места. Щелчок — выбрать всех."),
+        (Kinds.Trebuchet, "Требушет\nМечет тяжёлые камни на 90 м, вдвое дальше камнемёта орды. Перед дорогой его разбирают, на месте " +
+            "собирают 8 с. Стоит 8 м³ брёвен. Выходит с расчётом из 3 человек, занимает 5 мест. Щелчок — выбрать всех."),
+        (Kinds.Crewman, "Механик\nЗаряжает и катит свою машину. Без машины работает как рабочий."),
     };
 
     public static string Tip(UnitType t) => Array.Find(Defs, d => d.t == t).tip ?? t.Name;
@@ -130,6 +138,16 @@ public static class Retinue
         if (u.T == Kinds.Alchemist && u.State == UnitState.Siege)
             return (u.Target != null ? "бросает кислоту в наших" : "бросает кислоту в стену") + $" · склянок {Math.Max(0, Sim.FlasksCarried - u.Thrown)}";
         if (u.T == Kinds.Ram) return u.State switch { UnitState.Carve => "проламывает стену", UnitState.Siege => "бьёт в цитадель", _ => "катится к стенам" };
+        // our engines and their crews (Sim.OurEngines.cs)
+        if (Kinds.IsOurEngine(u.T))
+            return u.Why switch
+            {
+                "" or "заряжают" when u.State == UnitState.Siege => u.HurlAt is { Dead: false } m ? $"бьёт: {m.T.Name.ToLowerInvariant()}" + (u.Cooldown > 0 ? " · заряжают" : "") : "заряжают",
+                "" => "ждёт цели",
+                _ => u.Why,
+            } + (u.State != UnitState.Idle || u.Why.StartsWith("без") ? "" : $" · расчёт {sim.CrewAt(u)} из {u.T.Crew}");
+        if (u.Escort is { Dead: false, Team: Team.Player } served && u.Team == Team.Player)
+            return u.State == UnitState.Work ? $"у машины: {(served.Path != null ? "катит" : "заряжает")}" : $"при машине: {served.T.Name.ToLowerInvariant()}";
         if (u.Escort is { Dead: false } && u.State != UnitState.Fight) return "охраняет камнемёт";
         if (u.T == Kinds.Mantlet) return "прикрывает ватагу от стрел";
         if (u.T == Kinds.SiegeTower) return u.Docked.Count > 0 ? "стоит у стены: по ней лезут наверх" : "катится к стене";
@@ -188,7 +206,8 @@ public static class Retinue
             else if (u.Pastime == Pastime.Pray) pray++;
             else if (u.State is UnitState.Work) busy++;
             else if (u.Prey != null) hunt++;
-            else if (u.State is UnitState.Fight) fight++;
+            // (an engine of ours at its throwing is in the fight)
+            else if (u.State is UnitState.Fight || u.State == UnitState.Siege && u.Team == Team.Player) fight++;
             else if (u.State == UnitState.Idle && !u.Hold) idle++;
         }
         var parts = new List<string>();

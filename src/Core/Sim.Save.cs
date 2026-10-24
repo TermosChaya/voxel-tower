@@ -26,7 +26,7 @@ public sealed partial class Sim
         if (_kindByKey == null)
         {
             _kindByKey = new Dictionary<string, UnitType>();
-            foreach (var arr in new[] { Kinds.PlayerKinds, Kinds.HordeKinds, Kinds.WildKinds, Kinds.Engines, Kinds.Summoned, Kinds.Casters, Kinds.Throwers }) foreach (var t in arr) _kindByKey[t.Key] = t;
+            foreach (var arr in new[] { Kinds.PlayerKinds, Kinds.HordeKinds, Kinds.WildKinds, Kinds.Engines, Kinds.Summoned, Kinds.Casters, Kinds.Throwers, Kinds.Crews }) foreach (var t in arr) _kindByKey[t.Key] = t;
         }
         return _kindByKey.TryGetValue(key, out var k) ? k : null;
     }
