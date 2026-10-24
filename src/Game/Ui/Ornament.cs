@@ -51,7 +51,11 @@ public static class Ornament
     {
         var v = Plain(font, spacing);
         if (font is FontFile)
-            v.VariationOpentype = new Godot.Collections.Dictionary { { TextServerManager.GetPrimaryInterface().NameToTag("wght"), wght } };
+        {
+            // let go of here and now, not by the collector's thread, which may not touch the engine
+            using var axes = new Godot.Collections.Dictionary { { TextServerManager.GetPrimaryInterface().NameToTag("wght"), wght } };
+            v.VariationOpentype = axes;
+        }
         return v;
     }
 
@@ -59,11 +63,8 @@ public static class Ornament
     static FontVariation Plain(Font font, int spacing = 0)
     {
         var ts = TextServerManager.GetPrimaryInterface();
-        return new FontVariation
-        {
-            BaseFont = font, SpacingGlyph = spacing,
-            OpentypeFeatures = new Godot.Collections.Dictionary { { ts.NameToTag("lnum"), 1 }, { ts.NameToTag("onum"), 0 } },
-        };
+        using var features = new Godot.Collections.Dictionary { { ts.NameToTag("lnum"), 1 }, { ts.NameToTag("onum"), 0 } };
+        return new FontVariation { BaseFont = font, SpacingGlyph = spacing, OpentypeFeatures = features };
     }
 
     public static Color Fade(Color c, float a) => new(c, c.A * a);

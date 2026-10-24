@@ -175,7 +175,7 @@ public static class Diag
         s.AppendLine($"Система: {OS.GetName()} {OS.GetVersion()}, {OS.GetProcessorName()} × {OS.GetProcessorCount()}");
         try
         {
-            var mem = OS.GetMemoryInfo();
+            using var mem = OS.GetMemoryInfo();
             s.AppendLine($"Память: {Gb(mem["physical"])} ГБ, свободно {Gb(mem["available"])} ГБ");
         }
         catch (Exception) { }
