@@ -467,4 +467,37 @@ public static partial class Bodies
         f.NeckZ = 6; f.NeckY = 10;
         return s.Into(f, 7, 13, 3);
     }
+
+    /// <summary>
+    /// One of an engine's crew: a man in a short jerkin, a long apron of dark leather over it from the chest to the
+    /// thighs, a padded leather cap tied close over the ears, rough gloves to the wrist, a pouch of pins and wedges at
+    /// the belt, and a mallet for knocking them home.
+    /// </summary>
+    static BodyPlan Crewman(int look)
+    {
+        var f = new BodyPlan { Chop = .75f };
+        byte hair = Hairs[(look * 3 + 1) % 4];
+        var b = new Build
+        {
+            Skin = HumanSkins[look % 3], Hair = hair, HairStyle = 1,
+            Shirt = new[] { Mat.ClothBrown, Mat.Linen, Mat.ClothGreen }[look % 3], Trousers = Mat.ClothDark, Belt = Mat.LeatherDark,
+        };
+        var s = Humanoid(b, f);
+        int hx = b.HeadW, hz0 = b.HeadZ, hz1 = b.HZ1, hy1 = b.Crown;
+        // the apron, darker and longer than a worker's, and its bib's straps up over the shoulders
+        s.Box(Body, -3, b.Waist - 4, b.Z1, 3, b.Neck - 3, b.Z1 + 1, Mat.LeatherDark);
+        s.Box(Body, -3, b.Neck - 3, b.Z1 - 1, -2, b.Neck, b.Z1, Mat.LeatherDark);
+        s.Box(Body, 2, b.Neck - 3, b.Z1 - 1, 3, b.Neck, b.Z1, Mat.LeatherDark);
+        // gloves of rough leather over the hands and the wrists
+        s.Paint(Main, b.ArmX0, b.HandY, b.ArmZ0, -b.Chest, b.HandY + b.Hand + 1, b.ArmZ1, Mat.Leather);
+        s.Paint(Off, b.Chest, b.HandY, b.ArmZ0, -b.ArmX0, b.HandY + b.Hand + 1, b.ArmZ1, Mat.Leather);
+        // the padded cap: over the crown and down over the ears, the face open
+        s.Paint(Body, -hx, hy1 - 4, hz0, hx, hy1, hz1 - 2, Mat.Leather);
+        s.Paint(Body, -hx, hy1 - 2, hz1 - 2, hx, hy1, hz1, Mat.Leather);
+        s.Box(Body, -hx + 1, hy1, hz0 + 1, hx - 1, hy1 + 1, hz1 - 1, Mat.Leather);
+        if (look == 1) Beard(s, b, hair);
+        Pouch(s, b, 1);
+        Mallet(s, b);
+        return Done(s, f, b);
+    }
 }
