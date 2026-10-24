@@ -6107,6 +6107,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--wand") WandBench.Run
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--houses") HousesBench.Run(Check);
 // the builders at work: what falls, who is shut in up there, thin decks walked on (Builders.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--builders") BuildersBench.Run(Check);
+// mines under the walls and what meets them (Mines.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--mines") MinesBench.Run(Check);
 
 if (args.Length > 0 && args[0] == "--stress")
 {

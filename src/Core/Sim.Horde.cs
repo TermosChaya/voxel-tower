@@ -164,6 +164,8 @@ public sealed partial class Sim
     /// </summary>
     void March(Unit u, float dt)
     {
+        // a miner under the ground, or sending its band's miners under a wall of ours ahead (Sim.Tunnels.cs)
+        if (u.T == Kinds.Miner && TunnelTick(u, dt)) return;
         if (_goalSet.Contains(u.Cell))
         {
             u.State = UnitState.Siege;

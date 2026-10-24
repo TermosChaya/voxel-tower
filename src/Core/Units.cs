@@ -573,6 +573,10 @@ public sealed class Unit
     /// while it is at it, the work the whole chamber takes, for the ground goes from under the wall all at once.</summary>
     public int Sapped = -1;
     public float SapCost;
+    /// <summary>A miner: the mine it is digging or following the digger of (Sim.Tunnels.cs), and when it next looks along
+    /// its way for a wall to go under; one of ours: when it may next knock out a frame of the horde's props.</summary>
+    public Tunnel Bore;
+    public double NextBoreLook;
 
     // the horde raising siege works
     public int BuildCell = -1;

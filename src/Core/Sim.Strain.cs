@@ -143,6 +143,8 @@ public sealed partial class Sim
             for (int px = (x0 - ri) >> 5; px <= (x0 + ri) >> 5; px++)
                 if (px >= 0 && pz >= 0) _weighs.Add(px | pz << 8);
         if (through != null) foreach (int p in through) GiveWay(p);
+        // a mine under it is shaken too (Sim.Tunnels.cs)
+        JarTunnels(fx, fy, fz, r);
     }
 
     /// <summary>
@@ -346,28 +348,15 @@ public sealed partial class Sim
         if (_stamp.Length < n) _stamp = new int[n];
         int gen = ++_gen, ox = sx - Box, oz = sz - Box;
         _bodyStack.Push(s); _stamp[StampAt(ox, oz, sx, sy, sz)] = gen;
-        var b = new Bulk { X0 = int.MaxValue, Y0 = int.MaxValue, Z0 = int.MaxValue, X1 = int.MinValue, Y1 = int.MinValue, Z1 = int.MinValue,
-            FX0 = int.MaxValue, FZ0 = int.MaxValue, FX1 = int.MinValue, FZ1 = int.MinValue, FY = int.MaxValue };
+        var b = Empty();
         bool tooBig = false;
+        _byJoint = false;
         while (_bodyStack.Count > 0)
         {
             int p = _bodyStack.Pop();
             if (_body.Count >= BodyMost) { tooBig = true; break; }
-            _body.Add(p);
             var (x, y, z) = WaterPlanner.Unpack(p);
-            byte m = World.Get(x, y, z);
-            float w = WeightOf(m);
-            b.M += w; b.GX += w * (x + .5f); b.GY += w * (y + .5f); b.GZ += w * (z + .5f);
-            b.X0 = Math.Min(b.X0, x); b.X1 = Math.Max(b.X1, x); b.Y0 = Math.Min(b.Y0, y); b.Y1 = Math.Max(b.Y1, y); b.Z0 = Math.Min(b.Z0, z); b.Z1 = Math.Max(b.Z1, z);
-            byte under = World.Get(x, y - 1, z);
-            bool stands = y <= 1 || !Rigid(under) && (under == Mat.Water ? Floats(m) : under != Mat.Air && !Mat.Passable[under])
-                || HoldsAside(m, World.Get(x + 1, y, z)) || HoldsAside(m, World.Get(x - 1, y, z))
-                || HoldsAside(m, World.Get(x, y, z + 1)) || HoldsAside(m, World.Get(x, y, z - 1)) || Arched.Get(x, y, z) != 0;
-            if (stands)
-            {
-                _stands.Add(p);
-                b.FX0 = Math.Min(b.FX0, x); b.FX1 = Math.Max(b.FX1, x); b.FZ0 = Math.Min(b.FZ0, z); b.FZ1 = Math.Max(b.FZ1, z); b.FY = Math.Min(b.FY, y);
-            }
+            Take(ref b, p, x, y, z);
             for (int d = 0; d < 6 && !tooBig; d++)
             {
                 var (nx, ny, nz) = Step6(x, y, z, d);
@@ -380,8 +369,45 @@ public sealed partial class Sim
             }
             if (tooBig) break;
         }
-        if (tooBig) { _bigGen = gen; _bigX = ox; _bigZ = oz; return null; }
+        if (tooBig)
+        {
+            // too great: a tower in a long wall may yet be weighed by itself, cut from the wall at its joint (Sim.Joint.cs)
+            var tower = Joint(sx, sy, sz, taken, out int seen);
+            if (tower != null) return tower;
+            _bigGen = seen; _bigX = ox; _bigZ = oz;
+            return null;
+        }
         foreach (int q in _body) taken.Add(q);
+        return Finish(ref b);
+    }
+
+    /// <summary>A new body's bounds, before any voxel is taken into it.</summary>
+    static Bulk Empty() => new Bulk { X0 = int.MaxValue, Y0 = int.MaxValue, Z0 = int.MaxValue, X1 = int.MinValue, Y1 = int.MinValue, Z1 = int.MinValue,
+        FX0 = int.MaxValue, FZ0 = int.MaxValue, FX1 = int.MinValue, FZ1 = int.MinValue, FY = int.MaxValue };
+
+    /// <summary>
+    /// A voxel taken into a body: its weight and its bounds, and, if it stands on something — the ground, rubble, a tree,
+    /// water under timber — or is set into rock aside, it is one of what the body stands on.
+    /// </summary>
+    void Take(ref Bulk b, int p, int x, int y, int z)
+    {
+        _body.Add(p);
+        byte m = World.Get(x, y, z);
+        float w = WeightOf(m);
+        b.M += w; b.GX += w * (x + .5f); b.GY += w * (y + .5f); b.GZ += w * (z + .5f);
+        b.X0 = Math.Min(b.X0, x); b.X1 = Math.Max(b.X1, x); b.Y0 = Math.Min(b.Y0, y); b.Y1 = Math.Max(b.Y1, y); b.Z0 = Math.Min(b.Z0, z); b.Z1 = Math.Max(b.Z1, z);
+        byte under = World.Get(x, y - 1, z);
+        bool stands = y <= 1 || !Rigid(under) && (under == Mat.Water ? Floats(m) : under != Mat.Air && !Mat.Passable[under])
+            || HoldsAside(m, World.Get(x + 1, y, z)) || HoldsAside(m, World.Get(x - 1, y, z))
+            || HoldsAside(m, World.Get(x, y, z + 1)) || HoldsAside(m, World.Get(x, y, z - 1)) || Arched.Get(x, y, z) != 0;
+        if (!stands) return;
+        _stands.Add(p);
+        b.FX0 = Math.Min(b.FX0, x); b.FX1 = Math.Max(b.FX1, x); b.FZ0 = Math.Min(b.FZ0, z); b.FZ1 = Math.Max(b.FZ1, z); b.FY = Math.Min(b.FY, y);
+    }
+
+    /// <summary>A body's weight put where it is, and whether it stands free as a tower or a house does.</summary>
+    static Bulk? Finish(ref Bulk b)
+    {
         if (b.M <= 0) return null;
         b.GX /= b.M; b.GY /= b.M; b.GZ /= b.M;
         // a tower or a house: about as deep as it is wide, and standing up
@@ -449,7 +475,7 @@ public sealed partial class Sim
         }
         float det = jxx * jzz - jxz * jxz, ex = b.GX - cx, ez = b.GZ - cz;
         float bx = det > 1e-3f ? b.M * (jzz * ex - jxz * ez) / det : 0, bz = det > 1e-3f ? b.M * (jxx * ez - jxz * ex) / det : 0;
-        float even = b.M / n;
+        float even = b.M / n, worst = 0;
         foreach (int p in _stands)
         {
             var (x, y, z) = WaterPlanner.Unpack(p);
@@ -457,9 +483,12 @@ public sealed partial class Sim
             float down = BearsDown(m);
             if (down <= 0) continue;
             float load = even + bx * (x + .5f - cx) + bz * (z + .5f - cz);
+            worst = Math.Max(worst, load / down);
             if (load / down > .4f) Strain(p, load, down, body: true);
             else if (_strained.TryGetValue(p, out var was) && was.body) _strained.Remove(p);
         }
+        // a tower in a wall: its joint with the wall cracks as its foot does (Sim.Joint.cs)
+        StrainJoint(worst);
     }
 
     /// <summary>
@@ -493,7 +522,10 @@ public sealed partial class Sim
         var cells = new List<(int x, int y, int z)>(_body.Count);
         foreach (int p in _body) cells.Add(WaterPlanner.Unpack(p));
         float edge = dir switch { 0 => b.FX1 + 1, 1 => b.FX0, 2 => b.FZ1 + 1, _ => b.FZ0 };
+        bool torn = _byJoint;
         var f = Loose(cells, 0, 0, 0, "обвал");
+        // a tower going over out of the wall it is built into tears its joint (Sim.Joint.cs)
+        TearJoint();
         if (f == null)
         {
             var heap = new HashSet<int>(_body);
@@ -517,7 +549,7 @@ public sealed partial class Sim
         if (cells.Count > 400 && Time - _overSaid > 8)
         {
             _overSaid = Time;
-            Say(b.Y1 - b.Y0 > Math.Max(b.X1 - b.X0, b.Z1 - b.Z0) ? "Башня рушится." : "Стена заваливается.", 2, b.GX, b.GZ);
+            Say(torn ? "Башня отрывается от стены и рушится." : b.Y1 - b.Y0 > Math.Max(b.X1 - b.X0, b.Z1 - b.Z0) ? "Башня рушится." : "Стена заваливается.", 2, b.GX, b.GZ);
         }
     }
 

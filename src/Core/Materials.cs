@@ -110,7 +110,12 @@ public static class Mat
     /// down from where they built themselves up, or up to work out of reach, and taken down after (Sim.Scaffold.cs).
     /// </summary>
     public const byte Scaffold = 142;
-    public const int Count = 143;
+    /// <summary>
+    /// Props: the timber frames a mine is shored with, a metre apart, and the posts under a wall at its end that the
+    /// horde sets alight to bring the wall down (Sim.Tunnels.cs).
+    /// </summary>
+    public const byte Prop = 143;
+    public const int Count = 144;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
     public static readonly bool[] IsVeg = new bool[Count], IsPlayer = new bool[Count], IsEarthy = new bool[Count],
@@ -267,6 +272,7 @@ public static class Mat
         Emission[Acid] = .75f;
         D(Phial, "склянка", 0x5f9a3a, .1f, MatGroup.Hard, 0);
         D(Scaffold, "Леса", 0xa48659, .2f, MatGroup.Wood, 0);
+        D(Prop, "Крепь", 0x7a5a38, .2f, MatGroup.Wood, 0);
         Emission[Phial] = .35f;
 
         foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage, Flower, Bloom, Birch, NeedleLight, FoliageLight, FoliageGold, PineBark, Snag }) IsVeg[m] = true;
@@ -295,6 +301,7 @@ public static class Mat
         F(.04f, 35, .35f, Wood, DropLog);
         F(.03f, 30, .35f, Plank);
         F(.12f, 15, 0, Ladder, SiegeLadder, Scaffold);
+        F(.08f, 22, .1f, Prop);
         F(.1f, 20, .2f, Deck);
         F(.03f, 45, .2f, Gate, GateShut, GateOpen);
         F(.3f, 6, 0, Banner, BannerTrim, Sack);
