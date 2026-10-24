@@ -145,6 +145,18 @@ public sealed partial class Sim
         if (through != null) foreach (int p in through) GiveWay(p);
     }
 
+    /// <summary>
+    /// Acid eating into a voxel of masonry or timber, so far (0 to 1): it is pitted and cracked half as far, and bears
+    /// the less for it; what it is in is weighed again each fifth further it goes.
+    /// </summary>
+    void Pit(int p, float eaten)
+    {
+        float c = eaten * .5f, was = Cracks.GetValueOrDefault(p);
+        if (c <= was + .05f) return;
+        SetCrack(p, c);
+        if ((int)(c * 5) != (int)(was * 5)) { var (x, _, z) = WaterPlanner.Unpack(p); _weighs.Add(PatchOf(x, z)); }
+    }
+
     /// <summary>Puts a cracked voxel right (a mason has pointed it): the crack is gone, and what it bears with it.</summary>
     public void Point(int x, int y, int z)
     {
@@ -185,7 +197,8 @@ public sealed partial class Sim
         {
             var (load, bears, _) = _strained[p];
             float c = Cracks.GetValueOrDefault(p), over = load / (bears * Unbroken(c));
-            c = Math.Min(1, c + dt * CrackRate * (over - 1 + .15f));
+            // the further cracked, the faster it goes on: what is all but through does not hang on for long
+            c = Math.Min(1, c + dt * CrackRate * (over - 1 + .15f) * (1 + 2 * c));
             SetCrack(p, c, runs: true);
             if (c >= 1) (through ??= new()).Add(p);
         }
@@ -562,7 +575,7 @@ public sealed partial class Sim
         // whoever it swings into
         foreach (var u in Units)
         {
-            if (u.Dead || u.Inside || u.Airborne != null || u.LastHurt >= f.TipFrom) continue;
+            if (u.Dead || u.Inside || u.Airborne != null || u.LastHurt >= f.TipFrom || u == f.By) continue;
             if (MathF.Abs(u.X - f.X) > f.R + u.T.BodyR + 2 || MathF.Abs(u.Z - f.Z) > f.R + u.T.BodyR + 2 || u.Y + u.T.BodyH < f.PY + 2) continue;
             if (!Touches(f, u, .5f)) continue;
             // how fast the building goes where it meets them: across its arm, the right hand's way about its axis
@@ -607,7 +620,7 @@ public sealed partial class Sim
         {
             float k = .7f + (float)Rng.NextDouble() * .5f;
             var p = piece.Count <= room ? Loose(piece, vx * k, vy * k + 2 * VoxelWorld.PerMetre, vz * k, f.Cause, room) : null;
-            if (p != null) { p.Heap = true; room -= p.Voxels.Count; continue; }
+            if (p != null) { p.Heap = true; p.By = f.By; room -= p.Voxels.Count; continue; }
             foreach (var (x, y, z) in piece) { byte m = World.Get(x, y, z); World.Set(x, y, z, Mat.Air); Fell?.Invoke(x, y, z, m); }
         }
         Jar(cx, cy, cz, 6, .45f);
@@ -664,6 +677,8 @@ public sealed partial class Sim
             if (piece == null) continue;
             piece.AX = ax; piece.AY = ay; piece.AZ = az; piece.Turn = f.Turn; piece.Spin = (float)(Rng.NextDouble() - .5) * 3;
             piece.Marked = f.Marked; piece.Heap = true;
+            // what one broke out spares it still, in pieces
+            piece.By = f.By;
             piece.Since = Time - .1;
             laid += part.Count;
         }

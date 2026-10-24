@@ -749,7 +749,7 @@ public sealed partial class Sim
         float blow = Math.Min(320, .045f * MathF.Sqrt(f.Voxels.Count) * 5 * VoxelWorld.PerMetre);
         foreach (var u in Units)
         {
-            if (u.Dead || u.Inside || u.Airborne != null || u.LastHurt >= f.TipFrom) continue;
+            if (u.Dead || u.Inside || u.Airborne != null || u.LastHurt >= f.TipFrom || u == f.By) continue;
             if (MathF.Abs(u.X - f.X) > f.R + u.T.BodyR + 2 || MathF.Abs(u.Z - f.Z) > f.R + u.T.BodyR + 2) continue;
             if (Touches(f, u, 1)) Strike(u, MassOf(f), 5, 0, -1, 0, float.NaN, f.Cause, blow);
         }

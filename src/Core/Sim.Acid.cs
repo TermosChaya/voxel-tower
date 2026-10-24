@@ -122,7 +122,7 @@ public sealed partial class Sim
                 ate = true;
                 int tp = WaterPlanner.Pack(tx, ty, tz);
                 float e = Etched.GetValueOrDefault(tp) + step * bite;
-                if (e < 1) { Etched[tp] = e; continue; }
+                if (e < 1) { Etched[tp] = e; if (BearsDown(m) > 0) Pit(tp, e); continue; }
                 Etched.Remove(tp);
                 EatThrough(tx, ty, tz, m);
                 if (Rng.NextDouble() < SpentOn(m)) { spent = true; break; }

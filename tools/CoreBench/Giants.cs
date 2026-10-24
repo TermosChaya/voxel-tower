@@ -148,8 +148,8 @@ static class GiantsBench
         Gone(giant2);
 
         // a giant of ours with the lore of boulders throws at our own wall: it breaks none of it (what the tests before
-        // it broke let come down first, lest a piece still falling strike it)
-        for (int i = 0; i < 40 && sim.Fliers.Count > 0; i++) Run(.5);
+        // it broke let come down first, lest a piece still falling strike it, and what they cracked crumble out)
+        for (int i = 0; i < 60 && (sim.Fliers.Count > 0 || sim.Cracking.Count > 0); i++) Run(.5);
         sim.Fliers.Clear();
         sim.Learnt.Add("boulders");
         var ours = Put(Kinds.Giant, wx0 - 120, fz0 + 110);

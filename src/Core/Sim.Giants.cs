@@ -545,6 +545,9 @@ public sealed partial class Sim
             left -= cost;
             broke.Add((x, y, z));
         }
+        // what is built about the hole is cracked by the blow (not ours by our own giant's stone): a wall struck there
+        // again gives way the sooner, and one struck often enough comes down under its own weight
+        if (!groundOnly && !spareOurs) Jar(ix + ux * 3, iy + uy * 3, iz + uz * 3, lat + 6, Math.Clamp(kj / 80, .25f, .6f));
         if (broke.Count == 0) return 0;
         int ourBroke = 0;
         foreach (var (x, y, z) in broke) if (Mat.IsPlayer[World.Get(x, y, z)]) ourBroke++;

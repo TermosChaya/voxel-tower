@@ -277,6 +277,54 @@ static class StrainBench
         check("a great ring hacked away at its foot a voxel a step: no step takes long for the weighing", cut > 100 && slowest < 40,
             $"{ringN} voxels of ring, {cut} hacked out, the slowest step {slowest:0.0} ms");
 
+        // a hill giant's boulders at a wall: each cracks it about the hole it breaks, and four bring down more of it than
+        // their holes, the cracked stone round them giving way
+        int hx0 = kx - 330, hz0 = kz + 220, hg = Flatten(hx0 - 170, hz0 - 50, hx0 + 20, hz0 + 50);
+        for (int z = hz0 - 40; z < hz0 + 40; z++) for (int x = hx0; x < hx0 + 8; x++) for (int y = hg; y < hg + 32; y++) w.Set(x, y, z, Mat.Stone);
+        Run(1);
+        int giantWall0 = Count(Stone, hx0, hz0 - 40, hx0 + 7, hz0 + 39, hg, hg + 32);
+        var hill = sim.Spawn(Kinds.HillGiant, sim.NearestStand(hx0 - 150, hz0, Kinds.HillGiant.Move.Height));
+        hill.Raid = null; hill.Guard = true; hill.Home = hill.Cell; hill.Hp = hill.MaxHp = 1e6f; hill.NextHurl = 1e9;
+        int hurled = 0, cracksFirst = -1, brokeFirst = 0;
+        for (int i = 0; i < 900 && hurled < 4; i++)
+        {
+            if (!sim.Hurling(hill) && sim.OrderHurl(hill, hx0, hg + 13, hz0)) hurled++;
+            Run(.1);
+            if (cracksFirst < 0 && sim.GiantBroke > 0) { Run(.5); cracksFirst = CracksIn(hx0 - 2, hz0 - 40, hx0 + 9, hz0 + 39); brokeFirst = sim.GiantBroke; }
+        }
+        Run(8);
+        int giantWall1 = Count(Stone, hx0, hz0 - 40, hx0 + 7, hz0 + 39, hg, hg + 32);
+        check("a hill giant's boulder cracks the wall about the hole it breaks, and four bring down more of it than their holes",
+            hurled == 4 && cracksFirst > 100 && giantWall0 - giantWall1 > sim.GiantBroke + 40,
+            $"{hurled} hurled; {cracksFirst} cracked by the first, which broke {brokeFirst}; the wall {giantWall0} → {giantWall1}, {sim.GiantBroke} broken out by the stones");
+        hill.Dead = true; hill.DiedAt = -999;
+
+        // what the workers build in the usual order, a stone wall course by course and a house of stone with its roof of
+        // logs, neither cracks nor crumbles nor goes over while it goes up: only a load past what is built to bear cracks
+        // it (what comes down by the older rules of overhangs as it goes up is told, for the order of building)
+        {
+            int bx = kx + 150, bz = kz + 120, bgnd = Flatten(bx - 40, bz - 40, bx + 80, bz + 60);
+            sim.Stock[Stockpile.Stone] = sim.Stock[Stockpile.Wood] = 1e7; sim.Stock.Gold = 1e7;
+            var crew = new List<Unit>();
+            for (int i = 0; i < 6; i++) crew.Add(sim.Spawn(Kinds.Worker, sim.NearestStand(bx - 20 + i * 4, bz + 50, 2)));
+            int crumbs = 0, falls = 0, overs = 0;
+            sim.Crumbled = (x, y, z, m) => { if (x > bx - 40 && x < bx + 80 && z > bz - 40 && z < bz + 60) crumbs++; };
+            sim.Collapsed = (n, x, y, z) => { if (x > bx - 40 && x < bx + 80 && z > bz - 40 && z < bz + 60) falls += n; };
+            sim.GoingOver = f => overs++;
+            sim.DesignateBuild(Shapes.Line(w, site, bx - 30, bz - 30, bx - 30, bz + 30, new Stroke { Mat = Mat.Stone, Width = 8, Height = 32, Level = true }, bgnd + 32));
+            var house = Shapes.House(w, site, bx + 10, bz - 16, bx + 60, bz + 12, new Stroke { Mat = Mat.Stone, Width = 4, Height = 32, Level = true }, bgnd + 32, out var door, out string why);
+            if (house != null) sim.DesignateBuild(house);
+            double built = 0;
+            for (int t = 0; t < 600 && sim.Orders.Total > 0; t++) { Run(1); built = t + 1; }
+            int laid = Count(m => Mat.IsMasonry(m) || m == Mat.Wood, bx - 40, bz - 40, bx + 80, bz + 60, bgnd, bgnd + 40);
+            int builtCracks = CracksIn(bx - 40, bz - 40, bx + 80, bz + 60);
+            check("a stone wall and a house of stone roofed with logs, built by the workers in the usual order, neither crack nor crumble nor go over as they go up",
+                house != null && laid > 20000 && builtCracks == 0 && crumbs == 0 && overs == 0,
+                $"{laid} voxels laid in {built:0} s{(why != null ? $" ({why})" : "")}, {sim.Orders.Total} still marked; {builtCracks} cracks, {crumbs} crumbled, went over {overs} times; {falls} came down by the overhang rule");
+            sim.Crumbled = null; sim.Collapsed = null; sim.GoingOver = null;
+            foreach (var u in crew) { u.Dead = true; u.DiedAt = -999; }
+        }
+
         // the cracks are kept in a save and read back
         sim.Jar(fx - 7, top - 12, (fz0 + fz1) / 2 - 30, 6, .4f);
         int before = sim.Cracks.Count;
