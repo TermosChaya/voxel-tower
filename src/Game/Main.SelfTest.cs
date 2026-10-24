@@ -373,7 +373,9 @@ public partial class Main
         Command.ReleaseSelected();
         Check("«За работу» lets it go", !worker.Hold);
         Command.ClearSelection();
-        // the mouse's buttons swapped on the controls page: the right one picks, the left one sends; and back
+        // the mouse's buttons swapped on the controls page: the right one picks, the left one sends; and back (with another
+        // worker if the copy's masonry came down on this one meanwhile)
+        if (worker.Dead || worker.Inside || worker.Down) worker = Sim.Units.Find(u => !u.Dead && !u.Inside && !u.Down && u.T == Kinds.Worker) ?? worker;
         Bindings.SetSwapMouse(true);
         await Look(worker.X, worker.Z);
         var onIt = Command.Screen(worker, .5f);
@@ -528,11 +530,15 @@ public partial class Main
         await Look(ex1, ez1);
         await Click(ex1, ez1);
         int flyingNow = Sim.Fliers.Count;
+        // (its own pieces: what else of the test's works may be coming down meanwhile is not the blast's)
+        var blasted = new HashSet<int>(Sim.Fliers.ConvertAll(f => f.Id));
         await Frames(2);
         int drawn = Magic.PiecesDrawn;
         Advance(10);
-        Check("a blast at a click: what is there goes up in pieces, seen flying, that come down", flyingNow > 3 && drawn > 500 && Sim.Fliers.Count == 0,
-            $"{flyingNow} pieces, {drawn} voxels drawn in the air; {Sim.Fliers.Count} still flying after 10 s");
+        var aloft = Sim.Fliers.FindAll(f => blasted.Contains(f.Id));
+        Check("a blast at a click: what is there goes up in pieces, seen flying, that come down", flyingNow > 3 && drawn > 500 && aloft.Count == 0,
+            $"{flyingNow} pieces, {drawn} voxels drawn in the air; {aloft.Count} of them still flying after 10 s"
+            + string.Join("", aloft.ConvertAll(f => $"; {(f.Unit != null ? f.Unit.T.Key : f.Voxels.Count + " voxels")}{(f.Rolling ? " rolling" : "")}{(f.Tipping ? " tipping" : "")} at {f.X:0},{f.Y:0},{f.Z:0}")));
         KeyPress(Key.Escape);
 
         // telekinesis with the mouse: the button goes down on a goblin, it is lifted, carried after the cursor, and thrown
@@ -680,7 +686,9 @@ public partial class Main
         // one standing on the ground (not up on a wall, with nowhere to walk), a swordsman if there is one
         bool Grounded(Unit u) => u.Y - World.GroundTop((int)u.X, (int)u.Z) < 3;
         var mine = Sim.Units.Find(u => Sim.CanPossess(u) && u.T == Kinds.Swordsman && Grounded(u)) ?? Sim.Units.Find(u => Sim.CanPossess(u) && u.T.Work < 1 && Grounded(u))
-            ?? Sim.Units.Find(u => Sim.CanPossess(u) && Grounded(u)) ?? Sim.Units.Find(Sim.CanPossess);
+            ?? Sim.Units.Find(u => Sim.CanPossess(u) && Grounded(u))
+            // (all of them up on the walls, or hurt: a swordsman come to the gate)
+            ?? Sim.Spawn(Kinds.Swordsman, Sim.NearestStand(kx - 40, kz + 30, 4));
         Selected.Clear(); Selected.Add(mine); Hud.OnSelectionChanged();
         // a nick out of its off arm first, so that the arm is drawn on its own: put away with it, and back after
         var nicked = new BodyState(Bodies.Plan(mine.T, mine.Look));
@@ -886,6 +894,7 @@ public partial class Main
             $"hidden at first {hiddenAtFirst}, key refused {refused}, stays {stays}, let out {letOut}");
         await AcidSelfTest((what, ok, detail) => Check(what, ok, detail));
         await SelfTestGiants(Check);
+        await SelfTestTrauma(Check);
         // the report for the author: one file with the system, the hangs, the last events and the logs
         string report = Diag.Report(this, ProjectSettings.GlobalizePath("user://logs"));
         string body = System.IO.File.Exists(report) ? System.IO.File.ReadAllText(report) : "";
@@ -928,5 +937,38 @@ public partial class Main
         Advance(6);
         g.Dead = true; g.DiedAt = -999;
         await Frames(2);
+    }
+
+    /// <summary>
+    /// What blunt things do (Sim.Trauma.cs), in the game: one of ours buried under a heap of rubble is pinned, tagged over
+    /// the heap, and dug out by a worker near; a broken leg limps and is told in the console.
+    /// </summary>
+    async Task SelfTestTrauma(Action<string, bool, string> check)
+    {
+        var sim = Sim; var w = World;
+        // nothing of what went before in the way: no alarm, no raider about
+        if (sim.Alarm) sim.StandDown();
+        foreach (var r in sim.Units) if (r.Team == Team.Horde && !r.Dead) { r.Dead = true; r.DiedAt = -999; }
+        int cx = Site.KeepX - Site.KeepR - 150, cz = Site.KeepZ + 60;
+        ClearTrees(cx - 40, cz - 40, cx + 40, cz + 40);
+        var buried = sim.Spawn(Kinds.Worker, sim.NearestStand(cx, cz, 4));
+        var digger = sim.Spawn(Kinds.Worker, sim.NearestStand(cx + 24, cz, 4));
+        Mound(buried);
+        Advance(.5);
+        Rig.Focus(w.WX(cx), w.WZ(cz));
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        bool pinned = buried.PinKg > 0, tagged = false;
+        foreach (var n in GetChildren()) if (n is PinTags t) foreach (var c in t.GetChildren()) foreach (var l in c.GetChildren()) if (l is Label { Visible: true } lab && lab.Text.StartsWith("Придавлен")) tagged = true;
+        string doing = Retinue.DoingNow(buried, sim);
+        for (int i = 0; i < 60 && buried.PinKg > 0; i++) Advance(.5);
+        Advance(2);
+        check("one of ours buried under rubble is pinned, tagged, and dug out by a worker near",
+            pinned && tagged && doing.StartsWith("придавлен") && buried.PinKg == 0 && !buried.Dead && !buried.Down,
+            $"pinned {pinned}, tagged {tagged}, «{doing}»; now {buried.PinKg:0} kg, {(buried.Dead ? "dead" : $"{buried.Hp:0} hp")}, down {buried.Down}; the digger: {Retinue.DoingNow(digger, sim)}");
+        sim.BreakBone(digger, Break.LegR);
+        string hurt = Retinue.Hurt(digger);
+        check("a broken leg limps and is told", Sim.Gait(digger) < .4f && hurt.Contains("сломана правая нога") && !sim.Holds(digger), $"gait {Sim.Gait(digger):0.00}, «{hurt}»");
+        buried.Dead = digger.Dead = true; buried.DiedAt = digger.DiedAt = -999;
     }
 }

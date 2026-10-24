@@ -16,7 +16,7 @@ namespace VoxelTower.Core;
 public sealed partial class Sim
 {
     /// <summary>20: the bodies sculpted finer, their half-voxels (and so a wounded body's) not what they were.</summary>
-    public const int SaveVersion = 29;
+    public const int SaveVersion = 30;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -206,6 +206,7 @@ public sealed partial class Sim
             w.Write((byte)rite.Kind); w.Write(rite.Victim?.Id ?? -1); w.Write(rite.Beast?.Key ?? ""); w.Write(rite.Spot); w.Write(rite.Stage); w.Write(rite.Done);
         }
         WriteBody(w, u.Wounds);
+        w.Write(u.PinKg); w.Write(u.PinnedSince);
     }
 
     static void WriteSurvivor(BinaryWriter w, Survivor s)
@@ -221,6 +222,7 @@ public sealed partial class Sim
         w.Write(b != null);
         if (b == null) return;
         w.Write(b.Rev); w.Write(b.MainHand); w.Write(b.OffHand); w.Write(b.Shield); w.Write(b.Legs); w.Write(b.Bleed);
+        w.Write((byte)b.Broken); w.Write((byte)b.Splinted); foreach (float k in b.Knit) w.Write(k);
         w.Write(b.Wounds.Count);
         foreach (var s in b.Wounds) w.Write(s);
         w.Write(b.Arrows.Count);
@@ -472,6 +474,7 @@ public sealed partial class Sim
             u.Rite = rite;
         }
         var body = ReadBody(r, t, u.Look);
+        u.PinKg = r.ReadSingle(); u.PinnedSince = r.ReadDouble();
         if (t == null) return null;
         u.Wounds = body;
         u.DutyZone = Zones.Find(z => z.Id == zone);
@@ -494,6 +497,9 @@ public sealed partial class Sim
         if (!r.ReadBoolean()) return null;
         var b = t == null ? null : new BodyState(Bodies.Plan(t, look));
         int rev = r.ReadInt32(); bool main = r.ReadBoolean(), off = r.ReadBoolean(), shield = r.ReadBoolean(); int legs = r.ReadInt32(); float bleed = r.ReadSingle();
+        var broken = (Break)r.ReadByte(); var splinted = (Break)r.ReadByte();
+        var knit = new float[5];
+        for (int i = 0; i < knit.Length; i++) knit[i] = r.ReadSingle();
         var wounds = new List<string>();
         int nw = r.ReadInt32();
         for (int i = 0; i < nw; i++) wounds.Add(r.ReadString());
@@ -514,6 +520,7 @@ public sealed partial class Sim
         }
         if (b == null) return null;
         b.Rev = rev + 1; b.MainHand = main; b.OffHand = off; b.Shield = shield; b.Legs = legs; b.Bleed = bleed;
+        b.Broken = broken; b.Splinted = splinted; Array.Copy(knit, b.Knit, knit.Length);
         b.Wounds.AddRange(wounds);
         b.Arrows.AddRange(arrows);
         // a part whose half-voxels are not of the shape its body has now (sculpted anew since) is read back whole

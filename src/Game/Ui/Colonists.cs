@@ -129,6 +129,9 @@ public partial class ColonistBar : Control
         else if (u.State == UnitState.Flee) Arrow(tr, s * .6f);
         if (u.Hold) Flag(tl, s * .62f);
         else if (u.State == UnitState.Idle && u.Why != "" && !u.Inside) Dots(new Vector2(face.Position.X + face.Size.X / 2, face.End.Y - s * .35f), s * .17f);
+        // a broken bone: a splint, two pale slats bound across; pinned: a heap of stones over it
+        if (u.PinKg > 0) Heap(new Vector2(face.Position.X + face.Size.X / 2, face.End.Y - s * .55f), s * .5f);
+        else if (w != null && w.Broken != Break.None) Splint(new Vector2(face.End.X - s * .65f, face.End.Y - s * .6f), s * .5f, (w.Splinted & w.Broken) == w.Broken);
         if (w != null && w.Wounds.Exists(t => t.StartsWith("отрублен")))
         {
             var bl = new Vector2(face.Position.X + s * .6f, face.End.Y - s * .6f);
@@ -179,6 +182,25 @@ public partial class ColonistBar : Control
         DrawLine(c + new Vector2(-r * .5f, r), c + new Vector2(-r * .5f, -r), new Color(0, 0, 0, .8f), 2.6f, true);
         DrawLine(c + new Vector2(-r * .5f, r), c + new Vector2(-r * .5f, -r), Ornament.BronzeLight, 1.3f, true);
         DrawColoredPolygon(new[] { c + new Vector2(-r * .4f, -r), c + new Vector2(r, -r * .55f), c + new Vector2(-r * .4f, -r * .1f) }, new Color("3e66a8"));
+    }
+
+    void Splint(Vector2 c, float r, bool bound)
+    {
+        DrawCircle(c, r * 1.25f, new Color(0, 0, 0, .65f), true, -1, true);
+        var bone = new Color("e6dcc4");
+        DrawLine(c + new Vector2(-r * .8f, r * .8f), c + new Vector2(r * .8f, -r * .8f), bone, 2.2f, true);
+        // the break across it, and the binding over it once splinted
+        DrawLine(c + new Vector2(-r * .35f, -r * .05f), c + new Vector2(r * .05f, r * .35f), Ornament.Blood, 1.6f, true);
+        if (bound) DrawLine(c + new Vector2(-r * .55f, -r * .25f), c + new Vector2(r * .25f, r * .55f), Ornament.BronzeLight, 1.4f, true);
+    }
+
+    void Heap(Vector2 c, float r)
+    {
+        var stone = new Color("8c8578");
+        DrawCircle(c, r * 1.35f, new Color(0, 0, 0, .65f), true, -1, true);
+        DrawCircle(c + new Vector2(-r * .5f, r * .25f), r * .48f, stone, true, -1, true);
+        DrawCircle(c + new Vector2(r * .5f, r * .25f), r * .48f, stone, true, -1, true);
+        DrawCircle(c + new Vector2(0, -r * .35f), r * .5f, stone.Lightened(.15f), true, -1, true);
     }
 
     void Dots(Vector2 c, float r)

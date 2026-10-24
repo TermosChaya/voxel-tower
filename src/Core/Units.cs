@@ -482,6 +482,15 @@ public sealed class Unit
     public BodyState Wounds;
     /// <summary>One of ours badly hurt that has left the fight to mend by the citadel; back to its post once it has.</summary>
     public bool Mending;
+    /// <summary>
+    /// What blunt things did to it (Sim.Trauma.cs): when it was last struck by one; pinned under what came down on it —
+    /// how heavy it lies (kg, 0 for free), since when, the comrade digging it out and when that one was last at it; for
+    /// that comrade, whom it digs out, how far along the next voxel is, and when it next looks for one pinned.
+    /// </summary>
+    public double StruckAt = -99, PinnedSince, DugAt;
+    public float PinKg, FreeEffort;
+    public Unit Digger, Freeing;
+    public double NextLookForPinned;
     /// <summary>Whose wound it is binding, and who is binding its own; how far along it is.</summary>
     public Unit Patient, Bandager;
     public float BandageEffort;

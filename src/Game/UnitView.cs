@@ -864,6 +864,8 @@ public partial class UnitView : Node3D
             float d = (float)Math.Min(1, (u.DazedUntil - now) / 1.5), tt = (float)_t * 2.3f + u.Id;
             roll += .12f * d * MathF.Sin(tt); head += .2f * d * MathF.Sin(tt * 1.7f); lean += .06f * d * MathF.Sin(tt * .8f);
         }
+        // broken bones: the arm hanging, the limp, bent over the ribs (UnitView.Trauma.cs)
+        Injured(u, f, look, ref turns, ref kneeR, ref kneeL, ref elbowR, ref elbowL, ref lean, ref roll, ref shift, ref head);
     }
 
     /// <summary>A turn about an axis through a point (in figure voxels).</summary>

@@ -227,6 +227,7 @@ public sealed partial class Sim
         Stage = "TickArrows"; TickArrows(dt);
         Stage = "KeepPossession"; KeepPossession();
         Stage = "TickBleeding"; TickBleeding(dt);
+        Stage = "TickTrauma"; TickTrauma(dt);
         Units.RemoveAll(u => u.Dead && Time - u.DiedAt > 30);
         Stage = "";
         if (KeepHp <= 0 && !Over) { Over = true; Say("Цитадель пала.", 3); }
@@ -246,17 +247,22 @@ public sealed partial class Sim
     /// <summary>If the ground went from under its feet, it falls to the first footing below; out of deep water it swims ashore.</summary>
     void Settle(Unit u)
     {
+        // pinned under what came down on it: it lies where it is till it is dug out (Sim.Trauma.cs)
+        if (u.PinKg > 0) return;
         int h = u.T.Move.Height, i = Nav.I(u.Cell), k = Nav.K(u.Cell), y = Nav.Y(u.Cell);
-        if (u.Team == Team.Horde && Nav.Fill[u.Cell] >= NavGrid.SolidT) return;   // standing in its own tunnel face
+        // standing in its own tunnel face (unless what came down on it there buries it)
+        if (u.Team == Team.Horde && Nav.Fill[u.Cell] >= NavGrid.SolidT) { if (Time - u.StruckAt < 2) TryPin(u); return; }
         if (Nav.Fill[u.Cell] >= NavGrid.SolidT || Nav.Deep(u.Cell) && !u.T.Move.Wades(Nav, i, y, k))
         {
+            // buried by what came down on it just now
+            if (!Nav.Deep(u.Cell) && Time - u.StruckAt < 2 && TryPin(u)) return;
             // walled in, or the water rose over it: out to the nearest free footing
             int c = NearestStand((int)u.X, (int)u.Z, h);
             if (c >= 0) { u.Cell = c; (u.X, u.Y, u.Z) = Nav.Feet(c); u.Path = null; StopCarve(u); StopBuild(u); }
             return;
         }
         // a horse or a hound does not hang on a ladder: it comes off it
-        if (Nav.Stand(i, y, k, h) || (y >= 1 && Nav.Ground(i, y - 1, k)) || Nav.Ladder[u.Cell] != 0 && u.T.Move.Ladders) return;
+        if (Nav.Stand(i, y, k, h) || (y >= 1 && Nav.Ground(i, y - 1, k)) || Nav.Ladder[u.Cell] != 0 && Holds(u)) return;
         for (int ny = y - 1; ny >= 1; ny--)
             if (Nav.Ground(i, ny - 1, k))
             {
@@ -265,7 +271,7 @@ public sealed partial class Sim
                 u.Y = Nav.Floor[u.Cell];
                 u.Path = null;
                 StopCarve(u); StopBuild(u);
-                if (fall >= 4) Hurt(u, null, (fall - 3) * 12, "падение");
+                Tumble(u, fall, "падение", fall >= 4 ? (fall - 3) * 12 : 0);
                 return;
             }
     }
@@ -328,7 +334,9 @@ public sealed partial class Sim
     {
         int i = Nav.I(c), y = Nav.Y(c), k = Nav.K(c);
         if (Nav.Deep(c) && !u.T.Move.Wades(Nav, i, y, k)) return false;
-        return u.Team == Team.Horde ? Nav.Ground(i, y - 1, k) || Nav.Ladder[c] != 0 : Nav.CanBe(i, y, k, u.T.Move.Height, ladders: u.T.Move.Ladders);
+        // one with a leg broken takes no ladder (Sim.Trauma.cs)
+        bool ladders = u.T.Move.Ladders && !Lame(u);
+        return u.Team == Team.Horde ? Nav.Ground(i, y - 1, k) || ladders && Nav.Ladder[c] != 0 : Nav.CanBe(i, y, k, u.T.Move.Height, ladders: ladders);
     }
 
     /// <summary>
@@ -340,11 +348,11 @@ public sealed partial class Sim
         for (int a = 0; a < Units.Count; a++)
         {
             var u = Units[a];
-            if (u.Dead || u.Inside || u.Airborne != null || Nav.Ladder[u.Cell] != 0) continue;
+            if (u.Dead || u.Inside || u.Airborne != null || u.PinKg > 0 || Nav.Ladder[u.Cell] != 0) continue;
             for (int b = a + 1; b < Units.Count; b++)
             {
                 var v = Units[b];
-                if (v.Dead || v.Inside || v.Airborne != null || Nav.Ladder[v.Cell] != 0) continue;
+                if (v.Dead || v.Inside || v.Airborne != null || v.PinKg > 0 || Nav.Ladder[v.Cell] != 0) continue;
                 float dx = v.X - u.X, dz = v.Z - u.Z, min = u.T.BodyR + v.T.BodyR + .5f;
                 if (dx * dx + dz * dz >= min * min || MathF.Abs(v.Y - u.Y) > Math.Min(u.T.BodyH, v.T.BodyH) * .8f) continue;
                 float d = MathF.Sqrt(dx * dx + dz * dz);
@@ -433,7 +441,7 @@ public sealed partial class Sim
             ? c => Math.Abs(Nav.I(c) - ti) <= 1 && Math.Abs(Nav.K(c) - tk) <= 1 && Math.Abs(Nav.Y(c) - ty) <= 2
             : c => c == target;
         if (goal(u.Cell)) { u.Path = null; return true; }
-        var path = Paths.Find(u.Cell, goal, c => H(c, ti, tk), u.T.Move, budget, gates: u.Team == Team.Player, lane: lane);
+        var path = Paths.Find(u.Cell, goal, c => H(c, ti, tk), MoverOf(u), budget, gates: u.Team == Team.Player, lane: lane);
         if (path == null) return false;
         u.Path = path; u.PathI = 0;
         // a way somewhere on purpose is no stroll

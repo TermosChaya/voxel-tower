@@ -422,7 +422,7 @@ public partial class Inspector : Control
         hurt.CustomMinimumSize = new Vector2(330, 0);
         who.AddChild(hurt);
         top.AddChild(who);
-        var chart = new BodyChart { Unit = u, CustomMinimumSize = new Vector2(58, 74), TooltipText = "Раны\nЗелёное — цело, жёлтое — задето, оранжевое — изранено, красное — тяжело ранено, перечёркнутое — отрублено." };
+        var chart = new BodyChart { Unit = u, CustomMinimumSize = new Vector2(58, 74), TooltipText = "Раны\nЗелёное — цело, жёлтое — задето, оранжевое — изранено или кость сломана, красное — тяжело ранено, перечёркнутое — отрублено." };
         top.AddChild(chart);
         var work = new VBoxContainer();
         work.AddThemeConstantOverride("separation", 3);
@@ -556,7 +556,7 @@ public partial class Inspector : Control
         hurt.CustomMinimumSize = new Vector2(380, 0);
         who.AddChild(hurt);
         top.AddChild(who);
-        var chart = new BodyChart { Unit = u, CustomMinimumSize = new Vector2(58, 74), TooltipText = "Раны\nЗелёное — цело, жёлтое — задето, оранжевое — изранено, красное — тяжело ранено, перечёркнутое — отрублено." };
+        var chart = new BodyChart { Unit = u, CustomMinimumSize = new Vector2(58, 74), TooltipText = "Раны\nЗелёное — цело, жёлтое — задето, оранжевое — изранено или кость сломана, красное — тяжело ранено, перечёркнутое — отрублено." };
         top.AddChild(chart);
         var about = new VBoxContainer();
         about.AddThemeConstantOverride("separation", 2);
@@ -780,6 +780,12 @@ public partial class BodyChart : Control
         for (int k = 0; k < 6; k++) shares[k] = had[k] == 0 ? 1 : has[k] / (float)had[k];
         if (!w.MainHand) shares[2] = Math.Min(shares[2], .2f);
         if (!w.OffHand) shares[3] = Math.Min(shares[3], .2f);
+        // a bone broken shows as a part badly hurt, whatever is left of it (Sim.Trauma.cs)
+        if ((w.Broken & Break.Main) != 0) shares[2] = Math.Min(shares[2], .6f);
+        if ((w.Broken & Break.Off) != 0) shares[3] = Math.Min(shares[3], .6f);
+        if ((w.Broken & Break.LegR) != 0) shares[4] = Math.Min(shares[4], .6f);
+        if ((w.Broken & Break.LegL) != 0) shares[5] = Math.Min(shares[5], .6f);
+        if ((w.Broken & Break.Ribs) != 0) shares[1] = Math.Min(shares[1], .75f);
         Cache[(u.Id, w.Rev)] = shares;
         return shares;
     }

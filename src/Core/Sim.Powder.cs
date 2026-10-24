@@ -386,7 +386,8 @@ public sealed partial class Sim
             float k = 1 - d / reach;
             done++;
             if (Kinds.IsEngine(u.T)) { Hurt(u, null, harm * 3.3f * (.5f + .5f * k), cause); continue; }
-            Hurt(u, null, harm * k, cause);
+            // the blast and what it throws: a chip of stone or a stave of the keg meets it somewhere (Sim.Trauma.cs)
+            Splinter(u, harm * k, dx, dy, dz, cause);
             float h = MathF.Sqrt(dx * dx + dz * dz), ux = h > .5f ? dx / h : MathF.Cos(u.Id), uz = h > .5f ? dz / h : MathF.Sin(u.Id);
             float push = (6 + 9 * k) * VoxelWorld.PerMetre * MathF.Min(1, 15 / u.T.BodyH) * Math.Clamp(r / (2.5f * VoxelWorld.PerMetre), .5f, 1.2f);
             Fling(u, ux * push * .8f, push * .75f, uz * push * .8f, cause);

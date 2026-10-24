@@ -30,6 +30,7 @@ public partial class Main
         if (_pose == "thieves") { Robbed(); return; }
         if (_pose == "engines") { Engines(); return; }
         if (_pose == "wounds") { Wounded(); return; }
+        if (_pose == "trauma") { Trauma(); return; }
         if (_pose == "flood") { Flood(); return; }
         if (_pose == "trees") { LookAtGrove(); return; }
         if (_pose == "grass") { Meadow(); return; }
@@ -1504,6 +1505,72 @@ public partial class Main
         float over = (World.WY(armless.Y + 8) - 4) / MathF.Tan(pitch);
         Rig.Set(World.WX(mx) - MathF.Sin(yaw) * over, World.WZ(mz) - MathF.Cos(yaw) * over, yaw, pitch, look != null ? 7.5f : 3.6f, snap: true);
         Hud.Refresh();
+    }
+
+    /// <summary>
+    /// What falls on people (--pose=trauma), on cleared ground west of the citadel: one of ours pinned under a heap of
+    /// rubble and a worker come to dig him out, a swordsman limping off on a broken leg (chosen: the console says so),
+    /// a worker going off with his arm hanging and his pick on the ground, an archer bent over his broken ribs.
+    /// --look=1 pieces of a wall coming down on a band of the horde (the game stopped as they strike), --look=2 the band
+    /// after it: the dead, the pinned, the broken (one of them chosen). --at= seconds after (2.5 by itself).
+    /// </summary>
+    void Trauma()
+    {
+        var sim = Sim; var w = World;
+        sim.Waves.Countdown = 1e9;
+        // on the level ground beside the citadel the figures are looked at on, its trees taken off before it was drawn
+        var (gx, gz) = GroveAt;
+        int cx = gx + 150, cz = gz + 110, g = w.SurfAt(cx, cz);
+        double at = _poseSeconds is > 0 and < 14 ? _poseSeconds : 2.5;
+        Unit Put(UnitType t, int dx, int dz) => sim.Spawn(t, sim.NearestStand(cx + dx, cz + dz, t.Move.Height));
+        if (_look >= 1)
+        {
+            var band = new List<Unit>();
+            for (int i = 0; i < 8; i++) band.Add(Camp(i % 3 == 0 ? Kinds.Goblin : Kinds.Orc, cx + i % 4 * 11 - 16, cz + i / 4 * 13 - 6));
+            // the top of a wall breaking up over them: blocks of it, each a little off the last
+            var rnd = new Random(7);
+            for (int k = 0; k < 7; k++)
+            {
+                int sx = 2 + rnd.Next(2), sy = 2 + rnd.Next(2), sz = 2 + rnd.Next(2);
+                var block = new List<(sbyte, sbyte, sbyte, byte)>();
+                for (int dz = -sz; dz < sz; dz++) for (int dy = -sy; dy < sy; dy++) for (int dx = -sx; dx < sx; dx++) block.Add(((sbyte)dx, (sbyte)dy, (sbyte)dz, rnd.Next(4) == 0 ? Mat.Mortar : Mat.Stone));
+                sim.Hurl(block, cx - 18 + rnd.Next(36), g + 30 + rnd.Next(14), cz - 9 + rnd.Next(22), 0, -4 - rnd.Next(4), 0, "обвал");
+            }
+            Advance(_look == 1 ? .78 : at + 1.5);
+            if (_look == 1) Paused = true;
+            if (_look == 2 && (band.Find(u => !u.Dead && Sim.Broken(u) != Break.None) ?? band.Find(u => !u.Dead)) is { } hurt) { Selected.Add(hurt); Hud.OnSelectionChanged(); }
+            Rig.SetAt(w.WX(cx), w.WY(g + 8), w.WZ(cz), -.7f, .5f, 2.6f);
+            Hud.Refresh();
+            return;
+        }
+        var buried = Put(Kinds.Worker, 0, 0);
+        Mound(buried);
+        Put(Kinds.Worker, 22, 10);
+        var limping = Put(Kinds.Swordsman, -24, -16);
+        sim.BreakBone(limping, Break.LegL);
+        var hung = Put(Kinds.Worker, -18, 18);
+        sim.BreakBone(hung, Break.Main);
+        var bent = Put(Kinds.Archer, 14, -22);
+        sim.BreakBone(bent, Break.Ribs);
+        Advance(at);
+        Selected.Add(limping);
+        Hud.OnSelectionChanged();
+        Rig.SetAt(w.WX(cx - 4), w.WY(g + 6), w.WZ(cz), -.6f, .5f, 2.6f);
+        Hud.Refresh();
+    }
+
+    /// <summary>A mound of rubble heaped over one, as a fall leaves it (no steeper than loose stone lies), just come down on it.</summary>
+    void Mound(Unit u)
+    {
+        var w = World;
+        int ux = (int)u.X, uz = (int)u.Z, uy = (int)MathF.Floor(u.Y + .01f);
+        for (int z = uz - 6; z <= uz + 6; z++)
+            for (int x = ux - 6; x <= ux + 6; x++)
+            {
+                int h = 7 - Math.Max(Math.Abs(x - ux), Math.Abs(z - uz));
+                for (int y = uy; y < uy + h; y++) if (w.Get(x, y, z) == Mat.Air) w.Set(x, y, z, Mat.Rubble);
+            }
+        u.StruckAt = Sim.Time;
     }
 
     /// <summary>Where the grove is planted (--pose=trees): dry level ground on the plateau beside the citadel, cleared first.</summary>

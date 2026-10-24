@@ -2990,6 +2990,9 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--spells")
     Gone(thiefW);
 }
 
+// what blunt things do to bodies (Trauma.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--trauma") TraumaBench.Run(Check);
+
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--physics")
 {
     Console.WriteLine();

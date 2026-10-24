@@ -79,7 +79,8 @@ public sealed partial class Sim
         u.State = UnitState.Idle;
         StopCarve(u); StopBuild(u); ReleaseSite(u);
         if (u == Possessed) Unpossess($"{u.Name} сбит с ног");
-        if (u.Team == Team.Player && Time - _downSaid > 6) { _downSaid = Time; Say($"{u.Name} упал и не может подняться.", 3, u); }
+        // (one pinned, or knocked senseless, is told of as that: Sim.Trauma.cs)
+        if (u.Team == Team.Player && u.PinKg <= 0 && Time >= u.DazedUntil && seconds > 6 && Time - _downSaid > 6) { _downSaid = Time; Say($"{u.Name} упал и не может подняться.", 3, u); }
     }
 
     double _downSaid = -99;
@@ -100,7 +101,7 @@ public sealed partial class Sim
             u.Z = Math.Clamp(u.Z + u.StagZ * dt, fz - 3.5f, fz + 3.5f);
             u.StagX *= MathF.Exp(-dt * 6); u.StagZ *= MathF.Exp(-dt * 6);
         }
-        if (u.Down && (Time >= u.DownUntil || double.IsInfinity(u.DownUntil) && u.Pain < BreakPain * .8f))
+        if (u.Down && !Grounded(u) && (Time >= u.DownUntil || double.IsInfinity(u.DownUntil) && u.Pain < BreakPain * .8f))
         {
             u.Down = false;
             u.NextSearch = 0;

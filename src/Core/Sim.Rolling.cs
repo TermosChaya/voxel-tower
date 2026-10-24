@@ -349,7 +349,7 @@ public sealed partial class Sim
         if (blow > 3)
             foreach (var u in Units)
                 if (!u.Dead && !u.Inside && u.Airborne == null && Time - u.LastHurt >= .5 && !Spares(f, u) && Against(f, u))
-                    Hurt(u, null, blow * (Kinds.IsEngine(u.T) ? 1.5f : 1), f.Cause);
+                    Strike(u, MassOf(f), hard / VoxelWorld.PerMetre, 0, -1, 0, float.NaN, f.Cause, blow * (Kinds.IsEngine(u.T) ? 1.5f : 1));
         Landed?.Invoke(f.X, f.Y, f.Z, f.Voxels.Count, hard);
     }
 
@@ -360,7 +360,9 @@ public sealed partial class Sim
     void RunOver(Flier f, Unit u, float speed)
     {
         bool engine = Kinds.IsEngine(u.T);
-        Hurt(u, null, Blow(f, speed) * (engine ? 1.5f : 1), f.Cause);
+        // it meets the legs first, a big ball the trunk too
+        Strike(u, MassOf(f), speed / VoxelWorld.PerMetre, f.VX, 0, f.VZ, Math.Clamp(f.RollR * (.6f + .8f * (float)Hash.H3(u.Id, f.Id, (int)Time)) / u.T.BodyH, .05f, .8f),
+            f.Cause, Blow(f, speed) * (engine ? 1.5f : 1));
         if (engine) { f.VX = -f.VX * Rebound; f.VZ = -f.VZ * Rebound; return; }
         // a body's weight against the ball's, as voxels of it
         float body = u.T.BodyR * u.T.BodyR * u.T.BodyH * 1.5f, n = f.Voxels.Count;

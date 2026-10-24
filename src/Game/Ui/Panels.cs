@@ -88,6 +88,11 @@ public static class Retinue
     {
         if (u.Dead) return u.Team == Team.Wild ? "добыт" : "пал";
         if (u.Airborne is { } flying) return flying.Held ? "в хватке телекинеза" : "летит по воздуху";
+        // what blunt things did to it (Sim.Trauma.cs): pinned, senseless, lying with its legs broken; digging one out
+        if (u.PinKg > 0) return u.Digger is { Dead: false } d ? $"придавлен, {(int)u.PinKg} кг: откапывает {d.T.Name.ToLowerInvariant()}" : $"придавлен, {(int)u.PinKg} кг: ждёт помощи";
+        if (u.Down && sim.Time < u.DazedUntil && u.Wounds != null && u.Wounds.Wounds.Contains("сотрясение")) return "без сознания";
+        if (u.Down && Sim.Grounded(u)) return "лежит: сломаны обе ноги";
+        if (u.Freeing is { Dead: false } pinned) return "откапывает: " + pinned.T.Name.ToLowerInvariant();
         if (u.Defusing != null) return u.Why.Length > 0 ? u.Why : "бежит резать фитиль";
         if (u.Shunning != null) return u.Why.Length > 0 ? u.Why : "уходит от заряда";
         if (u.PushCell >= 0) return "сбрасывает лестницу";

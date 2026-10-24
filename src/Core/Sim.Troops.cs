@@ -302,7 +302,7 @@ public sealed partial class Sim
             float k = 1 - d / reach;
             done++;
             if (Kinds.IsEngine(u.T)) { Hurt(u, by, harm * 2.5f * (.5f + .5f * k), "горшок с порохом"); continue; }
-            Hurt(u, by, harm * (.35f + .65f * k), "горшок с порохом");
+            Splinter(u, harm * (.35f + .65f * k), dx, dy, dz, "горшок с порохом", by);
             float h = MathF.Sqrt(dx * dx + dz * dz), ux = h > .5f ? dx / h : MathF.Cos(u.Id), uz = h > .5f ? dz / h : MathF.Sin(u.Id);
             float push = (2.5f + 4 * k) * VoxelWorld.PerMetre * MathF.Min(1, 15 / u.T.BodyH);
             Fling(u, ux * push, push * .8f, uz * push, "горшок с порохом");

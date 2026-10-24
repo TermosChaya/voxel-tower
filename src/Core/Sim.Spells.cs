@@ -303,7 +303,7 @@ public sealed partial class Sim
             if (u.Dead || u.Inside) continue;
             float d = MathF.Sqrt((u.X - x) * (u.X - x) + (u.Y - y) * (u.Y - y) * .5f + (u.Z - z) * (u.Z - z));
             if (Kinds.IsEngine(u.T) && d < r + 3 * VoxelWorld.PerMetre) Hurt(u, null, 280 * Might, "заклятый обвал");
-            else if (d < r + 1.5f * VoxelWorld.PerMetre) Hurt(u, null, 45 * Might, "заклятый обвал");
+            else if (d < r + 1.5f * VoxelWorld.PerMetre) Strike(u, 12, 6, 0, -1, 0, float.NaN, "заклятый обвал", 45 * Might);
         }
         Fall(ball, quiet: false);
         return null;

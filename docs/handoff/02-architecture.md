@@ -224,7 +224,7 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   паров (`Unit.CoughAt`, `Clutch` 9, шаг назад через `StagX/Z`), `Etch` — разъедает поверхность тела (кожа → `Scar`,
   ткань → дыры и `Rag`, броня и снаряжение — прочь; щит, от которого осталось меньше 55 %, — `BodyState.Shield =
   false`). `FlaskBreaks` — склянка: ожоги в 1,6 м, 16 вокселей кислоты кругом; `FlaskLands` — `Shot.Flask` из
-  `TickArrows`. События `FlaskBroke`, `Dissolved`, `Coughed`; в сохранении — `WriteAcid`/`ReadAcid` (версия 29).
+  `TickArrows`. События `FlaskBroke`, `Dissolved`, `Coughed`; в сохранении — `WriteAcid`/`ReadAcid` (версия 29, с травмами 30).
 - `Sim.Alchemists.cs` — алхимики орды: `Kinds.Alchemist` (в `Kinds.Throwers`, путь — поле гоблина), `AlchemistTick` из
   `RaiderTick`: с целью в `FlaskFar` (18 м) и без наших ближе `FlaskClose` встаёт (`UnitState.Siege`) и бросает
   `ThrowFlask` раз в `AttackTime`; `FlaskMark` — кучка наших (на стене охотнее), наши ворота, первая стена на линии к
@@ -665,6 +665,19 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   машин), затем выбор следующего приёма; темнота: `TickLight` (раз в
   секунду, только когда темно) раскладывает освещённые клетки по 4 м, `Lit`, `DarkRange`, `RangeAt` — с ней сверяют
   `BestTarget`, `Fight`, `HuntTick`, `KindleShot`; в `Shoot` вне света ночью шанс ×(1 − 0,2·темнота).
+- `Sim.Trauma.cs` — тупые удары и падения. `Strike(u, кг, м/с, направление, высота на теле 0…1, причина, урон)`
+  — энергия ½mv², место (`OnBody`: ноги, туловище, рука, голова) по высоте и стороне (`SideOf`), шлем и доспех
+  (`Cover` — доля брони на поверхности части, `Guard`), кости по массе тела (`Bones`); `Injure` — пороги в джоулях
+  (`DazeJ`, `KnockJ`, `SkullJ`, `ArmJ`, `RibsJ`, `ChestJ`, `LegJ`, `LegsJ`), броски — свои (`Roll`, хэш), чтобы мир
+  шёл как прежде. Груз больше тройного веса тела бьёт всё тело (`StrikeHeap`); обвал в `Lay` раскладывает энергию
+  каждого вокселя по частям того, на кого он упал (лежащего — вдоль тела, `Lying`). `Tumble` — падение (с высоты,
+  брошенного, с моста, в яму), `Splinter` — осколок взрыва. Переломы — `BodyState.Broken/Splinted/Knit` (`Break`),
+  `BreakBone` роняет одежду части (оружие, щит, лук) как `Remnant`; следствия — `Gait`, `HasMainHand/HasOffHand`,
+  `Armed`, `Hands` (работа), `Grip` (двуручное), `Holds` (лестница), `MoverOf` (пути хромого без лестниц), `Lame`
+  (налётчик бежит), `Disabled` (наш отлёживается до срастания), `Grounded` (не встаёт). `TickTrauma` — срастание
+  (`KnitFor`, у цитадели ×3, в лубке ×2), придавленные: `TryPin` (кто ударен за 2 с и лежит, или погребён под
+  2,5 веса), `Load` (кг на теле), `Pinned` (удушье, сам выбирается), `Rescue` (свой откапывает, из `PawnTick` и
+  `RaiderTick`). Сохраняются переломы и груз (версия 30). Вид — `UnitView.Trauma.cs`, `Ui/PinTags.cs`.
 - `Sim.Pain.cs` — боль и защита. `Pained` (из `Hurt`): боль копится долей урона × `Sense(вид)` (×1,8 в голову —
   `HitHead` по `LastRow ≥ HeadY0`, ставит `Strike`), голова — `DazedUntil` и задержка удара, рука к ране (`Clutch`),
   сильный удар того, кто бил (доля ≥ 0,1, бьющий не ниже в 1,4 раза), — `StaggerUntil` и отброс в своей клетке

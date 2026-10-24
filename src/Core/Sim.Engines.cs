@@ -314,7 +314,10 @@ public sealed partial class Sim
             if (o.Dead || o.Inside || o == f.By || o.Airborne != null) continue;
             float ddx = o.X - x, ddz = o.Z - z, dd = MathF.Sqrt(ddx * ddx + ddz * ddz);
             if (dd > 14 || MathF.Abs(o.Y - y) > 16) continue;
-            Hurt(o, f.By, 38 * (1 - dd / 18) * (Kinds.IsEngine(o.T) ? .5f : 1), "камень из камнемёта");
+            float harm = 38 * (1 - dd / 18) * (Kinds.IsEngine(o.T) ? .5f : 1);
+            // the stone itself on one it came down on; the chips it breaks out on those about
+            if (dd < o.T.BodyR + 2 && !Kinds.IsEngine(o.T)) Strike(o, MassOf(f), 20, f.VX, f.VY, f.VZ, float.NaN, "камень из камнемёта", harm, f.By);
+            else Splinter(o, harm, ddx, o.Y - y, ddz, "камень из камнемёта", f.By);
         }
         Collapsed?.Invoke(Math.Max(broken, 30), x, y, z);
         if (broken > 0 && kd >= Site.KeepR + 6 && Time - _stoneSaid > 20)

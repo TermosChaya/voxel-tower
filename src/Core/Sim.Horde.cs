@@ -121,6 +121,8 @@ public sealed partial class Sim
         if (!u.Routed && !u.Guard && u.Champion == 0 && u.Pain >= (u.Leader ? LeaderBreak : BreakPain) * FearOfUs) u.Routed = true;
         // a hill giant tears up a boulder and hurls it, or is at it (Sim.Giants.cs)
         if (u.T == Kinds.HillGiant && !u.Routed && GiantTick(u, dt)) return;
+        // or a leg broken under it: it limps back west (Sim.Trauma.cs)
+        if (!u.Routed && !u.Guard && u.Champion == 0 && Lame(u)) u.Routed = true;
         // the horde's envoy comes to bargain, and fights nobody
         if (u.Envoy && EnvoyTick(u, dt)) return;
         // the horde's engines go about their own work, and never run
@@ -140,6 +142,8 @@ public sealed partial class Sim
             return;
         }
         u.Target = null;
+        // one of its own pinned close by: dug out before anything
+        if (!u.Routed && Armed(u) && !u.Envoy && Rescue(u, dt, 12 * VoxelWorld.PerMetre)) return;
         // nothing left to fight with, or no heart left for it: back west and out of the valley
         if (!Armed(u) || u.Routed) { StopCarve(u); StopBuild(u); Retreat(u, dt); return; }
         KeepEscort(u);

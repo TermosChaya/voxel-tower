@@ -94,6 +94,8 @@ public partial class Sound : Node
         sim.Worked += (x, y, z, mat, dig) => { if (dig) Struck(Dug(mat), x, y, z, .07); else Play("dig", x + .5f, y, z + .5f, .12, .35f, pitch: 1.45f); };
         sim.Hacked += (x, y, z, mat) => Struck(Dug(mat), x, y, z, .09);
         sim.Collapsed += (n, x, y, z) => Play("rumble", x, y, z, .4, Math.Clamp(.4f + n / 2000f, .4f, 1.3f));
+        // a bone going: a short dry crack
+        sim.BoneBroke += (u, b) => Play("blunt", u.X, u.Y + u.T.BodyH * .5f, u.Z, .15, .75f, pitch: 1.75f);
         sim.Spelled += (k, x, y, z) =>
         {
             if (k == SpellKind.BlackWind) Play("wind", x, y, z, .2, 1.1f, far: true);

@@ -22,6 +22,9 @@ public sealed class BodyState
     public readonly List<(BodyPart part, float x, float y, float z, float dx, float dy, float dz)> Arrows = new();
     /// <summary>The worst of it, for the panel: "отрублена правая рука".</summary>
     public readonly List<string> Wounds = new();
+    /// <summary>The bones broken (Sim.Trauma.cs), those a comrade splinted, and how far each has knit, 0…1 (legs, arms, ribs).</summary>
+    public Break Broken, Splinted;
+    public readonly float[] Knit = new float[5];
 
     public BodyState(BodyPlan plan)
     {
@@ -110,15 +113,32 @@ public sealed partial class Sim
         _ => 1,
     };
 
-    /// <summary>What still works of a body (all of it, for one never hurt).</summary>
-    public static bool HasMainHand(Unit u) => u.Wounds?.MainHand ?? true;
-    public static bool HasOffHand(Unit u) => u.Wounds?.OffHand ?? true;
+    /// <summary>What still works of a body (all of it, for one never hurt): a hand cut off, or its arm broken, holds nothing.</summary>
+    public static bool HasMainHand(Unit u) => u.Wounds == null || u.Wounds.MainHand && (u.Wounds.Broken & Break.Main) == 0;
+    public static bool HasOffHand(Unit u) => u.Wounds == null || u.Wounds.OffHand && (u.Wounds.Broken & Break.Off) == 0;
 
     /// <summary>Can still fight: a hand for the weapon, and both for a bow.</summary>
-    public static bool Armed(Unit u) => !Kinds.IsEngine(u.T) && (u.Wounds == null || u.Wounds.MainHand && (!u.T.Ranged || u.Wounds.OffHand));
+    public static bool Armed(Unit u) => !Kinds.IsEngine(u.T) && (u.Wounds == null || HasMainHand(u) && (!u.T.Ranged || HasOffHand(u)));
 
-    /// <summary>How well it walks: on two legs, hopping on one, or dragging itself.</summary>
-    public static float Gait(Unit u) => u.Wounds == null ? 1 : u.Wounds.Legs switch { >= 2 => 1, 1 => .4f, _ => .15f };
+    /// <summary>
+    /// How well it walks: on two legs, hopping on one, or dragging itself; limping on a broken leg (a little better
+    /// splinted), crawling on two; slower with its ribs broken (Sim.Trauma.cs).
+    /// </summary>
+    public static float Gait(Unit u)
+    {
+        var w = u.Wounds;
+        if (w == null) return 1;
+        float g = w.Legs switch { >= 2 => 1, 1 => .4f, _ => .15f };
+        var legs = w.Plan.Beast ? Break.LegR | Break.LegL | Break.Main | Break.Off : Break.LegR | Break.LegL;
+        var broken = w.Broken & legs;
+        if (broken != Break.None)
+        {
+            int n = System.Numerics.BitOperations.PopCount((uint)broken);
+            g *= n >= 2 ? .12f : w.Plan.Beast ? .5f : (w.Splinted & broken) != 0 ? .45f : .35f;
+        }
+        if ((w.Broken & Break.Ribs) != 0) g *= .8f;
+        return g;
+    }
 
     static float ScaleOf(Unit u) => u.Leader ? 1.15f : 1;
 

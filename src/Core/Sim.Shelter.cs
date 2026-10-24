@@ -217,7 +217,7 @@ public sealed partial class Sim
         if (u.Mending)
         {
             u.Why = "в цитадели: отлёживается";
-            if (u.Hp < u.MaxHp * .75f || (u.Wounds?.Bleed ?? 0) >= .1f) return;
+            if (!MendedEnough(u)) { if (Disabled(u)) u.Why = "в цитадели: срастается кость"; return; }
             u.Mending = false;
             Leave(u);
             if (u.Post >= 0) GoTo(u, u.Post);

@@ -634,6 +634,8 @@ public sealed partial class Sim
         float cx = 0, cy = 0, cz = 0;
         int laid = 0, stone = 0, wood = 0;
         var crushed = new Dictionary<Unit, int>();
+        // what each came down on brought to its legs, trunk, arms and head, joules (Sim.Trauma.cs)
+        var blows = new Dictionary<Unit, float[]>();
         // those it may come down on
         int ax0 = int.MaxValue, az0 = int.MaxValue, ax1 = int.MinValue, az1 = int.MinValue;
         foreach (var (x, _, z, _, _) in pieces) { ax0 = Math.Min(ax0, x); az0 = Math.Min(az0, z); ax1 = Math.Max(ax1, x); az1 = Math.Max(az1, z); }
@@ -661,11 +663,23 @@ public sealed partial class Sim
             {
                 if (u.Dead || MathF.Abs(u.X - lx - .5f) > u.T.BodyR + 1 || MathF.Abs(u.Z - lz - .5f) > u.T.BodyR + 1 || ly < u.Y - 1 || ly > u.Y + u.T.BodyH) continue;
                 crushed[u] = crushed.GetValueOrDefault(u) + 1;
+                // it comes down through the body from the top (or from where it was, if that was lower): the head, a
+                // shoulder at the edge, as hard as the fall to there made it
+                // (one lying down is as high as it is broad, and what comes down on it lands along it)
+                float top = u.Y + (u.Down ? u.T.BodyR * 2 : u.T.BodyH), from = Math.Min(y, top), drop = (y - Math.Max(ly, from - 1)) / VoxelWorld.PerMetre;
+                // (what comes down beside the body, outside its round, goes by it; the head is the one column over its middle)
+                float off = MathF.Max(MathF.Abs(u.X - lx - .5f), MathF.Abs(u.Z - lz - .5f)) / MathF.Max(1, u.T.BodyR);
+                if (drop <= .05f || off > 1) continue;
+                if (!blows.TryGetValue(u, out var j)) blows[u] = j = new float[4];
+                float at = (from - u.Y) / u.T.BodyH;
+                int part = u.Down ? (int)Lying(u, lx + .5f, lz + .5f)
+                    : at >= .86f ? (off < .35f ? (int)OnBody.Head : off < .7f ? (int)OnBody.Trunk : (int)OnBody.Arm) : at >= .47f ? (off < .6f ? (int)OnBody.Trunk : (int)OnBody.Arm) : (int)OnBody.Legs;
+                j[part] += Kg(m) * 9.8f * drop;
             }
         }
         _settling = false;
         if (marked.Count > 0) Orders.PlanRemove(marked);
-        foreach (var (u, n) in crushed) Hurt(u, null, 30 + Math.Min(90, n * 2), "обвал");
+        foreach (var (u, n) in crushed) StrikeHeap(u, blows.TryGetValue(u, out var j) ? j : new float[4], "обвал", 30 + Math.Min(90, n * 2));
         // a felled trunk lying across a slope steep enough to start it goes rolling down it
         if (!quiet && logCells.Count >= 24) RollFelled(logCells, fx, fz);
         if (quiet || laid == 0) return;

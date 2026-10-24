@@ -288,7 +288,7 @@ public sealed partial class Sim
             int fall = (b.Y - y) >> NavGrid.Shift;
             u.Cell = c; u.Y = y;
             u.Path = null; StopCarve(u); StopBuild(u);
-            if (fall >= 2) Hurt(u, null, 8 * fall, "сброшен с моста");
+            if (fall >= 2) Tumble(u, fall, "сброшен с моста", 8 * fall);
             if (u.Team == Team.Horde) thrown++;
         }
         if (thrown > 0) { var (mx, _, mz) = b.Middle; Say(thrown == 1 ? "Мост подняли: налётчик полетел в ров." : $"Мост подняли: {thrown} налётчиков полетели в ров.", 1, mx, mz); }

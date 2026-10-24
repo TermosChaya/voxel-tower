@@ -96,6 +96,8 @@ public sealed partial class Sim
         if (u.Prey != null && HuntTick(u, dt)) { Busy(u); return; }
         // a priest prays by day and shelters by night, and does nothing else (unless the player sent it somewhere)
         if (u.T.Prays && !u.Hold) { PriestTick(u, dt); return; }
+        // a comrade pinned under what came down comes before any work: dug out (a soldier only close by while the horde is here)
+        if (!u.T.Prays && handy && Rescue(u, dt, (soldier && Waves.Active ? 15 : 40) * VoxelWorld.PerMetre)) { Busy(u); return; }
         // a comrade bleeding close by comes before any work (soldiers keep to their posts while the horde is here)
         if (!u.T.Prays && handy && (!soldier || !Waves.Active) && Bandage(u, dt)) { Busy(u); return; }
         // a fire in what we built or round the citadel, if putting it out comes before the work at hand
@@ -180,7 +182,7 @@ public sealed partial class Sim
         }
         u.State = UnitState.Work;
         // mourning one of their own given to the old powers, they work a quarter slower
-        u.Effort += (float)(Labour.WorkPerSecond * u.T.Work * u.Pace * dt) * (Time < MournUntil ? .75f : 1);
+        u.Effort += (float)(Labour.WorkPerSecond * u.T.Work * u.Pace * dt) * (Time < MournUntil ? .75f : 1) * Hands(u);
         // the tool comes down in blows, one every so long by the body (a heavy one slower): at each it does as much as
         // the effort since the last affords — a stone may take two or three blows to come away, loose earth comes a few
         // spadefuls to the blow — and between them the arm draws back to come down on the very voxel it works next
@@ -458,7 +460,7 @@ public sealed partial class Sim
                     && _bodies[c] - (c == self ? 1 : 0) <= 0
                     // not inside a space being walled shut: its gap is filled from outside (Sim.Seal.cs)
                     && !Closing(c);
-                List<int> path = Goal(u.Cell) ? new List<int>() : Paths.Find(u.Cell, Goal, c => H(c, ci, ck), u.T.Move, 30000, gates: true);
+                List<int> path = Goal(u.Cell) ? new List<int>() : Paths.Find(u.Cell, Goal, c => H(c, ci, ck), MoverOf(u), 30000, gates: true);
                 if (path == null) { u.Unreachable[col] = Time + 12; continue; }
                 u.Site = col; _claims[col]++;
                 u.SiteWork = mask;
@@ -624,20 +626,20 @@ public sealed partial class Sim
         float bleed = u.Wounds?.Bleed ?? 0;
         if (!u.Mending)
         {
-            if (u.Hp >= u.MaxHp * Steadfast(u.Hold) && bleed <= 1.2f) return false;
+            if (u.Hp >= u.MaxHp * Steadfast(u.Hold) && bleed <= 1.2f && !Disabled(u)) return false;
             u.Mending = true;
             ReleaseSite(u);
             u.Prey = null; u.Path = null; u.NextSearch = 0; u.Patient = null;
             Say($"{u.T.Name} тяжело ранен и отходит к цитадели.", 3, u);
         }
-        else if (u.Hp >= u.MaxHp * .75f && bleed < .1f)
+        else if (MendedEnough(u))
         {
             u.Mending = false;
             u.Why = "";
             if (u.Post >= 0) GoTo(u, u.Post);
             return false;
         }
-        u.Why = HasMainHand(u) ? "ранен: отлёживается" : "без руки: работать не может";
+        u.Why = Disabled(u) ? "кость сломана: отлёживается" : HasMainHand(u) ? "ранен: отлёживается" : "без руки: работать не может";
         var foe = Nearest(u, Team.Horde, u.T.Reach + 8);
         if (foe != null && InReach(u, foe) && Armed(u) && Time - u.LastHurt < 1.5)
         {
@@ -660,14 +662,21 @@ public sealed partial class Sim
         return true;
     }
 
+    /// <summary>Mended enough to go back: three quarters of itself, the bleeding stopped, no leg or arm broken.</summary>
+    bool MendedEnough(Unit u) => u.Hp >= u.MaxHp * .75f && (u.Wounds?.Bleed ?? 0) < .1f && !Disabled(u);
+
+    /// <summary>Wants a comrade's hands: bleeding, or a broken limb not splinted yet.</summary>
+    static bool WantsCare(Unit u) => u.Wounds is { Bleed: > .15f } || WantsSplint(u);
+
     /// <summary>
-    /// One of ours with nobody on it sees a comrade bleeding close by, with no raider over it, and goes to bind the
-    /// wound: a few seconds beside it and the bleeding all but stops. True while at that.
+    /// One of ours with nobody on it sees a comrade bleeding close by, or with a limb broken, with no raider over it, and
+    /// goes to bind the wound and splint the bone: a few seconds beside it and the bleeding all but stops, the bone knits
+    /// twice as fast. True while at that.
     /// </summary>
     bool Bandage(Unit u, float dt)
     {
         var p = u.Patient;
-        if (p == null || p.Dead || p.Wounds is not { Bleed: > .15f } || p.Bandager != u)
+        if (p == null || p.Dead || !WantsCare(p) || p.Bandager != u || p.PinKg > 0)
         {
             if (p != null && p.Bandager == u) p.Bandager = null;
             u.Patient = p = null;
@@ -676,7 +685,7 @@ public sealed partial class Sim
             float best = 30 * VoxelWorld.PerMetre;
             foreach (var o in Units)
             {
-                if (o == u || o.Dead || o.Inside || o.Team != Team.Player || o.Wounds is not { Bleed: > .15f } || o.Bandager is { Dead: false } && o.Bandager != u) continue;
+                if (o == u || o.Dead || o.Inside || o.Team != Team.Player || o.PinKg > 0 || !WantsCare(o) || o.Bandager is { Dead: false } && o.Bandager != u) continue;
                 float d = Dist(u, o);
                 if (d < best && Nearest(o, Team.Horde, 12 * VoxelWorld.PerMetre) == null) { best = d; p = o; }
             }
@@ -699,10 +708,12 @@ public sealed partial class Sim
         u.State = UnitState.Work;
         u.Facing = MathF.Atan2(p.Z - u.Z, p.X - u.X);
         u.BandageEffort += dt;
-        if (u.BandageEffort >= 2.5f)
+        if (u.BandageEffort >= (WantsSplint(p) ? 4 : 2.5f))
         {
+            bool splint = WantsSplint(p);
             p.Wounds.Bleed *= .1f;
-            Say($"{u.T.Name} перевязал {Whom(p.T)}.", 1, p);
+            SplintBones(p);
+            Say(splint ? $"{u.T.Name} перевязал {Whom(p.T)} и наложил лубок." : $"{u.T.Name} перевязал {Whom(p.T)}.", 1, p);
             p.Bandager = null; u.Patient = null;
         }
         return true;

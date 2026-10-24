@@ -183,6 +183,8 @@ public sealed partial class Sim
         if (u.Airborne is { } up) { if (!up.Held) { up.VX += vx; up.VY += vy; up.VZ += vz; } return up; }
         StopCarve(u); StopBuild(u);
         if (u.Team == Team.Player) ReleaseSite(u);
+        // thrown out from under what pinned it
+        if (u.PinKg > 0) Unpin(u, said: false);
         u.Path = null; u.Target = null; u.State = UnitState.Idle; u.Swing = 0;
         // one leading a captive lets go of it, and one led goes free of its leader
         if (u.Captive != null) { u.Captive.Captor = null; u.Captive = null; }
@@ -319,7 +321,8 @@ public sealed partial class Sim
             if (u.Dead || u.Inside || u.Airborne != null) continue;
             float dx = u.X - f.X, dz = u.Z - f.Z, dy = u.Y + u.T.BodyH * .5f - f.Y, reach = f.R + u.T.BodyR + 2;
             if (dx * dx + dz * dz + dy * dy * .5f > reach * reach || f.Unit == null && !Touches(f, u, 1.5f)) continue;
-            Hurt(u, null, blow, f.Cause);
+            // a stone or a body swung into it: where it meets it, as hard as it comes (Sim.Trauma.cs)
+            Strike(u, f.Unit != null ? BodyKg(f.Unit.T) : MassOf(f), speed / VoxelWorld.PerMetre, f.VX, f.VY, f.VZ, Math.Clamp((f.Y - u.Y) / u.T.BodyH, 0, 1), f.Cause, blow);
             f.LastBlow = Time;
         }
     }
@@ -373,7 +376,8 @@ public sealed partial class Sim
             if (hs > .01f && Stops(f.X + f.VX / hs * f.R, f.Y, f.Z + f.VZ / hs * f.R))
             {
                 float hard = (hs - 5.5f * VoxelWorld.PerMetre) * .5f;
-                if (hard > 0) Hurt(f.Unit, null, hard, f.Cause);
+                // dashed against it as from a height that gives that speed
+                if (hard > 0) Tumble(f.Unit, hs * hs / (2 * Gravity * VoxelWorld.PerMetre), f.Cause, hard);
                 f.VX = f.VZ = 0;
                 f.X -= ux * .5f; f.Z -= uz * .5f;
             }
@@ -499,8 +503,10 @@ public sealed partial class Sim
             {
                 if (u.Dead || u.Inside || u.Airborne != null || Spares(f, u)) continue;
                 float dx = u.X - f.X, dz = u.Z - f.Z, dy = u.Y + u.T.BodyH * .5f - f.Y, d = MathF.Sqrt(dx * dx + dz * dz + dy * dy * .5f);
-                // those it comes down on: not those its middle is near
-                if (d < reach && Touches(f, u, 1)) Hurt(u, null, blow * (1 - .5f * d / reach) * (Kinds.IsEngine(u.T) ? 1.5f : 1), f.Cause);
+                // those it comes down on: not those its middle is near; where on them it meets them, as hard as it comes
+                if (d < reach && Touches(f, u, 1))
+                    Strike(u, MassOf(f), speed / VoxelWorld.PerMetre, f.VX, f.VY, f.VZ, f.VY < -.5f * speed ? float.NaN : Math.Clamp((f.Y - f.R * .5f - u.Y) / u.T.BodyH, 0, 1), f.Cause,
+                        blow * (1 - .5f * d / reach) * (Kinds.IsEngine(u.T) ? 1.5f : 1));
             }
         // heavy and hard, it knocks a little out of what it strikes: chips of it fly off. It takes speed, not weight
         // alone: a block let down a hand's breadth breaks nothing
@@ -724,8 +730,16 @@ public sealed partial class Sim
         {
             if (u.Dead || u.Inside || u.Airborne != null || u.LastHurt >= f.TipFrom) continue;
             if (MathF.Abs(u.X - f.X) > f.R + u.T.BodyR + 2 || MathF.Abs(u.Z - f.Z) > f.R + u.T.BodyR + 2) continue;
-            if (Touches(f, u, 1)) Hurt(u, null, blow, f.Cause);
+            if (Touches(f, u, 1)) Strike(u, MassOf(f), 5, 0, -1, 0, float.NaN, f.Cause, blow);
         }
+    }
+
+    /// <summary>What a flying piece weighs, kg: its voxels, each as heavy as what it is.</summary>
+    static float MassOf(Flier f)
+    {
+        float kg = 0;
+        foreach (var v in f.Voxels) kg += Kg(v.m);
+        return kg;
     }
 
     /// <summary>Voxels broken into pieces of about so many each, about points strewn through them, each voxel going with the nearest.</summary>
@@ -762,13 +776,15 @@ public sealed partial class Sim
         if (u.Dead || f.Gentle) return;
         float hard = Math.Max(0, speed - 5.5f * VoxelWorld.PerMetre) * .5f;
         if (hard <= 0) return;
+        float ms = speed / VoxelWorld.PerMetre;
         foreach (var o in Units)
         {
             if (o == u || o.Dead || o.Inside || o.Airborne != null) continue;
             if (MathF.Abs(o.X - u.X) < u.T.BodyR + o.T.BodyR + 1 && MathF.Abs(o.Z - u.Z) < u.T.BodyR + o.T.BodyR + 1 && MathF.Abs(o.Y - u.Y) < 10)
-                Hurt(o, null, hard * .5f * Math.Min(2, u.T.BodyH / 15), f.Cause);
+                Strike(o, BodyKg(u.T), ms * .7f, f.VX, f.VY, f.VZ, float.NaN, f.Cause, hard * .5f * Math.Min(2, u.T.BodyH / 15));
         }
-        Hurt(u, null, Kinds.IsEngine(u.T) ? hard * 3 : hard, f.Cause.Length > 0 ? f.Cause : "падение");
+        // dashed down as from the height that gives the speed it came down at
+        Tumble(u, ms * ms / (2 * 9.8f), f.Cause.Length > 0 ? f.Cause : "падение", Kinds.IsEngine(u.T) ? hard * 3 : hard);
     }
 
     /// <summary>A cell to stand in under a spot (voxels), or as near under it as there is one; failing that, anywhere near.</summary>
