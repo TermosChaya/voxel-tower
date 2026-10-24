@@ -230,6 +230,29 @@ static class GiantsBench
             deep && wades && fieldG && !fieldT && wet && wader.X > dx0 + 30,
             $"deep {deep}, wades {wades}; its field there {fieldG}, a troll's {fieldT}; in the water {wet}, now {(wader.X - dx0) / VoxelWorld.PerMetre:0.0} m past the near bank");
 
+        // left to itself: a ring of stone round the citadel, and a hill giant coming at it by its field throws at the
+        // wall on its way and breaks it
+        int kx = site.KeepX, kz = site.KeepZ, ring = site.KeepR + 70;
+        for (int z = kz - ring - 8; z <= kz + ring + 8; z++)
+            for (int x = kx - ring - 8; x <= kx + ring + 8; x++)
+            {
+                float d = MathF.Sqrt((x - kx) * (x - kx) + (z - kz) * (z - kz));
+                if (d < ring || d >= ring + 8) continue;
+                int g = w.GroundTop(x, z);
+                for (int y = g + 1; y < g + 33; y++) w.Set(x, y, z, Mat.Stone);
+            }
+        Run(.5);
+        sim.ComputeFields();
+        int thrown0 = sim.GiantHurled, broke0 = sim.GiantBroke;
+        var comer = sim.Spawn(G, sim.NearestStand(kx - ring - 200, kz, 3));
+        comer.Hp = comer.MaxHp = 1e6f;
+        for (int i = 0; i < 900 && sim.GiantBroke == broke0; i++) Run(.1);
+        float left = MathF.Sqrt((comer.X - kx) * (comer.X - kx) + (comer.Z - kz) * (comer.Z - kz)) - ring;
+        check("a hill giant left to itself, coming at a ring of stone round the citadel, throws at the wall on its way and breaks it",
+            sim.GiantHurled > thrown0 && sim.GiantBroke > broke0,
+            $"thrown {sim.GiantHurled - thrown0}, broke {sim.GiantBroke - broke0} of ours, {left / VoxelWorld.PerMetre:0} m from the wall at {sim.Time:0} s");
+        Gone(comer);
+
         // saved and read back, it is a hill giant still
         var ms = new System.IO.MemoryStream();
         sim.Save(ms, mp.Seed, "giants", "");
