@@ -18,7 +18,15 @@ public partial class Main
     async void SelfTest()
     {
         int fails = 0;
-        void Check(string what, bool ok, string detail = "") { GD.Print($"[selftest] {(ok ? "ok  " : "FAIL")} {what} {detail}"); if (!ok) fails++; }
+        // each check says how long the way to it took, when it was more than a second
+        var since = Stopwatch.StartNew();
+        void Check(string what, bool ok, string detail = "")
+        {
+            double took = since.Elapsed.TotalSeconds;
+            since.Restart();
+            GD.Print($"[selftest] {(ok ? "ok  " : "FAIL")} {what} {detail}{(took >= 1 ? $" [{took:0.0} s]" : "")}");
+            if (!ok) fails++;
+        }
         async Task Frames(int n) { for (int i = 0; i < n; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         Vector2 Screen(int x, int z) => Rig.Cam.UnprojectPosition(new Vector3(World.WX(x + .5f), World.WY(World.SurfAt(x, z)), World.WZ(z + .5f)));
         Vector2 ScreenAt(float x, float y, float z) => Rig.Cam.UnprojectPosition(new Vector3(World.WX(x), World.WY(y), World.WZ(z)));
