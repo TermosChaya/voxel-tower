@@ -277,6 +277,15 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   (`BodyPlan.Mounted`, `Guard`), `Build.FaceUp`; материалы 114–121 (масти коней, сукно стёганки, глина, белое сукно).
   Таймеры родов не сохраняются. Значки узлов древа — `Icons.SigilFor` (ключ узла → файл в `icons/`), знаки ветвей
   и страниц — `BranchMark`, `PageMark`; их галерея — `SigilGallery.cs` (`--pose=sigils`).
+- `Sim.Giants.cs` — великаны и валуны: горный великан орды (`Kinds.HillGiant`, своё поле, `Mover.Wade` — вброд до
+  2 клеток, `HideShare` для стрел), `GiantTick` (раз в ~7 с: `GiantAim` — группа наших на виду, иначе `WallAhead` —
+  первая наша клетка на пути поля). Бросок по стадиям для всех великих: `HeftBoulder` (щебень `RubbleLump` или шар
+  из земли `GroundBall`, где больше камня; глубокий — с отбросом земли), `BeginHurl`, `Carried` (камень в руках —
+  летун с `Flier.Carrier`, стадии `HurlStoop/Lift/Raise/Loose/Done`), `LetFly`. Удар: `BoulderStrikes` из
+  `ComeDown` (`IsBoulder` по `Cause`): люди — `Flier.Struck`, бросок и дальше; земля — ямка и отскок
+  (`Flier.Bounces`); остальное — `Break` по энергии (`Kj`, `BreakCost`) и `Fly` (куски `ChipsCause`). У стены —
+  `GiantSmash` вместо рубки (из `Carve`), удар по людям — `Swat` (из `TroopBlow`). `OrderHurl`, `SmashInto` — для
+  постановок и проверок. Ничего из броска не сохраняется: камень в руках после загрузки падает.
 - `Sim.Possess.cs` — вселение: `Possessed`, намерения игрока `WishX/WishZ` (вектор в вокселях), `WishRun`,
   `LookYaw/LookPitch`, `WishStrike` (ЛКМ держится), `WishLay`, `WishClimb` (±1), `LayMat`; `CanPossess`, `Possess` (снимает
   с работы, цели, обезвреживания; `Why` = «в нём игрок»), `Unpossess(why)` + событие `Unpossessed` (солдату пост — где
@@ -749,6 +758,7 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   починка). `Sim.Design.cs` — слой замысла (каждый уложенный воксель), починка `Mend`. `Sim.Decor.cs` —
   факелы, стяги, бочки, ящики, мешки. `Sim.Mines.cs` — рудники и лагерь. `Sim.Wild.cs` — звери.
   `Sim.Life.cs` — досуг праздных.
+- `Bodies.HillGiant.cs` — лепка горного великана (`Bodies` теперь `partial`).
 - `Bodies.cs` — тела: `BodyPlan` на вид × облик, пять частей (`Body`, `Main`, `Off`, `LegR`, `LegL`; у зверя
   `Main/Off` — передние ноги), шарниры в вокселях. Координаты фигуры: начало между ступнями, +y вверх, +z — куда
   смотрит, правая рука (с орудием) на −x. Два разрешения:
@@ -787,6 +797,8 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
 
 ## Игра на экране (`src/Game`)
 
+- `UnitView.Hurl.cs` — поза броска великана по времени от его начала (`HurlPose`): присел к камню, поднял к животу, над
+  головой, бросок с шагом, обратно.
 - `Main.cs` — запуск: флаги командной строки, генерация, сим, узлы, стартовые пешки, скриншоты.
 - `Main.SelfTest.cs` — самотест (`--selftest`); `Main.Poses.cs`, `Main.Poses.Figures.cs` — постановки для снимков
   (`--demo`, `--pose=…`: `Demo`, `Siege`, `Wounded`, `Flood`, `Grove`…); `Main.TutorialCheck.cs`, `Main.Trailer.cs` —

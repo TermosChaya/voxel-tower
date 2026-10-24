@@ -46,7 +46,7 @@ public sealed partial class Sim
         Knowledge = Math.Max(Knowledge, 50);
     }
 
-    /// <summary>A band of the horde called up at a place of the valley: light (goblins and orcs) or heavy (trolls and a shaman).</summary>
+    /// <summary>A band of the horde called up at a place of the valley: light (goblins and orcs) or heavy (trolls, a shaman and a hill giant).</summary>
     public Warband Summon(int x, int z, bool heavy)
     {
         // room to stand for the tallest of the band
@@ -54,7 +54,7 @@ public sealed partial class Sim
         if (at < 0) return null;
         var b = new Warband { Id = _nextBand++, State = BandState.Coming, Entry = at, Name = heavy ? "Тяжёлая ватага" : "Ватага" };
         b.Roster.AddRange(heavy
-            ? new[] { Kinds.Troll, Kinds.Orc, Kinds.Orc, Kinds.Troll, Kinds.Orc, Kinds.Shaman, Kinds.Alchemist }
+            ? new[] { Kinds.Troll, Kinds.Orc, Kinds.Orc, Kinds.Troll, Kinds.Orc, Kinds.Shaman, Kinds.Alchemist, Kinds.HillGiant }
             : new[] { Kinds.Orc, Kinds.Goblin, Kinds.Goblin, Kinds.Orc, Kinds.Goblin, Kinds.Goblin, Kinds.Orc });
         Bands.Add(b);
         foreach (var t in b.Roster) SpawnRaider(t, b);

@@ -16,6 +16,20 @@ public sealed class Mover
     public float Build;
     /// <summary>Whether it goes up and down ladders and hangs on them: a horse or a hound does neither.</summary>
     public bool Ladders = true;
+    /// <summary>Cells of deep water it walks through on the bottom with its head out (a hill giant two); 0 for none.</summary>
+    public int Wade;
+
+    /// <summary>Whether it can stand in a cell of deep water: on the bottom, the water no deeper than it wades.</summary>
+    public bool Wades(NavGrid g, int i, int y, int k)
+    {
+        if (Wade <= 0 || y < 1 || !g.Ground(i, y - 1, k)) return false;
+        for (int d = 0; d <= Wade; d++)
+        {
+            if (!g.In(i, y + d, k)) return true;
+            if (!g.Deep(g.Id(i, y + d, k))) return true;
+        }
+        return false;
+    }
 
     /// <summary>Seconds to hack a blocked cell open, or infinity.</summary>
     public float CarveTime(NavGrid g, int c)
@@ -263,7 +277,7 @@ public sealed class FlowField
     {
         if (!g.In(i, y, k) || y < 1) return 0;
         int c = g.Id(i, y, k);
-        if (g.Water[c] >= NavGrid.DeepT) return 0;
+        if (g.Water[c] >= NavGrid.DeepT && !M.Wades(g, i, y, k)) return 0;
         if (g.Ground(i, y - 1, k)) return Ground;
         for (int d = 0; d < M.Height; d++) if (!g.Open(i, y + d, k)) return 0;
         int kind = g.Ladder[c] != 0 ? OnLadder : 0;

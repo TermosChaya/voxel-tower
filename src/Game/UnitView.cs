@@ -575,9 +575,11 @@ public partial class UnitView : Node3D
                     }
                     break;
             }
+            // a great one at a throw: stooping to the stone, up with it, over the head and away (UnitView.Hurl.cs)
+            bool hurl = HurlPose(u, f, ref main, ref off, ref lean, ref bob, ref elbowR, ref elbowL, ref kneeR, ref kneeL, ref legR, ref legL);
             // the feet on the ground under them, as the stride sets them down (UnitView.Gait.cs): walking, and standing
             // where the ground is not level; not at work, in a fight, sitting or bound
-            if (u.State is not (UnitState.Work or UnitState.Carve or UnitState.Siege or UnitState.Fight) && !u.Bound
+            if (!hurl && u.State is not (UnitState.Work or UnitState.Carve or UnitState.Siege or UnitState.Fight) && !u.Bound
                 && u.Pastime is not (Pastime.Sit or Pastime.Bound))
                 bob = Footing(u, f, look, bob, ref legR, ref legL, ref kneeR, ref kneeL);
         }

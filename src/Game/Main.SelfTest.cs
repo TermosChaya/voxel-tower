@@ -628,7 +628,7 @@ public partial class Main
         bool restored = Atmos.Sun.ShadowEnabled && vpG.Scaling3DScale == 1 && vpG.Msaa3D == Viewport.Msaa.Msaa2X && Atmos.Env.GlowEnabled;
         Check("the picture can be lowered for a weak machine and put back", lowered && restored, $"lowered {lowered}, back {restored}");
 
-        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 32 && Sound.Heard.Count >= 4,
+        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 33 && Sound.Heard.Count >= 4,
             $"{Sound.Clips} sounds, {Sound.Played} played: {string.Join(", ", Sound.Heard)}");
 
         var before = Rig.Target;
@@ -885,6 +885,7 @@ public partial class Main
             hiddenAtFirst && refused && stays && letOut,
             $"hidden at first {hiddenAtFirst}, key refused {refused}, stays {stays}, let out {letOut}");
         await AcidSelfTest((what, ok, detail) => Check(what, ok, detail));
+        await SelfTestGiants(Check);
         // the report for the author: one file with the system, the hangs, the last events and the logs
         string report = Diag.Report(this, ProjectSettings.GlobalizePath("user://logs"));
         string body = System.IO.File.Exists(report) ? System.IO.File.ReadAllText(report) : "";
@@ -894,5 +895,38 @@ public partial class Main
             $"{body.Length} characters in {System.IO.Path.GetFileName(report)}");
         GD.Print($"[selftest] {(fails == 0 ? "all passed" : fails + " failed")}");
         if (_shot == null) GetTree().Quit(fails == 0 ? 0 : 1);
+    }
+
+    /// <summary>
+    /// The hill giant on the screen: told to throw west of the citadel, it stoops to the stone (its body bent over), the
+    /// panel says it is tearing a boulder out, the stone is drawn in the air as it goes, and the heave is heard; the
+    /// horde tab and the dusk card say what it is.
+    /// </summary>
+    async Task SelfTestGiants(Action<string, bool, string> check)
+    {
+        async Task Frames(int n) { for (int i = 0; i < n; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+        int gx = Site.KeepX - Site.KeepR - 220, gz = Site.KeepZ + 30;
+        var g = Sim.Spawn(Kinds.HillGiant, Sim.NearestStand(gx, gz, 3));
+        g.Guard = true; g.Home = g.Cell; g.Hp = g.MaxHp = 1e5f; g.NextHurl = 1e9;
+        Rig.SetAt(World.WX(g.X), World.WY(g.Y + 14), World.WZ(g.Z), -.7f, .45f, 3f);
+        await Frames(6);
+        float upright = Units.TryBody(g.Id, out var b0) ? b0.Basis.Y.Normalized().Y : 0;
+        float tx = g.X + 150, tz = g.Z;
+        bool ordered = Sim.OrderHurl(g, tx, World.SurfAt((int)tx, (int)tz) + 4, tz);
+        Advance(.35);
+        await Frames(3);
+        float stooped = Units.TryBody(g.Id, out var b1) ? b1.Basis.Y.Normalized().Y : 1;
+        string doing = Retinue.Doing(g, Sim);
+        int heard = Sound.Played;
+        for (int i = 0; i < 40 && g.Hefted != null; i++) { Advance(.05); await Frames(1); }
+        await Frames(3);
+        bool heaved = Sound.Played > heard && Sound.Heard.Contains("swish");
+        bool flying = Sim.Fliers.Exists(f => f.Cause == Sim.HurledCause && f.Carrier == null);
+        check("a hill giant told to throw stoops to tear the stone out, the panel says so, and the stone goes off with the sound of it; the dusk card knows it",
+            ordered && upright > .95f && stooped < .9f && doing == "выворачивает валун" && heaved && flying && Sim.GiantHurled > 0 && DuskCard.Against.ContainsKey("hillgiant"),
+            $"upright {upright:0.00}, stooping {stooped:0.00}; «{doing}»; heard {heaved}, in the air {flying}");
+        Advance(6);
+        g.Dead = true; g.DiedAt = -999;
+        await Frames(2);
     }
 }

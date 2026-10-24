@@ -316,7 +316,7 @@ public sealed partial class Sim
         // hounds and riders run down a raider that flees, unless one is at them already
         if (Hunter(u.T) && (foe == null || !InReach(u, foe)) && Quarry(u) is { } quarry) foe = quarry;
         // a giant or a tame troll hurls a stone at one out of its reach
-        if ((foe == null || !InReach(u, foe)) && HurlBoulder(u)) { ReleaseSite(u); return true; }
+        if ((Hurling(u) || foe == null || !InReach(u, foe)) && HurlBoulder(u)) { ReleaseSite(u); return true; }
         if (foe == null) return false;
         bool engaged = u.State == UnitState.Fight && u.Target == foe && u.Path == null;
         u.State = UnitState.Fight;
@@ -487,7 +487,7 @@ public sealed partial class Sim
                 if (a.From != null) t.HurtBy = a.From;
                 // a shaft goes in along a narrow channel; a stone strikes a little round, and does not stay in
                 float share = Kinds.IsEngine(t.T) ? EngineShare(true) : Wound(t, cut, depth, cut == Cut.Arrow ? 0 : reach, tx - dx / dl * 30, hy - dy / dl * 30, tz - dz / dl * 30, dx, dy, dz);
-                Hurt(t, a.From, a.Damage * share, CauseOf(a.Kind));
+                Hurt(t, a.From, a.Damage * share * HideShare(t, a.Kind), CauseOf(a.Kind));
                 if (a.Kind == Shot.Stone) StoneStrikes(a, t);
                 if (a.Kind == Shot.Bolt && !Kinds.IsEngine(t.T)) Pierce(a, t);
             }

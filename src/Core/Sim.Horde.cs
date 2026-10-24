@@ -119,6 +119,8 @@ public sealed partial class Sim
         if (!u.Routed && !u.Leader && !u.Guard && u.Hp < u.MaxHp * .25f) u.Routed = true;
         // or hurt past bearing: it breaks (a leader holds on longer)
         if (!u.Routed && !u.Guard && u.Champion == 0 && u.Pain >= (u.Leader ? LeaderBreak : BreakPain) * FearOfUs) u.Routed = true;
+        // a hill giant tears up a boulder and hurls it, or is at it (Sim.Giants.cs)
+        if (u.T == Kinds.HillGiant && !u.Routed && GiantTick(u, dt)) return;
         // the horde's envoy comes to bargain, and fights nobody
         if (u.Envoy && EnvoyTick(u, dt)) return;
         // the horde's engines go about their own work, and never run
@@ -295,6 +297,8 @@ public sealed partial class Sim
         // with a torch, what burns is set alight first; a miner under a wall keeps at it till all the ground is out
         if (u.Torch && Kindle(u, dt)) return;
         if (Sapping(u, dt)) return;
+        // a hill giant smashes through a heap at a blow
+        if (u.T == Kinds.HillGiant) { GiantSmash(u); return; }
         u.State = UnitState.Carve;
         u.CarveEffort += dt;
         var rate = u.T.Move.Carve;

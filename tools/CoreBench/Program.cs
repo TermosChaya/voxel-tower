@@ -5840,7 +5840,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--sandbox")
     var called = simS.Summon(siteS.KeepX - 60, siteS.KeepZ, heavy: true);
     RunS(40);
     Check("…a band called up where it is pointed at comes whole and goes at the citadel, which takes no harm",
-        called != null && called.Members.Count == 7 && called.Members.Exists(u => u.T == Kinds.Troll) && simS.KeepHp >= keep0 && !simS.Over,
+        called != null && called.Members.Count == 8 && called.Members.Exists(u => u.T == Kinds.Troll) && called.Members.Exists(u => u.T == Kinds.HillGiant) && simS.KeepHp >= keep0 && !simS.Over,
         $"band {called?.Name} of {called?.Members.Count}, state {called?.State}; citadel {keep0:0} → {simS.KeepHp:0}");
 
     // the horde on call: the day runs on to noon and stands there; called, the horde comes knowing all; and a save
@@ -6057,6 +6057,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--house")
 }
 
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--acid") AcidBench.Run((what, ok, detail) => Check(what, ok, detail));
+// the hill giant and the great ones' boulders (Giants.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--giants") GiantsBench.Run(Check);
 
 if (args.Length > 0 && args[0] == "--stress")
 {

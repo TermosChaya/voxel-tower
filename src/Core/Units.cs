@@ -197,6 +197,19 @@ public static class Kinds
         Move = new Mover { Height = 3, Climb = 2, Drop = 5, Speed = 1.6f, Carve = new float[] { 60, 140, 90, 14 }, Build = .15f },
         Hp = 420, Damage = 30, AttackTime = 1.6f, KeepDamage = 9, Bounty = 18, BodyH = 24, BodyR = 3.5f, Reach = 14, Tool = "club",
     };
+    /// <summary>
+    /// A hill giant come down with the horde: three and a half metres of it in hides, bald and heavy-browed, a tree for a
+    /// club. It tears boulders out of the ground and hurls them at our walls and at knots of our people, smashes through
+    /// what it comes up against a heap at a blow, swats whoever stands before it into the air, and wades a ditch of water
+    /// up to its chest. Arrows hardly go through its hide.
+    /// </summary>
+    public static readonly UnitType HillGiant = new()
+    {
+        Key = "hillgiant", Name = "Горный великан", Team = Team.Horde,
+        Move = new Mover { Height = 3, Climb = 2, Drop = 5, Speed = 1.7f, Carve = new float[] { 160, 220, 110, 16 }, Build = 0, Wade = 2 },
+        Hp = 950, Damage = 44, AttackTime = 2.1f, KeepDamage = 16, Bounty = 60, BodyH = 28, BodyR = 4, Reach = 19, Tool = "club",
+        Range = 30 * VoxelWorld.PerMetre,
+    };
     /// <summary>The horde's own worker: raises ladders, lays bridges, fills ditches; poor in a fight.</summary>
     public static readonly UnitType Sapper = new()
     {
@@ -274,7 +287,7 @@ public static class Kinds
         TameTroll, Giant,
     };
     /// <summary>The horde's kinds that find their way by the field (the catapult goes its own way to where it throws from).</summary>
-    public static readonly UnitType[] HordeKinds = { Goblin, Orc, Miner, Troll, Sapper, Thief, Ram };
+    public static readonly UnitType[] HordeKinds = { Goblin, Orc, Miner, Troll, Sapper, Thief, Ram, HillGiant };
     /// <summary>A white stag, seen in the valley once in a long while: the swiftest thing in it, and worth a deal of gold to whoever runs it down.</summary>
     public static readonly UnitType WhiteStag = new()
     {
@@ -597,6 +610,14 @@ public sealed class Unit
     public double GallopUntil = -1;
     /// <summary>A giant or a tame troll: when it may next tear a stone out of the ground and hurl it.</summary>
     public double NextHurl;
+    /// <summary>
+    /// A great one at a throw (Sim.Giants.cs): the stone in its hands, or null once it is let go; when the throw began;
+    /// where the stone was torn from; where it is aimed, and at whom (null for a wall).
+    /// </summary>
+    public Flier Hefted;
+    public double HurlFrom = -99;
+    public float HurlSX, HurlSY, HurlSZ, HurlTX, HurlTY, HurlTZ;
+    public Unit HurlAt;
 
     public float Alive => Dead ? 0 : Hp / MaxHp;
 

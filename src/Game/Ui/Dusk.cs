@@ -18,7 +18,7 @@ public partial class DuskCard : Control
     int _shut = -1;
 
     /// <summary>What each kind of the horde is, and what is good against it, for the first night it comes.</summary>
-    static readonly Dictionary<string, string> Against = new()
+    public static readonly Dictionary<string, string> Against = new()
     {
         ["goblin"] = "быстрые и мелкие, пролезают там, где орк застрянет",
         ["orc"] = "рубит дерево намного быстрее камня, стройте из камня",
@@ -34,6 +34,7 @@ public partial class DuskCard : Control
         ["tower"] = "подъезжает к стене, и по ней лезут наверх; её можно сжечь огненными стрелами",
         ["necro"] = "поднимает павших налётчиков",
         ["alchemist"] = "бросает склянки с кислотой, она разъедает стены; стреляйте в него первым",
+        ["hillgiant"] = "мечет валуны с 30 м и проламывает стены, ров переходит вброд. Стрелы его почти не ранят: бейте копьями и огнём",
     };
 
     public void Init(Main m)

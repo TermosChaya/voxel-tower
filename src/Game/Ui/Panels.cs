@@ -109,6 +109,8 @@ public static class Retinue
         if (u.Fetching != null) return "идёт за пленным";
         if (u.Envoy) return sim.Offer?.Envoy == u && sim.Offer.Kind != DealKind.None ? "посол: ждёт ответа" : u.State == UnitState.Flee ? "посол: уходит" : "посол: идёт к цитадели";
         if (u.T == Kinds.Catapult) return u.State == UnitState.Siege ? "мечет камни по стенам" : "его катят на позицию";
+        if (u.Hefted != null) return sim.Time - u.HurlFrom < Sim.HurlLift ? "выворачивает валун" : "замахивается валуном";
+        if (u.T == Kinds.HillGiant && u.State == UnitState.Carve) return "крушит стену дубиной";
         if (u.T == Kinds.Alchemist && u.State == UnitState.Siege)
             return (u.Target != null ? "бросает кислоту в наших" : "бросает кислоту в стену") + $" · склянок {Math.Max(0, Sim.FlasksCarried - u.Thrown)}";
         if (u.T == Kinds.Ram) return u.State switch { UnitState.Carve => "проламывает стену", UnitState.Siege => "бьёт в цитадель", _ => "катится к стенам" };
@@ -298,6 +300,9 @@ public partial class HordeInfo : VBoxContainer
                         Ornament.Serif, 12, Ornament.BronzeLight, wrap: true));
                 var what = Hud.Text(Kinds(b), Ornament.Serif, 12, Ornament.Parchment, wrap: true);
                 box.AddChild(what);
+                // a hill giant with it: what it does, and what is good against it
+                bool giant = b.State == BandState.Coming ? b.Roster.Contains(VoxelTower.Core.Kinds.HillGiant) : b.Members.Exists(u => !u.Dead && u.T == VoxelTower.Core.Kinds.HillGiant);
+                if (giant) box.AddChild(Hud.Text("Горный великан " + DuskCard.Against["hillgiant"] + ".", Ornament.SerifItalic, 12, Ornament.EmberGlow, wrap: true));
                 _bands.AddChild(box);
             }
         }

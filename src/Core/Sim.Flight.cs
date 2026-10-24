@@ -62,6 +62,10 @@ public sealed class Flier
     public bool Marked;
     /// <summary>Not broken, only rolled away, as a felled trunk: it lies as what it is, not in pieces.</summary>
     public bool Intact;
+    /// <summary>A boulder in a great one's hands, being thrown (Sim.Giants.cs); those a boulder has struck on its way; how often it has bounced.</summary>
+    public Unit Carrier;
+    public List<Unit> Struck;
+    public int Bounces;
 }
 
 /// <summary>
@@ -446,6 +450,7 @@ public sealed partial class Sim
             var f = Fliers[i];
             if (f.Held && (f.Unit is { Dead: true } || f.Unit is { Inside: true })) f.Held = false;
             if (f.Held) { Hold(f, dt); continue; }
+            if (f.Carrier != null) { Carried(f, dt); continue; }
             if (f.Rolling) { if (Roll(f, dt)) Fliers.Remove(f); continue; }
             if (f.Tipping) { TipOver(f); continue; }
             f.Turn += f.Spin * dt;
@@ -480,6 +485,8 @@ public sealed partial class Sim
     {
         float speed = MathF.Sqrt(f.VX * f.VX + f.VY * f.VY + f.VZ * f.VZ);
         if (f.Unit != null) { Alight(f, speed); return true; }
+        // a great one's boulder: through whoever it meets, breaking what its force breaks (Sim.Giants.cs)
+        if (IsBoulder(f) && BoulderStrikes(f, speed)) return false;
         if (f.Star) StarStrikes(f);
         int broke = f.Smash > 0 ? StoneLands(f, speed) : 0;
         int ix = Math.Clamp((int)f.X, 2, World.SX - 3), iz = Math.Clamp((int)f.Z, 2, World.SZ - 3), iy = Math.Clamp((int)f.Y, 2, World.SY - 3);

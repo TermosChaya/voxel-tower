@@ -158,6 +158,8 @@ public sealed partial class Sim
         // mantlets before the bands from the fifth, a siege tower from the sixth and another from the tenth
         for (int i = 0; i < (n >= 9 ? 2 : n >= 5 ? 1 : 0); i++) list.Add(Kinds.Mantlet);
         for (int i = 0; i < (n >= 10 ? 2 : n >= 6 ? 1 : 0); i++) list.Add(Kinds.SiegeTower);
+        // a hill giant from the ninth, one a night
+        if (n >= 9) list.Add(Kinds.HillGiant);
         return list;
     }
 

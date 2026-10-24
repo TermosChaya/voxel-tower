@@ -57,6 +57,7 @@ public partial class Main
         if (_pose == "powder") { Kegs(); return; }
         if (_pose == "charge") { Sapped(); return; }
         if (_pose == "stones") { Stones(); return; }
+        if (_pose == "giants") { HillGiants(); return; }
         if (_pose == "topple") { Topple(); return; }
         if (_pose == "roll") { RollDown(); return; }
         if (_pose == "crush") { CrushDeck(); return; }
@@ -1097,6 +1098,85 @@ public partial class Main
         Paused = true;
         if (_look == 1) Rig.SetAt(w.WX(wx - 20), w.WY(top - 16), w.WZ(kz), -.75f, .45f, 2.6f);
         else Rig.SetAt(w.WX(stone?.X ?? wx - 120), w.WY(stone?.Y ?? top), w.WZ(stone?.Z ?? kz), -.75f, .4f, 3.2f);
+        Hud.Refresh();
+    }
+
+    /// <summary>
+    /// A hill giant before a stone wall of ours west of the citadel, archers on it, the game stopped: --look=0 stooping to
+    /// tear a boulder out of the ground (--at=seconds into the throw, .6 by itself), 1 the boulder high on its arc, 2 the
+    /// moment it strikes the wall, pieces flying, 3 after five of them, the wall broken through; 4 another one up against
+    /// the wall smashing it with its club, swordsmen of ours by it thrown into the air.
+    /// </summary>
+    void HillGiants()
+    {
+        var sim = Sim; var w = World;
+        Sorcerous();
+        sim.WantTrails = false;
+        int wx = Site.KeepX - Site.KeepR - 60, kz = Site.KeepZ, top = WallWest(-60, 32, 60);
+        // the field before the wall cleared of trees, from the ground up, and behind it
+        for (int z = kz - 90; z < kz + 150; z++)
+            for (int x = wx - 260; x < wx + 40; x++)
+                for (int y = w.GroundTop(x, z); y < w.SY; y++)
+                    if (w.Get(x, y, z) is var m && (Mat.IsTrunk(m) || Mat.IsLeafy(m))) w.Set(x, y, z, Mat.Air);
+        foreach (int dz in new[] { -24, 0, 24 })
+        {
+            int c = sim.NearestStand(wx + 2, kz + dz, 4);
+            sim.Command(new[] { sim.Spawn(Kinds.Archer, c) }, c);
+        }
+        int face = wx - 8; while (face < wx + 8 && !Mat.IsMasonry(w.Get(face, top - 18, kz))) face++;
+        float aimY = top - 18;
+        if (_look == 4)
+        {
+            var smasher = Camp(Kinds.HillGiant, face - 10, kz + 6);
+            smasher.Guard = false;
+            sim.SmashInto(smasher, sim.Nav.CellOf(face + 2, (int)smasher.Y + 1, (int)smasher.Z));
+            Advance(_poseSeconds != 14 ? _poseSeconds : 5);
+            // and two of ours come at it: the first blow throws them
+            foreach (int dz in new[] { -6, 20 })
+            {
+                var s = sim.Spawn(Kinds.Swordsman, sim.NearestStand(face - 14, kz + dz, 2));
+                s.Hp = s.MaxHp = 4000;
+                sim.Command(new[] { s }, s.Cell);
+            }
+            for (int t = 0; t < 80 && !sim.Units.Exists(u => u.T == Kinds.Swordsman && u.Airborne != null); t++) Advance(.05);
+            Advance(.15);
+            Paused = true;
+            Rig.SetAt(w.WX(face - 4), w.WY(smasher.Y + 14), w.WZ(kz + 6), -.45f, .42f, 3.2f);
+            Hud.Refresh();
+            return;
+        }
+        var giant = Camp(Kinds.HillGiant, wx - 150, kz - 4);
+        giant.Hp = giant.MaxHp = 1e5f;
+        giant.NextHurl = 1e9;
+        Advance(.3);
+        if (_look == 3)
+        {
+            for (int n = 0; n < 5; n++)
+            {
+                for (int t = 0; t < 80 && sim.Hurling(giant); t++) Advance(.1);
+                sim.OrderHurl(giant, face, aimY, kz);
+            }
+            Advance(14);
+            Paused = true;
+            Rig.SetAt(w.WX(face - 6), w.WY(top - 16), w.WZ(kz), -1.25f, .32f, 2.6f);
+            Hud.Refresh();
+            return;
+        }
+        sim.OrderHurl(giant, face, aimY, kz);
+        var stone = giant.Hefted;
+
+        if (_look == 1) for (int t = 0; t < 120 && stone != null && (stone.Carrier != null || stone.VY > 0); t++) Advance(.05);
+        else if (_look == 2)
+        {
+            int broke = sim.GiantBroke;
+            for (int t = 0; t < 400 && sim.GiantBroke == broke; t++) Advance(.02);
+            Advance(.08);
+        }
+        else Advance(_poseSeconds != 14 ? _poseSeconds : .6);
+        Paused = true;
+        if (_look == 2) Rig.SetAt(w.WX(face - 10), w.WY(top - 14), w.WZ(kz), -.85f, .4f, 3f);
+        else if (_look == 1) Rig.SetAt(w.WX(stone?.X ?? giant.X), w.WY(stone?.Y ?? top), w.WZ(stone?.Z ?? kz), -.75f, .38f, 2.6f);
+        else Rig.SetAt(w.WX(giant.X + 6), w.WY(giant.Y + 14), w.WZ(giant.Z), 2.1f, .3f, 3.6f);
         Hud.Refresh();
     }
 

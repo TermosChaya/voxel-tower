@@ -130,6 +130,8 @@ public sealed partial class Sim
     /// </summary>
     void TroopBlow(Unit a, Unit b, bool charge)
     {
+        // (the horde's hill giant swats whoever it strikes into the air: Sim.Giants.cs)
+        if (a.T == Kinds.HillGiant) { Swat(a, b); return; }
         if (a.Team != Team.Player || b.Team == Team.Player || b.Inside || Kinds.IsEngine(b.T)) return;
         float out_, up;
         string cause;
@@ -166,6 +168,8 @@ public sealed partial class Sim
     /// </summary>
     bool HurlBoulder(Unit u)
     {
+        // at a throw already: it stands to it
+        if (Hurling(u)) { HurlTick(u); return true; }
         if (!Great(u.T) || !Knows("boulders") || Time < u.NextHurl || !HasMainHand(u)) return false;
         Unit at = null;
         float bd = 24 * VoxelWorld.PerMetre;
@@ -178,52 +182,16 @@ public sealed partial class Sim
         }
         if (at == null) { u.NextHurl = Time + 1; return false; }
         u.NextHurl = Time + HurlEvery * (.9f + .2f * (float)Rng.NextDouble());
-        u.State = UnitState.Fight;
-        u.Path = null;
         u.Facing = MathF.Atan2(at.Z - u.Z, at.X - u.X);
-        u.Swing = 1;
-        u.Cooldown = u.T.AttackTime;
-        // the stone out of the ground before its feet, if the ground there is the valley's own
-        float fx = MathF.Cos(u.Facing), fz = MathF.Sin(u.Facing);
-        int sx = (int)(u.X + fx * (u.T.BodyR + 3)), sz = (int)(u.Z + fz * (u.T.BodyR + 3)), sy = (int)MathF.Floor(u.Y) - 2;
-        byte stone = Mat.Rock;
-        var hole = new List<(int x, int y, int z)>();
-        int ri = (int)MathF.Ceiling(BoulderR);
-        // not from under anything of ours: a wall over the hole would come down
-        bool ours = false;
-        for (int y = sy - 3; y <= sy + 8 && !ours; y++)
-            for (int z = sz - 4; z <= sz + 4 && !ours; z++)
-                for (int x = sx - 4; x <= sx + 4 && !ours; x++)
-                    if (World.InBounds(x, y, z) && Mat.IsPlayer[World.Get(x, y, z)]) ours = true;
-        for (int dy = -ri; dy <= ri && !ours; dy++)
-            for (int dz = -ri; dz <= ri; dz++)
-                for (int dx = -ri; dx <= ri; dx++)
-                {
-                    int x = sx + dx, y = sy + dy, z = sz + dz;
-                    if (dx * dx + dy * dy + dz * dz > BoulderR * BoulderR || !World.InBounds(x, y, z) || y < 4) continue;
-                    byte m = World.Get(x, y, z);
-                    if (m == Mat.Air || m == Mat.Water || Mat.IsPlayer[m] || !Mat.IsNatural[m] || !Breakable(m)) continue;
-                    hole.Add((x, y, z));
-                }
-        if (hole.Count >= 20)
-        {
-            foreach (var (x, y, z) in hole)
-            {
-                World.Set(x, y, z, Mat.Air);
-                if (Orders.At(x, y, z) != 0) Orders.Clear(x, y, z);
-            }
-            Hacked?.Invoke(sx, sy, sz, Mat.Rock);
-        }
-        // and away: from over its head, so long in the air that it comes down where the raider stands
-        float x0 = u.X + fx * 2, y0 = u.Y + u.T.BodyH + 2, z0 = u.Z + fz * 2;
-        float d0 = MathF.Sqrt((at.X - x0) * (at.X - x0) + (at.Z - z0) * (at.Z - z0)), t = .8f + d0 / (28 * VoxelWorld.PerMetre);
-        float tx = at.X + (float)(Rng.NextDouble() - .5) * 8, tz = at.Z + (float)(Rng.NextDouble() - .5) * 8, ty = at.Y + BoulderR;
-        var f = Hurl(Ball(BoulderR, stone), x0, y0, z0, (tx - x0) / t, (ty - y0 + .5f * Gravity * t * t) / t, (tz - z0) / t, BoulderCause);
-        if (f != null) { f.By = u; Hurled++; }
+        // the stone out of the ground before its feet, if the ground there is the valley's own (or a stone taken up),
+        // brought up over its head and away, so long in the air that it comes down where the raider stands
+        var stone = HeftBoulder(u, BoulderR, BoulderCause);
+        if (stone == null) return false;
+        BeginHurl(u, stone, at.X, at.Y + BoulderR, at.Z, at);
         return true;
     }
 
-    /// <summary>Stones the great ones have hurled since the start.</summary>
+    /// <summary>Stones the great ones of ours have hurled since the start.</summary>
     public int Hurled;
 
     // ------------------------------------------------------------ what the shots do where they land

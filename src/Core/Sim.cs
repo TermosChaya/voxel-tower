@@ -248,7 +248,7 @@ public sealed partial class Sim
     {
         int h = u.T.Move.Height, i = Nav.I(u.Cell), k = Nav.K(u.Cell), y = Nav.Y(u.Cell);
         if (u.Team == Team.Horde && Nav.Fill[u.Cell] >= NavGrid.SolidT) return;   // standing in its own tunnel face
-        if (Nav.Fill[u.Cell] >= NavGrid.SolidT || Nav.Deep(u.Cell))
+        if (Nav.Fill[u.Cell] >= NavGrid.SolidT || Nav.Deep(u.Cell) && !u.T.Move.Wades(Nav, i, y, k))
         {
             // walled in, or the water rose over it: out to the nearest free footing
             int c = NearestStand((int)u.X, (int)u.Z, h);
@@ -327,7 +327,7 @@ public sealed partial class Sim
     bool Passable(Unit u, int c)
     {
         int i = Nav.I(c), y = Nav.Y(c), k = Nav.K(c);
-        if (Nav.Deep(c)) return false;
+        if (Nav.Deep(c) && !u.T.Move.Wades(Nav, i, y, k)) return false;
         return u.Team == Team.Horde ? Nav.Ground(i, y - 1, k) || Nav.Ladder[c] != 0 : Nav.CanBe(i, y, k, u.T.Move.Height, ladders: u.T.Move.Ladders);
     }
 

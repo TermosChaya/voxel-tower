@@ -10,7 +10,7 @@ namespace VoxelTower.Game;
 /// from noise, strings and bells — a pick on rock, an axe in timber, a spade in earth, a stone set down, a bowstring, an
 /// arrow going home, a blade swung through the air, blades meeting, a blade biting flesh, a club, a death cry, the
 /// horn, stone coming down, thunder, a spell, the gong of a
-/// rite, a shaman's croon, a blast, stone crashing down, the black wind — and the fire, the rain and the hum of the hand
+/// rite, a shaman's croon, a blast, stone crashing down, the black wind, a great one's footfall — and the fire, the rain and the hum of the hand
 /// of telekinesis as loops. Each is played where it happens, as loud as that is near the middle of the view, the same
 /// one no more often than it would be heard apart, a score of them at most. The frame of the game has its own, heard
 /// wherever the view is: a wooden tick for a button, a soft knock of chalk for work marked, a low muffled pair of notes
@@ -23,6 +23,7 @@ public partial class Sound : Node
     readonly List<AudioStreamPlayer> _pool = new();
     readonly Dictionary<string, double> _last = new();
     readonly Dictionary<int, float> _swing = new();
+    readonly Dictionary<int, int> _steps = new();
     readonly HashSet<int> _dead = new();
     readonly HashSet<Arrow> _landed = new();
     AudioStreamPlayer _fire, _rain, _hum;
@@ -116,6 +117,8 @@ public partial class Sound : Node
         // a piece of the world coming down: the heavier, the louder, and a great one deeper
         sim.Landed += (x, y, z, n, speed) => { if (n >= 20) Play("crash", x, y, z, .07, Math.Clamp(.25f + n / 700f, .25f, 1.1f), pitch: n >= 600 ? .72f : 0); };
         sim.Struck += (x, y, z) => Play("thunder", x, y, z, .1, 1.3f, far: true);
+        // a boulder heaved away: the air it goes through, low
+        sim.Heaved += (x, y, z, n) => Play("swish", x, y, z, .1, 1.2f, pitch: .42f);
         // and far off, low and long, after the sheet lightning of a night of rain
         m.Atmos.Thunder += loud => Everywhere("thunder", loud, .62f);
         sim.RiteDone += (x, y, z) => Play("gong", x, y, z, .5, 1, far: true);
@@ -240,6 +243,13 @@ public partial class Sound : Node
                 if (_dead.Add(u.Id) && !Kinds.IsEngine(u.T) && sim.Time - u.DiedAt < 1) Play(u.Team == Team.Wild ? "blunt" : "death", u.X, u.Y, u.Z, .15, .9f);
                 continue;
             }
+            // a great one's feet: heard at every step, the hill giant's the loudest
+            if (u.T.BodyH >= 24 && u.Airborne == null && !u.Inside && !u.T.Mounted)
+            {
+                int step = (int)(u.Stride / 8.5f);
+                if (_steps.TryGetValue(u.Id, out int was0) && was0 != step) Play("stomp", u.X, u.Y, u.Z, .04, u.T == Kinds.HillGiant ? .95f : .5f, pitch: u.T == Kinds.HillGiant ? .8f : 1);
+                _steps[u.Id] = step;
+            }
             float was = _swing.GetValueOrDefault(u.Id);
             _swing[u.Id] = u.Swing;
             if (u.Swing < .99f || was > .6f || u.Inside) continue;
@@ -255,6 +265,7 @@ public partial class Sound : Node
             if (a.Done && a.Hits && a.Kind is not (Shot.Pot or Shot.FirePot) && _landed.Add(a) && a.Target != null) Play(a.Kind == Shot.Stone ? "blunt" : "arrow", a.X1, a.Y1, a.Z1, .06, .7f);
         if (_landed.Count > 400) _landed.RemoveWhere(a => !sim.Arrows.Contains(a));
         if (_dead.Count > 2000) _dead.Clear();
+        if (_steps.Count > 2000) _steps.Clear();
         // the fire, by how much of it burns near the middle of the view; the rain, while it rains
         int burning = 0, look = 0;
         foreach (int p in sim.Burning.Keys)
@@ -282,6 +293,7 @@ public partial class Sound : Node
         Add("blade", Blades());
         Add("hew", Hew());
         Add("blunt", Thud());
+        Add("stomp", Stomp());
         Add("death", Cry());
         Add("horn", Horn());
         Add("rumble", Rumble(1.4f, .9f));
@@ -503,6 +515,21 @@ public partial class Sound : Node
             s[i] = MathF.Sin(MathF.Tau * (110 - 50 * t) * t) * Decay(i, .05f) + lo.Step(Noise()) * Decay(i, .03f) * 1.5f;
         }
         Normalise(s, .7f);
+        return s;
+    }
+
+    /// <summary>A great one's footfall: the ground thumped low, and a little grit after it.</summary>
+    float[] Stomp()
+    {
+        var s = Buf(.42f);
+        var lo = new Low(180); var grit = new Low(1400);
+        for (int i = 0; i < s.Length; i++)
+        {
+            float t = i / (float)Rate;
+            s[i] = MathF.Sin(MathF.Tau * (58 - 26 * t) * t) * Decay(i, .11f) * Math.Min(1, t / .006f) + lo.Step(Noise()) * Decay(i, .07f) * 2.2f
+                + grit.Step(Noise()) * Decay(i, .04f) * .25f;
+        }
+        Normalise(s, .85f);
         return s;
     }
 
