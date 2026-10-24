@@ -7,8 +7,8 @@ namespace VoxelTower.Core;
 /// A tower built into a long wall is too great a body with the wall to be weighed as one (<see cref="BodyMost"/>), and
 /// was held by its courses only: undermined, it crumbled where it was dug out and stood on. Now it is found by itself,
 /// cut from the wall where the two are joined — the narrowest place between them, seen from above: what is left of all
-/// that is built about it (within the box a body is looked for in) when everything thinner than half the tower is worn
-/// away, grown back as far as it was worn; the wall's courses beside that cut are the joint. Weighed so, the tower
+/// that is built about it (within the box a body is looked for in) when everything thinner than six tenths of the tower
+/// is worn away, grown back down to its edge; the wall's courses beside that cut are the joint. Weighed so, the tower
 /// cracks along its joint as it leans, and goes over by itself, tearing out of the wall, whose broken end stays.
 /// </summary>
 public sealed partial class Sim
@@ -60,9 +60,28 @@ public sealed partial class Sim
                 _bodyStack.Push(q);
             }
         }
+        // what lies inside a ring of it (a hollow tower's room) is counted with it: the empty columns the box's edge cannot
+        // be reached from over empty columns
+        _colQueue.Clear();
+        int outside = ++_gen;
+        void Seep(int c)
+        {
+            if (_cols[c] != 0 || _mark[c] == outside) return;
+            _mark[c] = outside;
+            _colQueue.Enqueue(c);
+        }
+        for (int i = 0; i < N; i++) { Seep(i); Seep((N - 1) * N + i); Seep(i * N); Seep(i * N + N - 1); }
+        while (_colQueue.Count > 0)
+        {
+            int c = _colQueue.Dequeue(), x = c % N, z = c / N;
+            if (x > 0) Seep(c - 1);
+            if (x < N - 1) Seep(c + 1);
+            if (z > 0) Seep(c - N);
+            if (z < N - 1) Seep(c + N);
+        }
         // how far each column is from the edge of what is built, seen from above (the box's edge counting as an edge)
         const int Far = 1 << 20;
-        for (int c = 0; c < N * N; c++) _depth[c] = _cols[c] > 0 ? Far : 0;
+        for (int c = 0; c < N * N; c++) _depth[c] = _cols[c] > 0 || _mark[c] != outside ? Far : 0;
         for (int z = 0; z < N; z++)
             for (int x = 0; x < N; x++)
             {
@@ -84,17 +103,17 @@ public sealed partial class Sim
                 if (z < N - 1) d = Math.Min(d, Math.Min(_depth[c + N] + 1, Math.Min(x < N - 1 ? _depth[c + N + 1] + 1 : Far, x > 0 ? _depth[c + N - 1] + 1 : Far)));
                 _depth[c] = d;
             }
-        // the stoutest part near where it was found, and half its depth: what is thinner than that is wall
+        // the stoutest part near where it was found, and six tenths of its depth: what is thinner than that is wall
         int cx = sx - ox, cz = sz - oz, deepest = 0, best = -1, bestD = int.MaxValue;
         for (int z = Math.Max(0, cz - 32); z <= Math.Min(N - 1, cz + 32); z++)
             for (int x = Math.Max(0, cx - 32); x <= Math.Min(N - 1, cx + 32); x++)
                 deepest = Math.Max(deepest, _depth[z * N + x]);
         if (deepest < TowerLeast) return null;
-        int half = (deepest + 1) / 2;
+        int stout = (deepest * 3 + 4) / 5;
         for (int z = 0; z < N; z++)
             for (int x = 0; x < N; x++)
             {
-                if (_depth[z * N + x] < half) continue;
+                if (_depth[z * N + x] < stout) continue;
                 int d = Math.Max(Math.Abs(x - cx), Math.Abs(z - cz));
                 if (d < bestD) { bestD = d; best = z * N + x; }
             }
@@ -104,25 +123,30 @@ public sealed partial class Sim
         _colQueue.Clear();
         _mark[best] = mark; _colQueue.Enqueue(best);
         var core = new List<int>();
+        int x0 = N, x1 = -1, z0 = N, z1 = -1;
         while (_colQueue.Count > 0)
         {
             int c = _colQueue.Dequeue();
             core.Add(c);
             int x = c % N, z = c / N;
+            x0 = Math.Min(x0, x); x1 = Math.Max(x1, x); z0 = Math.Min(z0, z); z1 = Math.Max(z1, z);
             for (int dz = -1; dz <= 1; dz++)
                 for (int dx = -1; dx <= 1; dx++)
                 {
                     int nx = x + dx, nz = z + dz;
                     if ((uint)nx >= N || (uint)nz >= N) continue;
                     int n = nz * N + nx;
-                    if (_mark[n] == mark || _depth[n] < half) continue;
+                    if (_mark[n] == mark || _depth[n] < stout) continue;
                     _mark[n] = mark;
                     _colQueue.Enqueue(n);
                 }
         }
-        // grown back out: steps of a column, all eight ways, half the depth less one, and only over what is built
+        // a long and narrow stout part is the middle of a thick wall, not a tower
+        if (Math.Max(x1 - x0, z1 - z0) + 1 > 2.5f * (Math.Min(x1 - x0, z1 - z0) + 1)) return null;
+        // grown back out: steps of a column, all eight ways, as far as it was worn, only over what is built and only down
+        // from the middle, not up into the stout middle of a wall beside it
         var ring = new List<int>(core);
-        for (int step = 0; step < half - 1; step++)
+        for (int step = 0; step <= stout; step++)
         {
             var next = new List<int>();
             foreach (int c in ring)
@@ -134,7 +158,7 @@ public sealed partial class Sim
                         int nx = x + dx, nz = z + dz;
                         if ((uint)nx >= N || (uint)nz >= N) continue;
                         int n = nz * N + nx;
-                        if (_mark[n] == mark || _cols[n] == 0) continue;
+                        if (_mark[n] == mark || _depth[n] == 0 || _depth[n] > _depth[c]) continue;
                         _mark[n] = mark;
                         next.Add(n);
                     }

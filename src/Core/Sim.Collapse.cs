@@ -138,6 +138,9 @@ public sealed partial class Sim
             return;
         }
         _collapseAt = 0;
+        // what was found too great to weigh as one body is looked for afresh each pass: the building has changed since
+        // (it may be a tower standing by itself now, or one to be cut from its wall, Sim.Joint.cs)
+        _bigGen = -1;
         var shaken = new List<int>(_shaken);
         _shaken.Clear();
         var falling = new HashSet<int>();

@@ -285,7 +285,13 @@ public partial class Inspector : Control
                 if (o.Form == BrushForm.Column) { opts.AddChild(Height()); opts.AddChild(Level()); }
                 break;
             case Tool.Line:
-                opts.AddChild(Width(dig ? "Ширина" : "Толщина")); opts.AddChild(Height()); opts.AddChild(Level());
+                if (dig)
+                    opts.AddChild(Keyed(new Choice("Вид", "Вид\nРов: канава заданной ширины и глубины. Подкоп: ход под землёй от начала протяжки вниз и вдаль, " +
+                        "метр шириной и два высотой, на заданной глубине. Ведите его навстречу подкопу орды: прорвавшись, рабочие выбьют её крепь, и ход обвалится. Клавиша {Form}.",
+                        new[] { "ров", "подкоп" }, o.Mine ? 1 : 0, i => { o.Mine = i == 1; t.Changed(); }), () => Bindings.Label(Act.Form)));
+                if (!(dig && o.Mine)) opts.AddChild(Width(dig ? "Ширина" : "Толщина"));
+                opts.AddChild(Height());
+                if (!(dig && o.Mine)) opts.AddChild(Level());
                 break;
             case Tool.Box:
             case Tool.Circle:

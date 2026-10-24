@@ -89,6 +89,8 @@ public partial class Main : Node3D
     /// <summary>The valley's sounds.</summary>
     public Sound Sound;
     public MagicView Magic;
+    /// <summary>The marks over the horde's mines that ours have heard.</summary>
+    public TunnelView Tunnels;
     public CollapseView Collapse;
     /// <summary>The great moments made to be felt: the view shaken, the screen flashed, the time slowed a moment.</summary>
     public Spectacle Spectacle;
@@ -238,6 +240,7 @@ public partial class Main : Node3D
         if (_demo && _pose == "drawbridge") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 120);
         if (_demo && _pose == "ouralchemist") ClearTrees(Site.KeepX - Site.KeepR - 260, Site.KeepZ - 90, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 90);
         if (_demo && _pose == "acid") ClearTrees(Site.KeepX - Site.KeepR - 260, Site.KeepZ - 90, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 90);
+        if (_demo && _pose == "countermine") ClearTrees(Site.KeepX - Site.KeepR - 420, Site.KeepZ - 110, Site.KeepX - Site.KeepR - 60, Site.KeepZ + 110);
         if (_demo && _pose == "shaman") ClearTrees(Site.KeepX - Site.KeepR - 240, Site.KeepZ - 90, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 90);
         if (_demo && _pose == "spells") ClearTrees(Site.KeepX - Site.KeepR - 260, Site.KeepZ - 100, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
         if (_demo && _pose == "traps") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
@@ -315,6 +318,9 @@ public partial class Main : Node3D
         var acid = new AcidView();
         AddChild(acid);
         acid.Init(this);
+        Tunnels = new TunnelView();
+        AddChild(Tunnels);
+        Tunnels.Init(this);
         Magic = new MagicView();
         AddChild(Magic);
         Magic.Init(this);

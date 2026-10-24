@@ -24,6 +24,8 @@ public sealed class ToolOptions
     public bool Hollow;
     /// <summary>The rectangle draws a house: walls, a roof of logs and a door, a dwelling once it stands.</summary>
     public bool House;
+    /// <summary>The line with the pick digs a countermine: a bore under the ground from its start, as deep as the depth, toward the horde's mine.</summary>
+    public bool Mine;
     public bool Level = true;
     /// <summary>The bridge tool hangs a drawbridge instead of throwing an arch across.</summary>
     public bool DrawBridge;
@@ -69,7 +71,8 @@ public partial class BuildTools : Node3D
         (Tool.Brush, false) => "Ведите по земле: рабочие выложат стену до заданной высоты. {Form} — шар. Shift или кирка ({Pick}) — копать.",
         (Tool.Brush, true) => "Ведите по земле: рабочие выкопают полосу на заданную глубину. Шар ({Form}) вынимает ком. Щелчок по дереву — срубить.",
         (Tool.Line, false) => "Зажмите и протяните: стена заданной толщины и высоты.",
-        (Tool.Line, true) => "Протяните: ров заданной ширины и глубины. Деревья на пути срубят.",
+        (Tool.Line, true) => "Протяните: ров заданной ширины и глубины. Деревья на пути срубят. Вид «подкоп» ({Form}): ход под землёй " +
+            "на заданной глубине, навстречу подкопу орды. Рабочие крепят его брёвнами.",
         (Tool.Box, false) => "От угла до угла. {Form} — сплошной, стенки или дом.",
         (Tool.Box, true) => "От угла до угла: котлован. {Level} — ровное дно или по рельефу.",
         (Tool.Circle, false) => "От центра к краю. {Form} — кольцо или сплошной.",
@@ -317,6 +320,8 @@ public partial class BuildTools : Node3D
         else if (Tool == Tool.Box) { if (Opt.House) { Opt.House = false; Opt.Hollow = false; } else if (Opt.Hollow) Opt.House = true; else Opt.Hollow = true; }
         // the wand: any shade of the material, or exactly the one under the cursor
         else if (Tool == Tool.Wand) Opt.WandExact = !Opt.WandExact;
+        // the line with the pick: a ditch, or a countermine under the ground
+        else if (Tool == Tool.Line) Opt.Mine = !Opt.Mine;
         else Opt.Hollow = !Opt.Hollow;
         Changed();
     }
@@ -552,6 +557,7 @@ public partial class BuildTools : Node3D
             if (Tool == Tool.Bridge && Opt.DrawBridge) { HangDrawbridge(a, b); return; }
             if (Tool == Tool.Bridge && BridgeRefusal(a, b) is { } why) { Refuse(why); return; }
             if (Tool == Tool.Box && Opt.House && !dig) { MarkHouse(a, b); return; }
+            if (Tool == Tool.Line && Opt.Mine && dig) { MarkCountermine(a, b); return; }
             Designate(PlanDrag(a, b, dig), dig, ToolName(Tool), arched: Tool == Tool.Bridge);
             return;
         }
@@ -851,6 +857,7 @@ public partial class BuildTools : Node3D
         st.Height = dig ? Opt.Depth : Opt.Height;
         var plan = Tool switch
         {
+            Tool.Line when Opt.Mine && dig => _m.Sim.PlanCountermine(a.x, a.z, b.x, b.z, Opt.Depth, out _),
             Tool.Line => Shapes.Line(w, site, a.x, a.z, b.x, b.z, st, _level),
             Tool.Box when Opt.House && !dig => HousePreview(a, b, st),
             Tool.Box => Shapes.Box(w, site, a.x, a.z, b.x, b.z, st, _level),
@@ -859,6 +866,19 @@ public partial class BuildTools : Node3D
             _ => null,
         };
         return dig ? Shapes.WithTrees(_m.World, plan) : plan;
+    }
+
+    /// <summary>
+    /// A countermine from where the drag began to where it ends: its bore marked to be dug (the workers shore it with logs
+    /// as they go), kept by the sim to break into the horde's mine where it meets it.
+    /// </summary>
+    void MarkCountermine((int x, int y, int z) a, (int x, int y, int z) b)
+    {
+        var plan = _m.Sim.PlanCountermine(a.x, a.z, b.x, b.z, Opt.Depth, out var mine);
+        if (plan.Count == 0 || mine == null) { Refuse("подкоп ведут от земли вниз и вдаль, протяните его"); return; }
+        if (!Designate(plan, true, "Подкоп")) return;
+        _m.Sim.AddCountermine(mine);
+        _m.Hud.Log($"Подкоп: {Inspector.Len(mine.Cells.Count * VoxelWorld.PerMetre)} под землёй. Рабочие роют его и крепят брёвнами, без брёвен он осыплется.", Hud.Kind.Ok);
     }
 
     /// <summary>
@@ -1266,7 +1286,7 @@ public partial class BuildTools : Node3D
         var st = _m.Sim.Stock;
         string stock = $"{(int)(st[1] / 400)}|{(int)(st[2] / 400)}|{(int)(st[3] / 400)}";
         bool dig = DigNow;
-        string opts = $"{dig}|{Opt.Material}|{Opt.Width}|{Opt.Height}|{Opt.Depth}|{Opt.Step}|{Opt.Level}|{Opt.Hollow}|{Opt.House}|{Opt.Form}|{_rev}|{stock}";
+        string opts = $"{dig}|{Opt.Material}|{Opt.Width}|{Opt.Height}|{Opt.Depth}|{Opt.Step}|{Opt.Level}|{Opt.Hollow}|{Opt.House}|{Opt.Mine}|{Opt.Form}|{_rev}|{stock}";
         string key = "";
         bool dragging = Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Bridge && _lmb && _hasStart && _hasDrag;
         if (Tool == Tool.Spell)

@@ -89,10 +89,11 @@ public sealed partial class Sim
     public bool IsBurning(int x, int y, int z) => Burning.ContainsKey(WaterPlanner.Pack(x, y, z));
 
     /// <summary>A fire there is ours to put out: in something we built, in the dressing of it, or round the citadel. Pitch
-    /// is laid to burn and powder to blow: nobody puts either out.</summary>
+    /// is laid to burn and powder to blow, and the props of a mine burn under the ground where no bucket comes: nobody
+    /// puts any of them out.</summary>
     bool Ours(int x, int y, int z, byte m)
     {
-        if (m is Mat.Pitch or Mat.Powder) return false;
+        if (m is Mat.Pitch or Mat.Powder or Mat.Prop) return false;
         if (Mat.IsPlayer[m] || Mat.IsDecor[m] || MeantAt(x, y, z) != 0) return true;
         float dx = x - Site.KeepX, dz = z - Site.KeepZ;
         return dx * dx + dz * dz < HomeRange * HomeRange;

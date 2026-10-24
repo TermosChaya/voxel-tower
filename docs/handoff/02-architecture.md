@@ -59,6 +59,16 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   тело (`Gather`, `Balance`, `Bear`, `HeldByBody`), падение целиком (`GoOverWhole`, `GoOver` — поворот на краю,
   `Smash` встречного), разбивание большого (`Shatter`, кучи `LayHeap`), удар падающей постройкой (`Crush` → `Strike`). Вызывается
   из `TickCollapse` и `Overhangs`; `Flier.Toppling/TipRate/TipLean/Heap` — его поля в полёте.
+- `Sim.Joint.cs` — башня, встроенная в длинную стену: когда `Gather` находит тело слишком большим, `Joint` собирает всё
+  построенное в коробке, считает сверху толщину столбцов, стёсывает тоньше половины самой толстой части у затронутого,
+  наращивает сердцевину обратно — это башня (`_byJoint`), прилегающие воксели стены — стык (`_joint`): `StrainJoint`
+  трескает его вместе с основанием, `TearJoint` рвёт, когда башня валится.
+- `Sim.Tunnels.cs` — подкопы и контрподкопы: `Tunnel` (ступени-клетки `Cells`, `FallAt`, `Shored`, `Fallen`, камера
+  `Chamber`, столбы `Posts`, метка `MarkX/MarkZ`, `Heard`, `Breached`, `Flooded`, команда `Crew`); `TunnelTick` рудокопа
+  (из `March`), `BeginMine`, `BoreCells`/`Step` (сечение и запас над головой на ступенях), `DigMine`, `PlanChamber`,
+  `SetPosts`, `Heap`, `Knock` → событие `PicksHeard`; `PlanCountermine`/`AddCountermine`/`DigMineNow` (для проверок и
+  постановок); `TickTunnels` (крепь наших, обвал без крепи `CaveIn`, затопление, `Breaches`/`BreakThrough`/`PullProps`);
+  `JarTunnels` из `Jar`. Крепь — `Mat.Prop` (143), горит. `Unit.Bore`, `Unit.NextBoreLook`.
 - `Sim.Collapse.cs` — устойчивость. `OnSupportEdit` (подписан на `World.Replaced`) копит в `_shaken` места, где
   твёрдое ушло, пришло или сменилось; `TickCollapse` раз в 0,25 с: (1) `Adrift` — поиск вглубь от каждого соседа
   тронутого, вниз первым (`Order`), через «связанное» (`Bound`: держащееся + створки ворот), до земли (снизу любая
@@ -622,6 +632,9 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   лужами (видны ночью); склянка в полёте — `UnitView._flasks`. Звуки кислоты — `Sound.Acid.cs`. `CoverView` — обзор выбранных лучников (клетки по метру, что видны с места лучника на уровне груди, `Sim.Sees`, и
   край дальности; пересчёт при смене клетки или раз в 3 с; лучи считаются на рабочем потоке, меш — на главном).
   `OrdersView` тоже строит меши разметки на рабочих потоках.
+- `TunnelView` — кольцо на земле над забоем услышанного подкопа орды, вспыхивает с каждым ударом кирки, подскок земли
+  (`Debris`); `Sound.Tunnel.cs` — звук «knock». Постановка — `Main.Poses.Mines.cs`, проверка — `Main.SelfTest.Mines.cs`.
+  Линия с киркой, вид «подкоп» — `ToolOptions.Mine`, `BuildTools.MarkCountermine`.
 - `Saves.cs` — ячейки в `user://saves` (`slot1..3`, `quick`, `auto`, `selftest`): `Write` (сим + JSON экрана: камера
   `CameraRig.Aim`, скорость, отряды, летопись `Hud.Lines`; через `.part` и переименование), `Peek` (заголовок для
   списка), `Read` (ставит `Main.PendingLoad` и перезапускает сцену), `Apply` (экран после загрузки). `Main._Ready`

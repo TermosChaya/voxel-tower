@@ -94,8 +94,14 @@ public partial class Hints : Control
                 o.Add((L(Act.Form), "столб или шар"));
                 if (!dig) o.Add(("Shift", "кирка на мазок"));
                 break;
+            case Tool.Line when dig && t.Opt.Mine:
+                o.Add((Lmb, "тянуть подкоп"));
+                o.Add((height, "глубина"));
+                o.Add((L(Act.Form), "ров"));
+                break;
             case Tool.Line:
                 o.Add((Lmb, dig ? "тянуть ров" : "тянуть стену"));
+                if (dig) o.Add((L(Act.Form), "подкоп"));
                 o.Add((size, dig ? "ширина" : "толщина"));
                 o.Add((height, dig ? "глубина" : "высота"));
                 o.Add((L(Act.Pick), dig ? "стена" : "ров"));

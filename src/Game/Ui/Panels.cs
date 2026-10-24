@@ -134,6 +134,7 @@ public static class Retinue
         if (u.Envoy) return sim.Offer?.Envoy == u && sim.Offer.Kind != DealKind.None ? "посол: ждёт ответа" : u.State == UnitState.Flee ? "посол: уходит" : "посол: идёт к цитадели";
         if (u.T == Kinds.Catapult) return u.State == UnitState.Siege ? "мечет камни по стенам" : "его катят на позицию";
         if (u.Hefted != null) return sim.Time - u.HurlFrom < Sim.HurlLift ? "выворачивает валун" : "замахивается валуном";
+        if (u.T == Kinds.Miner && u.Bore is { } bore) return bore.State == TunnelState.Chamber ? "роет камеру под стеной" : "роет подкоп";
         if (u.T == Kinds.HillGiant && u.State == UnitState.Carve) return "крушит стену дубиной";
         if (u.T == Kinds.Alchemist && u.State == UnitState.Siege)
             return (u.Target != null ? "бросает кислоту в наших" : "бросает кислоту в стену") + $" · склянок {Math.Max(0, Sim.FlasksCarried - u.Thrown)}";

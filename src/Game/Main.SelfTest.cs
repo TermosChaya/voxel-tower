@@ -638,7 +638,7 @@ public partial class Main
         bool restored = Atmos.Sun.ShadowEnabled && vpG.Scaling3DScale == 1 && vpG.Msaa3D == Viewport.Msaa.Msaa2X && Atmos.Env.GlowEnabled;
         Check("the picture can be lowered for a weak machine and put back", lowered && restored, $"lowered {lowered}, back {restored}");
 
-        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 37 && Sound.Heard.Count >= 4,
+        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 38 && Sound.Heard.Count >= 4,
             $"{Sound.Clips} sounds, {Sound.Played} played: {string.Join(", ", Sound.Heard)}");
 
         var before = Rig.Target;
@@ -927,6 +927,7 @@ public partial class Main
         await SelfTestScaffold(Check);
         await SelfTestCarry(Check);
         await SelfTestOurEngines(Check);
+        await MinesSelfTest((what, ok, detail) => Check(what, ok, detail));
         // the report for the author: one file with the system, the hangs, the last events and the logs
         string report = Diag.Report(this, ProjectSettings.GlobalizePath("user://logs"));
         string body = System.IO.File.Exists(report) ? System.IO.File.ReadAllText(report) : "";

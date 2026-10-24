@@ -131,11 +131,18 @@ static class MinesBench
         check("ours near the wall hear the picks under the ground: told in the chronicle, the mark over the face trembling with each stroke, near the face",
             heardAt > 0 && heard.Contains("стучат кирки") && marks > 10 && markOff < 6 * VoxelWorld.PerMetre,
             $"heard at {heardAt:0} s ({marks} strokes heard, the last mark {markOff / VoxelWorld.PerMetre:0.0} m off the face); «{heard.Trim()}»");
-        double fellAt = -1;
-        for (int i = 0; i < 1200 && fellAt < 0; i++) { Run(.1); if (wallStretch() < wallAtFire - 1500) fellAt = sim.Time; }
-        check("under the wall it digs a chamber on posts, the wall standing on them; it fires them and goes, and when they have burnt through the wall comes down",
-            mine != null && mine.PostsSet >= 6 && firedAt > 0 && wallAtFire > wall0 - 600 && fellAt > firedAt && heard.Contains("подожгла крепь"),
-            $"{mine?.PostsSet} posts of {mine?.Posts.Count}; fired at {firedAt:0} s; the wall there {wall0} → {wallAtFire} at the firing → {wallStretch()} ({(fellAt > 0 ? $"came down {fellAt - firedAt:0} s after" : "still standing")})");
+        double fellAt = -1, doneAt = -1;
+        for (int i = 0; i < 1200 && (doneAt < 0 || sim.Time < doneAt + 10); i++)
+        {
+            Run(.1);
+            if (fellAt < 0 && wallStretch() < wallAtFire - 1500) fellAt = sim.Time;
+            if (doneAt < 0 && mine is { State: TunnelState.Done }) doneAt = sim.Time;
+        }
+        int wallAfter = wallStretch();
+        check("under the wall it digs a chamber on posts, the wall standing on them; it fires them and goes, and when they have burnt through the wall over the chamber comes down into it, told",
+            mine != null && mine.PostsSet >= 6 && firedAt > 0 && wallAtFire > wall0 - 600 && fellAt > firedAt && wallAfter < wallAtFire - 3000
+                && heard.Contains("подожгла крепь") && heard.Contains("над подкопом рухнула"),
+            $"{mine?.PostsSet} posts of {mine?.Posts.Count}; fired at {firedAt:0} s, burnt through {doneAt - firedAt:0} s after; the wall there {wall0} → {wallAtFire} at the firing → {wallAfter} ({(fellAt > 0 ? $"came down {fellAt - firedAt:0} s after" : "still standing")})");
 
         Unit Stand(UnitType t, int cell)
         {

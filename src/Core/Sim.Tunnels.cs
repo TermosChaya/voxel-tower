@@ -431,24 +431,36 @@ public sealed partial class Sim
         }
     }
 
-    /// <summary>A voxel of earth out of the mine onto the heap beside its mouth, wherever the heap is lowest.</summary>
+    /// <summary>
+    /// A voxel of earth out of the mine onto the heap behind its mouth: thrown near the middle of it, it rolls down any side
+    /// steeper than earth lies, so the heap grows as a mound; none of it rolls back into the mouth.
+    /// </summary>
     void Heap(Tunnel t)
     {
         var (mx, _, mz) = Nav.Feet(t.Mouth);
         var (ex, _, ez) = Nav.Feet(t.Cells[^1]);
         float dx = mx - ex, dz = mz - ez, d = MathF.Max(1, MathF.Sqrt(dx * dx + dz * dz));
         float hx = mx + dx / d * 16, hz = mz + dz / d * 16;
-        int bx = -1, bz = -1, by = int.MaxValue;
-        for (int a = 0; a < 6; a++)
+        float ang = (float)Hash.H3(t.Id, t.Spoil, 5) * 2 * MathF.PI, r = 10 * (float)(Hash.H3(t.Id, t.Spoil, 6) * Hash.H3(t.Id, t.Spoil, 7));
+        int x = (int)(hx + MathF.Cos(ang) * r), z = (int)(hz + MathF.Sin(ang) * r);
+        if (!World.InBounds(x, 1, z)) return;
+        int y = World.SurfAt(x, z);
+        for (int step = 0; step < 24; step++)
         {
-            float ang = (t.Spoil * 7 + a * 61) % 360 * MathF.PI / 180, r = (t.Spoil * 13 + a * 29) % 13;
-            int x = (int)(hx + MathF.Cos(ang) * r), z = (int)(hz + MathF.Sin(ang) * r);
-            if (!World.InBounds(x, 1, z)) continue;
-            int y = World.SurfAt(x, z);
-            if (y < by) { by = y; bx = x; bz = z; }
+            int bx = x, bz = z, by = y - 1;
+            for (int k = 0; k < 4; k++)
+            {
+                int dir = (k + t.Spoil / 12) & 3;
+                int nx = x + (dir == 0 ? 1 : dir == 1 ? -1 : 0), nz = z + (dir == 2 ? 1 : dir == 3 ? -1 : 0);
+                if (!World.InBounds(nx, 1, nz) || (nx - mx) * (nx - mx) + (nz - mz) * (nz - mz) < 64) continue;
+                int ny = World.SurfAt(nx, nz);
+                if (ny < by) { by = ny; bx = nx; bz = nz; }
+            }
+            if (bx == x && bz == z) break;
+            x = bx; z = bz; y = by;
         }
-        if (bx < 0 || !World.InBounds(bx, by, bz) || World.Get(bx, by, bz) != Mat.Air) return;
-        World.Set(bx, by, bz, Mat.Soil);
+        if (!World.InBounds(x, y, z) || World.Get(x, y, z) != Mat.Air) return;
+        World.Set(x, y, z, Mat.Soil);
     }
 
     /// <summary>
@@ -594,12 +606,65 @@ public sealed partial class Sim
                     break;
                 }
             }
-            if (t.State == TunnelState.Fired && !t.Posts.Exists(p => { var (x, y, z) = WaterPlanner.Unpack(p); for (int k = 0; k < 16; k += 3) if (World.Get(x, y + k, z) == Mat.Prop) return true; return false; }))
+            // two posts in three burnt through somewhere along them, the rest cannot carry the wall
+            if (t.State == TunnelState.Fired && 3 * t.Posts.FindAll(BurntThrough).Count >= 2 * t.Posts.Count)
+            {
                 t.State = TunnelState.Done;
+                Sink(t);
+            }
             // a countermine marked and never dug (the marking taken back) is forgotten
             if (t.Team == Team.Player && t.Dug == 0 && Time - t.KnockAt > 20 && !Marked(t)) Tunnels.RemoveAt(n);
         }
         Breaches();
+    }
+
+    /// <summary>Whether a post (2 by 2 voxels, two metres high) is burnt through: at some height none of it is left.</summary>
+    bool BurntThrough(int post)
+    {
+        var (x, y, z) = WaterPlanner.Unpack(post);
+        for (int k = 0; k < 2 * NavGrid.CS; k++)
+        {
+            bool left = false;
+            for (int d = 0; d < 4 && !left; d++) left = World.Get(x + (d & 1), y + k, z + (d >> 1)) == Mat.Prop;
+            if (!left) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// The posts under a wall burnt through: what is built over the chamber, from its foot up, comes down into it, each
+    /// block of it whole (Sim.Collapse.cs); what is left beside it cracks or holds as it may. Where the chamber was filled
+    /// in again, nothing comes down.
+    /// </summary>
+    void Sink(Tunnel t)
+    {
+        // the chamber's roof in each column
+        var roofs = new Dictionary<int, int>();
+        foreach (int p in t.Chamber)
+        {
+            var (x, y, z) = WaterPlanner.Unpack(p);
+            int key = x * World.SZ + z;
+            if (!roofs.TryGetValue(key, out int r) || y > r) roofs[key] = y;
+        }
+        var falling = new HashSet<int>();
+        float sx = 0, sz = 0;
+        int cols = 0;
+        foreach (var (key, roof) in roofs)
+        {
+            int x = key / World.SZ, z = key % World.SZ;
+            // open under it still (loose stone fallen in counts as open; earth filled in does not)
+            byte under = World.Get(x, roof, z);
+            if (under != Mat.Air && under != Mat.Rubble) continue;
+            int k = roof + 1;
+            while (k < roof + 4 && !Built(World.Get(x, k, z))) k++;
+            if (!Built(World.Get(x, k, z))) continue;
+            for (; k < World.SY && Built(World.Get(x, k, z)); k++) falling.Add(WaterPlanner.Pack(x, k, z));
+            sx += x; sz += z; cols++;
+        }
+        if (falling.Count == 0) return;
+        Fall(falling, quiet: false);
+        Say("Крепь прогорела. Стена над подкопом рухнула.", 2, sx / cols, sz / cols);
+        static bool Built(byte m) => Mat.IsPlayer[m] && Holds(m);
     }
 
     bool Marked(Tunnel t)
