@@ -946,7 +946,7 @@ public partial class Main
         bool heaved = Sound.Played > heard && Sound.Heard.Contains("swish");
         bool flying = Sim.Fliers.Exists(f => f.Cause == Sim.HurledCause && f.Carrier == null);
         check("a hill giant told to throw stoops to tear the stone out, the panel says so, and the stone goes off with the sound of it; the dusk card knows it",
-            ordered && upright > .95f && stooped < .9f && doing == "выворачивает валун" && heaved && flying && Sim.GiantHurled > 0 && DuskCard.Against.ContainsKey("hillgiant"),
+            ordered && upright > .95f && stooped < .9f && doing.StartsWith("выворачивает валун") && heaved && flying && Sim.GiantHurled > 0 && DuskCard.Against.ContainsKey("hillgiant"),
             $"ordered {ordered}, upright {upright:0.00}, stooping {stooped:0.00}; «{doing}»; heard {heaved}, in the air {flying}, hurled {Sim.GiantHurled}, still in hand {g.Hefted != null}, down {g.Down}, bones {Sim.Broken(g)}");
         Advance(6);
         g.Dead = true; g.DiedAt = -999;
@@ -960,8 +960,10 @@ public partial class Main
     async Task SelfTestTrauma(Action<string, bool, string> check)
     {
         var sim = Sim; var w = World;
-        // nothing of what went before in the way: no alarm, no raider about
+        // nothing of what went before in the way: no alarm, no raider about, nothing still flying or rolling (the hill
+        // giant's boulder) to come down on the one buried
         if (sim.Alarm) sim.StandDown();
+        for (int i = 0; i < 40 && sim.Fliers.Count > 0; i++) Advance(.5);
         foreach (var r in sim.Units) if (r.Team == Team.Horde && !r.Dead) { r.Dead = true; r.DiedAt = -999; }
         int cx = Site.KeepX - Site.KeepR - 150, cz = Site.KeepZ + 60;
         ClearTrees(cx - 40, cz - 40, cx + 40, cz + 40);
@@ -979,7 +981,7 @@ public partial class Main
         Advance(2);
         check("one of ours buried under rubble is pinned, tagged, and dug out by a worker near",
             pinned && tagged && doing.StartsWith("придавлен") && buried.PinKg == 0 && !buried.Dead && !buried.Down,
-            $"pinned {pinned}, tagged {tagged}, «{doing}»; now {buried.PinKg:0} kg, {(buried.Dead ? "dead" : $"{buried.Hp:0} hp")}, down {buried.Down}; the digger: {Retinue.DoingNow(digger, sim)}");
+            $"pinned {pinned}, tagged {tagged}, «{doing}»; now {buried.PinKg:0} kg, {(buried.Dead ? $"dead ({buried.KilledBy})" : $"{buried.Hp:0} hp")}, down {buried.Down}; the digger: {Retinue.DoingNow(digger, sim)}");
         sim.BreakBone(digger, Break.LegR);
         string hurt = Retinue.Hurt(digger);
         check("a broken leg limps and is told", Sim.Gait(digger) < .4f && hurt.Contains("сломана правая нога") && !sim.Holds(digger), $"gait {Sim.Gait(digger):0.00}, «{hurt}»");

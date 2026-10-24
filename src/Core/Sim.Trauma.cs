@@ -613,14 +613,14 @@ public sealed partial class Sim
             u.Path = null;
         }
         p.DugAt = Time;
-        // beside it: in a cell next to its own (as GoTo has it), or within arm's reach
-        bool beside = Math.Abs(Nav.I(u.Cell) - Nav.I(p.Cell)) <= 1 && Math.Abs(Nav.K(u.Cell) - Nav.K(p.Cell)) <= 1 && Math.Abs(Nav.Y(u.Cell) - Nav.Y(p.Cell)) <= 2;
+        // beside it: two metres off at most (the heap over it may fill the cells next to it), or within arm's reach
+        bool beside = Math.Abs(Nav.I(u.Cell) - Nav.I(p.Cell)) <= 2 && Math.Abs(Nav.K(u.Cell) - Nav.K(p.Cell)) <= 2 && Math.Abs(Nav.Y(u.Cell) - Nav.Y(p.Cell)) <= 2;
         if (!beside && Dist(u, p) > u.T.BodyR + p.T.BodyR + 10)
         {
             if (u.Path == null || u.PathI >= u.Path.Count || Time >= u.NextSearch)
             {
                 u.NextSearch = Time + .8;
-                if (!GoTo(u, p.Cell, adjacent: true, budget: 8000)) { p.Digger = null; u.Freeing = null; u.NextLookForPinned = Time + 5; return false; }
+                if (!GoTo(u, p.Cell, adjacent: true, budget: 8000, reach: 2)) { p.Digger = null; u.Freeing = null; u.NextLookForPinned = Time + 5; return false; }
             }
             if (u.Path != null && u.PathI < u.Path.Count) Walk(u, dt);
             return true;

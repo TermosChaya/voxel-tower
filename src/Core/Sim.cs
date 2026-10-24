@@ -472,11 +472,11 @@ public sealed partial class Sim
     float H(int c, int ti, int tk) => PathFinder.Octile(Nav.I(c) - ti, Nav.K(c) - tk) * .95f;
 
     /// <summary>Plans a walk to a cell (or next to it), keeping to a lane if given; false if there is no way.</summary>
-    public bool GoTo(Unit u, int target, bool adjacent = false, int budget = 40000, Func<int, float> lane = null)
+    public bool GoTo(Unit u, int target, bool adjacent = false, int budget = 40000, Func<int, float> lane = null, int reach = 1)
     {
         int ti = Nav.I(target), tk = Nav.K(target), ty = Nav.Y(target);
         Func<int, bool> goal = adjacent
-            ? c => Math.Abs(Nav.I(c) - ti) <= 1 && Math.Abs(Nav.K(c) - tk) <= 1 && Math.Abs(Nav.Y(c) - ty) <= 2
+            ? c => Math.Abs(Nav.I(c) - ti) <= reach && Math.Abs(Nav.K(c) - tk) <= reach && Math.Abs(Nav.Y(c) - ty) <= 2
             : c => c == target;
         if (goal(u.Cell)) { u.Path = null; return true; }
         var path = Paths.Find(u.Cell, goal, c => H(c, ti, tk), MoverOf(u), budget, gates: u.Team == Team.Player, lane: lane);

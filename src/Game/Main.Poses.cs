@@ -1568,8 +1568,11 @@ public partial class Main
             for (int x = ux - 6; x <= ux + 6; x++)
             {
                 int h = 7 - Math.Max(Math.Abs(x - ux), Math.Abs(z - uz));
-                for (int y = uy; y < uy + h; y++) if (w.Get(x, y, z) == Mat.Air) w.Set(x, y, z, Mat.Rubble);
+                // the tufts and flowers it comes down on buried with the rest, lest the rubble over them stand on nothing
+                for (int y = uy; y < uy + h; y++) if (w.Get(x, y, z) is Mat.Air or Mat.Tuft or Mat.Flower or Mat.Bloom) w.Set(x, y, z, Mat.Rubble);
             }
+        // whatever of it stands on nothing settles at once, quietly, as a new game's ruins do: the heap a fall leaves
+        Sim.Subside(ux - 8, uz - 8, ux + 8, uz + 8);
         u.StruckAt = Sim.Time;
     }
 
