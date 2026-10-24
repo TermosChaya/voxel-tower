@@ -1951,6 +1951,9 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--collapse")
         $"{lay.Count} to lay, {clear.Count} of rubble to clear; {standing} of {meantN} meant voxels stand");
 }
 
+// ---- weight and cracks, and buildings going over whole
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--collapse" || args[0] == "--strain") StrainBench.Run(Check);
+
 // ---- a game saved and read back: the valley as play changed it, and the siege, the same; and it plays on
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--night")
 {
@@ -3035,7 +3038,10 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--physics")
     string castBlast = simY.Cast(SpellKind.Explosion, ex, etop - 30, emid);
     int flying = simY.Fliers.Count, aloft = simY.Aloft;
     bool thrownE = gobE.Airborne != null;
+    // (what the blast cracked about the hole goes on crumbling a while, and what it held comes down after)
     RunY(8);
+    double settledE = 8;
+    for (int t = 0; t < 40 && simY.Fliers.Count > 0; t++) { RunY(.5); settledE += .5; }
     int stoneE1 = CountY(ex - 8, ez0 - 4, ex + 8, ez1 + 4, Mat.IsMasonry);
     int rubble = 0; float farthest = 0;
     for (int z = emid - 200; z <= emid + 200; z++)
@@ -3047,7 +3053,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--physics")
         }
     Check("a blast in a wall: it goes up in pieces that fly and come down as rubble far about, and the wall over it falls",
         castBlast == null && flying >= 10 && aloft > 3000 && simY.Fliers.Count == 0 && stoneE0 - stoneE1 > 6000 && rubble > 2000 && farthest > 6,
-        $"cast: {castBlast ?? "yes"}; {flying} pieces, {aloft} voxels in the air, {simY.Fliers.Count} still flying after 8 s; masonry {stoneE0} → {stoneE1}; rubble {rubble}, the farthest {farthest:0.0} m off");
+        $"cast: {castBlast ?? "yes"}; {flying} pieces, {aloft} voxels in the air, {simY.Fliers.Count} still flying after {settledE:0.0} s; masonry {stoneE0} → {stoneE1}; rubble {rubble}, the farthest {farthest:0.0} m off");
     Check("the goblin by the blast is hurt and thrown", thrownE && (gobE.Dead || gobE.Hp < gobE0 - 20) && gobE.Airborne == null && Far(gobE, gx0, gz0) > 2,
         $"thrown {thrownE}; the goblin {(gobE.Dead ? "dead: " + gobE.KilledBy : $"{gobE.Hp:0} of {gobE0:0}")}, {Far(gobE, gx0, gz0):0.0} m from where it stood, {(gobE.Airborne == null ? "down" : "still in the air")}");
     Gone(gobE);

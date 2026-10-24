@@ -46,6 +46,16 @@ public sealed class Flier
     public float PX, PY, PZ, CX0, CY0, CZ0;
     public double TipFrom;
     public int Tipped;
+    /// <summary>A building going over whole (<see cref="Sim.GoOver"/>): turning on the edge it stood on as a stiff body
+    /// does, how fast now (a second) and how far over its weight leaned past the edge as it began.</summary>
+    public bool Toppling;
+    public float TipRate, TipLean;
+    /// <summary>Going over: how high its foot reaches in its own voxels from its middle, the part of it that grinds
+    /// into the ground it stood on as it turns rather than being stopped by it.</summary>
+    public float Foot;
+    /// <summary>A piece of something great broken up where it came down: it lies as a heap, each stone of it running off
+    /// the heap as loose stone does, not in its shape.</summary>
+    public bool Heap;
     /// <summary>
     /// Rolling, as a ball does once it is down: along the ground and down whatever slope there is, till it stops; since
     /// when, and how far it reaches from its middle, as a ball's radius.
@@ -82,7 +92,7 @@ public sealed partial class Sim
     /// <summary>How hard things fall: voxels a second, each second.</summary>
     public const float Gravity = 9.8f * VoxelWorld.PerMetre;
     /// <summary>The most voxels in the air at once, all pieces together.</summary>
-    public const int MaxAloft = 24000;
+    public const int MaxAloft = 40000;
     /// <summary>How long the grip of telekinesis holds, in seconds.</summary>
     public const double GripFor = 8;
 
@@ -456,6 +466,7 @@ public sealed partial class Sim
             if (f.Held) { Hold(f, dt); continue; }
             if (f.Carrier != null) { Carried(f, dt); continue; }
             if (f.Rolling) { if (Roll(f, dt)) Fliers.Remove(f); continue; }
+            if (f.Toppling) { GoOver(f, dt); continue; }
             if (f.Tipping) { TipOver(f); continue; }
             f.Turn += f.Spin * dt;
             float speed = MathF.Sqrt(f.VX * f.VX + f.VY * f.VY + f.VZ * f.VZ);
@@ -539,8 +550,12 @@ public sealed partial class Sim
                 if (c != null) room -= c.Voxels.Count;
                 else foreach (var (x, y, z) in chip) { World.Set(x, y, z, Mat.Air); if (Orders.At(x, y, z) != 0) Orders.Clear(x, y, z); }
             }
+            // and what is built about where it struck is jarred
+            Jar(bx, by, bz, cr + 4, Math.Min(.8f, blow / 300));
         }
         Landed?.Invoke(f.X, f.Y, f.Z, f.Voxels.Count, speed);
+        for (int k = 0; k <= f.R + 1 && iy - k > 0; k++)
+            if (World.Get(ix, iy - k, iz) == Mat.Water) { Plunged?.Invoke(f.X, f.Y, f.Z, f.Voxels.Count, speed); break; }
         // a ball rolls on from where it struck, with the more of its going the more it came down aslant — and none of it
         // if it spent it breaking out what it struck
         float aslant = speed > .01f ? (f.VX * f.VX + f.VZ * f.VZ) / (speed * speed) : 0, keep = broke >= 10 ? 0 : .35f * aslant;
@@ -554,7 +569,9 @@ public sealed partial class Sim
             if (speed > 2 * VoxelWorld.PerMetre) BallBreaks(f, 0, speed);
             return false;
         }
-        // it lies where it came down, whole, as it lay when it struck — or breaks through, or tips over, and lies down after
+        // a great piece come down hard breaks up; else it lies where it came down, whole, as it lay when it struck — or
+        // breaks through, or tips over, and lies down after
+        if (!f.Star && Shatter(f, speed)) return true;
         return Lay(f, ix, iy, iz, speed);
     }
 
@@ -599,6 +616,7 @@ public sealed partial class Sim
             cells.Add((dx * ex.x + dy * ey.x + dz * ez.x, dx * ex.y + dy * ey.y + dz * ez.y, dx * ex.z + dy * ey.z + dz * ez.z, b));
         }
         if (cells.Count == 0) return true;
+        if (f.Heap) { LayHeap(f, cells, ix, iy, iz); return true; }
         // timber floats: a piece of it rests on water as on ground; stone sinks through it
         int wood = 0;
         foreach (var c in cells) if (c.m is Mat.Lumber or Mat.Wood or Mat.Char || Mat.IsTrunk(c.m)) wood++;
@@ -617,13 +635,16 @@ public sealed partial class Sim
         }
         int ay = iy;
         for (int k = 0; k < 48 && Clash(ix, ay, iz); k++) ay++;
+        // come down into the midst of a heap or a broken wall, a piece of any size breaks up there rather than stand on top of it
+        if (ay - iy > 6 && cells.Count >= 60 && !f.Intact && Shatter(f, 0, force: true)) return true;
         for (int k = 0; k < 120 && ay > 4 && !Clash(ix, ay - 1, iz); k++) ay--;
         // timber over a gap too weak for it: it breaks through, and falls on
         if (BreaksThrough(f, cells, ix, ay, iz, speed)) return false;
         // its weight beyond the footing it came down on: it tips over the edge of it, and comes down again after (a ball
-        // has rolled off any such edge already)
+        // has rolled off any such edge already); a great piece breaks up over the edge instead
         if (f.RollR == 0 && f.Tipped < 2 && cells.Count >= 24 && Tips(cells, ix, ay, iz, floats, out int dir, out int edge, out int py))
         {
+            if (cells.Count >= 1500 && Shatter(f, 6 * VoxelWorld.PerMetre, force: true)) return true;
             var turned = new List<(sbyte, sbyte, sbyte, byte)>(f.Voxels.Count);
             foreach (var (dx, dy, dz, m) in f.Voxels)
                 turned.Add(((sbyte)(dx * ex.x + dy * ey.x + dz * ez.x), (sbyte)(dx * ex.y + dy * ey.y + dz * ez.y), (sbyte)(dx * ex.z + dy * ey.z + dz * ez.z), m));

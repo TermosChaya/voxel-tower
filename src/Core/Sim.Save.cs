@@ -16,7 +16,7 @@ namespace VoxelTower.Core;
 public sealed partial class Sim
 {
     /// <summary>20: the bodies sculpted finer, their half-voxels (and so a wounded body's) not what they were.</summary>
-    public const int SaveVersion = 30;
+    public const int SaveVersion = 31;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -152,6 +152,7 @@ public sealed partial class Sim
         w.Write(Sandbox); w.Write(Waves.OnCall);
         w.Write(Unfolds); w.Write(LetOut.Count); foreach (var k in LetOut) w.Write(k);
         WriteAcid(w);
+        w.Write(Cracks.Count); foreach (var (p, c) in Cracks) { w.Write(p); w.Write(c); }
         w.Write(extra ?? "");
     }
 
@@ -429,6 +430,17 @@ public sealed partial class Sim
         Unfolds = r.ReadBoolean(); LetOut.Clear();
         for (int i = r.ReadInt32(); i > 0; i--) LetOut.Add(r.ReadString());
         ReadAcid(r);
+        Cracks.Clear(); _strained.Clear(); _undercut.Clear();
+        for (int i = r.ReadInt32(); i > 0; i--)
+        {
+            int p = r.ReadInt32(); float c = r.ReadSingle();
+            Cracks[p] = c;
+            // what is cracked is weighed again, and the buildings it is in
+            var (x, _, z) = WaterPlanner.Unpack(p);
+            _weighs.Add(PatchOf(x, z));
+            _undercut.Add(p);
+        }
+        CracksVersion++;
         string extra = r.ReadString();
         // the ways of the horde are worked out again for the valley as it now is, and the stones to throw down found again
         _fieldVersion = -1;

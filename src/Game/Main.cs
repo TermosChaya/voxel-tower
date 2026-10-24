@@ -89,6 +89,7 @@ public partial class Main : Node3D
     /// <summary>The valley's sounds.</summary>
     public Sound Sound;
     public MagicView Magic;
+    public CollapseView Collapse;
     /// <summary>The great moments made to be felt: the view shaken, the screen flashed, the time slowed a moment.</summary>
     public Spectacle Spectacle;
     /// <summary>A run driven by a script (a test, a staged scene, a screenshot), not by a hand on the mouse.</summary>
@@ -315,12 +316,15 @@ public partial class Main : Node3D
         Magic = new MagicView();
         AddChild(Magic);
         Magic.Init(this);
+        Collapse = new CollapseView();
+        AddChild(Collapse);
         Sound = new Sound();
         AddChild(Sound);
         Sound.Init(this);
         Spectacle = new Spectacle();
         AddChild(Spectacle);
         Spectacle.Init(this);
+        Collapse.Init(this);
         Progress = new WorkProgress();
         AddChild(Progress);
         Progress.Init(this);

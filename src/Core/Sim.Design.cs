@@ -153,8 +153,14 @@ public sealed partial class Sim
         {
             var (x, y, z) = WaterPlanner.Unpack(p);
             byte want = Design.Get(x, y, z), cur = World.Get(x, y, z);
-            if (want == 0 || Stands(cur, want) || Site.Forbidden(x, z)) continue;
+            if (want == 0 || Site.Forbidden(x, z)) continue;
             byte o = Orders.At(x, y, z);
+            // standing, but cracked: taken out and laid anew
+            if (Stands(cur, want))
+            {
+                if (Cracks.GetValueOrDefault(p) >= .1f && Labour.Diggable(cur)) { if (!Orders.IsRemove(o)) clear.Add(x, y, z, Mat.Air); else waiting++; }
+                continue;
+            }
             if (Brushes.Free(cur)) { if (o != want) lay.Add(x, y, z, want); else waiting++; }
             else if (Labour.Diggable(cur) && !Mat.IsLeaf(cur)) { if (!Orders.IsRemove(o)) clear.Add(x, y, z, Mat.Air); else waiting++; }
         }

@@ -112,21 +112,27 @@ public sealed partial class Sim
 
     void OnSupportEdit(int x, int y, int z, byte old)
     {
-        if (_settling) return;
         byte now = World.Get(x, y, z);
+        // a cracked voxel taken out or changed: its crack goes with it
+        if (Cracks.Count > 0 && old != now && Cracks.Remove(WaterPlanner.Pack(x, y, z))) CracksVersion++;
+        if (_settling) return;
         // the leaves of a gate turning, water running, grass and the dressing come and go without shaking anything
         if (Mat.Swings(old) || Mat.Swings(now)) return;
         if (!Bound(old) && !Ground(old) && !Holds(now)) return;
         // turf burnt black, or grown green again, holds up just what it held
         if ((Mat.IsGrass(old) || old == Mat.Scorch) && (Mat.IsGrass(now) || now == Mat.Scorch)) return;
         _shaken.Add(WaterPlanner.Pack(x, y, z));
+        // something that held taken away: what stands over it is weighed as one body; and while a building is weighed
+        // so as standing on too little, what is set under it or against it too (it may be propped up)
+        if ((Rigid(old) || Ground(old)) && !Holds(now) && !Ground(now) || _leaning > 0 && (Holds(now) || Ground(now))) _undercut.Add(WaterPlanner.Pack(x, y, z));
     }
 
     void TickCollapse(float dt)
     {
         if (_toppling.Count > 0) LandToppling();
+        TickStrain(dt);
         _collapseAt += dt;
-        if (_collapseAt < .25f || _shaken.Count == 0)
+        if (_collapseAt < .25f || _shaken.Count == 0 && _weighs.Count == 0 && _undercut.Count == 0)
         {
             if (_due.Count > 0) OverhangsDue(null);
             return;
@@ -148,10 +154,13 @@ public sealed partial class Sim
                 if (!falling.Contains(q) && !_held.Contains(q)) Adrift(nx, ny, nz, falling);
             }
         }
-        // what is held out too far over the air, in each patch of the valley that was shaken (those left over from the
-        // last look first)
-        var patches = new HashSet<int>();
-        foreach (int p in shaken) { var (x, _, z) = WaterPlanner.Unpack(p); patches.Add((x >> 5) | (z >> 5) << 8); }
+        // the buildings over where something under them went, each weighed as one body
+        if (_undercut.Count > 0) Balance(falling);
+        // what is held out too far over the air, and what carries more than it bears, in each patch of the valley that
+        // was shaken or jarred (those left over from the last look first)
+        var patches = new HashSet<int>(_weighs);
+        _weighs.Clear();
+        foreach (int p in shaken) { var (x, _, z) = WaterPlanner.Unpack(p); patches.Add(PatchOf(x, z)); }
         foreach (int key in patches) if (_dueSet.Add(key)) _due.Add(key);
         OverhangsDue(falling);
     }
@@ -273,7 +282,7 @@ public sealed partial class Sim
     /// (Courses of mortared stone do not step out as corbels unless built so: what is over a hole wider than masonry
     /// bears comes down to the top of the wall.)
     /// </summary>
-    void Overhangs(int x0, int z0, int size, HashSet<int> falling)
+    void Overhangs(int x0, int z0, int size, HashSet<int> falling, bool weigh = true)
     {
         const int Margin = 16;
         int bx0 = Math.Max(0, x0 - Margin), bz0 = Math.Max(0, z0 - Margin);
@@ -335,11 +344,16 @@ public sealed partial class Sim
             Try(x, y + 1, z, 0);
             Try(x + 1, y, z, 1); Try(x - 1, y, z, 1); Try(x, y, z + 1, 1); Try(x, y, z - 1, 1);
         }
-        // in the patch itself (not its margin): whatever built was not reached is held by nothing
+        if (weigh) Weigh(bx0, bz0, bx1, bz1, x0, z0, size);
+        // in the patch itself (not its margin): whatever built was not reached is held by nothing — unless it stands in a
+        // tower or a house that holds it up as one stiff body (or goes over with it)
+        HashSet<int> taken = null, stiff = null;
         foreach (int p in _built)
         {
             var (x, y, z) = WaterPlanner.Unpack(p);
-            if (x >= x0 && x < x0 + size && z >= z0 && z < z0 + size && _reach[I(x, y, z)] == int.MaxValue) falling.Add(p);
+            if (x < x0 || x >= x0 + size || z < z0 || z >= z0 + size || _reach[I(x, y, z)] != int.MaxValue) continue;
+            if (weigh && Rigid(World.Get(x, y, z)) && HeldByBody(x, y, z, taken ??= new HashSet<int>(falling), stiff ??= new HashSet<int>())) continue;
+            falling.Add(p);
         }
     }
 
@@ -430,7 +444,7 @@ public sealed partial class Sim
         var falling = new HashSet<int>();
         for (int z = Math.Max(0, z0) & ~31; z <= Math.Min(World.SZ - 1, z1); z += 32)
             for (int x = Math.Max(0, x0) & ~31; x <= Math.Min(World.SX - 1, x1); x += 32)
-                Overhangs(x, z, 32, falling);
+                Overhangs(x, z, 32, falling, weigh: false);
         if (falling.Count > 0) Fall(falling, quiet: true);
         _shaken.Clear();
         return falling.Count;

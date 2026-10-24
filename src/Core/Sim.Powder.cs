@@ -376,6 +376,8 @@ public sealed partial class Sim
                 }
             }
         }
+        // what is built about the crater is cracked, the more the nearer
+        Jar(fx, fy, fz, r * 1.5f, .6f);
         // those about it: hurt, and thrown out from it; engines battered where they stand
         float reach = r * 1.8f;
         var near = Units.FindAll(u => !u.Dead && !u.Inside && MathF.Abs(u.X - fx) < reach && MathF.Abs(u.Z - fz) < reach);

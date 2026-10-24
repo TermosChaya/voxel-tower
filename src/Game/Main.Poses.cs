@@ -60,6 +60,8 @@ public partial class Main
         if (_pose == "stones") { Stones(); return; }
         if (_pose == "giants") { HillGiants(); return; }
         if (_pose == "topple") { Topple(); return; }
+        if (_pose == "undermine") { Undermine(); return; }
+        if (_pose == "cracks") { Cracked(); return; }
         if (_pose == "roll") { RollDown(); return; }
         if (_pose == "crush") { CrushDeck(); return; }
         if (_pose == "drops") { Drops(); return; }
@@ -881,6 +883,58 @@ public partial class Main
         Advance(_look == 1 ? 3 : .38);
         Paused = true;
         Rig.SetAt(w.WX(px + 4), w.WY(g + 8), w.WZ(pz + 1), -.75f, .35f, 4.5f);
+        Hud.Refresh();
+    }
+
+    /// <summary>
+    /// A round stone tower of ours west of the citadel, eight metres high, a stretch of wall east of it; the horde's miners
+    /// have dug the ground out from under the east two fifths of its foot (--at=seconds since, 1.6 by itself): it stands,
+    /// cracking along that side; at about three seconds it goes over east, at five it comes down on the wall, and by ten
+    /// it lies in rubble, the wall broken. --look=1 close on the cracks.
+    /// </summary>
+    void Undermine()
+    {
+        var sim = Sim; var w = World;
+        sim.Waves.Countdown = 1e9;
+        int tx = Site.KeepX - Site.KeepR - 80, tz = Site.KeepZ + 30, g = w.SurfAt(tx, tz);
+        ClearTrees(tx - 60, tz - 70, tx + 140, tz + 160);
+        for (int z = tz - 50; z < tz + 50; z++)
+            for (int x = tx - 30; x < tx + 100; x++)
+            {
+                for (int y = g; y < g + 90; y++) if (w.Get(x, y, z) != Mat.Air) w.Set(x, y, z, Mat.Air);
+                for (int y = g - 6; y < g; y++) if (!Mat.IsEarthy[w.Get(x, y, z)]) w.Set(x, y, z, Mat.Soil);
+                w.Set(x, g - 1, z, Mat.Grass);
+            }
+        sim.InstantLabour = true;
+        sim.DesignateBuild(Shapes.Circle(w, Site, tx, tz, 12, new Stroke { Mat = Mat.Stone, Width = 4, Height = 64, Level = true, Hollow = true }, g + 64));
+        sim.DesignateBuild(Shapes.Line(w, Site, tx + 44, tz - 40, tx + 44, tz + 24, new Stroke { Mat = Mat.Stone, Width = 8, Height = 32, Level = true }, g + 32));
+        sim.InstantLabour = false;
+        Advance(1);
+        // the miners' hole under its east side, and the miners by it
+        for (int z = tz - 14; z <= tz + 14; z++) for (int x = tx + 3; x <= tx + 16; x++) for (int y = g - 4; y < g; y++) w.Set(x, y, z, Mat.Air);
+        foreach (var (dx, dz) in new[] { (18, -16), (22, 14) }) { var u = Camp(Kinds.Miner, tx + dx, tz + dz); u.Facing = MathF.PI; }
+        Advance(_poseSeconds == 14 ? 1.6 : _poseSeconds);
+        Paused = true;
+        if (_look == 1) Rig.SetAt(w.WX(tx + 2), w.WY(g + 6), w.WZ(tz + 10), -.25f, .6f, 4.2f);
+        else Rig.SetAt(w.WX(tx + 26), w.WY(g + 20), w.WZ(tz + 4), .2f, .42f, 2.1f);
+        Hud.Refresh();
+    }
+
+    /// <summary>
+    /// A stone wall of ours west of the citadel, three metres high, jarred at four places along it, harder and harder from
+    /// south to north, as by blows of a catapult's stones: its cracks from the first hairlines to cracked all but through.
+    /// </summary>
+    void Cracked()
+    {
+        var w = World;
+        Sim.Waves.Countdown = 1e9;
+        int wx = Site.KeepX - Site.KeepR - 60, kz = Site.KeepZ, top = WallWest(-60, 24, 40);
+        int face = wx - 8; while (face < wx + 8 && !Mat.IsMasonry(w.Get(face, top - 12, kz))) face++;
+        float[] hard = { .3f, .5f, .7f, .9f };
+        for (int i = 0; i < hard.Length; i++) Sim.Jar(face - 1, top - 12, kz + 8 - i * 16, 7, hard[i]);
+        Advance(.2);
+        Paused = true;
+        Rig.SetAt(w.WX(face), w.WY(top - 12), w.WZ(kz - 16), -1.45f, .3f, 3.2f);
         Hud.Refresh();
     }
 

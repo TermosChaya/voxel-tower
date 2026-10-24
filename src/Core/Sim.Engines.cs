@@ -320,6 +320,8 @@ public sealed partial class Sim
             else Splinter(o, harm, ddx, o.Y - y, ddz, "камень из камнемёта", f.By);
         }
         Collapsed?.Invoke(Math.Max(broken, 30), x, y, z);
+        // and cracks what is built about the hole: a wall struck again there gives way
+        Jar(x, y, z, r + 5, .55f);
         if (broken > 0 && kd >= Site.KeepR + 6 && Time - _stoneSaid > 20)
         {
             _stoneSaid = Time;

@@ -638,7 +638,7 @@ public partial class Main
         bool restored = Atmos.Sun.ShadowEnabled && vpG.Scaling3DScale == 1 && vpG.Msaa3D == Viewport.Msaa.Msaa2X && Atmos.Env.GlowEnabled;
         Check("the picture can be lowered for a weak machine and put back", lowered && restored, $"lowered {lowered}, back {restored}");
 
-        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 33 && Sound.Heard.Count >= 4,
+        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 36 && Sound.Heard.Count >= 4,
             $"{Sound.Clips} sounds, {Sound.Played} played: {string.Join(", ", Sound.Heard)}");
 
         var before = Rig.Target;
@@ -906,6 +906,7 @@ public partial class Main
         Check("«Отчёт об ошибке» writes one file with the system, the video card, the hangs, the last events and the logs",
             body.Contains("Видеокарта:") && body.Contains("===== Зависания") && body.Contains("===== Последние события") && body.Contains("===== Лог "),
             $"{body.Length} characters in {System.IO.Path.GetFileName(report)}");
+        await SelfTestStrain(Check, Frames);
         GD.Print($"[selftest] {(fails == 0 ? "all passed" : fails + " failed")}");
         if (_shot == null) GetTree().Quit(fails == 0 ? 0 : 1);
     }
@@ -986,5 +987,43 @@ public partial class Main
         string hurt = Retinue.Hurt(digger);
         check("a broken leg limps and is told", Sim.Gait(digger) < .4f && hurt.Contains("сломана правая нога") && !sim.Holds(digger), $"gait {Sim.Gait(digger):0.00}, «{hurt}»");
         buried.Dead = digger.Dead = true; buried.DiedAt = digger.DiedAt = -999;
+    }
+
+    /// <summary>
+    /// Weight and cracks, seen: a wall struck hard has its cracks drawn; a round tower dug out under two thirds of its foot
+    /// goes over whole, drawn turning in the air, and lies in rubble a few seconds after.
+    /// </summary>
+    async Task SelfTestStrain(Action<string, bool, string> check, Func<int, Task> frames)
+    {
+        var w = World;
+        int x0 = Site.KeepX - Site.KeepR - 160, z0 = Site.KeepZ + 160, g = w.SurfAt(x0, z0);
+        ClearTrees(x0 - 40, z0 - 40, x0 + 100, z0 + 40);
+        for (int z = z0 - 30; z < z0 + 30; z++)
+            for (int x = x0 - 30; x < x0 + 90; x++)
+            {
+                for (int y = g; y < g + 70; y++) if (w.Get(x, y, z) != Mat.Air) w.Set(x, y, z, Mat.Air);
+                for (int y = g - 6; y < g; y++) if (!Mat.IsEarthy[w.Get(x, y, z)]) w.Set(x, y, z, Mat.Soil);
+            }
+        Sim.InstantLabour = true;
+        Sim.DesignateBuild(Shapes.Circle(w, Site, x0, z0, 9, new Stroke { Mat = Mat.Stone, Width = 3, Height = 48, Level = true, Hollow = true }, g + 48));
+        Sim.DesignateBuild(Shapes.Line(w, Site, x0 + 60, z0 - 20, x0 + 60, z0 + 20, new Stroke { Mat = Mat.Stone, Width = 8, Height = 24, Level = true }, g + 24));
+        Sim.InstantLabour = false;
+        Advance(1);
+        Rig.Focus(w.WX(x0 + 30), w.WZ(z0));
+        Sim.Jar(x0 + 55, g + 12, z0, 6, .7f);
+        await frames(20);
+        int cracks = Collapse.CracksDrawn;
+        int over = 0;
+        Sim.GoingOver += f => over++;
+        for (int z = z0 - 10; z <= z0 + 10; z++) for (int x = x0 - 3; x <= x0 + 12; x++) for (int y = g - 4; y < g; y++) w.Set(x, y, z, Mat.Air);
+        Advance(1.5);
+        await frames(2);
+        int drawn = Magic.PiecesDrawn;
+        Advance(10);
+        int standing = 0;
+        for (int z = z0 - 10; z <= z0 + 10; z++) for (int x = x0 - 10; x <= x0 + 10; x++) for (int y = g + 16; y < g + 50; y++) if (Mat.IsMasonry(w.Get(x, y, z))) standing++;
+        check("a wall struck hard has its cracks drawn; a tower dug out under its foot goes over whole, drawn in the air, and lies in rubble after",
+            cracks > 20 && over > 0 && drawn > 1000 && standing < 100,
+            $"{cracks} cracked voxels drawn; went over {over} times, {drawn} voxels drawn in the air; {standing} of it standing over two metres after");
     }
 }
