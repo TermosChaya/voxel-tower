@@ -662,7 +662,12 @@ public partial class Main
         // the lines round the voxels: off unless the player turns them on in the settings, and seen at once when they are:
         // they darken the picture, where the wind in the grass from one frame to the next only stirs it
         // not so close that the sward is still growing in over the turf, which darkens it by itself
+        // (the game stopped and the grass put away meanwhile: on a busy machine the blades stirring in the wind and the
+        // people walking change the picture between two frames as much as the lines do)
         Rig.SetAt(World.WX(Site.KeepX - 120), World.WY(World.SurfAt(Site.KeepX - 120, Site.KeepZ)), World.WZ(Site.KeepZ), aim0.yaw, .6f, 2.2f);
+        bool wasPaused = Paused;
+        Paused = true;
+        View.Grass.Visible = false;
         await Frames(20);
         bool linesOff = !Settings.Lines;
         // how much darker the second picture is than the first, on average, in steps of 255
@@ -689,6 +694,8 @@ public partial class Main
         await Frames(2);
         var shot2 = GetViewport().GetTexture().GetImage();
         Settings.ScriptLines(false);
+        View.Grass.Visible = true;
+        Paused = wasPaused;
         float idle = Darker(shot0, shot1), lined = Darker(shot1, shot2);
         Rig.Set(aim0.x, aim0.z, aim0.yaw, aim0.pitch, aim0.zoom, snap: true);
         Check("the lines round the voxels are off by default, and turned on in the settings they are drawn at once",
