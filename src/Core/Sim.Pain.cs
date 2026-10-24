@@ -23,14 +23,14 @@ public sealed partial class Sim
     {
         "sword" => .32f, "knight" => .34f, "halberd" => .22f, "spear" => .24f, "shield" => .2f, "worker" => .08f, "archer" => .13f,
         "sling" => .14f, "crossbow" => .1f, "bombard" => .08f, "priest" => .06f, "goblin" => .2f, "sapper" => .14f, "miner" => .1f,
-        "orc" => .14f, "thief" => .3f, "troll" => .03f, "shaman" => .1f, "witch" => .14f, "necro" => .1f, "hound" => .18f,
+        "orc" => .14f, "thief" => .3f, "troll" => .03f, "shaman" => .1f, "witch" => .14f, "necro" => .1f, "alchemist" => .12f, "hound" => .18f,
         "giant" => .02f, "tametroll" => .03f, "boar" => .05f, "bear" => .06f, _ => 0f,
     };
 
     /// <summary>How much a wound hurts a kind, for the share of it its health it cost: the dead and the engines feel nothing.</summary>
     public static float Sense(UnitType t) => Kinds.IsEngine(t) ? 0 : t.Key switch
     {
-        "risen" or "thrall" => 0, "troll" or "tametroll" or "giant" => .55f, "orc" => 1f, "goblin" or "thief" => 1.45f, "bear" or "boar" => .7f, _ => 1.25f,
+        "risen" or "thrall" => 0, "troll" or "tametroll" or "giant" => .55f, "orc" => 1f, "goblin" or "thief" or "alchemist" => 1.45f, "bear" or "boar" => .7f, _ => 1.25f,
     };
 
     /// <summary>Pain past which a raider breaks and runs (a leader holds on longer); past which one goes down.</summary>

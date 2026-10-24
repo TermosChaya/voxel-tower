@@ -26,7 +26,7 @@ public partial class Main
         Paused = true;
         var rows = new[]
         {
-            new[] { Kinds.Worker, Kinds.Priest }, new[] { Kinds.Archer, Kinds.Swordsman, Kinds.Risen, Kinds.Thrall }, new[] { Kinds.Goblin, Kinds.Sapper, Kinds.Thief, Kinds.Shaman, Kinds.Witch },
+            new[] { Kinds.Worker, Kinds.Priest }, new[] { Kinds.Archer, Kinds.Swordsman, Kinds.Risen, Kinds.Thrall }, new[] { Kinds.Goblin, Kinds.Sapper, Kinds.Thief, Kinds.Shaman, Kinds.Witch, Kinds.Alchemist },
             new[] { Kinds.Orc, Kinds.Miner, Kinds.Necromancer }, new[] { Kinds.Troll, Kinds.Deer, Kinds.Boar, Kinds.Hare, Kinds.Bear, Kinds.WhiteStag }, new[] { Kinds.Ram, Kinds.Catapult, Kinds.Mantlet, Kinds.SiegeTower },
             // the troops the lore opens: men on foot; men who throw and shoot, and the hounds; the riders; the great ones
             new[] { Kinds.Spearman, Kinds.Shieldbearer, Kinds.Halberdier, Kinds.Knight }, new[] { Kinds.Slinger, Kinds.Crossbowman, Kinds.Bombardier, Kinds.Hound },

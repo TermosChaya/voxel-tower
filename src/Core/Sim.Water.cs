@@ -44,6 +44,8 @@ public sealed partial class Sim
     public bool WaterBusy => _water.Busy;
     /// <summary>Pitch still running.</summary>
     public bool PitchBusy => _pitch.Busy;
+    /// <summary>Acid still running.</summary>
+    public bool AcidBusy => _acid.Busy;
 
     /// <summary>
     /// A liquid's own running: what it is and how fast it goes, where it may have to move (something opened beside or
@@ -67,7 +69,10 @@ public sealed partial class Sim
     /// <summary>Voxels of pitch moved a second while it runs: it is thick and goes slowly.</summary>
     public const float PitchRate = 2400;
 
-    readonly Flow _water = new(Mat.Water, PourRate), _pitch = new(Mat.Pitch, PitchRate);
+    /// <summary>Voxels of acid moved a second while it runs: it is thin and runs nearly as quick as water.</summary>
+    public const float AcidRate = 12000;
+
+    readonly Flow _water = new(Mat.Water, PourRate), _pitch = new(Mat.Pitch, PitchRate), _acid = new(Mat.Acid, AcidRate);
 
     // a liquid comes in from the sides and from above, never up from below
     static readonly (int, int, int)[] Inflow = { (1, 0, 0), (-1, 0, 0), (0, 0, 1), (0, 0, -1), (0, 1, 0) };
@@ -80,6 +85,8 @@ public sealed partial class Sim
     {
         OnLiquidEdit(_water, x, y, z, old);
         OnLiquidEdit(_pitch, x, y, z, old);
+        OnLiquidEdit(_acid, x, y, z, old);
+        OnAcidEdit(x, y, z, old);
     }
 
     void OnLiquidEdit(Flow f, int x, int y, int z, byte old)
@@ -91,8 +98,8 @@ public sealed partial class Sim
             if (now != Mat.Air) f.Events.Add((x, y, z, 1));
             return;
         }
-        // pitch newly poured finds its way down (water put down by hand stays as it was put)
-        if (now == f.Mat && f.Mat == Mat.Pitch) { f.Events.Add((x, y, z, 0)); return; }
+        // pitch poured or acid splashed finds its way down (water put down by hand stays as it was put)
+        if (now == f.Mat && f.Mat is Mat.Pitch or Mat.Acid) { f.Events.Add((x, y, z, 0)); return; }
         if (now != Mat.Air) return;
         foreach (var (dx, dy, dz) in Inflow)
         {
@@ -110,11 +117,12 @@ public sealed partial class Sim
         return y + 1;
     }
 
-    /// <summary>Works out where water and pitch have to go when something happened at their edge, and lets them run there.</summary>
+    /// <summary>Works out where water, pitch and acid have to go when something happened at their edge, and lets them run there.</summary>
     void TickWater(float dt)
     {
         TickFlow(_water, dt);
         TickFlow(_pitch, dt);
+        TickFlow(_acid, dt);
     }
 
     void TickFlow(Flow f, float dt)

@@ -16,7 +16,7 @@ namespace VoxelTower.Core;
 public sealed partial class Sim
 {
     /// <summary>20: the bodies sculpted finer, their half-voxels (and so a wounded body's) not what they were.</summary>
-    public const int SaveVersion = 28;
+    public const int SaveVersion = 29;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -26,7 +26,7 @@ public sealed partial class Sim
         if (_kindByKey == null)
         {
             _kindByKey = new Dictionary<string, UnitType>();
-            foreach (var arr in new[] { Kinds.PlayerKinds, Kinds.HordeKinds, Kinds.WildKinds, Kinds.Engines, Kinds.Summoned, Kinds.Casters }) foreach (var t in arr) _kindByKey[t.Key] = t;
+            foreach (var arr in new[] { Kinds.PlayerKinds, Kinds.HordeKinds, Kinds.WildKinds, Kinds.Engines, Kinds.Summoned, Kinds.Casters, Kinds.Throwers }) foreach (var t in arr) _kindByKey[t.Key] = t;
         }
         return _kindByKey.TryGetValue(key, out var k) ? k : null;
     }
@@ -151,6 +151,7 @@ public sealed partial class Sim
         WriteHouseDoors(w);
         w.Write(Sandbox); w.Write(Waves.OnCall);
         w.Write(Unfolds); w.Write(LetOut.Count); foreach (var k in LetOut) w.Write(k);
+        WriteAcid(w);
         w.Write(extra ?? "");
     }
 
@@ -425,6 +426,7 @@ public sealed partial class Sim
         Sandbox = r.ReadBoolean(); Waves.OnCall = r.ReadBoolean();
         Unfolds = r.ReadBoolean(); LetOut.Clear();
         for (int i = r.ReadInt32(); i > 0; i--) LetOut.Add(r.ReadString());
+        ReadAcid(r);
         string extra = r.ReadString();
         // the ways of the horde are worked out again for the valley as it now is, and the stones to throw down found again
         _fieldVersion = -1;

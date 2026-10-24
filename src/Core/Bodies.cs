@@ -154,7 +154,7 @@ public sealed class BodyPlan
 /// The bodies of everyone in the valley: men, the horde's kinds and the beasts, each in a few looks (hair, skin, hats,
 /// rags, helmets), so a crowd is not one figure repeated. A man is 15 voxels tall with his hat, a goblin 10, a troll 24.
 /// </summary>
-public static class Bodies
+public static partial class Bodies
 {
     static readonly Dictionary<(string, int), BodyPlan> Cache = new();
 
@@ -163,7 +163,7 @@ public static class Bodies
     {
         "worker" => 8, "archer" => 6, "sword" => 6, "priest" => 3, "risen" => 2, "thrall" => 2, "shaman" => 2, "witch" => 2, "necro" => 2, "goblin" => 8, "sapper" => 4, "orc" => 6, "miner" => 4, "troll" => 3, "thief" => 3, "deer" => 2, "ram" => 2, "catapult" => 2, "mantlet" => 2, "tower" => 1, "stag" => 1, "bear" => 1,
         "spear" => 4, "shield" => 3, "halberd" => 3, "knight" => 3, "sling" => 4, "crossbow" => 3, "bombard" => 3, "hound" => 3, "rider" => 4, "horsearcher" => 3,
-        "lancer" => 2, "tametroll" => 2, "giant" => 3, _ => 1,
+        "lancer" => 2, "tametroll" => 2, "giant" => 3, "alchemist" => 3, _ => 1,
     };
 
     /// <summary>A look for a unit, from its number, so it keeps it.</summary>
@@ -224,6 +224,7 @@ public static class Bodies
         "shaman" => Shaman(look),
         "witch" => Witch(look),
         "necro" => Necromancer(look),
+        "alchemist" => Alchemist(look),
         "ram" => RamPlan(look),
         "catapult" => CatapultPlan(look),
         "mantlet" => MantletPlan(look),

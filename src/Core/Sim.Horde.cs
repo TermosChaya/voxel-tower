@@ -113,6 +113,8 @@ public sealed partial class Sim
         if (u.T == Kinds.Shaman && !u.Routed) ShamanTick(u);
         else if (u.T == Kinds.Witch && !u.Routed) WitchTick(u);
         else if (u.T == Kinds.Necromancer && !u.Routed) NecromancerTick(u, dt);
+        // an alchemist stops out of reach and throws its flasks while it has a mark and flasks to throw
+        if (u.T == Kinds.Alchemist && !u.Routed && AlchemistTick(u, dt)) return;
         // hurt to a quarter of itself, a raider has had enough (a leader leads to the end, a guard keeps its camp)
         if (!u.Routed && !u.Leader && !u.Guard && u.Hp < u.MaxHp * .25f) u.Routed = true;
         // or hurt past bearing: it breaks (a leader holds on longer)

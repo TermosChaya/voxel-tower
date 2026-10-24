@@ -628,7 +628,7 @@ public partial class Main
         bool restored = Atmos.Sun.ShadowEnabled && vpG.Scaling3DScale == 1 && vpG.Msaa3D == Viewport.Msaa.Msaa2X && Atmos.Env.GlowEnabled;
         Check("the picture can be lowered for a weak machine and put back", lowered && restored, $"lowered {lowered}, back {restored}");
 
-        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 28 && Sound.Heard.Count >= 4,
+        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 32 && Sound.Heard.Count >= 4,
             $"{Sound.Clips} sounds, {Sound.Played} played: {string.Join(", ", Sound.Heard)}");
 
         var before = Rig.Target;
@@ -884,6 +884,7 @@ public partial class Main
         Check("the frame unfolds: no circle and no lore at the start, its key refused, so while nothing is done; three markings let the circle out marked new (not the bridge), a night the lore",
             hiddenAtFirst && refused && stays && letOut,
             $"hidden at first {hiddenAtFirst}, key refused {refused}, stays {stays}, let out {letOut}");
+        await AcidSelfTest((what, ok, detail) => Check(what, ok, detail));
         // the report for the author: one file with the system, the hangs, the last events and the logs
         string report = Diag.Report(this, ProjectSettings.GlobalizePath("user://logs"));
         string body = System.IO.File.Exists(report) ? System.IO.File.ReadAllText(report) : "";

@@ -123,6 +123,7 @@ public partial class Sound : Node
         sim.Hexed += (x, y, z) => Play("hex", x, y, z, .6, 1);
         sim.Darkened += (x, y, z) => Play("hex", x, y, z, .6, .9f);
         sim.Woken += (x, y, z) => Play("gong", x, y, z, 1, .6f);
+        HookAcid(sim);
     }
 
     /// <summary>A blade, a club or a beast's jaws starting down at someone: the swish of it through the air, or a beast's lunge.</summary>
@@ -264,6 +265,7 @@ public partial class Sound : Node
         }
         _fire.VolumeDb = burning == 0 ? -80 : Mathf.LinearToDb(Math.Clamp(burning / 120f, .12f, .8f));
         _rain.VolumeDb = sim.Weather == Weather.Rain ? -9 : -80;
+        AcidLoop(sim);
     }
 
     // ---------------------------------------------------------------- making the sounds
@@ -298,6 +300,7 @@ public partial class Sound : Node
         Add("mark", Chalk());
         Add("nope", Nope());
         Add("done", Bell());
+        MakeAcid();
     }
 
     void Add(string name, float[] s, bool loop = false)

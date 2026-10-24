@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace VoxelTower.Core;
 
 /// <summary>What flies at the horde: an arrow, a crossbow's bolt, a sling's stone, a pot of powder, a pot of burning pitch.</summary>
-public enum Shot : byte { Arrow, Bolt, Stone, Pot, FirePot }
+public enum Shot : byte { Arrow, Bolt, Stone, Pot, FirePot, Flask }
 
 /// <summary>An arrow (or a bolt, a stone, a pot) in flight, from bow to where the target was expected to be.</summary>
 public sealed class Arrow
@@ -33,8 +33,8 @@ public sealed partial class Sim
     const float ArrowSpeed = 15 * 16;   // voxels a second
     /// <summary>How fast the rest fly: a bolt faster than an arrow, a sling stone a little slower, a pot lobbed slow.</summary>
     const float BoltSpeed = 20 * 16, StoneSpeed = 13 * 16, PotSpeed = 8 * 16;
-    static float SpeedOf(Shot s) => s switch { Shot.Bolt => BoltSpeed, Shot.Stone => StoneSpeed, Shot.Pot or Shot.FirePot => PotSpeed, _ => ArrowSpeed };
-    static float ArcOf(Shot s) => s switch { Shot.Bolt => .04f, Shot.Stone => .08f, Shot.Pot or Shot.FirePot => .32f, _ => .1f };
+    static float SpeedOf(Shot s) => s switch { Shot.Bolt => BoltSpeed, Shot.Stone => StoneSpeed, Shot.Pot or Shot.FirePot or Shot.Flask => PotSpeed, _ => ArrowSpeed };
+    static float ArcOf(Shot s) => s switch { Shot.Bolt => .04f, Shot.Stone => .08f, Shot.Pot or Shot.FirePot => .32f, Shot.Flask => .36f, _ => .1f };
     /// <summary>What a shot that kills is put down as, for the chronicle.</summary>
     static string CauseOf(Shot s) => s switch { Shot.Bolt => "арбалетный болт", Shot.Stone => "камень из пращи", _ => "стрела" };
 
@@ -408,7 +408,7 @@ public sealed partial class Sim
             bool making = o.Loot > 0 || o.Captive != null, charged = o.Charge;
             // an engine: hardly worth a plain arrow, the first mark for a fire arrow; a sorcerer before anyone
             // (a pot of powder breaks an engine up as well as fire does)
-            float engine = Kinds.IsEngine(o.T) ? (u.FireArrows || u.T.Tool == "bombard" ? -96 : 96) : Kinds.IsCaster(o.T) ? -110 : 0;
+            float engine = Kinds.IsEngine(o.T) ? (u.FireArrows || u.T.Tool == "bombard" ? -96 : 96) : Kinds.IsCaster(o.T) || o.T == Kinds.Alchemist ? -110 : 0;
             // with fire arrows, those standing on a deck, a ladder or pitch: one arrow sets it all alight under them
             float pri = d - (making ? 96 : charged ? 80 : hurting ? 64 : busy ? 48 : 0) - (u.FireArrows && OnTinder(o) ? 40 : 0) + engine;
             if (pri >= bd || !Sight(u, o)) continue;
@@ -466,6 +466,8 @@ public sealed partial class Sim
             a.T += dt;
             if (a.T < a.Dur || a.Done) continue;
             a.Done = true;
+            // an alchemist's flask breaks and lets out its acid
+            if (a.Kind == Shot.Flask) { FlaskLands(a); continue; }
             // a pot bursts, or breaks and burns, wherever it comes down, on the raider or by it
             if (a.Kind == Shot.Pot) { if (a.Hits) ShotHits++; var (px, py, pz) = PotDown(a); PotBurst(px, py, pz, a.Damage, a.From); continue; }
             if (a.Kind == Shot.FirePot) { if (a.Hits) ShotHits++; PitchLands(a); continue; }

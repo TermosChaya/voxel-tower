@@ -344,6 +344,22 @@ public static class Kinds
     /// <summary>The horde's sorcerers.</summary>
     public static readonly UnitType[] Casters = { Shaman, Witch, Necromancer };
     public static bool IsCaster(UnitType t) => t == Shaman || t == Witch || t == Necromancer;
+
+    /// <summary>
+    /// An alchemist of the horde: a goblin in a stained robe and a leather apron, goggles of green glass, flasks of acid
+    /// on a bandolier. It stops out of reach and throws them at our walls, gates and ladders, or into a knot of our
+    /// people (Sim.Alchemists.cs); its flasks spent, it fights with its knife like any goblin. It goes the goblins' way.
+    /// </summary>
+    public static readonly UnitType Alchemist = new()
+    {
+        Key = "alchemist", Name = "Алхимик", Team = Team.Horde,
+        Move = new Mover { Height = 2, Climb = 1, Drop = 5, Speed = 2.7f, Carve = new float[] { 10, 22, 3, 1 }, Build = .3f },
+        // its damage is a flask's on whoever it breaks on; its throws are AttackTime apart
+        Hp = 50, Damage = 14, AttackTime = 4.5f, KeepDamage = 1, Bounty = 12, BodyH = 10, BodyR = 1.5f, Reach = 9,
+        Range = 18 * VoxelWorld.PerMetre, Tool = "flask",
+    };
+    /// <summary>The horde's throwers of what is not a weapon of war: the alchemists.</summary>
+    public static readonly UnitType[] Throwers = { Alchemist };
 }
 
 /// <summary>One pawn or attacker on the field. Positions are in voxels, feet on the ground.</summary>
@@ -507,6 +523,10 @@ public sealed class Unit
     /// <summary>The engine a raider guards, keeping by it; and for a catapult, where it throws at (packed voxel, −1 none).</summary>
     public Unit Escort;
     public int AimAt = -1;
+    /// <summary>An alchemist: the flasks it has thrown of those it came with.</summary>
+    public int Thrown;
+    /// <summary>When it last coughed in the fumes of acid and stepped back out of them.</summary>
+    public double CoughAt = -99;
     /// <summary>A siege tower at a wall: the voxels of the ladder it dropped against it (packed).</summary>
     public readonly List<int> Docked = new();
     /// <summary>An envoy of the horde, under a white rag, come to bargain: no one of the horde strikes with it.</summary>

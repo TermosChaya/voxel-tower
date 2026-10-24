@@ -173,6 +173,7 @@ public sealed partial class Sim
         Time += dt;
         if (Sandbox) Fill();
         Stage = "TickWater"; TickWater(dt);
+        Stage = "TickAcid"; TickAcid(dt);
         Stage = "TickFire"; TickFire(dt);
         Stage = "TickCharges"; TickCharges(dt);
         Stage = "TickLight"; TickLight();

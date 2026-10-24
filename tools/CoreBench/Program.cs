@@ -4397,7 +4397,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bodies")
     int parityLooks = 0, parityCells = 0;
     var parityOff = new System.Collections.Generic.List<string>();
     var everyKind = Kinds.PlayerKinds.Concat(Kinds.HordeKinds).Concat(Kinds.WildKinds)
-        .Concat(new[] { Kinds.Catapult, Kinds.Mantlet, Kinds.SiegeTower, Kinds.Risen, Kinds.Thrall, Kinds.Shaman, Kinds.Witch, Kinds.Necromancer }).Distinct().ToArray();
+        .Concat(new[] { Kinds.Catapult, Kinds.Mantlet, Kinds.SiegeTower, Kinds.Risen, Kinds.Thrall, Kinds.Shaman, Kinds.Witch, Kinds.Necromancer, Kinds.Alchemist }).Distinct().ToArray();
     foreach (var t in everyKind)
         for (int l = 0; l < Bodies.Looks(t); l++)
         {
@@ -5840,7 +5840,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--sandbox")
     var called = simS.Summon(siteS.KeepX - 60, siteS.KeepZ, heavy: true);
     RunS(40);
     Check("…a band called up where it is pointed at comes whole and goes at the citadel, which takes no harm",
-        called != null && called.Members.Count == 6 && called.Members.Exists(u => u.T == Kinds.Troll) && simS.KeepHp >= keep0 && !simS.Over,
+        called != null && called.Members.Count == 7 && called.Members.Exists(u => u.T == Kinds.Troll) && simS.KeepHp >= keep0 && !simS.Over,
         $"band {called?.Name} of {called?.Members.Count}, state {called?.State}; citadel {keep0:0} → {simS.KeepHp:0}");
 
     // the horde on call: the day runs on to noon and stands there; called, the horde comes knowing all; and a save
@@ -6055,6 +6055,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--house")
         $"the dwelling closed {dwelling?.Closed} ({simU.CheckDwelling(spot.x - 28, spot.z - 16, spot.x + 28, spot.z + 16).Why}), gate ready {simU.Gates[^1].Ready}, " +
         $"orders left {simU.Orders.Total}, places {places0} → {simU.Places} at {simU.Time:0} s");
 }
+
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--acid") AcidBench.Run((what, ok, detail) => Check(what, ok, detail));
 
 if (args.Length > 0 && args[0] == "--stress")
 {

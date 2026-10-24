@@ -109,6 +109,8 @@ public static class Retinue
         if (u.Fetching != null) return "идёт за пленным";
         if (u.Envoy) return sim.Offer?.Envoy == u && sim.Offer.Kind != DealKind.None ? "посол: ждёт ответа" : u.State == UnitState.Flee ? "посол: уходит" : "посол: идёт к цитадели";
         if (u.T == Kinds.Catapult) return u.State == UnitState.Siege ? "мечет камни по стенам" : "его катят на позицию";
+        if (u.T == Kinds.Alchemist && u.State == UnitState.Siege)
+            return (u.Target != null ? "бросает кислоту в наших" : "бросает кислоту в стену") + $" · склянок {Math.Max(0, Sim.FlasksCarried - u.Thrown)}";
         if (u.T == Kinds.Ram) return u.State switch { UnitState.Carve => "проламывает стену", UnitState.Siege => "бьёт в цитадель", _ => "катится к стенам" };
         if (u.Escort is { Dead: false } && u.State != UnitState.Fight) return "охраняет камнемёт";
         if (u.T == Kinds.Mantlet) return "прикрывает ватагу от стрел";

@@ -54,7 +54,7 @@ public sealed partial class Sim
         if (at < 0) return null;
         var b = new Warband { Id = _nextBand++, State = BandState.Coming, Entry = at, Name = heavy ? "Тяжёлая ватага" : "Ватага" };
         b.Roster.AddRange(heavy
-            ? new[] { Kinds.Troll, Kinds.Orc, Kinds.Orc, Kinds.Troll, Kinds.Orc, Kinds.Shaman }
+            ? new[] { Kinds.Troll, Kinds.Orc, Kinds.Orc, Kinds.Troll, Kinds.Orc, Kinds.Shaman, Kinds.Alchemist }
             : new[] { Kinds.Orc, Kinds.Goblin, Kinds.Goblin, Kinds.Orc, Kinds.Goblin, Kinds.Goblin, Kinds.Orc });
         Bands.Add(b);
         foreach (var t in b.Roster) SpawnRaider(t, b);

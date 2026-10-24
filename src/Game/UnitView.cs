@@ -91,11 +91,11 @@ public partial class UnitView : Node3D
     readonly Dictionary<int, Look> _looks = new();
     readonly HashSet<int> _alive = new();
     readonly List<int> _gone = new();
-    MultiMeshInstance3D _arrows, _rings, _standards, _stuck, _kegs, _bolts, _stones, _pots, _firePots;
+    MultiMeshInstance3D _arrows, _rings, _standards, _stuck, _kegs, _bolts, _stones, _pots, _firePots, _flasks;
     float[] _kegBuf = Array.Empty<float>();
     float[] _ringBuf = Array.Empty<float>(), _standardBuf = Array.Empty<float>(), _stuckBuf = Array.Empty<float>();
     /// <summary>A buffer for each of what flies, by <see cref="Shot"/>.</summary>
-    readonly float[][] _shotBufs = { Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>() };
+    readonly float[][] _shotBufs = { Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>(), Array.Empty<float>() };
     readonly Dictionary<int, Own> _own = new();
     readonly List<Fallen> _fallen = new();
     readonly Transform3D[] _xf = new Transform3D[Figure.Bones];
@@ -124,6 +124,10 @@ public partial class UnitView : Node3D
         var firePot = new SphereMesh { Radius = .1f, Height = .18f, RadialSegments = 8, Rings = 4,
             Material = new StandardMaterial3D { AlbedoColor = new Color("8e3a1c"), EmissionEnabled = true, Emission = new Color(1f, .45f, .12f), EmissionEnergyMultiplier = 2.5f } };
         _firePots = Multi(firePot, null, false);
+        // an alchemist's flask: green glass with the acid glowing in it
+        var flask = new SphereMesh { Radius = .08f, Height = .15f, RadialSegments = 8, Rings = 4,
+            Material = new StandardMaterial3D { AlbedoColor = new Color("5f9a3a"), Roughness = .15f, EmissionEnabled = true, Emission = new Color(.45f, .9f, .25f), EmissionEnergyMultiplier = 1.2f } };
+        _flasks = Multi(flask, null, false);
         // a sapper's charge: a keg of powder, a little under half a metre
         var keg = new BoxMesh { Size = new Vector3(.36f, .42f, .36f), Material = new StandardMaterial3D { AlbedoColor = new Color("6a3322"), Roughness = .85f } };
         _kegs = Multi(keg, null, false);
@@ -526,6 +530,10 @@ public partial class UnitView : Node3D
                 case UnitState.Work when u.JobI < u.Jobs.Count:
                     Labour(u, f, ref main, ref off, ref lean, ref elbowR, ref elbowL, ref kneeR, ref kneeL);
                     break;
+                // an alchemist standing to throw: the flask drawn back over the shoulder and lobbed
+                case UnitState.Siege when u.T.Tool == "flask":
+                    FightArms(u, f, seed, ref main, ref off, ref lean);
+                    break;
                 case UnitState.Work:
                 case UnitState.Carve:
                 case UnitState.Siege:
@@ -597,6 +605,9 @@ public partial class UnitView : Node3D
                     lean = k < .85f ? -.1f : Mathf.Lerp(-.1f, .22f, (k - .85f) / .15f);
                     break;
                 }
+                case UnitState.Siege when u.T.Tool == "flask":
+                    FightArms(u, f, seed, ref main, ref off, ref lean);
+                    break;
                 case UnitState.Work:
                 case UnitState.Carve:
                 case UnitState.Siege:
@@ -937,7 +948,7 @@ public partial class UnitView : Node3D
             off = -.9f;
             lean = u.Swing * .12f;
         }
-        else if (u.T.Ranged && tool == "bombard")
+        else if (u.T.Ranged && tool == "bombard" || tool == "flask")
         {
             float k = 1 - Math.Clamp(u.Cooldown / 1.2f, 0, 1);
             main = Mathf.Lerp(-.5f, -2.8f, k * k);
@@ -1297,9 +1308,9 @@ public partial class UnitView : Node3D
     {
         DrawKegs(sim);
         // a shot that missed throws up bits of what it came down in: earth, grass, chips of stone, water
-        foreach (var a in sim.Arrows) if (a.Done && !a.Hits && a.Kind is not (Shot.Pot or Shot.FirePot) && _grounded.Add(a)) Thud(a);
+        foreach (var a in sim.Arrows) if (a.Done && !a.Hits && a.Kind is not (Shot.Pot or Shot.FirePot or Shot.Flask) && _grounded.Add(a)) Thud(a);
         if (_grounded.Count > 600) _grounded.RemoveWhere(a => !sim.Arrows.Contains(a));
-        var meshes = new[] { _arrows, _bolts, _stones, _pots, _firePots };
+        var meshes = new[] { _arrows, _bolts, _stones, _pots, _firePots, _flasks };
         Span<int> counts = stackalloc int[meshes.Length];
         foreach (var a in sim.Arrows) if (Flying(a)) counts[(int)a.Kind]++;
         for (int k = 0; k < meshes.Length; k++)
@@ -1322,7 +1333,7 @@ public partial class UnitView : Node3D
             var at = new Vector3(_w.WX(p.X), _w.WY(p.Y), _w.WZ(p.Z));
             var z = dir.Normalized();
             // a stone or a pot turns over and over as it goes
-            if (a.Kind is Shot.Stone or Shot.Pot or Shot.FirePot) z = new Basis(Vector3.Up, a.T * 9) * (new Basis(Vector3.Right, a.T * 13) * Vector3.Back);
+            if (a.Kind is Shot.Stone or Shot.Pot or Shot.FirePot or Shot.Flask) z = new Basis(Vector3.Up, a.T * 9) * (new Basis(Vector3.Right, a.T * 13) * Vector3.Back);
             var x = Vector3.Up.Cross(z);
             x = x.LengthSquared() < 1e-6f ? Vector3.Right : x.Normalized();
             var y = z.Cross(x);

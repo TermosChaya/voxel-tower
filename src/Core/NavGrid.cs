@@ -215,8 +215,8 @@ public sealed class NavGrid
                                 if ((uint)(xx - 3) < 2 && (uint)(zz - 3) < 2) trunk[(zz - 3) * 2 + xx - 3]++;
                             }
                         }
-                        // pitch is waded and drowned in like water
-                        else if (v == Mat.Water || v == Mat.Pitch) wat++;
+                        // pitch and acid are waded and drowned in like water
+                        else if (v == Mat.Water || v == Mat.Pitch || v == Mat.Acid) wat++;
                         else if (Mat.IsLadder[v]) lad++;
                         else if (v == Mat.Stakes) spk++;
                     }

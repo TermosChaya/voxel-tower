@@ -98,7 +98,14 @@ public static class Mat
     /// </summary>
     public const byte SteelEdge = 123, SteelDark = 124, Rust = 125, LeatherDark = 126, EyeWhite = 127, Lips = 128, Tusk = 129, Warpaint = 130,
         WarpaintRed = 131, Ink = 132, SkinTrollDark = 133, Crag = 134, Hide = 135, Horn = 136, Shaft = 137, Maw = 138, Scar = 139;
-    public const int Count = 140;
+    /// <summary>
+    /// Acid from an alchemist's flask: a thin liquid with a sickly green glow that runs into the lowest place it can reach
+    /// and eats whatever it lies on, earth and timber quickly, stone slowly, spent as it eats (Sim.Acid.cs).
+    /// </summary>
+    public const byte Acid = 140;
+    /// <summary>For the figures: the green glass of an alchemist's flasks and goggles, the acid showing through it.</summary>
+    public const byte Phial = 141;
+    public const int Count = 142;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
     public static readonly bool[] IsVeg = new bool[Count], IsPlayer = new bool[Count], IsEarthy = new bool[Count],
@@ -250,9 +257,14 @@ public static class Mat
         D(Hide, "шкура", 0x6b4d33, .2f, MatGroup.Hard, 0); D(Horn, "рог", 0x4e4133, .1f, MatGroup.Hard, 0);
         D(Shaft, "древко", 0x7d5c3b, .12f, MatGroup.Hard, 0); D(Maw, "пасть", 0x3c1213, .08f, MatGroup.Hard, 0);
         D(Scar, "шрам", 0x8f5f55, .08f, MatGroup.Hard, 0);
+        // acid glows a little of itself, enough to be seen at night, not to light the walls as fire does
+        D(Acid, "Кислота", 0x8bc83a, .14f, MatGroup.Hard, 0);
+        Emission[Acid] = .75f;
+        D(Phial, "склянка", 0x5f9a3a, .1f, MatGroup.Hard, 0);
+        Emission[Phial] = .35f;
 
         foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage, Flower, Bloom, Birch, NeedleLight, FoliageLight, FoliageGold, PineBark, Snag }) IsVeg[m] = true;
-        foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame, Stakes, Pitch, TowerLadder }) Passable[m] = true;
+        foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame, Stakes, Pitch, TowerLadder, Acid }) Passable[m] = true;
         IsLadder[Ladder] = IsLadder[SiegeLadder] = IsLadder[TowerLadder] = true;
         foreach (var m in new[] { Tuft, Flower, Bloom }) SwayKind[m] = 1;
         foreach (var m in new[] { Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold }) SwayKind[m] = 2;
@@ -261,6 +273,8 @@ public static class Mat
         for (int m = 0; m < Count; m++)
             Skin[m] = Smooth[m] ? (byte)1 : Metal[m] ? (byte)2 : IsGrass((byte)m) ? (byte)3 : m is Leaf or NeedleLight ? (byte)7
                 : IsLeafy((byte)m) ? (byte)4 : m == Birch ? (byte)6 : IsTrunk((byte)m) ? (byte)5 : m == Scorch ? (byte)8 : (byte)0;
+        // acid wet and glossy as pitch is, without ringing like metal when struck
+        Skin[Acid] = 2;
         // what holds the world up: loose pieces resting on these never fall
         foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Scorch, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank, Menhir }) IsAnchor[m] = true;
 
