@@ -501,9 +501,9 @@ public sealed partial class Sim
         if (blow > 3)
             foreach (var u in Units)
             {
-                if (u.Dead || u.Inside || u.Airborne != null || Spares(f, u)) continue;
+                if (u.Dead || u.Inside || u.Airborne != null || Spares(f, u) || u == f.By) continue;
                 float dx = u.X - f.X, dz = u.Z - f.Z, dy = u.Y + u.T.BodyH * .5f - f.Y, d = MathF.Sqrt(dx * dx + dz * dz + dy * dy * .5f);
-                // those it comes down on: not those its middle is near; where on them it meets them, as hard as it comes
+                // those it comes down on (not the one who broke it out or threw it): not those its middle is near; where on them it meets them, as hard as it comes
                 if (d < reach && Touches(f, u, 1))
                     Strike(u, MassOf(f), speed / VoxelWorld.PerMetre, f.VX, f.VY, f.VZ, f.VY < -.5f * speed ? float.NaN : Math.Clamp((f.Y - f.R * .5f - u.Y) / u.T.BodyH, 0, 1), f.Cause,
                         blow * (1 - .5f * d / reach) * (Kinds.IsEngine(u.T) ? 1.5f : 1));

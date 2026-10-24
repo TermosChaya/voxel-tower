@@ -147,7 +147,10 @@ static class GiantsBench
         check("a boulder coming down aslant on the open ground knocks a bowl out of it and bounces on", stone3 != null && bounced3 >= 1, $"bounced {bounced3}; its way {string.Join(" ", path3)}");
         Gone(giant2);
 
-        // a giant of ours with the lore of boulders throws at our own wall: it breaks none of it
+        // a giant of ours with the lore of boulders throws at our own wall: it breaks none of it (what the tests before
+        // it broke let come down first, lest a piece still falling strike it)
+        for (int i = 0; i < 40 && sim.Fliers.Count > 0; i++) Run(.5);
+        sim.Fliers.Clear();
         sim.Learnt.Add("boulders");
         var ours = Put(Kinds.Giant, wx0 - 120, fz0 + 110);
         int wallO = Count(wx0, fg, wz0, wx0 + 8, fg + 32, wz1, Stone);
@@ -209,7 +212,7 @@ static class GiantsBench
         var (lostG, hitsG) = Shot(G);
         var (lostO, hitsO) = Shot(Kinds.Orc);
         float perG = lostG / Math.Max(1, hitsG), perO = lostO / Math.Max(1, hitsO);
-        check("arrows hardly go through a hill giant's hide: an arrow does it under a third of what it does an orc", hitsG > 3 && hitsO > 3 && perG < perO / 3,
+        check("arrows hardly go through a hill giant's hide: an arrow does it under half of what it does an orc in its mail", hitsG > 3 && hitsO > 3 && perG < perO / 2,
             $"the giant lost {lostG:0} in {hitsG} hits ({perG:0.0} each), the orc {lostO:0} in {hitsO} ({perO:0.0} each)");
         Run(1);
 

@@ -283,7 +283,7 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   из земли `GroundBall`, где больше камня; глубокий — с отбросом земли), `BeginHurl`, `Carried` (камень в руках —
   летун с `Flier.Carrier`, стадии `HurlStoop/Lift/Raise/Loose/Done`), `LetFly`. Удар: `BoulderStrikes` из
   `ComeDown` (`IsBoulder` по `Cause`): люди — `Flier.Struck`, бросок и дальше; земля — ямка и отскок
-  (`Flier.Bounces`); остальное — `Break` по энергии (`Kj`, `BreakCost`) и `Fly` (куски `ChipsCause`). У стены —
+  (`Flier.Bounces`); остальное — `Crater` по энергии (`Kj`, `BreakCost`) и `Fly` (куски `ChipsCause`). У стены —
   `GiantSmash` вместо рубки (из `Carve`), удар по людям — `Swat` (из `TroopBlow`). `OrderHurl`, `SmashInto` — для
   постановок и проверок. Ничего из броска не сохраняется: камень в руках после загрузки падает.
 - `Sim.Possess.cs` — вселение: `Possessed`, намерения игрока `WishX/WishZ` (вектор в вокселях), `WishRun`,

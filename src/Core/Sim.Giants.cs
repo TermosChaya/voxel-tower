@@ -191,7 +191,7 @@ public sealed partial class Sim
                             if (m != Mat.Air && m != Mat.Water && !Mat.IsPlayer[m] && Breakable(m)) over.Add((x, y, z));
                         }
                 float sx0 = bx - u.X, sz0 = bz - u.Z, sl = MathF.Max(1, MathF.Sqrt(sx0 * sx0 + sz0 * sz0));
-                Fly(over, bx, by, bz, -sz0 / sl, .3f, sx0 / sl, 0, ChipsCause);
+                Fly(over, bx, by, bz, -sz0 / sl, .3f, sx0 / sl, 0, ChipsCause, u);
             }
             f = Loose(best, 0, 0, 0, cause);
             if (f != null) Hacked?.Invoke(bx, by, bz, Mat.Rock);
@@ -429,8 +429,10 @@ public sealed partial class Sim
             (f.Struck ??= new List<Unit>()).Add(u);
             bool engine = Kinds.IsEngine(u.T);
             // a man struck by a third of a ton at a run is broken; a troll or a giant takes it and stands
-            Hurt(u, f.By, Math.Min(engine ? 260 : 420, kj * 3.2f) * (engine ? 1.5f : 1), f.Cause);
-            if (engine) { slow *= .35f; continue; }
+            float blow = Math.Min(engine ? 260 : 420, kj * 3.2f) * (engine ? 1.5f : 1);
+            if (engine) { Hurt(u, f.By, blow, f.Cause); slow *= .35f; continue; }
+            // where it meets the body breaks what is there (Sim.Trauma.cs)
+            Strike(u, f.Voxels.Count * BoulderKg, speed / VoxelWorld.PerMetre, f.VX, f.VY, f.VZ, Math.Clamp((f.Y - u.Y) / u.T.BodyH, 0, 1), f.Cause, blow, f.By);
             float light = MathF.Min(1, 15 / u.T.BodyH), out_ = speed * .5f * light;
             Fling(u, ux * out_, MathF.Max(2.5f * VoxelWorld.PerMetre, out_ * .45f), uz * out_, f.Cause);
             slow *= .82f;
@@ -458,7 +460,7 @@ public sealed partial class Sim
         if (other == 0)
         {
             // the ground: a bowl knocked out of its earth, and on it bounces if it came aslant and hard
-            Break(f, ix, iy, iz, ux, uy, uz, kj * .2f, ours, groundOnly: true, out _);
+            Crater(f, ix, iy, iz, ux, uy, uz, kj * .2f, ours, groundOnly: true, out _);
             if (f.Bounces < 2 && uy > -.8f && speed > 7 * VoxelWorld.PerMetre)
             {
                 f.Bounces++;
@@ -470,7 +472,7 @@ public sealed partial class Sim
             }
             return false;
         }
-        int broken = Break(f, ix, iy, iz, ux, uy, uz, kj, ours, groundOnly: false, out float left);
+        int broken = Crater(f, ix, iy, iz, ux, uy, uz, kj, ours, groundOnly: false, out float left);
         if (broken > 0)
         {
             Collapsed?.Invoke(Math.Max(broken, 40), ix, iy, iz);
@@ -495,7 +497,7 @@ public sealed partial class Sim
     /// back out of the hole, and on out of the far side what bursts through. Powder in it goes up. Returns how many
     /// voxels it broke, and the force left over.
     /// </summary>
-    int Break(Flier f, int ix, int iy, int iz, float ux, float uy, float uz, float kj, bool spareOurs, bool groundOnly, out float left)
+    int Crater(Flier f, int ix, int iy, int iz, float ux, float uy, float uz, float kj, bool spareOurs, bool groundOnly, out float left)
     {
         left = kj;
         float lat = f.R + 1.5f;
@@ -559,9 +561,9 @@ public sealed partial class Sim
     /// <summary>
     /// Voxels knocked out by a blow fly off in pieces: those short of the middle of the blow back out of the hole, up
     /// and aside; those beyond it on out of the far face, with what force is left (a share, 0…1). What there is no room
-    /// in the air for is gone in dust.
+    /// in the air for is gone in dust. The one who broke them out is not struck by them coming down.
     /// </summary>
-    void Fly(List<(int x, int y, int z)> voxels, int ix, int iy, int iz, float ux, float uy, float uz, float spare, string cause)
+    void Fly(List<(int x, int y, int z)> voxels, int ix, int iy, int iz, float ux, float uy, float uz, float spare, string cause, Unit by = null)
     {
         int room = MaxAloft - Aloft;
         foreach (var piece in Split(voxels, 25))
@@ -583,7 +585,7 @@ public sealed partial class Sim
                 vx = -ux * back + sx / sl * side; vy = (3 + 3 * r1) * m; vz = -uz * back + sz / sl * side;
             }
             var p = piece.Count <= room ? Loose(piece, vx, vy, vz, cause, room) : null;
-            if (p != null) { room -= p.Voxels.Count; continue; }
+            if (p != null) { p.By = by; room -= p.Voxels.Count; continue; }
             foreach (var (px, py, pz) in piece)
             {
                 byte was = World.Get(px, py, pz);
@@ -634,7 +636,7 @@ public sealed partial class Sim
             var (hx, hy, hz) = broke[0];
             Hacked?.Invoke(hx, hy, hz, World.Get(hx, hy, hz));
             float dx = wx - u.X, dz = wz - u.Z, d = MathF.Max(1, MathF.Sqrt(dx * dx + dz * dz));
-            Fly(broke, (int)u.X, (int)(u.Y + u.T.BodyH * .5f), (int)u.Z, dx / d, 0, dz / d, .4f, ChipsCause);
+            Fly(broke, (int)u.X, (int)(u.Y + u.T.BodyH * .5f), (int)u.Z, dx / d, 0, dz / d, .4f, ChipsCause, u);
             Collapsed?.Invoke(broke.Count, hx, hy, hz);
         }
         if (u.CarveI >= u.CarveList.Count || broke.Count > 0 && WayOpen(u)) StopCarve(u);
