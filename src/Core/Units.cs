@@ -509,6 +509,17 @@ public sealed class Unit
     public Unit Patient, Bandager;
     public float BandageEffort;
     public double NextLookForWounded;
+    /// <summary>
+    /// The wounded carried and helped along (Sim.Carry.cs): whom it carries (or goes to lift) and who carries it, whether
+    /// it is up on the shoulder yet, how far the lifting has got, where it is being taken; whom it helps along on a broken
+    /// leg and who helps it; when it next looks for one to carry or help. For one pinned, when it last called out and
+    /// when it calls again; for one sent by the player to dig a comrade out, that it was sent (it digs beside another).
+    /// </summary>
+    public Unit Carrying, CarriedBy, Propping, PropBy;
+    public bool Aloft, FreeOrdered;
+    public float LiftEffort;
+    public int CarryTo = -1;
+    public double NextLookForFallen, CalledAt = -99, NextCall;
 
     // the horde hacking its way
     public int CarveCell = -1;

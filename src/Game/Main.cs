@@ -231,7 +231,7 @@ public partial class Main : Node3D
         World = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         Site = MapGen.Generate(World, mp);
         if (_demo && _pose == "trees") Grove();
-        if (_demo && _pose is "people" or "duel" or "reel" or "blood" or "beasts" or "walk" or "trauma" or "scaffold") ClearGrove();
+        if (_demo && _pose is "people" or "duel" or "reel" or "blood" or "beasts" or "walk" or "trauma" or "scaffold" or "carry") ClearGrove();
         // the field of the traps cleared of trees, so they are to be seen
         if (_demo && _pose == "engines") ClearTrees(Site.KeepX - Site.KeepR - 420, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 20, Site.KeepZ + 140);
         if (_demo && _pose == "drawbridge") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 120);

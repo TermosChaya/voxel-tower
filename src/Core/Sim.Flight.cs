@@ -195,6 +195,8 @@ public sealed partial class Sim
         if (u.Team == Team.Player) ReleaseSite(u);
         // thrown out from under what pinned it
         if (u.PinKg > 0) Unpin(u, said: false);
+        // one carried is thrown off the shoulder, one carrying lets go (Sim.Carry.cs)
+        LetGoOf(u);
         u.Path = null; u.Target = null; u.State = UnitState.Idle; u.Swing = 0;
         // one leading a captive lets go of it, and one led goes free of its leader
         if (u.Captive != null) { u.Captive.Captor = null; u.Captive = null; }

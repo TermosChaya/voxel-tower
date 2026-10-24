@@ -130,6 +130,7 @@ public partial class Sound : Node
         sim.Woken += (x, y, z) => Play("gong", x, y, z, 1, .6f);
         HookAcid(sim);
         HookCollapse(sim);
+        HookCarry(sim);
     }
 
     /// <summary>A blade, a club or a beast's jaws starting down at someone: the swish of it through the air, or a beast's lunge.</summary>
@@ -317,6 +318,7 @@ public partial class Sound : Node
         Add("done", Bell());
         MakeAcid();
         MakeCollapse();
+        MakeCarry();
     }
 
     void Add(string name, float[] s, bool loop = false)

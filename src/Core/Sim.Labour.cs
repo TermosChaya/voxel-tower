@@ -76,6 +76,8 @@ public sealed partial class Sim
         TroopTick(u, dt);
         // bound and led off by a thief: it goes where it is led till it is freed
         if (u.Captor != null) { Led(u, dt); return; }
+        // carrying a comrade who cannot get up, or helping one along: on with it, unless it must see to itself first (Sim.Carry.cs)
+        if ((u.Carrying != null || u.Propping != null) && Aid(u, dt)) { Busy(u); return; }
         // standing in the flames: out of them before anything
         if (EscapeFire(u, dt)) { Busy(u); return; }
         // a sapper's fuse burning down: one runs to cut it, the rest near it get away from the wall
@@ -100,6 +102,8 @@ public sealed partial class Sim
         if (!u.T.Prays && handy && Rescue(u, dt, (soldier && Waves.Active ? 15 : 40) * VoxelWorld.PerMetre)) { Busy(u); return; }
         // a comrade bleeding close by comes before any work (soldiers keep to their posts while the horde is here)
         if (!u.T.Prays && handy && (!soldier || !Waves.Active) && Bandage(u, dt)) { Busy(u); return; }
+        // one who cannot get up carried to mend, one limping helped along (soldiers only while the horde is away)
+        if (!u.T.Prays && handy && (!soldier || !Waves.Active) && LookForFallen(u) && Aid(u, dt)) { Busy(u); return; }
         // a fire in what we built or round the citadel, if putting it out comes before the work at hand
         if (!u.T.Prays && handy && (!soldier || !Waves.Active) && FightFire(u, dt)) { Busy(u); return; }
         // a raider bound out in the field: a free worker goes for it and leads it into the citadel

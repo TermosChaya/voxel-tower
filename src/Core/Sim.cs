@@ -250,6 +250,8 @@ public sealed partial class Sim
             u.Swing = Math.Max(0, u.Swing - dt * 3);
             // in the air: nothing to do but come down
             if (u.Airborne != null) continue;
+            // up on a comrade's shoulder: it goes where it is carried (Sim.Carry.cs)
+            if (OnShoulder(u)) { Shouldered(u, dt); continue; }
             u.Cooldown -= dt;
             Settle(u);
             TickPain(u, dt);
@@ -279,7 +281,7 @@ public sealed partial class Sim
     {
         Array.Clear(_bodies);
         foreach (var u in Units)
-            if (!u.Dead && !u.Inside && u.Airborne == null)
+            if (!u.Dead && !u.Inside && u.Airborne == null && !OnShoulder(u))
                 for (int d = 0; d < u.T.Move.Height && Nav.Y(u.Cell) + d < Nav.NY; d++) _bodies[u.Cell + d * Nav.Layer]++;
     }
 
@@ -390,11 +392,11 @@ public sealed partial class Sim
         for (int a = 0; a < Units.Count; a++)
         {
             var u = Units[a];
-            if (u.Dead || u.Inside || u.Airborne != null || u.PinKg > 0 || Nav.Ladder[u.Cell] != 0) continue;
+            if (u.Dead || u.Inside || u.Airborne != null || u.PinKg > 0 || u.CarriedBy != null || u.PropBy != null || u.Propping != null || Nav.Ladder[u.Cell] != 0) continue;
             for (int b = a + 1; b < Units.Count; b++)
             {
                 var v = Units[b];
-                if (v.Dead || v.Inside || v.Airborne != null || v.PinKg > 0 || Nav.Ladder[v.Cell] != 0) continue;
+                if (v.Dead || v.Inside || v.Airborne != null || v.PinKg > 0 || v.CarriedBy != null || v.PropBy != null || v.Propping != null || Nav.Ladder[v.Cell] != 0) continue;
                 float dx = v.X - u.X, dz = v.Z - u.Z, min = u.T.BodyR + v.T.BodyR + .5f;
                 if (dx * dx + dz * dz >= min * min || MathF.Abs(v.Y - u.Y) > Math.Min(u.T.BodyH, v.T.BodyH) * .8f) continue;
                 float d = MathF.Sqrt(dx * dx + dz * dz);
@@ -422,7 +424,7 @@ public sealed partial class Sim
         foreach (var u in Units)
         {
             if (u.Dead || u.Inside || u.Airborne != null || u == Possessed || u.State != UnitState.Idle || u.Path != null && u.PathI < u.Path.Count || Nav.Ladder[u.Cell] != 0) continue;
-            if (u.Team == Team.Player && u.Site >= 0) continue;
+            if (u.Team == Team.Player && (u.Site >= 0 || u.CarriedBy != null || u.Propping != null)) continue;
             if (_stood.TryAdd(u.Cell, u)) continue;
             int c = FreeBeside(u);
             if (c < 0) continue;

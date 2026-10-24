@@ -91,10 +91,15 @@ public static class Retinue
     {
         if (u.Dead) return u.Team == Team.Wild ? "добыт" : "пал";
         if (u.Airborne is { } flying) return flying.Held ? "в хватке телекинеза" : "летит по воздуху";
+        // carried, carrying, helped along, helping (Sim.Carry.cs)
+        if (Sim.OnShoulder(u)) return u.CarriedBy.CarryTo == sim.Gate ? "его несут к цитадели" : "его несут в жилой дом";
+        if (u.Carrying is { } carried) return carried.Aloft ? (u.CarryTo == sim.Gate ? "несёт раненого к цитадели" : "несёт раненого в жилой дом") : "идёт поднять раненого";
+        if (u.Propping is { } led) return Sim.Propped(led) ? "ведёт хромого к цитадели" : "идёт помочь хромому";
+        if (Sim.Propped(u)) return "хромает к цитадели, опираясь на товарища";
         // what blunt things did to it (Sim.Trauma.cs): pinned, senseless, lying with its legs broken; digging one out
         if (u.PinKg > 0) return u.Digger is { Dead: false } d ? $"придавлен, {(int)u.PinKg} кг: откапывает {d.T.Name.ToLowerInvariant()}" : $"придавлен, {(int)u.PinKg} кг: ждёт помощи";
         if (u.Down && sim.Time < u.DazedUntil && u.Wounds != null && u.Wounds.Wounds.Contains("сотрясение")) return "без сознания";
-        if (u.Down && Sim.Grounded(u)) return "лежит: сломаны обе ноги";
+        if (u.Down && Sim.Grounded(u)) return "лежит: сломаны обе ноги, ждёт, кто вынесет";
         if (u.Freeing is { Dead: false } pinned) return "откапывает: " + pinned.T.Name.ToLowerInvariant();
         // at its scaffolding (Sim.Scaffold.cs), or climbing down by it
         if (u.Raising != null) return u.Why.Length > 0 ? u.Why : "ставит леса";

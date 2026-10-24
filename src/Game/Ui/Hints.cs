@@ -68,6 +68,8 @@ public partial class Hints : Control
         switch (t.Tool)
         {
             case Tool.None when _m.Selected.Count > 0:
+                // over one of ours pinned or down for good: what a right click on it does (Sim.Carry.cs)
+                if (VoxelTower.Core.Sim.AidFor(_m.Command.UnitAt(GetViewport().GetMousePosition(), pawnsFirst: false)) is { } aid) o.Add((Rmb, aid));
                 o.Add((Rmb, "идти, охотиться, атаковать"));
                 o.Add((Lmb, "выбрать других"));
                 if (_m.Selected.Count == 1) o.Add((L(Act.Possess), "вселиться"));
@@ -138,7 +140,8 @@ public partial class Hints : Control
                 break;
             case Tool.Wand:
                 o.Add((Lmb, t.Opt.WandCapture ? "снять чертёж" : dig ? "снести выделенное" : "переложить выделенное"));
-                o.Add(("Shift", "и по углам"));
+                o.Add(("Shift", "добавить к выделению"));
+                if (t.WandHeld > 0) o.Add(("Esc", "сбросить выделение"));
                 o.Add((L(Act.Form), t.Opt.WandExact ? "любой оттенок" : "точно такой"));
                 o.Add((L(Act.Pick), dig ? "переложить" : "снести"));
                 break;

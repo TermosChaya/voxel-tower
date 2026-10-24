@@ -137,6 +137,8 @@ public sealed partial class Sim
             g *= n >= 2 ? .12f : w.Plan.Beast ? .5f : (w.Splinted & broken) != 0 ? .45f : .35f;
         }
         if ((w.Broken & Break.Ribs) != 0) g *= .8f;
+        // an arm over a comrade's shoulder: on one leg and his (Sim.Carry.cs)
+        if (broken != Break.None && Propped(u)) g = MathF.Max(g, PropGait);
         return g;
     }
 
@@ -600,7 +602,7 @@ public sealed partial class Sim
             }
             if (u.Team != Team.Player || u.Hp >= u.MaxHp || Time - u.LastHurt < 8 || u.State is UnitState.Fight or UnitState.Flee) continue;
             float dx = u.X - Site.KeepX, dz = u.Z - Site.KeepZ;
-            bool home = dx * dx + dz * dz < MendBy * MendBy;
+            bool home = dx * dx + dz * dz < MendBy * MendBy || InDwelling(u);
             u.Hp = Math.Min(u.MaxHp, u.Hp + u.MaxHp * (home || u.Inside ? .0035f * MendHome : .0012f) * dt);
         }
         if (Remnants.Count > 0) Remnants.RemoveAll(r => Time - r.At > 90);

@@ -17,8 +17,12 @@ public partial class UnitView
         var b = Sim.Broken(u);
         if (b == Break.None) return;
         // an arm broken hangs: the shoulder let go, the elbow straight, whatever the walk or the fight would have it do
-        if ((b & Break.Main) != 0) { turns.Main = turns.Main.Slerp(new Quaternion(Vector3.Right, .06f) * new Quaternion(Vector3.Back, -.06f), .92f); elbowR = -.12f; }
-        if ((b & Break.Off) != 0) { turns.Off = turns.Off.Slerp(new Quaternion(Vector3.Right, .06f) * new Quaternion(Vector3.Back, .06f), .92f); elbowL = -.12f; }
+        // splinted, it is carried in a sling instead: the forearm across the belly (UnitView.Carry.cs)
+        var splinted = u.Wounds?.Splinted ?? Break.None;
+        if ((b & Break.Main) != 0 && (splinted & Break.Main) != 0) { turns.Main = turns.Main.Slerp(new Quaternion(Vector3.Right, -.2f) * new Quaternion(Vector3.Back, .22f), .95f); elbowR = -1.5f; }
+        else if ((b & Break.Main) != 0) { turns.Main = turns.Main.Slerp(new Quaternion(Vector3.Right, .06f) * new Quaternion(Vector3.Back, -.06f), .92f); elbowR = -.12f; }
+        if ((b & Break.Off) != 0 && (splinted & Break.Off) != 0) { turns.Off = turns.Off.Slerp(new Quaternion(Vector3.Right, -.2f) * new Quaternion(Vector3.Back, -.22f), .95f); elbowL = -1.5f; }
+        else if ((b & Break.Off) != 0) { turns.Off = turns.Off.Slerp(new Quaternion(Vector3.Right, .06f) * new Quaternion(Vector3.Back, .06f), .92f); elbowL = -.12f; }
         // the ribs: bent over them, the free hand pressed to the side
         if ((b & Break.Ribs) != 0)
         {

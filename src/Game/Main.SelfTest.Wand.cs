@@ -78,6 +78,30 @@ public partial class Main
             $"to lay again {relays} of {wood} («{relaid}»); blueprint {bp?.Describe()}, stone {bp?.Stone}, logs {bp?.Wood}");
         if (bp != null) RemoveBlueprint(bp);
         Tools.Opt.WandCapture = false;
+        sim.Relays.Clear();
+        sim.CancelArea(wx - 16, kz - 40, wx + 16, kz + 40);
+
+        // Shift and a click: the stone, then the walk, kept together; a click without it marks both as one marking,
+        // and one Ctrl+Z takes both back
+        async Task ShiftClick(Vector2 p)
+        {
+            Move(p); await Frames(3);
+            Tools._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = p, ShiftPressed = true });
+            Tools._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = p, ShiftPressed = true });
+            await Frames(2);
+        }
+        Tools.SetDig(true);
+        int r0 = sim.Orders.Total - sim.Orders.BuildTotal;
+        await ShiftClick(onStone);
+        await ShiftClick(onWalk);
+        int held = Tools.WandHeld, before = sim.Orders.Total - sim.Orders.BuildTotal - r0;
+        await Click(onWalk);
+        int both = sim.Orders.Total - sim.Orders.BuildTotal - r0, heldAfter = Tools.WandHeld;
+        Tools._UnhandledInput(z1);
+        int back = sim.Orders.Total - sim.Orders.BuildTotal - r0;
+        check("Shift and a click add a region to the wand's choice; a click without it marks all of them as one, and one Ctrl+Z takes them back",
+            held == 2 && before == 0 && both == litStone + litWood && heldAfter == 0 && back == 0,
+            $"chosen {held} regions, marked meanwhile {before}; at the click {both} of {litStone + litWood}; chosen after {heldAfter}; after Ctrl+Z {back}");
         Tools.SetTool(Tool.None);
         sim.CancelArea(wx - 16, kz - 40, wx + 16, kz + 40);
         sim.Relays.Clear();

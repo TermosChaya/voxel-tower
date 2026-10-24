@@ -124,6 +124,7 @@ public partial class UnitView : Node3D
         var firePot = new SphereMesh { Radius = .1f, Height = .18f, RadialSegments = 8, Rings = 4,
             Material = new StandardMaterial3D { AlbedoColor = new Color("8e3a1c"), EmissionEnabled = true, Emission = new Color(1f, .45f, .12f), EmissionEnergyMultiplier = 2.5f } };
         _firePots = Multi(firePot, null, false);
+        InitSplints();
         // an alchemist's flask: green glass with the acid glowing in it
         var flask = new SphereMesh { Radius = .08f, Height = .15f, RadialSegments = 8, Rings = 4,
             Material = new StandardMaterial3D { AlbedoColor = new Color("5f9a3a"), Roughness = .15f, EmissionEnabled = true, Emission = new Color(.45f, .9f, .25f), EmissionEnergyMultiplier = 1.2f } };
@@ -334,6 +335,8 @@ public partial class UnitView : Node3D
                 int on = (int)k.Fig.DressOn[d];
                 Write(k.DressBufs[d], o, hurt != null && hurt[on] ? Folded : _xf[(int)k.Fig.DressBone[d]] * Wrist(u, k.Fig, d), tint);
             }
+            // splints on what is splinted (UnitView.Carry.cs)
+            Splints(u, k.Fig);
         }
         StrokesEnd();
         foreach (var k in _kinds.Values) Upload(k);
@@ -351,6 +354,7 @@ public partial class UnitView : Node3D
         DrawFallen(dt);
         DrawRings();
         DrawStandards(sim);
+        DrawSplints();
     }
 
     void Track(Unit u, Look l, float dt)
@@ -640,9 +644,13 @@ public partial class UnitView : Node3D
             else look.Down -= look.Down * Math.Min(1, _dt * 1.4f);
             if (look.Down > .01f) fall = Math.Max(fall, Smooth(look.Down));
         }
+        // up on a comrade's shoulder: laid across it, not lying down (UnitView.Carry.cs)
+        bool borne = f.Jointed && Sim.OnShoulder(u);
+        if (borne) fall = 0;
         var at = new Vector3(_w.WX(u.X), _w.WY(u.Y + bob - sink), _w.WZ(u.Z));
         // a leader stands a little taller than its kind
         var root = new Transform3D(new Basis(Vector3.Up, MathF.PI / 2 - look.Face).Scaled(Vector3.One * VoxelWorld.Vox * (u.Leader ? 1.15f : 1)), at);
+        if (borne) root = Shouldered(u, f);
         // thrown through the air, it tumbles about its middle as it flies
         if (u.Airborne is { } fl && new Vector3(fl.AX, fl.AY, fl.AZ) is var axis && axis.LengthSquared() > 1e-4f)
         {
@@ -689,6 +697,8 @@ public partial class UnitView : Node3D
         if (u.Dead || fall > 0) { kneeR = kneeL = .25f * fall; elbowR = elbowL = -.3f * fall; }
         // what the wounds and the blows do to the pose: getting out of the way, reeling, hurt, dazed
         Reacting(u, f, look, ref turns, ref kneeR, ref kneeL, ref elbowR, ref elbowL, ref legR, ref legL, out float leanAdd, out float rollAdd, out var shove, out float headAdd);
+        // carried, carrying, helped along, helping (UnitView.Carry.cs)
+        Aiding(u, f, ref turns, ref kneeR, ref kneeL, ref elbowR, ref elbowL, ref legR, ref legL, ref leanAdd);
         if (shove != Vector3.Zero) hips *= new Transform3D(Basis.Identity, shove);
         // the breath: slow at rest, quick and deep after a run or in a fight, and it takes a while to settle
         float exert = u.Dead ? 0 : look.Run > .3f ? 1 : u.State == UnitState.Fight ? .8f : u.State is UnitState.Work or UnitState.Carve or UnitState.Siege ? .45f : look.Move > .2f ? .25f : 0;

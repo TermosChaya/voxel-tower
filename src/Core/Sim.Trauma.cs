@@ -56,6 +56,11 @@ public sealed partial class Sim
 
     /// <summary>A bone broke: whose and which (for the sound of it).</summary>
     public Action<Unit, Break> BoneBroke;
+    /// <summary>One of ours pinned called out for help (for its voice, and the «!» over it).</summary>
+    public Action<Unit> CalledOut;
+
+    /// <summary>How far, in voxels, the call of one pinned is heard by those free to come.</summary>
+    const float HeardFrom = 70 * VoxelWorld.PerMetre;
 
     /// <summary>A draw of its own for the harm, so that the valley's other chances run as they did.</summary>
     float Roll(Unit u, int salt) => (float)Hash.H3(u.Id * 131 + salt, (int)(Time * 64), ++_traumaDraws);
@@ -399,7 +404,8 @@ public sealed partial class Sim
     static Mover MoverOf(Unit u)
     {
         var s = u.T.Move;
-        if (!Lame(u) || !s.Ladders) return s;
+        // a broken leg, or a comrade on the shoulder: no ladder (Sim.Carry.cs)
+        if (!Lame(u) && u.Carrying is not { Aloft: true } || !s.Ladders) return s;
         lock (_lame)
         {
             if (!_lame.TryGetValue(s, out var m))
@@ -440,7 +446,7 @@ public sealed partial class Sim
     void Knit(Unit u, BodyState w, float dt)
     {
         float dx = u.X - Site.KeepX, dz = u.Z - Site.KeepZ;
-        bool home = u.Inside || dx * dx + dz * dz < MendBy * MendBy;
+        bool home = u.Inside || dx * dx + dz * dz < MendBy * MendBy || InDwelling(u);
         foreach (var b in Bones5)
         {
             if ((w.Broken & b) == 0) continue;
@@ -457,7 +463,7 @@ public sealed partial class Sim
     }
 
     /// <summary>Its broken bones splinted by a comrade: they knit twice as fast.</summary>
-    void SplintBones(Unit u)
+    public void SplintBones(Unit u)
     {
         var w = u.Wounds;
         if (w == null) return;
@@ -557,6 +563,13 @@ public sealed partial class Sim
         u.Path = null;
         // one who went to dig it out and was called off by something more pressing (the horde, the alarm) leaves it to another
         if (u.Digger != null && (u.Digger.Dead || u.Digger.Freeing != u || Time - u.DugAt > 3)) { if (u.Digger.Freeing == u) u.Digger.Freeing = null; u.Digger = null; }
+        // it calls out now and then while nobody digs, more often at first: heard further than it is seen
+        if (u.Team == Team.Player && u.Digger == null && Time >= u.NextCall)
+        {
+            u.CalledAt = Time;
+            u.NextCall = Time + (Time - u.PinnedSince < 20 ? 4 : 9) + Hash.H3(u.Id, (int)Time, 31) * 3;
+            CalledOut?.Invoke(u);
+        }
         float kg = BodyKg(u.T), bear = kg * 1.2f;
         if (u.PinKg > bear)
         {
@@ -594,10 +607,12 @@ public sealed partial class Sim
     bool Rescue(Unit u, float dt, float reach)
     {
         var p = u.Freeing;
-        if (p == null || p.Dead || p.PinKg <= 0 || p.Digger != u)
+        // (one the player sent digs beside whoever else is at it)
+        if (p == null || p.Dead || p.PinKg <= 0 || p.Digger != u && !(u.FreeOrdered && p.Digger is { Dead: false }))
         {
             if (p != null && p.Digger == u) p.Digger = null;
             u.Freeing = p = null;
+            u.FreeOrdered = false;
             if (_pinnedNow == 0 || Time < u.NextLookForPinned || u.T.NoHands || Kinds.IsEngine(u.T) || Hands(u) < .2f) return false;
             u.NextLookForPinned = Time + 1 + u.Id % 5 * .1;
             float best = reach;
@@ -605,7 +620,9 @@ public sealed partial class Sim
             {
                 if (o == u || o.Dead || o.PinKg <= 0 || o.Team != u.Team || o.Digger is { Dead: false } && o.Digger != u) continue;
                 float d = Dist(u, o);
-                if (d < best && (u.Team != Team.Player || Nearest(o, Team.Horde, 10 * VoxelWorld.PerMetre) == null)) { best = d; p = o; }
+                // one that called out lately is heard further than it is seen (not by soldiers kept at their posts)
+                float far = Time - o.CalledAt < 8 && reach >= 40 * VoxelWorld.PerMetre ? HeardFrom : best;
+                if (d < Math.Max(best, far) && (u.Team != Team.Player || Nearest(o, Team.Horde, 10 * VoxelWorld.PerMetre) == null)) { best = d; p = o; }
             }
             if (p == null) return false;
             u.Freeing = p; p.Digger = u; u.FreeEffort = 0; p.DugAt = Time;
@@ -621,7 +638,7 @@ public sealed partial class Sim
             if (u.Path == null || u.PathI >= u.Path.Count || Time >= u.NextSearch)
             {
                 u.NextSearch = Time + .8;
-                if (!GoTo(u, p.Cell, adjacent: true, budget: 8000, reach: 2)) { p.Digger = null; u.Freeing = null; u.NextLookForPinned = Time + 5; return false; }
+                if (!GoTo(u, p.Cell, adjacent: true, budget: u.FreeOrdered ? 60000 : 8000, reach: 2)) { if (p.Digger == u) p.Digger = null; u.Freeing = null; u.FreeOrdered = false; u.NextLookForPinned = Time + 5; return false; }
             }
             if (u.Path != null && u.PathI < u.Path.Count) Walk(u, dt);
             return true;
@@ -655,7 +672,7 @@ public sealed partial class Sim
         {
             Unpin(p, said: false);
             if (u.Team == Team.Player) Say($"{u.Name} откопал {Whom(p.T)}.", 1, p);
-            u.Freeing = null;
+            u.Freeing = null; u.FreeOrdered = false;
         }
         return true;
     }

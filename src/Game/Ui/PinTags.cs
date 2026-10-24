@@ -45,7 +45,10 @@ public partial class PinTags : CanvasLayer
             var at = new Vector3(_m.World.WX(u.X), _m.World.WY(u.Y + u.T.BodyH + 6), _m.World.WZ(u.Z));
             tag.Visible = !hidden && !cam.IsPositionBehind(at);
             if (!tag.Visible) continue;
-            tag.Text = u.Digger is { Dead: false } ? $"Придавлен · {(int)u.PinKg} кг · откапывают" : $"Придавлен · {(int)u.PinKg} кг";
+            // a «!» while it calls out for help (Sim.Trauma.cs)
+            bool calling = sim.Time - u.CalledAt < 1.6;
+            tag.Text = u.Digger is { Dead: false } ? $"Придавлен · {(int)u.PinKg} кг · откапывают" : (calling ? "! " : "") + $"Придавлен · {(int)u.PinKg} кг" + (calling ? " !" : "");
+            tag.Modulate = calling ? new Color(1.25f, 1.1f, .9f) : Colors.White;
             tag.ResetSize();
             tag.Position = cam.UnprojectPosition(at) - new Vector2(tag.Size.X / 2, tag.Size.Y);
         }

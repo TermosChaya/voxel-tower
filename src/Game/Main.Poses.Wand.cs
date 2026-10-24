@@ -13,7 +13,7 @@ public partial class Main
     /// The magic wand (--pose=wand): a stone wall west of the citadel with a walk of logs on it, the wand in hand.
     /// --look=0 the cursor on the stone with the pick: all of the stone lit, none of the logs; 1 on the walk; 2 the stone
     /// marked to come down, and the cursor on the walk with stone in hand, to lay it over again; 3 told exactly: one
-    /// shade of the stone.
+    /// shade of the stone; 4 the stone chosen with Shift and the cursor on the walk, both lit to come down together.
     /// </summary>
     void WandPose()
     {
@@ -43,6 +43,14 @@ public partial class Main
                 Tools._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = onStone });
                 Tools._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = onStone });
                 Tools.SetMaterial(Mat.Stone);
+                Move(onWalk);
+            }
+            else if (_look == 4)
+            {
+                // the stone chosen with Shift, the cursor on the walk: both lit, to come down as one
+                Move(onStone);
+                Tools._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = onStone, ShiftPressed = true });
+                Tools._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = onStone, ShiftPressed = true });
                 Move(onWalk);
             }
             else Move(_look == 1 ? onWalk : onStone);

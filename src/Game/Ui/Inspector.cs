@@ -338,9 +338,9 @@ public partial class Inspector : Control
                 opts.AddChild(Keyed(new Choice("Материал", "Что считать тем же материалом\nЛюбой оттенок: камень любого цвета вместе с раствором, любые стволы, дёрн с землёй долины. " +
                     "Точно: только воксели того же цвета, что под курсором. Клавиша {Form}.",
                     new[] { "любой оттенок", "точно" }, o.WandExact ? 1 : 0, i => { o.WandExact = i == 1; t.Changed(); }), () => Bindings.Label(Act.Form)));
-                opts.AddChild(Keyed(new Choice("Соседи", "Соседи\nПо граням: только то, что касается гранью. С углами: и то, что касается ребром или углом, например стена под 45°. " +
-                    "Shift при наведении и щелчке тоже берёт с углами.",
-                    new[] { "по граням", "с углами" }, o.WandCorners ? 1 : 0, i => { o.WandCorners = i == 1; t.Changed(); }), () => "Shift"));
+                opts.AddChild(new Choice("Соседи", "Соседи\nПо граням: только то, что касается гранью. С углами: и то, что касается ребром или углом, например стена под 45°.",
+                    new[] { "по граням", "с углами" }, o.WandCorners ? 1 : 0, i => { o.WandCorners = i == 1; t.Changed(); }));
+                opts.AddChild(Hud.CapsLabel(t.WandHeld > 0 ? $"выделено: {t.WandHeld} · Esc сбросит" : "Shift: добавить", 10, Ornament.Aged));
                 break;
             case Tool.Paste when t.PasteBp != null:
                 opts.AddChild(Hud.CapsLabel($"поворот {t.PasteRot * 90}° · {Bindings.Label(Act.Rotate)} — повернуть · {t.PasteBp.Describe()}", 10, Ornament.Aged));

@@ -288,6 +288,15 @@ public partial class Commander : Node
         if (_m.Selected.Count == 0) return;
         Sent++;
         var prey = UnitAt(screen, pawnsFirst: false);
+        // one of ours pinned or down for good: dug out, or carried to mend (Sim.Carry.cs)
+        if (Sim.AidFor(prey) is { } aid && !_m.Selected.Contains(prey))
+        {
+            int n = _m.Sim.OrderAid(_m.Selected, prey);
+            if (n > 0) _m.Hud.Float(aid == "откопать" ? (n == 1 ? "откопать" : $"откапывают: {n}") : "вынести к цитадели", Ornament.EmberGlow);
+            else _m.Hud.Float("некому: нужны руки", Ornament.Blood);
+            _m.Hud.OnSelectionChanged();
+            return;
+        }
         if (prey != null && prey.Team != Team.Player)
         {
             int n = _m.Sim.Hunt(_m.Selected, prey);

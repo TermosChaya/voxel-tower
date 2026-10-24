@@ -223,6 +223,8 @@ public partial class BuildTools : Node3D
         // what telekinesis holds is let go when the spell is put away
         Throw();
         Tool = Tool == t ? Tool.None : t;
+        // what the wand had chosen with Shift is let go with it
+        WandDrop();
         // these only build
         if (Tool is Tool.Bridge or Tool.Repair or Tool.Gate or Tool.Ladder) Opt.Dig = false;
         if (Tool != Tool.Paste) PasteBp = null;
@@ -425,6 +427,8 @@ public partial class BuildTools : Node3D
         {
             // a brush in hand is put down, the chosen let go; with nothing of that, the menu
             if (_m.Hud.MenuOpen) _m.Hud.MenuBack();
+            // the wand's chosen regions let go before the wand itself
+            else if (Tool == Tool.Wand && WandHeld > 0) WandDrop();
             else if (Tool != Tool.None) SetTool(Tool.None);
             else if (_m.Selected.Count > 0 || _m.Inspected != null || _m.KeepChosen) { _m.Command.ClearSelection(); _m.Inspected = null; _m.KeepChosen = false; _m.Hud.OnSelectionChanged(); }
             else _m.Hud.OpenMenu();
@@ -1295,7 +1299,7 @@ public partial class BuildTools : Node3D
         {
             // the region under the cursor, shown as it is (and what will be laid in its place)
             WandRegion();
-            string wk = _hasHover && _wandL.Count > 0 ? $"V|{_wandGen}|{dig}|{Opt.Material}|{Opt.WandCapture}|{stock}" : "";
+            string wk = _hasHover && _wandL.Count > 0 || _wandHeldN > 0 ? $"V|{_wandGen}|{_wandHeldGen}|{dig}|{Opt.Material}|{Opt.WandCapture}|{stock}" : "";
             if (wk == _planKey) return;
             _planKey = wk; _planClock = _clock;
             WandPlan(wk.Length > 0, dig, st);
