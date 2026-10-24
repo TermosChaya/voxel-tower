@@ -6098,6 +6098,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--giants") GiantsBench
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--wand") WandBench.Run(Check);
 // houses the workers build: roofed whole, floored, furnished, and a storey on a storey (Houses.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--houses") HousesBench.Run(Check);
+// the builders at work: what falls, who is shut in up there, thin decks walked on (Builders.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--builders") BuildersBench.Run(Check);
 
 if (args.Length > 0 && args[0] == "--stress")
 {

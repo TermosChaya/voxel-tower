@@ -516,7 +516,8 @@ public sealed partial class Sim
     {
         if (!World.InBounds(x, y, z)) return false;
         byte m = World.Get(x, y, z);
-        if (m == Mat.Air || m == Mat.Water || !Breakable(m) || Kg(m) <= 0) return false;
+        // (a gate's leaf swung open stands where it was not built, and lies on nobody)
+        if (m == Mat.Air || m == Mat.Water || Mat.Swings(m) || !Breakable(m) || Kg(m) <= 0) return false;
         if (Mat.IsNatural[m] && m is not (Mat.Soil or Mat.Rubble or Mat.Lumber)) return false;
         return MeantAt(x, y, z) != m;
     }

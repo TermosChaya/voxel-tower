@@ -32,6 +32,7 @@ public partial class Main
         if (_pose == "engines") { Engines(); return; }
         if (_pose == "wounds") { Wounded(); return; }
         if (_pose == "trauma") { Trauma(); return; }
+        if (_pose == "scaffold") { Scaffolding(); return; }
         if (_pose == "flood") { Flood(); return; }
         if (_pose == "trees") { LookAtGrove(); return; }
         if (_pose == "grass") { Meadow(); return; }

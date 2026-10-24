@@ -31,6 +31,16 @@ public sealed partial class Sim
         if (Time - u.ShutSince < 20) return;
         _roomSet.Clear();
         foreach (int c in _room) _roomSet.Add(c);
+        // scaffolding out of the stores' logs, if there are any: nothing of what was built is cut (Sim.Scaffold.cs)
+        if (Stock[Stockpile.Wood] >= 400 && PlanEscape(u) is { } climb)
+        {
+            Scaffolds.Add(climb);
+            u.Raising = climb;
+            u.WayOutMarked = Time;
+            u.ShutSince = -1;
+            Say($"{u.T.Name} оказался взаперти и ставит леса, чтобы выбраться.", 2, u);
+            return;
+        }
         var cut = WayOut(u);
         if (cut == null) return;
         u.WayOutMarked = Time;

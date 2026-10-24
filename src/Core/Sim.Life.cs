@@ -108,6 +108,8 @@ public sealed partial class Sim
                 if (c == u.Cell || _bodies[c] > 0 || Nav.Water[c] > 0) break;
                 var path = Paths.Find(u.Cell, x => x == c, x => H(x, i, k), u.T.Move, 600, gates: true);
                 if (path == null || path.Count > radius * 3) break;
+                // nobody climbs a ladder or scaffolding for a stroll
+                if (path.Exists(x => Nav.Ladder[x] != 0)) break;
                 u.Path = path; u.PathI = 0;
                 u.Pastime = Pastime.Stroll; u.After = Pastime.None; u.PastimeUntil = Time + 30;
                 return true;

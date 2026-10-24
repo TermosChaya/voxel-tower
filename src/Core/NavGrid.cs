@@ -9,7 +9,8 @@ namespace VoxelTower.Core;
 /// Leaves, bushes, grass, ladders and water don't block; trunks, earth, masonry and rock do once a cell is a quarter full,
 /// and a standing trunk through the middle of a cell does however thin it is: nobody stands inside a tree. Nor on one: a cell
 /// shut by nothing but a tree that still stands is no ground, though a log lying on the ground is. A cell with a ladder in
-/// it can be hung on and climbed; a cell more than a third full of water drowns whoever stands there.
+/// it can be hung on and climbed; a cell more than a third full of water drowns whoever stands there. A floor laid thin —
+/// a deck of planks a voxel thick over a pit, a roof of logs — is ground to stand and walk on, though it is no wall.
 /// </summary>
 public sealed class NavGrid
 {
@@ -45,6 +46,16 @@ public sealed class NavGrid
     public readonly byte[] Tree;
     /// <summary>A straight run of trunk this tall stands: no log lies so thick.</summary>
     const int StandingRun = 12;
+    /// <summary>
+    /// The cell holds a floor laid thin: one course of it covers most of the cell (<see cref="DeckT"/> of its 64 columns)
+    /// though the cell is not full enough to block. In the cell's upper half (<see cref="DeckHigh"/>) it is ground to the
+    /// cell over it, as a full cell would be; in its lower half (<see cref="DeckLow"/>) it is to the cell itself what the
+    /// top of the turf is, ground under the cell's own floor, as if the cell under it were full.
+    /// </summary>
+    public readonly byte[] Deck;
+    public const byte DeckHigh = 1, DeckLow = 2;
+    /// <summary>Columns of 64 one course of a cell must cover to be a floor to stand on.</summary>
+    public const int DeckT = 40;
 
     readonly bool[] _dirty;
     readonly List<int> _dirtyList = new();
@@ -73,6 +84,7 @@ public sealed class NavGrid
         Hard = new byte[Count]; Keep = new byte[Count]; Floor = new ushort[Count];
         Ladder = new byte[Count]; Water = new ushort[Count]; GateFill = new ushort[Count]; Spikes = new ushort[Count];
         Tree = new byte[Count];
+        Deck = new byte[Count];
         _dirty = new bool[Count];
         w.Edited += OnEdit;
     }
@@ -92,8 +104,14 @@ public sealed class NavGrid
         return Fill[c] - (gates ? GateFill[c] : 0) >= SolidT;
     }
 
-    /// <summary>Ground to stand on: blocked, and not by a standing tree. Below the field everything is.</summary>
-    public bool Ground(int i, int y, int k, bool gates = false) => Solid(i, y, k, gates) && (y < 0 || Tree[Id(i, y, k)] == 0);
+    /// <summary>Ground to stand on: blocked, or floored with a thin deck, and not by a standing tree. Below the field everything is.</summary>
+    public bool Ground(int i, int y, int k, bool gates = false)
+    {
+        if (y < 0) return true;
+        if (!In(i, y, k)) return false;
+        int c = Id(i, y, k);
+        return (Fill[c] - (gates ? GateFill[c] : 0) >= SolidT || (Deck[c] & DeckHigh) != 0 || y + 1 < NY && (Deck[c + Layer] & DeckLow) != 0) && Tree[c] == 0;
+    }
 
     /// <summary>Free to be in. Outside the field's sides nothing is; above the field the sky is.</summary>
     public bool Open(int i, int y, int k, bool gates = false)
@@ -169,10 +187,10 @@ public sealed class NavGrid
         foreach (int c in _dirtyList)
         {
             _dirty[c] = false;
-            bool was = Fill[c] >= SolidT, ladder = Ladder[c] != 0, deep = Water[c] >= DeepT, spiked = Spikes[c] != 0, tree = Tree[c] != 0;
+            bool was = Fill[c] >= SolidT, ladder = Ladder[c] != 0, deep = Water[c] >= DeepT, spiked = Spikes[c] != 0, tree = Tree[c] != 0, deck = Deck[c] != 0;
             Recompute(c);
             if ((Fill[c] >= SolidT) != was || (Ladder[c] != 0) != ladder || (Water[c] >= DeepT) != deep || (Spikes[c] != 0) != spiked
-                || (Tree[c] != 0) != tree) changed++;
+                || (Tree[c] != 0) != tree || (Deck[c] != 0) != deck) changed++;
         }
         _dirtyList.Clear();
         if (changed > 0) Version++;
@@ -186,7 +204,7 @@ public sealed class NavGrid
         int i = I(c), k = K(c), y = Y(c), x0 = i << Shift, y0 = y << Shift, z0 = k << Shift;
         int ci = World.ChunkIndex(x0 >> VoxelWorld.Shift, y0 >> VoxelWorld.Shift, z0 >> VoxelWorld.Shift);
         var d = World.ChunkData(ci);
-        int fill = 0, e = 0, wd = 0, st = 0, rk = 0, hard = 0, keep = 0, lad = 0, wat = 0, gate = 0, spk = 0, tv = 0;
+        int fill = 0, e = 0, wd = 0, st = 0, rk = 0, hard = 0, keep = 0, lad = 0, wat = 0, gate = 0, spk = 0, tv = 0, low = 0, high = 0;
         Span<int> trunk = stackalloc int[4];
         if (d == null)
         {
@@ -197,6 +215,9 @@ public sealed class NavGrid
         else
         {
             for (int yy = 0; yy < CS; yy++)
+            {
+                // how many of the course's 64 columns something blocking (and not a tree's trunk) covers
+                int covered = 0;
                 for (int zz = 0; zz < CS; zz++)
                 {
                     int row = (((y0 + yy) & VoxelWorld.Mask) << 10) | (((z0 + zz) & VoxelWorld.Mask) << 5) | (x0 & VoxelWorld.Mask);
@@ -206,6 +227,7 @@ public sealed class NavGrid
                         if (cls != 0)
                         {
                             Tally(cls, 1, ref fill, ref e, ref wd, ref st, ref rk, ref hard, ref keep);
+                            if (!Mat.IsTrunk(v)) covered++;
                             // a leaf voxel shuts twice its share of the cell, but takes no longer to hack
                             if (Mat.IsLeaf(v)) fill++;
                             if (v == Mat.Gate) gate += 2;
@@ -221,6 +243,8 @@ public sealed class NavGrid
                         else if (v == Mat.Stakes) spk++;
                     }
                 }
+                if (yy < CS / 2) low = Math.Max(low, covered); else high = Math.Max(high, covered);
+            }
         }
         // a trunk standing up through the middle of the cell (not a root, nor a bough across it)
         bool through = Math.Max(Math.Max(trunk[0], trunk[1]), Math.Max(trunk[2], trunk[3])) >= 6;
@@ -235,6 +259,7 @@ public sealed class NavGrid
         GateFill[c] = (ushort)gate;
         Spikes[c] = (ushort)spk;
         Tree[c] = (byte)(tree ? 1 : 0);
+        Deck[c] = (byte)(fill >= SolidT ? 0 : (high >= DeckT ? DeckHigh : 0) | (low >= DeckT ? DeckLow : 0));
         Floor[c] = (ushort)FloorIn(x0, y0, z0);
     }
 

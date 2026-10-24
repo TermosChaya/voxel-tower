@@ -93,6 +93,9 @@ public static class Retinue
         if (u.Down && sim.Time < u.DazedUntil && u.Wounds != null && u.Wounds.Wounds.Contains("сотрясение")) return "без сознания";
         if (u.Down && Sim.Grounded(u)) return "лежит: сломаны обе ноги";
         if (u.Freeing is { Dead: false } pinned) return "откапывает: " + pinned.T.Name.ToLowerInvariant();
+        // at its scaffolding (Sim.Scaffold.cs), or climbing down by it
+        if (u.Raising != null) return u.Why.Length > 0 ? u.Why : "ставит леса";
+        if (u.Why == "спускается по лесам" && u.Path != null && u.PathI < u.Path.Count) return u.Why;
         if (u.Defusing != null) return u.Why.Length > 0 ? u.Why : "бежит резать фитиль";
         if (u.Shunning != null) return u.Why.Length > 0 ? u.Why : "уходит от заряда";
         if (u.PushCell >= 0) return "сбрасывает лестницу";

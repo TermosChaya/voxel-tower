@@ -105,7 +105,12 @@ public static class Mat
     public const byte Acid = 140;
     /// <summary>For the figures: the green glass of an alchemist's flasks and goggles, the acid showing through it.</summary>
     public const byte Phial = 141;
-    public const int Count = 142;
+    /// <summary>
+    /// Scaffolding: poles and boards lashed up a metre at a time, climbed like a ladder, raised by the workers to get
+    /// down from where they built themselves up, or up to work out of reach, and taken down after (Sim.Scaffold.cs).
+    /// </summary>
+    public const byte Scaffold = 142;
+    public const int Count = 143;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
     public static readonly bool[] IsVeg = new bool[Count], IsPlayer = new bool[Count], IsEarthy = new bool[Count],
@@ -261,11 +266,12 @@ public static class Mat
         D(Acid, "Кислота", 0x8bc83a, .14f, MatGroup.Hard, 0);
         Emission[Acid] = .75f;
         D(Phial, "склянка", 0x5f9a3a, .1f, MatGroup.Hard, 0);
+        D(Scaffold, "Леса", 0xa48659, .2f, MatGroup.Wood, 0);
         Emission[Phial] = .35f;
 
         foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage, Flower, Bloom, Birch, NeedleLight, FoliageLight, FoliageGold, PineBark, Snag }) IsVeg[m] = true;
-        foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame, Stakes, Pitch, TowerLadder, Acid }) Passable[m] = true;
-        IsLadder[Ladder] = IsLadder[SiegeLadder] = IsLadder[TowerLadder] = true;
+        foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame, Stakes, Pitch, TowerLadder, Acid, Scaffold }) Passable[m] = true;
+        IsLadder[Ladder] = IsLadder[SiegeLadder] = IsLadder[TowerLadder] = IsLadder[Scaffold] = true;
         foreach (var m in new[] { Tuft, Flower, Bloom }) SwayKind[m] = 1;
         foreach (var m in new[] { Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold }) SwayKind[m] = 2;
         foreach (var m in new[] { Stone, StoneDark, StoneLight, StoneWarm, StoneCool, Mortar, Keep, KeepShade, KeepDark }) Smooth[m] = true;
@@ -288,7 +294,7 @@ public static class Mat
         F(.1f, 30, .6f, Snag);
         F(.04f, 35, .35f, Wood, DropLog);
         F(.03f, 30, .35f, Plank);
-        F(.12f, 15, 0, Ladder, SiegeLadder);
+        F(.12f, 15, 0, Ladder, SiegeLadder, Scaffold);
         F(.1f, 20, .2f, Deck);
         F(.03f, 45, .2f, Gate, GateShut, GateOpen);
         F(.3f, 6, 0, Banner, BannerTrim, Sack);

@@ -65,6 +65,8 @@ public static class Labour
         D(Mat.Stakes, 1, Stockpile.Wood, .5f); D(Mat.TrapDeck, 1, Stockpile.Wood, .5f); D(Mat.DropStone, 1.2f, Stockpile.Stone, 1);
         D(Mat.DropLog, 1.2f, Stockpile.Wood, 1);
         D(Mat.DrawDeck, 2.5f, Stockpile.Wood, .75f); D(Mat.TowerLadder, 1, Stockpile.Wood, .75f);
+        // scaffolding is only lashed: it comes apart at once, every pole back
+        D(Mat.Scaffold, .3f, Stockpile.Wood, 1);
         // kegs of powder are carried off whole: half the earth they were leached from comes back
         D(Mat.Powder, 1, Stockpile.Earth, .5f);
         // a dwelling's furnishing is taken apart for a little of its timber

@@ -267,6 +267,7 @@ public sealed partial class Sim
         Stage = "KeepPossession"; KeepPossession();
         Stage = "TickBleeding"; TickBleeding(dt);
         Stage = "TickTrauma"; TickTrauma(dt);
+        Stage = "TickScaffolds"; TickScaffolds();
         Units.RemoveAll(u => u.Dead && Time - u.DiedAt > 30);
         Stage = "";
         if (KeepHp <= 0 && !Over) { Over = true; Say("Цитадель пала.", 3); }

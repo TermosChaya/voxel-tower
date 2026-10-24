@@ -135,8 +135,11 @@ public sealed partial class Sim
         }
         // a hound or a rider has no work of the pawns': between waves it idles about its post
         if (u.T.Work <= 0) { ReleaseSite(u); u.Why = ""; Idle(u, dt, stay: false); return; }
+        // at its scaffolding: raising it to get out or to work high up, or taking it down (Sim.Scaffold.cs)
+        if (u.Raising != null && ScaffoldTick(u, dt)) { Busy(u); return; }
         // shut in by its own work (a pit, a walled tower): a way out is marked, and it is the nearest work there is
         LookForWayOut(u);
+        if (u.Raising != null) { Busy(u); return; }
         WorkTick(u, dt);
     }
 
@@ -157,6 +160,8 @@ public sealed partial class Sim
             if (Time >= u.NextSearch && GetOut(u)) { Busy(u); return; }
             if (Time >= u.NextSearch) FindWork(u);
             if (u.Site >= 0) { Busy(u); return; }
+            // nothing to do up there: down by the scaffolding while it stands (Sim.Scaffold.cs)
+            if (GetDown(u)) { Busy(u); return; }
             Idle(u, dt, stay: false);
             return;
         }
@@ -237,6 +242,9 @@ public sealed partial class Sim
         if (!Brushes.Free(cur) || cur == j.m) { Orders.Clear(j.x, j.y, j.z); return false; }
         // pitch is poured, not laid: it needs nothing under it, it runs down
         if (_bodies[Nav.CellOf(j.x, j.y, j.z)] > 0 || j.m != Mat.Pitch && !Footed(j.x, j.y, j.z)) return false;
+        // nor what would be out further than it bears from what holds it, and come straight down (Sim.Builders.cs); nor
+        // what is to rest on a voxel not laid yet, held out from the side meanwhile
+        if (j.m != Mat.Pitch && (Overreaches(j.x, j.y, j.z, j.m) || UnderMarked(j.x, j.y, j.z))) return false;
         // the voxel that would wall one of ours in waits, to be laid from outside once nobody is in (Sim.Seal.cs)
         if (ShutsIn(u, j.x, j.y, j.z, j.m)) return false;
         int ck = Labour.CostKind(j.m);
@@ -309,37 +317,61 @@ public sealed partial class Sim
         builds.Sort((a, b) => a.y != b.y ? a.y.CompareTo(b.y) : Near(a).CompareTo(Near(b)));
         u.Jobs.AddRange(digs);
         u.Jobs.AddRange(builds);
-        if (u.Jobs.Count == 0) u.Why = missing != "" ? "нет: " + missing : held != "" ? held : crowded ? "на месте кладки стоят" : unfooted ? "ждёт опоры: класть не на что" : "";
+        if (u.Jobs.Count == 0) u.Why = missing != "" ? "нет: " + missing : held != "" ? held : crowded ? "на месте кладки стоят"
+            : unfooted ? (_overreach ? "ждёт опоры: так далеко не удержится" : "ждёт опоры: класть не на что") : "";
     }
 
-    readonly HashSet<int> _toLay = new(), _footed = new();
-    readonly Queue<int> _footing = new();
+    readonly Dictionary<int, byte> _toLay = new();
+    readonly Dictionary<int, int> _footed = new();
+    readonly LinkedList<int> _footing = new();
     static readonly (int dx, int dy, int dz)[] Borne = { (0, 1, 0), (1, 0, 0), (-1, 0, 0), (0, 0, 1), (0, 0, -1) };
+    // set by Footing: something to lay here had a footing, but would be out further than it bears (Sim.Builders.cs)
+    bool _overreach;
 
     /// <summary>
     /// Keeps of the voxels to lay from here those that stand on something already, or will once what is under them or
     /// beside them here is laid first (in the order the work goes, bottom up): so a wall is laid from one footing all the
-    /// height in reach, not a course at a time. Pitch is poured, it needs nothing under it. True if any had to be left.
+    /// height in reach, not a course at a time. Pitch is poured, it needs nothing under it. What would be out over the
+    /// air further than its material bears from what holds it is left too (Sim.Builders.cs): a roof waits for the wall
+    /// across the room. True if any had to be left.
     /// </summary>
     bool Footing(List<(int x, int y, int z, byte m)> builds)
     {
-        _toLay.Clear(); _footed.Clear(); _footing.Clear();
-        foreach (var b in builds) _toLay.Add(WaterPlanner.Pack(b.x, b.y, b.z));
+        _toLay.Clear(); _footed.Clear(); _footing.Clear(); _overreach = false;
+        foreach (var b in builds) _toLay[WaterPlanner.Pack(b.x, b.y, b.z)] = b.m;
+        static int Bears(byte m) { int s = SpanOf(m); return s == 0 || s == Free ? int.MaxValue : s; }
         foreach (var b in builds)
-            if ((b.m == Mat.Pitch || Footed(b.x, b.y, b.z)) && _footed.Add(WaterPlanner.Pack(b.x, b.y, b.z))) _footing.Enqueue(WaterPlanner.Pack(b.x, b.y, b.z));
-        // what each one laid will bear: the voxel over it and those beside it
+        {
+            if (b.m != Mat.Pitch && (!Footed(b.x, b.y, b.z) || UnderMarked(b.x, b.y, b.z))) continue;
+            int d = b.m == Mat.Pitch ? 0 : ReachIfLaid(b.x, b.y, b.z, b.m);
+            if (d > Bears(b.m)) { _overreach = true; continue; }
+            int p = WaterPlanner.Pack(b.x, b.y, b.z);
+            if (_footed.TryGetValue(p, out int had) && had <= d) continue;
+            _footed[p] = d;
+            if (d == 0) _footing.AddFirst(p); else _footing.AddLast(p);
+        }
+        // what each one laid will bear: the voxel over it as far out as it is held, those beside it a step further
         while (_footing.Count > 0)
         {
-            var (x, y, z) = WaterPlanner.Unpack(_footing.Dequeue());
+            int p = _footing.First.Value; _footing.RemoveFirst();
+            var (x, y, z) = WaterPlanner.Unpack(p);
+            int d = _footed[p];
             foreach (var (dx, dy, dz) in Borne)
             {
                 int n = WaterPlanner.Pack(x + dx, y + dy, z + dz);
-                if (_toLay.Contains(n) && _footed.Add(n)) _footing.Enqueue(n);
+                if (!_toLay.TryGetValue(n, out byte m)) continue;
+                var (nx, ny, nz) = (x + dx, y + dy, z + dz);
+                // what stands as an arch needs only to be joined to the rest: it is held however far out it goes
+                int nd = Bears(m) == int.MaxValue || Arched.Get(nx, ny, nz) != 0 ? 0 : d + (dy == 0 ? 1 : 0);
+                if (nd > Bears(m)) { _overreach = true; continue; }
+                if (_footed.TryGetValue(n, out int had) && had <= nd) continue;
+                _footed[n] = nd;
+                if (dy != 0 || nd == d) _footing.AddFirst(n); else _footing.AddLast(n);
             }
         }
-        int had = builds.Count;
-        builds.RemoveAll(b => !_footed.Contains(WaterPlanner.Pack(b.x, b.y, b.z)));
-        return builds.Count < had;
+        int had0 = builds.Count;
+        builds.RemoveAll(b => !_footed.ContainsKey(WaterPlanner.Pack(b.x, b.y, b.z)));
+        return builds.Count < had0;
     }
 
     /// <summary>
@@ -357,7 +389,8 @@ public sealed partial class Sim
                     for (int dy = 0; dy <= 2; dy = dy <= 0 ? 1 - dy : -dy)
                     {
                         int ni = i + di, nk = k + dk, ny = y + dy;
-                        if (ni < 0 || nk < 0 || ni >= Nav.NX || nk >= Nav.NZ || ny < 1 || ny >= Nav.NY || !Nav.Stand(ni, ny, nk, h)) continue;
+                        // onto ground, or onto scaffolding or a ladder beside (up on a wall's top, that is all there may be)
+                        if (ni < 0 || nk < 0 || ni >= Nav.NX || nk >= Nav.NZ || ny < 1 || ny >= Nav.NY || !Nav.CanBe(ni, ny, nk, h, true, u.T.Move.Ladders)) continue;
                         int c = Nav.Id(ni, ny, nk);
                         if (_bodies[c] > 0 || ToLay(c, h)) continue;
                         if (GoTo(u, c, budget: 600)) { u.Why = ""; return true; }
@@ -470,6 +503,14 @@ public sealed partial class Sim
                 if (!Goal(u.Cell)) _seekSpent += Paths.Expanded;
                 if (path == null)
                 {
+                    // out of reach of anywhere to stand: scaffolding beside it, raised from the ground (Sim.Scaffold.cs)
+                    if (u.T.Work >= 1 && Stock[Stockpile.Wood] >= 600 && PlanReach(u, col, y0, y1) is { } lift)
+                    {
+                        Scaffolds.Add(lift);
+                        u.Raising = lift;
+                        u.Why = "ставит леса к работе наверху";
+                        return true;
+                    }
                     u.Unreachable[col] = Time + 12;
                     if (_noWay.Count > 4096) _noWay.Clear();
                     _noWay[col] = (Time + 12, u.Cell);

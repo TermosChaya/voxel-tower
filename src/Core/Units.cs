@@ -407,6 +407,9 @@ public sealed class Unit
     public Zone Focus;
     /// <summary>When a worker next looks whether it is shut in, and when it last marked a way out (Sim.Escape.cs).</summary>
     public double NextWayOut, WayOutMarked = -999, ShutSince = -1;
+    /// <summary>The scaffolding it is raising, or taking down (Sim.Scaffold.cs); when it next looks to climb down by some.</summary>
+    public Scaffold Raising;
+    public double NextGetDown;
     /// <summary>Where the player sent it; it keeps finding its way there if the way breaks.</summary>
     public int Dest = -1;
     /// <summary>Where a soldier goes when the horn sounds; -1 for none.</summary>
