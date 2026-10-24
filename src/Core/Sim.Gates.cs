@@ -88,9 +88,10 @@ public sealed class GatePlan
 
     /// <summary>
     /// A gate through the wall whose side face was clicked: the gateway centred on the click and snapped to the cells,
-    /// the leaves on the side toward the citadel. Null if the face is no wall's side, or the wall is too thick.
+    /// the leaves on the side toward the citadel. Null if the face is no wall's side, or the wall is too thick. A house's
+    /// door gives its <paramref name="threshold"/>, the top of its floor.
     /// </summary>
-    public static GatePlan At(VoxelWorld w, Site site, VoxelHit hit)
+    public static GatePlan At(VoxelWorld w, Site site, VoxelHit hit, int threshold = -1)
     {
         if (hit.NY != 0 || (hit.NX == 0 && hit.NZ == 0)) return null;
         bool alongX = hit.NZ != 0;
@@ -134,6 +135,7 @@ public sealed class GatePlan
                 while (y > 0 && !Blocking(Get(u, y - 1, a))) y--;
                 y0 = Math.Max(y0, y);
             }
+        if (threshold > 0) y0 = threshold;
         if (y0 <= 0 || y0 + Gateway.Height >= w.SY) return null;
         plan.Y = y0;
         // the gateway: through the wall from face to face

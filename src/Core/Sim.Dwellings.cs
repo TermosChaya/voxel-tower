@@ -22,6 +22,8 @@ sealed class Furnishing
     public readonly VoxelList Voxels = new();
     /// <summary>For each bunk, the first of its voxels and how many there are, in <see cref="Voxels"/>.</summary>
     public readonly List<(int from, int count)> Bunks = new();
+    /// <summary>The floor it was laid out for: when the floor is no longer that one, it is laid out again.</summary>
+    public long Key;
 }
 
 /// <summary>
@@ -39,7 +41,7 @@ public sealed partial class Sim
     /// <summary>A man's headroom over the floor, in voxels.</summary>
     const int Headroom = 16;
     /// <summary>How far out of the frame and how high over the floor the room is looked for before it counts as open.</summary>
-    const int RoomReach = 24, RoomHigh = 64, RoomSpan = 160;
+    const int RoomReach = 24, RoomHigh = 88, RoomSpan = 160;
 
     readonly Dictionary<int, Furnishing> _furnishing = new();
     double _nextDwellings;
@@ -52,28 +54,38 @@ public sealed partial class Sim
     public readonly List<(Shapes.HouseDoor door, double since)> HouseDoors = new();
     double _nextDoors;
 
-    /// <summary>A house drawn: its door waits for the wall, and its floor is a dwelling to furnish once it is closed.</summary>
+    /// <summary>
+    /// A house drawn: its door waits for the wall, and its floor is a dwelling to furnish once it is closed; the dwelling
+    /// keeps the top of the walls (its Depth), where a storey would go up.
+    /// </summary>
     public void PlanHouse(Shapes.HouseDoor door, int x0, int z0, int x1, int z1)
     {
         HouseDoors.Add((door, Time));
-        AddZone(x0, z0, x1, z1, Zone.Dwelling, 0);
+        AddZone(x0, z0, x1, z1, Zone.Dwelling, door.Top);
+    }
+
+    /// <summary>Voxels to stand as an arch once they are laid: held as long as they are joined to the rest (a house's roof).</summary>
+    public void Arch(VoxelList L)
+    {
+        if (L != null) for (int i = 0; i < L.Count; i++) Arched.SetRaw(L.X(i), L.Y(i), L.Z(i), 1);
     }
 
     void WriteHouseDoors(System.IO.BinaryWriter w)
     {
         w.Write(HouseDoors.Count);
-        foreach (var (d, since) in HouseDoors) { w.Write(d.X); w.Write(d.Y); w.Write(d.Z); w.Write(d.NX); w.Write(d.NZ); w.Write(d.Thick); w.Write(since); }
+        foreach (var (d, since) in HouseDoors) { w.Write(d.X); w.Write(d.Y); w.Write(d.Z); w.Write(d.NX); w.Write(d.NZ); w.Write(d.Thick); w.Write(d.Top); w.Write(since); }
     }
 
     void ReadHouseDoors(System.IO.BinaryReader r)
     {
         HouseDoors.Clear();
         for (int i = r.ReadInt32(); i > 0; i--)
-            HouseDoors.Add((new Shapes.HouseDoor { X = r.ReadInt32(), Y = r.ReadInt32(), Z = r.ReadInt32(), NX = r.ReadInt32(), NZ = r.ReadInt32(), Thick = r.ReadInt32() }, r.ReadDouble()));
+            HouseDoors.Add((new Shapes.HouseDoor { X = r.ReadInt32(), Y = r.ReadInt32(), Z = r.ReadInt32(), NX = r.ReadInt32(), NZ = r.ReadInt32(), Thick = r.ReadInt32(), Top = r.ReadInt32() }, r.ReadDouble()));
     }
 
     void TickHouseDoors()
     {
+        TickStoreys();
         if (HouseDoors.Count == 0 || Time < _nextDoors) return;
         _nextDoors = Time + 2;
         for (int i = HouseDoors.Count - 1; i >= 0; i--)
@@ -81,6 +93,7 @@ public sealed partial class Sim
             var (d, since) = HouseDoors[i];
             int ax = -d.NX, az = -d.NZ;
             bool stands = true, meant = false;
+            int wallTop = d.Top > 0 ? d.Top : d.Y - 8 + Gateway.Height + 4;
             // the wall through its thickness at the door's middle, from the threshold to over the lintel
             for (int k = 0; k < d.Thick && stands; k++)
                 for (int y = d.Y - 8; y < d.Y - 8 + Gateway.Height + 4; y++)
@@ -89,13 +102,24 @@ public sealed partial class Sim
                     if (Orders.At(x, y, z) != 0) meant = true;
                     if (World.Get(x, y, z) == Mat.Air) { stands = false; break; }
                 }
+            // and all of it round the doorway and over it to the walls' top laid: cut under a wall half laid, what
+            // is laid over the doorway has nothing at its ends to hold it
+            for (int k = 0; k < d.Thick && stands; k++)
+                for (int u = -Gateway.Half - 6; u <= Gateway.Half + 6 && stands; u++)
+                    for (int y = d.Y - 8; y < wallTop && stands; y++)
+                    {
+                        int x = d.NX != 0 ? d.X + ax * k : d.X + u, z = d.NX != 0 ? d.Z + u : d.Z + az * k;
+                        byte o = Orders.At(x, y, z);
+                        if (o != 0 && !Orders.IsRemove(o)) { meant = true; stands = false; }
+                    }
             if (!stands)
             {
                 // nothing standing and nothing marked there for a long while: the house was taken back
                 if (!meant && Orders.At(d.X, d.Y, d.Z) == 0 && Time - since > 60) HouseDoors.RemoveAt(i);
                 continue;
             }
-            var plan = GatePlan.At(World, Site, new VoxelHit { X = d.X, Y = d.Y, Z = d.Z, NX = d.NX, NZ = d.NZ });
+            // the threshold at the top of the house's floor, whatever the ground outside
+            var plan = GatePlan.At(World, Site, new VoxelHit { X = d.X, Y = d.Y, Z = d.Z, NX = d.NX, NZ = d.NZ }, d.Top > 0 ? d.Y - 8 : -1);
             if (plan == null) continue;
             // the doorway is not to be laid any more: what is marked in it is let go before it is cut
             for (int k = 0; k < d.Thick; k++)
@@ -224,7 +248,7 @@ public sealed partial class Sim
         var cells = new List<int>();
         FloorOf(best, cells);
         res.Area = cells.Count / (float)(VoxelWorld.PerMetre * VoxelWorld.PerMetre);
-        res.Bunks = Furnish(cells, Math.Clamp((int)(res.Area / FloorPerBunk), 1, MostBunks)).Bunks.Count;
+        res.Bunks = FurnishLevels(cells, Math.Clamp((int)(res.Area / FloorPerBunk), 1, MostBunks)).Bunks.Count;
         if (!bestDoor) { res.Why = "нет двери: поставьте ворота ({ToolGate}) в стену"; return res; }
         if (res.Area < DwellingFloor) { res.Why = $"тесно: {res.Area:0.#} м² пола, нужно хотя бы {DwellingFloor:0}"; return res; }
         if (res.Bunks == 0) { res.Why = "лежанке негде встать: нужна стена и пол два метра в длину"; return res; }
@@ -289,8 +313,16 @@ public sealed partial class Sim
             if (was && had > 0 && !quiet) Say($"Жилой дом открыт ({check.Why}): его {had} {PlacesWord(had)} не считаются, пока его не закроют.", 2, (z.X0 + z.X1) / 2f, (z.Z0 + z.Z1) / 2f);
             return;
         }
-        if (!_furnishing.TryGetValue(z.Id, out var plan) || plan.Voxels.Count == 0)
-            _furnishing[z.Id] = plan = Furnish(floor, check.Bunks);
+        // laid out once for its floor; again if the floor is another now (a storey over it, the floor laid since), what
+        // stands of the old layout and is not in the new one taken away
+        long key = FloorKey(floor);
+        if (!_furnishing.TryGetValue(z.Id, out var plan) || plan.Voxels.Count == 0 || plan.Key != key)
+        {
+            var fresh = FurnishLevels(floor, check.Bunks);
+            fresh.Key = key;
+            if (plan != null) Unfurnish(plan, fresh);
+            _furnishing[z.Id] = plan = fresh;
+        }
         z.Planned = plan.Bunks.Count;
         // what of the furnishing is not standing and not ordered yet is ordered
         var want = new VoxelList();
@@ -319,6 +351,58 @@ public sealed partial class Sim
         else if (!was && beds > 0) Say($"Жилой дом снова закрыт: {beds} {PlacesWord(beds)} в войске.", 1, (z.X0 + z.X1) / 2f, (z.Z0 + z.Z1) / 2f);
     }
 
+    /// <summary>What tells one floor from another: how many cells it has and where.</summary>
+    static long FloorKey(List<int> floor)
+    {
+        long k = floor.Count;
+        foreach (int p in floor) k = k * 31 + p;
+        return k;
+    }
+
+    /// <summary>What stands of an old layout and has no place in the new: taken away, as the workers would carry it off.</summary>
+    void Unfurnish(Furnishing old, Furnishing fresh)
+    {
+        var keep = new HashSet<int>();
+        for (int i = 0; i < fresh.Voxels.Count; i++) keep.Add(WaterPlanner.Pack(fresh.Voxels.X(i), fresh.Voxels.Y(i), fresh.Voxels.Z(i)));
+        for (int i = 0; i < old.Voxels.Count; i++)
+        {
+            int x = old.Voxels.X(i), y = old.Voxels.Y(i), z = old.Voxels.Z(i);
+            if (keep.Contains(WaterPlanner.Pack(x, y, z)) || !Mat.IsFurniture[World.Get(x, y, z)]) continue;
+            World.Set(x, y, z, Mat.Air);
+            Forget(x, y, z);
+        }
+    }
+
+    /// <summary>
+    /// The furnishing of a house of more than one floor: each floor (the cells within a few voxels of the same height)
+    /// furnished as a room of its own, the bunks shared out by how much floor each has, up to the bunks wanted.
+    /// </summary>
+    Furnishing FurnishLevels(List<int> floorCells, int bunks)
+    {
+        var heights = new List<int>();
+        foreach (int p in floorCells) heights.Add(WaterPlanner.Unpack(p).y);
+        heights.Sort();
+        // the floors: heights that run on with gaps of a few voxels at most
+        var cuts = new List<int>();
+        for (int i = 1; i < heights.Count; i++) if (heights[i] - heights[i - 1] > 6) cuts.Add(heights[i]);
+        if (cuts.Count == 0) return Furnish(floorCells, bunks);
+        var plan = new Furnishing();
+        int left = bunks;
+        for (int level = 0; level <= cuts.Count && left > 0; level++)
+        {
+            int lo = level == 0 ? int.MinValue : cuts[level - 1], hi = level == cuts.Count ? int.MaxValue : cuts[level];
+            var cells = floorCells.FindAll(p => { int y = WaterPlanner.Unpack(p).y; return y >= lo && y < hi; });
+            int want = Math.Min(left, (int)(cells.Count / (VoxelWorld.PerMetre * VoxelWorld.PerMetre) / FloorPerBunk));
+            if (want <= 0) continue;
+            var part = Furnish(cells, want);
+            int from = plan.Voxels.Count;
+            for (int i = 0; i < part.Voxels.Count; i++) plan.Voxels.Add(part.Voxels.X(i), part.Voxels.Y(i), part.Voxels.Z(i), part.Voxels.M(i));
+            foreach (var (f, c) in part.Bunks) plan.Bunks.Add((f + from, c));
+            left -= part.Bunks.Count;
+        }
+        return plan;
+    }
+
     /// <summary>
     /// The furnishing of a room: bunks set head to a wall along it, side by side with room to pass between, and a table
     /// with a bench on either side where floor is left in the middle. A floor of trodden earth is not flat: each piece
@@ -331,6 +415,12 @@ public sealed partial class Sim
         // no furniture in a door's way: the cells its leaves fill and sweep through are kept clear
         var clear = new HashSet<int>();
         foreach (var g in Gates) clear.UnionWith(g.Cells);
+        // nor at a ladder's foot: the cells it stands in are kept clear
+        foreach (int p in floorCells)
+        {
+            var (x, y, z) = WaterPlanner.Unpack(p);
+            for (int k = 0; k < 4; k++) if (Mat.IsLadder[World.Get(x, y + k, z)]) { clear.Add(Nav.CellOf(x, y, z)); break; }
+        }
         // the floor by column: where each column's floor is
         var floor = new Dictionary<int, int>();
         int Col(int x, int z) => z * 4096 + x;

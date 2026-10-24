@@ -848,7 +848,7 @@ public partial class BuildTools : Node3D
         var plan = Tool switch
         {
             Tool.Line => Shapes.Line(w, site, a.x, a.z, b.x, b.z, st, _level),
-            Tool.Box when Opt.House && !dig => Shapes.House(w, site, a.x, a.z, b.x, b.z, st, _level, out _, out _),
+            Tool.Box when Opt.House && !dig => HousePreview(a, b, st),
             Tool.Box => Shapes.Box(w, site, a.x, a.z, b.x, b.z, st, _level),
             Tool.Circle => Shapes.Circle(w, site, a.x, a.z, Radius(a, b), st, _level),
             Tool.Bridge => Bridges.Plan(w, site, a.x, a.z, b.x, b.z, Opt.Width, BridgeMat),
@@ -857,16 +857,39 @@ public partial class BuildTools : Node3D
         return dig ? Shapes.WithTrees(_m.World, plan) : plan;
     }
 
-    /// <summary>A house from corner to corner: its walls and roof marked, its door to be cut once the wall stands, its floor a dwelling.</summary>
+    /// <summary>
+    /// A house from corner to corner: its walls, floor and roof marked (the roof to stand as an arch), its door to be cut
+    /// once the wall stands, its floor a dwelling. Drawn over a house, a second storey on it, or why not.
+    /// </summary>
     void MarkHouse((int x, int y, int z) a, (int x, int y, int z) b)
     {
         var st = StrokeNow();
         st.Dig = false;
-        var plan = Shapes.House(_m.World, _m.Site, a.x, a.z, b.x, b.z, st, _level, out var door, out string why);
+        int x0 = Math.Min(a.x, b.x), z0 = Math.Min(a.z, b.z), x1 = Math.Max(a.x, b.x), z1 = Math.Max(a.z, b.z);
+        if (_m.Sim.HouseUnder(x0, z0, x1, z1) is { } under)
+        {
+            string no = _m.Sim.PlanStorey(under, x0, z0, x1, z1, st.Mat);
+            if (no != null) { Refuse(no); return; }
+            _markName = "Второй этаж";
+            Sound.Ui("mark");
+            _m.Hud.Log("Второй этаж: рабочие снимут крышу, поставят лестницу, настелют пол и поднимут стены с новой крышей.", Hud.Kind.Ok);
+            return;
+        }
+        var plan = Shapes.House(_m.World, _m.Site, a.x, a.z, b.x, b.z, st, _level, out var door, out string why, out var arched);
         if (plan == null) { Refuse(why); return; }
-        Designate(plan, false, "Дом");
-        _m.Sim.PlanHouse(door, Math.Min(a.x, b.x), Math.Min(a.z, b.z), Math.Max(a.x, b.x), Math.Max(a.z, b.z));
+        if (!Designate(plan, false, "Дом")) return;
+        _m.Sim.Arch(arched);
+        _m.Sim.PlanHouse(door, x0, z0, x1, z1);
         _m.Hud.Log("Дом: когда стены встанут, рабочие прорубят дверь и навесят ворота, потом поставят лежанки. Каждая лежанка — место в войске.", Hud.Kind.Ok);
+    }
+
+    /// <summary>What a house drawn here would be: a house, or over a house the storey that would go up on it.</summary>
+    VoxelList HousePreview((int x, int y, int z) a, (int x, int y, int z) b, Stroke st)
+    {
+        int x0 = Math.Min(a.x, b.x), z0 = Math.Min(a.z, b.z), x1 = Math.Max(a.x, b.x), z1 = Math.Max(a.z, b.z);
+        if (_m.Sim.HouseUnder(x0, z0, x1, z1) is { } under)
+            return under.Depth > 1 ? Shapes.Storey(_m.World, _m.Site, under.X0, under.Z0, under.X1, under.Z1, under.Depth, st.Mat, out _, out _, out _) : null;
+        return Shapes.House(_m.World, _m.Site, a.x, a.z, b.x, b.z, st, _level, out _, out _);
     }
 
     /// <summary>A drawbridge from the bank at A over the gap to B, hinged on the bank nearer the citadel.</summary>

@@ -129,6 +129,18 @@ public sealed partial class Sim
         return false;
     }
 
+    /// <summary>Whether anything built, or meant to be, stands over a spot within twelve metres: a roof over it.</summary>
+    bool Roofed(int x, int y, int z)
+    {
+        for (int yy = y + 8; yy < Math.Min(World.SY - 1, y + 96); yy++)
+        {
+            byte m = World.Get(x, yy, z);
+            if (m != Mat.Air && Mat.IsPlayer[m] || MeantAt(x, yy, z) != 0) return true;
+        }
+        foreach (var zn in Zones) if (zn.Kind == Zone.Dwelling && zn.Contains(x, z)) return true;
+        return false;
+    }
+
     void DecorateChunk(int ci)
     {
         var d = Design.ChunkData(ci);
@@ -202,10 +214,14 @@ public sealed partial class Sim
         Hang(f);
     }
 
-    /// <summary>Barrels, crates or sacks at the foot of a wall's inner face, standing clear of gates, ladders and work.</summary>
+    /// <summary>
+    /// Barrels, crates or sacks at the foot of a wall's inner face, standing clear of gates, ladders and work: in a yard
+    /// under the open sky, never in a room under a roof (a house's floor is for its furniture).
+    /// </summary>
     void TryProp(int x, int z, int nx, int nz, int ground, int by)
     {
         if (ground < by || ground >= by + VoxelWorld.CS) return;
+        if (Roofed(x + nx * 3, ground, z + nz * 3)) return;
         if (!Built(x, ground + 2, z) && !Built(x - nx, ground + 2, z - nz) || !Built(x, ground + 14, z) && !Built(x - nx, ground + 14, z - nz)) return;
         if (NearGate(x, z, 30) || NearLadder(x + nx * 4, ground, z + nz * 4, 12)) return;
         double pick = Hash.H3(x * 3, ground, z * 5);

@@ -6095,6 +6095,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--acid") AcidBench.Run
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--giants") GiantsBench.Run(Check);
 // the magic wand: what it takes, laying over again, its blueprint (WandBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--wand") WandBench.Run(Check);
+// houses the workers build: roofed whole, floored, furnished, and a storey on a storey (Houses.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--houses") HousesBench.Run(Check);
 
 if (args.Length > 0 && args[0] == "--stress")
 {

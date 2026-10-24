@@ -196,49 +196,188 @@ public static class Shapes
         return !st.Dig && st.Mat == Mat.Stone ? Recess(w, L) : L;
     }
 
-    /// <summary>A house's door: the outer face of its wall in the middle of the side facing the citadel, a metre over the ground, the way it faces, and how thick the wall is.</summary>
-    public struct HouseDoor { public int X, Y, Z, NX, NZ, Thick; }
+    /// <summary>
+    /// A house's door: the outer face of its wall in the middle of the side facing the citadel, a metre over its floor
+    /// (<see cref="Y"/> − 8 is the threshold, the top of the floor), the way it faces, how thick the wall is, and the top
+    /// of the walls (where the roof begins, and a storey over it would).
+    /// </summary>
+    public struct HouseDoor { public int X, Y, Z, NX, NZ, Thick, Top; }
+
+    /// <summary>How thick a house's walls are, how high they stand over its floor, and how far its eaves reach out.</summary>
+    public const int HouseWall = 4, HouseHeight = 28, Eaves = 2;
 
     /// <summary>
     /// A house drawn as a rectangle: walls of the stroke's material round it, half a metre thick whatever the brush's
-    /// width, up to a flat top
-    /// at least four metres over the highest ground under them (a door three metres high and a lintel over it), and a
-    /// roof of logs over the room flush with the walls' top. Logs span two metres from a wall, so the room is under four
-    /// metres across, and the door goes in an end wall (the one nearer the citadel): the long walls carry all the roof,
-    /// and the lintel over the door none of it. The door is not left out of the wall: once the wall stands there, the
-    /// gateway is cut and the gate hung (Sim.PlanHouse). Null, and why, when the room is too small to sleep in or too
-    /// wide to roof.
+    /// width, three and a half metres over the highest ground under them; a floor of logs laid over the ground
+    /// inside up to that height; and a roof of logs in two slopes from eaves a quarter of a metre out over the long
+    /// walls up to a ridge along the middle, the end walls going on up under it in gables (<see cref="Roof"/>). The room
+    /// is under four metres across, so that a storey can be floored over it, and the door goes in the middle of a long
+    /// wall, the one facing the citadel, under a lintel of logs (stone bears little held out over a doorway; the gables
+    /// stand over the end walls). The door is not left out of the wall: once the wall stands all round it and over it,
+    /// the gateway is cut and the gate hung (Sim.PlanHouse). <paramref name="arched"/> is what of it stands as an arch,
+    /// held as long as it is joined to the rest: the roof, and the lintel. Null, and why, when the room is too small to
+    /// sleep in or too wide to floor over.
     /// </summary>
     public static VoxelList House(VoxelWorld w, Site site, int ax, int az, int bx, int bz, in Stroke st, int levelTop, out HouseDoor door, out string why)
+        => House(w, site, ax, az, bx, bz, st, levelTop, out door, out why, out _);
+
+    public static VoxelList House(VoxelWorld w, Site site, int ax, int az, int bx, int bz, in Stroke st, int levelTop, out HouseDoor door, out string why, out VoxelList arched)
     {
-        door = default; why = null;
-        const int t = 4;
+        door = default; why = null; arched = null;
+        const int t = HouseWall;
         int x0 = Math.Min(ax, bx), x1 = Math.Max(ax, bx), z0 = Math.Min(az, bz), z1 = Math.Max(az, bz);
-        int inX = x1 - x0 + 1 - 2 * t, inZ = z1 - z0 + 1 - 2 * t;
-        if (Math.Min(inX, inZ) < 16 || Math.Max(inX, inZ) < 24) { why = "дом мал: внутри нужно хотя бы 2 × 3 м"; return null; }
-        if (Math.Min(inX, inZ) > 30) { why = "дом широк: брёвна крыши перекрывают меньше 4 м, рисуйте поуже"; return null; }
-        if (Math.Max(x1 - x0, z1 - z0) > 150) { why = "дом велик: не длиннее 18 м"; return null; }
+        if (!HouseSize(x1 - x0 + 1, z1 - z0 + 1, out why)) return null;
         int ground = 0;
         for (int z = z0; z <= z1; z++) for (int x = x0; x <= x1; x++) if (x >= 0 && z >= 0 && x < w.SX && z < w.SZ) ground = Math.Max(ground, w.SurfAt(x, z));
-        int top = Math.Max(levelTop, ground + 32);
+        int top = ground + 1 + HouseHeight;
         var wall = st; wall.Width = t; wall.Level = true; wall.Hollow = true; wall.Dig = false;
         var L = new VoxelList();
+        arched = new VoxelList();
         for (int z = z0; z <= z1; z++)
             for (int x = x0; x <= x1; x++)
             {
                 bool room = x - x0 >= t && x1 - x >= t && z - z0 >= t && z1 - z >= t;
                 if (!room) { Column(w, site, L, x, z, wall, top); continue; }
                 if (x < 0 || z < 0 || x >= w.SX || z >= w.SZ || site.Forbidden(x, z)) continue;
-                if (Brushes.Free(w.Get(x, top - 1, z))) L.Add(x, top - 1, z, Mat.Wood);
+                // the floor: logs over the ground inside, up to the highest ground under the house
+                for (int y = Math.Max(1, w.SurfAt(x, z)); y <= ground; y++) if (Brushes.Free(w.Get(x, y, z))) L.Add(x, y, z, Mat.Wood);
             }
         if (L.Count == 0) { why = "здесь не построить"; return null; }
-        // the door: in the middle of the end wall nearer the citadel (of a square house, the side facing it)
+        Roof(w, site, L, arched, x0, z0, x1, z1, top, st.Mat);
+        // the door: in the middle of the long wall on the citadel's side (the ridge runs along the long walls)
         int cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, dx = site.KeepX - cx, dz = site.KeepZ - cz;
-        bool endsAlongX = inX > inZ || inX == inZ && Math.Abs(dx) > Math.Abs(dz);
-        if (endsAlongX) door = new HouseDoor { X = dx > 0 ? x1 : x0, Z = cz, NX = dx > 0 ? 1 : -1 };
-        else door = new HouseDoor { X = cx, Z = dz > 0 ? z1 : z0, NZ = dz > 0 ? 1 : -1 };
-        door.Y = w.SurfAt(door.X, door.Z) + 8;
+        if (x1 - x0 >= z1 - z0) door = new HouseDoor { X = cx, Z = dz > 0 ? z1 : z0, NZ = dz > 0 ? 1 : -1 };
+        else door = new HouseDoor { X = dx > 0 ? x1 : x0, Z = cz, NX = dx > 0 ? 1 : -1 };
+        door.Y = ground + 1 + 8;
         door.Thick = t;
+        door.Top = top;
+        // the lintel: three courses of logs over where the doorway will be, a metre beyond it either side (the gateway
+        // snaps to the cells, half a metre either way), standing as an arch
+        var lintel = new HashSet<long>();
+        for (int k = 0; k < t; k++)
+            for (int u = -Gateway.Half - 8; u <= Gateway.Half + 8; u++)
+                for (int y = door.Y - 8 + Gateway.Height; y < Math.Min(top, door.Y - 8 + Gateway.Height + 3); y++)
+                {
+                    int x = door.NX != 0 ? door.X - door.NX * k : door.X + u, z = door.NX != 0 ? door.Z + u : door.Z - door.NZ * k;
+                    lintel.Add(Key(w, x, y, z));
+                }
+        var o = new VoxelList();
+        for (int i = 0; i < L.Count; i++)
+        {
+            int x = L.X(i), y = L.Y(i), z = L.Z(i);
+            byte m = lintel.Contains(Key(w, x, y, z)) ? Mat.Wood : L.M(i);
+            o.Add(x, y, z, m);
+            if (m == Mat.Wood && lintel.Contains(Key(w, x, y, z))) arched.Add(x, y, z, m);
+        }
+        return o;
+    }
+
+    /// <summary>Whether a house of this outer size can be built: room enough inside to sleep in, and not too wide to floor over.</summary>
+    public static bool HouseSize(int sx, int sz, out string why)
+    {
+        int inX = sx - 2 * HouseWall, inZ = sz - 2 * HouseWall;
+        why = null;
+        if (Math.Min(inX, inZ) < 16 || Math.Max(inX, inZ) < 24) why = "дом мал: внутри нужно хотя бы 2 × 3 м";
+        else if (Math.Min(inX, inZ) > 30) why = "дом широк: внутри не шире 3,75 м, рисуйте поуже";
+        else if (Math.Max(sx, sz) > 151) why = "дом велик: не длиннее 18 м";
+        return why == null;
+    }
+
+    /// <summary>
+    /// The roof of a house over the rectangle of its walls, standing on them at <paramref name="top"/>: two slopes of
+    /// logs, a voxel thick, from eaves a quarter of a metre out over the long walls up to a ridge along the middle, a
+    /// voxel up for every two in (as the members of an arch, they hold at their corners); the end walls go on up under it
+    /// as gables of their own material. Into the plan, and the slopes into <paramref name="arched"/>.
+    /// </summary>
+    public static void Roof(VoxelWorld w, Site site, VoxelList L, VoxelList arched, int x0, int z0, int x1, int z1, int top, byte wallMat)
+    {
+        const int t = HouseWall, e = Eaves;
+        bool alongX = x1 - x0 >= z1 - z0;
+        int c0 = alongX ? z0 : x0, c1 = alongX ? z1 : x1, l0 = alongX ? x0 : z0, l1 = alongX ? x1 : z1;
+        int cmin = c0 - e, cmax = c1 + e, dmax = (cmax - cmin) / 2;
+        for (int k = 0; 2 * k <= dmax; k++)
+        {
+            int y = top + k;
+            if (y >= w.SY - 1) break;
+            for (int c = cmin; c <= cmax; c++)
+            {
+                int d = Math.Min(c - cmin, cmax - c);
+                // the slope: two voxels in at each course (the eaves and the wall's outer half at the first), all of
+                // what is left at the ridge; the gable: under the slopes, over the end walls
+                bool slope = k == 0 ? d <= e + 1 : d >= 2 * k && (d <= 2 * k + 1 || 2 * k + 1 >= dmax);
+                bool gable = !slope && d > 2 * k + 1 && c >= c0 && c <= c1;
+                if (!slope && !gable) continue;
+                for (int l = slope ? l0 - e : l0; l <= (slope ? l1 + e : l1); l++)
+                {
+                    if (gable && l - l0 >= t && l1 - l >= t) continue;
+                    int x = alongX ? l : c, z = alongX ? c : l;
+                    if (!w.InBounds(x, y, z) || site.Forbidden(x, z) || !Brushes.Free(w.Get(x, y, z))) continue;
+                    byte m = slope ? Mat.Wood : Lay(wallMat, x, y, z);
+                    L.Add(x, y, z, m);
+                    if (slope) arched.Add(x, y, z, m);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// What of a house stands over its walls' top: its roof and gables, and whatever else was laid up there, to be taken
+    /// down before a storey goes up on it.
+    /// </summary>
+    public static VoxelList OverHouse(VoxelWorld w, int x0, int z0, int x1, int z1, int top)
+    {
+        var L = new VoxelList();
+        for (int z = z0 - Eaves; z <= z1 + Eaves; z++)
+            for (int x = x0 - Eaves; x <= x1 + Eaves; x++)
+                for (int y = top; y < Math.Min(w.SY - 1, top + HouseHeight + 4); y++)
+                {
+                    // the eaves outside the walls are left, a ledge between the storeys
+                    if (y == top && (x < x0 || x > x1 || z < z0 || z > z1)) continue;
+                    if (!w.InBounds(x, y, z)) continue;
+                    byte m = w.Get(x, y, z);
+                    if (m != Mat.Air && Mat.IsPlayer[m] && Labour.Diggable(m)) L.Add(x, y, z, Mat.Air);
+                }
+        return L;
+    }
+
+    /// <summary>
+    /// A storey over a house whose walls stand to <paramref name="lowerTop"/>, its roof taken down: a floor of logs in the
+    /// top two courses of the room below, held as an arch, but for a hatch over a ladder set against one long wall from
+    /// the floor below (<paramref name="ladder"/>, laid first); the walls going on up as high again, and a roof of their
+    /// own over them (<see cref="Roof"/>). The ladder stands against the long wall away from the citadel, the door being
+    /// in the other. The walls' top is <paramref name="newTop"/>.
+    /// </summary>
+    public static VoxelList Storey(VoxelWorld w, Site site, int x0, int z0, int x1, int z1, int lowerTop, byte wallMat, out VoxelList arched, out VoxelList ladder, out int newTop)
+    {
+        const int t = HouseWall;
+        var L = new VoxelList();
+        arched = new VoxelList();
+        newTop = lowerTop + HouseHeight;
+        bool alongX = x1 - x0 >= z1 - z0;
+        // the ladder: against the inner face of the long wall away from the citadel (the door is in the other), a metre
+        // and a half in from an end wall
+        bool far0 = alongX ? site.KeepZ > (z0 + z1) / 2 : site.KeepX > (x0 + x1) / 2;
+        var hit = alongX
+            ? new VoxelHit { X = x0 + t + 12, Y = lowerTop - 20, Z = far0 ? z0 + t - 1 : z1 - t + 1, NZ = far0 ? 1 : -1 }
+            : new VoxelHit { X = far0 ? x0 + t - 1 : x1 - t + 1, Y = lowerTop - 20, Z = z0 + t + 12, NX = far0 ? 1 : -1 };
+        ladder = LadderAt(w, site, hit);
+        var hatch = new HashSet<int>();
+        for (int i = 0; i < ladder.Count; i++) hatch.Add((ladder.Z(i) >> 3) * 4096 + (ladder.X(i) >> 3));
+        for (int z = z0; z <= z1; z++)
+            for (int x = x0; x <= x1; x++)
+            {
+                if (x < 0 || z < 0 || x >= w.SX || z >= w.SZ || site.Forbidden(x, z)) continue;
+                bool room = x - x0 >= t && x1 - x >= t && z - z0 >= t && z1 - z >= t;
+                if (!room)
+                {
+                    for (int y = lowerTop; y < newTop && y < w.SY - 1; y++) if (Brushes.Free(w.Get(x, y, z))) L.Add(x, y, z, Lay(wallMat, x, y, z));
+                    continue;
+                }
+                if (hatch.Contains((z >> 3) * 4096 + (x >> 3))) continue;
+                for (int y = lowerTop - 2; y < lowerTop; y++)
+                    if (Brushes.Free(w.Get(x, y, z))) { L.Add(x, y, z, Mat.Wood); arched.Add(x, y, z, Mat.Wood); }
+            }
+        Roof(w, site, L, arched, x0, z0, x1, z1, newTop, wallMat);
         return L;
     }
 

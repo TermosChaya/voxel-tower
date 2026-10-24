@@ -25,6 +25,7 @@ public partial class Main
         if (_pose == "sap") { Sapping(); return; }
         if (_pose == "shelter") { Sheltering(); return; }
         if (_pose == "dwelling") { Housing(); return; }
+        if (_pose == "house") { HousePose(); return; }
         if (_pose == "traps") { Trapped(); return; }
         if (_pose == "drawbridge") { Drawn(); return; }
         if (_pose == "thieves") { Robbed(); return; }
