@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading;
 using System.Threading.Tasks;
 using Godot;
 using VoxelTower.Core;
@@ -15,6 +17,11 @@ namespace VoxelTower.Game;
 /// cell (GreedyMesher.MeshCoarse), a quarter of the faces in an eighth of the draws; a block whose chunks changed is made
 /// again while the coarse level is drawn, or when it comes on. Vertices are in voxel units; this node scales them
 /// to metres and centres the field on the origin, so the shaders see whole-voxel coordinates.
+///
+/// The meshing is done on the worker threads, into buffers borrowed from a pool; only Godot's meshes are made here,
+/// on the main thread (Godot's arrays and objects are never made or let go on a worker), compressed
+/// (<see cref="GodotMesh"/>), and in play so many vertices of them a frame, the rest the next. At the start the main
+/// thread makes the meshes while the workers are still meshing the rest of the valley.
 /// </summary>
 public partial class WorldView : Node3D
 {
@@ -32,9 +39,37 @@ public partial class WorldView : Node3D
     bool _coarse, _showSolid = true;
     /// <summary>Whether the valley is drawn at the coarse level now.</summary>
     public bool Coarse => _coarse;
-    readonly GreedyMesher _mesher = new();
-    readonly byte[] _pad = new byte[34 * 34 * 34], _wet = new byte[34 * 34 * 34];
     readonly List<int> _batch = new();
+    /// <summary>
+    /// Chunks changed in play are meshed off the main thread and put in when they are ready, a frame or two on; runs
+    /// that take pictures or check themselves have them meshed and put in at once, so that what they look at is up to date.
+    /// </summary>
+    public bool Async;
+
+    // what each worker thread meshes with
+    sealed class Kit
+    {
+        public readonly GreedyMesher Mesher = new() { Pooled = true };
+        public readonly byte[] Pad = new byte[34 * 34 * 34], Wet = new byte[34 * 34 * 34];
+    }
+    static readonly ThreadLocal<Kit> Kits = new(() => new Kit());
+
+    /// <summary>What a chunk was meshed into, still the core's buffers: the picture, its water, its shadow (when asked for), the grass on it.</summary>
+    struct Built
+    {
+        public MeshBuffers Solid, Water, Shadow;
+        public Sward Sward;
+    }
+
+    /// <summary>Godot's mesh of the core's buffers, made here on the main thread, the borrowed buffers given back.</summary>
+    static ArrayMesh ToGodot(MeshBuffers b)
+    {
+        var mesh = GodotMesh.From(b, compress: true);
+        b?.Return();
+        return mesh;
+    }
+
+    static int VerticesOf(MeshBuffers b) => b?.Vertices ?? 0;
 
     public double LastFullMeshMs { get; private set; }
     /// <summary>The tufts, the flowers and the sward, drawn in blades over the chunks.</summary>
@@ -55,37 +90,98 @@ public partial class WorldView : Node3D
         Grass.Init(w);
 
         var sw = Stopwatch.StartNew();
-        var results = new (MeshBuffers solid, MeshBuffers water, Sward sward, MeshBuffers shadow)[w.ChunkCount];
-        Parallel.For(0, w.ChunkCount, () => (new GreedyMesher(), new byte[34 * 34 * 34], new byte[34 * 34 * 34]), (ci, _, loc) =>
+        // the workers mesh the valley while the main thread makes Godot's meshes of what is done so far
+        using (var done = new BlockingCollection<(int ci, Built b)>(256))
         {
-            results[ci].solid = loc.Item1.MeshChunk(w, ci, loc.Item2, loc.Item3, out results[ci].water, out results[ci].sward, out results[ci].shadow);
-            return loc;
-        }, _ => { });
-        for (int ci = 0; ci < w.ChunkCount; ci++) Apply(ci, results[ci]);
+            var meshing = Task.Run(() =>
+            {
+                try { Parallel.For(0, w.ChunkCount, ci => done.Add((ci, MakeChunk(ci, shadow: true)))); }
+                finally { done.CompleteAdding(); }
+            });
+            foreach (var (ci, b) in done.GetConsumingEnumerable())
+            {
+                Put(_inst, ci, ToGodot(b.Solid), _mat, GeometryInstance3D.ShadowCastingSetting.Off, _showSolid && !_coarse);
+                Put(_water, ci, ToGodot(b.Water), _waterMat, GeometryInstance3D.ShadowCastingSetting.Off, true);
+                Put(_shade, ci, ToGodot(b.Shadow), null, GeometryInstance3D.ShadowCastingSetting.ShadowsOnly, _showSolid && !_coarse);
+                Grass.Take(ci, b.Sward);
+            }
+            meshing.Wait();
+        }
         _batch.Clear();
         w.TakeDirty(_batch);
         _batch.Clear();
         _rx = (w.CX + 1) / 2; _ry = (w.CY + 1) / 2; _rz = (w.CZ + 1) / 2;
         _far = new MeshInstance3D[_rx * _ry * _rz];
         _farShade = new MeshInstance3D[_far.Length];
-        // the coarse level is wanted only from far off: made off the main thread, put in a few blocks a frame after
-        _farMade = Task.Run(() =>
-        {
-            var made = new (MeshBuffers solid, MeshBuffers shadow)[_far.Length];
-            Parallel.For(0, made.Length, () => (new GreedyMesher(), new byte[34 * 34 * 34]), (ri, _, loc) =>
-            {
-                made[ri].solid = loc.Item1.MeshCoarse(w, ri % _rx, ri / (_rx * _rz), ri / _rx % _rz, loc.Item2, out made[ri].shadow);
-                return loc;
-            }, _ => { });
-            return made;
-        });
+        // the coarse level is wanted only from far off: meshed off the main thread, made Godot's a few dozen blocks a frame after
+        var all = new int[_far.Length];
+        for (int i = 0; i < all.Length; i++) all[i] = i;
+        _farMade = Task.Run(() => MakeFar(all));
         LastFullMeshMs = sw.Elapsed.TotalMilliseconds;
     }
 
-    // the coarse level as the thread made it, and how much of it is put in so far
+    /// <summary>A chunk meshed, on whatever thread asks.</summary>
+    Built MakeChunk(int ci, bool shadow)
+    {
+        var k = Kits.Value;
+        var b = new Built();
+        if (shadow) b.Solid = k.Mesher.MeshChunk(_w, ci, k.Pad, k.Wet, out b.Water, out b.Sward, out b.Shadow);
+        else b.Solid = k.Mesher.MeshChunk(_w, ci, k.Pad, k.Wet, out b.Water, out b.Sward);
+        return b;
+    }
+
+    /// <summary>These chunks meshed for the picture, over all the cores when there are more than two.</summary>
+    Built[] MakeChunks(int[] chunks)
+    {
+        var made = new Built[chunks.Length];
+        if (chunks.Length <= 2) for (int i = 0; i < chunks.Length; i++) made[i] = MakeChunk(chunks[i], shadow: false);
+        else Parallel.For(0, chunks.Length, i => made[i] = MakeChunk(chunks[i], shadow: false));
+        return made;
+    }
+
+    /// <summary>The shadows of these chunks.</summary>
+    MeshBuffers[] MakeShadows(int[] chunks)
+    {
+        var made = new MeshBuffers[chunks.Length];
+        void One(int i) { var k = Kits.Value; made[i] = k.Mesher.MeshShadow(_w, chunks[i], k.Pad); }
+        if (chunks.Length <= 2) for (int i = 0; i < chunks.Length; i++) One(i);
+        else Parallel.For(0, chunks.Length, One);
+        return made;
+    }
+
+    /// <summary>These blocks of the coarse level, their picture and their shadow.</summary>
+    (MeshBuffers solid, MeshBuffers shadow)[] MakeFar(int[] blocks)
+    {
+        var made = new (MeshBuffers solid, MeshBuffers shadow)[blocks.Length];
+        void One(int i)
+        {
+            int ri = blocks[i];
+            var k = Kits.Value;
+            made[i].solid = k.Mesher.MeshCoarse(_w, ri % _rx, ri / (_rx * _rz), ri / _rx % _rz, k.Pad, out made[i].shadow);
+        }
+        if (blocks.Length <= 2) for (int i = 0; i < blocks.Length; i++) One(i);
+        else Parallel.For(0, blocks.Length, One);
+        return made;
+    }
+
+    // the coarse level as the thread meshed it at the start, and how much of it is put in so far
     Task<(MeshBuffers solid, MeshBuffers shadow)[]> _farMade;
     int _farPut;
     bool FarReady => _farMade == null;
+
+    // the batches being meshed on the workers in play, and what they are of
+    Task<Built[]> _making;
+    int[] _makingOf;
+    Task<MeshBuffers[]> _shading;
+    int[] _shadingOf;
+    Task<(MeshBuffers solid, MeshBuffers shadow)[]> _farMaking;
+    int[] _farMakingOf;
+    // chunks meshed and waiting to be made Godot's, in the order they were meshed, and where the first of them is
+    readonly Queue<(int ci, Built b)> _waiting = new();
+    readonly Queue<(int ci, MeshBuffers b)> _shadesWaiting = new();
+    /// <summary>Vertices made into Godot's meshes a frame at most (the first chunk waiting always goes in).</summary>
+    const int VerticesAFrame = 160_000;
+    int _spent;
 
     int RegionOf(int ci)
     {
@@ -93,22 +189,12 @@ public partial class WorldView : Node3D
         return ((cy >> 1) * _rz + (cz >> 1)) * _rx + (cx >> 1);
     }
 
-    /// <summary>Makes these blocks of the coarse level again, over all the cores when there are more than two.</summary>
-    void MeshFar(List<int> blocks)
+    void PutFar(int[] blocks, (MeshBuffers solid, MeshBuffers shadow)[] made)
     {
-        Prof.Count("far blocks", blocks.Count);
-        var made = new (MeshBuffers solid, MeshBuffers shadow)[blocks.Count];
-        void One(GreedyMesher m, byte[] grid, int i)
+        for (int i = 0; i < blocks.Length; i++)
         {
-            int ri = blocks[i];
-            made[i].solid = m.MeshCoarse(_w, ri % _rx, ri / (_rx * _rz), ri / _rx % _rz, grid, out made[i].shadow);
-        }
-        if (blocks.Count <= 2) for (int i = 0; i < blocks.Count; i++) One(_mesher, _pad, i);
-        else Parallel.For(0, blocks.Count, () => (new GreedyMesher(), new byte[34 * 34 * 34]), (i, _, loc) => { One(loc.Item1, loc.Item2, i); return loc; }, _ => { });
-        for (int i = 0; i < blocks.Count; i++)
-        {
-            Put(_far, blocks[i], made[i].solid, _mat, GeometryInstance3D.ShadowCastingSetting.Off, _showSolid && _coarse);
-            Put(_farShade, blocks[i], made[i].shadow, null, GeometryInstance3D.ShadowCastingSetting.ShadowsOnly, _showSolid && _coarse);
+            Put(_far, blocks[i], ToGodot(made[i].solid), _mat, GeometryInstance3D.ShadowCastingSetting.Off, _showSolid && _coarse);
+            Put(_farShade, blocks[i], ToGodot(made[i].shadow), null, GeometryInstance3D.ShadowCastingSetting.ShadowsOnly, _showSolid && _coarse);
         }
     }
 
@@ -121,12 +207,18 @@ public partial class WorldView : Node3D
         bool want = FarReady && !close && (_coarse ? pxPerVoxel < 1.9f : pxPerVoxel < 1.7f);
         if (want == _coarse) return;
         _coarse = want;
-        if (_coarse && _farDirty.Count > 0)
+        if (_coarse)
         {
-            _farBatch.Clear();
-            _farBatch.AddRange(_farDirty);
-            _farDirty.Clear();
-            MeshFar(_farBatch);
+            // a batch still being made goes in first, so that it does not come after the newer ones made now
+            if (_farMaking != null) { PutFar(_farMakingOf, _farMaking.Result); _farMaking = null; }
+            if (_farDirty.Count > 0)
+            {
+                var blocks = new int[_farDirty.Count];
+                _farDirty.CopyTo(blocks);
+                _farDirty.Clear();
+                Prof.Count("far blocks", blocks.Length);
+                PutFar(blocks, MakeFar(blocks));
+            }
         }
         ShowLevels();
     }
@@ -147,48 +239,85 @@ public partial class WorldView : Node3D
         foreach (var mi in _water) if (mi != null) mi.Visible = water;
     }
 
-    /// <summary>Re-meshes edited chunks; big edits are spread over all cores.</summary>
+    /// <summary>
+    /// Edited chunks meshed again, so many at a time: in play the batch meshed on the workers waits, when it is ready,
+    /// to be made Godot's a few chunks a frame, and the next one is begun; else all at once. Their shadows follow a
+    /// little after (<see cref="RemeshShadows"/>).
+    /// </summary>
     public int RemeshDirty(int maxChunks = 64)
     {
-        if (_w.DirtyCount == 0) return 0;
+        _spent = 0;
+        if (_making != null && _making.IsCompleted)
+        {
+            var made = _making.Result;
+            for (int i = 0; i < made.Length; i++) _waiting.Enqueue((_makingOf[i], made[i]));
+            _making = null;
+        }
+        while (_waiting.Count > 0 && (_spent == 0 || _spent < VerticesAFrame))
+        {
+            var (ci, b) = _waiting.Dequeue();
+            _spent += VerticesOf(b.Solid) + VerticesOf(b.Water);
+            PutChunk(ci, b);
+        }
+        // the next batch while this one goes in, as long as not too much waits
+        if (_making != null || _w.DirtyCount == 0 || _waiting.Count > maxChunks) return 0;
         _batch.Clear();
         _w.TakeDirty(_batch, maxChunks);
         Prof.Count("chunks", _batch.Count);
-        // the picture at once; its shadow a little after (RemeshShadows), so a great blast is not made twice in one frame
-        var results = new (MeshBuffers solid, MeshBuffers water, Sward sward)[_batch.Count];
-        if (_batch.Count <= 2)
-            for (int i = 0; i < _batch.Count; i++) results[i].solid = _mesher.MeshChunk(_w, _batch[i], _pad, _wet, out results[i].water, out results[i].sward);
-        else
-            Parallel.For(0, _batch.Count, () => (new GreedyMesher(), new byte[34 * 34 * 34], new byte[34 * 34 * 34]), (i, _, loc) =>
-            {
-                results[i].solid = loc.Item1.MeshChunk(_w, _batch[i], loc.Item2, loc.Item3, out results[i].water, out results[i].sward);
-                return loc;
-            }, _ => { });
-        for (int i = 0; i < _batch.Count; i++)
+        var chunks = _batch.ToArray();
+        if (Async)
         {
-            int ci = _batch[i];
-            Put(_inst, ci, results[i].solid, _mat, GeometryInstance3D.ShadowCastingSetting.Off, _showSolid && !_coarse);
-            Put(_water, ci, results[i].water, _waterMat, GeometryInstance3D.ShadowCastingSetting.Off, true);
-            Grass.Take(ci, results[i].sward);
-            _shadeDirty.Add(ci);
-            _farDirty.Add(RegionOf(ci));
+            _makingOf = chunks;
+            _making = Task.Run(() => MakeChunks(chunks));
         }
-        return _batch.Count;
+        else
+        {
+            var made = MakeChunks(chunks);
+            for (int i = 0; i < chunks.Length; i++) PutChunk(chunks[i], made[i]);
+        }
+        return chunks.Length;
     }
 
-    /// <summary>The shadows of the chunks made again lately, eight a frame at most.</summary>
+    void PutChunk(int ci, Built b)
+    {
+        Put(_inst, ci, ToGodot(b.Solid), _mat, GeometryInstance3D.ShadowCastingSetting.Off, _showSolid && !_coarse);
+        Put(_water, ci, ToGodot(b.Water), _waterMat, GeometryInstance3D.ShadowCastingSetting.Off, true);
+        Grass.Take(ci, b.Sward);
+        _shadeDirty.Add(ci);
+        _farDirty.Add(RegionOf(ci));
+    }
+
+    /// <summary>The shadows of the chunks made again lately, sixteen at a time, meshed as the chunks are and made Godot's in what is left of the frame's vertices.</summary>
     public void RemeshShadows()
     {
-        if (_shadeDirty.Count == 0) return;
+        if (_shading != null && _shading.IsCompleted)
+        {
+            var made = _shading.Result;
+            for (int i = 0; i < made.Length; i++) _shadesWaiting.Enqueue((_shadingOf[i], made[i]));
+            _shading = null;
+        }
+        while (_shadesWaiting.Count > 0 && (_spent == 0 || _spent < VerticesAFrame))
+        {
+            var (ci, b) = _shadesWaiting.Dequeue();
+            _spent += VerticesOf(b);
+            Put(_shade, ci, ToGodot(b), null, GeometryInstance3D.ShadowCastingSetting.ShadowsOnly, _showSolid && !_coarse);
+        }
+        if (_shading != null || _shadeDirty.Count == 0 || _shadesWaiting.Count > 16) return;
         _shadeBatch.Clear();
-        foreach (int ci in _shadeDirty) { _shadeBatch.Add(ci); if (_shadeBatch.Count >= 8) break; }
+        foreach (int ci in _shadeDirty) { _shadeBatch.Add(ci); if (_shadeBatch.Count >= 16) break; }
         foreach (int ci in _shadeBatch) _shadeDirty.Remove(ci);
         Prof.Count("shadows", _shadeBatch.Count);
-        var made = new MeshBuffers[_shadeBatch.Count];
-        if (made.Length <= 2) for (int i = 0; i < made.Length; i++) made[i] = _mesher.MeshShadow(_w, _shadeBatch[i], _pad);
-        else Parallel.For(0, made.Length, () => (new GreedyMesher(), new byte[34 * 34 * 34]), (i, _, loc) => { made[i] = loc.Item1.MeshShadow(_w, _shadeBatch[i], loc.Item2); return loc; }, _ => { });
-        for (int i = 0; i < made.Length; i++)
-            Put(_shade, _shadeBatch[i], made[i], null, GeometryInstance3D.ShadowCastingSetting.ShadowsOnly, _showSolid && !_coarse);
+        var chunks = _shadeBatch.ToArray();
+        if (Async)
+        {
+            _shadingOf = chunks;
+            _shading = Task.Run(() => MakeShadows(chunks));
+        }
+        else
+        {
+            var made = MakeShadows(chunks);
+            for (int i = 0; i < chunks.Length; i++) Put(_shade, chunks[i], ToGodot(made[i]), null, GeometryInstance3D.ShadowCastingSetting.ShadowsOnly, _showSolid && !_coarse);
+        }
     }
 
     /// <summary>
@@ -197,42 +326,63 @@ public partial class WorldView : Node3D
     /// </summary>
     public void RemeshFar()
     {
-        // the first making of the coarse level, done off the main thread, put in a few dozen blocks a frame
+        // the first making of the coarse level, meshed off the main thread, made Godot's a few dozen blocks a frame
         if (_farMade != null)
         {
             if (!_farMade.IsCompleted) return;
             var made = _farMade.Result;
             for (int n = 0; n < 48 && _farPut < made.Length; n++, _farPut++)
             {
-                Put(_far, _farPut, made[_farPut].solid, _mat, GeometryInstance3D.ShadowCastingSetting.Off, _showSolid && _coarse);
-                Put(_farShade, _farPut, made[_farPut].shadow, null, GeometryInstance3D.ShadowCastingSetting.ShadowsOnly, _showSolid && _coarse);
+                Put(_far, _farPut, ToGodot(made[_farPut].solid), _mat, GeometryInstance3D.ShadowCastingSetting.Off, _showSolid && _coarse);
+                Put(_farShade, _farPut, ToGodot(made[_farPut].shadow), null, GeometryInstance3D.ShadowCastingSetting.ShadowsOnly, _showSolid && _coarse);
             }
             if (_farPut >= made.Length) _farMade = null;
             return;
+        }
+        if (_farMaking != null)
+        {
+            if (!_farMaking.IsCompleted) return;
+            PutFar(_farMakingOf, _farMaking.Result);
+            _farMaking = null;
         }
         if (!_coarse || _farDirty.Count == 0) return;
         _farBatch.Clear();
         const int most = 4;
         foreach (int ri in _farDirty) { _farBatch.Add(ri); if (_farBatch.Count >= most) break; }
         foreach (int ri in _farBatch) _farDirty.Remove(ri);
-        MeshFar(_farBatch);
+        Prof.Count("far blocks", _farBatch.Count);
+        var blocks = _farBatch.ToArray();
+        if (Async)
+        {
+            _farMakingOf = blocks;
+            _farMaking = Task.Run(() => MakeFar(blocks));
+        }
+        else PutFar(blocks, MakeFar(blocks));
     }
 
-    void Apply(int ci, (MeshBuffers solid, MeshBuffers water, Sward sward, MeshBuffers shadow) mb)
+    /// <summary>
+    /// The scene going (a new game, a load): the batches still being meshed waited for, and the meshes hung on the
+    /// nodes let go here on the main thread rather than by the garbage collector on a thread of its own.
+    /// </summary>
+    public override void _ExitTree()
     {
-        Put(_inst, ci, mb.solid, _mat, GeometryInstance3D.ShadowCastingSetting.Off, _showSolid && !_coarse);
-        Put(_water, ci, mb.water, _waterMat, GeometryInstance3D.ShadowCastingSetting.Off, true);
-        Put(_shade, ci, mb.shadow, null, GeometryInstance3D.ShadowCastingSetting.ShadowsOnly, _showSolid && !_coarse);
-        Grass.Take(ci, mb.sward);
+        _making?.Wait(); _shading?.Wait(); _farMaking?.Wait(); _farMade?.Wait();
+        _making = null; _shading = null; _farMaking = null; _farMade = null;
+        _waiting.Clear();
+        _shadesWaiting.Clear();
+        foreach (var slots in new[] { _inst, _water, _shade, _far, _farShade })
+            if (slots != null)
+                foreach (var mi in slots)
+                    if (mi != null && IsInstanceValid(mi)) mi.Mesh?.Dispose();
     }
 
-    void Put(MeshInstance3D[] slots, int ci, MeshBuffers mb, Material mat, GeometryInstance3D.ShadowCastingSetting shadows, bool visible)
+    /// <summary>A mesh hung on its slot's node (made if there is none), or the node let go if there is no mesh; the mesh it replaces is let go at once rather than when the garbage is next collected.</summary>
+    void Put(MeshInstance3D[] slots, int ci, ArrayMesh mesh, Material mat, GeometryInstance3D.ShadowCastingSetting shadows, bool visible)
     {
         var mi = slots[ci];
-        var mesh = GodotMesh.From(mb);
         if (mesh == null)
         {
-            if (mi != null) { mi.QueueFree(); slots[ci] = null; }
+            if (mi != null) { var gone = mi.Mesh; mi.QueueFree(); slots[ci] = null; gone?.Dispose(); }
             return;
         }
         if (mi == null)
@@ -241,7 +391,9 @@ public partial class WorldView : Node3D
             AddChild(mi);
             slots[ci] = mi;
         }
+        var old = mi.Mesh;
         mi.Mesh = mesh;
+        old?.Dispose();
     }
 
     // ---------------------------------------------------------------- the current

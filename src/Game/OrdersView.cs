@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Godot;
 using VoxelTower.Core;
@@ -7,7 +8,8 @@ namespace VoxelTower.Game;
 
 /// <summary>
 /// The work the player has marked out, drawn over the valley: planned masonry as pale ghosts in its own colours,
-/// earth, rock and trees to be dug or felled washed red. Re-meshed a few times a second as the pawns get through it.
+/// earth, rock and trees to be dug or felled washed red. Re-meshed a few times a second as the pawns get through it,
+/// in play on the worker threads, Godot's meshes made of what they meshed here on the main thread when it is ready.
 /// </summary>
 public partial class OrdersView : Node3D
 {
@@ -16,6 +18,11 @@ public partial class OrdersView : Node3D
     ShaderMaterial _buildMat, _digMat;
     readonly List<int> _batch = new();
     double _t, _next;
+    /// <summary>Meshed on the workers and put in a frame or so on (in play), or at once (pictures, the self-test).</summary>
+    public bool Async;
+    Task<(MeshBuffers build, MeshBuffers dig)[]> _making;
+    int[] _makingOf;
+    static readonly ThreadLocal<Mesher> Meshers = new(() => new Mesher());
 
     public void Init(Sim sim)
     {
@@ -39,32 +46,77 @@ public partial class OrdersView : Node3D
     }
 
     /// <summary>Re-meshes now whatever changed, without waiting for the next beat (screenshots).</summary>
-    public void Flush() { _next = 0; _Process(0); }
+    public void Flush()
+    {
+        if (_making != null) { Put(_makingOf, _making.Result); _making = null; }
+        while (_layer != null && _layer.DirtyCount > 0) Remesh(false);
+    }
 
     public override void _Process(double delta)
     {
         using var prof = Prof.Time("OrdersView");
         _t += delta;
+        if (_making != null)
+        {
+            if (!_making.IsCompleted) return;
+            Put(_makingOf, _making.Result);
+            _making = null;
+        }
         if (_layer == null || _layer.DirtyCount == 0 || _t < _next) return;
         _next = _t + .2;
+        Remesh(Async);
+    }
+
+    public override void _ExitTree()
+    {
+        // what the workers were still meshing when the scene went; and the meshes hung up let go here, not by the
+        // garbage collector on a thread of its own
+        _making?.Wait();
+        _making = null;
+        foreach (var slots in new[] { _build, _dig })
+            if (slots != null)
+                foreach (var mi in slots)
+                    if (mi != null && IsInstanceValid(mi)) mi.Mesh?.Dispose();
+    }
+
+    void Remesh(bool async)
+    {
         _batch.Clear();
         _layer.TakeDirty(_batch, 96);
-        var results = new (MeshBuffers build, MeshBuffers dig)[_batch.Count];
-        Parallel.For(0, _batch.Count, () => new Mesher(), (i, _, m) => { results[i] = m.Mesh(_layer, _w, _batch[i]); return m; }, _ => { });
-        for (int i = 0; i < _batch.Count; i++)
+        var chunks = _batch.ToArray();
+        if (async)
         {
-            Apply(_build, _batch[i], results[i].build, _buildMat);
-            Apply(_dig, _batch[i], results[i].dig, _digMat);
+            _makingOf = chunks;
+            _making = Task.Run(() => Make(chunks));
+        }
+        else Put(chunks, Make(chunks));
+    }
+
+    (MeshBuffers build, MeshBuffers dig)[] Make(int[] chunks)
+    {
+        var made = new (MeshBuffers, MeshBuffers)[chunks.Length];
+        Parallel.For(0, chunks.Length, i => made[i] = Meshers.Value.Mesh(_layer, _w, chunks[i]));
+        return made;
+    }
+
+    void Put(int[] chunks, (MeshBuffers build, MeshBuffers dig)[] made)
+    {
+        for (int i = 0; i < chunks.Length; i++)
+        {
+            Apply(_build, chunks[i], made[i].build, _buildMat);
+            Apply(_dig, chunks[i], made[i].dig, _digMat);
         }
     }
 
-    void Apply(MeshInstance3D[] slots, int ci, MeshBuffers mb, Material mat)
+    /// <summary>Godot's mesh of what was meshed hung up (here, on the main thread), the borrowed buffers given back.</summary>
+    void Apply(MeshInstance3D[] slots, int ci, MeshBuffers b, Material mat)
     {
-        var mesh = GodotMesh.From(mb);
+        var mesh = GodotMesh.From(b);
+        b?.Return();
         var mi = slots[ci];
         if (mesh == null)
         {
-            if (mi != null) { mi.QueueFree(); slots[ci] = null; }
+            if (mi != null) { var gone = mi.Mesh; mi.QueueFree(); slots[ci] = null; gone?.Dispose(); }
             return;
         }
         if (mi == null)
@@ -73,14 +125,16 @@ public partial class OrdersView : Node3D
             AddChild(mi);
             slots[ci] = mi;
         }
+        var old = mi.Mesh;
         mi.Mesh = mesh;
+        old?.Dispose();
     }
 
     /// <summary>Splits a chunk of orders into what is to be laid and what is to be taken out, and meshes both.</summary>
     sealed class Mesher
     {
         const int P = VoxelWorld.CS + 2;
-        readonly GreedyMesher _mesher = new();
+        readonly GreedyMesher _mesher = new() { Pooled = true };
         readonly byte[] _pad = new byte[P * P * P], _b = new byte[P * P * P], _d = new byte[P * P * P];
 
         public (MeshBuffers, MeshBuffers) Mesh(VoxelWorld layer, VoxelWorld w, int ci)

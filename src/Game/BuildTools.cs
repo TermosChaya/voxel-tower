@@ -120,12 +120,15 @@ public partial class BuildTools : Node3D
     string _gridKey = "";
     ShaderMaterial _ghostMat;
     StandardMaterial3D _shapeMat;
-    readonly GreedyMesher _mesher = new();
+    readonly GreedyMesher _mesher = new() { Pooled = true };
     byte[] _grid = Array.Empty<byte>();
     VoxelList _plan;
     bool _planDig;
     string _planKey = "~";
     double _planClock, _clock, _revAt;
+    // how long the last ghost took to plan and mesh, so that a large one (a blueprint's copy) is planned again for the
+    // changing valley less often
+    double _planMs;
     int _rev;
 
     /// <summary>What the stroke under the cursor asks for, or null; and whether the stores hold enough.</summary>
@@ -1221,8 +1224,9 @@ public partial class BuildTools : Node3D
     void UpdatePlan()
     {
         var w = _m.World;
-        // the valley changes all the time while the pawns work: re-plan for it twice a second, not every frame
-        if (w.Revision != _rev && _clock - _revAt > .5) { _rev = w.Revision; _revAt = _clock; }
+        // the valley changes all the time while the pawns work: re-plan for it twice a second, not every frame, and a
+        // ghost that is long in the making no more than a hundredth of the time
+        if (w.Revision != _rev && _clock - _revAt > Math.Max(.5, _planMs * .1)) { _rev = w.Revision; _revAt = _clock; }
         var st = _m.Sim.Stock;
         string stock = $"{(int)(st[1] / 400)}|{(int)(st[2] / 400)}|{(int)(st[3] / 400)}";
         bool dig = DigNow;
@@ -1270,7 +1274,7 @@ public partial class BuildTools : Node3D
             if (_mendGhost.Count == 0 && _mendClear.Count == 0) { _ghost.Visible = false; PlanText = _mendWaiting > 0 ? "Починка уже размечена: ждёт рабочих" : "Цело: чинить нечего"; PlanAffordable = true; return; }
             PlanText = "Починка: " + MendSummary(out bool ok);
             PlanAffordable = ok;
-            _ghost.Mesh = MeshPlan(_mendGhost, false);
+            Ghost(MeshPlan(_mendGhost, false));
             _ghost.Visible = _ghost.Mesh != null;
             _ghostMat.SetShaderParameter("tint", ok ? new Vector3(.55f, .78f, .42f) : new Vector3(.85f, .2f, .16f));
             _ghostMat.SetShaderParameter("tint_mix", ok ? .3f : .6f);
@@ -1302,7 +1306,15 @@ public partial class BuildTools : Node3D
         _planKey = key;
         _planClock = _clock;
         if (key.Length == 0) { _plan = null; _ghost.Visible = false; PlanText = null; return; }
+        long planT0 = System.Diagnostics.Stopwatch.GetTimestamp();
+        try { Replan(key, dragging, dig, st); }
+        finally { _planMs = (System.Diagnostics.Stopwatch.GetTimestamp() - planT0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency; }
+    }
 
+    /// <summary>The ghost and the words over it made again for what the key says the tool is at now.</summary>
+    void Replan(string key, bool dragging, bool dig, Stockpile st)
+    {
+        var w = _m.World;
         var site = _m.Site;
         var gp = Tool == Tool.Brush ? _hover.Ground(w) : HoverGround();
         double r = NibR;
@@ -1360,11 +1372,19 @@ public partial class BuildTools : Node3D
                 if (_est[k] > st[k] + .5) shortOf += (shortOf.Length > 0 ? ", " : "") + $"{Stockpile.Name(k)} {Fmt.M3(st[k])}";
         PlanAffordable = dig || shortOf.Length == 0;
         PlanText = $"{name}: {(Tool == Tool.Gate && _gatePlan != null ? GateSummary(_gatePlan) : Summary(_est, dig, sec))}" + (shortOf.Length > 0 ? $" — в запасе {shortOf}" : "");
-        _ghost.Mesh = MeshPlan(_plan, dig);
+        Ghost(MeshPlan(_plan, dig));
         _ghost.Visible = _ghost.Mesh != null;
         _ghostMat.SetShaderParameter("tint", dig ? new Vector3(.85f, .2f, .14f) : PlanAffordable ? new Vector3(.9f, .55f, .25f) : new Vector3(.85f, .2f, .16f));
         _ghostMat.SetShaderParameter("tint_mix", dig ? .62f : PlanAffordable ? .35f : .6f);
         _ghostMat.SetShaderParameter("inflate", dig ? .1f : 0f);
+    }
+
+    /// <summary>The ghost's mesh changed, the old one let go at once rather than left to the garbage collector.</summary>
+    void Ghost(ArrayMesh mesh)
+    {
+        var old = _ghost.Mesh;
+        _ghost.Mesh = mesh;
+        if (old != mesh) old?.Dispose();
     }
 
     ArrayMesh MeshPlan(VoxelList L, bool dig)
@@ -1392,6 +1412,9 @@ public partial class BuildTools : Node3D
             if (m == 0 || (dig && (!Labour.Diggable(m) || Mat.IsSprig(m)))) continue;
             _grid[((y - y0 + 1) * pz + (z - z0 + 1)) * px + (x - x0 + 1)] = m;
         }
-        return GodotMesh.From(_mesher.Mesh(_grid, dx, dy, dz, x0, y0, z0));
+        var made = _mesher.Mesh(_grid, dx, dy, dz, x0, y0, z0);
+        var mesh = GodotMesh.From(made);
+        made?.Return();
+        return mesh;
     }
 }

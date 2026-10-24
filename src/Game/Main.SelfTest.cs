@@ -373,8 +373,11 @@ public partial class Main
         Command.ReleaseSelected();
         Check("«За работу» lets it go", !worker.Hold);
         Command.ClearSelection();
-        // the mouse's buttons swapped on the controls page: the right one picks, the left one sends; and back (with another
-        // worker if the copy's masonry came down on this one meanwhile)
+        // the mouse's buttons swapped on the controls page: the right one picks, the left one sends; and back. A worker
+        // with nobody beside it again (they have all gone about their work since), so the click is on it alone (with
+        // another worker if the copy's masonry came down on this one meanwhile)
+        foreach (var u in Sim.Units)
+            if (!u.Dead && u.T == Kinds.Worker && !u.Inside && !u.Down && !Sim.Units.Exists(o => o != u && !o.Dead && !o.Inside && MathF.Abs(o.X - u.X) < 6 && MathF.Abs(o.Z - u.Z) < 6)) { worker = u; break; }
         if (worker.Dead || worker.Inside || worker.Down) worker = Sim.Units.Find(u => !u.Dead && !u.Inside && !u.Down && u.T == Kinds.Worker) ?? worker;
         Bindings.SetSwapMouse(true);
         await Look(worker.X, worker.Z);
@@ -384,6 +387,7 @@ public partial class Main
         Tools._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = false, Position = onIt });
         await Frames(2);
         bool pickedByRight = Selected.Count == 1 && Selected.Contains(worker);
+        string picked = Selected.Count == 0 ? "nobody" : string.Join(", ", new List<Unit>(Selected).ConvertAll(u => u.Name));
         var there = Screen(kx - 40, kz + 40);
         Rig._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = there });
         Rig._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = there });
@@ -392,7 +396,7 @@ public partial class Main
         Bindings.SetSwapMouse(false);
         Check("with the mouse's buttons swapped the right one picks a pawn, the left one sends it, and the hints say so",
             pickedByRight && sentByLeft && said == "ПКМ ЛКМ" && Bindings.First == MouseButton.Left,
-            $"picked {pickedByRight}, sent {sentByLeft}, the hints «{said}»");
+            $"picked {pickedByRight} ({picked} for {worker.Name}), sent {sentByLeft}, the hints «{said}»");
         Command.ReleaseSelected();
         Command.ClearSelection();
 

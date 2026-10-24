@@ -44,7 +44,23 @@ public sealed partial class Sim
     /// of anything that falls (air, ground, leaves, ladders, water, gates, dressing), 255 for what only needs to touch
     /// the ground (old masonry).
     /// </summary>
-    public static int SpanOf(byte m)
+    public static int SpanOf(byte m) => Spans[m];
+
+    // the spans and what holds what, by material, looked up rather than worked out: the search for overhangs asks them
+    // of every voxel of a fort, a few hundred thousand times over
+    static readonly byte[] Spans = ByMaterial(m => (byte)SpanOfMaterial(m));
+    static readonly byte[] Grounds = ByMaterial(m => m != Mat.Air && (Mat.IsAnchor[m] || m == Mat.Ore) ? (byte)1 : (byte)0);
+    static readonly byte[] Hards = ByMaterial(m => m is Mat.Rock or Mat.Bed or Mat.Moss or Mat.Ore or Mat.Keep or Mat.KeepShade or Mat.KeepDark or Mat.Roof or Mat.Iron or Mat.Plank or Mat.Ember ? (byte)1 : (byte)0);
+
+    /// <summary>A table of something by material, every byte a voxel can hold (nothing for those no material has).</summary>
+    static byte[] ByMaterial(Func<byte, byte> of)
+    {
+        var t = new byte[256];
+        for (int m = 0; m < Mat.IsAnchor.Length && m < Mat.Passable.Length && m < 256; m++) t[m] = of((byte)m);
+        return t;
+    }
+
+    static int SpanOfMaterial(byte m)
     {
         if (m == Mat.Air || Mat.Passable[m] || Mat.IsAnchor[m] || m == Mat.Water || Mat.IsDecor[m] || Mat.Swings(m) || m == Mat.Ore) return 0;
         if (Mat.IsMasonry(m) || m == Mat.Keep) return 10;
@@ -71,7 +87,7 @@ public sealed partial class Sim
     }
 
     /// <summary>It falls if it is not held: masonry, timber, earth laid by hand, trunks.</summary>
-    static bool Holds(byte m) => SpanOf(m) > 0;
+    static bool Holds(byte m) => Spans[m] != 0;
 
     /// <summary>What lies where it came down: broken stone and splinters.</summary>
     static bool Debris(byte m) => m is Mat.Rubble or Mat.Lumber;
@@ -83,10 +99,10 @@ public sealed partial class Sim
     static bool Floats(byte m) => Mat.IsTrunk(m) || m is Mat.Wood or Mat.Deck or Mat.Char or Mat.Lumber or Mat.DropLog;
 
     /// <summary>What holds things up from below: the ground itself, the citadel, a solid floor.</summary>
-    static bool Ground(byte m) => m != Mat.Air && (Mat.IsAnchor[m] || m == Mat.Ore);
+    static bool Ground(byte m) => Grounds[m] != 0;
 
     /// <summary>What holds a thing set into it from the side: rock and the citadel's masonry, not loose earth.</summary>
-    static bool Hard(byte m) => m is Mat.Rock or Mat.Bed or Mat.Moss or Mat.Ore or Mat.Keep or Mat.KeepShade or Mat.KeepDark or Mat.Roof or Mat.Iron or Mat.Plank or Mat.Ember;
+    static bool Hard(byte m) => Hards[m] != 0;
 
     /// <summary>What holds a voxel of this from the side: what is hard, and for the poles of a trap floor, whose ends are dug into the pit's sides, the ground too.</summary>
     static bool HoldsAside(byte m, byte side) => Hard(side) || m == Mat.TrapDeck && Ground(side);
@@ -110,28 +126,60 @@ public sealed partial class Sim
     {
         if (_toppling.Count > 0) LandToppling();
         _collapseAt += dt;
-        if (_collapseAt < .25f || _shaken.Count == 0) return;
+        if (_collapseAt < .25f || _shaken.Count == 0)
+        {
+            if (_patchesDue.Count > 0) OverhangsDue(null);
+            return;
+        }
         _collapseAt = 0;
         var shaken = new List<int>(_shaken);
         _shaken.Clear();
         var falling = new HashSet<int>();
         _held.Clear();
-        // what no longer touches the ground at all
+        // what no longer touches the ground at all; and the patches of the valley to be looked over for what is held
+        // out too far over the air, where what changed has something built beside it (ground dug away from all that is
+        // built holds up nothing, and lets nothing down)
         foreach (int p in shaken)
         {
             var (x, y, z) = WaterPlanner.Unpack(p);
+            bool near = false;
             for (int d = 0; d <= 6; d++)
             {
                 var (nx, ny, nz) = d < 6 ? Step6(x, y, z, d) : (x, y, z);
                 if (!World.InBounds(nx, ny, nz) || !Bound(World.Get(nx, ny, nz))) continue;
+                near = true;
                 int q = WaterPlanner.Pack(nx, ny, nz);
                 if (!falling.Contains(q) && !_held.Contains(q)) Adrift(nx, ny, nz, falling);
             }
+            if (near) _patchesDue.Add((x >> 5) | (z >> 5) << 8);
         }
-        // what is held out too far over the air, in each patch of the valley that was shaken
-        var patches = new HashSet<int>();
-        foreach (int p in shaken) { var (x, _, z) = WaterPlanner.Unpack(p); patches.Add((x >> 5) | (z >> 5) << 8); }
-        foreach (int key in patches) Overhangs((key & 255) << 5, (key >> 8) << 5, 32, falling);
+        OverhangsDue(falling);
+    }
+
+    // the patches of the valley still to be looked over for overhangs: a fort's worth of them a step, so that a stretch
+    // of digging along its walls, or a great blast, does not stop the game while all of it is gone through at once
+    readonly HashSet<int> _patchesDue = new();
+    readonly List<int> _patchBatch = new();
+    const int BuiltAStep = 60_000;
+
+    /// <summary>
+    /// Looks over the patches due for overhangs till those looked over hold so many built voxels between them (one patch at
+    /// least: by count, not by the clock, so a run goes the same on any machine); the rest wait for the next step. Then
+    /// what is found held by nothing falls, with whatever else was found so.
+    /// </summary>
+    void OverhangsDue(HashSet<int> falling)
+    {
+        falling ??= new HashSet<int>();
+        _patchBatch.Clear();
+        _patchBatch.AddRange(_patchesDue);
+        int built = 0;
+        foreach (int key in _patchBatch)
+        {
+            if (built >= BuiltAStep) break;
+            _patchesDue.Remove(key);
+            Overhangs((key & 255) << 5, (key >> 8) << 5, 32, falling);
+            built += _built.Count;
+        }
         if (falling.Count > 0) Fall(falling, quiet: false);
     }
 

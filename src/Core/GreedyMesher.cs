@@ -17,6 +17,23 @@ public sealed class MeshBuffers
     public int[] Idx;
     public int Quads;
     public int Vertices => Quads * 4;
+    /// <summary>The arrays are borrowed from the shared pool, and longer than the mesh (<see cref="GreedyMesher.Pooled"/>).</summary>
+    public bool Pooled;
+
+    /// <summary>Borrowed arrays given back to the pool, once what they hold is copied away; the buffers are not read after.</summary>
+    public void Return()
+    {
+        if (!Pooled) return;
+        Pooled = false;
+        System.Buffers.ArrayPool<float>.Shared.Return(Pos);
+        System.Buffers.ArrayPool<float>.Shared.Return(Nrm);
+        if (Col != null) System.Buffers.ArrayPool<float>.Shared.Return(Col);
+        if (Uv != null) System.Buffers.ArrayPool<float>.Shared.Return(Uv);
+        if (Uv2 != null) System.Buffers.ArrayPool<float>.Shared.Return(Uv2);
+        System.Buffers.ArrayPool<int>.Shared.Return(Idx);
+        Pos = Nrm = Col = Uv = Uv2 = null;
+        Idx = null;
+    }
 }
 
 /// <summary>
@@ -64,6 +81,12 @@ public sealed class GreedyMesher
     float[] _pos = Array.Empty<float>(), _nrm = Array.Empty<float>(), _col = Array.Empty<float>(), _uv = Array.Empty<float>(), _uv2 = Array.Empty<float>();
     int[] _idx = Array.Empty<int>();
     int _q, _capQ;
+    /// <summary>
+    /// The buffers handed out are borrowed from the shared pool rather than made new, to be given back once copied away
+    /// (<see cref="MeshBuffers.Return"/>): the valley's chunks, meshed again and again in play, would otherwise leave
+    /// megabytes of large arrays a frame to the garbage collector, which gathers those only in its slowest sweeps.
+    /// </summary>
+    public bool Pooled;
     readonly System.Collections.Generic.List<int> _sprigs = new(), _turf = new();
 
     public GreedyMesher() { Grow(2048); }
@@ -337,13 +360,23 @@ public sealed class GreedyMesher
         return new MeshBuffers
         {
             Quads = _q,
-            Pos = _pos.AsSpan(0, _q * 12).ToArray(),
-            Nrm = _nrm.AsSpan(0, _q * 12).ToArray(),
-            Col = _shadow ? null : _col.AsSpan(0, _q * 16).ToArray(),
-            Uv = _shadow ? null : _uv.AsSpan(0, _q * 8).ToArray(),
-            Uv2 = _shadow ? null : _uv2.AsSpan(0, _q * 8).ToArray(),
-            Idx = _idx.AsSpan(0, _q * 6).ToArray(),
+            Pooled = Pooled,
+            Pos = Out(_pos, _q * 12),
+            Nrm = Out(_nrm, _q * 12),
+            Col = _shadow ? null : Out(_col, _q * 16),
+            Uv = _shadow ? null : Out(_uv, _q * 8),
+            Uv2 = _shadow ? null : Out(_uv2, _q * 8),
+            Idx = Out(_idx, _q * 6),
         };
+    }
+
+    /// <summary>The first so many of a buffer, in an array of their own or one borrowed from the pool.</summary>
+    T[] Out<T>(T[] from, int n)
+    {
+        if (!Pooled) return from.AsSpan(0, n).ToArray();
+        var a = System.Buffers.ArrayPool<T>.Shared.Rent(n);
+        from.AsSpan(0, n).CopyTo(a);
+        return a;
     }
 
     void Emit(int d, int u, int v, int s, float pd, float u0, float u1, float v0, float v1, int val)

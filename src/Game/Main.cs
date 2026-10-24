@@ -157,6 +157,9 @@ public partial class Main : Node3D
 
     public override void _Ready()
     {
+        // a sweep of the oldest garbage stops the game for tens of milliseconds: put off while it can be, and done
+        // alongside the game rather than in its way
+        System.Runtime.GCSettings.LatencyMode = System.Runtime.GCLatencyMode.SustainedLowLatency;
         foreach (var a in OS.GetCmdlineUserArgs())
         {
             if (a.StartsWith("--shot=")) _shot = a["--shot=".Length..];
@@ -263,6 +266,8 @@ public partial class Main : Node3D
         View = new WorldView();
         AddChild(View);
         View.Init(World);
+        // in play a chunk changed is meshed off the main thread; pictures, the self-test and the trailer want it at once
+        View.Async = _shot == null && !_selfTest && !_tutCheck && _trailer < 0;
         View.InitFlow(Site);
 
         Rig = new CameraRig { BottomInset = Hud.BottomBand, TopInset = Hud.TopBand };
@@ -279,6 +284,7 @@ public partial class Main : Node3D
         Marks = new OrdersView();
         AddChild(Marks);
         Marks.Init(Sim);
+        Marks.Async = View.Async;
         Areas = new ZoneView();
         AddChild(Areas);
         Areas.Init(Sim);

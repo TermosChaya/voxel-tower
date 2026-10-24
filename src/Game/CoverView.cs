@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Godot;
 using VoxelTower.Core;
 
@@ -9,7 +10,8 @@ namespace VoxelTower.Game;
 /// What the chosen archers can shoot at: the ground within their reach that they can see from where they stand,
 /// washed in ember a metre at a time, and the edge of their reach as a thin ring. At night the dark ground is theirs
 /// only as far as they can make a man out in it; what is lit they reach all the way. Worked out again when one of them
-/// moves, or every few seconds while the walls and the light change round them.
+/// moves, or every few seconds while the walls and the light change round them; in play the sight lines, a few
+/// thousand rays, are worked out on a worker thread, and the mesh made of them here.
 /// </summary>
 public partial class CoverView : Node3D
 {
@@ -17,6 +19,14 @@ public partial class CoverView : Node3D
     MeshInstance3D _mesh;
     string _key = "";
     double _at;
+    Task<Wash> _making;
+
+    /// <summary>The wash as plain triangles, worked out anywhere and made a mesh on the main thread.</summary>
+    sealed class Wash
+    {
+        public readonly List<Vector3> At = new();
+        public readonly List<Color> Col = new();
+    }
 
     public void Init(Main m)
     {
@@ -37,6 +47,12 @@ public partial class CoverView : Node3D
     {
         using var prof = Prof.Time("CoverView");
         if (_m?.Sim == null) return;
+        if (_making != null)
+        {
+            if (!_making.IsCompleted) return;
+            Hang(MeshOf(_making.Result));
+            _making = null;
+        }
         var archers = new List<Unit>();
         foreach (var u in _m.Selected) if (!u.Dead && u.T.Ranged && archers.Count < 8) archers.Add(u);
         archers.Sort((a, b) => a.Id.CompareTo(b.Id));
@@ -44,16 +60,44 @@ public partial class CoverView : Node3D
         double now = _m.Sim.Time;
         if (key == _key && (archers.Count == 0 || now - _at < 3)) return;
         _key = key; _at = now;
-        if (archers.Count == 0) { _mesh.Mesh = null; return; }
-        Rebuild(archers);
+        if (archers.Count == 0) { Hang(null); return; }
+        if (_m.View.Async) _making = Task.Run(() => Rebuild(archers));
+        else Hang(MeshOf(Rebuild(archers)));
     }
 
-    void Rebuild(List<Unit> archers)
+    /// <summary>The wash hung up, the one before it let go at once.</summary>
+    void Hang(ArrayMesh mesh)
+    {
+        var old = _mesh.Mesh;
+        _mesh.Mesh = mesh;
+        if (old != mesh) old?.Dispose();
+    }
+
+    public override void _ExitTree()
+    {
+        _making?.Wait();
+        _making = null;
+        Hang(null);
+    }
+
+    /// <summary>The wash made a mesh, its Godot array let go at once.</summary>
+    static ArrayMesh MeshOf(Wash wash)
+    {
+        if (wash.At.Count == 0) return null;
+        using var arrays = new Godot.Collections.Array();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        using (var at = (Variant)wash.At.ToArray()) arrays[(int)Mesh.ArrayType.Vertex] = at;
+        using (var col = (Variant)wash.Col.ToArray()) arrays[(int)Mesh.ArrayType.Color] = col;
+        var mesh = new ArrayMesh();
+        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        return mesh;
+    }
+
+    Wash Rebuild(List<Unit> archers)
     {
         var w = _m.World; var sim = _m.Sim;
         var seen = new HashSet<(int, int)>();
-        var st = new SurfaceTool();
-        st.Begin(Mesh.PrimitiveType.Triangles);
+        var st = new Wash();
         // fainter at night, when there is little else on the ground to wash over
         var lit = new Color(Ornament.EmberGlow, .11f - .045f * sim.Waves.Darkness);
         const int Cell = VoxelWorld.PerMetre;
@@ -93,15 +137,15 @@ public partial class CoverView : Node3D
                 Quad(st, w, P(t0, range - 2), P(t0, range), P(t1, range), P(t1, range - 2), edge);
             }
         }
-        _mesh.Mesh = st.Commit();
+        return st;
     }
 
-    static void Quad(SurfaceTool st, VoxelWorld w, Vector3 a, Vector3 b, Vector3 c, Vector3 d, Color col)
+    static void Quad(Wash st, VoxelWorld w, Vector3 a, Vector3 b, Vector3 c, Vector3 d, Color col)
     {
         foreach (var v in new[] { a, b, c, a, c, d })
         {
-            st.SetColor(col);
-            st.AddVertex(new Vector3(w.WX(v.X), w.WY(v.Y), w.WZ(v.Z)));
+            st.Col.Add(col);
+            st.At.Add(new Vector3(w.WX(v.X), w.WY(v.Y), w.WZ(v.Z)));
         }
     }
 }

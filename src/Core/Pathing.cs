@@ -90,6 +90,9 @@ public sealed class PathFinder
     /// A lane adds a little to every cell entered (off the line one keeps to in a group), so of ways that cost
     /// the same each walker takes its own.
     /// </summary>
+    /// <summary>How many cells the last search looked beyond (what it cost).</summary>
+    public int Expanded;
+
     public List<int> Find(int start, Func<int, bool> goal, Func<int, float> heuristic, Mover m, int maxExpand = 40000, bool gates = false,
         Func<int, float> lane = null)
     {
@@ -101,12 +104,14 @@ public sealed class PathFinder
         _cost[start] = 0; _from[start] = -1; _seen[start] = _gen;
         _open.Enqueue(start, heuristic(start));
         int expanded = 0;
+        Expanded = 0;
         while (_open.TryDequeue(out int c, out _))
         {
             if (_closed[c] == _gen) continue;
             _closed[c] = _gen;
             if (goal(c)) return Trace(c, start);
             if (++expanded > maxExpand) return null;
+            Expanded = expanded;
             int i = g.I(c), y = g.Y(c), k = g.K(c);
             bool standing = g.Ground(i, y - 1, k, gates);
             for (int dir = 0; dir < 8; dir++)

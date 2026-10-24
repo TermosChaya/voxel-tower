@@ -460,7 +460,12 @@ public sealed partial class Sim
                     && _bodies[c] - (c == self ? 1 : 0) <= 0
                     // not inside a space being walled shut: its gap is filled from outside (Sim.Seal.cs)
                     && !Closing(c);
+                // the searches of a step share a budget: what is left over looks again a step later (a stretch of work
+                // that cannot be got to costs a whole search to find out, and many pawns finding it out at once stop the game)
+                if (Time != _seekAt) { _seekAt = Time; _seekSpent = 0; }
+                if (_seekSpent >= SeekBudget) { u.NextSearch = Time; return false; }
                 List<int> path = Goal(u.Cell) ? new List<int>() : Paths.Find(u.Cell, Goal, c => H(c, ci, ck), MoverOf(u), 30000, gates: true);
+                if (!Goal(u.Cell)) _seekSpent += Paths.Expanded;
                 if (path == null) { u.Unreachable[col] = Time + 12; continue; }
                 u.Site = col; _claims[col]++;
                 u.SiteWork = mask;
@@ -478,6 +483,11 @@ public sealed partial class Sim
         if (DutyWork(u) || FeedFromZone(u)) { u.Why = ""; u.NextSearch = Time; }
         return false;
     }
+
+    // the cells the pawns' searches for work have looked beyond this step, and at what time the step is
+    int _seekSpent;
+    double _seekAt = -1;
+    const int SeekBudget = 40_000;
 
     bool Inside(Zone z, int col)
     {
