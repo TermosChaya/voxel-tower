@@ -221,7 +221,7 @@ public partial class GrassView : Node3D
         }
         Vector3 focus;
         float near, far;
-        Godot.Collections.Array<Plane> frustum = null;
+        Plane[] frustum = null;
         if (round)
         {
             focus = eyes ? fp.Cam.GlobalPosition : cine.Focus;
@@ -233,7 +233,14 @@ public partial class GrassView : Node3D
             focus = new Vector3(_w.WX(_centre.X), 0, _w.WZ(_centre.Y));
             near = 1e6f;
             far = 2e6f;
-            if (grow > 0) frustum = _m.Rig.Cam.GetFrustum();
+            if (grow > 0)
+            {
+                // copied out and let go here, not left to the collector's thread (see GodotMesh)
+                var planes = _m.Rig.Cam.GetFrustum();
+                frustum = new Plane[planes.Count];
+                planes.CopyTo(frustum, 0);
+                ((Godot.Collections.Array)planes).Dispose();
+            }
         }
         RenderingServer.GlobalShaderParameterSet("sward_at", new Vector4(focus.X, focus.Y, focus.Z, eyes || grow > 0 ? grow : 0));
         RenderingServer.GlobalShaderParameterSet("sward_reach", new Vector2(near, far));
@@ -297,7 +304,7 @@ public partial class GrassView : Node3D
     }
 
     /// <summary>Whether a box (world) is at least partly inside the frustum: on the inner side of every one of its planes.</summary>
-    static bool Seen(Godot.Collections.Array<Plane> frustum, Vector3 a, Vector3 b)
+    static bool Seen(Plane[] frustum, Vector3 a, Vector3 b)
     {
         foreach (var pl in frustum)
         {
@@ -589,7 +596,7 @@ public partial class GrassView : Node3D
 
         public ArrayMesh Mesh()
         {
-            var arrays = new Godot.Collections.Array();
+            using var arrays = new Godot.Collections.Array();
             arrays.Resize((int)Godot.Mesh.ArrayType.Max);
             arrays[(int)Godot.Mesh.ArrayType.Vertex] = _v.ToArray();
             arrays[(int)Godot.Mesh.ArrayType.Normal] = _n.ToArray();

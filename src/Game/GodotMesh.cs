@@ -4,7 +4,10 @@ using VoxelTower.Core;
 
 namespace VoxelTower.Game;
 
-/// <summary>Hands the core's mesh buffers to Godot.</summary>
+/// <summary>
+/// Hands the core's mesh buffers to Godot. The array of arrays is let go at once, here on the main thread: left to the
+/// collector it is destroyed on its own thread while the main one is in the engine, which can bring the game down.
+/// </summary>
 public static class GodotMesh
 {
     public static ArrayMesh From(MeshBuffers b)
@@ -18,7 +21,7 @@ public static class GodotMesh
     /// <summary>Adds the buffers to a mesh as a surface of their own.</summary>
     public static void AddTo(ArrayMesh mesh, MeshBuffers b)
     {
-        var arrays = new Godot.Collections.Array();
+        using var arrays = new Godot.Collections.Array();
         arrays.Resize((int)Mesh.ArrayType.Max);
         arrays[(int)Mesh.ArrayType.Vertex] = MemoryMarshal.Cast<float, Vector3>(b.Pos).ToArray();
         arrays[(int)Mesh.ArrayType.Normal] = MemoryMarshal.Cast<float, Vector3>(b.Nrm).ToArray();

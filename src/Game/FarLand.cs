@@ -290,7 +290,7 @@ public partial class FarLand : MeshInstance3D
                 }
             }
 
-        var arrays = new Godot.Collections.Array();
+        using var arrays = new Godot.Collections.Array();
         arrays.Resize((int)Mesh.ArrayType.Max);
         arrays[(int)Mesh.ArrayType.Vertex] = vs.ToArray();
         arrays[(int)Mesh.ArrayType.Normal] = ns.ToArray();
