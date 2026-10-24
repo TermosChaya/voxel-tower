@@ -769,8 +769,10 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
 
 ## Игра на экране (`src/Game`)
 
-- `Main.cs` — запуск: флаги командной строки, генерация, сим, узлы, стартовые пешки, демо-сцены
-  (`Demo`, `Siege`, `Wounded`, `Flood`, `Grove`), самотест (`--selftest`), скриншоты.
+- `Main.cs` — запуск: флаги командной строки, генерация, сим, узлы, стартовые пешки, скриншоты.
+- `Main.SelfTest.cs` — самотест (`--selftest`); `Main.Poses.cs`, `Main.Poses.Figures.cs` — постановки для снимков
+  (`--demo`, `--pose=…`: `Demo`, `Siege`, `Wounded`, `Flood`, `Grove`…); `Main.TutorialCheck.cs`, `Main.Trailer.cs` —
+  прогон обучения и трейлер.
 - `CameraRig` — ортографическая камера: `Set(x, z, yaw, pitch, zoom)` в единицах движка, `Dist 80`,
   `ViewH 15.5` при zoom 1, смотрит на плоскость y = 4; наклон ≥ 0,35, zoom 0,28–8; WASD/QE, колесо и трекпад,
   край экрана двигает камеру. Тряска: `Shake(amount)` копит «встряску» (≤ 1, гаснет 1,3/с); в `Apply` — сдвиг кадра
