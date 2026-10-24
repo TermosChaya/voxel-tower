@@ -128,7 +128,7 @@ public sealed partial class Sim
         _collapseAt += dt;
         if (_collapseAt < .25f || _shaken.Count == 0)
         {
-            if (_patchesDue.Count > 0) OverhangsDue(null);
+            if (_due.Count > 0) OverhangsDue(null);
             return;
         }
         _collapseAt = 0;
@@ -136,50 +136,50 @@ public sealed partial class Sim
         _shaken.Clear();
         var falling = new HashSet<int>();
         _held.Clear();
-        // what no longer touches the ground at all; and the patches of the valley to be looked over for what is held
-        // out too far over the air, where what changed has something built beside it (ground dug away from all that is
-        // built holds up nothing, and lets nothing down)
+        // what no longer touches the ground at all
         foreach (int p in shaken)
         {
             var (x, y, z) = WaterPlanner.Unpack(p);
-            bool near = false;
             for (int d = 0; d <= 6; d++)
             {
                 var (nx, ny, nz) = d < 6 ? Step6(x, y, z, d) : (x, y, z);
                 if (!World.InBounds(nx, ny, nz) || !Bound(World.Get(nx, ny, nz))) continue;
-                near = true;
                 int q = WaterPlanner.Pack(nx, ny, nz);
                 if (!falling.Contains(q) && !_held.Contains(q)) Adrift(nx, ny, nz, falling);
             }
-            if (near) _patchesDue.Add((x >> 5) | (z >> 5) << 8);
         }
+        // what is held out too far over the air, in each patch of the valley that was shaken (those left over from the
+        // last look first)
+        var patches = new HashSet<int>();
+        foreach (int p in shaken) { var (x, _, z) = WaterPlanner.Unpack(p); patches.Add((x >> 5) | (z >> 5) << 8); }
+        foreach (int key in patches) if (_dueSet.Add(key)) _due.Add(key);
         OverhangsDue(falling);
     }
 
-    // the patches of the valley still to be looked over for overhangs: a fort's worth of them a step, so that a stretch
-    // of digging along its walls, or a great blast, does not stop the game while all of it is gone through at once
-    readonly HashSet<int> _patchesDue = new();
-    readonly List<int> _patchBatch = new();
+    // the patches of the valley still to be looked over for overhangs, in the order they were shaken: a fort's worth of
+    // them a step, so that a stretch of digging along its walls, or a great blast, does not stop the game while all of
+    // it is gone through at once
+    readonly List<int> _due = new();
+    readonly HashSet<int> _dueSet = new();
     const int BuiltAStep = 60_000;
 
     /// <summary>
-    /// Looks over the patches due for overhangs till those looked over hold so many built voxels between them (one patch at
-    /// least: by count, not by the clock, so a run goes the same on any machine); the rest wait for the next step. Then
-    /// what is found held by nothing falls, with whatever else was found so.
+    /// Looks over the patches due for overhangs, in turn, till those looked over hold so many built voxels between them
+    /// (one patch at least: by count, not by the clock, so a run goes the same on any machine); the rest wait for the
+    /// next step. Then what is found held by nothing falls, with whatever else was found so.
     /// </summary>
     void OverhangsDue(HashSet<int> falling)
     {
         falling ??= new HashSet<int>();
-        _patchBatch.Clear();
-        _patchBatch.AddRange(_patchesDue);
-        int built = 0;
-        foreach (int key in _patchBatch)
+        int built = 0, n = 0;
+        while (n < _due.Count && built < BuiltAStep)
         {
-            if (built >= BuiltAStep) break;
-            _patchesDue.Remove(key);
+            int key = _due[n++];
+            _dueSet.Remove(key);
             Overhangs((key & 255) << 5, (key >> 8) << 5, 32, falling);
             built += _built.Count;
         }
+        _due.RemoveRange(0, n);
         if (falling.Count > 0) Fall(falling, quiet: false);
     }
 
