@@ -90,15 +90,15 @@ public sealed class PathFinder
     /// <summary>A way under the feet of one standing in the cell: in the cell, or the top of the cell below.</summary>
     public static bool OnWay(NavGrid g, int c) => g.Paved[c] != 0 || c >= g.Layer && g.Paved[c - g.Layer] != 0;
 
+    /// <summary>How many cells the last search looked beyond (what it cost).</summary>
+    public int Expanded;
+
     /// <summary>
     /// Cells from start (exclusive) to the first cell that satisfies goal, or null.
     /// The heuristic should not overestimate; cost is in cells walked. Ladders are climbed, slowly.
     /// A lane adds a little to every cell entered (off the line one keeps to in a group), so of ways that cost
     /// the same each walker takes its own.
     /// </summary>
-    /// <summary>How many cells the last search looked beyond (what it cost).</summary>
-    public int Expanded;
-
     public List<int> Find(int start, Func<int, bool> goal, Func<int, float> heuristic, Mover m, int maxExpand = 40000, bool gates = false,
         Func<int, float> lane = null)
     {

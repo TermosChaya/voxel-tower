@@ -176,10 +176,12 @@ public sealed class NavGrid
 
     public void BuildAll()
     {
-        Parallel.For(0, NY, y =>
+        // row by row of cells rather than layer by layer: the layers through the ground's surface are the slow ones, and
+        // there are only some two dozen layers to share among the cores (a cell is counted from its own voxels alone)
+        Parallel.For(0, NY * NZ, yk =>
         {
-            for (int k = 0; k < NZ; k++)
-                for (int i = 0; i < NX; i++) Recompute(Id(i, y, k));
+            int y = yk / NZ, k = yk % NZ;
+            for (int i = 0; i < NX; i++) Recompute(Id(i, y, k));
         });
         Version++;
     }

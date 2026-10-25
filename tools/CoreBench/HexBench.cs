@@ -89,7 +89,9 @@ static class HexBench
             Math.Abs(site.KeepX - hex.CX) <= 1 && Math.Abs(site.KeepZ - hex.CZ) <= 1 && level.hi - level.lo <= 6 && level.wet == 0,
             $"citadel at {site.KeepX},{site.KeepZ}, the middle {hex.CX:0},{hex.CZ:0}; the ground round it {level.lo}…{level.hi}, {level.wet} columns of water");
 
+        sw.Restart();
         var sim = new Sim(w, site);
+        Console.WriteLine($"the game's valley's simulation (navigation and all) set up in {sw.ElapsedMilliseconds} ms");
         sim.Waves.Countdown = 1e9; sim.WildTarget = 0;
         void Run(Sim sm, double seconds) { for (double t = 0; t < seconds; t += .05) sm.Step(.05f); }
 

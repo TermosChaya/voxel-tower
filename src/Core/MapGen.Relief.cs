@@ -273,17 +273,29 @@ public static partial class MapGen
         // ---- how far each column is from those lines: stamped segment by segment, within reach of each
         var riverD = new float[N]; var riverH = new float[N]; var streamD = new float[N]; var roadD = new float[N];
         Array.Fill(riverD, 1e6f); Array.Fill(streamD, 1e6f); Array.Fill(roadD, 1e6f);
+        // (row by row on all the cores: a row's columns are nobody else's, and the nearest is the nearest whichever
+        // segment is looked at first, so the valley comes out the same)
         void Stamp(List<(double x, double z)> line, double[] halves, double reach, float[] dist, float[] half)
         {
-            for (int i = 0; i + 1 < line.Count; i++)
+            int n = line.Count - 1;
+            if (n <= 0) return;
+            var box = new (int x0, int x1, int z0, int z1)[n];
+            for (int i = 0; i < n; i++)
             {
                 var (ax, az) = line[i]; var (bx, bz) = line[i + 1];
-                double h0 = halves?[i] ?? 0, h1 = halves?[i + 1] ?? 0, rr = reach + Math.Max(h0, h1);
-                int x0 = Math.Max(0, (int)(Math.Min(ax, bx) - rr)), x1 = Math.Min(SX - 1, (int)(Math.Max(ax, bx) + rr));
-                int z0 = Math.Max(0, (int)(Math.Min(az, bz) - rr)), z1 = Math.Min(SZ - 1, (int)(Math.Max(az, bz) + rr));
-                if (x0 > x1 || z0 > z1) continue;
-                double ex = bx - ax, ez = bz - az, ee = Math.Max(1e-9, ex * ex + ez * ez);
-                for (int z = z0; z <= z1; z++)
+                double rr = reach + Math.Max(halves?[i] ?? 0, halves?[i + 1] ?? 0);
+                box[i] = (Math.Max(0, (int)(Math.Min(ax, bx) - rr)), Math.Min(SX - 1, (int)(Math.Max(ax, bx) + rr)),
+                    Math.Max(0, (int)(Math.Min(az, bz) - rr)), Math.Min(SZ - 1, (int)(Math.Max(az, bz) + rr)));
+            }
+            Parallel.For(0, SZ, z =>
+            {
+                for (int i = 0; i < n; i++)
+                {
+                    var (x0, x1, z0, z1) = box[i];
+                    if (z < z0 || z > z1 || x0 > x1) continue;
+                    var (ax, az) = line[i]; var (bx, bz) = line[i + 1];
+                    double h0 = halves?[i] ?? 0, h1 = halves?[i + 1] ?? 0;
+                    double ex = bx - ax, ez = bz - az, ee = Math.Max(1e-9, ex * ex + ez * ez);
                     for (int x = x0; x <= x1; x++)
                     {
                         double t = Math.Clamp(((x + .5 - ax) * ex + (z + .5 - az) * ez) / ee, 0, 1);
@@ -291,7 +303,8 @@ public static partial class MapGen
                         int c = z * SX + x;
                         if (d < dist[c]) { dist[c] = (float)d; if (half != null) half[c] = (float)(h0 + (h1 - h0) * t); }
                     }
-            }
+                }
+            });
         }
         Stamp(river, riverHalf, 150, riverD, riverH);
         Stamp(stream, null, 60, streamD, null);
