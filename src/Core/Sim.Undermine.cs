@@ -128,7 +128,8 @@ public sealed partial class Sim
     /// </summary>
     bool DropHold(Unit u, (int x, int y, int z, byte m) j)
     {
-        if (!BearsBuilt(j.x, j.y, j.z)) return false;
+        // (what is built is taken down as builders do it, from the top: Sim.Builders.cs)
+        if (Mat.IsPlayer[World.Get(j.x, j.y, j.z)] || !BearsBuilt(j.x, j.y, j.z)) return false;
         int key = WaterPlanner.Pack(j.x, j.y, j.z);
         if (_footingsAt.Contains(key)) return true;
         if (u.FellHold && u.FellLooked == key && Time < u.FellLookedUntil) return true;

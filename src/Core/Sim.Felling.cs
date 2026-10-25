@@ -36,8 +36,11 @@ public sealed class FellPlan
     public float CX, CZ, PX, PZ, DX, DZ;
     public int Base, Top;
     public double Made, Warned = -1;
-    /// <summary>It could only come down on something built: it is left standing.</summary>
+    /// <summary>It could only come down on something built, or on those of ours who would not leave: it is left standing.</summary>
     public bool Left;
+    public string Why = "дерево некуда валить: упадёт на постройку";
+    /// <summary>How many times its way was chosen again, those in the lane not having left.</summary>
+    public int Tries;
     public Danger Lane;
 }
 
@@ -258,7 +261,9 @@ public sealed partial class Sim
                     byte m = World.Get(x, y, z);
                     if (m == Mat.Air) continue;
                     if (Mat.IsTrunk(m)) { if (!b.Wood.Contains(WaterPlanner.Pack(x, y, z))) { trees++; break; } continue; }
-                    if (Mat.IsPlayer[m] || m == Mat.Scaffold) { built++; break; }
+                    // (scaffolding is only poles and boards, put up again as easily)
+                    if (m == Mat.Scaffold) { cost += 40; break; }
+                    if (Mat.IsPlayer[m]) { built++; break; }
                 }
             }
         }
@@ -334,11 +339,16 @@ public sealed partial class Sim
         var plan = PlanFell(tree, u);
         if (plan.Left)
         {
-            // nowhere to put it down: the tree stays, its marks taken off it, crown and all
-            var whole = Shapes.Tree(World, j.x, j.y, j.z);
-            for (int i = 0; i < whole.Count; i++) if (Orders.At(whole.X(i), whole.Y(i), whole.Z(i)) != 0) Orders.Clear(whole.X(i), whole.Y(i), whole.Z(i));
-            if (Time - _fellLeftSaid > 20) { _fellLeftSaid = Time; Say("Дерево не свалить: в любую сторону оно упадёт на постройку. Его оставили.", 1, u); }
-            u.Why = "дерево некуда валить: упадёт на постройку";
+            // nowhere to put it down: the tree stays, its marks taken off it, butt, crown and all
+            LeaveTree(tree);
+            if (Time - _fellLeftSaid > 20)
+            {
+                _fellLeftSaid = Time;
+                Say(plan.Tries > 0 ? "Дерево не свалить: в любую сторону под ним люди. Его оставили." : "Дерево не свалить: в любую сторону оно упадёт на постройку. Его оставили.", 1, u);
+            }
+            u.Why = plan.Why;
+            u.Unreachable[u.Site] = Time + 20;
+            ReleaseSite(u);
             u.FellHold = true;
             return true;
         }
@@ -369,10 +379,17 @@ public sealed partial class Sim
             u.FellHold = true;
             if (Time - plan.Warned > 30)
             {
-                _fells.Remove(plan);
+                // the way chosen again, round them; after three times the tree is left
                 Dangers.Remove(plan.Lane);
-                u.Unreachable[u.Site] = Time + 20;
-                ReleaseSite(u);
+                plan.Warned = -1;
+                if (++plan.Tries >= 3) { plan.Left = true; plan.Why = "дерево некуда валить: под ним люди"; }
+                else
+                {
+                    var (dx, dz) = FellWay(tree, u, u.Team == Team.Horde, out float built);
+                    plan.DX = dx; plan.DZ = dz; plan.Left = built >= 1;
+                    plan.Lane = LaneOf(tree.PX, tree.PZ, tree.Base, tree.Top, tree.Spread, tree.Butt, dx, dz);
+                    plan.Lane.Until = Time + 15;
+                }
             }
             return true;
         }
@@ -380,6 +397,23 @@ public sealed partial class Sim
     }
 
     double _fellLeftSaid = -99;
+
+    /// <summary>A tree left standing: the marks taken off all of it, the butt under the cut and the crown about it.</summary>
+    void LeaveTree(in FellBulk tree)
+    {
+        int x0 = int.MaxValue, z0 = int.MaxValue, x1 = int.MinValue, z1 = int.MinValue;
+        foreach (int p in tree.Wood) { var (x, _, z) = WaterPlanner.Unpack(p); x0 = Math.Min(x0, x); x1 = Math.Max(x1, x); z0 = Math.Min(z0, z); z1 = Math.Max(z1, z); }
+        x0 = Math.Max(0, x0 - 24); z0 = Math.Max(0, z0 - 24); x1 = Math.Min(World.SX - 1, x1 + 24); z1 = Math.Min(World.SZ - 1, z1 + 24);
+        int y0 = Math.Max(1, tree.Base - 24), y1 = Math.Min(World.SY - 1, tree.Top + 24);
+        for (int y = y0; y <= y1; y++)
+            for (int z = z0; z <= z1; z++)
+                for (int x = x0; x <= x1; x++)
+                {
+                    if (Orders.At(x, y, z) == 0) continue;
+                    byte m = World.Get(x, y, z);
+                    if (Mat.IsTrunk(m) || Mat.IsLeafy(m)) Orders.Clear(x, y, z);
+                }
+    }
 
     /// <summary>Sends those of ours in a danger out of it (all but the one whose work it is); how many are still in it.</summary>
     int ClearLane(Danger d, Unit worker)
