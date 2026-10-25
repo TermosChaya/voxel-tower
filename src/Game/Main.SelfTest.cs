@@ -617,12 +617,15 @@ public partial class Main
             $"shaking {shook:0.00} → {Rig.Shaking:0.00}, time ×{slowed:0.00} → ×{Slow:0.00}, flash {flashed:0.00} → {Spectacle.FlashNow:0.00}");
         Settings.Feel(0, false);
 
-        // the horde called early: no gold for it, only less known of the defences
+        // the horde called early: no gold for it, only less known of the defences (the next raid, whatever came before:
+        // on a busy machine the tests before may have let one in)
+        if (Sim.Waves.Active) Sim.Waves.CallOff(Sim);
         Sim.Waves.Countdown = 200;
         double gold0 = Sim.Stock.Gold;
+        int number0 = Sim.Waves.Number;
         KeyPress(Key.Space);
-        Check("Space calls the horde early: no gold, less scouted", Sim.Waves.Active && Sim.Waves.Number == 1 && Math.Abs(Sim.Stock.Gold - gold0) < .01 && Math.Abs(Sim.Waves.Intel - 400.0 / 600) < .01,
-            $"intel {Sim.Waves.Intel * 100:0} %, gold {gold0:0} → {Sim.Stock.Gold:0}");
+        Check("Space calls the horde early: no gold, less scouted", Sim.Waves.Active && Sim.Waves.Number == number0 + 1 && Math.Abs(Sim.Stock.Gold - gold0) < .01 && Math.Abs(Sim.Waves.Intel - 400.0 / 600) < .01,
+            $"raid {number0} → {Sim.Waves.Number}, in the valley {Sim.Waves.Active}; intel {Sim.Waves.Intel * 100:0} %, gold {gold0:0} → {Sim.Stock.Gold:0}");
         Advance(90);
         Check("the first wave comes and fights", Sim.Kills > 0 && Sim.Shots > 0, $"{Sim.Kills} killed, {Sim.RaidersAlive()} alive, {Sim.Shots} arrows, citadel {Sim.KeepHp:0}");
         KeyPress(Key.P);
@@ -716,33 +719,45 @@ public partial class Main
         Units.Visible = true;
         Paused = wasPaused;
         float lined = (Darker(shots[0], shots[1]) + Darker(shots[2], shots[1]) + Darker(shots[2], shots[3]) + Darker(shots[4], shots[3])) / 4;
-        float idle = Math.Max(Math.Abs(Darker(shots[0], shots[2])), Math.Abs(Darker(shots[2], shots[4])));
+        // what the picture does by itself meanwhile, beyond a steady drift (which the weighing above cancels, and which on
+        // a busy machine goes on long after the view settled): how far the middle picture without the lines is off the
+        // halfway between the first and the last
+        float drift = Darker(shots[0], shots[4]) / 2, idle = Math.Abs(Darker(shots[0], shots[2]) - Darker(shots[2], shots[4])) / 2;
         Rig.Set(aim0.x, aim0.z, aim0.yaw, aim0.pitch, aim0.zoom, snap: true);
         Check("the lines round the voxels are off by default, and turned on in the settings they are drawn at once",
-            linesOff && lined > .6f && lined > idle * 1.5f, $"the picture {lined:0.00} darker with the lines, {idle:0.00} by itself");
+            linesOff && lined > .6f && lined > idle * 1.5f, $"the picture {lined:0.00} darker with the lines, {idle:0.00} by itself (and {drift:0.00} darker every 4 frames)");
         // first person: one of ours chosen (a swordsman if one is about), I goes into it: the view is its eyes, the frame of
         // the game put away; it walks where it is told, and Esc lets it go, the view back over the valley and it chosen
         // one standing on the ground (not up on a wall, with nowhere to walk), a swordsman if there is one
         bool Grounded(Unit u) => u.Y - World.GroundTop((int)u.X, (int)u.Z) < 3;
-        var mine = Sim.Units.Find(u => Sim.CanPossess(u) && u.T == Kinds.Swordsman && Grounded(u)) ?? Sim.Units.Find(u => Sim.CanPossess(u) && u.T.Work < 1 && Grounded(u))
-            ?? Sim.Units.Find(u => Sim.CanPossess(u) && Grounded(u))
-            // (all of them up on the walls, or hurt: a swordsman come to the gate)
-            ?? Sim.Spawn(Kinds.Swordsman, Sim.NearestStand(kx - 40, kz + 30, 4));
-        Selected.Clear(); Selected.Add(mine); Hud.OnSelectionChanged();
-        // a nick out of its off arm first, so that the arm is drawn on its own: put away with it, and back after
-        var nicked = new BodyState(Bodies.Plan(mine.T, mine.Look));
-        var arm = nicked.Grid[(int)BodyPart.Off];
-        int nick = Array.FindLastIndex(arm.M, m => m != 0);
-        arm.Clear(nick % arm.SX + arm.X0, nick / (arm.SX * arm.SZ) + arm.Y0, nick / arm.SX % arm.SZ + arm.Z0);
-        nicked.Rev++;
-        mine.Wounds = nicked;
-        await Frames(2);
-        bool nickShown = Units.HurtShown(mine.Id);
-        KeyPress(Key.I);
-        bool into = FP.On && FP.Unit == mine && Sim.Possessed == mine && FP.Cam.Current && Hud.InFirstPerson && Rig.Held && Units.HiddenId == mine.Id;
+        // (the raid is still in the valley: the one chosen may be seized, thrown or cut down in the frames before the key,
+        // and then another is chosen)
+        Unit mine = null;
+        bool nickShown = false, into = false;
+        string missed = "";
+        for (int attempt = 0; attempt < 3 && !into; attempt++)
+        {
+            if (mine != null) missed += $" {mine.Name} №{mine.Id} {(mine.Dead ? "dead" : mine.Captor != null ? "seized" : mine.Airborne != null ? "thrown" : mine.Inside ? "inside" : mine.State.ToString())};";
+            mine = Sim.Units.Find(u => Sim.CanPossess(u) && u.T == Kinds.Swordsman && Grounded(u)) ?? Sim.Units.Find(u => Sim.CanPossess(u) && u.T.Work < 1 && Grounded(u))
+                ?? Sim.Units.Find(u => Sim.CanPossess(u) && Grounded(u))
+                // (all of them up on the walls, or hurt: a swordsman come to the gate)
+                ?? Sim.Spawn(Kinds.Swordsman, Sim.NearestStand(kx - 40, kz + 30, 4));
+            Selected.Clear(); Selected.Add(mine); Hud.OnSelectionChanged();
+            // a nick out of its off arm first, so that the arm is drawn on its own: put away with it, and back after
+            var nicked = new BodyState(Bodies.Plan(mine.T, mine.Look));
+            var arm = nicked.Grid[(int)BodyPart.Off];
+            int nick = Array.FindLastIndex(arm.M, m => m != 0);
+            arm.Clear(nick % arm.SX + arm.X0, nick / (arm.SX * arm.SZ) + arm.Y0, nick / arm.SX % arm.SZ + arm.Z0);
+            nicked.Rev++;
+            mine.Wounds = nicked;
+            await Frames(2);
+            nickShown = Units.HurtShown(mine.Id);
+            KeyPress(Key.I);
+            into = FP.On && FP.Unit == mine && Sim.Possessed == mine && FP.Cam.Current && Hud.InFirstPerson && Rig.Held && Units.HiddenId == mine.Id;
+        }
         // forward for two seconds; if a wall is right before it, the other ways round, the best of them counting
         float strode = 0, face0 = mine.Facing;
-        for (int way = 0; way < 4 && strode <= 2; way++)
+        for (int way = 0; way < 4 && strode <= 2 && into; way++)
         {
             float fx0 = mine.X, fz0 = mine.Z;
             FP.Face(face0 + way * MathF.PI / 2, 0);
@@ -759,7 +774,7 @@ public partial class Main
         bool outOf = !FP.On && Sim.Possessed == null && Rig.Cam.Current && !Hud.InFirstPerson && !Rig.Held && Units.HiddenId < 0 && Selected.Contains(mine);
         bool nickBack = Units.HurtShown(mine.Id);
         Check("I goes into the one chosen and the view is its eyes; it walks where it is told; Esc lets it go and the view goes back over the valley, its nicked arm drawn again",
-            into && strode > 2 && outOf && nickShown && nickBack, $"in {into}, walked {strode:0.0} m, out {outOf}; the nicked arm drawn {nickShown}, again after {nickBack}; it stood at {mine.X:0},{mine.Y:0},{mine.Z:0} ({mine.Y - World.GroundTop((int)mine.X, (int)mine.Z):0} over the ground), {mine.State}, climbing {Sim.Climbing(mine)}");
+            into && strode > 2 && outOf && nickShown && nickBack, $"in {into}{(missed.Length > 0 ? $" (not gone into:{missed})" : "")}, walked {strode:0.0} m, out {outOf}; the nicked arm drawn {nickShown}, again after {nickBack}; it stood at {mine.X:0},{mine.Y:0},{mine.Z:0} ({mine.Y - World.GroundTop((int)mine.X, (int)mine.Z):0} over the ground), {mine.State}, climbing {Sim.Climbing(mine)}");
         // the land beyond the valley and the sky looked along the view are for someone's eyes; over the diorama the valley
         // floats on its backdrop again
         bool farGone = !Atmos.Far.Visible, backdrop = Atmos.Told["sky_view"].Z < .5f;
@@ -832,6 +847,14 @@ public partial class Main
         Sim.Stock.Gold = 500;
         int w0 = Sim.Count(Kinds.Worker);
         await Look(kx, kz);
+        // (and whoever is there still, kept by the work or the way, or come by meanwhile, is put there and held till the
+        // click)
+        var heldOff = Sim.Units.FindAll(u => !u.Dead && !u.Inside && u.Team == Team.Player && Brushes.Dist(u.X - kx, u.Z - kz) < Site.KeepR + 70);
+        foreach (var u in heldOff)
+        {
+            u.Cell = Sim.NearestStand(kx - 100, kz - 100, u.T.Move.Height); (u.X, u.Y, u.Z) = Sim.Nav.Feet(u.Cell); u.Path = null;
+            u.Hold = true; u.Dest = u.Post = u.Cell;
+        }
         await ClickAt(ScreenAt(kx, Site.KeepBase + 40, kz));
         bool keepOpen = Hud.KeepShown;
         string instead = Inspected != null ? $" ({Inspected.T.Name} looked at instead)" : "";
@@ -842,6 +865,7 @@ public partial class Main
         Check("a click on the citadel opens its muster; a worker taken on is paid for and comes out at once",
             keepOpen && paidNow && Sim.Count(Kinds.Worker) == w0 + 1 && Sim.Places == Sim.CitadelPlaces,
             $"muster {(keepOpen ? "open" : "not open")}{instead}, paid at once {paidNow}, {Sim.Stock.Gold:0} gold left, workers {w0} → {Sim.Count(Kinds.Worker)}");
+        foreach (var u in heldOff) u.Hold = false;
         KeyPress(Key.Escape);
         Check("Esc lets the citadel go", !KeepChosen && !Hud.KeepShown);
         // the game written down, and its head read back for the list of saves
