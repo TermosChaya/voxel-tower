@@ -474,19 +474,20 @@ public partial class Main
         Hud.Lore.ShowPage(0);
         Sim.Knowledge = 2;
         Hud.Refresh();
-        var yew = Hud.Lore.PlaqueOf("yew");
+        // (the town's page since 25.10.2026: the town hall, and the market resting on it)
+        var yew = Hud.Lore.PlaqueOf("b_hall");
         bool could = !yew.Disabled;
         yew.EmitSignal(BaseButton.SignalName.Pressed);
-        Check("a medallion in «Знания» learns its lore for the knowledge it costs", could && Sim.Knows("yew") && Sim.Knowledge == 0 && Hud.Lore.PlaqueOf("barbs").Disabled,
-            $"yew learnt {Sim.Knows("yew")}, {Sim.Knowledge} knowledge left");
-        // the troops' page: a kind learnt there is one the citadel will take on
+        Check("a medallion in «Знания» learns its lore for the knowledge it costs", could && Sim.Knows("b_hall") && Sim.Knowledge == 0 && Hud.Lore.PlaqueOf("b_market").Disabled,
+            $"the town hall learnt {Sim.Knows("b_hall")}, {Sim.Knowledge} knowledge left");
+        // the troops' page: a building that hires a kind
         Hud.OpenPanel("lore:1");
         Sim.Knowledge = 3;
         Hud.Refresh();
-        bool troopsShown = Hud.Lore.Page == 1 && Hud.Lore.PlaqueOf("spearmen").IsVisibleInTree() && !Hud.Lore.PlaqueOf("yew").IsVisibleInTree();
-        Hud.Lore.PlaqueOf("spearmen").EmitSignal(BaseButton.SignalName.Pressed);
-        Check("the troops' page of «Знания» learns a kind of troops for knowledge", troopsShown && Sim.Knows("spearmen") && Sim.Knowledge == 0,
-            $"page {Hud.Lore.Page}, spearmen learnt {Sim.Knows("spearmen")}, {Sim.Knowledge} knowledge left");
+        bool troopsShown = Hud.Lore.Page == 1 && Hud.Lore.PlaqueOf("b_barracks").IsVisibleInTree() && !Hud.Lore.PlaqueOf("b_hall").IsVisibleInTree();
+        Hud.Lore.PlaqueOf("b_barracks").EmitSignal(BaseButton.SignalName.Pressed);
+        Check("the troops' page of «Знания» opens a building that hires troops, for knowledge", troopsShown && Sim.Knows("b_barracks") && Sim.Knowledge == 0,
+            $"page {Hud.Lore.Page}, the barracks learnt {Sim.Knows("b_barracks")}, {Sim.Knowledge} knowledge left");
         Hud.ClosePanel();
 
         // a spell: a click on Dread's plaque in «Таинства» before it is learnt opens the intervention's page of the tree;

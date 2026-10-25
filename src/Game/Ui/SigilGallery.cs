@@ -48,7 +48,7 @@ public partial class SigilGallery : Control
         all.Add(("Ветви и страницы", null));
         foreach (string b in BranchNames) all.Add((b, Icons.BranchMark(b)));
         for (int p = 0; p < 3; p++) all.Add(($"страница {p}", Icons.PageMark(p)));
-        all.Add(("Умения — для сравнения", null));
+        all.Add(("Город и войско — для сравнения", null));
         foreach (var l in Sim.Lores) all.Add((l.Key, Icons.SigilFor(l.Key)));
         return all;
     }

@@ -33,12 +33,12 @@ public sealed class Lore
 
 /// <summary>
 /// What a wave beaten back gives: gold, and knowledge — what was learnt of the horde and of holding against it. The
-/// knowledge goes on lore, a tree of three pages. The household's skills: five branches — bows, masonry, labour, arms,
-/// traps — each four deep: the first of a branch, two that rest on it, a further one on each of those, and the last,
-/// resting on both; one rests on another branch besides its own. The troops: five branches of the same shape, where
-/// the kinds the citadel will take on are learnt — spearmen to knights, slingers to bombardiers, hounds to mounted
-/// knights, barracks to giants, and in a fifth, our engines: catapults to trebuchets — with what makes them better. And the intervention of the old powers: the four circles
-/// of spells and a branch of grace, learnt not for knowledge but for what the powers give, intervention and revelations.
+/// knowledge goes on lore, a tree of three pages. Since 25.10.2026 the tree holds only new things, and what makes them
+/// better is built (Sim.Town.cs, docs/handoff/08-town.md): the first two pages are the right to put up the town's
+/// buildings — the town hall to the traps' shed on the first, the barracks to the workshop on the second, a chain of one
+/// to three a branch — and a building's levels give the troops it hires and the lores that once were bought here. And the
+/// intervention of the old powers: the four circles of spells and a branch of grace, learnt not for knowledge but for
+/// what the powers give, intervention and revelations.
 /// There is more of the knowledge than a siege gives: what to learn is a choice. What is learnt is learnt for good.
 /// </summary>
 public sealed partial class Sim
@@ -51,10 +51,10 @@ public sealed partial class Sim
         new() { Key = key, Branch = "Благодать", Name = name, Cost = cost, Coin = Coin.Favour, Tier = tier, Lane = lane, About = about, Needs = needs, Page = 2 };
 
     /// <summary>The pages of the tree, and the branches of each, in the order they go round.</summary>
-    public static readonly string[] Pages = { "Умения", "Войско", "Вмешательство" };
+    public static readonly string[] Pages = { "Город", "Войско", "Вмешательство" };
     public static readonly string[][] PageBranches =
     {
-        new[] { "Луки", "Кладка", "Труд", "Дружина", "Ловушки" },
+        new[] { "Хозяйство", "Ремёсла", "Кладка", "Дружина", "Ловушки" },
         new[] { "Пехота", "Стрелки", "Конница", "Великаны", "Машины" },
         new[] { "Круг земли", "Круг огня и неба", "Круг смерти", "Круг воли", "Благодать" },
     };
@@ -70,85 +70,37 @@ public sealed partial class Sim
         var all = new List<Lore>(Skills);
         all.AddRange(Troops);
         all.AddRange(Rites());
-        // each branch of the household's skills forks at its third tier: one way or the other
-        foreach (var (a, b) in new[] { ("volley", "owleye"), ("granite", "bastion"), ("carts", "hides"), ("mail", "sergeants"), ("naphtha", "firestorm") })
-        {
-            all.Find(l => l.Key == a).Rival = b;
-            all.Find(l => l.Key == b).Rival = a;
-        }
         return all.ToArray();
     }
 
-    /// <summary>The household's skills: page one.</summary>
+    /// <summary>
+    /// The town: page one. Since the author's word of 25.10.2026 the lore opens only what is new — the right to put up
+    /// a building (Sim.Town.cs); what the buildings' levels give is what the lore's improvements used to give.
+    /// </summary>
     static readonly Lore[] Skills =
     {
-        L("yew", "Луки", "Тисовые луки", 2, 0, .5f, "Лучники бьют на 15 % дальше."),
-        L("barbs", "Луки", "Гранёные наконечники", 3, 1, 0, "Стрелы ранят на 25 % сильнее.", "yew"),
-        L("braziers", "Луки", "Жаровни на стенах", 3, 1, 1, "Факелы на стенах светят ночью на 9 м вместо 6, и лучники видят врага у стен дальше.", "yew"),
-        L("volley", "Луки", "Частая стрельба", 4, 2, 0, "Лучники стреляют на 20 % чаще.", "barbs"),
-        L("owleye", "Луки", "Совиный глаз", 4, 2, 1, "В темноте и тумане лучники теряют вдвое меньше дальности и меткости.", "braziers"),
-        L("longbows", "Луки", "Длинные луки", 6, 3, .5f, "Лучники бьют ещё на 15 % дальше.", "volley", "owleye"),
-        L("mortar", "Кладка", "Известковый раствор", 2, 0, .5f, "Орда ломает камень на 33 % дольше."),
-        L("masons", "Кладка", "Артель каменщиков", 3, 1, 0, "Строят на 25 % быстрее.", "mortar"),
-        L("ironbound", "Кладка", "Окованные ворота", 3, 1, 1, "Ворота и подъёмные мосты выдерживают вдвое больше ударов.", "mortar"),
-        L("granite", "Кладка", "Тёсаный камень", 4, 2, 0, "Камни камнемёта выбивают из кладки вдвое меньше.", "masons"),
-        L("bastion", "Кладка", "Цитадель на скале", 4, 2, 1, "Цитадель получает вдвое меньше урона от орды и камнемётов.", "ironbound"),
-        L("fortress", "Кладка", "Крепость", 6, 3, .5f, "Орда ломает камень ещё на 20 % дольше.", "granite", "bastion"),
-        L("picks", "Труд", "Добрые кирки", 2, 0, .5f, "Копают, рубят и добывают камень на 25 % быстрее."),
-        L("barrows", "Труд", "Тачки", 3, 1, 0, "Добыча приносит на 20 % больше.", "picks"),
-        L("buckets", "Труд", "Пожарные вёдра", 2, 1, 1, "Огонь тушат вдвое быстрее.", "picks"),
-        L("carts", "Труд", "Тропы и носилки", 4, 2, 0, "Рабочие ходят на 20 % быстрее.", "barrows"),
-        L("hides", "Труд", "Мокрые шкуры", 4, 2, 1, "Наши деревянные стены, лестницы и колья загораются вдвое реже.", "buckets"),
-        L("guild", "Труд", "Гильдия мастеров", 6, 3, .5f, "Копают, рубят и строят ещё на 20 % быстрее.", "carts", "masons"),
-        L("gambesons", "Дружина", "Стёганки", 2, 0, .5f, "У наших солдат на 20 % больше здоровья."),
-        L("drill", "Дружина", "Учебный двор", 3, 1, 0, "Наём на 20 % дешевле.", "gambesons"),
-        L("banners", "Дружина", "Знамёна у цитадели", 3, 1, 1, "Раненые у цитадели и в ней выздоравливают вдвое быстрее.", "gambesons"),
-        L("mail", "Дружина", "Кольчуги", 5, 2, 0, "Наши солдаты получают на 20 % меньше урона.", "drill"),
-        L("sergeants", "Дружина", "Десятники", 4, 2, 1, "В ближнем бою наши солдаты бьют на 20 % сильнее.", "banners"),
-        L("veterans", "Дружина", "Ветераны", 6, 3, .5f, "Раненые остаются в строю, пока у них больше 20 % здоровья, а не 33 %.", "mail", "sergeants"),
-        L("spikes", "Ловушки", "Острые колья", 2, 0, .5f, "Колья ранят на 60 % сильнее."),
-        L("tar", "Ловушки", "Густая смола", 3, 1, 0, "Смола горит в 1,5 раза дольше.", "spikes"),
-        L("soaked", "Ловушки", "Пропитанные стрелы", 3, 1, 1, "Огненные стрелы чаще поджигают, а лучник стреляет ими почти так же быстро, как обычными.", "spikes"),
-        L("naphtha", "Ловушки", "Горючая смесь", 5, 2, 0, "Радиус взрыва пороха больше на 33 %.", "tar"),
-        L("firestorm", "Ловушки", "Огненный ливень", 4, 2, 1, "Налётчик, подожжённый стрелой, горит вдвое дольше, и земля под ним чаще загорается.", "soaked"),
-        L("deathtraps", "Ловушки", "Ловчая наука", 6, 3, .5f, "Колья ранят ещё на 33 % сильнее и ломаются вдвое реже, волчья яма калечит вдвое сильнее.", "naphtha", "firestorm"),
+        L("b_hall", "Хозяйство", "Ратуша", 2, 0, .5f, "Можно построить ратушу. Она платит золото: больше, чем больше город."),
+        L("b_market", "Хозяйство", "Рынок", 3, 1, .5f, "Можно построить рынок: камень, брёвна и землю меняют на золото и обратно.", "b_hall"),
+        L("b_smithy", "Ремёсла", "Кузница", 3, 0, .5f, "Можно построить кузницу: добрые кирки, окованные ворота, жаровни, а на втором этаже кольчуги и закалённые клинки."),
+        L("b_carpentry", "Ремёсла", "Плотницкая", 3, 1, .5f, "Можно построить плотницкую: тачки, пожарные вёдра, мокрые шкуры, а на втором этаже носилки, нары и гильдия мастеров.", "b_smithy"),
+        L("b_masons", "Кладка", "Двор каменщиков", 3, 0, .5f, "Можно построить двор каменщиков: известковый раствор и артель, а на втором этаже тёсаный камень, цитадель на скале и крепость."),
+        L("b_drill", "Дружина", "Учебный плац", 3, 0, .5f, "Можно построить учебный плац: наём дешевле, стёганки, а на втором этаже солдаты быстрее."),
+        L("b_infirmary", "Дружина", "Лазарет", 3, 1, .5f, "Можно построить лазарет: раненые заживают вдвое быстрее, а на втором этаже ветераны.", "b_drill"),
+        L("b_traps", "Ловушки", "Ловчий двор", 3, 0, .5f, "Можно построить ловчий двор: колья, смола и огненные стрелы сильнее, на втором этаже ещё сильнее."),
     };
 
-    /// <summary>The troops: page two. The kinds the citadel takes on once they are learnt, and what makes them better.</summary>
+    /// <summary>The troops: page two. Each opens the building that hires a kind; its second storey hires the better kinds.</summary>
     static readonly Lore[] Troops =
     {
-        U("spearmen", "Пехота", "Копейщики", 3, 0, .5f, "Цитадель набирает копейщиков. Копьё бьёт дальше меча и достаёт тех, кто лезет по лестнице."),
-        U("shieldmen", "Пехота", "Щитоносцы", 4, 1, 0, "Цитадель набирает щитоносцев, самых живучих пехотинцев.", "spearmen"),
-        U("halberds", "Пехота", "Алебардщики", 4, 1, 1, "Цитадель набирает алебардщиков. Алебарда бьёт тяжело.", "spearmen"),
-        U("shieldwall", "Пехота", "Стена щитов", 4, 2, 0, "Наши бойцы в 3 м от щитоносца получают на 25 % меньше урона.", "shieldmen"),
-        U("longshafts", "Пехота", "Длинные древки", 4, 2, 1, "Копья и алебарды бьют на 25 % дальше.", "halberds"),
-        U("knights", "Пехота", "Рыцари", 7, 3, .5f, "Цитадель набирает рыцарей в полных латах.", "shieldwall", "longshafts"),
-        U("slingers", "Стрелки", "Пращники", 2, 0, .5f, "Цитадель набирает пращников. Дешёвые и быстрые."),
-        U("crossbows", "Стрелки", "Арбалетчики", 4, 1, 0, "Цитадель набирает арбалетчиков. Долго перезаряжают, но бьют сильнее и дальше лука.", "slingers"),
-        // the lead shot and the fire pots are one lore since the alchemists took the fire pots' place (25.10.2026)
-        U("leadshot", "Стрелки", "Ядра и горшки", 4, 1, 1, "Пращники бьют на 33 % сильнее и отбрасывают налётчика на шаг, а иногда бросают горшок с горящей смолой. Он поджигает налётчика и землю под ним.", "slingers"),
-        U("bodkins", "Стрелки", "Бронебойные болты", 4, 2, 0, "Арбалетный болт пробивает налётчика насквозь и ранит того, кто за ним.", "crossbows"),
-        U("alchemists", "Стрелки", "Алхимики", 4, 2, 1, "Цитадель набирает алхимиков. Их кислота проедает лестницы, настилы и машины орды и обжигает налётчиков, а нашу кладку не трогает.", "leadshot"),
-        U("bombards", "Стрелки", "Бомбардиры", 7, 3, .5f, "Цитадель набирает бомбардиров. Их горшки с порохом взрываются среди орды и ломают лестницы и машины, но не нашу кладку. Алхимики бросают в толпу налётчиков склянки едкого дыма: от него кашляют и бегут.", "bodkins", "alchemists"),
-        U("hounds", "Конница", "Боевые псы", 2, 0, .5f, "Цитадель набирает боевых псов. Быстрые и дешёвые, по лестницам не лазят."),
-        U("riders", "Конница", "Всадники", 5, 1, 0, "Цитадель набирает всадников. Вдвое быстрее пеших, по лестницам не лазят.", "hounds"),
-        U("hunt", "Конница", "Травля", 3, 1, 1, "Псы и всадники догоняют бегущих налётчиков на 33 % быстрее и бьют их вдвое сильнее. Сбежавшие не вернутся со следующей волной.", "hounds"),
-        U("horsearchers", "Конница", "Конные лучники", 6, 2, 0, "Цитадель набирает конных лучников. Стреляют с коня и уходят от погони.", "riders"),
-        U("charge", "Конница", "Натиск", 4, 2, 1, "Удар конницы с разгона вдвое сильнее и сбивает налётчика с ног.", "hunt"),
-        U("lancers", "Конница", "Конные рыцари", 8, 3, .5f, "Цитадель набирает конных рыцарей. Удар копья с разгона сбивает с ног даже тролля.", "horsearchers", "charge"),
-        U("barracks", "Великаны", "Казармы", 3, 0, .5f, "В цитадели на 4 места больше."),
-        U("drillyard", "Великаны", "Учебный плац", 3, 1, 0, "Солдаты ходят и бегают на 15 % быстрее.", "barracks"),
-        U("bunks", "Великаны", "Двухъярусные нары", 4, 1, 1, "Каждая лежанка в жилом доме даёт 2 места в войске.", "barracks"),
-        U("trolls", "Великаны", "Ручные тролли", 6, 2, 0, "Цитадель набирает ручных троллей. Бьют сильно, вне боя быстро заживают.", "drillyard"),
-        U("giants", "Великаны", "Великаны", 7, 2, 1, "Цитадель набирает великанов. Удар молота раскидывает налётчиков. Великан занимает 4 места.", "bunks"),
-        U("boulders", "Великаны", "Глыбы", 6, 3, .5f, "Великаны и тролли бросают в орду камни, которые катятся сквозь ряды.", "trolls", "giants"),
-        // our engines (Sim.OurEngines.cs)
-        U("mangonels", "Машины", "Катапульты", 4, 0, .5f, "Цитадель набирает катапульты. Мечут камни на 46 м в машины и ватаги орды. Расчёт 2 человека, занимает 3 места."),
-        U("pitchkegs", "Машины", "Бочонки со смолой", 3, 1, 0, "Катапульты и требушеты через раз мечут бочонок горящей смолы: он поджигает машины, настилы и ватагу.", "mangonels"),
-        U("windlass", "Машины", "Вороты", 3, 1, 1, "Машины заряжаются на 25 % быстрее.", "mangonels"),
-        U("ballistas", "Машины", "Баллисты", 5, 2, 0, "Цитадель набирает баллисты. Копьё летит прямо на 50 м, пробивает ряд налётчиков и пригвождает великана.", "pitchkegs"),
-        U("heavystones", "Машины", "Тяжёлые камни", 4, 2, 1, "Камни машин на треть тяжелее, катапульта бьёт на 15 % дальше.", "windlass"),
-        U("trebuchets", "Машины", "Требушеты", 7, 3, .5f, "Цитадель набирает требушеты. Тяжёлые камни на 90 м, вдвое дальше камнемёта орды. На новом месте собирается 8 с. Расчёт 3 человека, занимает 5 мест.", "ballistas", "heavystones"),
+        U("b_barracks", "Пехота", "Казарма", 3, 0, .5f, "Можно построить казарму: нанимает копейщиков, а на втором этаже щитоносцев и алебардщиков."),
+        U("b_knights", "Пехота", "Рыцарский двор", 6, 1, .5f, "Можно построить рыцарский двор: нанимает рыцарей в полных латах. Нужны улучшенная казарма и кузница.", "b_barracks"),
+        U("b_range", "Стрелки", "Стрельбище", 3, 0, .5f, "Можно построить стрельбище: нанимает пращников, улучшает лучников, а на втором этаже нанимает арбалетчиков."),
+        U("b_lab", "Стрелки", "Лаборатория алхимиков", 5, 1, .5f, "Можно построить лабораторию: нанимает алхимиков, а на втором этаже бомбардиров.", "b_range"),
+        U("b_kennel", "Конница", "Псарня", 2, 0, .5f, "Можно построить псарню: нанимает боевых псов."),
+        U("b_stables", "Конница", "Конюшня", 5, 1, .5f, "Можно построить конюшню: нанимает всадников, а на втором этаже конных лучников и конных рыцарей.", "b_kennel"),
+        U("b_trolls", "Великаны", "Логово троллей", 5, 0, .5f, "Можно построить логово: нанимает ручных троллей."),
+        U("b_giants", "Великаны", "Чертог великанов", 7, 1, .5f, "Можно построить чертог: нанимает великанов.", "b_trolls"),
+        U("b_workshop", "Машины", "Мастерская", 4, 0, .5f, "Можно построить мастерскую: собирает катапульты, а на втором этаже баллисты и требушеты."),
     };
 
     /// <summary>The intervention: page three — the spells, circle by circle, and the boons of grace.</summary>
@@ -192,7 +144,7 @@ public sealed partial class Sim
     /// <summary>The lore learnt, but for the spells: those are the <see cref="Known"/> spells.</summary>
     public readonly HashSet<string> Learnt = new();
 
-    public bool Knows(string key) => LoreOf(key) is { Spell: { } k } ? Known.Contains(k) : Learnt.Contains(key);
+    public bool Knows(string key) => LoreOf(key) is { Spell: { } k } ? Known.Contains(k) : Learnt.Contains(key) || _granted.Contains(key);
 
     public static Lore LoreOf(string key)
     {

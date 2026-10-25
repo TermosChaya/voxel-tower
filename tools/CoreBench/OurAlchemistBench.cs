@@ -25,19 +25,17 @@ static class OurAlchemistBench
         void Gone(Unit u) { u.Dead = true; u.DiedAt = -999; }
         int kx = site.KeepX, kz = site.KeepZ;
 
-        // the lore: six in the branch of the shot as before, the alchemists where the fire pots were, the pots with the lead
-        var shot = Sim.Lores.Where(l => l.Branch == "Стрелки").ToList();
-        var alch = Sim.LoreOf("alchemists");
+        // since 25.10.2026 hired at the alchemists' laboratory, which the shot's branch opens (Sim.Town.cs), not at the citadel
+        var lab = Sim.TownKindOf("lab");
         bool before = sim.Unlocked(Kinds.OurAlchemist);
         sim.Learnt.Add("alchemists");
         bool after = sim.Unlocked(Kinds.OurAlchemist);
         sim.Stock.Gold = 1000;
-        int ours0 = sim.Count(Kinds.OurAlchemist);
-        bool hired = sim.Enlist(Kinds.OurAlchemist);
-        check("the alchemists take the fire pots' place among the shot, six lores as before; once learnt the citadel takes one on",
-            shot.Count == 6 && alch != null && alch.Tier == 2 && alch.Needs.SequenceEqual(new[] { "leadshot" }) && Sim.LoreOf("firepots") == null
-            && Sim.LoreOf("bombards").Needs.Contains("alchemists") && !before && after && (hired || sim.Count(Kinds.OurAlchemist) > ours0),
-            $"{string.Join(", ", shot.Select(l => $"{l.Key} {l.Tier}/{l.Lane}"))}; unlocked {before} → {after}; taken on {hired}");
+        string atCitadel = sim.CantEnlist(Kinds.OurAlchemist);
+        check("our alchemists are hired at the alchemists' laboratory, which the shot's branch opens, and not at the citadel; its first level gives them, its second the bombardiers and the smoke",
+            lab != null && Sim.LoreOf("b_lab")?.Branch == "Стрелки" && lab.Grants1.Contains("alchemists") && lab.Grants2.Contains("bombards")
+            && lab.Hires.Any(h => h.kind == Kinds.OurAlchemist) && Sim.LoreOf("firepots") == null && !before && after && atCitadel != null && atCitadel.Contains("Лаборатория"),
+            $"unlocked {before} → {after}; at the citadel «{atCitadel}»");
         foreach (var u in sim.Units) if (u.Team == Team.Player) Gone(u);
 
         // a level field west of the citadel, a stone wall four metres high on it, and the horde's ladder up its outer face
@@ -125,7 +123,8 @@ static class OurAlchemistBench
         sim.Fumed += (_, _, _) => burst++;
         bool coughed = false, ran = false;
         double since = -1;
-        for (int i = 0; i < 600 && (since < 0 || sim.Time - since < 1); i++)
+        // (two in five throws into a knot are fumes: a minute of throwing, so that a run of plain ones does not fail it)
+        for (int i = 0; i < 1200 && (since < 0 || sim.Time - since < 1); i++)
         {
             int was = burst;
             Run(.05);

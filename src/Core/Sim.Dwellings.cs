@@ -317,6 +317,8 @@ public sealed partial class Sim
         z.Closed = check.Ok;
         z.Why = check.Why;
         z.Area = check.Area;
+        // a town building is furnished as its kind wants, and gives no beds (Sim.Town.cs)
+        if (BuildingOn(z) is { } building) { LookOverBuilding(z, building, check, floor, quiet); return; }
         if (!check.Ok)
         {
             z.Beds = 0;

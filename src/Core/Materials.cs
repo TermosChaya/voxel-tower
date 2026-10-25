@@ -116,6 +116,12 @@ public static class Mat
     /// </summary>
     public const byte Prop = 143;
     /// <summary>
+    /// What stands inside the town's buildings and makes each the building it is (Sim.Town.cs): an anvil, a forge and its
+    /// coals, hay, an archery butt and its red ring, racks and rails and benches of timber, barrels, goods in crates and
+    /// sacks, blocks of stone. Furniture, as the dwellings' bunks: walked through, never taken for a wall or a floor.
+    /// </summary>
+    public const byte Anvil = 160, Forge = 161, Coals = 162, Hay = 163, Butt = 164, ButtRing = 165, Rack = 166, Barrel = 167, Goods = 168, Block = 169;
+    /// <summary>
     /// For the figures: a hill giant's skin, weathered ruddy brown or grey as a crag, and the blue it daubs itself with
     /// in stripes.
     /// </summary>
@@ -241,6 +247,14 @@ public static class Mat
         D(Bunk, "Лежанка", 0x6e5034, .16f, MatGroup.Wood, Player); D(Bedding, "Постель", 0x9c8a5e, .18f, MatGroup.Wood, Player);
         D(Table, "Стол", 0x7d5c39, .14f, MatGroup.Wood, Player); D(Bench, "Скамья", 0x684a2f, .14f, MatGroup.Wood, Player);
         foreach (var m in new[] { Bunk, Bedding, Table, Bench }) IsFurniture[m] = Passable[m] = true;
+        // the town's buildings' furnishing (Sim.Town.cs)
+        D(Anvil, "Наковальня", 0x3b3d42, .1f, MatGroup.Hard, Player); D(Forge, "Горн", 0x7a4a36, .18f, MatGroup.Hard, Player);
+        D(Coals, "Угли", 0xc4541c, .3f, MatGroup.Hard, Player | Glows); D(Hay, "Сено", 0xc9a85a, .2f, MatGroup.Wood, Player);
+        D(Butt, "Мишень", 0xb89a5c, .18f, MatGroup.Wood, Player); D(ButtRing, "Круг мишени", 0x8a2a22, .1f, MatGroup.Wood, Player);
+        D(Rack, "Стойка", 0x6a4a2e, .16f, MatGroup.Wood, Player); D(Barrel, "Бочка", 0x5c3f27, .16f, MatGroup.Wood, Player);
+        D(Goods, "Товар", 0x8d7752, .3f, MatGroup.Wood, Player); D(Block, "Глыба", 0x8c8a8e, .2f, MatGroup.Hard, Player);
+        foreach (var m in new[] { Anvil, Forge, Coals, Hay, Butt, ButtRing, Rack, Barrel, Goods, Block }) IsFurniture[m] = Passable[m] = true;
+        Emission[Coals] = .9f;
         D(Robe, "ряса", 0x3e1518, .14f, MatGroup.Hard, 0); D(RobeTrim, "кайма", 0x7a6236, .12f, MatGroup.Hard, 0);
         D(SoulFire, "мертвенный огонь", 0x9ef2c4, .08f, MatGroup.Hard, Glows);
 
@@ -292,6 +306,8 @@ public static class Mat
         Emission[Phial] = .35f;
         Emission[Window] = Emission[WindowLog] = .45f;
 
+        // a number no material has been given yet (kept for one being made elsewhere) is at least something, not nothing
+        for (int m = 1; m < Count; m++) if (Def[m].Name == null) D((byte)m, "—", 0x808080, 0, MatGroup.Hard, 0);
         foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage, Flower, Bloom, Birch, NeedleLight, FoliageLight, FoliageGold, PineBark, Snag }) IsVeg[m] = true;
         foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame, Stakes, Pitch, TowerLadder, Acid, Scaffold }) Passable[m] = true;
         IsLadder[Ladder] = IsLadder[SiegeLadder] = IsLadder[TowerLadder] = IsLadder[Scaffold] = true;

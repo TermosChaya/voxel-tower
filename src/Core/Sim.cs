@@ -236,6 +236,7 @@ public sealed partial class Sim
         Stage = "TendTurf"; TendTurf();
         Stage = "TickShelter"; TickShelter();
         Stage = "TickDwellings"; TickDwellings();
+        Stage = "TickTown"; TickTown(dt);
         Stage = "TickHouseDoors"; TickHouseDoors();
         Stage = "TickTraps"; TickTraps();
         Stage = "TickEventsHalf"; TickEventsHalf(Time);

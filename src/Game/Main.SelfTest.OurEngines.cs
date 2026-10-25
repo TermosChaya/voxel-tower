@@ -19,11 +19,17 @@ public partial class Main
         if (sim.Alarm) sim.StandDown();
         foreach (var r in sim.Units) if (r.Team == Team.Horde && !r.Dead) { r.Dead = true; r.DiedAt = -999; }
         sim.Knowledge += 10;
-        bool learnt = sim.Knows("mangonels") || sim.Learn("mangonels");
+        // assembled at a workshop since 25.10.2026 (Sim.Town.cs): one here as it would stand, by the citadel's door
+        bool learnt = sim.Knows("b_workshop") || sim.Learn("b_workshop");
         sim.Stock.Gold = Math.Max(sim.Stock.Gold, 400);
-        sim.Stock[Stockpile.Wood] = Math.Max(sim.Stock[Stockpile.Wood], 10);
+        sim.Stock[Stockpile.Wood] = Math.Max(sim.Stock[Stockpile.Wood], 10 * VoxelWorld.PerM3);
         double wood0 = sim.Stock[Stockpile.Wood];
-        bool took = Command.Enlist(Kinds.Mangonel);
+        var (sx, _, sz) = sim.Nav.Feet(sim.Gate);
+        var shop = new Building { Kind = "workshop", X0 = (int)sx - 18, Z0 = (int)sz + 30, X1 = (int)sx + 18, Z1 = (int)sz + 66, Level = 1, Ready = true };
+        shop.Stock[Kinds.Mangonel.Key] = 1;
+        sim.Buildings.Add(shop);
+        bool took = sim.HireAt(shop, Kinds.Mangonel) != null;
+        sim.Buildings.Remove(shop);
         var e = sim.Units.FindLast(u => u.T == Kinds.Mangonel && !u.Dead);
         int crew = e == null ? 0 : sim.CrewOf(e);
         // out of the citadel with its crew, and a band of goblins coming on west of it, within its reach
@@ -50,7 +56,7 @@ public partial class Main
             doing = Retinue.Doing(e, sim);
         }
         check("a catapult of ours is learnt, taken on at the muster for gold and timber, comes out of the citadel with its crew of two and throws at a band within its reach, the stone in the air and the panel saying at whom",
-            learnt && took && crew == 2 && Math.Abs(wood0 - sim.Stock[Stockpile.Wood] - Kinds.Mangonel.Logs) < .01 && sim.EngineShots > shots0 && aloft && doing.Contains("бьёт"),
+            learnt && took && crew == 2 && Math.Abs(wood0 - sim.Stock[Stockpile.Wood] - Kinds.Mangonel.Logs * VoxelWorld.PerM3) < .01 && sim.EngineShots > shots0 && aloft && doing.Contains("бьёт"),
             $"learnt {learnt}, taken {took}, crew {crew}, timber {wood0:0.#} → {sim.Stock[Stockpile.Wood]:0.#}; thrown {sim.EngineShots - shots0}, aloft {aloft}; «{doing}»");
         foreach (var u in sim.Units)
             if (!u.Dead && (u == e || u.Escort == e && e != null || u.Team == Team.Horde)) { u.Dead = true; u.DiedAt = -999; }

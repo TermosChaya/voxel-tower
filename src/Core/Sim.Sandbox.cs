@@ -33,6 +33,8 @@ public sealed partial class Sim
             if (l.Spell is { } k) Known.Add(k);
             else Learnt.Add(l.Key);
         }
+        // and all the buildings give, and every kind the citadel will take on at once (Sim.Town.cs)
+        foreach (var g in TownGrants()) Learnt.Add(g);
         Fill();
     }
 

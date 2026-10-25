@@ -3780,20 +3780,24 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--lore")
     Check("a wave beaten back brings gold and knowledge", !simK.Waves.Active && simK.Stock.Gold >= goldK0 + 40 && simK.Knowledge == 4,
         $"gold {goldK0:0} → {simK.Stock.Gold:0}, knowledge {simK.Knowledge}");
 
-    // lore is learnt in the order of its branch, and only for the knowledge it costs
-    bool barbsFirst = simK.Learn("barbs");
+    // lore is learnt in the order of its branch, and only for the knowledge it costs (since 25.10.2026 the first two
+    // pages open buildings: the market rests on the town hall, the carpentry on the smithy)
+    bool barbsFirst = simK.Learn("b_market");
     var bowK = simK.Spawn(Kinds.Archer, simK.Gate);
     float reachK0 = simK.RangeAt(bowK, bowK.X + 50, bowK.Z);
     int costK0 = simK.HireCost(Kinds.Swordsman);
-    bool yewK = simK.Learn("yew");
-    float reachK1 = simK.RangeAt(bowK, bowK.X + 50, bowK.Z);
-    bool barbsPoor = simK.Learn("barbs");
+    bool yewK = simK.Learn("b_hall");
+    bool barbsPoor = simK.Learn("b_market");
     simK.Knowledge = 6;
-    bool drillFirst = simK.Learn("drill");
-    bool coats = simK.Learn("gambesons"), drillK = simK.Learn("drill");
+    bool drillFirst = simK.Learn("b_carpentry");
+    bool coats = simK.Learn("b_smithy"), drillK = simK.Learn("b_carpentry");
     Check("lore is learnt in the order of its branch, for the knowledge it costs",
-        !barbsFirst && yewK && !barbsPoor && !drillFirst && coats && drillK && simK.Knowledge == 1 && simK.Learnt.Count == 3,
-        $"barbs before yew {barbsFirst}, yew {yewK}, barbs with nothing left {barbsPoor}, drill before coats {drillFirst}, coats {coats}, drill {drillK}; {simK.Knowledge} left");
+        !barbsFirst && yewK && !barbsPoor && !drillFirst && coats && drillK && simK.Knowledge == 0 && simK.Learnt.Count == 3,
+        $"market before the hall {barbsFirst}, the hall {yewK}, the market with too little left {barbsPoor}, the carpentry before the smithy {drillFirst}, the smithy {coats}, the carpentry {drillK}; {simK.Knowledge} left");
+    // what were the lore's improvements are given by the buildings' levels now, under the same keys (Sim.Town.cs)
+    simK.Learnt.Add("yew");
+    float reachK1 = simK.RangeAt(bowK, bowK.X + 50, bowK.Z);
+    simK.Learnt.Add("gambesons"); simK.Learnt.Add("drill");
 
     // and does what it says: yew carries further, the drill yard makes hiring cheaper, quilted coats keep a soldier longer
     int costK1 = simK.HireCost(Kinds.Swordsman);
@@ -3805,24 +3809,20 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--lore")
         $"reach {reachK0 / VoxelWorld.PerMetre:0.0} → {reachK1 / VoxelWorld.PerMetre:0.0} m; a swordsman {costK0} → {costK1} gold, paid {1000 - simK.Stock.Gold:0}; " +
         $"his life {swordK?.MaxHp:0} of {Kinds.Swordsman.Hp:0}");
 
-    // the tree goes deeper: the last of a branch rests on both before it, one rests on another branch besides its own,
-    // and there is more of it than a siege gives knowledge for
-    simK.Knowledge = 100;
-    bool longFirst = simK.Learn("barbs") && simK.Learn("volley") && simK.Learn("longbows");
-    bool longK = simK.Learn("braziers") && simK.Learn("owleye") && simK.Learn("longbows");
+    // the tree: the town's eight buildings and the troops' nine, each branch's second resting on its first, and the
+    // intervention as it was; longbows (now the archery range's second storey) carry yet further
+    simK.Learnt.Add("longbows");
     float reachK2 = simK.RangeAt(bowK, bowK.X + 50, bowK.Z);
-    bool guildFirst = simK.Learn("picks") && simK.Learn("barrows") && simK.Learn("carts") && simK.Learn("guild");
-    bool guildK = simK.Learn("mortar") && simK.Learn("masons") && simK.Learn("guild");
-    int treeCost = 0, siege = 0, skills = 0, troops = 0, rites = 0;
+    int skills = 0, troops = 0, rites = 0;
+    bool chained = true;
     foreach (var l in Sim.Lores)
     {
-        if (l.Coin == Coin.Knowledge) treeCost += l.Cost;
         if (l.Page == 0) skills++; else if (l.Page == 1) troops++; else rites++;
+        if (l.Page < 2 && (l.Tier == 0) != (l.Needs.Length == 0)) chained = false;
     }
-    for (int wave = 1; wave <= Waves.Total; wave++) siege += 3 + wave;
-    Check("the tree is four deep: the last of a branch wants both before it, the masters' guild wants the masons' too, and the skills and the troops together cost more than a siege gives",
-        skills == 30 && troops == 30 && rites == 30 && !longFirst && longK && MathF.Abs(reachK2 / reachK0 - 1.15f * 1.15f) < .01f && !guildFirst && guildK && treeCost > siege * 1.5f,
-        $"{skills} skills, {troops} of the troops, {rites} of the intervention; longbows on one {longFirst}, on both {longK}, reach ×{reachK2 / reachK0:0.000}; the guild without masons {guildFirst}, with {guildK}; skills and troops {treeCost}, a siege's knowledge {siege}");
+    Check("the town's page has eight buildings and the troops' nine, each branch's second resting on its first; the intervention's thirty",
+        skills == 8 && troops == 9 && rites == 30 && chained && MathF.Abs(reachK2 / reachK0 - 1.15f * 1.15f) < .01f,
+        $"{skills} of the town, {troops} of the troops, {rites} of the intervention; chained {chained}; reach ×{reachK2 / reachK0:0.000}");
     // every page's branches are its own, each branch a tier 0 to a tier 3, every root on its own page
     bool shaped = true;
     for (int pg = 0; pg < 3; pg++)
@@ -3830,10 +3830,10 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--lore")
         {
             var tiers = new System.Collections.Generic.List<int>();
             foreach (var l in Sim.LoresOn(pg)) if (l.Branch == br) tiers.Add(l.Tier);
-            if (tiers.Count != 6 || !tiers.Contains(0) || !tiers.Contains(3)) shaped = false;
+            if (pg < 2 ? tiers.Count < 1 || !tiers.Contains(0) : tiers.Count != 6 || !tiers.Contains(0) || !tiers.Contains(3)) shaped = false;
         }
     foreach (var l in Sim.Lores) foreach (string nd in l.Needs) if (Sim.LoreOf(nd) is not { } r || r.Page != l.Page) shaped = false;
-    Check("every branch of every page is six lores from a first to a last, every lore resting on its own page; the circles are the spells' own",
+    Check("every branch of the town's and the troops' pages begins with a building, of the intervention's is six lores from a first to a last, every lore resting on its own page; the circles are the spells' own",
         shaped && Sim.Circles[0] == Sim.PageBranches[2][0] && Sim.Circles[3] == Sim.PageBranches[2][3] && Sim.Spells.Length == 23,
         $"shaped {shaped}, {Sim.Spells.Length} spells");
 
@@ -3841,7 +3841,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--lore")
     float hpK0 = swordK.Hp;
     simK.Hurt(swordK, null, 10);
     float mailOff = hpK0 - swordK.Hp;
-    simK.Learn("drill"); simK.Learn("mail");
+    simK.Learnt.Add("drill"); simK.Learnt.Add("mail");
     hpK0 = swordK.Hp;
     simK.Hurt(swordK, null, 10);
     float mailOn = hpK0 - swordK.Hp;
@@ -3900,7 +3900,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
     RunS(1);
     // and something learnt, and given
     simS.Knowledge = 4;
-    simS.Learn("mortar");
+    simS.Learn("b_hall");
     simS.Revelations = 2; simS.Carcasses.Add(Kinds.Boar); simS.Favour = 17;
     simS.Known.Add(SpellKind.Hand); simS.Known.Add(SpellKind.Eye);
     // a ball of rock rolling, and a stone high in the air
@@ -3987,7 +3987,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--save")
         && simL.Gates.Count == simS.Gates.Count && simL.Fixtures.Count == simS.Fixtures.Count && simL.Burning.Count == simS.Burning.Count
         && simL.Bands.Count == simS.Bands.Count && simL.Waves.Number == simS.Waves.Number && simL.Waves.Active == simS.Waves.Active
         && simL.Waves.Coming == simS.Waves.Coming && simL.Mines.TrueForAll(m => m.Holder == simS.Mines[simL.Mines.IndexOf(m)].Holder) && extra == "the screen's own"
-        && simL.Knowledge == 2 && simL.Knows("mortar") && simL.Learnt.Count == 1
+        && simL.Knowledge == 2 && simL.Knows("b_hall") && simL.Learnt.Count == 1
         && simL.Revelations == 2 && simL.Carcasses.Count == 1 && simL.Carcasses[0] == Kinds.Boar && Math.Abs(simL.Favour - simS.Favour) < 1e-9
         && simL.Known.SetEquals(simS.Known);
     // and what was in the air, or rolling, goes on its way as it was
@@ -4267,16 +4267,12 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--muster")
     for (int i = Ours(); i < Sim.CitadelPlaces - 1; i++) simM.Spawn(Kinds.Worker, simM.Gate);
     bool lastOne = simM.Enlist(Kinds.Worker);
     string full = simM.CantEnlist(Kinds.Worker);
-    var giant = new UnitType { Key = "testgiant", Name = "Великан", Team = Team.Player, Move = Kinds.Worker.Move, Hp = 600, Cost = 10, Room = 4 };
-    var locked = new UnitType { Key = "testknight", Name = "Рыцарь", Team = Team.Player, Move = Kinds.Worker.Move, Hp = 200, Cost = 10, Lore = "knights" };
-    string shut = simM.CantEnlist(locked);
-    simM.Learnt.Add("knights");
-    string open = simM.CantEnlist(locked);
+    // the troops are hired in their buildings, not at the citadel (Sim.Town.cs)
+    string shut = simM.CantEnlist(Kinds.Spearman);
     simM.Learnt.Add("barracks");
-    string roomy = simM.CantEnlist(giant);
-    Check("the citadel takes on no more than it has places for; a kind waits for its lore; barracks make room, a giant takes four",
-        lastOne && full != null && full.Contains("мест") && shut != null && shut.Contains("изучите") && open != null && open.Contains("мест") && roomy == null && simM.Places == Sim.CitadelPlaces + 4,
-        $"household {simM.Household()} of {Sim.CitadelPlaces}: «{full}»; locked: «{shut}», then «{open}»; with barracks {simM.Places} places, the giant: «{roomy ?? "taken"}»");
+    Check("the citadel takes on no more than it has places for; the troops are hired in their buildings; the barracks make room, a giant takes four",
+        lastOne && full != null && full.Contains("мест") && shut != null && shut.Contains("Казарма") && simM.Places == Sim.CitadelPlaces + 4 && Kinds.Giant.Room == 4,
+        $"household {simM.Household()} of {Sim.CitadelPlaces}: «{full}»; a spearman at the citadel: «{shut}»; with the barracks {simM.Places} places");
     // the drill yard: soldiers on their feet a seventh faster, workers as they were
     float Walked(UnitType kind, bool drilled)
     {
@@ -5623,16 +5619,6 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--chapters")
         $"{bossH.Name}: {bossHp:0} hp of an orc's {Kinds.Orc.Hp}; tier II shut before {shut}, open after {simH.TierOpen}, «{tier2.Name}» learnable {simH.CanLearn(tier2)}; " +
         $"legendary trophies {relics}, took «{firstRelic}» {took}");
 
-    // a branch forks at its third tier: one way shuts the other, and what rests on both opens with either
-    simH.TierOpen = 4; simH.Knowledge = 100;
-    foreach (var k in new[] { "yew", "barbs", "braziers" }) simH.Learnt.Add(k);
-    bool both = simH.CanLearn(Sim.LoreOf("volley")) && simH.CanLearn(Sim.LoreOf("owleye"));
-    bool learnt = simH.Learn("volley");
-    bool shutOther = !simH.CanLearn(Sim.LoreOf("owleye")) && simH.RivalShut(Sim.LoreOf("owleye"));
-    bool topOpen = simH.CanLearn(Sim.LoreOf("longbows"));
-    Check("in a siege of one's own a branch forks at its third tier: one way taken shuts the other, and the branch's crown opens with either",
-        both && learnt && shutOther && topOpen, $"both open before {both}; «Частая стрельба» learnt {learnt}; «Совиный глаз» shut {shutOther}; «Длинные луки» open {topOpen}");
-
     // a champion who got away comes back crowned
     var backH = new Survivor { Kind = Kinds.Troll, Look = 0, Hp = Kinds.Troll.Hp * .5f, Champion = 2, Title = "Камнелом" };
     var bandH = new Warband { Id = 999, Name = "Ватага Проверки", State = BandState.Coming, Entry = simH.NearestStand(siteH.SpawnStrip / 2, wH.SZ / 2, 3) };
@@ -6103,6 +6089,9 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--giants") GiantsBench
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--ourengines") OurEnginesBench.Run(Check);
 // the magic wand: what it takes, laying over again, its blueprint (WandBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--wand") WandBench.Run(Check);
+// the town: buildings the lore opens, put up by the workers, hiring and raised a storey (Town.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--town") TownBench.Run(Check);
+
 // houses the workers build: roofed whole, floored, furnished, and a storey on a storey (Houses.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--houses") HousesBench.Run(Check);
 // the builders at work: what falls, who is shut in up there, thin decks walked on (Builders.cs)

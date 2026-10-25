@@ -42,7 +42,9 @@ public partial class KindTile : Control
         string room = Kind.Room > 1 ? $", занимает {Kind.Room} {Places(Kind.Room)}" : "";
         string logs = Kind.Logs > 0 ? $" и {Kind.Logs:0.#} м³ брёвен" : "";
         string foot = why == null ? $"Щелчок — нанять за {sim.HireCost(Kind)} золота{logs}{room}. Выходит из цитадели сразу." : $"Нельзя: {why}.";
-        if (!sim.Unlocked(Kind)) foot = $"Нужно знание «{Sim.LoreOf(Kind.Lore)?.Name ?? Kind.Lore}» (вкладка «Знания», страница «Войско»).";
+        // since 25.10.2026 the citadel hires only its own; the rest come out of their buildings (Sim.Town.cs)
+        if (!Sim.CitadelHires(Kind) && !sim.Sandbox) foot = $"Цитадель таких не нанимает: {sim.HiredWhere(Kind)}.";
+        else if (!sim.Unlocked(Kind)) foot = $"Нужно знание «{Sim.LoreOf(Kind.Lore)?.Name ?? Kind.Lore}» (вкладка «Знания»).";
         return $"{Kind.Name} · {sim.HireCost(Kind)} золота{logs}{room}\n{Retinue.About(Kind)}\n{foot}";
     }
 
@@ -52,7 +54,7 @@ public partial class KindTile : Control
     {
         var sim = _m.Sim;
         var r = new Rect2(Vector2.Zero, Size);
-        bool open = sim.Unlocked(Kind), can = sim.CantEnlist(Kind) == null;
+        bool open = sim.Unlocked(Kind) && (Sim.CitadelHires(Kind) || sim.Sandbox), can = sim.CantEnlist(Kind) == null;
         Ornament.Gradient(this, r, new Color("2a2024"), new Color("0e0b0d"));
         float s = Size.X - 2;
         DrawTextureRect(Portraits.Of(Kind, 0, 48), new Rect2(1, 1, s, s), false, open ? Colors.White : new Color(.32f, .3f, .3f));

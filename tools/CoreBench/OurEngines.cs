@@ -16,12 +16,14 @@ static class OurEnginesBench
     public static void Run(Action<string, bool, string> check)
     {
         Console.WriteLine();
-        // the branch: six nodes, a tier 0 to a tier 3, the three engines among them, on the troops' page
+        // the branch: since 25.10.2026 one node, the workshop (Sim.Town.cs), whose levels give the engines and their lores
         var branch = Sim.LoresOn(1).Where(l => l.Branch == "Машины").ToList();
-        bool shaped = branch.Count == 6 && branch.Min(l => l.Tier) == 0 && branch.Max(l => l.Tier) == 3 && Sim.PageBranches[1].Contains("Машины")
-            && Kinds.OurEngines.All(t => Sim.LoreOf(t.Lore)?.Branch == "Машины" && Kinds.Troops.Contains(t) && Kinds.IsEngine(t) && Bodies.Looks(t) == 2 && t.Crew > 0 && t.Logs > 0);
-        check("our engines are learnt in a fifth branch of the troops, «Машины», six deep, and taken on with timber and a crew",
-            shaped, $"{branch.Count} lores: {string.Join(", ", branch.Select(l => $"{l.Key} {l.Tier}"))}");
+        var works = Sim.TownKindOf("workshop");
+        bool shaped = branch.Count == 1 && branch[0].Key == "b_workshop" && Sim.PageBranches[1].Contains("Машины") && works?.Lore == "b_workshop"
+            && Kinds.OurEngines.All(t => works.Hires.Any(h => h.kind == t) && works.Grants1.Concat(works.Grants2).Contains(t.Lore)
+                && Kinds.Troops.Contains(t) && Kinds.IsEngine(t) && Bodies.Looks(t) == 2 && t.Crew > 0 && t.Logs > 0);
+        check("our engines are put together in the workshop, which a branch of the troops, «Машины», opens, and taken on with timber and a crew",
+            shaped, $"{branch.Count} lores: {string.Join(", ", branch.Select(l => $"{l.Key} {l.Tier}"))}; the workshop hires {string.Join(", ", works?.Hires.Select(h => h.kind.Name) ?? new string[0])}");
 
         var mp = new MapParams();
         var w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
@@ -70,21 +72,27 @@ static class OurEnginesBench
             Level();
         }
 
-        // learnt, then taken on at the muster: gold and timber paid, out of the citadel with its crew
+        // not at the citadel since 25.10.2026: assembled at a workshop (Sim.Town.cs), gold and timber paid, out of its
+        // door with its crew (the workshop here as it would stand, built and working)
         sim.Knowledge = 100;
         string before = sim.CantEnlist(Kinds.Mangonel);
-        bool learnt = sim.Learn("mangonels");
+        bool learnt = sim.Learn("b_workshop");
+        var (gx, _, gz) = sim.Nav.Feet(sim.Gate);
+        var shop = new Building { Kind = "workshop", X0 = (int)gx - 18, Z0 = (int)gz + 30, X1 = (int)gx + 18, Z1 = (int)gz + 66, Level = 1, Ready = true };
+        shop.Stock[Kinds.Mangonel.Key] = 1;
+        sim.Buildings.Add(shop);
         sim.Stock.Gold = 1000; sim.Stock[Stockpile.Wood] = 1;
-        string shortWood = sim.CantEnlist(Kinds.Mangonel);
-        sim.Stock[Stockpile.Wood] = 10;
+        string shortWood = sim.CantHireAt(shop, Kinds.Mangonel);
+        sim.Stock[Stockpile.Wood] = 10 * VoxelWorld.PerM3;
         double gold0 = sim.Stock.Gold, wood0 = sim.Stock[Stockpile.Wood];
         int people0 = sim.Household();
-        bool took = sim.Enlist(Kinds.Mangonel);
+        bool took = sim.HireAt(shop, Kinds.Mangonel) != null;
+        sim.Buildings.Remove(shop);
         var mustered = sim.Units.Find(u => u.T == Kinds.Mangonel && !u.Dead);
         int crewOut = mustered == null ? 0 : sim.CrewOf(mustered);
-        check("a stone-thrower is learnt, then taken on at the muster for gold and three cubic metres of timber, and comes out with a crew of two, three places in all",
+        check("a stone-thrower is not taken on at the citadel; the workshop assembles one for gold and three cubic metres of timber, and it comes out with a crew of two, three places in all",
             before != null && learnt && shortWood != null && shortWood.Contains("брёвен") && took && crewOut == 2 && sim.Household() - people0 == 3
-            && Math.Abs(wood0 - sim.Stock[Stockpile.Wood] - Kinds.Mangonel.Logs) < .01 && sim.Stock.Gold < gold0,
+            && Math.Abs(wood0 - sim.Stock[Stockpile.Wood] - Kinds.Mangonel.Logs * VoxelWorld.PerM3) < .01 && sim.Stock.Gold < gold0,
             $"before: «{before}»; short of timber: «{shortWood}»; crew {crewOut}; places +{sim.Household() - people0}; timber {wood0} → {sim.Stock[Stockpile.Wood]}");
         foreach (var u in sim.Units) if (!u.Dead && (u.T == Kinds.Mangonel || u.T == Kinds.Crewman)) Gone(u);
 

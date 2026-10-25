@@ -38,7 +38,9 @@ public sealed class Zone
     public bool Contains(int x, int z) => x >= X0 && x <= X1 && z >= Z0 && z <= Z1;
     public int FloorAt(int x, int z) => Floor == null ? 0 : Floor[(z - Z0) * W + (x - X0)];
 
-    public string Name => Name0(Kind);
+    /// <summary>What a dwelling is called when it is a town building (Sim.Town.cs): «Кузница», «Казарма»…</summary>
+    public string Title = "";
+    public string Name => Title.Length > 0 ? Title : Name0(Kind);
     public static string Name0(int kind) => kind switch { Stockpile.Wood => "Делянка", Stockpile.Stone => "Каменоломня", Shelter => "Убежище", Sanctum => "Святилище", Dwelling => "Жилой дом", _ => "Карьер" };
 }
 

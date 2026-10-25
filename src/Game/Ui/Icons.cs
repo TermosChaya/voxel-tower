@@ -65,6 +65,11 @@ public static class Icons
         ["bunks"] = "bunk-beds", ["trolls"] = "troll", ["giants"] = "giant", ["boulders"] = "boulder-dash",
         ["mangonels"] = "catapult", ["pitchkegs"] = "pitch-keg", ["windlass"] = "winch", ["ballistas"] = "ballista",
         ["heavystones"] = "heavy-stone", ["trebuchets"] = "trebuchet",
+        // the town's buildings, as the lore opens them and the «Город» tab shows them (Sim.Town.cs)
+        ["b_hall"] = "castle", ["b_market"] = "two-coins", ["b_smithy"] = "anvil", ["b_carpentry"] = "axe-in-stump",
+        ["b_masons"] = "trowel", ["b_drill"] = "target-dummy", ["b_infirmary"] = "bunk-beds", ["b_traps"] = "wolf-trap",
+        ["b_barracks"] = "medieval-barracks", ["b_knights"] = "black-knight-helm", ["b_range"] = "bow-arrow", ["b_lab"] = "acid-flask",
+        ["b_kennel"] = "hound", ["b_stables"] = "horse-head", ["b_trolls"] = "troll", ["b_giants"] = "giant", ["b_workshop"] = "trebuchet",
         // the rites
         ["spell.Hand"] = "earth-spit", ["spell.Rift"] = "earth-crack", ["spell.Mire"] = "swamp", ["spell.Skin"] = "rock-golem",
         ["spell.Fall"] = "falling-rocks", ["spell.Quake"] = "quake-stomp", ["spell.FireRain"] = "fire-wave",
@@ -83,7 +88,7 @@ public static class Icons
     /// <summary>The great emblem at the outer end of a branch, by the branch's name.</summary>
     public static Painter BranchMark(string branch) => branch switch
     {
-        "Луки" => Bow, "Кладка" => Of("stone-wall"), "Труд" => Pick, "Дружина" => Sword, "Ловушки" => Of("spiky-pit"),
+        "Хозяйство" => Of("two-coins"), "Ремёсла" => Of("anvil"), "Кладка" => Of("stone-wall"), "Дружина" => Sword, "Ловушки" => Of("spiky-pit"),
         "Пехота" => Of("swordman"), "Стрелки" => Of("bowman"), "Конница" => Of("horse-head"), "Великаны" => Of("footprint"), "Машины" => Of("catapult"),
         "Круг земли" => Of("mountains"), "Круг огня и неба" => Of("fire"), "Круг смерти" => Skull, "Круг воли" => Of("magic-swirl"),
         "Благодать" => Of("angel-wings"),
@@ -91,5 +96,5 @@ public static class Icons
     };
 
     /// <summary>The emblem of a page of the tree, for its tab and its middle.</summary>
-    public static Painter PageMark(int page) => page switch { 0 => Tome, 1 => CrossedSwords, _ => Eye };
+    public static Painter PageMark(int page) => page switch { 0 => Of("castle"), 1 => CrossedSwords, _ => Eye };
 }
