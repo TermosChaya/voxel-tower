@@ -97,12 +97,14 @@ public partial class Main
         sim.Stock[Stockpile.Wood] = 40 * VoxelWorld.PerM3;
         sim.Stock[Stockpile.Earth] = 30 * VoxelWorld.PerM3;
         Stroke St(byte m, int width, int height, bool hollow = false) => new() { Mat = m, Width = width, Height = height, Level = true, Hollow = hollow };
-        const int wx = 676, z0 = 436, z1 = 596, mx = wx - 30;
+        // set out round the citadel where it stood at 819,512 on the old valley: it goes with it
+        int ox = Site.KeepX - 819, oz = Site.KeepZ - 512;
+        int wx = 676 + ox, z0 = 436 + oz, z1 = 596 + oz, mx = wx - 30;
         bool battle = _pose == "battle";
 
         // what was built before: the wall, two towers, stairs up from the yard
         sim.InstantLabour = true;
-        int top = Shapes.LevelTop(w, wx, 516, 40);
+        int top = Shapes.LevelTop(w, wx, 516 + oz, 40);
         sim.DesignateBuild(Shapes.Line(w, s, wx, z0, wx, z1, St(Mat.Stone, 12, 40), top));
         foreach (int tz in new[] { z0 - 8, z1 + 8 })
         {
@@ -111,28 +113,28 @@ public partial class Main
             sim.DesignateBuild(Shapes.Circle(w, s, wx, tz, 11, St(Mat.Rammed, 1, 56), Shapes.LevelTop(w, wx, tz, 56)));
         }
         for (int k = 0; k < 5; k++)
-            sim.DesignateBuild(Shapes.Line(w, s, wx + 10 + k * 8, 540, wx + 10 + k * 8, 552, St(Mat.Stone, 8, 0), top - k * 8));
+            sim.DesignateBuild(Shapes.Line(w, s, wx + 10 + k * 8, 540 + oz, wx + 10 + k * 8, 552 + oz, St(Mat.Stone, 8, 0), top - k * 8));
         // the moat's southern half is dug, and a cut from its end into the nearest pond lets the water in; in battle all of it
         var moat = new Stroke { Width = 16, Height = 20, Dig = true };
-        sim.DesignateRemove(Shapes.Line(w, s, mx, battle ? z0 - 24 : 524, mx, 684, moat, 0));
+        sim.DesignateRemove(Shapes.Line(w, s, mx, battle ? z0 - 24 : 524 + oz, mx, 684 + oz, moat, 0));
         var pond = s.Ponds[0];
         foreach (var p in s.Ponds)
-            if (Brushes.Dist(p.X - mx, p.Z - 684) < Brushes.Dist(pond.X - mx, pond.Z - 684)) pond = p;
-        double pd = Brushes.Dist(mx - pond.X, 684 - pond.Z);
-        int reach = MapGen.Shore(w, s, pond.X, pond.Z, mx - pond.X, 684 - pond.Z) - 6;
-        int cutX = pond.X + (int)((mx - pond.X) / pd * reach), cutZ = pond.Z + (int)((684 - pond.Z) / pd * reach);
-        sim.DesignateRemove(Shapes.Line(w, s, mx, 684, cutX, cutZ, new Stroke { Width = 8, Height = 20, Dig = true }, 0));
+            if (Brushes.Dist(p.X - mx, p.Z - (684 + oz)) < Brushes.Dist(pond.X - mx, pond.Z - (684 + oz))) pond = p;
+        double pd = Brushes.Dist(mx - pond.X, 684 + oz - pond.Z);
+        int reach = MapGen.Shore(w, s, pond.X, pond.Z, mx - pond.X, 684 + oz - pond.Z) - 6;
+        int cutX = pond.X + (int)((mx - pond.X) / pd * reach), cutZ = pond.Z + (int)((684 + oz - pond.Z) / pd * reach);
+        sim.DesignateRemove(Shapes.Line(w, s, mx, 684 + oz, cutX, cutZ, new Stroke { Width = 8, Height = 20, Dig = true }, 0));
         sim.InstantLabour = false;
 
         // what is marked for the pawns now: merlons and a wooden walk on the wall, the rest of the moat, a tree to fell
         for (int z = z0 + 4; z <= z1 - 8; z += 12) sim.DesignateBuild(Shapes.Box(w, s, wx - 6, z, wx - 3, z + 5, St(Mat.Stone, 4, 10), top + 10));
         sim.DesignateBuild(Shapes.Line(w, s, wx + 2, z0, wx + 2, z1, St(Mat.Wood, 6, 3), top + 3));
-        if (!battle) sim.DesignateRemove(Shapes.Line(w, s, mx, z0 - 24, mx, 524, moat, 0));
-        var (treeX, treeZ) = Nearest(691, 670, 80, (x, z) => Mat.IsTrunk(w.Get(x, w.SurfAt(x, z) + 2, z)));
+        if (!battle) sim.DesignateRemove(Shapes.Line(w, s, mx, z0 - 24, mx, 524 + oz, moat, 0));
+        var (treeX, treeZ) = Nearest(691 + ox, 670 + oz, 80, (x, z) => Mat.IsTrunk(w.Get(x, w.SurfAt(x, z) + 2, z)));
         sim.DesignateRemove(Shapes.Tree(w, treeX, w.SurfAt(treeX, treeZ) + 4, treeZ));
         // a grove and a quarry set aside: the workers turn to them whenever the marked work runs out
         sim.AddZone(treeX + 20, treeZ - 40, treeX + 110, treeZ + 40, Stockpile.Wood, 0);
-        var (rx, rz) = Nearest(705, 475, 60, (x, z) => w.Get(x, w.SurfAt(x, z) - 1, z) == Mat.Rock && w.SurfAt(x, z) > s.HTop[z * w.SX + x] + 3);
+        var (rx, rz) = Nearest(705 + ox, 475 + oz, 60, (x, z) => w.Get(x, w.SurfAt(x, z) - 1, z) == Mat.Rock && w.SurfAt(x, z) > s.HTop[z * w.SX + x] + 3);
         sim.AddZone(rx - 16, rz - 16, rx + 16, rz + 16, Stockpile.Stone, 16);
 
         // more hands, the archers up on the wall, deer grazing out of the way
@@ -142,14 +144,14 @@ public partial class Main
         var swords = new List<Unit>();
         foreach (var u in sim.Units) if (u.T == Kinds.Swordsman) swords.Add(u);
         swords.Add(sim.Spawn(Kinds.Swordsman, sim.Gate));
-        int walk = sim.NearestStand(wx, 500, 4), walk2 = sim.NearestStand(wx, 560, 4);
+        int walk = sim.NearestStand(wx, 500 + oz, 4), walk2 = sim.NearestStand(wx, 560 + oz, 4);
         if (walk >= 0) sim.Command(archers.GetRange(0, 1), walk);
         if (walk2 >= 0) sim.Command(archers.GetRange(1, archers.Count - 1), walk2);
-        int yard = sim.NearestStand(wx + 30, 500, 4);
+        int yard = sim.NearestStand(wx + 30, 500 + oz, 4);
         if (yard >= 0) sim.Command(swords, yard);
         foreach (var (dx, dz) in new[] { (0, 0), (14, 9), (-10, 16), (6, -14) })
         {
-            var deer = sim.Spawn(Kinds.Deer, sim.NearestStand(wx + 70 + dx, 770 + dz, 3));
+            var deer = sim.Spawn(Kinds.Deer, sim.NearestStand(wx + 70 + dx, 770 + oz + dz, 3));
             deer.Home = deer.Cell;
         }
         Advance(battle ? 30 : 55);
@@ -161,21 +163,21 @@ public partial class Main
             sim.Step(.05f);
             sim.Waves.Countdown = 1e9;
             sim.HordeStock[Stockpile.Wood] = 24 * VoxelWorld.PerM3;
-            foreach (var (t, x, z) in new[] { (Kinds.Sapper, wx - 64, 492), (Kinds.Sapper, wx - 62, 532), (Kinds.Sapper, wx - 66, 566), (Kinds.Goblin, wx - 70, 510),
-                (Kinds.Goblin, wx - 74, 548), (Kinds.Orc, wx - 80, 520), (Kinds.Orc, wx - 84, 500), (Kinds.Troll, wx - 100, 530) })
+            foreach (var (t, x, z) in new[] { (Kinds.Sapper, wx - 64, 492 + oz), (Kinds.Sapper, wx - 62, 532 + oz), (Kinds.Sapper, wx - 66, 566 + oz), (Kinds.Goblin, wx - 70, 510 + oz),
+                (Kinds.Goblin, wx - 74, 548 + oz), (Kinds.Orc, wx - 80, 520 + oz), (Kinds.Orc, wx - 84, 500 + oz), (Kinds.Troll, wx - 100, 530 + oz) })
             {
                 int c = sim.NearestStand(x, z, t.Move.Height);
                 if (c >= 0) sim.Spawn(t, c);
             }
             sim.ComputeFields();
             Advance(16);
-            Rig.Set(World.WX(wx - 22), World.WZ(520), -.95f, .62f, 1.3f, snap: true);
+            Rig.Set(World.WX(wx - 22), World.WZ(520 + oz), -.95f, .62f, 1.3f, snap: true);
         }
-        else if (_pose == "close") Rig.Set(World.WX(wx - 22), World.WZ(526), -.75f, .55f, 3.4f, snap: true);
-        else Rig.Set(World.WX(wx + 4), World.WZ(600), -.7f, .62f, 1.1f, snap: true);
+        else if (_pose == "close") Rig.Set(World.WX(wx - 22), World.WZ(526 + oz), -.75f, .55f, 3.4f, snap: true);
+        else Rig.Set(World.WX(wx + 4), World.WZ(600 + oz), -.7f, .62f, 1.1f, snap: true);
 
         AddBlueprint(Blueprint.Capture(w, wx - 16, z1 - 6, wx + 16, z1 + 26, NextBlueprintId++, "Круглая башня"), save: false);
-        AddBlueprint(Blueprint.Capture(w, wx - 7, 500, wx + 7, 530, NextBlueprintId++, "Пролёт стены"), save: false);
+        AddBlueprint(Blueprint.Capture(w, wx - 7, 500 + oz, wx + 7, 530 + oz, NextBlueprintId++, "Пролёт стены"), save: false);
         Hud.Refresh();
         Marks.Flush();
 

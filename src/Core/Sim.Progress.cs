@@ -144,7 +144,7 @@ public sealed partial class Sim
             {
                 var m = MineOf(2);
                 if (m == null || m.Holder == Holder.Ours) return null;
-                return new Errand { Key = key, Main = main, Text = $"Займите {m.Name.ToLowerInvariant()} далеко на западе", Gold = 30, Knowledge = 3 };
+                return new Errand { Key = key, Main = main, Text = $"Займите {m.Name.ToLowerInvariant()} далеко {EdgeBy(HomeEdge)}", Gold = 30, Knowledge = 3 };
             }
             case "stone":
                 return new Errand { Key = key, Main = main, From = Stock[Stockpile.Stone], Text = "Добудьте 6 м³ камня", Knowledge = 2 };

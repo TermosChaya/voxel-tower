@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace VoxelTower.Core;
@@ -7,6 +8,8 @@ public sealed class MapParams
 {
     /// <summary>Voxels; 8 make a metre. The default valley is 128 × 24 × 128 m.</summary>
     public int SizeX = 1024, SizeY = 192, SizeZ = 1024;
+    /// <summary>The game's valley's box across: the hexagon in it 166 m between its straight sides, 191 m point to point.</summary>
+    public const int GameSize = 1536;
     public uint Seed = 7;
     /// <summary>Knobs for the look against the triangle count.</summary>
     public double TreeDensity = .7, TuftChance = .015, Roughness = 2.5;
@@ -22,6 +25,13 @@ public sealed class MapParams
     /// hexagons; the core's default is the old box, on which the bench's checks of the mechanics were set out.
     /// </summary>
     public bool Hexagon;
+    /// <summary>
+    /// The six sides as the map of valleys gives them (seeds, river and road crossings), so the valley meets its
+    /// neighbours; null for a valley made by itself, whose sides are made from its own seed.
+    /// </summary>
+    public HexEdge[] Edges;
+    /// <summary>The side of the hexagon the horde comes in by (<see cref="Hex.West"/> and the others).</summary>
+    public int EntrySide = Hex.West;
 }
 
 /// <summary>
@@ -33,7 +43,7 @@ public sealed class MapParams
 /// citadel stands on the plateau towards its eastern side. The kind of valley (<see cref="Valleys"/>) sets how thick the
 /// woods are, how rocky and how wet the ground, and which named places it has.
 /// </summary>
-public static class MapGen
+public static partial class MapGen
 {
     // terrain kinds per column
     const byte Low = 0, Plateau = 1, Rim = 2, Ramp = 3, Road = 4, Knoll = 5, River = 6, Pond = 7, Bank = 8;
@@ -57,9 +67,11 @@ public static class MapGen
 
     public static Site Generate(VoxelWorld w, MapParams p)
     {
+        // a hexagon is made by itself, procedurally (MapGen.Relief.cs); the box keeps the valley the bench was set out on
+        if (p.Hexagon) return GenerateHex(w, p);
         int SX = w.SX, SZ = w.SZ;
         uint seed = p.Seed;
-        var site = new Site { HTop = new int[SX * SZ], SpawnStrip = 24, KeepR = 24, KeepX = (int)(SX * .8), KeepZ = SZ / 2, Design = new VoxelWorld(SX, w.SY, SZ) };
+        var site = new Site { HTop = new int[SX * SZ], SpawnStrip = 24, KeepR = 24, KeepX = (int)(SX * .8), KeepZ = SZ / 2, Design = new VoxelWorld(SX, w.SY, SZ), SX = SX, SZ = SZ };
         site.Kind = p.Kind; site.Classic = p.Classic;
         var ground = Valleys.GroundOf(p.Kind);
         var places = Valleys.PlacesOf(p.Kind, p.Classic);
@@ -285,6 +297,7 @@ public static class MapGen
         bool NearKeep(int x, int z, int margin) => Brushes.Dist(x - site.KeepX, z - site.KeepZ) < site.KeepR + margin;
         // where water stands, for whatever lays a pool of its own
         site.WaterTop = water;
+        AfterRelief(w, site, p, new Relief { SX = SX, SZ = SZ, Kind = kind, Soil = soil, Water = water });
 
         // the named places, before the rocks and trees: mines worth holding, and ruins of what stood here before
         (int x, int z) Free(int x, int z, int r)
@@ -440,6 +453,26 @@ public static class MapGen
 
         site.RiverMid = new float[SZ]; site.RiverHalfWidth = new float[SZ];
         for (int z = 0; z < SZ; z++) { site.RiverMid[z] = (float)RiverX(z); site.RiverHalfWidth[z] = (float)RiverHalf(z); }
+        // the river and the old road as lines, carried on out of the box the way the far land always laid them: the river
+        // north and south the way it was going and then winding, the road on west
+        site.River = new List<(float X, float Z, float Half)>();
+        for (int z = -6400; z <= SZ + 6400; z += 32)
+        {
+            bool north = z < 0;
+            int edge = north ? 0 : SZ - 1, inner = north ? 24 : SZ - 25;
+            float x, half;
+            if (z >= 0 && z < SZ) { x = site.RiverMid[z]; half = site.RiverHalfWidth[z]; }
+            else
+            {
+                float slope = Math.Clamp((site.RiverMid[edge] - site.RiverMid[inner]) / 24f, -.6f, .6f), t = north ? -z : z - SZ;
+                half = site.RiverHalfWidth[edge] + t * .004f;
+                x = site.RiverMid[edge] + slope * 300 * (1 - MathF.Exp(-t / 300)) + 80 * MathF.Sin(t * .0032f) * (float)Site.Smooth01(t / 700);
+            }
+            site.River.Add((x, z, half));
+        }
+        var oldRoad = new List<(float X, float Z)>();
+        for (double x = -6400; x <= roadEnd; x += 16) oldRoad.Add(((float)x, (float)(x < 0 ? SZ * .56 + Math.Sin(x * .018) * 18 : RoadZ(x))));
+        site.Roads.Add(oldRoad);
         site.KeepBase = WorldGen.Keep(w, site);
         int gx2 = site.KeepX - site.KeepR - 7;
         foreach (int dz in new[] { -10, 10 }) WorldGen.Brazier(w, site, gx2, w.SurfAt(gx2, site.KeepZ + dz), site.KeepZ + dz, post: 4);

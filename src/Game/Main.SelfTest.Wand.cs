@@ -25,7 +25,24 @@ public partial class Main
             await Frames(2);
         }
         var w = World; var sim = Sim;
-        int wx = Site.KeepX - Site.KeepR - 300, kz = Site.KeepZ - 60;
+        // (on the levellest dry ground thereabouts, wherever the valley has it: a hump under the wall would part a
+        // log or two of the walk from the rest)
+        int wx0 = Site.KeepX - Site.KeepR - 300, kz0 = Site.KeepZ - 60, wx = wx0, kz = kz0, best = int.MaxValue;
+        for (int cz = kz0 - 96; cz <= kz0 + 96; cz += 16)
+            for (int cx = wx0 - 96; cx <= wx0 + 96; cx += 16)
+            {
+                int lo = int.MaxValue, hi = int.MinValue;
+                bool wet = false;
+                for (int z = cz - 32; z <= cz + 32; z += 4)
+                    for (int x = cx - 12; x <= cx + 12; x += 4)
+                    {
+                        int y = w.SurfAt(x, z);
+                        wet |= !w.OnLand(x, z) || w.Get(x, y, z) == Mat.Water;
+                        lo = Math.Min(lo, y); hi = Math.Max(hi, y);
+                    }
+                int score = (hi - lo) * 64 + Math.Abs(cx - wx0) / 8 + Math.Abs(cz - kz0) / 8;
+                if (!wet && score < best) (best, wx, kz) = (score, cx, cz);
+            }
         ClearTrees(wx - 40, kz - 40, wx + 40, kz + 40);
         int top = Shapes.LevelTop(w, wx, kz, 24);
         sim.InstantLabour = true;

@@ -50,7 +50,8 @@ public partial class Main
         for (int z = dz0; z < dz0 + 16; z++) for (int x = dx0 - 8; x < dx0 + 32; x++) for (int y = dg - 16; y < dg + 16; y++)
             w.Set(x, y, z, y == dg - 1 ? Mat.Wood : y < dg - 1 && (x < dx0 + 4 || x >= dx0 + 20) ? Mat.Soil : Mat.Air);
         Advance(.2);
-        int cell = sim.Nav.CellOf(dx0 + 12, dg + 1, dz0 + 8);
+        // (a deck in the upper half of its cell is ground to the cell over it, in the lower half to its own)
+        int cell = sim.Nav.CellOf(dx0 + 12, ((dg - 1) & 7) >= 4 ? dg + 7 : dg + 1, dz0 + 8);
         bool ground = sim.Nav.Stand(sim.Nav.I(cell), sim.Nav.Y(cell), sim.Nav.K(cell), 2);
         string Cell(int c) => $"y{sim.Nav.Y(c)} fill {sim.Nav.Fill[c]} deck {sim.Nav.Deck[c]} floor {sim.Nav.Floor[c] - dg}";
         check("a deck of planks a voxel thick over a ditch is ground to stand on", ground,

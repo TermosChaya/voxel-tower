@@ -132,7 +132,7 @@ public static class Retinue
             return "бьёт рабочего, чтобы связать";
         if (u.Team == Team.Horde && u.T == Kinds.Thief && u.State == UnitState.Walk)
             return "крадётся к цитадели";
-        if (u.Captor != null) return u.Captor.Team == Team.Horde ? "в плену: его уводят на запад" : u.Why != "" ? u.Why : "его ведут к алтарю";
+        if (u.Captor != null) return u.Captor.Team == Team.Horde ? $"в плену: его уводят {Sim.EdgeToward(sim.HomeEdge)}" : u.Why != "" ? u.Why : "его ведут к алтарю";
         if (u.Rite != null && u.Why != "") return u.Why;
         if (u.Captive is { Team: Team.Horde }) return "ведёт пленного в цитадель";
         if (u.Fetching != null) return "идёт за пленным";
@@ -311,8 +311,9 @@ public partial class HordeInfo : VBoxContainer
     {
         if (b.Target != null) return "на " + b.Target.Name.ToLowerInvariant();
         // one come in by another side than the west: by that side
-        if (b.Edge >= 0 && b.Edge != Sim.WestEdge)
-            return b.State == BandState.Coming ? "войдёт " + Sim.EdgeName(b.Edge) : b.State == BandState.Storm ? "на штурме" : "пришла " + Sim.EdgeName(b.Edge);
+        int edge = b.Edge >= 0 ? b.Edge : m.Sim.HomeEdge;
+        if (edge != Sim.WestEdge)
+            return b.State == BandState.Coming ? "войдёт " + Sim.EdgeName(edge) : b.State == BandState.Storm ? "на штурме" : "пришла " + Sim.EdgeName(edge);
         int z = b.Leader is { Dead: false } l ? (int)l.Z : b.Entry >= 0 ? m.Sim.Nav.K(b.Entry) << NavGrid.Shift : m.World.SZ / 2;
         float t = z / (float)m.World.SZ;
         string side = t < .33f ? "с северо-запада" : t > .67f ? "с юго-запада" : "с запада";

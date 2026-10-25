@@ -540,7 +540,9 @@ public partial class Main
     /// <summary>Points the cursor for the screenshot: a blueprint copy beside the fort, or a moat half drawn.</summary>
     void PoseDemo()
     {
-        Vector2 At(int x, int z) => Rig.Cam.UnprojectPosition(new Vector3(World.WX(x + .5f), World.WY(World.SurfAt(x, z)), World.WZ(z + .5f)));
+        // (set out round the citadel where it stood at 819,512 on the old valley: it goes with it)
+        int ox = Site.KeepX - 819, oz = Site.KeepZ - 512;
+        Vector2 At(int x, int z) => Rig.Cam.UnprojectPosition(new Vector3(World.WX(x + ox + .5f), World.WY(World.SurfAt(x + ox, z + oz)), World.WZ(z + oz + .5f)));
         if (_pose == "line")
         {
             var a = At(612, 470); var b = At(616, 600);
@@ -550,7 +552,7 @@ public partial class Main
             return;
         }
         if (_pose is "battle" or "close" or "flood" or "troops") return;
-        int x = 720, z = 640;
+        int x = 720 + ox, z = 640 + oz;
         Tools.PointAt(new Vector3(World.WX(x), World.WY(World.SurfAt(x, z)), World.WZ(z)));
     }
 }

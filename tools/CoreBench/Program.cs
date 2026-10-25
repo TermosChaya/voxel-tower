@@ -311,6 +311,8 @@ if (args.Length == 0 || args[0] == "--seeds")
         Check($"seed {seed}: a whole valley", ss.KeepBase > 70 && open == 0 && mines == 3 && ruins == 6 && powers == 3 && ss.Ponds.Count == 2,
             $"keep base {ss.KeepBase}, {open} open water faces, {mines} mines, {ruins} ruins, {powers} places of power, {ss.Ponds.Count} ponds");
     }
+    // the game's hexagons, of other kinds, the horde from other sides (HexBench.cs)
+    HexBench.Seeds(Check);
 }
 
 // ---- the living valley: navigation, labour, the horde

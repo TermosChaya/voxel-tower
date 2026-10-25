@@ -415,18 +415,19 @@ public partial class WorldView : Node3D
     {
         int W = _w.SX / Sim.FlowPatch, H = _w.SZ / Sim.FlowPatch;
         _riverFlow = new float[W * H * 2];
-        if (site.RiverMid != null && site.WaterTop != null)
+        if (site.River != null && site.WaterTop != null)
             for (int j = 0; j < H; j++)
                 for (int i = 0; i < W; i++)
                 {
                     int x = i * Sim.FlowPatch + 2, z = j * Sim.FlowPatch + 2;
                     if (site.WaterTop[z * _w.SX + x] == 0) continue;
-                    float half = site.RiverHalfWidth[z], off = Math.Abs(x - site.RiverMid[z]) / (half + 6);
-                    if (off > 1.3f) continue;   // a pond: still
-                    float d = (site.RiverMid[Math.Min(_w.SZ - 1, z + 3)] - site.RiverMid[Math.Max(0, z - 3)]) / 6f;
-                    float n = MathF.Sqrt(1 + d * d), speed = 64f / half * (1 - .6f * Math.Min(1, off * off));
-                    _riverFlow[(j * W + i) * 2] = d / n * speed;
-                    _riverFlow[(j * W + i) * 2 + 1] = speed / n;
+                    // the river's course, wherever it winds: along it, quicker where it is narrow
+                    site.RiverAt(x, z, out float d, out float half, out float dx, out float dz);
+                    float off = d / (half + 6);
+                    if (off > 1.3f) continue;   // a pond or a lake: still
+                    float speed = 64f / half * (1 - .6f * Math.Min(1, off * off));
+                    _riverFlow[(j * W + i) * 2] = dx * speed;
+                    _riverFlow[(j * W + i) * 2 + 1] = dz * speed;
                 }
         _flowBytes = new byte[W * H * 2];
         FillFlow(null, 0);

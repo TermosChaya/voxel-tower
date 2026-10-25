@@ -90,9 +90,9 @@ public sealed partial class Sim
     {
         for (int tries = 0; tries < 12; tries++)
         {
-            // in by the western edge, along its straight side
-            int z = Site.Hex == null ? 24 + Rng.Next(World.SZ - 48) : Site.WestZ0 + Rng.Next(Math.Max(1, Site.WestZ1 - Site.WestZ0));
-            int c = NearestStand(Site.EntryX, z, t.Move.Height);
+            // in by the side it comes from (the western edge of the box; on a hexagon, any side of it)
+            var (ex, ez) = Site.Hex == null ? (Site.EntryX, 24 + Rng.Next(World.SZ - 48)) : Site.Entry(Rng.NextDouble());
+            int c = NearestStand(ex, ez, t.Move.Height);
             if (c < 0) continue;
             var u = Spawn(t, c);
             SendRaid(u);
@@ -247,10 +247,10 @@ public sealed partial class Sim
     void Retreat(Unit u, float dt)
     {
         u.Raid = null;
-        // one come in by another side than the west goes out by where it came in
-        int home = u.Band is { Edge: >= 0 } hb && hb.Edge != WestEdge && hb.Entry >= 0 ? hb.Entry : -1;
+        // one come in by another side than the horde's own goes out by where it came in
+        int home = u.Band is { Edge: >= 0 } hb && hb.Edge != HomeEdge && hb.Entry >= 0 ? hb.Entry : -1;
         var (hx, _, hz) = home >= 0 ? Nav.Feet(home) : (0f, 0f, 0f);
-        bool gone = home >= 0 ? (u.X - hx) * (u.X - hx) + (u.Z - hz) * (u.Z - hz) < 24 * 24 : u.X < Site.SpawnStrip;
+        bool gone = home >= 0 ? (u.X - hx) * (u.X - hx) + (u.Z - hz) * (u.Z - hz) < 24 * 24 : Site.InStrip(u.X, u.Z);
         if (gone)
         {
             if (u.T == Kinds.Thief) ThiefGone(u);
@@ -269,7 +269,8 @@ public sealed partial class Sim
             u.State = UnitState.Idle;
             if (Time < u.NextSearch) return;
             u.NextSearch = Time + 2;
-            int c = home >= 0 ? home : NearestStand(Site.EntryX, Site.EntryZ((int)u.Z), u.T.Move.Height);
+            var (ox, oz) = Site.EntryNear(u.X, u.Z);
+            int c = home >= 0 ? home : NearestStand(ox, oz, u.T.Move.Height);
             if (c < 0 || !GoTo(u, c, adjacent: true, budget: 40000)) return;
         }
         Walk(u, dt);

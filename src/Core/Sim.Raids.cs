@@ -263,7 +263,7 @@ public sealed class Raids
         s.Recall();
         string intelSaid = Intel >= .995 ? "" : $" Разведать вас она успела на {Intel * 100:0} %.";
         string again = back == 0 ? "" : back == 1 ? " С ними и один из бежавших в прошлый раз." : $" С ними и бежавшие в прошлый раз: {back}.";
-        s.Say($"Рог! {s.Source.Title(Count)}: {total} налётчиков, {Bands(bands.Count)}, идут {Sim.FromEdge(bands)}.{again}{intelSaid}", 2);
+        s.Say($"Рог! {s.Source.Title(Count)}: {total} налётчиков, {Bands(bands.Count)}, идут {Sim.FromEdge(bands, s.HomeEdge)}.{again}{intelSaid}", 2);
     }
 
     /// <summary>More bands join the raid in the valley (one more army walked in): they come after those still to come.</summary>
@@ -515,10 +515,10 @@ public sealed partial class Sim
     }
 
     /// <summary>Which way they come in, for the horn: «с запада», or from several sides.</summary>
-    internal static string FromEdge(List<Warband> bands)
+    internal static string FromEdge(List<Warband> bands, int home)
     {
         var edges = new HashSet<int>();
-        foreach (var b in bands) edges.Add(b.Edge < 0 ? WestEdge : b.Edge);
+        foreach (var b in bands) edges.Add(b.Edge < 0 ? home : b.Edge);
         if (edges.Count != 1) return "с разных сторон";
         foreach (int e in edges) return EdgeFrom[e];
         return "с запада";
@@ -526,6 +526,8 @@ public sealed partial class Sim
 
     /// <summary>The land's sides, from the northern point round by the east; the western is the fifth.</summary>
     public const int WestEdge = 4;
+    /// <summary>The side the siege's own raids come in by: the valley's (<see cref="Site.EntrySide"/>); on the box, the west.</summary>
+    public int HomeEdge => Site.Hex == null ? WestEdge : Site.EntrySide;
     /// <summary>«с востока»: where a side of the land is, as the horn and the horde's tab say it.</summary>
     public static string EdgeName(int edge) => EdgeFrom[((edge < 0 ? WestEdge : edge) % 6 + 6) % 6];
 
@@ -541,6 +543,12 @@ public sealed partial class Sim
         return line;
     }
     static readonly string[] EdgeFrom = { "с северо-востока", "с востока", "с юго-востока", "с юго-запада", "с запада", "с северо-запада" };
+    /// <summary>«на восток»: the way out to a side of the land.</summary>
+    public static string EdgeToward(int edge) => EdgeTo[((edge < 0 ? WestEdge : edge) % 6 + 6) % 6];
+    /// <summary>«на востоке»: out by a side of the land.</summary>
+    public static string EdgeBy(int edge) => EdgeAt[((edge < 0 ? WestEdge : edge) % 6 + 6) % 6];
+    static readonly string[] EdgeTo = { "на северо-восток", "на восток", "на юго-восток", "на юго-запад", "на запад", "на северо-запад" };
+    static readonly string[] EdgeAt = { "на северо-востоке", "на востоке", "на юго-востоке", "на юго-западе", "на западе", "на северо-западе" };
 
     // ------------------------------------------------------------ the save
 

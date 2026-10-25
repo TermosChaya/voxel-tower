@@ -37,7 +37,8 @@ public partial class Main
         Unit First(UnitType t) => Sim.Units.Find(u => !u.Dead && u.Team == Team.Player && u.T == t);
         void Choose(params Unit[] us) { Selected.Clear(); foreach (var u in us) if (u != null) Selected.Add(u); Hud.OnSelectionChanged(); }
         int kx = Site.KeepX, kz = Site.KeepZ;
-        var tree = Nearest(kx - 90, kz + 40, 120, (x, z) => Mat.IsTrunk(World.Get(x, World.SurfAt(x, z) + 2, z)) && (x - kx) * (x - kx) + (z - kz) * (z - kz) > 90 * 90);
+        // (the nearest tree out of the citadel's clearing, on the plateau or under it, wherever the valley grew one)
+        var tree = Nearest(kx - 90, kz + 40, 260, (x, z) => Mat.IsTrunk(World.Get(x, World.SurfAt(x, z) + 2, z)) && (x - kx) * (x - kx) + (z - kz) * (z - kz) > 90 * 90);
 
         await Frames(10);
         var done = new HashSet<string>();
@@ -92,9 +93,15 @@ public partial class Main
                 {
                     if (Tools.Tool != Tool.Gather) Tools.SetTool(Tool.Gather);
                     Tools.SetMaterial(Mat.Plate);
-                    var o = Site.Outcrops.Find(c => Sim.OreLeft(c.X, c.Z, c.R) >= 40);
-                    await Look(o.X, o.Z);
-                    await Drag((o.X - 16, o.Z - 16), (o.X + 16, o.Z + 16));
+                    // (an outcrop clear of the plots drawn before, wherever the valley put them; the next if one will not take)
+                    foreach (var o in Site.Outcrops)
+                    {
+                        if (Sim.OreLeft(o.X, o.Z, o.R) < 40 || Sim.Zones.Exists(z => z.X0 < o.X + 24 && z.X1 > o.X - 24 && z.Z0 < o.Z + 24 && z.Z1 > o.Z - 24)) continue;
+                        await Look(o.X, o.Z);
+                        await Drag((o.X - 16, o.Z - 16), (o.X + 16, o.Z + 16));
+                        GD.Print($"[tutorial]      ore: the outcrop at {o.X},{o.Z}, «{Tools.HoverText}»");
+                        if (Sim.Zones.Exists(z => z.Kind == Stockpile.Metal)) break;
+                    }
                     break;
                 }
                 case "Убрать кисть": Tools.SetTool(Tool.None); break;

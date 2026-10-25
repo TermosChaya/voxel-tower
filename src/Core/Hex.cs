@@ -85,4 +85,57 @@ public sealed class Hex
     public float WestX => CX - HalfW;
     public float WestZ0 => CZ - R / 2;
     public float WestZ1 => CZ + R / 2;
+
+    // ------------------------------------------------------------ the sides, for the map of valleys to come
+
+    /// <summary>The sides, each from one corner to the next round by the east: north-east, east, south-east, south-west,
+    /// west, north-west. A neighbour on the map shares a side with the valley: its side (i + 3) % 6, run the other way.</summary>
+    public const int NorthEast = 0, East = 1, SouthEast = 2, SouthWest = 3, West = 4, NorthWest = 5;
+
+    /// <summary>A side's two ends (from the corner it begins at to the one it ends at).</summary>
+    public ((float x, float z) a, (float x, float z) b) Side(int i)
+    {
+        var c = Corners();
+        return (c[i % 6], c[(i + 1) % 6]);
+    }
+
+    /// <summary>The point a part t (0…1) of the way along a side, moved in from it toward the middle by so many voxels.</summary>
+    public (float x, float z) SidePoint(int i, float t, float inward = 0)
+    {
+        var (a, b) = Side(i);
+        var (nx, nz) = Inward(i);
+        return (a.x + (b.x - a.x) * t + nx * inward, a.z + (b.z - a.z) * t + nz * inward);
+    }
+
+    /// <summary>The way in from a side, square to it: toward the middle.</summary>
+    public (float x, float z) Inward(int i)
+    {
+        var (a, b) = Side(i);
+        float mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, dx = CX - mx, dz = CZ - mz, l = MathF.Sqrt(dx * dx + dz * dz);
+        return (dx / l, dz / l);
+    }
+
+    /// <summary>
+    /// How far a point is in from a side's line (negative beyond it), and how far along the side it lies (t, 0 at its
+    /// first end, 1 at its last; outside 0…1 past its ends).
+    /// </summary>
+    public (float d, float t) FromSide(int i, float x, float z)
+    {
+        var (a, b) = Side(i);
+        var (nx, nz) = Inward(i);
+        float ex = b.x - a.x, ez = b.z - a.z;
+        return ((x - a.x) * nx + (z - a.z) * nz, ((x - a.x) * ex + (z - a.z) * ez) / (ex * ex + ez * ez));
+    }
+
+    /// <summary>The side a point is nearest to (the one whose line it is least far in from).</summary>
+    public int NearestSide(float x, float z)
+    {
+        int best = 0; float bd = float.MaxValue;
+        for (int i = 0; i < 6; i++)
+        {
+            float d = FromSide(i, x, z).d;
+            if (d < bd) { bd = d; best = i; }
+        }
+        return best;
+    }
 }

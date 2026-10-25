@@ -163,6 +163,10 @@ public partial class Main : Node3D
     /// place it always had (--classic=0 takes them away), and whether the land is a hexagon (--square for the old box).</summary>
     ValleyKind _valley = ValleyKind.First;
     bool _classic = true, _hexagon = true;
+    /// <summary>The world's box across (voxels) when not the default (--size=1536; a multiple of 32).</summary>
+    int _size;
+    /// <summary>The side of the hexagon the horde comes by (--entry=0…5: north-east, east, south-east, south-west, west, north-west).</summary>
+    int _entry = Hex.West;
     string _pose = "";
     /// <summary>How long the staged siege runs before the screenshot (--at=seconds).</summary>
     double _poseSeconds = 14;
@@ -187,6 +191,8 @@ public partial class Main : Node3D
             else if (a.StartsWith("--valley=") && Valleys.Parse(a["--valley=".Length..]) is { } vk) _valley = vk;
             else if (a == "--classic=0") _classic = false;
             else if (a == "--square") _hexagon = false;
+            else if (a.StartsWith("--size=") && int.TryParse(a["--size=".Length..], out int sz) && sz >= 256) _size = sz / 32 * 32;
+            else if (a.StartsWith("--entry=") && int.TryParse(a["--entry=".Length..], out int es) && es is >= 0 and < 6) _entry = es;
             else if (a.StartsWith("--look=") && int.TryParse(a["--look=".Length..], out int lk)) _look = lk;
             else if (a.StartsWith("--wave=") && double.TryParse(a["--wave=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double wa)) _waveAt = wa;
             else if (a.StartsWith("--day=") && double.TryParse(a["--day=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double da)) _dayAt = da;
@@ -241,13 +247,16 @@ public partial class Main : Node3D
         if (PendingLoad != null)
         {
             _loadedFrom = PendingLoad;
-            try { save = new SaveReader(System.IO.File.OpenRead(PendingLoad)); _seed = save.Seed; _valley = save.Kind; _classic = save.Classic; _hexagon = save.Hexagon; }
+            try { save = new SaveReader(System.IO.File.OpenRead(PendingLoad)); _seed = save.Seed; _valley = save.Kind; _classic = save.Classic; _hexagon = save.Hexagon; _size = save.SizeX; _entry = save.EntrySide; }
             catch (Exception e) { GD.PrintErr($"[voxel-tower] could not read {PendingLoad}: {e.Message}"); save?.Dispose(); save = null; }
             PendingLoad = null;
             _demo = _selfTest = false;
         }
         var sw = Stopwatch.StartNew();
-        var mp = new MapParams { Seed = _seed, Kind = _valley, Classic = _classic, Hexagon = _hexagon };
+        var mp = new MapParams { Seed = _seed, Kind = _valley, Classic = _classic, Hexagon = _hexagon, EntrySide = _entry };
+        // the game's valley: a hexagon in a box a half again as wide as the bench's (192 m from point to point)
+        if (_hexagon) mp.SizeX = mp.SizeZ = MapParams.GameSize;
+        if (_size > 0) mp.SizeX = mp.SizeZ = _size;
         World = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         Site = MapGen.Generate(World, mp);
         if (_demo && _pose == "trees") Grove();
@@ -295,6 +304,8 @@ public partial class Main : Node3D
 
         Rig = new CameraRig { BottomInset = Hud.BottomBand, TopInset = Hud.TopBand };
         Rig.Bounds = new Rect2(World.OriginX, World.OriginZ, World.SX * VoxelWorld.Vox, World.SZ * VoxelWorld.Vox);
+        // out far enough to see the whole valley however wide it is
+        Rig.MinZoom = .28f * 1024f / Math.Max(World.SX, World.SZ);
         AddChild(Rig);
         Rig.HomeAt(World.WX(Site.KeepX - Site.KeepR - 50), World.WZ(Site.KeepZ + 14));
         atmo.Follow = Rig;
@@ -645,7 +656,7 @@ public partial class Main : Node3D
             Hud.Log("Что делать дальше, написано слева в «Поручениях». {Help} — все клавиши.", Hud.Kind.Ok);
             return;
         }
-        Hud.Log("Орда придёт с запада через 10 минут.", Hud.Kind.Warn);
+        Hud.Log($"Орда придёт {Sim.EdgeName(Sim.HomeEdge)} через 10 минут.", Hud.Kind.Warn);
     }
 
     /// <summary>A commander with the household at the start of a siege of one's own, to try it (the «Командир в начале» setting).</summary>

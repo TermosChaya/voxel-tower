@@ -37,9 +37,25 @@ public partial class Main
         async Task Click(int x, int z) { var p = Screen(x, z); Move(p); await Frames(3); Button(p, true); Button(p, false); await Frames(2); }
         int Removals() => sim.Orders.Total - sim.Orders.BuildTotal;
 
-        // a field of level turf, bare of trees
-        int fx = Site.KeepX - Site.KeepR - 420, fz = Site.KeepZ + 120, g = w.SurfAt(fx, fz);
-        ClearTrees(fx - 70, fz - 50, fx + 70, fz + 50);
+        // a field of level turf, bare of trees: the most open lowland west of the citadel, clear of the river and of
+        // the hills and woods that would stand between it and the camera, wherever the valley has them
+        int fx0 = Site.KeepX - Site.KeepR - 420, fz0 = Site.KeepZ + 120, fx = fx0, fz = fz0, best = int.MaxValue;
+        for (int cz = Site.KeepZ - 200; cz <= Site.KeepZ + 260; cz += 16)
+            for (int cx = Site.KeepX - Site.KeepR - 460; cx <= Site.KeepX - Site.KeepR - 260; cx += 16)
+            {
+                int h0 = w.SurfAt(cx, cz), rough = 0;
+                for (int z = cz - 90; z <= cz + 90 && rough < 1 << 20; z += 6)
+                    for (int x = cx - 110; x <= cx + 110; x += 6)
+                    {
+                        int y = w.SurfAt(x, z);
+                        if (!w.OnLand(x, z) || w.Get(x, y, z) == Mat.Water) { rough = 1 << 20; break; }
+                        if (Math.Abs(y - h0) > 4 || w.ColTop(x, z) > y + 4) rough++;
+                    }
+                int score = rough * 64 + Math.Abs(cx - fx0) / 8 + Math.Abs(cz - fz0) / 8;
+                if (score < best) (best, fx, fz) = (score, cx, cz);
+            }
+        int g = w.SurfAt(fx, fz);
+        ClearTrees(fx - 110, fz - 90, fx + 110, fz + 90);
         for (int z = fz - 44; z <= fz + 44; z++)
             for (int x = fx - 64; x <= fx + 64; x++)
                 for (int y = g - 6; y < g + 40; y++)

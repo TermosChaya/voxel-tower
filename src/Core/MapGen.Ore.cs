@@ -20,6 +20,8 @@ public static class OreVeins
         int SX = w.SX, SZ = w.SZ, s = (int)(seed % 1000003);
         // how far in from the land's edge a column is
         double In(int x, int z) => site.Hex != null ? site.Hex.Edge(x, z) : Math.Min(Math.Min(x, SX - x), Math.Min(z, SZ - z));
+        // within 5 m of the strip the horde comes in by
+        bool NearStrip(int x, int z) => site.Hex != null ? site.Hex.FromSide(site.EntrySide, x, z).d < Site.StripDepth + 40 : x < site.SpawnStrip + 40;
         // water on the column or within three metres of it (the river, a pond, a marsh)
         bool Wet(int x, int z)
         {
@@ -39,7 +41,7 @@ public static class OreVeins
             for (int gx = 24; gx < SX - 24; gx += 12)
             {
                 int x = gx + (int)(Hash.H3(gx, gz, s + 1) * 10), z = gz + (int)(Hash.H3(gx, gz, s + 2) * 10);
-                if (!w.OnLand(x, z) || In(x, z) < 56 || x < site.SpawnStrip + 40) continue;
+                if (!w.OnLand(x, z) || In(x, z) < 56 || NearStrip(x, z)) continue;
                 if (Brushes.Dist(x - site.KeepX, z - site.KeepZ) < site.KeepR + 120 || Landmarks.Taken(site, x, z, 24) || Wet(x, z)) continue;
                 int top = w.SurfAt(x, z);
                 byte m = w.Get(x, top - 1, z);

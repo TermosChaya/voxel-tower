@@ -16,7 +16,7 @@ namespace VoxelTower.Core;
 public sealed partial class Sim
 {
     /// <summary>20: the bodies sculpted finer, their half-voxels (and so a wounded body's) not what they were.</summary>
-    public const int SaveVersion = 55;
+    public const int SaveVersion = 57;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -42,8 +42,10 @@ public sealed partial class Sim
         using var z = new GZipStream(to, CompressionLevel.Fastest, leaveOpen: true);
         using var w = new BinaryWriter(z, Encoding.UTF8, leaveOpen: true);
         w.Write(SaveMagic); w.Write(SaveVersion); w.Write(seed);
-        // the valley's kind and shape, made again from them with the seed (version 40)
+        // the valley's kind and shape, made again from them with the seed (version 40); its size and the side the horde
+        // comes by (version 45)
         w.Write((byte)Site.Kind); w.Write(Site.Classic); w.Write(Site.Hex != null);
+        w.Write(World.SX); w.Write(World.SZ); w.Write((byte)Site.EntrySide);
         w.Write(label ?? ""); w.Write(Time);
         // the valley as play changed it, what is meant of it and its arches
         WriteChunks(w, World, edited: true);
@@ -612,6 +614,8 @@ public sealed class SaveReader : IDisposable
     /// <summary>The valley's kind, whether it keeps the old places, and whether it is a hexagon.</summary>
     public readonly ValleyKind Kind;
     public readonly bool Classic, Hexagon;
+    /// <summary>The box the valley was made in, across, and the side the horde comes by.</summary>
+    public readonly int SizeX, SizeZ, EntrySide;
     public readonly string Label;
     public readonly double Time;
 
@@ -626,6 +630,7 @@ public sealed class SaveReader : IDisposable
         if (version != Sim.SaveVersion) throw new InvalidDataException($"a save of version {version}, not {Sim.SaveVersion}");
         Seed = R.ReadUInt32();
         Kind = (ValleyKind)R.ReadByte(); Classic = R.ReadBoolean(); Hexagon = R.ReadBoolean();
+        SizeX = R.ReadInt32(); SizeZ = R.ReadInt32(); EntrySide = R.ReadByte();
         Label = R.ReadString(); Time = R.ReadDouble();
     }
 

@@ -571,12 +571,14 @@ public partial class Main
     Shot TakeValley()
     {
         var s = Site;
+        // (set out round the citadel where it stood at 819,512 on the old valley: they go with it)
+        int ox = s.KeepX - 819, oz = s.KeepZ - 512;
         var shot = new Shot
         {
             Name = "valley",
             Length = 8,
             // the trees that would stand between the lens and the citadel at the end of its rise
-            Clear = new[] { (560, 500, 790, 600) },
+            Clear = new[] { (560 + ox, 500 + oz, 790 + ox, 600 + oz) },
             FadeIn = 1.6f,
             Day = _ => .93f, Dark = _ => .04f,
             Haze = .6f, ClearAir = 60, Hand = .7f,
@@ -594,7 +596,7 @@ public partial class Main
             {
                 // low over the river under the cliff, rising and drawing back till the citadel stands over the valley
                 float k = CineCam.Ease(t / 8);
-                return CineCam.Dolly(k, V(400, 66, 760), V(330, 168, 650), V(610, 72, 610), V(s.KeepX, 100, s.KeepZ), 44, 36);
+                return CineCam.Dolly(k, V(400 + ox, 66, 760 + oz), V(330 + ox, 168, 650 + oz), V(610 + ox, 72, 610 + oz), V(s.KeepX, 100, s.KeepZ), 44, 36);
             },
         };
         shot.Tag(2, 7.4f, "Процедурная долина");
@@ -696,11 +698,13 @@ public partial class Main
                 ManTheWalls(5, 2);
                 Nightfall();
                 sim.HordeStock[Stockpile.Wood] = 40 * VoxelWorld.PerM3;
-                // four bands out of the west, each behind its chief, torches among them, coming on side by side
+                // four bands out of the west, each behind its chief, torches among them, coming on side by side (set out
+                // from the western side and the citadel's row as they were on the old valley)
                 var kinds = new[] { Kinds.Goblin, Kinds.Goblin, Kinds.Orc, Kinds.Goblin, Kinds.Sapper, Kinds.Orc, Kinds.Goblin, Kinds.Goblin };
-                int id = 90;
-                foreach (var (bx, bz, chief) in new[] { (150, 400, Kinds.Troll), (110, 500, Kinds.Orc), (170, 590, Kinds.Troll), (90, 680, Kinds.Orc) })
+                int id = 90, wx = s.Hex != null ? (int)s.Hex.WestX - 70 : 0, oz = s.KeepZ - 512;
+                foreach (var (bx0, bz0, chief) in new[] { (150, 400, Kinds.Troll), (110, 500, Kinds.Orc), (170, 590, Kinds.Troll), (90, 680, Kinds.Orc) })
                 {
+                    int bx = bx0 + wx, bz = bz0 + oz;
                     var band = new Warband { Id = id++, Name = "Ватага", State = BandState.March };
                     var lead = sim.Spawn(chief, sim.NearestStand(bx + 14, bz, chief.Move.Height));
                     band.Members.Add(lead); band.Leader = lead; lead.Band = band;

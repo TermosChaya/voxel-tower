@@ -55,6 +55,8 @@ public partial class Main
 
         await Frames(5);
         int kx = Site.KeepX, kz = Site.KeepZ;
+        // the places below were set out round the citadel where it stood at 819,512 on the old valley: they go with it
+        int ox = kx - 819, oz = kz - 512;
         Sim.Waves.Countdown = 1e9;
         Sim.Stock.Gold = 500;
         Check("no ready-made blueprints", Blueprints.Count == 0);
@@ -90,25 +92,25 @@ public partial class Main
 
 
         // a stone wall is marked, not built
-        await Look(740, 470);
+        await Look(740 + ox, 470 + oz);
         KeyPress(Key.Key2); KeyPress(Key.Z);
         Check("2 picks the line, Z the stone", Tools.Tool == Tool.Line && Tools.Opt.Material == Mat.Stone && !Tools.Opt.Dig);
-        int lx = 750, ground = World.SurfAt(lx, 460), b0 = Sim.Orders.BuildTotal;
-        await Drag((lx, 440), (lx, 480));
-        Check("the line marks a wall for the workers", Sim.Orders.BuildTotal > b0 + 1500 && World.SurfAt(lx, 460) == ground,
-            $"{Sim.Orders.BuildTotal - b0} voxels marked, ground still at {World.SurfAt(lx, 460)}");
+        int lx = 750 + ox, ground = World.SurfAt(lx, 460 + oz), b0 = Sim.Orders.BuildTotal;
+        await Drag((lx, 440 + oz), (lx, 480 + oz));
+        Check("the line marks a wall for the workers", Sim.Orders.BuildTotal > b0 + 1500 && World.SurfAt(lx, 460 + oz) == ground,
+            $"{Sim.Orders.BuildTotal - b0} voxels marked, ground still at {World.SurfAt(lx, 460 + oz)}");
 
         // the pick: a pit
         KeyPress(Key.V); KeyPress(Key.Key3);
         Check("V takes up the pick", Tools.Opt.Dig && Tools.Tool == Tool.Box);
-        int px = 669, pz = 552, r0 = Removals();
-        await Look(680, 560);
+        int px = 669 + ox, pz = 552 + oz, r0 = Removals();
+        await Look(680 + ox, 560 + oz);
         await Drag((px, pz), (px + 24, pz + 24));
         int pit = Removals() - r0;
         Check("a box with the pick marks a pit", pit > 2000, $"{pit} voxels to dig");
 
         // a boulder broken up for stone with the ball of the brush
-        var (bx, bz) = Nearest(705, 475, 60, (x, z) => World.Get(x, World.SurfAt(x, z) - 1, z) == Mat.Rock && World.SurfAt(x, z) > Site.HTop[z * World.SX + x] + 3);
+        var (bx, bz) = Nearest(705 + ox, 475 + oz, 60, (x, z) => World.Get(x, World.SurfAt(x, z) - 1, z) == Mat.Rock && World.SurfAt(x, z) > Site.HTop[z * World.SX + x] + 3);
         await Look(bx, bz);
         KeyPress(Key.Key1); KeyPress(Key.F);
         Check("the brush becomes a ball", Tools.Tool == Tool.Brush && Tools.Opt.Form == BrushForm.Ball);
@@ -118,7 +120,7 @@ public partial class Main
         KeyPress(Key.F);
 
         // a tree, felled whole by clicking it
-        var (tx, tz) = Nearest(691, 670, 80, (x, z) => Mat.IsTrunk(World.Get(x, World.SurfAt(x, z) + 2, z)));
+        var (tx, tz) = Nearest(691 + ox, 670 + oz, 80, (x, z) => Mat.IsTrunk(World.Get(x, World.SurfAt(x, z) + 2, z)));
         await Look(tx, tz);
         int r2 = Removals();
         await ClickAt(ScreenAt(tx + .5f, World.SurfAt(tx, tz) + 6, tz + .5f));
@@ -134,7 +136,7 @@ public partial class Main
         int dugCols = 0;
         for (int z = pz + 2; z < pz + 23; z += 3) for (int x = px + 2; x < px + 23; x += 3) if (World.SurfAt(x, z) < Site.HTop[z * World.SX + x] - 8) dugCols++;
         Check("workers dig the pit", dugCols > 30 && Sim.Stock[Stockpile.Earth] > earth0 + 1000, $"{dugCols} of 64 columns down, earth +{Fmt.M3(Sim.Stock[Stockpile.Earth] - earth0)} m³");
-        Check("…lay the wall from the stores", World.SurfAt(lx, 460) > ground + 16, $"top {World.SurfAt(lx, 460)} over ground {ground}, stone {Fmt.M3(stone0)} → {Fmt.M3(Sim.Stock[Stockpile.Stone])} m³");
+        Check("…lay the wall from the stores", World.SurfAt(lx, 460 + oz) > ground + 16, $"top {World.SurfAt(lx, 460 + oz)} over ground {ground}, stone {Fmt.M3(stone0)} → {Fmt.M3(Sim.Stock[Stockpile.Stone])} m³");
         // (the wood of the tree still marked, and how high the lowest of it lies over the ground, for when it fails)
         int woodLeft = 0, woodLow = int.MaxValue;
         for (int z = tz - 90; z < tz + 90; z++)
@@ -151,21 +153,21 @@ public partial class Main
         // a ladder against the new wall, from the side the camera sees
         KeyPress(Key.Key7);
         Check("7 picks up the ladder", Tools.Tool == Tool.Ladder);
-        await Look(lx, 460);
+        await Look(lx, 460 + oz);
         int fy = ground + 10, face = lx;
-        while (World.Get(face - 1, fy, 460) != Mat.Air) face--;
+        while (World.Get(face - 1, fy, 460 + oz) != Mat.Air) face--;
         int b2 = Sim.Orders.BuildTotal;
-        await ClickAt(ScreenAt(face - .02f, fy + .5f, 460.5f));
+        await ClickAt(ScreenAt(face - .02f, fy + .5f, (460.5f + oz)));
         int rungs = Sim.Orders.BuildTotal - b2;
         Advance(40);
         int built = 0;
-        for (int y = ground; y < ground + 48; y++) for (int z = 450; z < 472; z++) for (int x = face - 10; x < face; x++) if (World.Get(x, y, z) == Mat.Ladder) built++;
-        Check("…the workers set it against the wall", rungs > 40 && built > 40, $"{rungs} voxels marked, {built} in place; clicked on «{Tools.HoverText}», west of the face {Mat.NameOf(World.Get(face - 1, fy, 460))}, the face {Mat.NameOf(World.Get(face, fy, 460))} at {face},{fy}, wall top {World.SurfAt(lx, 460)}");
+        for (int y = ground; y < ground + 48; y++) for (int z = 450 + oz; z < 472 + oz; z++) for (int x = face - 10; x < face; x++) if (World.Get(x, y, z) == Mat.Ladder) built++;
+        Check("…the workers set it against the wall", rungs > 40 && built > 40, $"{rungs} voxels marked, {built} in place; clicked on «{Tools.HoverText}», west of the face {Mat.NameOf(World.Get(face - 1, fy, 460 + oz))}, the face {Mat.NameOf(World.Get(face, fy, 460 + oz))} at {face},{fy}, wall top {World.SurfAt(lx, 460 + oz)}");
 
         // a gate through the same wall, further along it
         KeyPress(Key.Key9);
         Check("9 picks up the gate", Tools.Tool == Tool.Gate);
-        int gz = 472, gface = lx;
+        int gz = 472 + oz, gface = lx;
         while (World.Get(gface - 1, fy, gz) != Mat.Air) gface--;
         int gates0 = Sim.Gates.Count;
         await ClickAt(ScreenAt(gface - .02f, fy + .5f, gz + .5f));
@@ -179,7 +181,7 @@ public partial class Main
         int hy = ground + 8, holed = 0;
         var was = new Dictionary<(int x, int y, int z), byte>();
         for (int y = hy; y < hy + 10; y++)
-            for (int z = 450; z < 458; z++)
+            for (int z = 450 + oz; z < 458 + oz; z++)
                 for (int x = lx - 6; x <= lx + 6; x++)
                 {
                     byte m = World.Get(x, y, z);
@@ -192,8 +194,8 @@ public partial class Main
         KeyPress(Key.Key0);
         Check("0 picks up mending", Tools.Tool == Tool.Repair);
         // on the top of the wall beside the hole, where the ladder is not in the way
-        int b3 = Sim.Orders.BuildTotal, wtop = World.SurfAt(lx, 446);
-        await ClickAt(ScreenAt(lx + .5f, wtop + .02f, 446.5f));
+        int b3 = Sim.Orders.BuildTotal, wtop = World.SurfAt(lx, 446 + oz);
+        await ClickAt(ScreenAt(lx + .5f, wtop + .02f, (446.5f + oz)));
         int mended = Sim.Orders.BuildTotal - b3;
         Advance(40);
         int back = 0;
@@ -278,14 +280,14 @@ public partial class Main
         if (!Tools.Opt.Dig) KeyPress(Key.V);
         KeyPress(Key.N);
         Check("N snaps to the grid", Tools.Opt.Grid == 8, $"grid {Tools.Opt.Grid}, last {Tools.Opt.GridLast}, tool {Tools.Tool}, menu {Hud.MenuOpen}");
-        await Look(640, 500);
+        await Look(640 + ox, 500 + oz);
         int r3 = Removals();
-        await Drag((641, 441), (646, 558));
+        await Drag((641 + ox, 441 + oz), (646 + ox, 558 + oz));
         int moat = Removals() - r3;
         // (a tree the moat cuts into comes down whole, roots and all: its wood is not the line's)
-        int gx = kx + (int)Math.Round((641 - kx) / 8.0) * 8, askew = 0, minZ = int.MaxValue, maxZ = 0;
-        for (int z = 420; z < 580; z++)
-            for (int x = 600; x < 690; x++)
+        int gx = kx + (int)Math.Round((641 + ox - kx) / 8.0) * 8, askew = 0, minZ = int.MaxValue, maxZ = 0;
+        for (int z = 420 + oz; z < 580 + oz; z++)
+            for (int x = 600 + ox; x < 690 + ox; x++)
                 for (int y = World.SurfAt(x, z) - 20; y < World.SurfAt(x, z) + 2; y++)
                     if (Orders.IsRemove(Sim.Orders.At(x, y, z)) && !Mat.IsTrunk(World.Get(x, y, z)) && !Mat.IsLeafy(World.Get(x, y, z)))
                     {
@@ -299,17 +301,17 @@ public partial class Main
         KeyPress(Key.M);
         Check("M picks up the bridge", Tools.Tool == Tool.Bridge && !Tools.Opt.Dig);
         int bb0 = Sim.Orders.BuildTotal;
-        await Drag((620, 500), (668, 500));
+        await Drag((620 + ox, 500 + oz), (668 + ox, 500 + oz));
         int bridged = Sim.Orders.BuildTotal - bb0, deckMid = 0, deckEnd = 0;
-        for (int y = World.SY - 1; y > 0 && deckMid == 0; y--) if (Sim.Orders.At(643, y, 500) != 0) deckMid = y;
-        for (int y = World.SY - 1; y > 0 && deckEnd == 0; y--) if (Sim.Orders.At(626, y, 500) != 0) deckEnd = y;
+        for (int y = World.SY - 1; y > 0 && deckMid == 0; y--) if (Sim.Orders.At(643 + ox, y, 500 + oz) != 0) deckMid = y;
+        for (int y = World.SY - 1; y > 0 && deckEnd == 0; y--) if (Sim.Orders.At(626 + ox, y, 500 + oz) != 0) deckEnd = y;
         Check("…a drag marks a bridge over the moat, higher in the middle", bridged > 1500 && deckMid > deckEnd + 2,
             $"{bridged} voxels, deck at {deckMid} in the middle and {deckEnd} near the end");
         KeyPress(Key.Key6);
         Check("6 picks up the unmarking tool", Tools.Tool == Tool.Unmark);
-        await Drag((608, 486), (680, 514));
+        await Drag((608 + ox, 486 + oz), (680 + ox, 514 + oz));
         Check("a frame takes the bridge back", Sim.Orders.BuildTotal <= bb0 + 10, $"{Sim.Orders.BuildTotal - bb0} left of {bridged}");
-        await Drag((630, 430), (652, 570));
+        await Drag((630 + ox, 430 + oz), (652 + ox, 570 + oz));
         Check("a frame takes the marks back", Removals() <= r3 + 10, $"{Removals() - r3} left of {moat}");
         // Ctrl+Z takes the frames back, the last first: the moat is marked again, then the bridge with the end of the moat under it
         KeyPress(Key.Z, ctrl: true);
@@ -318,13 +320,13 @@ public partial class Main
         Check("Ctrl+Z takes the frames back one by one: the moat is marked again, then the bridge",
             moatBack > moat / 2 && Removals() - r3 >= moat - 10 && Sim.Orders.BuildTotal - bb0 >= bridged - 10,
             $"moat {moatBack}, then {Removals() - r3} of {moat}; bridge {Sim.Orders.BuildTotal - bb0} of {bridged}");
-        Sim.CancelArea(600, 420, 690, 580);
+        Sim.CancelArea(600 + ox, 420 + oz, 690 + ox, 580 + oz);
 
         // capture what the workers built, mark a copy
         KeyPress(Key.Escape); KeyPress(Key.Z);
-        await Look(750, 460);
+        await Look(750 + ox, 460 + oz);
         KeyPress(Key.B);
-        await Drag((lx - 10, 436), (lx + 10, 484));
+        await Drag((lx - 10, 436 + oz), (lx + 10, 484 + oz));
         Check("capture makes a blueprint of the new wall", Blueprints.Count == 1, Blueprints.Count > 0 ? Blueprints[0].Describe() : "");
         if (Blueprints.Count > 0)
         {
@@ -332,7 +334,7 @@ public partial class Main
             KeyPress(Key.R);
             Check("R turns the copy", Tools.PasteRot == 1);
             int b1 = Sim.Orders.BuildTotal;
-            await Click(780, 420);
+            await Click(780 + ox, 420 + oz);
             Check("the copy is marked for building", Sim.Orders.BuildTotal > b1 + 500, $"{Sim.Orders.BuildTotal - b1} voxels");
         }
         KeyPress(Key.Escape);
@@ -438,12 +440,15 @@ public partial class Main
         Selected.Clear(); Selected.Add(archer);
         Hud.OnSelectionChanged();
         Command.FireArrowsSelected();
-        await Look(face - 6, 460);
-        var rung = ScreenAt(face - .5f, fy + 2.5f, 460.5f);
+        await Look(face - 6, 460 + oz);
+        // (the ladder stands where the wall's foot let it, a voxel or two out from the face)
+        int lad = face - 1;
+        for (int k = 1; k <= 6; k++) if (World.Get(face - k, fy + 2, 460 + oz) == Mat.Ladder) { lad = face - k; break; }
+        var rung = ScreenAt(lad + .5f, fy + 2.5f, (460.5f + oz));
         Rig._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true, Position = rung });
         Rig._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = false, Position = rung });
         Check("«Огонь» gives the archer fire arrows, and a right click on the ladder tells it to set it alight", archer.FireArrows && archer.KindleAt >= 0,
-            $"fire arrows {archer.FireArrows}, mark {archer.KindleAt}, at the ladder: {Mat.NameOf(World.Get(face - 1, fy + 2, 460))}");
+            $"fire arrows {archer.FireArrows}, mark {archer.KindleAt}, at the ladder: {Mat.NameOf(World.Get(lad, fy + 2, 460 + oz))}");
         var (mx, my, mz) = archer.KindleAt >= 0 ? WaterPlanner.Unpack(archer.KindleAt) : (0, 0, 0);
         string marked = $"{Mat.NameOf(World.Get(mx, my, mz))} at {mx},{my},{mz} (the wall face at {face}, {fy})";
         int caughtN = 0;
@@ -581,7 +586,9 @@ public partial class Main
         var nearKegs = Sim.Spawn(Kinds.Goblin, Sim.NearestStand(px1 - 12, pz1 + 2, 2));
         nearKegs.Guard = true; nearKegs.Home = nearKegs.Cell;
         int booms = 0;
-        Action<float, float, float, float> heard = (_, _, _, _) => booms++;
+        // (how far from the blast the goblin stood when it went up, for when it fails)
+        float shy = -1;
+        Action<float, float, float, float> heard = (hx, _, hz, _) => { booms++; shy = MathF.Sqrt((nearKegs.X - hx) * (nearKegs.X - hx) + (nearKegs.Z - hz) * (nearKegs.Z - hz)); };
         Sim.Exploded += heard;
         Sim.SetFireArrows(new[] { archer }, true);
         var (kgx, kgy, kgz) = kegs[^1];
@@ -592,7 +599,7 @@ public partial class Main
         Sim.SetFireArrows(new[] { archer }, false);
         int kegsLeft = kegs.FindAll(k => World.Get(k.x, k.y, k.z) == Mat.Powder).Count;
         Check("powder is a trap the brush lays, and kegs set alight by a fire arrow go up and throw the goblin by them", powderInHand && booms > 0 && kegsLeft == 0 && (nearKegs.Dead || nearKegs.Hp < nearKegs.MaxHp),
-            $"in hand {powderInHand}; {booms} blasts, {kegsLeft} of {kegs.Count} kegs left; the goblin {(nearKegs.Dead ? "dead" : $"{nearKegs.Hp:0} hp")}");
+            $"in hand {powderInHand}; {booms} blasts, {kegsLeft} of {kegs.Count} kegs left; the goblin {(nearKegs.Dead ? "dead" : $"{nearKegs.Hp:0} hp")}, {shy / VoxelWorld.PerMetre:0.0} m off the blast");
         nearKegs.Dead = true; nearKegs.DiedAt = -999;
 
         // a great blast in the middle of the view: it shakes, the screen flashes and the time slows a moment, and all of
@@ -818,8 +825,10 @@ public partial class Main
         // its door only when made ready. Whoever stands about the citadel's foot by now is sent a little way off first (an
         // envoy come to the walls is taken off), so that the click finds the citadel and not one of them
         if (Sim.Offer?.Envoy is { } envoy) { Sim.Offer = null; envoy.Dead = true; envoy.DiedAt = -999; }
-        var about = Sim.Units.FindAll(u => !u.Dead && !u.Inside && u.Team == Team.Player && Brushes.Dist(u.X - kx, u.Z - kz) < Site.KeepR + 40);
-        if (about.Count > 0) { Sim.Command(about, Sim.NearestStand(kx + 90, kz + 60, 2)); for (int t = 0; t < 40; t++) Advance(.5); }
+        // (out of the camera's way, which looks from the south-east: to the north-west of the citadel)
+        var about = Sim.Units.FindAll(u => !u.Dead && !u.Inside && u.Team == Team.Player && Brushes.Dist(u.X - kx, u.Z - kz) < Site.KeepR + 70);
+        if (about.Count > 0) { Sim.Command(about, Sim.NearestStand(kx - 100, kz - 100, 2)); for (int t = 0; t < 40; t++) Advance(.5); }
+        Selected.Clear(); Hud.OnSelectionChanged();
         Sim.Stock.Gold = 500;
         int w0 = Sim.Count(Kinds.Worker);
         await Look(kx, kz);

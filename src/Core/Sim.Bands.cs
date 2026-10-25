@@ -107,7 +107,7 @@ public sealed partial class Sim
     {
         Bands.RemoveAll(b => b.State == BandState.Coming);
         PlannedThreat = threat;
-        var planned = DrawBands(Roster(threat, HordeMany), WestEdge, n);
+        var planned = DrawBands(Roster(threat, HordeMany), HomeEdge, n);
         int count = planned.Count;
         // a chapter's third night: its champion with his own guard
         if (ChampionBand(n) is { } champion) planned.Add(champion);
@@ -136,11 +136,8 @@ public sealed partial class Sim
         {
             var b = planned[i];
             double along = (i + 1.0) / (count + 1) + (Rng.NextDouble() - .5) / (count + 1) * .6;
-            if (edge == WestEdge)
-            {
-                int z0 = Site.Hex == null ? 0 : Site.WestZ0, span = Site.Hex == null ? World.SZ : Site.WestZ1 - Site.WestZ0;
-                b.Entry = NearestStand(Site.EntryX, Math.Clamp((int)(z0 + span * along), Site.WestZ0, Site.WestZ1), 3);
-            }
+            if (Site.Hex == null && edge == WestEdge)
+                b.Entry = NearestStand(Site.EntryX, Math.Clamp((int)(World.SZ * along), Site.WestZ0, Site.WestZ1), 3);
             else
             {
                 var (ex, ez) = EdgePoint(edge, along);
@@ -156,7 +153,8 @@ public sealed partial class Sim
     /// <summary>A point a few metres in from a side of the land (0 to 5 from the northern point round by the east), so far along it (0 to 1).</summary>
     (int x, int z) EdgePoint(int edge, double along)
     {
-        var hex = Site.Hex ?? Hex.In(World.SX, World.SZ);
+        if (Site.Hex != null) return Site.EntryOn(edge, along);
+        var hex = Hex.In(World.SX, World.SZ);
         var c = hex.Corners();
         var (ax, az) = c[((edge % 6) + 6) % 6]; var (bx, bz) = c[(((edge + 1) % 6) + 6) % 6];
         float t = (float)Math.Clamp(along, .08, .92), x = ax + (bx - ax) * t, z = az + (bz - az) * t;
@@ -370,7 +368,8 @@ public sealed partial class Sim
             if (raid.Roster.Count > 0)
             {
                 // they come in where the mine is nearest the edge
-                raid.Entry = NearestStand(Site.EntryX, Math.Clamp(held.Place.StandZ, Site.WestZ0, Site.WestZ1), 3);
+                var (rx, rz) = Site.Hex == null ? (Site.EntryX, Math.Clamp(held.Place.StandZ, Site.WestZ0, Site.WestZ1)) : Site.EntryNear(held.Place.StandX, held.Place.StandZ);
+                raid.Entry = NearestStand(rx, rz, 3);
                 raid.Roster.Sort((a, b) => Rank(b).CompareTo(Rank(a)));
                 Bands.Add(raid);
                 coming.Add(raid);

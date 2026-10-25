@@ -119,6 +119,8 @@ public sealed partial class Sim
         {
             int x = Site.SpawnStrip + 60 + _fate.Next(World.SX - Site.SpawnStrip - 120), z = 40 + _fate.Next(World.SZ - 80);
             if (Math.Abs(x - Site.KeepX) < 260 && Math.Abs(z - Site.KeepZ) < 260) continue;
+            // on the land, well in from its edge and off the horde's side
+            if (Site.Hex != null && (!Site.Inland(x, z, 64) || Site.InStrip(x, z))) continue;
             int c = NearestStand(x, z, t.Move.Height);
             if (c < 0 || Nav.Water[c] > 0) continue;
             var u = Spawn(t, c);
@@ -155,7 +157,8 @@ public sealed partial class Sim
         if (u == null) return;
         u.Envoy = true; u.Band = null; u.Raid = null; u.Torch = false;
         Offer = new Deal { Envoy = u, Until = double.MaxValue };
-        Say("С запада идёт посол орды. Не трогайте его, если хотите выслушать.", 2, u);
+        string from = EdgeName(HomeEdge);
+        Say($"{char.ToUpperInvariant(from[0])}{from[1..]} идёт посол орды. Не трогайте его, если хотите выслушать.", 2, u);
     }
 
     /// <summary>The envoy on its way, waiting at the walls, or gone: the offer made when it is near enough to be heard.</summary>

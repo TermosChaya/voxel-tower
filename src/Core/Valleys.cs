@@ -48,10 +48,16 @@ public static class Valleys
         public readonly double River, Wet;
         /// <summary>The soil over the rock, how deep.</summary>
         public readonly double Soil;
+        /// <summary>On a hexagon made by itself: how high the citadel's plateau stands over the lowland, how much the lowland
+        /// swells and sinks, and how many lakes lie in its hollows.</summary>
+        public readonly double Lift, Relief;
+        public readonly int Lakes;
 
-        public Ground(double trees, double knoll, double knollHeight, double ridges, double river, double wet, double soil)
+        public Ground(double trees, double knoll, double knollHeight, double ridges, double river, double wet, double soil,
+            double lift = 1, double relief = 1, int lakes = 1)
         {
             Trees = trees; Knoll = knoll; KnollHeight = knollHeight; Ridges = ridges; River = river; Wet = wet; Soil = soil;
+            Lift = lift; Relief = relief; Lakes = lakes;
         }
     }
 
@@ -90,14 +96,14 @@ public static class Valleys
     public static Ground GroundOf(ValleyKind k) => k switch
     {
         // the valleys of ore: rock near the surface, many knolls, thin soil, fewer trees
-        ValleyKind.Ore => new Ground(trees: .7, knoll: .6, knollHeight: 1.2, ridges: 1.2, river: 1, wet: -.05, soil: .6),
-        ValleyKind.Sacred => new Ground(trees: .8, knoll: .72, knollHeight: 1, ridges: 1, river: 1, wet: 0, soil: 1),
-        ValleyKind.Forest => new Ground(trees: 1.7, knoll: .74, knollHeight: .9, ridges: .9, river: .9, wet: .08, soil: 1.2),
+        ValleyKind.Ore => new Ground(trees: .7, knoll: .6, knollHeight: 1.2, ridges: 1.2, river: 1, wet: -.05, soil: .6, lift: 1.1, relief: 1.2, lakes: 0),
+        ValleyKind.Sacred => new Ground(trees: .8, knoll: .72, knollHeight: 1, ridges: 1, river: 1, wet: 0, soil: 1, lift: .9, relief: .9, lakes: 1),
+        ValleyKind.Forest => new Ground(trees: 1.7, knoll: .74, knollHeight: .9, ridges: .9, river: .9, wet: .08, soil: 1.2, lift: .85, relief: 1, lakes: 2),
         // the river's valley: a broad river, wet meadows, low ground
-        ValleyKind.Marsh => new Ground(trees: .9, knoll: .8, knollHeight: .7, ridges: .6, river: 1.8, wet: .25, soil: 1.2),
+        ValleyKind.Marsh => new Ground(trees: .9, knoll: .8, knollHeight: .7, ridges: .6, river: 1.8, wet: .25, soil: 1.2, lift: .6, relief: .6, lakes: 3),
         // the mountains: high ridges, crags, little soil and few trees
-        ValleyKind.Mountain => new Ground(trees: .55, knoll: .56, knollHeight: 1.6, ridges: 2, river: .8, wet: -.1, soil: .5),
-        _ => new Ground(trees: 1, knoll: .7, knollHeight: 1, ridges: 1, river: 1, wet: 0, soil: 1),
+        ValleyKind.Mountain => new Ground(trees: .55, knoll: .56, knollHeight: 1.6, ridges: 2, river: .8, wet: -.1, soil: .5, lift: 1.3, relief: 1.5, lakes: 1),
+        _ => new Ground(trees: 1, knoll: .7, knollHeight: 1, ridges: 1, river: 1, wet: 0, soil: 1, lift: 1, relief: 1, lakes: 1),
     };
 
     /// <summary>

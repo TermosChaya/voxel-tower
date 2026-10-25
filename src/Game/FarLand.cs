@@ -60,20 +60,8 @@ public partial class FarLand : MeshInstance3D
         bool OnLand(float x, float z) => land != null ? land.Edge(x, z) >= 0 : x >= 0 && x <= SX && z >= 0 && z <= SZ;
         static float Smooth(float t) { t = Math.Clamp(t, 0, 1); return t * t * (3 - 2 * t); }
 
-        // the river out of the valley north and south: its middle goes on the way it was going, then winds; it widens a little
-        bool river = s.RiverMid != null;
-        float RiverAt(float z, out float half)
-        {
-            bool north = z <= 0;
-            int edge = north ? 0 : SZ - 1, inner = north ? 24 : SZ - 25;
-            float slope = Math.Clamp((s.RiverMid[edge] - s.RiverMid[inner]) / 24f, -.6f, .6f), t = north ? -z : z - SZ;
-            t = Math.Max(0, t);
-            half = s.RiverHalfWidth[edge] + t * .004f;
-            return s.RiverMid[edge] + slope * 300 * (1 - MathF.Exp(-t / 300)) + 80 * MathF.Sin(t * .0032f) * Smooth(t / 700);
-        }
-        // the old road on west out of the valley, as the valley's own map lays it there (MapGen.RoadZ short of the plateau)
-        float RoadZ(float x) => SZ * .56f + MathF.Sin(x * .018f) * 18;
-
+        // the river and the roads out of the valley, as the valley's own map carries them on out of the box
+        bool river = s.River != null;
         // the height of the ground at a spot (voxels), without the woods; how far it is from the river's edge and the road's,
         // and from the valley's edge
         float LandAt(float x, float z, out float riverD, out float roadD, out float sd)
@@ -109,16 +97,13 @@ public partial class FarLand : MeshInstance3D
             riverD = 1e4f; roadD = 1e4f;
             if (river && !OnLand(x, z))
             {
-                // the river's own course on in the box past the land's edge, then on out of it
-                float rx, half;
-                if (z > 0 && z < SZ - 1) { rx = s.RiverMid[(int)z]; half = s.RiverHalfWidth[(int)z]; }
-                else rx = RiverAt(z, out half);
-                float d = MathF.Abs(x - rx);
-                riverD = d - half;
+                // the river's own course on past the land's edge and out, widening a little the further it goes
+                s.RiverAt(x, z, out float d, out float half, out _, out _);
+                riverD = d - half - Math.Max(0, sd) * .004f;
                 if (riverD < 0) h = MapGen.RiverLevel;
                 else h = Math.Max(Math.Min(h, MapGen.RiverLevel + 2 + riverD * .42f + Math.Max(0, riverD - 30) * .95f), MapGen.RiverLevel + 1);
             }
-            if (x <= (land != null ? land.WestX : 0)) roadD = MathF.Abs(z - RoadZ(x)) - 6;
+            if (!OnLand(x, z)) roadD = s.RoadDist(x, z) - 6;
             return h;
         }
         // how much of a spot is wood: not on the river or the road, nor high up the rim, and only a little way out from

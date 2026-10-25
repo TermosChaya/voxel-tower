@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Godot;
 using VoxelTower.Core;
@@ -72,13 +73,25 @@ public partial class Main
         var cap = sim.Spawn(Kinds.Captain, sim.NearestStand(fx - 4, fz + 22, 2));
         Advance(.3);
         FP.Enter(cap);
+        // (looking west, away from the plateau, a little up at a post of stone 14 m off, so «Залп!» has somewhere to fall
+        // that is no horde: the ground the way it happens to face may rise too near or fall away out of its sight, and
+        // then it looks for the horde instead)
+        FP.Face(MathF.PI, .02f);
+        int px = (int)cap.X - 110, pz = (int)cap.Z;
+        var post = new List<(int x, int y, int z)>();
+        for (int z = pz - 2; z <= pz + 2; z++)
+            for (int x = px - 2; x <= px + 2; x++)
+                for (int y = w.SurfAt(x, z); y < (int)cap.Y + 30; y++) { w.Set(x, y, z, Mat.Stone); post.Add((x, y, z)); }
         await Frames(3);
         bool bar = FP.CallsShown;
         Key_(Act.FpWood);
         bool held = cap.Ready[1] > sim.Time && sw.WallUntil > sim.Time && sw.Ward == cap && sw2.Ward == cap;
         Key_(Act.FpEarth);
         await Frames(2);
-        bool refused = cap.Ready[2] <= sim.Time && FP.SaidLine.Contains("стрелков");
+        // (no archers near, or none near that can reach it — an archer of the tests before may stand within 50 m of
+        // here, wherever the valley put this field: refused in words either way)
+        bool refused = cap.Ready[2] <= sim.Time && FP.SaidLine.Contains("стрел");
+        foreach (var (x, y, z) in post) w.Set(x, y, z, Mat.Air);
         check("a commander gone into shows its four calls; «Держать строй» on its key sets the swordsmen about it to hold, «Залп!» with no archers is refused in words",
             bar && held && refused, $"calls shown {bar}, held {held} (wall till {sw.WallUntil - sim.Time:0.0} s, ward {sw.Ward?.Id}), refused {refused} («{FP.SaidLine}»)");
 

@@ -73,7 +73,7 @@ public sealed partial class Sim
         if (Time - u.BoundAt < WrigglesFree) return;
         u.Bound = false; u.Pastime = Pastime.None;
         u.Routed = true;
-        Say($"Связанный {u.T.Name.ToLowerInvariant()} развязался и бежит на запад.", 2, u);
+        Say($"Связанный {u.T.Name.ToLowerInvariant()} развязался и бежит {EdgeToward(HomeEdge)}.", 2, u);
     }
 
     /// <summary>

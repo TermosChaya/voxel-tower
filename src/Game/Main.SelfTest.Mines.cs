@@ -36,8 +36,8 @@ public partial class Main
         bool under = false;
         if (ours != null)
         {
-            var (_, fy, _) = sim.Nav.Feet(ours.Cells[ours.Cells.Count / 2]);
-            under = fy < w.SurfAt(ax + 40, az) - 2 * NavGrid.CS;
+            // (its roof, the top of the cells it is dug through, a metre and more under the ground)
+            under = (sim.Nav.Y(ours.Cells[ours.Cells.Count / 2]) + 1) * NavGrid.CS <= w.SurfAt(ax + 40, az) - NavGrid.CS;
         }
         check("the line with the pick as a countermine marks a bore under the ground, and the mine is kept",
             ours is { Team: Team.Player } && sim.Orders.Total > orders0 + 4000 && under,
