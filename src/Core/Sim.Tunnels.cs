@@ -51,7 +51,7 @@ public sealed class Tunnel
 /// Those of ours within twenty-four metres of where they dig, up on the ground, hear the picks: the chronicle tells of
 /// it, and the ground over the face shows a mark that trembles with every stroke, the nearer the listener the truer.
 /// Our countermine is a line drawn with the pick as a mine: a bore the same as theirs, dug by the workers and shored
-/// while there are logs. Where ours comes within a metre of theirs it breaks in: the soldiers can be sent down, and
+/// as they go; with no logs for a frame they dig no further than the last one set (Sim.Undermine.cs). Where ours comes within a metre of theirs it breaks in: the soldiers can be sent down, and
 /// ours there knock out the horde's props, and what is not shored falls in a little after, burying whoever is in it;
 /// so does any mine left without props a minute and a half or more, and one shaken by a blast. Water in a mine floods
 /// it: the horde gives that one up.
@@ -675,9 +675,15 @@ public sealed partial class Sim
         return false;
     }
 
-    /// <summary>Our countermine: the steps dug out in order from its mouth, each shored if there are logs for it.</summary>
+    /// <summary>Our countermine: the steps dug out in order from its mouth, each shored if there are logs for it, and none dug past one left bare.</summary>
     void TendCountermine(Tunnel t)
     {
+        // a step left without props for want of logs is shored as soon as there are logs, before it falls in
+        for (int i = 0; i < t.Dug && i < t.Cells.Count; i++)
+            if (!t.Shored[i] && !t.Fallen[i] && Stock[Stockpile.Wood] >= FrameLogs && Open(t, i) && Stock.Take(Stockpile.Wood, FrameLogs))
+            {
+                Shore(t.Cells[i]); t.Shored[i] = true; t.FallAt[i] = double.NaN;
+            }
         while (t.Dug < t.Cells.Count && Open(t, t.Dug))
         {
             int cell = t.Cells[t.Dug];
@@ -691,6 +697,9 @@ public sealed partial class Sim
             }
             t.Dug++;
         }
+        // nobody digs on past a step without props, under ground that may fall in: the rest of the bore waits for logs
+        // (with none in the stores, past the step being dug, which there will be nothing to shore with)
+        HoldBore(t, t.Dug >= t.Cells.Count ? -1 : t.Dug > 0 && !t.Shored[t.Dug - 1] ? t.Dug : Stock[Stockpile.Wood] < FrameLogs ? t.Dug + 1 : -1);
     }
 
     /// <summary>

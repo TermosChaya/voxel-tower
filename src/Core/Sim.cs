@@ -221,6 +221,7 @@ public sealed partial class Sim
         Stage = "TickSpells"; TickSpells();
         Stage = "TickCurses"; TickCurses();
         Stage = "TickCollapse"; TickCollapse(dt);
+        Stage = "TickDangers"; TickDangers();
         Stage = "TickStrays"; TickStrays(dt);
         Stage = "TickFlight"; TickFlight(dt);
         Stage = "TickGates"; TickGates(dt);

@@ -148,10 +148,14 @@ public sealed partial class Sim
         TroopBlow(a, b, charge);
     }
 
+    /// <summary>One is hurt: who, how much, and by what (the bench counts by it what the work costs those at it).</summary>
+    public Action<Unit, float, string> Hurting;
+
     public void Hurt(Unit b, Unit by, float dmg, string cause = null)
     {
         if (b.Dead) return;
         dmg *= MailGuard(b) * Walled(b, Time);
+        Hurting?.Invoke(b, dmg, cause ?? by?.T.Name ?? "");
         b.Hp -= dmg;
         b.LastHurt = Time;
         if (by != null) b.HurtBy = by;

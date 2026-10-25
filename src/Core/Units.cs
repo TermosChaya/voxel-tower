@@ -668,6 +668,14 @@ public sealed class Unit
     public bool Charge;
     /// <summary>One of ours running to cut the fuse of a sapper's charge; one keeping clear of a charge nobody can get to in time.</summary>
     public Charge Defusing, Shunning;
+    /// <summary>
+    /// One of ours keeping out of a place about to be struck — the lane a tree goes down along, what a dig will bring down
+    /// (Sim.Felling.cs, Sim.Digging.cs); and, for a feller, the voxel it last weighed and till when that holds.
+    /// </summary>
+    public Danger Avoiding;
+    public int FellLooked = -1;
+    public double FellLookedUntil;
+    public bool FellHold;
 
     // beasts, and pawns with nothing to do
     /// <summary>Where it grazes and wanders round; for a pawn, where it idles round.</summary>

@@ -9,6 +9,8 @@ public sealed class Toppling
     public readonly List<(int x, int y, int z, byte m)> Voxels = new();
     public float PX, PY, PZ, DX, DZ;
     public double From, To;
+    /// <summary>Felled as a woodcutter fells: its way chosen, the warning called, its lane cleared first (Sim.Felling.cs).</summary>
+    public bool Felled;
 }
 
 /// <summary>
@@ -459,17 +461,17 @@ public sealed partial class Sim
     /// A felled trunk lying across a slope steep enough to start a log rolling goes rolling down it, still marked to be
     /// cut up if it was; one lying along the slope, or on the level, stays where it lies.
     /// </summary>
-    void RollFelled(List<(int x, int y, int z)> cells, int fx, int fz)
+    void RollFelled(List<(int x, int y, int z)> cells, float fx, float fz)
     {
-        int nx = -fz, nz = fx;
+        float nx = -fz, nz = fx;
         int lo = int.MaxValue, hi = int.MinValue;
         var along = new HashSet<int>();
         float mid = 0;
         foreach (var (x, _, z) in cells)
         {
-            int across = x * nx + z * nz;
+            int across = (int)MathF.Round(x * nx + z * nz);
             lo = Math.Min(lo, across); hi = Math.Max(hi, across); mid += across;
-            along.Add(x * fx + z * fz);
+            along.Add((int)MathF.Round(x * fx + z * fz));
         }
         mid /= cells.Count;
         // the ground on either side of it, along its length
@@ -622,16 +624,15 @@ public sealed partial class Sim
             pieces.Add((x, y, z, m, Orders.At(x, y, z)));
             if (Mat.IsTrunk(m)) { trunks++; tx += x; tz += z; baseY = Math.Min(baseY, y); }
         }
-        // which way a tree falls: away from the nearest of us, or as it leans
-        int fx = 1, fz = 0;
+        // which way a tree falls: the way its feller chose for it, else the way that comes down on the fewest (Sim.Felling.cs)
+        float fx = 1, fz = 0;
+        FellPlan fellPlan = null;
         if (trunks > 0)
         {
             tx /= trunks; tz /= trunks;
-            Unit near = null;
-            float nd = 12 * VoxelWorld.PerMetre;
-            foreach (var u in Units) { if (u.Dead || u.Inside) continue; float d = MathF.Abs(u.X - tx) + MathF.Abs(u.Z - tz); if (d < nd) { nd = d; near = u; } }
-            int dir = near == null ? Rng.Next(4) : MathF.Abs(near.X - tx) > MathF.Abs(near.Z - tz) ? (near.X > tx ? 1 : 0) : (near.Z > tz ? 3 : 2);
-            (fx, fz) = dir switch { 0 => (1, 0), 1 => (-1, 0), 2 => (0, 1), _ => (0, -1) };
+            int treeTop = baseY;
+            foreach (var pc in pieces) if (Mat.IsTrunk(pc.m)) treeTop = Math.Max(treeTop, pc.y);
+            (fx, fz) = quiet ? (1f, 0f) : FallWay(tx, tz, baseY, treeTop, pieces, out fellPlan);
         }
         // the crowns of trees go with their trunks: the leaves nearer to the wood that falls than to any tree left
         // standing (a stump marked to be cut stands no more), all of them however big the crown
@@ -664,6 +665,11 @@ public sealed partial class Sim
         // a crown with its trunk gone comes down as brushwood, which does not keep
         foreach (var (x, y, z) in twigs) if (Mat.IsLeafy(World.Get(x, y, z))) Shed(x, y, z);
         if (timber.Count > 0) DropStrays(timber, twigs);
+        // the lane it was felled along kept clear till it is down; one coming down by itself is cried out as it goes, and
+        // whoever of ours is in its way gets out of it if they can
+        if (topple != null) topple.Felled = fellPlan != null;
+        if (topple != null && !quiet) TreeGoing(topple, fellPlan, pieces, baseY);
+        else if (fellPlan != null) fellPlan.Lane.Until = Time + 1;
         if (topple != null)
         {
             _settling = false;
@@ -675,7 +681,7 @@ public sealed partial class Sim
     }
 
     /// <summary>Trees going over now, to be laid down when they get to the ground.</summary>
-    readonly List<(Toppling t, List<(int x, int y, int z, byte m, byte order)> pieces, int fx, int fz, int baseY)> _toppling = new();
+    readonly List<(Toppling t, List<(int x, int y, int z, byte m, byte order)> pieces, float fx, float fz, int baseY)> _toppling = new();
 
     /// <summary>A tree begins to go over: what it is made of, the foot of it, which way it goes and how long it takes.</summary>
     public Action<Toppling> Toppled;
@@ -695,9 +701,12 @@ public sealed partial class Sim
     }
 
     /// <summary>What fell, laid down where it comes to rest: a trunk along the ground as a log, the rest in a heap.</summary>
-    void Lay(List<(int x, int y, int z, byte m, byte order)> pieces, int fx, int fz, int baseY, int trunks, bool quiet)
+    void Lay(List<(int x, int y, int z, byte m, byte order)> pieces, float fx, float fz, int baseY, int trunks, bool quiet)
     {
         pieces.Sort((a, b) => a.y.CompareTo(b.y));
+        // a felled trunk comes down swung on its stump: the farther along it, the harder (a rod falling over, v = r √(3g/L))
+        float logLen = MathF.Max(1, (pieces.Count > 0 ? pieces[^1].y - baseY : 1) / (float)VoxelWorld.PerMetre), swing = MathF.Sqrt(3 * 9.8f / logLen);
+        var byLog = new HashSet<Unit>();
         float cx = 0, cy = 0, cz = 0;
         int laid = 0, stone = 0, wood = 0;
         var crushed = new Dictionary<Unit, int>();
@@ -714,7 +723,7 @@ public sealed partial class Sim
         {
             // a trunk falls over and lies along the ground; a gate's leaf is only so much timber once it has fallen
             bool log = Mat.IsTrunk(m);
-            int sx = log ? x + fx * (y - baseY) : x, sz = log ? z + fz * (y - baseY) : z, sy = log ? baseY + 6 : y;
+            int sx = log ? x + (int)MathF.Round(fx * (y - baseY)) : x, sz = log ? z + (int)MathF.Round(fz * (y - baseY)) : z, sy = log ? baseY + 6 : y;
             if (!World.InBounds(sx, sy, sz)) continue;
             var (lx, ly, lz) = Landing(sx, sy, sz, log || m is Mat.Wood or Mat.Deck or Mat.Char || Mat.IsLeaf(m), runs: !log, log: log ? logLaid : null);
             if (ly < 0) continue;
@@ -724,11 +733,24 @@ public sealed partial class Sim
             if (log) { logCells.Add((lx, ly, lz)); logLaid.Add(WaterPlanner.Pack(lx, ly, lz)); }
             cx += lx; cy += ly; cz += lz; laid++;
             if (Mat.IsMasonry(m) || m == Mat.Ruin) stone++; else if (m is Mat.Wood or Mat.Deck || Mat.IsTrunk(m)) wood++;
-            // a falling tree comes down away from those beside it
-            if (quiet || log) continue;
+            // a falling tree comes down away from those beside it (Sim.Felling.cs); whoever is under it after all is struck
+            if (quiet || log && trunks < 60) continue;
             foreach (var u in under)
             {
                 if (u.Dead || MathF.Abs(u.X - lx - .5f) > u.T.BodyR + 1 || MathF.Abs(u.Z - lz - .5f) > u.T.BodyR + 1 || ly < u.Y - 1 || ly > u.Y + u.T.BodyH) continue;
+                if (log)
+                {
+                    // the log lands along the ground, on what of the body is as low as it lies, swung down from its height
+                    float loff = MathF.Max(MathF.Abs(u.X - lx - .5f), MathF.Abs(u.Z - lz - .5f)) / MathF.Max(1, u.T.BodyR);
+                    if (loff > 1) continue;
+                    crushed[u] = crushed.GetValueOrDefault(u) + 1;
+                    if (!blows.TryGetValue(u, out var lj)) blows[u] = lj = new float[4];
+                    float v = (y - baseY) / (float)VoxelWorld.PerMetre * swing, lat = (ly - u.Y) / u.T.BodyH;
+                    int lpart = u.Down ? (int)Lying(u, lx + .5f, lz + .5f) : lat >= .86f ? (int)OnBody.Head : lat >= .47f ? (int)OnBody.Trunk : (int)OnBody.Legs;
+                    lj[lpart] += .5f * Kg(m) * v * v;
+                    byLog.Add(u);
+                    continue;
+                }
                 crushed[u] = crushed.GetValueOrDefault(u) + 1;
                 // it comes down through the body from the top (or from where it was, if that was lower): the head, a
                 // shoulder at the edge, as hard as the fall to there made it
@@ -746,9 +768,10 @@ public sealed partial class Sim
         }
         _settling = false;
         if (marked.Count > 0) Orders.PlanRemove(marked);
-        foreach (var (u, n) in crushed) StrikeHeap(u, blows.TryGetValue(u, out var j) ? j : new float[4], "обвал", 30 + Math.Min(90, n * 2));
-        // a felled trunk lying across a slope steep enough to start it goes rolling down it
-        if (!quiet && logCells.Count >= 24) RollFelled(logCells, fx, fz);
+        foreach (var (u, n) in crushed) StrikeHeap(u, blows.TryGetValue(u, out var j) ? j : new float[4], byLog.Contains(u) ? "упавшее дерево" : "обвал", 30 + Math.Min(90, n * 2));
+        // a felled trunk lying across a slope steep enough to start it goes rolling down it (a bough, its stubs in the
+        // ground, lies where it drops)
+        if (!quiet && logCells.Count >= 60) RollFelled(logCells, fx, fz);
         if (quiet || laid == 0) return;
         cx /= laid; cy /= laid; cz /= laid;
         Collapsed?.Invoke(laid, cx, cy, cz);

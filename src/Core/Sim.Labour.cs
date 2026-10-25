@@ -82,6 +82,8 @@ public sealed partial class Sim
         if ((u.Carrying != null || u.Propping != null) && Aid(u, dt)) { Busy(u); return; }
         // standing in the flames: out of them before anything
         if (EscapeFire(u, dt)) { Busy(u); return; }
+        // out of the way of a tree coming down, or of what a dig is bringing down (Sim.Felling.cs)
+        if (u.Avoiding != null && u != Possessed && KeepOut(u, dt)) { Busy(u); return; }
         if (CrewTick(u, dt)) { Busy(u); return; }
         // a sapper's fuse burning down: one runs to cut it, the rest near it get away from the wall
         if (u.Defusing != null && Defuse(u, dt)) { Busy(u); return; }
@@ -206,6 +208,9 @@ public sealed partial class Sim
         u.Beat += dt * u.Pace / chop;
         // what is put by between blows is the work of one blow (none stored up while it walked or stood about)
         if (u.Beat < 1) { u.Effort = Math.Min(u.Effort, (float)(Labour.WorkPerSecond * u.T.Work * chop) * 1.1f + 60); return; }
+        // the last blows on a tree's butt wait till its lane is clear, the feller at its back (Sim.Felling.cs); so does
+        // the last of the ground under something built (Sim.Undermine.cs)
+        if (u.JobI < u.Jobs.Count && FellHold(u, u.Jobs[u.JobI])) { u.Beat = .95f; return; }
         u.Beat -= MathF.Floor(u.Beat);
         // the blow lands on the voxel it was drawn at: chips and the ring of it, whether or not it comes away this time
         if (u.JobI < u.Jobs.Count)
@@ -221,6 +226,8 @@ public sealed partial class Sim
             float cost = Orders.IsRemove(j.m) ? Labour.Dig(World.Get(j.x, j.y, j.z)) / DigPace : Labour.Lay(j.m) / LayPace;
             if (cost <= 0) cost = .25f;
             if (u.Effort < cost) break;
+            // (each voxel of a trunk, or of a footing, weighed before it goes: the one that brings it down waits)
+            if (FellHold(u, j)) break;
             u.JobI++;
             if (Do(u, j))
             {
@@ -240,14 +247,7 @@ public sealed partial class Sim
         if (Orders.IsRemove(j.m))
         {
             if (!Labour.Diggable(cur)) { Orders.Clear(j.x, j.y, j.z); return false; }
-            World.Set(j.x, j.y, j.z, Mat.Air);
-            Orders.Clear(j.x, j.y, j.z);
-            Dug(j.x, j.y, j.z, cur);
-            int kind = Labour.YieldKind(cur);
-            if (kind != Stockpile.None) Stock[kind] += Labour.YieldShare(cur) * u.T.Yield * YieldMore;
-            if (cur == Mat.Ore) Stock.Gold += Labour.OreGold * u.T.Yield;
-            if (Mat.IsIronOre(cur)) StruckOre(cur, Labour.YieldShare(cur) * u.T.Yield * YieldMore);
-            Mined?.Invoke(j.x, j.y, j.z, cur);
+            DigAway(j.x, j.y, j.z, cur, u.T.Yield);
             return true;
         }
         if (!Brushes.Free(cur) || cur == j.m) { Orders.Clear(j.x, j.y, j.z); return false; }
@@ -313,8 +313,10 @@ public sealed partial class Sim
         var digs = new List<(int x, int y, int z, byte m)>();
         var builds = new List<(int x, int y, int z, byte m)>();
         string missing = "", held = "";
-        bool crowded = false, unfooted = false;
-        for (int y = y1 - 1; y >= y0 && digs.Count < 2048; y--)
+        bool crowded = false, unfooted = false, ownFeet = false, overhead = BuiltOverhead(u);
+        // (all of what is in reach is looked over: digging is gathered from the top down, so that with a crown marked
+        // over it, a tree's butt — what is cut first — would be the last found, and missed)
+        for (int y = y1 - 1; y >= y0; y--)
             for (int z = z0; z < z1; z++)
                 for (int x = x0; x < x1; x++)
                 {
@@ -322,7 +324,16 @@ public sealed partial class Sim
                     if (o == 0 || (u.SiteWork >> (int)Work.Of(o) & 1) == 0) continue;
                     if (Orders.IsRemove(o))
                     {
-                        // a roof comes off from the ridge down (Sim.Builders.cs)
+                        // a roof comes off from the ridge down (Sim.Builders.cs); of a crown, so much at a time; the wood always
+                        bool wood = Mat.IsTrunk(World.Get(x, y, z));
+                        if (digs.Count >= 2048 && !wood) continue;
+                        // a standing trunk is cut at its foot only, never partway up: the top would come down on whoever is under it
+                        if (wood && MidTrunk(x, y, z)) continue;
+                        // the ground under its own feet is dug from beside, and the footing of what is built over its head
+                        // from out from under it; our countermine no further than its props (Sim.Undermine.cs)
+                        if (!wood && (UnderOwnFeet(u, x, y, z, feet) || overhead && BearsBuilt(x, y, z))) { ownFeet = true; continue; }
+                        if (BoreHeld(x, y, z)) { held = "подкоп ждёт брёвен на крепь"; continue; }
+                        if (_footingsAt.Count > 0 && _footingsAt.Contains(WaterPlanner.Pack(x, y, z))) continue;
                         if (Arched.Get(x, y, z) == 0 || !ArchOver(x, y, z)) digs.Add((x, y, z, o));
                         continue;
                     }
@@ -359,7 +370,8 @@ public sealed partial class Sim
         u.Jobs.AddRange(digs);
         u.Jobs.AddRange(builds);
         if (u.Jobs.Count == 0) u.Why = missing != "" ? "нет: " + missing : held != "" ? held : crowded ? "на месте кладки стоят"
-            : unfooted ? (_overreach ? "ждёт опоры: так далеко не удержится" : "ждёт опоры: класть не на что") : "";
+            : unfooted ? (_overreach ? "ждёт опоры: так далеко не удержится" : "ждёт опоры: класть не на что")
+            : ownFeet ? "под собой не копает: зайдёт сбоку" : "";
     }
 
     readonly Dictionary<int, byte> _toLay = new();

@@ -3028,6 +3028,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--spells")
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--trauma") TraumaBench.Run(Check);
 // the wounded carried and helped along, the pinned calling out, the player sending the chosen to them (Carry.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--carry") CarryBench.Run(Check);
+// the workers at dangerous work: felling a grove, digging by a wall, under masonry, a shaft (Smartwork.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--smartwork") SmartworkBench.Run(Check);
 
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--physics")
 {

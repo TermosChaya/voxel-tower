@@ -26,13 +26,20 @@ public sealed partial class Sim
         if (u.Hold || u.Inside || u.Airborne != null || u.Down || u.Captor != null || Time < u.WayOutMarked + 40) { u.ShutSince = -1; return; }
         _room.Clear();
         if (Paths.Reach(u.Cell, u.T.Move, RoomEnough, true, _room) >= RoomEnough || _room.Contains(Gate)) { u.ShutSince = -1; return; }
-        // shut in for a moment (a gate being hung across the only way): wait and see
-        if (u.ShutSince < 0) { u.ShutSince = Time; return; }
-        if (Time - u.ShutSince < 20) return;
+        // shut in for a moment (a gate being hung across the only way): wait and see; at the bottom of a pit it dug, it
+        // is shut in for good, and the sooner it cuts its way up the better (Sim.Undermine.cs)
+        bool pit = InPit(u);
+        if (u.ShutSince < 0 && !pit) { u.ShutSince = Time; return; }
+        if (!pit && Time - u.ShutSince < 20) return;
         _roomSet.Clear();
         foreach (int c in _room) _roomSet.Add(c);
-        // scaffolding out of the stores' logs, if there are any: nothing of what was built is cut (Sim.Scaffold.cs)
-        if (Stock[Stockpile.Wood] >= 400 && PlanEscape(u) is { } climb)
+        // one way out for all who are shut in there together
+        foreach (var o in Units)
+            if (o != u && !o.Dead && o.Team == Team.Player && Time < o.WayOutMarked + 40 && _roomSet.Contains(o.Cell)) { u.ShutSince = -1; return; }
+        // scaffolding out of the stores' logs, if there are any: nothing of what was built is cut (Sim.Scaffold.cs); out
+        // of a pit, steps cut up its side first, for they stay, a way out for all who work in it after
+        var cut = pit ? WayOut(u) : null;
+        if (cut == null && Stock[Stockpile.Wood] >= 400 && PlanEscape(u) is { } climb)
         {
             Scaffolds.Add(climb);
             u.Raising = climb;
@@ -41,7 +48,7 @@ public sealed partial class Sim
             Say($"{u.T.Name} оказался взаперти и ставит леса, чтобы выбраться.", 2, u);
             return;
         }
-        var cut = WayOut(u);
+        cut ??= pit ? null : WayOut(u);
         if (cut == null) return;
         u.WayOutMarked = Time;
         u.ShutSince = -1;
