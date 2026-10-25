@@ -299,7 +299,7 @@ public partial class WaveClock : Control
             _unit.Text = "В ДОЛИНЕ";
             _call.Text = "Орда в долине"; _call.Disabled = true;
             _call.TooltipText = $"Запасы орды\nБрёвна на лестницы и мосты: {Fmt.M3(sim.HordeStock[Stockpile.Wood])} м³. Земля на засыпку рвов: {Fmt.M3(sim.HordeStock[Stockpile.Earth])} м³. " +
-                "Каждый набег приносит свои запасы, а половина прорубленного идёт орде.";
+                "Каждая волна приносит свои запасы, а половина прорубленного идёт орде.";
         }
         else
         {

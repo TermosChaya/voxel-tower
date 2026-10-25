@@ -218,8 +218,8 @@ public sealed partial class Sim
     public static string OfferText(Deal d) => d.Kind switch
     {
         DealKind.Delay => $"«Дайте {d.Cost:0} золота, и орда придёт на 3 минуты позже».",
-        DealKind.Tribute => $"«Отдайте {Fmt.M3(d.Cost)} м³ {(d.Store == Stockpile.Wood ? "брёвен" : d.Store == Stockpile.Stone ? "камня" : "земли")} и следующий набег будет на 25 % меньше».",
-        DealKind.NoEngines => $"«Дайте {d.Cost:0} золота, и следующий набег придёт без осадных машин».",
+        DealKind.Tribute => $"«Отдайте {Fmt.M3(d.Cost)} м³ {(d.Store == Stockpile.Wood ? "брёвен" : d.Store == Stockpile.Stone ? "камня" : "земли")}, и следующая волна будет на 25 % меньше».",
+        DealKind.NoEngines => $"«Дайте {d.Cost:0} золота, и следующая волна придёт без осадных машин».",
         DealKind.Ransom => $"«Отпустите наших пленных, и мы дадим за них {d.Cost:0} золота».",
         _ => "",
     };
@@ -255,12 +255,12 @@ public sealed partial class Sim
             case DealKind.Tribute:
                 _waveShare = .75;
                 ThinNextWave();
-                Say("Сделка: следующий набег будет на 25 % меньше.", 1, d.Envoy);
+                Say("Сделка: следующая волна будет на 25 % меньше.", 1, d.Envoy);
                 break;
             case DealKind.NoEngines:
                 _waveNoEngines = true;
                 ThinNextWave();
-                Say("Сделка: следующий набег придёт без осадных машин.", 1, d.Envoy);
+                Say("Сделка: следующая волна придёт без осадных машин.", 1, d.Envoy);
                 break;
         }
         return true;
@@ -285,7 +285,7 @@ public sealed partial class Sim
     void EnvoyKilled()
     {
         Angered = true;
-        Say("Посол орды убит. Следующий набег будет на 20 % сильнее.", 3);
+        Say("Посол орды убит. Следующая волна будет на 20 % сильнее.", 3);
         AngerNextWave();
     }
 

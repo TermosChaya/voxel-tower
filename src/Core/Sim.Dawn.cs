@@ -106,7 +106,7 @@ public sealed partial class Sim
         {
             Gifts.AddRange(RelicGifts(night));
             _nightChampion = 0;
-            if (Gifts.Count > 0) { Say("Рассвет: выберите один из трёх трофеев вожака. Выбор ждёт до следующего набега.", 1); return; }
+            if (Gifts.Count > 0) { Say("Рассвет: выберите один из трёх трофеев вожака. Выбор ждёт до следующей волны.", 1); return; }
         }
         var trophy = Trophy(night);
         var deal = new List<Gift>();
@@ -120,7 +120,7 @@ public sealed partial class Sim
         // short of four: a second caravan's goods
         if (deal.Count < want && GiftOf(GiftKind.Caravan, night, 1) is { } more) deal.Add(more);
         for (int i = 0; i < Math.Min(want, deal.Count); i++) Gifts.Add(deal[i]);
-        if (Gifts.Count > 0) Say("Рассвет: выберите один из даров. Выбор ждёт до следующего набега.", 1);
+        if (Gifts.Count > 0) Say("Рассвет: выберите один из даров. Выбор ждёт до следующей волны.", 1);
     }
 
     /// <summary>A draw of the dawn's own, so that the valley's other chances run as they did.</summary>

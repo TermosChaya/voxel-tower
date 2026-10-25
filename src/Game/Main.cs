@@ -725,7 +725,7 @@ public partial class Main : Node3D
         // a wave beaten back is written down by itself
         if (_shot == null && !_selfTest && !_demo)
         {
-            if (Sim.Raids.Repelled > _repelledSeen && !Sim.Over && Tutor is not { Over: false } && Saves.Write(this, Saves.Auto)) Hud.Log("Автосохранение: набег отбит.", Hud.Kind.Ok, toast: false);
+            if (Sim.Raids.Repelled > _repelledSeen && !Sim.Over && Tutor is not { Over: false } && Saves.Write(this, Saves.Auto)) Hud.Log("Автосохранение: волна отбита.", Hud.Kind.Ok, toast: false);
             _repelledSeen = Sim.Raids.Repelled;
         }
         Command.Prune();

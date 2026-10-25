@@ -358,7 +358,7 @@ public partial class HordeInfo : VBoxContainer
         }
         _threat.Text = sim.ThreatLine();
         _stores.Text = $"Брёвна орды на лестницы и мосты: {Fmt.M3(sim.HordeStock[Stockpile.Wood])} м³, земля на засыпку рвов: {Fmt.M3(sim.HordeStock[Stockpile.Earth])} м³. " +
-            "Каждый набег приносит свои запасы, а половина прорубленного идёт орде.";
+            "Каждая волна приносит свои запасы, а половина прорубленного идёт орде.";
     }
 }
 

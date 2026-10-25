@@ -293,7 +293,7 @@ public partial class Inspector : Control
             row.AddChild(g);
         }
         if (o.TemplateTab == 0)
-            row.AddChild(new Glyph(Icons.BridgeIcon, "Мост ({ToolBridge})\nМост тянут от берега до берега инструментом «Мост».", () => t.SetTool(Tool.Bridge)) { CustomMinimumSize = new Vector2(34, 30) });
+            row.AddChild(new Glyph(Icons.BridgeIcon, "Мост ({ToolBridge})\nЩелчок возьмёт инструмент «Мост»: протяните его от берега до берега.", () => t.SetTool(Tool.Bridge)) { CustomMinimumSize = new Vector2(34, 30) });
         row.AddChild(new Control { CustomMinimumSize = new Vector2(14, 0) });
         row.AddChild(Shelf());
         return row;
@@ -433,7 +433,7 @@ public partial class Inspector : Control
                 break;
             case Tool.Wand:
                 opts.AddChild(Keyed(new Choice("Щелчок", "Что делает щелчок\nСнести: рабочие разберут выделенное, материал вернётся в запас. Кирка ({Pick}).\n" +
-                    "Переложить: разберут и сложат заново из камня, брёвен или земли ({MatStone}, {MatWood}, {MatEarth}).\nЧертёж: выделенное сохранится как чертёж, его копии ставят инструментом «Снять чертёж» ({ToolCapture}).",
+                    "Переложить: разберут и сложат заново из камня, брёвен, земли или металла ({MatStone}, {MatWood}, {MatEarth}, {MatMetal}).\nЧертёж: выделенное сохранится как чертёж, его копии ставят инструментом «Снять чертёж» ({ToolCapture}).",
                     new[] { "снести", "переложить", "чертёж" }, o.WandCapture ? 2 : dig ? 0 : 1, i =>
                     {
                         if (i == 0) t.SetDig(true);

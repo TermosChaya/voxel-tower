@@ -511,7 +511,7 @@ public sealed partial class Sim
         DeedKnowledge = deeds - know;
         Stock.Gold += gold;
         Knowledge += know;
-        Say($"Награда за набег: {gold:0} золота и {know} {Plural(know, "знание", "знания", "знаний")}.", 1);
+        Say($"Награда за волну: {gold:0} золота и {know} {Plural(know, "знание", "знания", "знаний")}.", 1);
     }
 
     /// <summary>Which way they come in, for the horn: «с запада», or from several sides.</summary>

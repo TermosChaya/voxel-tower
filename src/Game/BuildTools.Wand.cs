@@ -103,8 +103,8 @@ public partial class BuildTools
         }
     }
 
-    /// <summary>What it is laid over again in: «в камень», «в брёвна», «в землю».</summary>
-    static string Into(byte m) => m switch { Mat.Rammed => "землю", Mat.Wood => "брёвна", _ => "камень" };
+    /// <summary>What it is laid over again in: «в камень», «в брёвна», «в землю», «в металл».</summary>
+    static string Into(byte m) => m switch { Mat.Rammed => "землю", Mat.Wood => "брёвна", Mat.Plate => "металл", _ => "камень" };
 
     /// <summary>"брёвна 3,1 м³ · разборка: камень +2,0 м³ · 4 мин работы одного".</summary>
     string RelaySummary(double sec)

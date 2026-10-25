@@ -126,7 +126,7 @@ public sealed partial class Sim
             {
                 int n = Raids.Count + (Raids.Active ? 0 : 1);
                 if (n > RaidsInAll) return null;
-                return new Errand { Key = key, Main = main, From = n, Text = n == 1 ? "Выстойте первую ночь" : RaidsInAll < int.MaxValue ? $"Выстойте ночь {n} из {RaidsInAll}" : "Отбейте следующий набег" };
+                return new Errand { Key = key, Main = main, From = n, Text = n == 1 ? "Выстойте первую ночь" : RaidsInAll < int.MaxValue ? $"Выстойте ночь {n} из {RaidsInAll}" : "Отбейте следующую волну" };
             }
             case "copper":
             {
