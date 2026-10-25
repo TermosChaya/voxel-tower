@@ -195,7 +195,20 @@ public sealed partial class Sim
         // the doors: the cells a gate's leaves fill or sweep through stand for wall, and are seen (a gate hung and still
         // being laid is a door already; one hacked through is a hole)
         var doors = new HashSet<int>();
-        foreach (var g in Gates) if (!g.Broken) doors.UnionWith(g.Cells);
+        foreach (var g in Gates)
+        {
+            if (g.Broken) continue;
+            doors.UnionWith(g.Cells);
+            // a door hung outside (a house's) sweeps nothing in the room: its doorway through the wall is the door seen
+            // from within
+            for (int k = 0; k <= Shapes.HouseWall; k++)
+                for (int u = g.U0; u < g.U0 + Gateway.Width; u += 4)
+                    for (int y = g.Y; y < g.Y + Gateway.Height; y += 4)
+                    {
+                        int a = g.P - g.In * k;
+                        doors.Add(Nav.CellOf(g.AlongX ? u : a, y, g.AlongX ? a : u));
+                    }
+        }
         int bx0 = Math.Max(0, x0 - RoomReach), bz0 = Math.Max(0, z0 - RoomReach), bx1 = Math.Min(World.SX - 1, x1 + RoomReach), bz1 = Math.Min(World.SZ - 1, z1 + RoomReach);
         int by0 = Math.Max(1, lowest - 2), by1 = Math.Min(World.SY - 1, lowest + RoomHigh);
         int W = bx1 - bx0 + 1, D = bz1 - bz0 + 1, H = by1 - by0 + 1;

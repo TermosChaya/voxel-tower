@@ -329,6 +329,12 @@ public sealed partial class Sim
                 if (done == 0) return "рядом нет бойцов";
                 break;
             case 2:
+            {
+                // no archers about: nothing to loose, whether the horde is in sight or not
+                bool archers = false;
+                foreach (var u in Units)
+                    if (Soldierly(u, cap) && u.T.Ranged && Dist(u, cap) <= 50 * VoxelWorld.PerMetre) { archers = true; break; }
+                if (!archers) return "рядом нет стрелков";
                 if (float.IsNaN(ax))
                 {
                     var foe = Nearest(cap, Team.Horde, 60 * VoxelWorld.PerMetre);
@@ -344,6 +350,7 @@ public sealed partial class Sim
                 }
                 if (done == 0) return shooters == 0 ? "рядом нет стрелков" : "стрелкам туда не достать";
                 break;
+            }
             case 3:
                 foreach (var u in Units)
                 {

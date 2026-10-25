@@ -113,7 +113,7 @@ public sealed partial class Sim
     /// may not stand at all; nor share a wall whose door has nowhere else to go.
     /// </summary>
     public VoxelList PlanHouseAt(int ax, int az, int bx, int bz, in Stroke st, int doorSide, out Shapes.HouseDoor door, out string why, out VoxelList arched,
-        out (int x0, int z0, int x1, int z1) rect, out int shared, out Zone over, out List<DoorMove> moves)
+        out (int x0, int z0, int x1, int z1) rect, out int shared, out Zone over, out List<DoorMove> moves, bool lax = false)
     {
         int x0 = ax, z0 = az, x1 = bx, z1 = bz;
         FitHouse(ref x0, ref z0, ref x1, ref z1, out shared, out over);
@@ -123,7 +123,7 @@ public sealed partial class Sim
         if (!World.OnLand(x0, z0) || !World.OnLand(x1, z0) || !World.OnLand(x0, z1) || !World.OnLand(x1, z1)) { why = "здесь край долины"; return null; }
         why = DoorsInTheWay(rect, out moves);
         if (why != null) return null;
-        return Shapes.House(World, Site, x0, z0, x1, z1, st, 0, doorSide, TakenBesides(x0, z0, x1, z1), shared, out door, out why, out arched);
+        return Shapes.House(World, Site, x0, z0, x1, z1, st, 0, doorSide, TakenBesides(x0, z0, x1, z1), shared, out door, out why, out arched, lax);
     }
 
     /// <summary>A door of a house beside a new one that would be walled in by it: the gate there (or the door still waiting), and where it goes.</summary>
@@ -191,7 +191,7 @@ public sealed partial class Sim
                 {
                     if ((sharedNow & 1 << s) != 0) continue;
                     var e = Shapes.DoorOn(s, z.X0, z.Z0, z.X1, z.Z1, threshold - 1, z.Depth);
-                    if (Shapes.DoorFree(World, Site, e, Taken)) { to = e; break; }
+                    if (Shapes.DoorFree(World, Site, e, Taken, BuildingOn(z) != null)) { to = e; break; }
                 }
                 if (to == null) return $"в общей стене дверь дома «{z.Name}», и ей некуда переехать";
                 moves.Add(new DoorMove { House = z, Gate = g, Pending = pending, To = to.Value });
@@ -485,13 +485,16 @@ public sealed partial class Sim
         // a gatehouse's or a barn's door: as it was planned
         if (house == null) return d;
         var taken = TakenBesides(house.X0, house.Z0, house.X1, house.Z1);
-        if (Shapes.DoorFree(World, Site, d, taken)) return d;
+        // (only what is put up before it moves it: the lie of the land was looked at when it was planned, and the works
+        // about a house going up — a heap, a hole dug — come and go)
+        if (Shapes.DoorFree(World, Site, d, taken, true)) return d;
+        bool lax = BuildingOn(house) != null;
         int shared = SharedSidesOf(house);
         for (int side = 0; side < 4; side++)
         {
             if (side == d.Side || (shared & 1 << side) != 0) continue;
             var e = Shapes.DoorOn(side, house.X0, house.Z0, house.X1, house.Z1, d.Y - 9, d.Top);
-            if (!Shapes.DoorFree(World, Site, e, taken)) continue;
+            if (!Shapes.DoorFree(World, Site, e, taken, lax)) continue;
             Say($"Дверь дома перенесена {Shapes.SideWords[side]}: перед прежней теперь стена.", 1, e.X, e.Z);
             return e;
         }

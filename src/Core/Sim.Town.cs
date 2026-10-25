@@ -253,7 +253,8 @@ public sealed partial class Sim
         // the miners' building stands on an outcrop of ore (Sim.Metal.cs)
         if (k.OnOre && OutcropUnder(x0, z0, x1, z1) < 0) { why = "ставится на рудный выход: ржавая скала, где жила выходит наружу"; return null; }
         var st = new Stroke { Mat = k.Wall, Width = Shapes.HouseWall, Height = Shapes.HouseHeight + 4, Level = true };
-        var plan = PlanHouseAt(x0, z0, x1, z1, st, -1, out door, out why, out arched, out rect, out _, out var over, out moves);
+        // (a building goes where its kind must, on rough ground too: its door wants only nothing built before it)
+        var plan = PlanHouseAt(x0, z0, x1, z1, st, -1, out door, out why, out arched, out rect, out _, out var over, out moves, lax: true);
         if (over != null) { why = "здесь уже стоит дом"; return null; }
         return plan;
     }

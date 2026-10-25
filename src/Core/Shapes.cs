@@ -240,7 +240,11 @@ public static class Shapes
     /// no trunk, no water, no other house (<paramref name="taken"/>: what another building holds or is marked to be built,
     /// by voxel) — and, just outside, ground to step down onto no more than three quarters of a metre down.
     /// </summary>
-    public static bool DoorFree(VoxelWorld w, Site site, HouseDoor d, Func<int, int, int, bool> taken)
+    public static bool DoorFree(VoxelWorld w, Site site, HouseDoor d, Func<int, int, int, bool> taken) => DoorFree(w, site, d, taken, false);
+
+    /// <summary>As above; <paramref name="lax"/>: only what is built or water stands in the way, not the lie of the land (a
+    /// building that must stand on rough ground, the miners' on an outcrop: its doorstep is laid down to the ground).</summary>
+    public static bool DoorFree(VoxelWorld w, Site site, HouseDoor d, Func<int, int, int, bool> taken, bool lax)
     {
         int threshold = d.Y - 8, across = d.NX != 0 ? d.Z : d.X;
         static bool Solid(byte m) => m != Mat.Air && !Mat.Passable[m] && !Mat.IsLeafy(m) || Mat.IsTrunk(m);
@@ -251,7 +255,7 @@ public static class Shapes
                 if (!w.InBounds(x, threshold, z) || !w.OnLand(x, z) || site.Forbidden(x, z)) return false;
                 // what stands there over a step's height: a wall, a trunk, a house
                 for (int y = threshold + 3; y < threshold + 20 && y < w.SY; y++)
-                    if (Solid(w.Get(x, y, z))) return false;
+                    if (Solid(w.Get(x, y, z)) && (!lax || Mat.IsPlayer[w.Get(x, y, z)])) return false;
                 for (int y = threshold; y < threshold + 20 && y < w.SY; y++)
                     if (taken != null && taken(x, y, z)) return false;
                 // the ground there: no higher than a step over the threshold, no water on it; just outside, no more
@@ -259,7 +263,7 @@ public static class Shapes
                 int top = threshold + 2;
                 while (top > 1 && threshold - top <= 8 && !Solid(w.Get(x, top, z)) && w.Get(x, top, z) != Mat.Water) top--;
                 if (w.Get(x, top, z) == Mat.Water || w.Get(x, top + 1, z) == Mat.Water) return false;
-                if (k <= 2 && threshold - (top + 1) > 6) return false;
+                if (!lax && k <= 2 && threshold - (top + 1) > 6) return false;
             }
         return true;
     }
@@ -325,7 +329,7 @@ public static class Shapes
     /// Null and why when the door has nowhere to open.
     /// </summary>
     public static VoxelList House(VoxelWorld w, Site site, int ax, int az, int bx, int bz, in Stroke st, int levelTop, int doorSide, Func<int, int, int, bool> taken, int shared,
-        out HouseDoor door, out string why, out VoxelList arched)
+        out HouseDoor door, out string why, out VoxelList arched, bool lax = false)
     {
         door = default; why = null; arched = null;
         const int t = HouseWall;
@@ -366,14 +370,15 @@ public static class Shapes
         // the door: in the middle of a side that opens onto free ground — a long wall (the ridge runs along them), the
         // citadel's side first — never into a wall or another house standing before it
         bool found = false;
-        foreach (int side in DoorSides(site, x0, z0, x1, z1, doorSide, shared))
-        {
-            var d = DoorOn(side, x0, z0, x1, z1, ground, top);
-            if (!DoorFree(w, site, d, taken)) continue;
-            door = d;
-            found = true;
-            break;
-        }
+        for (int pass = 0; pass < (lax ? 2 : 1) && !found; pass++)
+            foreach (int side in DoorSides(site, x0, z0, x1, z1, doorSide, shared))
+            {
+                var d = DoorOn(side, x0, z0, x1, z1, ground, top);
+                if (!DoorFree(w, site, d, taken, pass > 0)) continue;
+                door = d;
+                found = true;
+                break;
+            }
         if (!found)
         {
             why = doorSide >= 0 ? $"дверь {SideWords[doorSide]} упрётся в стену, дом или обрыв: {{Rotate}} — другая сторона" : "двери некуда открыться: со всех сторон стена, дом, вода или обрыв";
