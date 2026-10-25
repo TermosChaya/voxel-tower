@@ -248,7 +248,9 @@ public sealed partial class Sim
         }
         if (!Brushes.Free(cur) || cur == j.m) { Orders.Clear(j.x, j.y, j.z); return false; }
         // pitch is poured, not laid: it needs nothing under it, it runs down
-        if (_bodies[Nav.CellOf(j.x, j.y, j.z)] > 0 || j.m != Mat.Pitch && !Footed(j.x, j.y, j.z)) return false;
+        int jc = Nav.CellOf(j.x, j.y, j.z);
+        bool underfoot = _bodies[jc] > 0 && Underfoot(j.x, j.y, j.z);
+        if (_bodies[jc] > 0 && !underfoot || j.m != Mat.Pitch && !Footed(j.x, j.y, j.z)) return false;
         // nor what would be out further than it bears from what holds it, and come straight down (Sim.Builders.cs); nor
         // what is to rest on a voxel not laid yet, held out from the side meanwhile
         if (j.m != Mat.Pitch && (Overreaches(j.x, j.y, j.z, j.m) || UnderMarked(j.x, j.y, j.z))) return false;
@@ -260,6 +262,26 @@ public sealed partial class Sim
         Filled(j.x, j.y, j.z, j.m);
         Remember(j.x, j.y, j.z, j.m);
         Orders.Clear(j.x, j.y, j.z);
+        // whoever stood where the floor went in stands on it now
+        if (underfoot)
+            foreach (var o in Units)
+                if (!o.Dead && !o.Inside && o.Airborne == null && o.Cell == jc && o.Y < j.y + 1 && Math.Abs(o.X - j.x - .5f) < 4 && Math.Abs(o.Z - j.z - .5f) < 4) o.Y = j.y + 1;
+        return true;
+    }
+
+    /// <summary>
+    /// A voxel of a floor rather than of a wall: in the lowest two above where the feet rest in its cell, with nothing to
+    /// be laid over it higher in the cell. It may be laid under someone standing there, lifting them.
+    /// </summary>
+    bool Underfoot(int x, int y, int z)
+    {
+        int c = Nav.CellOf(x, y, z), f = Nav.Floor[c];
+        if (y < f || y >= f + 2) return false;
+        for (int yy = f + 2; yy < f + NavGrid.CS && yy < World.SY; yy++)
+        {
+            byte o = Orders.At(x, yy, z);
+            if (o != 0 && !Orders.IsRemove(o)) return false;
+        }
         return true;
     }
 
@@ -280,8 +302,8 @@ public sealed partial class Sim
     {
         u.Jobs.Clear(); u.JobI = 0; u.Why = ""; _inTheWay = false;
         int i = Nav.I(u.Cell), k = Nav.K(u.Cell), feet = (int)MathF.Round(u.Y);
-        int x0 = Math.Max(0, (i - 1) * NavGrid.CS), x1 = Math.Min(World.SX, (i + 2) * NavGrid.CS);
-        int z0 = Math.Max(0, (k - 1) * NavGrid.CS), z1 = Math.Min(World.SZ, (k + 2) * NavGrid.CS);
+        int x0 = Math.Max(0, (i - Labour.ReachAside) * NavGrid.CS), x1 = Math.Min(World.SX, (i + 1 + Labour.ReachAside) * NavGrid.CS);
+        int z0 = Math.Max(0, (k - Labour.ReachAside) * NavGrid.CS), z1 = Math.Min(World.SZ, (k + 1 + Labour.ReachAside) * NavGrid.CS);
         int y0 = Math.Max(0, feet - Labour.ReachDown), y1 = Math.Min(World.SY, feet + Labour.ReachUp);
         var digs = new List<(int x, int y, int z, byte m)>();
         var builds = new List<(int x, int y, int z, byte m)>();
@@ -304,7 +326,9 @@ public sealed partial class Sim
                     int bc = Nav.CellOf(x, y, z);
                     // a gap left open so that nobody is walled in waits a while (Sim.Seal.cs)
                     if (Held(bc, out string why)) { held = why; continue; }
-                    if (_bodies[bc] > 0)
+                    // a floor is laid under the feet of whoever stands on its spot, and lifts them (a house's floor goes in
+                    // with the workers inside it, building its roof)
+                    if (_bodies[bc] > 0 && !Underfoot(x, y, z))
                     {
                         crowded = true;
                         // it is itself where the masonry goes
@@ -511,8 +535,22 @@ public sealed partial class Sim
                 // that cannot be got to costs a whole search to find out, and many pawns finding it out at once stop the game)
                 if (Time != _seekAt) { _seekAt = Time; _seekSpent = 0; }
                 if (_seekSpent >= SeekBudget) { u.NextSearch = Time; return false; }
-                List<int> path = Goal(u.Cell) ? new List<int>() : Paths.Find(u.Cell, Goal, c => H(c, ci, ck), MoverOf(u), 30000, gates: true);
-                if (!Goal(u.Cell)) _seekSpent += Paths.Expanded;
+                // what is to be laid goes up from its lowest course: a place to stand that reaches that first, if there is
+                // one — up on the wall or the scaffolding the courses still wanting below are out of reach, and what is
+                // over them has nothing to rest on (a tower's last gap was left so, for good)
+                bool lays = (mask & 1) != 0 && Orders.ColWork[0][col] > 0;
+                bool Low(int c) => Goal(c) && Nav.Floor[c] - Labour.ReachDown <= y0;
+                List<int> path = null;
+                if (lays)
+                {
+                    path = Low(u.Cell) ? new List<int>() : Paths.Find(u.Cell, Low, c => H(c, ci, ck), MoverOf(u), 30000, gates: true);
+                    if (!Low(u.Cell)) _seekSpent += Paths.Expanded;
+                }
+                if (path == null)
+                {
+                    path = Goal(u.Cell) ? new List<int>() : Paths.Find(u.Cell, Goal, c => H(c, ci, ck), MoverOf(u), 30000, gates: true);
+                    if (!Goal(u.Cell)) _seekSpent += Paths.Expanded;
+                }
                 if (path == null)
                 {
                     // out of reach of anywhere to stand: scaffolding beside it, raised from the ground (Sim.Scaffold.cs)

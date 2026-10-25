@@ -377,8 +377,9 @@ public sealed partial class Sim
             int ui = Nav.I(u.Cell), uy = Nav.Y(u.Cell), uk = Nav.K(u.Cell);
             foreach (var c in s.Columns)
             {
-                // in its cells (anyone: a raider on it is on it too)
-                if (ui == c.i && uk == c.k && uy >= c.y0 && uy <= c.y1 + 1) return true;
+                // in its cells (anyone: a raider on it is on it too), but for one of ours idling on the ground at its
+                // foot (the work it was put up for done from beside it, where the workers reach the lowest course)
+                if (ui == c.i && uk == c.k && uy >= c.y0 && uy <= c.y1 + 1 && !(u.Team == Team.Player && uy == c.y0 && u.State == UnitState.Idle)) return true;
                 // one of ours up on what it leads to, near it
                 if (u.Team == Team.Player && u.Y >= foot + 2 * NavGrid.CS && Math.Abs(ui - c.i) <= 6 && Math.Abs(uk - c.k) <= 6) return true;
             }

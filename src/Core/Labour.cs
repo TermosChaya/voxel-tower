@@ -28,11 +28,12 @@ public sealed class Stockpile
 /// </summary>
 public static class Labour
 {
-    public const double WorkPerSecond = 600;
+    public const double WorkPerSecond = 1000;
     /// <summary>Gold a voxel of ore gives when it is broken out.</summary>
     public const double OreGold = .05;
-    /// <summary>How far from where they stand pawns reach: a cell to each side, 1.5 m down and 2.5 m up.</summary>
-    public const int ReachDown = 24, ReachUp = 40;
+    /// <summary>How far from where they stand pawns reach: 1.5 m down and 2.5 m up, and <see cref="ReachAside"/> cells to
+    /// each side (two: a stretch of wall is laid from one place, and the workers walk less from spot to spot).</summary>
+    public const int ReachDown = 24, ReachUp = 40, ReachAside = 2;
 
     static readonly float[] DigCost = new float[Mat.Count], LayCost = new float[Mat.Count], Share = new float[Mat.Count];
     static readonly byte[] Kind = new byte[Mat.Count];

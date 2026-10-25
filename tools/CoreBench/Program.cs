@@ -6112,6 +6112,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--ourengines") OurEngi
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--wand") WandBench.Run(Check);
 // the town: buildings the lore opens, put up by the workers, hiring and raised a storey (Town.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--town") TownBench.Run(Check);
+// the easier building: the pace of the usual works (Casual.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--casual") CasualBench.Run(Check);
 
 // houses the workers build: roofed whole, floored, furnished, and a storey on a storey (Houses.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--houses") HousesBench.Run(Check);
