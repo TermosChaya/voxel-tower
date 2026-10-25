@@ -23,6 +23,8 @@ public sealed class Liquid
     public float Thin;
     /// <summary>A voxel is drawn as the liquid from this much in it, and stops being drawn below the second.</summary>
     public float ShowOn, ShowOff;
+    /// <summary>A film of it creeps on over level ground and over edges however thin (acid, which goes flat by itself).</summary>
+    public bool Creeps;
 }
 
 /// <summary>
@@ -49,7 +51,7 @@ public sealed partial class Sim
     {
         null,
         new Liquid { Mat = Mat.Water, Name = "вода", Every = 1, Pull = 1, Way = .94f, Thin = .9f, ShowOn = .4f, ShowOff = .15f },
-        new Liquid { Mat = Mat.Acid, Name = "кислота", Every = 2, Pull = .8f, Way = .9f, Thin = .6f, ShowOn = .3f, ShowOff = .1f },
+        new Liquid { Mat = Mat.Acid, Name = "кислота", Every = 2, Pull = .8f, Way = .9f, Thin = .6f, ShowOn = .3f, ShowOff = .1f, Creeps = true },
         new Liquid { Mat = Mat.Pitch, Name = "смола", Every = 3, Pull = .5f, Way = .8f, Thin = .6f, ShowOn = .35f, ShowOff = .15f },
         new Liquid { Mat = Mat.Lava, Name = "лава", Every = 6, Pull = .4f, Way = .6f, Thin = 1.4f, ShowOn = .45f, ShowOff = .2f },
     };
@@ -680,7 +682,7 @@ public sealed partial class Sim
         // what runs keeps its way, but a thin film drags on the ground and keeps none, and lies still on a slighter
         // slope than deep water does
         float way = L.Way * Math.Clamp((depth - .3f) / .9f, 0, 1);
-        float still = Level + Math.Max(0, 1 - depth) * .1f;
+        float still = L.Creeps ? Level : Level + Math.Max(0, 1 - depth) * .1f;
         // a shallow run carries its way on from one column into the next; in a deep body that would slosh
         float keep = KeepOn * Math.Clamp(1 - (depth - 2) / 3, 0, 1);
         // afloat on running water, it drifts with it: as fast as the water runs, as deep as it lies
@@ -721,7 +723,7 @@ public sealed partial class Sim
                 beyond = nc.head;
                 fy = nc.y0;
                 // a film thinner than the liquid runs does not run on over level ground, wet or dry, unless it is running
-                if (nc.y0 == col.y0 && depth < L.Thin && was < .05f && drift <= 0) continue;
+                if (nc.y0 == col.y0 && depth < L.Thin && was < .05f && drift <= 0 && !L.Creeps) continue;
             }
             else
             {
@@ -737,7 +739,7 @@ public sealed partial class Sim
                 beyond = fl;
                 // on dry level ground it runs out only standing deep enough, or running that way; and a film half as thin
                 // clings to an edge rather than trickle over it for ever
-                if (col.head - my < (fl == my ? L.Thin : L.Thin * .5f) && was < .05f && drift <= 0) continue;
+                if (col.head - my < (fl == my ? L.Thin : L.Creeps ? 0 : L.Thin * .5f) && was < .05f && drift <= 0) continue;
                 fy = my;
             }
             float drive = col.head - beyond;

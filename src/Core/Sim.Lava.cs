@@ -140,6 +140,24 @@ public sealed partial class Sim
             }
     }
 
+    /// <summary>
+    /// One caught where lava ran (it is got out of it at once, the cell being as deep water to it): burnt badly, and
+    /// burning on a while.
+    /// </summary>
+    void Scald(Unit u)
+    {
+        // anywhere about where it stands: the lava has reached the ground it stands on
+        int x = (int)MathF.Floor(u.X), y = (int)MathF.Floor(u.Y), z = (int)MathF.Floor(u.Z), r = NavGrid.CS / 2;
+        bool lava = false;
+        for (int dy = -1; dy < 3 && !lava; dy++)
+            for (int dz = -r; dz <= r && !lava; dz++)
+                for (int dx = -r; dx <= r && !lava; dx++) lava = World.Get(x + dx, y + dy, z + dz) == Mat.Lava;
+        if (!lava || u.Dead) return;
+        u.Burn = Math.Max(u.Burn, 6);
+        u.BurnHeat = Math.Max(u.BurnHeat, 3);
+        Hurt(u, null, LavaBurns * .5f * (Kinds.IsEngine(u.T) ? 2 : 1), "лава");
+    }
+
     void WriteLava(BinaryWriter w)
     {
         w.Write(LavaSet);
