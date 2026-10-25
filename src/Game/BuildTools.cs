@@ -1372,12 +1372,26 @@ public partial class BuildTools : Node3D
         _shapeMat.AlbedoColor = c;
     }
 
+    /// <summary>The world's revision about the cursor and the drag, 12 m round them (a blueprint's ghost reaches so far).</summary>
+    int PlanRevision(VoxelWorld w)
+    {
+        if (!_hasHover) return w.Revision;
+        var h = HoverGround();
+        int x0 = h.x, z0 = h.z, x1 = h.x, z1 = h.z;
+        if (_hasStart) { x0 = Math.Min(x0, _startPt.x); z0 = Math.Min(z0, _startPt.z); x1 = Math.Max(x1, _startPt.x); z1 = Math.Max(z1, _startPt.z); }
+        if (_hasDrag) { x0 = Math.Min(x0, _dragPt.x); z0 = Math.Min(z0, _dragPt.z); x1 = Math.Max(x1, _dragPt.x); z1 = Math.Max(z1, _dragPt.z); }
+        const int Room = 12 * VoxelWorld.PerMetre;
+        return w.RevisionIn(x0 - Room, z0 - Room, x1 + Room, z1 + Room);
+    }
+
     void UpdatePlan()
     {
         var w = _m.World;
         // the valley changes all the time while the pawns work: re-plan for it twice a second, not every frame, and a
         // ghost that is long in the making no more than a hundredth of the time
-        if (w.Revision != _rev && _clock - _revAt > Math.Max(.5, _planMs * .1)) { _rev = w.Revision; _revAt = _clock; }
+        // and only for a change near what the hand holds: the cursor, where a drag began, with room for the ghost
+        int rev = PlanRevision(w);
+        if (rev != _rev && _clock - _revAt > Math.Max(.5, _planMs * .1)) { _rev = rev; _revAt = _clock; }
         var st = _m.Sim.Stock;
         string stock = $"{(int)(st[1] / 400)}|{(int)(st[2] / 400)}|{(int)(st[3] / 400)}";
         bool dig = DigNow;

@@ -28,6 +28,8 @@ public sealed class VoxelWorld
     readonly byte[][] _data;
     readonly byte[] _uniform;
     readonly bool[] _dirty;
+    /// <summary>For each column of chunks (cz·CX + cx), the world's revision when something in it last changed.</summary>
+    readonly int[] _colRev;
     /// <summary>Chunks written since the valley was made (a save keeps only these: the rest is made again from the seed).</summary>
     readonly bool[] _edited;
     /// <summary>Whether writes are being kept count of: off while the valley is being made, on once play begins.</summary>
@@ -52,6 +54,7 @@ public sealed class VoxelWorld
         _data = new byte[ChunkCount][];
         _uniform = new byte[ChunkCount];
         _dirty = new bool[ChunkCount];
+        _colRev = new int[CX * CZ];
         _edited = new bool[ChunkCount];
         _colDirty = new bool[sx * sz];
         OriginX = -sx * Vox / 2;
@@ -124,12 +127,27 @@ public sealed class VoxelWorld
         if (old == m) return false;
         SetRaw(x, y, z, m);
         Revision++;
+        _colRev[(z >> Shift) * CX + (x >> Shift)] = Revision;
         Touch(x, y, z);
         int col = z * SX + x;
         if (!_colDirty[col]) { _colDirty[col] = true; _colDirtyList.Add(col); }
         Edited?.Invoke(x, y, z);
         Replaced?.Invoke(x, y, z, old);
         return true;
+    }
+
+    /// <summary>
+    /// The latest revision of the world within a rectangle of columns (voxels, inclusive): what the cursor's ghost
+    /// asks, so that it is planned again for a change under it and not for a worker's stroke across the valley.
+    /// </summary>
+    public int RevisionIn(int x0, int z0, int x1, int z1)
+    {
+        int cx0 = Math.Max(0, Math.Min(x0, x1) >> Shift), cx1 = Math.Min(CX - 1, Math.Max(x0, x1) >> Shift);
+        int cz0 = Math.Max(0, Math.Min(z0, z1) >> Shift), cz1 = Math.Min(CZ - 1, Math.Max(z0, z1) >> Shift);
+        int r = 0;
+        for (int cz = cz0; cz <= cz1; cz++)
+            for (int cx = cx0; cx <= cx1; cx++) r = Math.Max(r, _colRev[cz * CX + cx]);
+        return r;
     }
 
     /// <summary>Hands over the columns (z·SX + x) edited since the last call, for the map in the corner.</summary>
@@ -227,6 +245,7 @@ public sealed class VoxelWorld
         _edited[ci] = true;
         Revision++;
         ChunkCoords(ci, out int cx, out int cy, out int cz);
+        _colRev[cz * CX + cx] = Revision;
         MarkChunk(cx, cy, cz);
     }
 
