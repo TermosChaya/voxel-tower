@@ -104,6 +104,8 @@ public sealed partial class Sim
     void RaiderTick(Unit u, float dt)
     {
         _goalSet ??= new HashSet<int>(Goals);
+        // (since when it has been getting nowhere: kept only by a tick that again gets it nowhere, see GettingNowhere)
+        _stuckSince = u.StuckSince; u.StuckSince = -1;
         // bound: it lies where it fell, or goes where it is led
         if (u.Bound) { BoundTick(u, dt); return; }
         // held fast in a spell's chains: it neither goes nor strikes
@@ -176,6 +178,7 @@ public sealed partial class Sim
         }
         if (u.CarveCell >= 0) { Carve(u, dt); return; }
         if (u.BuildCell >= 0) { BuildTick(u, dt); return; }
+        GettingNowhere(u);
         if (u.Path != null && u.PathI < u.Path.Count) { Walk(u, dt); return; }
         if (BandStep(u, dt)) return;
         if (FieldOf(u.T) is not { } f) { u.State = UnitState.Idle; return; }
@@ -251,19 +254,9 @@ public sealed partial class Sim
         int home = u.Band is { Edge: >= 0 } hb && hb.Edge != HomeEdge && hb.Entry >= 0 ? hb.Entry : -1;
         var (hx, _, hz) = home >= 0 ? Nav.Feet(home) : (0f, 0f, 0f);
         bool gone = home >= 0 ? (u.X - hx) * (u.X - hx) + (u.Z - hz) * (u.Z - hz) < 24 * 24 : Site.InStrip(u.X, u.Z);
-        if (gone)
-        {
-            if (u.T == Kinds.Thief) ThiefGone(u);
-            if (u.Envoy) { u.Dead = true; u.DiedAt = -999; u.State = UnitState.Dead; return; }
-            if (Armed(u) && !u.Guard)
-            {
-                if (u.Wounds != null) { u.Wounds.Bleed = 0; u.Wounds.Arrows.Clear(); }
-                Escaped.Add(new Survivor { Kind = u.T, Look = u.Look, Hp = u.Hp, Wounds = u.Wounds, Champion = u.Champion, Title = u.Title });
-                Say($"{u.T.Name} сбежал и вернётся со следующей волной.", 2, u);
-            }
-            u.Dead = true; u.DiedAt = -999; u.State = UnitState.Dead;
-            return;
-        }
+        if (gone) { OutOfValley(u); return; }
+        GettingNowhere(u);
+        if (u.Dead) return;
         if (u.Path == null || u.PathI >= u.Path.Count)
         {
             u.State = UnitState.Idle;
@@ -276,6 +269,46 @@ public sealed partial class Sim
         }
         Walk(u, dt);
         u.State = UnitState.Flee;
+    }
+
+    /// <summary>Gone out of the valley: one still fit to fight comes back with the next raid.</summary>
+    void OutOfValley(Unit u)
+    {
+        if (u.T == Kinds.Thief) ThiefGone(u);
+        if (u.Envoy) { u.Dead = true; u.DiedAt = -999; u.State = UnitState.Dead; return; }
+        if (Armed(u) && !u.Guard)
+        {
+            if (u.Wounds != null) { u.Wounds.Bleed = 0; u.Wounds.Arrows.Clear(); }
+            Escaped.Add(new Survivor { Kind = u.T, Look = u.Look, Hp = u.Hp, Wounds = u.Wounds, Champion = u.Champion, Title = u.Title });
+            Say($"{u.T.Name} сбежал и вернётся со следующей волной.", 2, u);
+        }
+        u.Dead = true; u.DiedAt = -999; u.State = UnitState.Dead;
+    }
+
+    double _stuckSince;
+    /// <summary>A raider getting nowhere gives it up after so long: a minute to turn back, a minute more to be gone; and
+    /// getting somewhere is three metres from where it was.</summary>
+    const double StuckFor = 60;
+    const float StuckR = 3 * VoxelWorld.PerMetre;
+
+    /// <summary>
+    /// A raider on its way, or its way out, getting nowhere: not three metres from where it was a minute ago (walled in,
+    /// on a ledge, in a pit, to and fro between two cells). A minute of that and it turns back; turned back and still
+    /// getting nowhere, a minute more and it is gone from the valley, as if it had got out. So a raid always ends, though
+    /// nobody of ours can get at the last of it. Hacking, building, battering the citadel or fighting is getting somewhere
+    /// (it never comes here then).
+    /// </summary>
+    void GettingNowhere(Unit u)
+    {
+        float dx = u.X - u.StuckX, dz = u.Z - u.StuckZ;
+        // (one of a band waiting on its leader at work, hacking or building a way in, waits as long as it works)
+        bool waits = u.Band?.Leader is { Dead: false } l && l != u && l.State is UnitState.Carve or UnitState.Work or UnitState.Siege or UnitState.Fight;
+        if (_stuckSince < 0 || waits || dx * dx + dz * dz > StuckR * StuckR) { u.StuckSince = Time; u.StuckX = u.X; u.StuckZ = u.Z; return; }
+        u.StuckSince = _stuckSince;
+        if (Time - u.StuckSince < StuckFor) return;
+        u.StuckSince = Time;
+        if (!u.Routed) { u.Routed = true; return; }
+        OutOfValley(u);
     }
 
     /// <summary>Lists the voxels in the way into the next cell (and above its head when climbing), nearest first.</summary>

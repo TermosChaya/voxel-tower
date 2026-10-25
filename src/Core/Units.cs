@@ -526,6 +526,9 @@ public sealed class Unit
     /// the alarm, has it look at once).
     /// </summary>
     public double NoWayUntil;
+    /// <summary>A raider: since when it has been getting nowhere (−1: it is getting somewhere), and from where; see Sim.GettingNowhere.</summary>
+    public double StuckSince = -1;
+    public float StuckX, StuckZ;
     /// <summary>Why it is not working, for the panel: "нет камня", "не дойти".</summary>
     public string Why = "";
     public readonly Dictionary<int, double> Unreachable = new();

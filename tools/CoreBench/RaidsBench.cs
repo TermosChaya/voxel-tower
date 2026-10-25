@@ -90,6 +90,38 @@ static class RaidsBench
             $"gone {gone} of {come.Count}, still in the valley west of the middle {westward}; the raid over {!simR.Raids.Active}"
             + string.Join("", come.Where(u => !u.Dead).Select(u => $"; {u.T.Key} {u.State} at {u.X:0},{u.Z:0} routed {u.Routed} band {u.Band?.Edge} entry {(u.Band != null && u.Band.Entry >= 0 ? simR.Nav.Feet(u.Band.Entry).ToString() : "-")} path {(u.Path == null ? -1 : u.Path.Count - u.PathI)} why {u.Why}")));
 
+        // ---- a raider walled in where it can go nowhere, nor out, and nobody of ours can get at it: it turns back after a
+        // minute, is gone a minute after, and the raid ends (it would have gone on for ever)
+        var simW = Fresh(out _);
+        simW.SetSource(new MapRaids());
+        simW.Clock.Left = 1e9;
+        simW.Raid(new List<UnitType> { Kinds.Goblin }, 1, intel: 1);
+        Run(simW, 3);
+        var shut = simW.Units.FirstOrDefault(u => u.Team == Team.Horde && !u.Dead);
+        if (shut != null)
+        {
+            // set down well away from the citadel, in a box of the valley's bedrock, which nothing cuts: three metres
+            // across, nearly three high
+            shut.Cell = simW.NearestStand(simW.Site.KeepX - 260, simW.Site.KeepZ + 40, shut.T.Move.Height);
+            (shut.X, shut.Y, shut.Z) = simW.Nav.Feet(shut.Cell); shut.Path = null;
+            int cx = (int)shut.X, cz = (int)shut.Z, fy = (int)MathF.Round(shut.Y);
+            for (int z = cz - 14; z <= cz + 14; z++)
+                for (int x = cx - 14; x <= cx + 14; x++)
+                    for (int y = fy - 4; y <= fy + 24; y++)
+                    {
+                        bool shell = Math.Abs(x - cx) >= 12 || Math.Abs(z - cz) >= 12 || y < fy || y >= fy + 22;
+                        if (shell) simW.World.Set(x, y, z, Mat.Bed);
+                        else if (simW.World.Get(x, y, z) != Mat.Air) simW.World.Set(x, y, z, Mat.Air);
+                    }
+        }
+        double w0 = simW.Time;
+        int escaped0 = simW.Escaped.Count;
+        while (simW.Raids.Active && simW.Time - w0 < 300) Run(simW, 1);
+        double took = simW.Time - w0;
+        check("a raider walled in where it can go nowhere and nobody can get at it turns back after a minute, is gone a minute after, and the raid ends",
+            shut != null && shut.Dead && simW.Escaped.Count == escaped0 + 1 && !simW.Raids.Active && took >= 55 && took < 200,
+            $"{(shut == null ? "nobody came" : $"{shut.T.Key} at {shut.X:0},{shut.Z:0} (the keep {simW.Site.KeepX},{simW.Site.KeepZ}, its hp {simW.KeepHp:0}) {(shut.Dead ? "gone" : $"still {shut.State}, routed {shut.Routed}")}")}; escaped {simW.Escaped.Count - escaped0}; the raid over {!simW.Raids.Active} after {took:0} s");
+
         // ---- knowledge by deeds: a leader and a troll felled in a raid, a place taken, a building put up
         var simK = Fresh(out _);
         simK.Clock.Left = 1e9;

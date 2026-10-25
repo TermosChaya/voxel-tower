@@ -180,6 +180,12 @@ public partial class Main
                         int cell = Sim.NearestStand(copper.Place.StandX > 0 ? copper.Place.StandX : copper.Place.X, copper.Place.StandZ > 0 ? copper.Place.StandZ : copper.Place.Z, 2);
                         Sim.Command(folk, cell);
                         for (int t = 0; t < 120 && copper.Holder != Holder.Ours; t++) Advance(1);
+                        // not taken: where the two are, and who else holds it
+                        if (copper.Holder != Holder.Ours)
+                        {
+                            GD.Print($"[tutorial]      {copper.Name}: ours {copper.Ours}, theirs {copper.Theirs}, grip {copper.Grip:0.00}, sent to {cell}");
+                            foreach (var u in folk) GD.Print($"[tutorial]        #{u.Id} at {u.X:0},{u.Y:0},{u.Z:0} {u.State} «{u.Why}» hold {u.Hold} dest {u.Dest} path {u.Path?.Count - u.PathI} from the stand {MathF.Sqrt((u.X - copper.Place.StandX) * (u.X - copper.Place.StandX) + (u.Z - copper.Place.StandZ) * (u.Z - copper.Place.StandZ)):0}");
+                        }
                     }
                     break;
                 }
@@ -200,6 +206,21 @@ public partial class Main
                     }
                     GD.Print($"[tutorial]      wave {Sim.Waves.Number}, active {Sim.Waves.Active}, coming {Sim.Waves.Coming}, raiders {Sim.Units.FindAll(u => !u.Dead && u.Team == Team.Horde && !u.Guard).Count}");
                     foreach (var u in Sim.Units) if (!u.Dead && u.Team == Team.Horde && !u.Guard) GD.Print($"[tutorial]        {u.T.Name} at {u.X:0},{u.Z:0} {u.State}");
+                    // the band not beaten: how each of them and each of ours stands, and whether ours can get to them
+                    if (Sim.Waves.Active)
+                    {
+                        GD.Print($"[tutorial]      the keep {Sim.KeepHp:0} of {Sim.KeepMax:0}, alarm {Sim.Alarm}");
+                        foreach (var u in Sim.Units)
+                            if (!u.Dead && u.Team == Team.Horde)
+                                GD.Print($"[tutorial]        #{u.Id} {u.T.Name} at {u.X:0},{u.Y:0},{u.Z:0} {u.State} hp {u.Hp:0}/{u.MaxHp:0} pain {u.Pain:0.00} routed {u.Routed} guard {u.Guard} bound {u.Bound} down {u.Down} inside {u.Inside} target {u.Target?.Id}");
+                        foreach (var u in Sim.Units)
+                            if (!u.Dead && u.Team == Team.Player && u.T.Work < 1)
+                            {
+                                var foe = Sim.Units.Find(o => !o.Dead && o.Team == Team.Horde);
+                                var way = foe == null || u.Inside ? null : Sim.Paths.Find(u.Cell, c => c == foe.Cell || Math.Abs(Sim.Nav.I(c) - Sim.Nav.I(foe.Cell)) <= 1 && Math.Abs(Sim.Nav.K(c) - Sim.Nav.K(foe.Cell)) <= 1, _ => 0, u.T.Move, 200000, gates: true);
+                                GD.Print($"[tutorial]        #{u.Id} {u.T.Name} at {u.X:0},{u.Y:0},{u.Z:0} {u.State} «{u.Why}» hp {u.Hp:0}/{u.MaxHp:0} inside {u.Inside} mending {u.Mending} hold {u.Hold} post {u.Post} prey {u.Prey?.Id} target {u.Target?.Id}; a way to #{foe?.Id}: {(way == null ? "none" : way.Count + " cells")} ({Sim.Paths.Expanded} looked at)");
+                            }
+                    }
                     break;
                 case "Отбой": if (Sim.Alarm) Command.Alarm(); break;
                 case "Цитадель": Sim.Enlist(Kinds.Archer); break;

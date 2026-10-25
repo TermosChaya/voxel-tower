@@ -42,9 +42,15 @@ public sealed partial class Sim
     /// <summary>What a shot that kills is put down as, for the chronicle.</summary>
     static string CauseOf(Shot s) => s switch { Shot.Bolt => "арбалетный болт", Shot.Stone => "камень из пращи", Shot.Spear => SpearCause, _ => "стрела" };
 
+    /// <summary>
+    /// A raider still in the raid: living, not keeping a camp, not bound, led off or shut up in the citadel (the raid is
+    /// over when none is left, and none of these is any more in it).
+    /// </summary>
+    static bool InRaid(Unit u) => !u.Dead && u.Team == Team.Horde && !u.Guard && !u.Bound && u.Captor == null && !u.Inside;
+
     public bool AnyRaider()
     {
-        foreach (var u in Units) if (!u.Dead && u.Team == Team.Horde && !u.Guard && !u.Bound) return true;
+        foreach (var u in Units) if (InRaid(u)) return true;
         return false;
     }
 
@@ -52,7 +58,7 @@ public sealed partial class Sim
     public int RaidersAlive()
     {
         int n = 0;
-        foreach (var u in Units) if (!u.Dead && u.Team == Team.Horde && !u.Guard && !u.Bound) n++;
+        foreach (var u in Units) if (InRaid(u)) n++;
         return n;
     }
 
