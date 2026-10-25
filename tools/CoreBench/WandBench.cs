@@ -137,10 +137,11 @@ static class WandBench
         var bp = Blueprint.FromVoxels(L, 1, null);
         check("a blueprint of what the wand took keeps that only", bp != null && bp.Stone == stoneNow && bp.Wood == 0, $"{bp?.Describe()}: stone {bp?.Stone} of {stoneNow}, logs {bp?.Wood}");
 
-        // fast enough to follow the cursor: the whole cap in a few milliseconds
-        var sw = System.Diagnostics.Stopwatch.StartNew();
+        // fast enough to follow the cursor: the whole cap in a few milliseconds (of the processor's time, which does not
+        // grow on a busy machine)
+        double c0 = BenchClock.CpuMs();
         for (int i = 0; i < 5; i++) Wand.Fill(w, gx, w.SurfAt(gx, gz) - 1, gz, false, false, L, seen);
-        double ms5 = sw.Elapsed.TotalMilliseconds / 5;
+        double ms5 = (BenchClock.CpuMs() - c0) / 5;
         check("the wand fills its whole cap fast enough to follow the cursor", ms5 < 40, $"{ms5:0.0} ms for {Wand.Cap} voxels");
     }
 }

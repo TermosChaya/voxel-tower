@@ -45,6 +45,12 @@ void Check(string what, bool ok, string detail = "")
     if (!ok) failures++;
 }
 
+// the clock the timed checks go by counts the bench's own work, not the time it waits on a busy machine
+{
+    var (work, idle) = BenchClock.Weighed();
+    Check("the bench's clock counts its own work and not its waiting", work > 5 && work < 60 && idle < 10, $"50 ms of work counted {work:0.0} ms, 50 ms asleep {idle:0.0} ms");
+}
+
 var sw = Stopwatch.StartNew();
 var w = new VoxelWorld(WorldGen.SizeX, WorldGen.SizeY, WorldGen.SizeZ);
 var site = WorldGen.Generate(w);

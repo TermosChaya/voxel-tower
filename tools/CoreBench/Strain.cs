@@ -270,12 +270,13 @@ static class StrainBench
                     if (!Mat.IsMasonry(w.Get(x, y, z))) continue;
                     w.Set(x, y, z, Mat.Air);
                     cut++;
-                    long s0 = System.Diagnostics.Stopwatch.GetTimestamp();
+                    // the work the step does, not the wall clock's time (another program busy on the machine is no slow step)
+                    double s0 = BenchClock.CpuMs();
                     sim.Step(.05f);
-                    slowest = Math.Max(slowest, (System.Diagnostics.Stopwatch.GetTimestamp() - s0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
+                    slowest = Math.Max(slowest, BenchClock.CpuMs() - s0);
                 }
         check("a great ring hacked away at its foot a voxel a step: no step takes long for the weighing", cut > 100 && slowest < 40,
-            $"{ringN} voxels of ring, {cut} hacked out, the slowest step {slowest:0.0} ms");
+            $"{ringN} voxels of ring, {cut} hacked out, the slowest step {slowest:0.0} ms of the processor's time");
 
         // a hill giant's boulders at a wall: each cracks it about the hole it breaks, and four bring down more of it than
         // their holes, the cracked stone round them giving way

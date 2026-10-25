@@ -250,18 +250,19 @@ static class LiquidsBench
                 for (int y = g; y < g + 36; y++) w.Set(x, y, z, wall ? Mat.Stone : y < g + 32 ? Mat.Water : Mat.Air);
             }
         Run(1);
-        var quiet = Stopwatch.StartNew();
+        // the processor's time the bench spends, not the wall clock's: another program busy on the machine is no cost
+        double q0 = BenchClock.CpuMs();
         Run(10);
-        long still = quiet.ElapsedMilliseconds;
+        double still = BenchClock.CpuMs() - q0;
         for (int z = kz - 8; z < kz + 8; z++) for (int x = rx1 - 4; x < rx1; x++) for (int y = g; y < g + 36; y++) w.Set(x, y, z, Mat.Air);
         sim.TakeLiquidPeak();
-        var sw = Stopwatch.StartNew();
+        double f0 = BenchClock.CpuMs();
         Run(30);
-        long ms = sw.ElapsedMilliseconds;
+        double ms = BenchClock.CpuMs() - f0;
         int far = 0;
         for (int x = rx1; x < fx1; x++) for (int z = fz0; z < fz1; z += 2) if (w.Get(x, g, z) == Mat.Water) { far = x - rx1; break; }
         double cost = (ms - still * 3) / 30.0;
-        Console.WriteLine($"  [liquids] flood over the field: {ms} ms for 30 s of game, {still} ms for 10 s before it; out {far / 8.0:0.0} m; " +
+        Console.WriteLine($"  [liquids] flood over the field: {ms:0} ms of the processor for 30 s of game, {still:0} ms for 10 s before it; out {far / 8.0:0.0} m; " +
             $"most voxels looked at in a turn {sim.TakeLiquidPeak()}, blocks kept {sim.LiquidBlocks}");
         check("a big flood over open land costs little a second of game", cost < 70 && far > 40,
             $"{cost:0} ms a second of game over a quiet one; it ran out {far / 8.0:0.0} m in 30 s");
