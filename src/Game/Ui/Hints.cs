@@ -169,6 +169,18 @@ public partial class Hints : Control
                 o.Add((L(Act.Rotate), "повернуть"));
                 o.Add((L(Act.Form), "следующая"));
                 break;
+            case Tool.Template when t.TemplatePick.Line:
+                o.Add((Lmb, "протянуть"));
+                o.Add((height, "высота"));
+                o.Add((L(Act.Form), "следующий"));
+                break;
+            case Tool.Template:
+                o.Add((Lmb, "поставить"));
+                o.Add(("Shift", "ряд по протяжке"));
+                o.Add((L(Act.Rotate), "повернуть"));
+                if (t.TemplatePick.SizeMax > 0) o.Add((height, "высота"));
+                o.Add((L(Act.Form), "следующий"));
+                break;
             case Tool.Paste:
                 o.Add((Lmb, "поставить копию"));
                 o.Add((L(Act.Rotate), "повернуть"));

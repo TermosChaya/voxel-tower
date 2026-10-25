@@ -561,6 +561,18 @@ public partial class Tutorial : Node
                 "Волшебная палочка ({ToolWand}) выделяет всё прилегающее из одного материала: так сносят или перекладывают постройку целиком. Shift добавляет к выделению.",
             Point = "tool:Capture",
         });
+        Opens(Tool.Template);
+        Add(new Step
+        {
+            Chapter = build, Title = "Шаблоны",
+            Text = "Шаблоны ({ToolTemplate}) — готовые постройки: башни, участок стены с зубцами, частокол, надвратная башня, " +
+                "вышка, амбар, лестница и настил. Выберите шаблон в нижней панели, щелчок ставит его, рабочие построят. " +
+                "{Rotate} поворачивает, {HeightLess} и {HeightMore} меняют высоту. Стену протяните мышью. Там же лежат ваши чертежи.",
+            Task = "Поставьте шаблон",
+            Point = "tool:Template",
+            Enter = () => n0 = m.Sim.MarkingsMade,
+            Done = () => Marked(n0, Tool.Template),
+        });
 
         // ---- the order of the work
         const string work = "Работы";

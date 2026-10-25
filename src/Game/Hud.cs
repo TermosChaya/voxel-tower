@@ -44,6 +44,9 @@ public partial class Hud : CanvasLayer
         (Tool.Yard, Icons.YardIcon, Act.ToolYard, "Обустройство ({ToolYard})\nДорожки между домами и вещи для поселения. Внизу выберите, что класть. Дорожку (тропа, гравий, булыжник, плиты, мостки) " +
             "протяните по земле: рабочие снимут дёрн и выложат её вровень с землёй, по ней ходят быстрее. Вещь (костёр, скамья, факел, жаровня, колодец и другие) " +
             "ставится щелчком, {Rotate} поворачивает. У костра греются, на скамьях отдыхают, огни светят ночью.\nГде люди часто ходят, трава сама вытаптывается в тропу."),
+        (Tool.Template, Icons.TemplateIcon, Act.ToolTemplate, "Шаблоны ({ToolTemplate})\nГотовые постройки: круглая и квадратная башни, участок стены с зубцами и ходом, частокол, надвратная башня, " +
+            "дозорная вышка, амбар, лестница на стену и настил. Внизу выберите шаблон, щелчок ставит его, рабочие построят. {Rotate} поворачивает, {HeightLess} и {HeightMore} меняют высоту. " +
+            "Стену и частокол протяните мышью, конец у башни встанет к ней. С Shift протяжка ставит ряд башен.\nТам же лежат ваши чертежи. Часть шаблонов открывается с ростом поселения."),
     };
 
     /// <summary>The tools on the belt, a row to each purpose: building, the works of the fort, marking out.</summary>
@@ -51,7 +54,7 @@ public partial class Hud : CanvasLayer
     {
         new[] { Tool.Brush, Tool.Line, Tool.Box, Tool.Circle, Tool.Extrude },
         new[] { Tool.Gate, Tool.Bridge, Tool.Ladder, Tool.Repair, Tool.Yard },
-        new[] { Tool.Gather, Tool.Unmark, Tool.Wand, Tool.Capture },
+        new[] { Tool.Gather, Tool.Unmark, Tool.Wand, Tool.Capture, Tool.Template },
     };
     const float SlotSize = 44;
 

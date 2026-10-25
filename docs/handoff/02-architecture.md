@@ -285,6 +285,15 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   были). Прежние ключи (`yew`, `spearmen`, `mail`…) в древе больше не стоят: их даёт уровень здания (`TownKind.Grants1/2`
   → `_granted`), и `Knows` спрашивает `Learnt` или `_granted`, так что всё, что читает изученное, работает как было.
   Соперников (`Rival`) на этих страницах нет. В песочнице `Learnt` получает всё из `TownGrants()`.
+- `Sim.Templates.cs` — готовые шаблоны и уровень поселения. `Template` (данные: `Key`, `Name`, `About`, `Line` — тянется
+  от конца до конца, высота `Size`/`SizeMin`/`SizeMax`, `Opens` — уровень, с которого открыт, `Plan` — функция мира,
+  места, конца, поворота и высоты) и `TemplatePlan` (`Voxels`, `Arched`, `Door` — проём, который прорубят, когда стена
+  встанет, через `HouseDoors`, или `Why`). `Sim.Templates` — круглая и квадратная башни, участок стены, частокол,
+  надвратная башня, вышка, амбар, лестница на стену, настил; за краем `Inside` отказывает «здесь край долины».
+  `PutTemplate` размечает (`DesignateBuild`, `Arch`, дверь). Уровень: `Standing` (сохраняется вместе с `BuiltVoxels`,
+  уложенными рабочими, — `Do` в `Sim.Labour.cs` считает), `SettlementPoints`, `StandingPoints`, `StandingNames`,
+  `TickStanding` раз в 5 с: новый уровень — строка в летописи, золото, событие `StandingRose`; `StandingLine` для
+  вкладки «Город» и библиотеки; `TemplateOpen` (в песочнице всё).
 - `Sim.Town.cs` — город: `TownKind` (шаблон здания — данные: `Key`, `Name`, `About`, `Level2`, `Lore`, размер `W`×`D`
   (37×57 вокселей, мастерская, конюшня и чертог 37×73), `Wall`, `MaxLevel`, `Gold`/`UpGold`, `Hires` (вид, с какого
   уровня, прирост за волну), `Grants1/2`, `Needs` (вид и уровень), `Income1/2`, `Props1/2` — обстановка этажей),
@@ -1087,6 +1096,11 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   Shift и щелчок (`WandAdd`) копят области в `_wandHeld`; щелчок без Shift действует на них вместе с областью под
   курсором (`WandPick`) одной разметкой; `WandDrop` — по Esc, смене инструмента и после щелчка; `WandHeld` — для
   подсказки и нижней панели.
+- `BuildTools.Template.cs` — «Шаблоны» (`;`, `Tool.Template`): `Opt.TemplatePick`, `Opt.TemplateRot`, высота по
+  шаблону (`TemplateSize`, клавиши высоты), `TemplatePlans` (у курсора, по протяжке для стены, рядом с Shift через
+  `RowStep`), `ToTower` — конец стены к середине башни, поставленной в этой игре (`_towers`, не сохраняется),
+  `TemplatePlanAtHover` (призрак и цена), `PutTemplateHere`. Библиотека в нижней панели — `Inspector.TemplateLibrary`
+  (медальоны шаблонов, мост, полка чертежей).
 - `BuildTools.Town.cs` — здание в руке (`Tool.Building`, «Здание»): `StartBuilding(kind)` из вкладки «Город», призрак
   дома у курсора (`BuildingPlanAtHover`, строка с ценой и сроком), R — поворот (`TurnBuilding`), щелчок — `PutUpAtHover`
   (`Sim.PutUp`), после него и по Esc/ПКМ инструмент убран.

@@ -10,7 +10,7 @@ namespace VoxelTower.Game;
 /// out as they are wanted, each with a line in the chronicle and a mark of new on it till it is first used, and the
 /// card of first meeting then. The circle and extrude after 3 markings; the ladder after 5, or when workers cannot get
 /// to their work; the gate after 6, a house laid out, or the first night; the bridge with the first ditch; the magic
-/// wand after 8, or the third marking of the pick; the blueprint after 10; the lore with its mysteries when the first night is beaten off or there is knowledge to spend.
+/// wand after 8, or the third marking of the pick; the templates after 2; the blueprint after 10; the lore with its mysteries when the first night is beaten off or there is knowledge to spend.
 /// What is let out is kept in the save (Sim.LetOut); the sandbox and the tutorial do not unfold.
 /// </summary>
 public sealed class Unfold
@@ -29,6 +29,7 @@ public sealed class Unfold
         (Tool.Capture, "Новое: чертёж ({ToolCapture}), сохраняет постройку, чтобы ставить её копии."),
         (Tool.Wand, "Новое: волшебная палочка ({ToolWand}). Выделяет всё прилегающее из одного материала, чтобы снести или переложить."),
         (Tool.Yard, "Новое: обустройство ({ToolYard}). Дорожки между домами, костры, скамьи и факелы."),
+        (Tool.Template, "Новое: шаблоны ({ToolTemplate}). Готовые башни, стены и ворота: поставьте щелчком, рабочие построят."),
     };
     const string LoreKey = "tab:lore", LoreLine = "Новое: вкладка «Знания». За отбитые волны дают знания, на них изучают улучшения.";
 
@@ -88,6 +89,8 @@ public sealed class Unfold
                 Tool.Wand => made >= 8 || _m.Tools.DigMarkings >= 3,
                 // the settlement's ways and things, once there is a house to set them round, or a good deal built
                 Tool.Yard => house || made >= 12,
+                // the ready templates soon: the first strokes drawn by hand show what they save
+                Tool.Template => made >= 2,
                 _ => false,
             };
             if (want) Open(KeyOf(tool), line, () => _m.Hud.Freshen(tool));

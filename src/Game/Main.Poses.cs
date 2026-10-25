@@ -78,6 +78,7 @@ public partial class Main
         if (_pose == "lava") { LavaPose(); return; }
         if (_pose == "wand") { WandPose(); return; }
         if (_pose == "square") { SquarePose(); return; }
+        if (_pose == "templates") { TemplatesPose(); return; }
         if (_pose == "sigils")
         {
             var layer = new CanvasLayer { Layer = 100 };

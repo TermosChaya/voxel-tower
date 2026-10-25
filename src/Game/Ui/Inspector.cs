@@ -168,6 +168,7 @@ public partial class Inspector : Control
         head.AddChild(Hud.Text(t.Tool == Tool.Paste && t.PasteBp != null ? $"Чертёж «{t.PasteBp.Name}»" : BuildTools.ToolName(t.Tool), Ornament.Display, 22, Ornament.EmberGlow));
         var mat = Hud.CapsLabel((t.Tool == Tool.Gather ? (t.Shelter ? "убежище от орды" : t.Sanctum ? "святилище жрецов" : t.Dwelling ? "жилой дом" : "добывать: " + (t.GatherKind switch { Stockpile.Wood => "лес", Stockpile.Earth => "землю", _ => "камень" }))
             : t.Tool == Tool.Yard ? (o.YardPick < BuildTools.WayCount ? "дорожка: " : "вещь: ") + BuildTools.YardName(o.YardPick).ToLowerInvariant()
+            : t.Tool == Tool.Template ? "шаблон: " + t.TemplatePick.Name.ToLowerInvariant()
             : t.Tool == Tool.Wand && o.WandCapture ? "снять чертёж" : o.Dig ? "кирка: копать и рубить" : (t.Tool == Tool.Wand ? "переложить в: " : "материал: ") + Mat.NameOf(o.Material).ToLowerInvariant()), 9);
         mat.VerticalAlignment = VerticalAlignment.Center;
         head.AddChild(mat);
@@ -201,6 +202,8 @@ public partial class Inspector : Control
                 new[] { "камень", "брёвна", "земля" }, Array.IndexOf(Relaid, o.Material), i => t.SetMaterial(Relaid[i])));
         // the settlement's palette: the ways, then the things
         if (t.Tool == Tool.Yard) col.AddChild(YardPalette());
+        // the library: the ready templates, the bridge, the settlement's rank, and the blueprints taken
+        if (t.Tool == Tool.Template) col.AddChild(TemplateLibrary());
         // the blueprints taken so far, with the tool that takes them and with a copy in hand
         if (t.Tool is Tool.Capture or Tool.Paste || t.Tool == Tool.Wand && o.WandCapture) col.AddChild(Shelf());
         if (opts.GetChildCount() == 0) col.AddChild(Hud.Text(Bindings.Fill("Esc — убрать кисть. {Help} — все клавиши."), Ornament.SerifItalic, 12, Ornament.Faded));
@@ -229,6 +232,47 @@ public partial class Inspector : Control
         box.AddChild(Row("Вещь", BuildTools.WayCount, BuildTools.YardCount - BuildTools.WayCount));
         return box;
     }
+
+    /// <summary>The icon of each template in the library, by its key.</summary>
+    static readonly Dictionary<string, string> TemplateIcons = new()
+    {
+        ["roundtower"] = "stone-tower", ["squaretower"] = "hill-fort", ["wall"] = "stone-wall", ["palisade"] = "stakes-fence",
+        ["gatehouse"] = "gate", ["watchtower"] = "all-seeing-eye", ["barn"] = "medieval-barracks", ["stairs"] = "3d-stairs", ["floor"] = "wood-pile",
+    };
+
+    /// <summary>
+    /// The library in one row: a medallion for each template, its name and what it is in its tooltip, those the
+    /// settlement has not grown to yet faded; the bridge, which is the bridge tool's; then the blueprints taken.
+    /// </summary>
+    Control TemplateLibrary()
+    {
+        var t = _m.Tools; var o = t.Opt;
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 4);
+        var head = Hud.CapsLabel("шаблон", 9);
+        head.VerticalAlignment = VerticalAlignment.Center;
+        row.AddChild(head);
+        for (int i = 0; i < Sim.Templates.Length; i++)
+        {
+            int k = i;
+            var tp = Sim.Templates[i];
+            bool open = _m.Sim.TemplateOpen(tp);
+            var g = new Glyph(Icons.Of(TemplateIcons.GetValueOrDefault(tp.Key, "stone-tower")),
+                tp.Name + "\n" + tp.About + (open ? "" : $"\nОткроется на уровне «{Sim.StandingNames[tp.Opens]}»."), () => t.PickTemplate(k), toggle: true)
+            { CustomMinimumSize = new Vector2(34, 30) };
+            g.SetPressedNoSignal(o.TemplatePick == i);
+            if (!open) g.Modulate = new Color(1, 1, 1, .4f);
+            if (i == 0) KeyTags.Tag(g, () => Bindings.Label(Act.Form));
+            row.AddChild(g);
+        }
+        row.AddChild(new Glyph(Icons.BridgeIcon, "Мост ({ToolBridge})\nМост тянут от берега до берега инструментом «Мост».", () => t.SetTool(Tool.Bridge)) { CustomMinimumSize = new Vector2(34, 30) });
+        row.AddChild(new Control { CustomMinimumSize = new Vector2(14, 0) });
+        row.AddChild(Shelf());
+        return row;
+    }
+
+    public const string StandingTip = "Уровень поселения\nРастёт с тем, что построено: жилые дома, здания города по их уровню, вещи «Обустройства» и вся кладка рабочих. " +
+        "Каждый новый уровень даёт золото, некоторые открывают шаблоны.";
 
     /// <summary>The blueprints taken so far, a button each: a click takes up a copy to place, the cross throws the blueprint away.</summary>
     Control Shelf()
@@ -380,6 +424,17 @@ public partial class Inspector : Control
             case Tool.Yard:
                 opts.AddChild(Hud.CapsLabel($"поворот {o.YardRot * 90}° · {Bindings.Label(Act.Rotate)} — повернуть", 10, Ornament.Aged));
                 break;
+            case Tool.Template:
+            {
+                var tp = t.TemplatePick;
+                if (tp.SizeMax > 0) opts.AddChild(Keyed(new Stepper("Высота", "Высота\nВысота шаблона. Клавиши {HeightLess} и {HeightMore}.", () => Len(t.TemplateSize(tp)), d => t.StepHeight(d)), () => Pair(Act.HeightLess, Act.HeightMore)));
+                opts.AddChild(Hud.CapsLabel(tp.Line ? "протяните от конца до конца" : $"поворот {o.TemplateRot * 90}° · {Bindings.Label(Act.Rotate)} — повернуть · Shift и протяжка — ряд", 10, Ornament.Aged));
+                var rank = Hud.CapsLabel("поселение: " + _m.Sim.StandingLine().ToLowerInvariant(), 10, Ornament.BronzeLight);
+                rank.TooltipText = StandingTip;
+                rank.MouseFilter = MouseFilterEnum.Pass;
+                opts.AddChild(rank);
+                break;
+            }
             case Tool.Paste when t.PasteBp != null:
                 opts.AddChild(Hud.CapsLabel($"поворот {t.PasteRot * 90}° · {Bindings.Label(Act.Rotate)} — повернуть · {t.PasteBp.Describe()}", 10, Ornament.Aged));
                 break;

@@ -240,6 +240,7 @@ public sealed partial class Sim
         Stage = "TickDwellings"; TickDwellings();
         Stage = "TickTown"; TickTown(dt);
         Stage = "TickHouseDoors"; TickHouseDoors();
+        Stage = "TickStanding"; TickStanding();
         Stage = "TickTraps"; TickTraps();
         Stage = "TickEventsHalf"; TickEventsHalf(Time);
         Stage = "CountBodies"; CountBodies();

@@ -5,7 +5,7 @@ using VoxelTower.Core;
 
 namespace VoxelTower.Game;
 
-public enum Tool { None, Brush, Line, Box, Circle, Extrude, Ladder, Gate, Repair, Bridge, Gather, Unmark, Capture, Paste, Spell, Wand, Building, Yard }
+public enum Tool { None, Brush, Line, Box, Circle, Extrude, Ladder, Gate, Repair, Bridge, Gather, Unmark, Capture, Paste, Spell, Wand, Building, Yard, Template }
 
 public enum BrushForm { Column, Ball }
 
@@ -34,6 +34,8 @@ public sealed class ToolOptions
     public bool WandExact, WandCorners, WandCapture;
     /// <summary>The «Обустройство» tool: what of its palette is in hand (the ways first, then the things), and how a thing is turned.</summary>
     public int YardPick, YardRot;
+    /// <summary>The «Шаблоны» tool: the template in hand (Sim.Templates), and how it is turned.</summary>
+    public int TemplatePick, TemplateRot;
     /// <summary>Snapping to a grid round the citadel's middle, its step in voxels (0: off); the step it had when it was last on.</summary>
     public int Grid, GridLast = 8;
 
@@ -63,7 +65,7 @@ public partial class BuildTools : Node3D
     {
         Tool.Brush => "Кисть", Tool.Line => "Линия", Tool.Box => "Прямоугольник", Tool.Circle => "Круг",
         Tool.Extrude => "Выдавить", Tool.Ladder => "Лестница", Tool.Gate => "Ворота", Tool.Repair => "Починка", Tool.Bridge => "Мост", Tool.Gather => "Делянка", Tool.Unmark => "Снять разметку", Tool.Capture => "Снять чертёж",
-        Tool.Paste => "Чертёж", Tool.Spell => "Заклинание", Tool.Wand => "Волшебная палочка", Tool.Building => "Здание", Tool.Yard => "Обустройство", _ => "Без кисти",
+        Tool.Paste => "Чертёж", Tool.Spell => "Заклинание", Tool.Wand => "Волшебная палочка", Tool.Building => "Здание", Tool.Yard => "Обустройство", Tool.Template => "Шаблоны", _ => "Без кисти",
     };
 
     public static string Hint(Tool t, bool dig) => Bindings.Fill(HintText(t, dig));
@@ -93,6 +95,7 @@ public partial class BuildTools : Node3D
         (Tool.Wand, true) => "Наведите на постройку: подсветится всё прилегающее из того же материала. Щелчок: рабочие это снесут.",
         (Tool.Wand, false) => "Наведите на постройку: подсветится всё прилегающее из того же материала. Щелчок: переложат из выбранного материала.",
         (Tool.Yard, _) => "Внизу выберите дорожку или вещь ({Form} — следующая). Дорожку протяните по земле, вещь поставьте щелчком, {Rotate} поворачивает.",
+        (Tool.Template, _) => "Внизу выберите шаблон ({Form} — следующий). Щелчок ставит, {Rotate} поворачивает, {HeightLess} и {HeightMore} — высота. Стену протяните. Shift и протяжка — ряд.",
         _ => "{Lmb} — выбрать, рамкой — нескольких, {Rmb} — послать. {ToolBrush}–{ToolExtrude} — кисти, {Pick} — кирка, {Help} — все клавиши.",
     };
 
@@ -233,7 +236,7 @@ public partial class BuildTools : Node3D
         // what the wand had chosen with Shift is let go with it
         WandDrop();
         // these only build
-        if (Tool is Tool.Bridge or Tool.Repair or Tool.Gate or Tool.Ladder or Tool.Yard) Opt.Dig = false;
+        if (Tool is Tool.Bridge or Tool.Repair or Tool.Gate or Tool.Ladder or Tool.Yard or Tool.Template) Opt.Dig = false;
         if (Tool != Tool.Paste) PasteBp = null;
         if (Tool != Tool.Building) Placing = null;
         _lmb = _paint = _hasStart = false;
@@ -300,7 +303,7 @@ public partial class BuildTools : Node3D
         if (_m.Hud.PickLocked) { Refuse("кирка откроется дальше в обучении"); return; }
         Opt.Dig = dig;
         if (dig) Opt.WandCapture = false;
-        if (dig && Tool is Tool.None or Tool.Capture or Tool.Unmark or Tool.Paste or Tool.Ladder or Tool.Gate or Tool.Repair or Tool.Bridge or Tool.Gather) { Tool = Tool.Line; PasteBp = null; }
+        if (dig && Tool is Tool.None or Tool.Capture or Tool.Unmark or Tool.Paste or Tool.Ladder or Tool.Gate or Tool.Repair or Tool.Bridge or Tool.Gather or Tool.Template) { Tool = Tool.Line; PasteBp = null; }
         Changed();
     }
 
@@ -312,6 +315,7 @@ public partial class BuildTools : Node3D
     /// <summary>The second number of the current tool: height, digging depth or extrusion step.</summary>
     public void StepHeight(int dir)
     {
+        if (Tool == Tool.Template) { StepTemplateSize(dir); return; }
         if (Tool == Tool.Extrude) Opt.Step = ToolOptions.Next(ToolOptions.Steps, Opt.Step, dir);
         else if (Opt.Dig || Tool == Tool.Gather) Opt.Depth = ToolOptions.Next(ToolOptions.Depths, Opt.Depth, dir);
         else Opt.Height = ToolOptions.Next(ToolOptions.Heights, Opt.Height, dir);
@@ -329,6 +333,8 @@ public partial class BuildTools : Node3D
         else if (Tool == Tool.Line) Opt.Mine = !Opt.Mine;
         // the settlement's ways and things: on to the next of the palette
         else if (Tool == Tool.Yard) { StepYard(1); return; }
+        // the templates: on to the next of the library
+        else if (Tool == Tool.Template) { StepTemplate(1); return; }
         else Opt.Hollow = !Opt.Hollow;
         Changed();
     }
@@ -432,7 +438,7 @@ public partial class BuildTools : Node3D
             Act.ToolBrush => Tool.Brush, Act.ToolLine => Tool.Line, Act.ToolBox => Tool.Box, Act.ToolCircle => Tool.Circle,
             Act.ToolExtrude => Tool.Extrude, Act.ToolUnmark => Tool.Unmark, Act.ToolLadder => Tool.Ladder, Act.ToolGather => Tool.Gather,
             Act.ToolGate => Tool.Gate, Act.ToolRepair => Tool.Repair, Act.ToolCapture => Tool.Capture, Act.ToolBridge => Tool.Bridge, Act.ToolWand => Tool.Wand,
-            Act.ToolYard => Tool.Yard,
+            Act.ToolYard => Tool.Yard, Act.ToolTemplate => Tool.Template,
             _ => Tool.None,
         };
         if (t != Tool.None) { SetTool(t); return true; }
@@ -463,6 +469,7 @@ public partial class BuildTools : Node3D
             case Act.Rotate when Tool == Tool.Paste: PasteRot = (PasteRot + 1) & 3; Changed(); return true;
             case Act.Rotate when Tool == Tool.Building: TurnBuilding(); Changed(); return true;
             case Act.Rotate when Tool == Tool.Yard: Opt.YardRot = (Opt.YardRot + 1) & 3; Changed(); return true;
+            case Act.Rotate when Tool == Tool.Template: Opt.TemplateRot = (Opt.TemplateRot + 1) & 3; Changed(); return true;
         }
         return false;
     }
@@ -544,6 +551,8 @@ public partial class BuildTools : Node3D
             }
             return;
         }
+        // a template set where it was clicked, or drawn along the drag (BuildTools.Template.cs)
+        if (Tool == Tool.Template) { PutTemplateHere(click); return; }
         if (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather or Tool.Repair or Tool.Bridge || Paving)
         {
             if (click && Tool == Tool.Unmark) { UnmarkAt(); return; }
@@ -1090,7 +1099,7 @@ public partial class BuildTools : Node3D
             _hasTree = true;
         }
         _hasDrag = false;
-        if (_lmb && _hasStart && (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather or Tool.Repair || Paving || ColumnStroke || SpellStroke) && Math.Abs(d.Y) > 1e-4f)
+        if (_lmb && _hasStart && (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather or Tool.Repair || Paving || ColumnStroke || SpellStroke || TemplateDrag) && Math.Abs(d.Y) > 1e-4f)
         {
             float t = (w.WY(_startPt.y) - o.Y) / d.Y;
             if (t > 0)
@@ -1332,6 +1341,12 @@ public partial class BuildTools : Node3D
         {
             // a town building's ghost where it would go up (BuildTools.Town.cs)
             BuildingPlanAtHover();
+            return;
+        }
+        if (Tool == Tool.Template)
+        {
+            // the template's ghost, at the cursor or along the drag (BuildTools.Template.cs)
+            TemplatePlanAtHover();
             return;
         }
         if (Tool == Tool.Wand)

@@ -15,7 +15,7 @@ public partial class TownPanel : VBoxContainer
 {
     public const float Width = 470;
     Main _m;
-    Label _income;
+    Label _income, _standing;
     VBoxContainer _rows;
     string _key = "";
     double _next;
@@ -25,6 +25,11 @@ public partial class TownPanel : VBoxContainer
         _m = m;
         AddThemeConstantOverride("separation", 6);
         AddChild(Hud.CapsLabel("Город"));
+        _standing = Hud.Text("", Ornament.SerifBold, 14, Ornament.BronzeLight, wrap: true);
+        _standing.CustomMinimumSize = new Vector2(Width - 24, 0);
+        _standing.TooltipText = Inspector.StandingTip;
+        _standing.MouseFilter = MouseFilterEnum.Pass;
+        AddChild(_standing);
         _income = Hud.Text("", Ornament.Serif, 13, Ornament.Aged, wrap: true);
         _income.CustomMinimumSize = new Vector2(Width - 24, 0);
         AddChild(_income);
@@ -48,7 +53,7 @@ public partial class TownPanel : VBoxContainer
     {
         var sim = _m.Sim;
         var key = new System.Text.StringBuilder();
-        key.Append(sim.TownVersion).Append('|').Append((int)sim.Stock.Gold).Append('|').Append(sim.Learnt.Count).Append('|').Append(sim.Household()).Append('|').Append(sim.Places);
+        key.Append(sim.StandingLine()).Append('|').Append(sim.TownVersion).Append('|').Append((int)sim.Stock.Gold).Append('|').Append(sim.Learnt.Count).Append('|').Append(sim.Household()).Append('|').Append(sim.Places);
         foreach (var b in sim.Buildings)
         {
             key.Append('|').Append(b.Kind).Append(b.Level).Append(b.Target).Append(b.Ready);
@@ -65,6 +70,7 @@ public partial class TownPanel : VBoxContainer
         _key = key;
         var sim = _m.Sim;
         float income = sim.TownIncome();
+        _standing.Text = "Поселение: " + sim.StandingLine();
         _income.Text = sim.Buildings.Count == 0
             ? "Здания открывают во вкладке «Знания» (страницы «Город» и «Войско»), а ставят здесь: рабочие строят их, потом здание нанимает войска и улучшает их."
             : $"Доход города: {income:0.#} золота в минуту. Зданий: {sim.Buildings.FindAll(b => b.Ready).Count} из {sim.Buildings.Count}.";

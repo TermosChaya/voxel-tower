@@ -262,6 +262,7 @@ public sealed partial class Sim
         Filled(j.x, j.y, j.z, j.m);
         Remember(j.x, j.y, j.z, j.m);
         Orders.Clear(j.x, j.y, j.z);
+        BuiltVoxels++;
         // whoever stood where the floor went in stands on it now
         if (underfoot)
             foreach (var o in Units)

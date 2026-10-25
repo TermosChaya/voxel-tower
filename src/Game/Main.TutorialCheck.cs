@@ -140,6 +140,17 @@ public partial class Main
                     GD.Print($"[tutorial]      ladder: {(at2 == null ? "no side of the fort in sight" : Sim.MarkingsMade > made ? "marked" : "nothing marked")}, «{Tools.HoverText}»");
                     break;
                 }
+                case "Шаблоны":
+                {
+                    // the round tower from the library, on open ground south of the old works
+                    Tools.SetTool(Tool.Template);
+                    Tools.PickTemplate(0);
+                    await Look(kx - 150, kz + 140);
+                    int made = Sim.MarkingsMade;
+                    await ClickAt(Screen(kx - 150, kz + 140));
+                    GD.Print($"[tutorial]      template: {(Sim.MarkingsMade > made ? "put up" : "nothing put up")}, «{Tools.PlanText}»");
+                    break;
+                }
                 case "Работы": Hud.OpenPanel("works"); break;
                 case "Летопись": Hud.OpenPanel("goals"); break;
                 case "Часы": Command.TogglePause(); await Frames(3); Command.SetSpeed(3); break;
