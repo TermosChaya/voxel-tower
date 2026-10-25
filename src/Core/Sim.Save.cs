@@ -16,7 +16,7 @@ namespace VoxelTower.Core;
 public sealed partial class Sim
 {
     /// <summary>20: the bodies sculpted finer, their half-voxels (and so a wounded body's) not what they were.</summary>
-    public const int SaveVersion = 39;
+    public const int SaveVersion = 40;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -41,7 +41,10 @@ public sealed partial class Sim
         DropStrayLeaves();
         using var z = new GZipStream(to, CompressionLevel.Fastest, leaveOpen: true);
         using var w = new BinaryWriter(z, Encoding.UTF8, leaveOpen: true);
-        w.Write(SaveMagic); w.Write(SaveVersion); w.Write(seed); w.Write(label ?? ""); w.Write(Time);
+        w.Write(SaveMagic); w.Write(SaveVersion); w.Write(seed);
+        // the valley's kind and shape, made again from them with the seed (version 40)
+        w.Write((byte)Site.Kind); w.Write(Site.Classic); w.Write(Site.Hex != null);
+        w.Write(label ?? ""); w.Write(Time);
         // the valley as play changed it, what is meant of it and its arches
         WriteChunks(w, World, edited: true);
         WriteChunks(w, Design, edited: false);
@@ -594,6 +597,9 @@ public sealed class SaveReader : IDisposable
     readonly GZipStream _z;
     public readonly BinaryReader R;
     public readonly uint Seed;
+    /// <summary>The valley's kind, whether it keeps the old places, and whether it is a hexagon.</summary>
+    public readonly ValleyKind Kind;
+    public readonly bool Classic, Hexagon;
     public readonly string Label;
     public readonly double Time;
 
@@ -606,7 +612,9 @@ public sealed class SaveReader : IDisposable
             throw new InvalidDataException("not a saved game");
         int version = R.ReadInt32();
         if (version != Sim.SaveVersion) throw new InvalidDataException($"a save of version {version}, not {Sim.SaveVersion}");
-        Seed = R.ReadUInt32(); Label = R.ReadString(); Time = R.ReadDouble();
+        Seed = R.ReadUInt32();
+        Kind = (ValleyKind)R.ReadByte(); Classic = R.ReadBoolean(); Hexagon = R.ReadBoolean();
+        Label = R.ReadString(); Time = R.ReadDouble();
     }
 
     /// <summary>What play changed of the valley, into the world made again from the seed; what is meant of it and its arches into the site.</summary>

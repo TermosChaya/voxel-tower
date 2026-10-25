@@ -59,7 +59,7 @@ public sealed partial class Sim
         var b = new Warband { Id = _nextBand++, State = BandState.Coming, Champion = (byte)c, Title = title };
         b.Roster.Add(kind);
         b.Roster.AddRange(guard);
-        b.Entry = NearestStand(Site.SpawnStrip / 2, World.SZ / 2, 3);
+        b.Entry = NearestStand(Site.EntryX, Site.EntryZ(World.SZ / 2), 3);
         b.Name = c == 4 ? $"Дружина Вождя {of}" : $"Дружина {of}";
         return b;
     }

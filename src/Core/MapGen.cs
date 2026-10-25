@@ -10,13 +10,28 @@ public sealed class MapParams
     public uint Seed = 7;
     /// <summary>Knobs for the look against the triangle count.</summary>
     public double TreeDensity = .7, TuftChance = .015, Roughness = 2.5;
+    /// <summary>What kind of valley it is: its ground and its places (<see cref="Valleys"/>).</summary>
+    public ValleyKind Kind = ValleyKind.First;
+    /// <summary>
+    /// The first valley with every place it has always had — the mines, the barrow — as long as there is no map of valleys
+    /// to find them in; off, it has only the ruins and the bridges, and the rest lies in valleys of other kinds.
+    /// </summary>
+    public bool Classic = true;
+    /// <summary>
+    /// The land a hexagon (the cell of the map to come); off, the whole box as before. The game makes its valleys
+    /// hexagons; the core's default is the old box, on which the bench's checks of the mechanics were set out.
+    /// </summary>
+    public bool Hexagon;
 }
 
 /// <summary>
 /// The valley the game is played in: rolling lowland with ridges, forests, rocky knolls and boulders; a river winding
 /// through it with a few fords; an old road from the west; and a cliff-edged plateau with two ramps, ponds and a clearing
 /// round the citadel. Everything in it can be dug, chopped or quarried, down to the bedrock, and water runs into what is dug
-/// beside it.
+/// beside it. The land is a hexagon pointed north and south (<see cref="Hex"/>): the river comes in over its north-western
+/// side and goes out over its south-western one, the road and the horde come in over its straight western side, and the
+/// citadel stands on the plateau towards its eastern side. The kind of valley (<see cref="Valleys"/>) sets how thick the
+/// woods are, how rocky and how wet the ground, and which named places it has.
 /// </summary>
 public static class MapGen
 {
@@ -45,6 +60,23 @@ public static class MapGen
         int SX = w.SX, SZ = w.SZ;
         uint seed = p.Seed;
         var site = new Site { HTop = new int[SX * SZ], SpawnStrip = 24, KeepR = 24, KeepX = (int)(SX * .8), KeepZ = SZ / 2, Design = new VoxelWorld(SX, w.SY, SZ) };
+        site.Kind = p.Kind; site.Classic = p.Classic;
+        var ground = Valleys.GroundOf(p.Kind);
+        var places = Valleys.PlacesOf(p.Kind, p.Classic);
+        // the land a hexagon: nothing is made outside it; the horde's strip runs along its straight western side
+        var hex = p.Hexagon ? Hex.In(SX, SZ) : null;
+        w.SetLand(hex);
+        site.Hex = hex;
+        if (hex != null)
+        {
+            site.SpawnStrip = (int)hex.WestX + 24;
+            site.WestZ0 = (int)hex.WestZ0 + 24;
+            site.WestZ1 = (int)hex.WestZ1 - 24;
+            site.KeepX = Math.Min(site.KeepX, (int)(hex.CX + hex.HalfW) - 128);
+        }
+        else { site.WestZ0 = 40; site.WestZ1 = SZ - 40; }
+        // how far in from the land's edge a spot is: the box's edge, or the hexagon's
+        double In(double x, double z) => hex != null ? hex.Edge((float)x, (float)z) : Math.Min(Math.Min(x, SX - x), Math.Min(z, SZ - z));
         var nHill = new ValueNoise(seed * 11 + 1); var nHill2 = new ValueNoise(seed * 13 + 2); var nFine = new ValueNoise(seed * 17 + 3);
         var nEdge = new ValueNoise(seed * 19 + 4); var nKnoll = new ValueNoise(seed * 23 + 5); var nSoil = new ValueNoise(seed * 29 + 6);
         var nForest = new ValueNoise(seed * 31 + 7); var nRidge = new ValueNoise(seed * 37 + 8); var nRiver = new ValueNoise(seed * 41 + 9);
@@ -63,7 +95,7 @@ public static class MapGen
 
         // the river runs north to south across the lowland, between the horde's edge and the plateau
         double RiverX(double z) => SX * .3 + Math.Sin(z * .0062 + 1.3) * 64 + (nRiver.Sample(z * .009, 2.2) - .5) * 70;
-        double RiverHalf(double z) => 15 + nRiver.Sample(z * .02, 9.4) * 12;
+        double RiverHalf(double z) => (15 + nRiver.Sample(z * .02, 9.4) * 12) * ground.River;
         // a ford to the north; where the road crosses the river is deep, and the old bridge carries it over
         double roadCross = 0;
         for (int x = 0; x < SX; x++) if (Math.Abs(x - RiverX(RoadZ(x))) < 2) { roadCross = RoadZ(x); break; }
@@ -94,12 +126,21 @@ public static class MapGen
             int pr = 60 + (int)(Hash.H3((int)seed, n, 5) * 24), level = int.MaxValue;
             int px = site.KeepX + (int)(Math.Cos(a) * dist);
             int pz = Math.Clamp(site.KeepZ + (int)(Math.Sin(a) * dist), pr + shore + 16, SZ - pr - shore - 16);
-            // the whole shore on the plateau, well back from the cliff wherever the cliff wanders
-            int span = (int)(pr * 1.22) + shore;
-            double edge = EdgeX(pz) + 70;
-            for (int z = pz - span; z <= pz + span; z++) edge = Math.Max(edge, EdgeX(z) + span + 8);
-            px = Math.Clamp(px, (int)Math.Ceiling(edge), SX - span - 16);
-            pz = Math.Clamp(pz, span + 16, SZ - span - 16);
+            int span = 0;
+            // the whole shore on the plateau, well back from the cliff wherever the cliff wanders, and on the land: nearer
+            // the citadel, or smaller, where the hexagon narrows
+            for (int tries = 0; tries < 60; tries++)
+            {
+                span = (int)(pr * 1.22) + shore;
+                double edge = EdgeX(pz) + 70;
+                for (int z = pz - span; z <= pz + span; z++) edge = Math.Max(edge, EdgeX(z) + span + 8);
+                px = Math.Clamp(px, (int)Math.Ceiling(edge), SX - span - 16);
+                pz = Math.Clamp(pz, span + 16, SZ - span - 16);
+                if (In(px, pz) >= span + 16) break;
+                if (Math.Abs(pz - site.KeepZ) > 170) pz += pz > site.KeepZ ? -8 : 8;
+                else if (pr > 40) pr -= 4;
+                else px -= 8;
+            }
             for (int z = pz - span; z <= pz + span; z++)
                 for (int x = px - span; x <= px + span; x++)
                 {
@@ -124,8 +165,8 @@ public static class MapGen
                 // rolling lowland with long ridges
                 double ridge = 1 - Math.Abs(nRidge.Sample(x * .0065, z * .0065) * 2 - 1);
                 double low = baseH + (nHill.Sample(x * .010, z * .010) - .5) * 34 + (nHill2.Sample(x * .033, z * .033) - .5) * 11
-                    + Math.Pow(ridge, 3) * 24 + (nFine.Sample(x * .11, z * .11) - .5) * p.Roughness;
-                low = Math.Min(low, baseH + 30);
+                    + Math.Pow(ridge, 3) * 24 * ground.Ridges + (nFine.Sample(x * .11, z * .11) - .5) * p.Roughness;
+                low = Math.Min(low, baseH + 30 * ground.Ridges);
                 double plat = Plat(x, z);
                 double h = low; byte k = Low;
                 // how far into a ramp's band, and how far from the road: hills and ramps fade out over a slope, never a cut
@@ -135,10 +176,10 @@ public static class MapGen
                 else
                 {
                     double kn = nKnoll.Sample(x * .018, z * .018);
-                    if (kn > .7 && x > site.SpawnStrip + 16)
+                    if (kn > ground.Knoll && x > site.SpawnStrip + 16)
                     {
                         double fade = Site.Smooth01(roadD / 26) * Site.Smooth01(rampD / 30) * Site.Smooth01((x - site.SpawnStrip - 16) / 40.0);
-                        double hill = (kn - .7) * 190 * fade;
+                        double hill = (kn - ground.Knoll) * 190 * ground.KnollHeight * fade;
                         if (hill > 1.5) { h = low + hill; k = Knoll; }
                     }
                     if (x >= edge - rampLen && rampD < 34)
@@ -194,9 +235,10 @@ public static class MapGen
                     else h = level + (h - level) * Site.Smooth01((d - r) / shore);
                 }
                 kind[i] = k;
-                water[i] = wl;
+                // no water stands off the land
+                water[i] = w.OnLand(x, z) ? wl : (short)0;
                 site.HTop[i] = (int)Math.Round(h);
-                soil[i] = (byte)(k switch { Knoll or Rim => 0, Plateau or Pond => 7, River => 4, _ => 9 + (int)(nSoil.Sample(x * .02, z * .02) * 6) });
+                soil[i] = (byte)(k switch { Knoll or Rim => 0, Plateau or Pond => 7, River => 4, _ => (int)((9 + nSoil.Sample(x * .02, z * .02) * 6) * ground.Soil) });
             }
         });
 
@@ -211,7 +253,7 @@ public static class MapGen
                     w.FillColumnRaw(x, z, 3, h - s, Mat.Rock);
                     w.FillColumnRaw(x, z, h - s, h - 1, Mat.Soil);
                     // the turf goes dry on the heights and lush in the hollows and by the water
-                    double moist = nMoist.Sample(x * .011, z * .011) + (k == Bank ? .22 : 0) - (h - baseH) / 110.0;
+                    double moist = nMoist.Sample(x * .011, z * .011) + (k == Bank ? .22 : 0) - (h - baseH) / 110.0 + ground.Wet;
                     byte grass = moist < .22 ? Mat.GrassDry : moist > .64 ? Mat.GrassLush : Mat.Grass;
                     byte top = k switch
                     {
@@ -249,7 +291,7 @@ public static class MapGen
         {
             bool Ok(int cx, int cz)
             {
-                if (cx < r + 16 || cz < r + 16 || cx >= SX - r - 16 || cz >= SZ - r - 16 || NearKeep(cx, cz, 100 + r)) return false;
+                if (cx < r + 16 || cz < r + 16 || cx >= SX - r - 16 || cz >= SZ - r - 16 || In(cx, cz) < r + 16 || NearKeep(cx, cz, 100 + r)) return false;
                 foreach (var (px, pz, pr, _) in ponds) if (Brushes.Dist(cx - px, cz - pz) < pr + r + 16) return false;
                 foreach (var l in site.Landmarks) if (Brushes.Dist(cx - l.X, cz - l.Z) < l.R + r + 12) return false;
                 for (int dz = -r; dz <= r; dz += 4)
@@ -265,29 +307,49 @@ public static class MapGen
                 }
             return (x, z);
         }
-        var copper = Free(site.KeepX + 150, site.KeepZ + 64, 30);
-        Landmarks.Mine(w, site, copper.x, copper.z, "Медный рудник", 3, false, seed + 1);
-        var houses = Free(copper.x - 52, copper.z + 46, 34);
-        Landmarks.Houses(w, site, houses.x, houses.z, "Брошенные дома рудокопов", seed + 2);
+        // the mines, as many as the kind of valley has: copper on the plateau east of the citadel (in the hexagon's
+        // narrowing, south of it), silver in the lowland under the cliff, gold out west by the horde's side
+        var copper = (x: 0, z: 0);
+        if ((places & Places.Mines) != 0)
+        {
+            copper = Free(site.KeepX + (hex != null ? 40 : 150), site.KeepZ + (hex != null ? 170 : 64), 30);
+            Landmarks.Mine(w, site, copper.x, copper.z, "Медный рудник", 3, false, seed + 1);
+        }
+        if ((places & Places.MinersHouses) != 0 && (places & Places.Mines) != 0)
+        {
+            var houses = Free(copper.x - 52, copper.z + 46, 34);
+            Landmarks.Houses(w, site, houses.x, houses.z, "Брошенные дома рудокопов", seed + 2);
+        }
+        if ((places & (Places.Mines | Places.Silver)) != 0)
         {
             // the silver lies in the lowland between the river and the cliff, on the horde's way
             int sz = (int)(SZ * .36), sx = (int)((RiverX(sz) + RiverHalf(sz) + EdgeX(sz)) / 2);
             var silver = Free(sx, sz, 30);
             Landmarks.Mine(w, site, silver.x, silver.z, "Серебряная жила", 6, true, seed + 3);
         }
-        var gold = Free((int)(SX * .12), (int)(SZ * .17), 30);
-        Landmarks.Mine(w, site, gold.x, gold.z, "Золотой прииск", 10, false, seed + 4);
-        var outpost = Free(gold.x + 64, gold.z + 56, 32);
-        Landmarks.Outpost(w, site, outpost.x, outpost.z, "Старая застава", seed + 5);
+        var gold = (x: (int)(hex != null ? hex.WestX + 96 : SX * .12), z: (int)(SZ * (hex != null ? .3 : .17)));
+        if ((places & Places.Mines) != 0)
+        {
+            gold = Free(gold.x, gold.z, 30);
+            Landmarks.Mine(w, site, gold.x, gold.z, "Золотой прииск", 10, false, seed + 4);
+        }
+        if ((places & Places.Outpost) != 0)
+        {
+            var outpost = Free(gold.x + 64, gold.z + 56, 32);
+            Landmarks.Outpost(w, site, outpost.x, outpost.z, "Старая застава", seed + 5);
+        }
+        if ((places & Places.Watchtowers) != 0)
         {
             double f = fords[0];
             var tower = Free((int)(RiverX(f) + RiverHalf(f) + 36), (int)f + 24, 20);
             Landmarks.Watchtower(w, site, tower.x, tower.z, "Руины сторожевой башни", seed + 6);
+            var fallen = Free((int)EdgeX(rampN) + 34, rampN + 64, 20);
+            Landmarks.Watchtower(w, site, fallen.x, fallen.z, "Обвалившаяся башня", seed + 7, .45);
         }
-        var fallen = Free((int)EdgeX(rampN) + 34, rampN + 64, 20);
-        Landmarks.Watchtower(w, site, fallen.x, fallen.z, "Обвалившаяся башня", seed + 7, .45);
         // old stone bridges over the river: one carries the road, whole; one between the road and the north ford fell in
-        foreach (var (z0, whole, name) in new[] { ((int)roadCross, true, "Старый мост"), ((int)((roadCross + fords[0]) / 2), false, "Обрушенный мост") })
+        foreach (var (z0, whole, name) in (places & Places.Bridges) != 0
+            ? new[] { ((int)roadCross, true, "Старый мост"), ((int)((roadCross + fords[0]) / 2), false, "Обрушенный мост") }
+            : Array.Empty<(int, bool, string)>())
         {
             int bz = z0;
             // the road's bridge stands where the road crosses; the fallen one keeps clear of the other places
@@ -309,16 +371,20 @@ public static class MapGen
         }
         // the places of power: a barrow on the plateau north of the citadel, the black stone in the lowland under the
         // cliff to the south, a dead spring beyond the river, in the horde's country
-        var barrow = Free(site.KeepX - 110, site.KeepZ - 200, 56);
-        Landmarks.Barrow(w, site, barrow.x, barrow.z, "Курган", seed + 10);
-        var black = Free((int)EdgeX(SZ * .86) - 110, (int)(SZ * .86), 38);
-        Landmarks.BlackStone(w, site, black.x, black.z, "Чёрный камень", seed + 11);
-        var spring = Free((int)(SX * .16), (int)(SZ * .64), 50);
-        Landmarks.DeadSpring(w, site, spring.x, spring.z, "Мёртвый родник", seed + 12);
+        if ((places & Places.Power) != 0)
+        {
+            var barrow = Free(site.KeepX - 110, site.KeepZ - 200, 56);
+            Landmarks.Barrow(w, site, barrow.x, barrow.z, "Курган", seed + 10);
+            var black = Free((int)EdgeX(SZ * (hex != null ? .78 : .86)) - 110, (int)(SZ * (hex != null ? .78 : .86)), 38);
+            Landmarks.BlackStone(w, site, black.x, black.z, "Чёрный камень", seed + 11);
+            var spring = Free((int)(hex != null ? hex.WestX + 110 : SX * .16), (int)(SZ * .64), 50);
+            Landmarks.DeadSpring(w, site, spring.x, spring.z, "Мёртвый родник", seed + 12);
+        }
 
         bool Clear(int x, int z)
         {
-            if (x < site.SpawnStrip + 8 || x >= SX - 8 || z < 8 || z >= SZ - 8) return false;
+            // (a tree's crown kept off the land's edge)
+            if (x < site.SpawnStrip + 8 || x >= SX - 8 || z < 8 || z >= SZ - 8 || hex != null && In(x, z) < 20) return false;
             byte k = kind[z * SX + x];
             return k is Low or Plateau or Bank && !NearKeep(x, z, 48) && !Landmarks.Taken(site, x, z, 6);
         }
@@ -351,7 +417,7 @@ public static class MapGen
             bool plateau = kind[z * SX + x] == Plateau;
             // the plateau is where the player builds: a clearing round the citadel, thin woods beyond
             if (plateau) density = NearKeep(x, z, 160) ? 0 : density * .3;
-            if (Hash.H3(gx, gz, 203) > density * p.TreeDensity) return null;
+            if (Hash.H3(gx, gz, 203) > density * p.TreeDensity * ground.Trees) return null;
             double r = Hash.H3(gx, gz, 204), size = Hash.H3(gx, gz, 205), biome = nBiome.Sample(x * .004, z * .004);
             if (r > .94) return Flora.DeadTree(w, x, z, grown: true, scale: 1.45);
             if (r > .86) { Flora.Bush(w, x, z, 3 + (int)(size * 4)); return true; }

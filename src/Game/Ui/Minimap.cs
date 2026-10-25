@@ -66,8 +66,13 @@ public partial class Minimap : Control
         _mat[pz * _w + px] = mat;
     }
 
+    /// <summary>Off the land: the mist the valley stands in, a little darker than the far land.</summary>
+    static readonly Color Off = new(.13f, .14f, .14f);
+
     Color Shade(int px, int pz)
     {
+        var land = _m.World.Land;
+        if (land != null && land.Edge((px + .5f) * _step, (pz + .5f) * _step) < -.5f * _step) return Off;
         int top = _top[pz * _w + px];
         var c = Ornament.MatColor(_mat[pz * _w + px]);
         int nw = _top[Math.Max(0, pz - 1) * _w + Math.Max(0, px - 1)];
@@ -104,17 +109,28 @@ public partial class Minimap : Control
     {
         if (_m == null) return;
         var r = new Rect2(Vector2.Zero, Size);
-        // the land beyond, as far as the ring shows it: the valley turned over at each of its edges and corners, in shadow
-        for (int j = -1; j <= 1; j++)
-            for (int i = -1; i <= 1; i++)
-            {
-                if (i == 0 && j == 0) continue;
-                DrawSetTransform(new Vector2(i > 0 ? 2 * Size.X : 0, j > 0 ? 2 * Size.Y : 0), 0, new Vector2(i == 0 ? 1 : -1, j == 0 ? 1 : -1));
-                DrawTextureRect(_tex, r, false, new Color(.62f, .62f, .68f));
-            }
+        var w = _m.World;
+        // the land beyond, as far as the ring shows it: on a square valley the valley turned over at each of its edges
+        // and corners, in shadow; a hexagonal one stands in its mist, its six sides drawn round it
+        if (w.Land == null)
+            for (int j = -1; j <= 1; j++)
+                for (int i = -1; i <= 1; i++)
+                {
+                    if (i == 0 && j == 0) continue;
+                    DrawSetTransform(new Vector2(i > 0 ? 2 * Size.X : 0, j > 0 ? 2 * Size.Y : 0), 0, new Vector2(i == 0 ? 1 : -1, j == 0 ? 1 : -1));
+                    DrawTextureRect(_tex, r, false, new Color(.62f, .62f, .68f));
+                }
+        else DrawRect(new Rect2(-Size, Size * 3), Off);
         DrawSetTransformMatrix(Transform2D.Identity);
         DrawTextureRect(_tex, r, false);
-        var w = _m.World;
+        if (w.Land != null)
+        {
+            var corners = w.Land.Corners();
+            var hexLine = new Vector2[7];
+            for (int i = 0; i < 7; i++) hexLine[i] = ToMap(corners[i % 6].x, corners[i % 6].z);
+            DrawPolyline(hexLine, new Color(0, 0, 0, .55f), 3f, true);
+            DrawPolyline(hexLine, new Color(Ornament.BronzeLight, .55f), 1.2f, true);
+        }
         var pts = _m.Rig.GroundFootprint(3f);
         var poly = new Vector2[pts.Length + 1];
         for (int i = 0; i < pts.Length; i++)

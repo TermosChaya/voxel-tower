@@ -115,8 +115,9 @@ public sealed partial class Sim
         for (int i = 0; i < count; i++)
         {
             var b = planned[i];
-            int z = (int)(World.SZ * (i + 1.0) / (count + 1) + (Rng.NextDouble() - .5) * World.SZ / (count + 1) * .6);
-            b.Entry = NearestStand(Site.SpawnStrip / 2, Math.Clamp(z, 40, World.SZ - 40), 3);
+            int z0 = Site.Hex == null ? 0 : Site.WestZ0, span = Site.Hex == null ? World.SZ : Site.WestZ1 - Site.WestZ0;
+            int z = (int)(z0 + span * (i + 1.0) / (count + 1) + (Rng.NextDouble() - .5) * span / (count + 1) * .6);
+            b.Entry = NearestStand(Site.EntryX, Math.Clamp(z, Site.WestZ0, Site.WestZ1), 3);
             b.Name = "Ватага " + LeaderNames[(b.Id * 7 + n) % LeaderNames.Length];
             // the tail of the shuffle beyond the leader: kinds come mixed
             for (int k = b.Roster.Count - 1; k > 1; k--) { int j = 1 + Rng.Next(k); (b.Roster[k], b.Roster[j]) = (b.Roster[j], b.Roster[k]); }
@@ -329,7 +330,7 @@ public sealed partial class Sim
             if (raid.Roster.Count > 0)
             {
                 // they come in where the mine is nearest the edge
-                raid.Entry = NearestStand(Site.SpawnStrip / 2, Math.Clamp(held.Place.StandZ, 40, World.SZ - 40), 3);
+                raid.Entry = NearestStand(Site.EntryX, Math.Clamp(held.Place.StandZ, Site.WestZ0, Site.WestZ1), 3);
                 raid.Roster.Sort((a, b) => Rank(b).CompareTo(Rank(a)));
                 Bands.Add(raid);
                 coming.Add(raid);

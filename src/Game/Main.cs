@@ -151,6 +151,10 @@ public partial class Main : Node3D
     int _grid = -1;
     float[] _aim;
     uint _seed = 7;
+    /// <summary>The kind of valley to make (--valley=first|ore|sacred|forest|marsh|mountain), whether the first keeps every
+    /// place it always had (--classic=0 takes them away), and whether the land is a hexagon (--square for the old box).</summary>
+    ValleyKind _valley = ValleyKind.First;
+    bool _classic = true, _hexagon = true;
     string _pose = "";
     /// <summary>How long the staged siege runs before the screenshot (--at=seconds).</summary>
     double _poseSeconds = 14;
@@ -172,6 +176,9 @@ public partial class Main : Node3D
             else if (a == "--calm") _calm = true;
             else if (a == "--top") _top = true;
             else if (a.StartsWith("--seed=") && uint.TryParse(a["--seed=".Length..], out uint sd)) _seed = sd;
+            else if (a.StartsWith("--valley=") && Valleys.Parse(a["--valley=".Length..]) is { } vk) _valley = vk;
+            else if (a == "--classic=0") _classic = false;
+            else if (a == "--square") _hexagon = false;
             else if (a.StartsWith("--look=") && int.TryParse(a["--look=".Length..], out int lk)) _look = lk;
             else if (a.StartsWith("--wave=") && double.TryParse(a["--wave=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double wa)) _waveAt = wa;
             else if (a.StartsWith("--day=") && double.TryParse(a["--day=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double da)) _dayAt = da;
@@ -224,13 +231,13 @@ public partial class Main : Node3D
         if (PendingLoad != null)
         {
             _loadedFrom = PendingLoad;
-            try { save = new SaveReader(System.IO.File.OpenRead(PendingLoad)); _seed = save.Seed; }
+            try { save = new SaveReader(System.IO.File.OpenRead(PendingLoad)); _seed = save.Seed; _valley = save.Kind; _classic = save.Classic; _hexagon = save.Hexagon; }
             catch (Exception e) { GD.PrintErr($"[voxel-tower] could not read {PendingLoad}: {e.Message}"); save?.Dispose(); save = null; }
             PendingLoad = null;
             _demo = _selfTest = false;
         }
         var sw = Stopwatch.StartNew();
-        var mp = new MapParams { Seed = _seed };
+        var mp = new MapParams { Seed = _seed, Kind = _valley, Classic = _classic, Hexagon = _hexagon };
         World = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         Site = MapGen.Generate(World, mp);
         if (_demo && _pose == "trees") Grove();

@@ -61,7 +61,30 @@ public sealed class VoxelWorld
     public void ChunkCoords(int ci, out int cx, out int cy, out int cz) { cx = ci % CX; cz = ci / CX % CZ; cy = ci / (CX * CZ); }
     static int Local(int x, int y, int z) => ((y & Mask) << 10) | ((z & Mask) << 5) | (x & Mask);
 
-    public bool InBounds(int x, int y, int z) => (uint)x < (uint)SX && (uint)y < (uint)SY && (uint)z < (uint)SZ;
+    /// <summary>
+    /// Whether a voxel is in the world: in the box, and on the land when the land is a shape within it (a hexagon, see
+    /// <see cref="SetLand"/>) — outside that there is nothing, and nothing may be put there: water meets it as a wall,
+    /// whatever is laid or fallen there is gone.
+    /// </summary>
+    public bool InBounds(int x, int y, int z) => (uint)x < (uint)SX && (uint)y < (uint)SY && (uint)z < (uint)SZ && (_land == null || _land[z * SX + x]);
+
+    /// <summary>The columns of the land (index z·SX + x), when it is a shape within the box; null for the whole box.</summary>
+    bool[] _land;
+    /// <summary>The shape of the land within the box, when it has one.</summary>
+    public Hex Land { get; private set; }
+
+    /// <summary>The land a hexagon within the box: the columns outside it are no part of the world.</summary>
+    public void SetLand(Hex hex)
+    {
+        Land = hex;
+        if (hex == null) { _land = null; return; }
+        _land = new bool[SX * SZ];
+        for (int z = 0; z < SZ; z++)
+            for (int x = 0; x < SX; x++) _land[z * SX + x] = hex.Inside(x, z);
+    }
+
+    /// <summary>Whether a column is on the land (and in the box).</summary>
+    public bool OnLand(int x, int z) => (uint)x < (uint)SX && (uint)z < (uint)SZ && (_land == null || _land[z * SX + x]);
 
     /// <summary>Material at a voxel. Everything below the field is bedrock, even past its edges; beside and above it is air.</summary>
     public byte Get(int x, int y, int z)
@@ -76,6 +99,8 @@ public sealed class VoxelWorld
     /// <summary>Write without marking anything; used while generating the map.</summary>
     public void SetRaw(int x, int y, int z, byte m)
     {
+        // nothing is made off the land, a tree's crown over its edge or a ruin's stone
+        if (_land != null && !_land[z * SX + x]) return;
         int ci = ((y >> Shift) * CZ + (z >> Shift)) * CX + (x >> Shift);
         if (TrackEdits) _edited[ci] = true;
         var d = _data[ci];
@@ -303,7 +328,7 @@ public sealed class VoxelWorld
     /// <summary>Writes a vertical run of one material straight into the chunk arrays (map generation).</summary>
     public void FillColumnRaw(int x, int z, int y0, int y1, byte m)
     {
-        if ((uint)x >= (uint)SX || (uint)z >= (uint)SZ) return;
+        if ((uint)x >= (uint)SX || (uint)z >= (uint)SZ || _land != null && !_land[z * SX + x]) return;
         y0 = Math.Max(0, y0); y1 = Math.Min(SY, y1);
         int local = ((z & Mask) << 5) | (x & Mask);
         for (int y = y0; y < y1;)

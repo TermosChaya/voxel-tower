@@ -55,6 +55,9 @@ public partial class FarLand : MeshInstance3D
         int nx = ax.Length, nz = az.Length;
 
         float Ground(float x, float z) => s.HTop[Math.Clamp((int)z, 0, SZ - 1) * SX + Math.Clamp((int)x, 0, SX - 1)];
+        // the valley's land: a hexagon in the box, or the whole box
+        var land = w.Land;
+        bool OnLand(float x, float z) => land != null ? land.Edge(x, z) >= 0 : x >= 0 && x <= SX && z >= 0 && z <= SZ;
         static float Smooth(float t) { t = Math.Clamp(t, 0, 1); return t * t * (3 - 2 * t); }
 
         // the river out of the valley north and south: its middle goes on the way it was going, then winds; it widens a little
@@ -75,9 +78,21 @@ public partial class FarLand : MeshInstance3D
         // and from the valley's edge
         float LandAt(float x, float z, out float riverD, out float roadD, out float sd)
         {
-            float ox = Math.Max(0, Math.Max(-x, x - SX)), oz = Math.Max(0, Math.Max(-z, z - SZ));
-            sd = MathF.Sqrt(ox * ox + oz * oz);
-            float cx = Math.Clamp(x, 0, SX - 1), cz = Math.Clamp(z, 0, SZ - 1);
+            float cx, cz;
+            if (land != null)
+            {
+                // the nearest of the land, a little in from its edge so the edge's own ground is read
+                var (nx, nz) = land.Nearest(x, z);
+                sd = MathF.Sqrt((x - nx) * (x - nx) + (z - nz) * (z - nz));
+                float mx0 = land.CX - nx, mz0 = land.CZ - nz, ml = MathF.Max(1e-3f, MathF.Sqrt(mx0 * mx0 + mz0 * mz0));
+                cx = Math.Clamp(nx + mx0 / ml * 1.5f, 0, SX - 1); cz = Math.Clamp(nz + mz0 / ml * 1.5f, 0, SZ - 1);
+            }
+            else
+            {
+                float ox = Math.Max(0, Math.Max(-x, x - SX)), oz = Math.Max(0, Math.Max(-z, z - SZ));
+                sd = MathF.Sqrt(ox * ox + oz * oz);
+                cx = Math.Clamp(x, 0, SX - 1); cz = Math.Clamp(z, 0, SZ - 1);
+            }
             float h = Ground(cx, cz) - 1;
             if (sd > 0)
             {
@@ -92,14 +107,18 @@ public partial class FarLand : MeshInstance3D
                 h = Mathf.Lerp(h, sum / 25 + hills, Smooth(sd / 900)) + rise;
             }
             riverD = 1e4f; roadD = 1e4f;
-            if (river && (z <= 0 || z >= SZ))
+            if (river && !OnLand(x, z))
             {
-                float rx = RiverAt(z, out float half), d = MathF.Abs(x - rx);
+                // the river's own course on in the box past the land's edge, then on out of it
+                float rx, half;
+                if (z > 0 && z < SZ - 1) { rx = s.RiverMid[(int)z]; half = s.RiverHalfWidth[(int)z]; }
+                else rx = RiverAt(z, out half);
+                float d = MathF.Abs(x - rx);
                 riverD = d - half;
                 if (riverD < 0) h = MapGen.RiverLevel;
                 else h = Math.Max(Math.Min(h, MapGen.RiverLevel + 2 + riverD * .42f + Math.Max(0, riverD - 30) * .95f), MapGen.RiverLevel + 1);
             }
-            if (x <= 0) roadD = MathF.Abs(z - RoadZ(x)) - 6;
+            if (x <= (land != null ? land.WestX : 0)) roadD = MathF.Abs(z - RoadZ(x)) - 6;
             return h;
         }
         // how much of a spot is wood: not on the river or the road, nor high up the rim, and only a little way out from
@@ -167,7 +186,8 @@ public partial class FarLand : MeshInstance3D
         for (int j = 0; j < nz - 1; j++)
             for (int i = 0; i < nx - 1; i++)
             {
-                if (ax[i] >= 0 && ax[i + 1] <= SX && az[j] >= 0 && az[j + 1] <= SZ) continue;
+                // a cell all on the land is the valley's own; one across its edge is drawn under the edge's ground
+                if (OnLand(ax[i], az[j]) && OnLand(ax[i + 1], az[j]) && OnLand(ax[i], az[j + 1]) && OnLand(ax[i + 1], az[j + 1])) continue;
                 float ccx = (ax[i] + ax[i + 1]) / 2 - mx, ccz = (az[j] + az[j + 1]) / 2 - mz;
                 if (ccx * ccx + ccz * ccz > reach * reach) continue;
                 int a = Vert(i, j), b = Vert(i + 1, j), c = Vert(i + 1, j + 1), d = Vert(i, j + 1);

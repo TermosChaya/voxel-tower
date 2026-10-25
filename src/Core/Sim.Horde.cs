@@ -90,8 +90,9 @@ public sealed partial class Sim
     {
         for (int tries = 0; tries < 12; tries++)
         {
-            int z = 24 + Rng.Next(World.SZ - 48);
-            int c = NearestStand(Site.SpawnStrip / 2, z, t.Move.Height);
+            // in by the western edge, along its straight side
+            int z = Site.Hex == null ? 24 + Rng.Next(World.SZ - 48) : Site.WestZ0 + Rng.Next(Math.Max(1, Site.WestZ1 - Site.WestZ0));
+            int c = NearestStand(Site.EntryX, z, t.Move.Height);
             if (c < 0) continue;
             var u = Spawn(t, c);
             SendRaid(u);
@@ -264,7 +265,7 @@ public sealed partial class Sim
             u.State = UnitState.Idle;
             if (Time < u.NextSearch) return;
             u.NextSearch = Time + 2;
-            int c = NearestStand(Site.SpawnStrip / 2, (int)u.Z, u.T.Move.Height);
+            int c = NearestStand(Site.EntryX, Site.EntryZ((int)u.Z), u.T.Move.Height);
             if (c < 0 || !GoTo(u, c, adjacent: true, budget: 40000)) return;
         }
         Walk(u, dt);

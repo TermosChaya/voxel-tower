@@ -288,7 +288,8 @@ if (args.Length == 0 || args[0] == "--seeds")
                 int i = z * ws.SX + x;
                 for (int y = ss.HTop[i]; y < ss.WaterTop[i]; y++)
                     foreach (var (sx, sz) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
-                        if (ws.Get(x + sx, y, z + sz) == Mat.Air) open++;
+                        // (the land's edge is the world's: its side is no bank)
+                        if (ws.Get(x + sx, y, z + sz) == Mat.Air && ws.OnLand(x + sx, z + sz)) open++;
             }
         int mines = ss.Landmarks.Count(l => l.Kind == LandmarkKind.Mine), ruins = ss.Landmarks.Count(l => l.Kind == LandmarkKind.Ruin), powers = ss.Landmarks.Count(l => l.Kind == LandmarkKind.Power);
         Check($"seed {seed}: a whole valley", ss.KeepBase > 70 && open == 0 && mines == 3 && ruins == 6 && powers == 3 && ss.Ponds.Count == 2,
@@ -319,7 +320,8 @@ if (args.Length == 0 || args[0] == "--sim")
                 int i = z * w4.SX + x;
                 for (int y = site4.HTop[i]; y < site4.WaterTop[i]; y++)
                     foreach (var (sx, sz) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
-                        if (w4.Get(x + sx, y, z + sz) == Mat.Air) open++;
+                        // (the land's edge is the world's: its side is no bank)
+                        if (w4.Get(x + sx, y, z + sz) == Mat.Air && w4.OnLand(x + sx, z + sz)) open++;
             }
         Check("ponds and the river lie level inside their banks", open == 0, $"{open} faces of water open to the air");
     }
@@ -6100,6 +6102,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--builders") BuildersB
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--decor") DecorBench.Run(Check);
 // mines under the walls and what meets them (Mines.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--mines") MinesBench.Run(Check);
+// the valley a hexagon, and the kinds of valley (HexBench.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--hex") HexBench.Run(Check);
 
 if (args.Length > 0 && args[0] == "--stress")
 {

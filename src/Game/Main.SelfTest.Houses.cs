@@ -35,7 +35,8 @@ public partial class Main
                     if (!World.InBounds(x + dx, 1, z + dz) || Math.Abs(World.SurfAt(x + dx, z + dz) - h) > 1 || Site.Forbidden(x + dx, z + dz)) return false;
             return true;
         }
-        var (hx, hz) = Nearest(Site.KeepX + Site.KeepR + 120, Site.KeepZ - 60, 160, Level);
+        // (on a hexagonal valley the land ends some sixteen metres east of the citadel: the search starts nearer)
+        var (hx, hz) = Nearest(Site.KeepX + Site.KeepR + (World.Land != null ? 60 : 120), Site.KeepZ - 60, 200, Level);
         ClearTrees(hx - 40, hz - 50, hx + 40, hz + 50);
         if (Sim.Alarm) Sim.StandDown();
         Rig.Focus(World.WX(hx), World.WZ(hz));
@@ -45,6 +46,11 @@ public partial class Main
         int x0 = hx - 18, z0 = hz - 27, x1 = hx + 18, z1 = hz + 27;
         await Drag(x0, z0, x1, z1);
         var home = Sim.Zones.Find(z => z.Kind == Zone.Dwelling && z.X0 == x0 && z.Z0 == z0);
+        if (home == null)
+        {
+            check("a house drawn with the rectangle's «дом» is laid out as a dwelling", false, $"no dwelling at {x0},{z0} (level ground found at {hx},{hz}: {Level(hx, hz)})");
+            return;
+        }
         int top = home?.Depth ?? 0, floorTop = top - Shapes.HouseHeight;
         // the ridge runs along the long side, here along z: six courses up the slope, twelve voxels in from the eaves,
         // and the ridge itself ten courses up over the middle

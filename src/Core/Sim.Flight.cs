@@ -480,7 +480,8 @@ public sealed partial class Sim
             {
                 f.VY -= Gravity * h;
                 f.X += f.VX * h; f.Y += f.VY * h; f.Z += f.VZ * h;
-                if (f.X < 2 || f.Z < 2 || f.X >= World.SX - 2 || f.Z >= World.SZ - 2 || f.Y < 2) { down = true; break; }
+                // past the land's edge it goes down off the valley, and whatever is laid there is gone
+                if (f.X < 2 || f.Z < 2 || f.X >= World.SX - 2 || f.Z >= World.SZ - 2 || f.Y < 2 || !World.OnLand((int)f.X, (int)f.Z)) { down = true; break; }
                 // nothing goes up out of the world: it stops there and falls back
                 if (f.Y > World.SY - 4) { f.Y = World.SY - 4; f.VY = Math.Min(0, f.VY); }
                 // a ladder in its way is torn off where it strikes it
@@ -793,6 +794,8 @@ public sealed partial class Sim
     {
         var u = f.Unit;
         u.Airborne = null;
+        // thrown off the land's edge: down past the valley's side, and no coming back
+        if (!World.OnLand((int)u.X, (int)u.Z) && !u.Dead) { Fatal(u, "сорвался с края долины", f.Cause.Length > 0 ? f.Cause : "падение", null); return; }
         int cell = StandBelow(u.X, u.Y + 2, u.Z, u.T.Move.Height);
         if (cell >= 0) { u.Cell = cell; var (fx, fy, fz) = Nav.Feet(cell); u.X = Math.Clamp(u.X, fx - 3.5f, fx + 3.5f); u.Y = fy; u.Z = Math.Clamp(u.Z, fz - 3.5f, fz + 3.5f); }
         u.Path = null; u.NextSearch = 0; u.State = u.Dead ? UnitState.Dead : UnitState.Idle;

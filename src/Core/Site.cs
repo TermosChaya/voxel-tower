@@ -25,8 +25,20 @@ public sealed class Site
     public int KeepX = 286, KeepZ = 112, KeepR = 24;
     public int KeepBase = 72;
     public int WallX = 232;
-    /// <summary>The strip along the western edge where the horde walks in; nothing may be built there.</summary>
+    /// <summary>The strip along the western edge where the horde walks in; nothing may be built there (the x it ends at).</summary>
     public int SpawnStrip = 16;
+    /// <summary>The rows of the western edge the horde comes in by: on a hexagon its straight side, short of the corners.</summary>
+    public int WestZ0 = 40, WestZ1 = 984;
+    /// <summary>The land's shape, when it is a hexagon (null for the whole box).</summary>
+    public Hex Hex;
+    /// <summary>What kind of valley this is, and whether the first valley keeps every place it always had.</summary>
+    public ValleyKind Kind;
+    public bool Classic = true;
+
+    /// <summary>A row of the western edge to come in by, as near a wanted one as the hexagon's straight side allows.</summary>
+    public int EntryZ(int z) => Hex == null ? z : Math.Clamp(z, WestZ0, WestZ1);
+    /// <summary>Where along the western edge to look for a place to come in (or go out) by: the middle of the strip.</summary>
+    public int EntryX => SpawnStrip / 2;
 
     /// <summary>Torch and brazier lights, in voxel coordinates.</summary>
     public readonly List<(float X, float Y, float Z)> Torches = new();
@@ -51,10 +63,11 @@ public sealed class Site
     /// <summary>Where the old bridges arch over the river: they stand as long as they touch the ground (<see cref="Sim.Arched"/>).</summary>
     public VoxelWorld Arched;
 
-    /// <summary>Columns nobody may build on: the map's western edge (the horde's entry), the citadel and its gate approach.</summary>
+    /// <summary>Columns nobody may build on: off the land, the map's western edge (the horde's entry), the citadel and its gate approach.</summary>
     public bool Forbidden(int x, int z)
     {
         if (x < SpawnStrip) return true;
+        if (Hex != null && Hex.Edge(x + .5f, z + .5f) < 0) return true;
         if (Math.Sqrt((double)(x - KeepX) * (x - KeepX) + (double)(z - KeepZ) * (z - KeepZ)) < KeepR + 3) return true;
         if (x >= KeepX - KeepR - 16 && x < KeepX - KeepR && Math.Abs(z - KeepZ) < 8) return true;
         return false;
