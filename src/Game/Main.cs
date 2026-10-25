@@ -64,6 +64,7 @@ public partial class Main : Node3D
     public BloodView Blood { get; private set; }
     public WorkProgress Progress { get; private set; }
     public TownPlates Plates { get; private set; }
+    public ShoutTags Shouts { get; private set; }
     public UnitView Units { get; private set; }
     public OrdersView Marks { get; private set; }
     public ZoneView Areas { get; private set; }
@@ -260,7 +261,7 @@ public partial class Main : Node3D
         World = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         Site = MapGen.Generate(World, mp);
         if (_demo && _pose == "trees") Grove();
-        if (_demo && _pose is "people" or "duel" or "reel" or "blood" or "beasts" or "walk" or "trauma" or "scaffold" or "carry") ClearGrove();
+        if (_demo && _pose is "people" or "duel" or "reel" or "blood" or "beasts" or "walk" or "trauma" or "scaffold" or "carry" or "felling" or "pit") ClearGrove();
         // the field of the traps cleared of trees, so they are to be seen
         if (_demo && _pose == "engines") ClearTrees(Site.KeepX - Site.KeepR - 420, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 20, Site.KeepZ + 140);
         if (_demo && _pose == "ourengines") ClearTrees(Site.KeepX - Site.KeepR - 720, Site.KeepZ - 160, Site.KeepX - Site.KeepR - 10, Site.KeepZ + 160);
@@ -376,6 +377,10 @@ public partial class Main : Node3D
         var pins = new PinTags();
         AddChild(pins);
         pins.Init(this);
+        // a feller's «Берегись!» over the one who calls it (Ui/ShoutTags.cs)
+        Shouts = new ShoutTags();
+        AddChild(Shouts);
+        Shouts.Init(this);
         // the town's buildings, named over their roofs (Ui/Town.cs)
         Plates = new TownPlates();
         AddChild(Plates);

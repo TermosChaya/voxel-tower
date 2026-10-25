@@ -518,6 +518,16 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   клеткам навигации (`Walkable`), пока не выйдет за запертые (`_roomSet`), а где не пройти — режет ступень с
   головой над ней (кладка и дерево — вдвое дороже, до 14 м, `Forbidden` — нельзя); самый дешёвый — `DesignateRemove`,
   в летопись «прорубает себе выход», снова не раньше чем через 40 с (`WayOutMarked`). Ничего не сохраняется.
+- `Sim.Felling.cs` — валка: `Danger` (полоса от комля или коробка, `Has`), `FellPlan`, `Dangers`, `Shouted`.
+  `FellHold` (из `WorkTick` перед ударом и в цикле работ): `WouldFell`/`NearlyCut`+`TreeAbove` → `PlanFell` →
+  `FellWay`/`FellCost` → окрик, `ClearLane`, ожидание; `KeepOut` в `PawnTick` уводит `Avoiding`. `TreeGoing` в
+  `Fall` (полоса до конца падения, `Toppling.Felled`), `FallWay` — сторона плана или «сама» (`careful: false`),
+  `TickDangers` после `TickCollapse`. `Lay` бьёт бревном (`упавшее дерево`), `RollFelled` — от 60 вокселей ствола.
+  У юнита `Avoiding`, `FellLooked`, `FellLookedUntil`, `FellHold`. `Sim.Hurting` — для стенда.
+- `Sim.Undermine.cs` — копка: `UnderOwnFeet`, `BuiltOverhead`+`BearsBuilt` (в `Gather`), `DropHold` (из `FellHold`
+  для не-ствола) → `WouldDrop` → зона, окрик, подрубка `_footings` → `TickUndercut` → `DigAway` (общий с `Do`).
+  `InPit` для `LookForWayOut` (сразу, ступени раньше лесов, один выход на яму). `HoldBore`/`BoreHeld` — контрподкоп
+  дальше ступени без крепи не копают (`TendCountermine`). Ничего не сохраняется.
 - `Sim.Seal.cs` — стройка без замуровывания. В `Do` перед кладкой: `ShutsIn` — для клетки, которую работа закроет
   (`Filling` + `Orders.CellLay` ≥ `SolidT`; `CellLay` — заказанная кладка по клеткам сетки, ведёт `Orders.Count`):
   перед первым вокселем, раз в 4 с (`_cleared`) и на вокселе, который её закрывает. `Filling`: счёт сетки на начало

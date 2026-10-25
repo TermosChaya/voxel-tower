@@ -135,6 +135,7 @@ public partial class Sound : Node
         HookTunnel(sim);
         HookCollapse(sim);
         HookCarry(sim);
+        HookShout(sim);
     }
 
     /// <summary>A blade, a club or a beast's jaws starting down at someone: the swish of it through the air, or a beast's lunge.</summary>
@@ -324,6 +325,7 @@ public partial class Sound : Node
         MakeTunnel();
         MakeCollapse();
         MakeCarry();
+        MakeShout();
     }
 
     void Add(string name, float[] s, bool loop = false)

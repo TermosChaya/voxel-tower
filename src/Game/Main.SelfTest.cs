@@ -646,7 +646,7 @@ public partial class Main
         bool restored = Atmos.Sun.ShadowEnabled && vpG.Scaling3DScale == 1 && vpG.Msaa3D == Viewport.Msaa.Msaa2X && Atmos.Env.GlowEnabled;
         Check("the picture can be lowered for a weak machine and put back", lowered && restored, $"lowered {lowered}, back {restored}");
 
-        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 38 && Sound.Heard.Count >= 4,
+        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 39 && Sound.Heard.Count >= 4,
             $"{Sound.Clips} sounds, {Sound.Played} played: {string.Join(", ", Sound.Heard)}");
 
         var before = Rig.Target;
@@ -946,6 +946,7 @@ public partial class Main
         await SelfTestTown(Check);
         await MinesSelfTest((what, ok, detail) => Check(what, ok, detail));
         await SelfTestYard(Check);
+        await SelfTestFelling(Check);
         await SelfTestTemplates(Check);
         await SelfTestRowHouses(Check);
         await SelfTestHex(Check);
