@@ -23,6 +23,10 @@ public partial class CameraRig : Node3D
 
     /// <summary>The part of the map the camera may look at, in world metres (x, z).</summary>
     public Rect2 Bounds = new(-11, -8, 22, 16);
+    /// <summary>The lowest and the highest the valley reaches (world units): what the view need look through.</summary>
+    public float GroundLow, GroundHigh = 16;
+    /// <summary>The sun whose shadows are cast over as much as the view takes in, no further (set by the atmosphere).</summary>
+    public DirectionalLight3D Sun;
 
     /// <summary>Where H returns the view to.</summary>
     public void HomeAt(float wx, float wz) { _homeX = wx; _homeZ = wz; Home(true); }
@@ -198,6 +202,26 @@ public partial class CameraRig : Node3D
         Apply();
     }
 
+    /// <summary>
+    /// How deep the view looks: the box of an orthographic camera goes on behind what it shows, through the ground and
+    /// the valley beyond, and everything in it is drawn and shadowed whether seen or not. It is cut to the slab between
+    /// the lowest and the highest of the valley where the screen's top and bottom rows cross it, with a margin, and the
+    /// sun's shadows are cast over that and no further: the wider valley does not cost more than it shows.
+    /// </summary>
+    void Depth(float spn, float cp)
+    {
+        // through someone's eyes or the trailer's lens the sun keeps its own reach
+        if (!Cam.Current) { if (Sun != null) Sun.DirectionalShadowMaxDistance = ShadowReach; return; }
+        float half = Cam.Size * .5f + Math.Abs(Cam.VOffset) + 1, s = MathF.Max(.15f, spn);
+        float near = Dist - (GroundHigh - LookY + half * cp) / s - 6, far = Dist + (LookY - GroundLow + half * cp) / s + 6;
+        Cam.Near = Math.Max(.1f, near);
+        Cam.Far = Math.Min(400, far);
+        if (Sun != null) Sun.DirectionalShadowMaxDistance = Math.Min(ShadowReach * 3, far);
+    }
+
+    /// <summary>How far the sun's shadows reach from any other camera (world units).</summary>
+    public const float ShadowReach = 115f;
+
     /// <summary>A shaking, one way of it: three tremors over one another, from a slow sway to a rattle.</summary>
     static float Wobble(float t, float seed) => MathF.Sin(t * 31 + seed) * .55f + MathF.Sin(t * 47 + seed * 2.3f) * .3f + MathF.Sin(t * 83 + seed * 4.1f) * .15f;
 
@@ -216,6 +240,7 @@ public partial class CameraRig : Node3D
         var up = cp < .02f ? new Vector3(-MathF.Sin(_cyaw), 0, -MathF.Cos(_cyaw)) : Vector3.Up;
         Cam.LookAtFromPosition(pos, target, up);
         Cam.VOffset = -(BottomInset - TopInset) * .5f * Cam.Size / Math.Max(1f, vp.Y);
+        Depth(spn, cp);
         // shaking: the view jolted aside and turned a little, as the square of how hard, so a small jolt stays small
         float k = _trauma * _trauma * Settings.Shake;
         if (k > 1e-4f)

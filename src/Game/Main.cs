@@ -307,6 +307,8 @@ public partial class Main : Node3D
         Rig.Bounds = new Rect2(World.OriginX, World.OriginZ, World.SX * VoxelWorld.Vox, World.SZ * VoxelWorld.Vox);
         // out far enough to see the whole valley however wide it is
         Rig.MinZoom = .28f * 1024f / Math.Max(World.SX, World.SZ);
+        Rig.GroundLow = World.WY(0); Rig.GroundHigh = World.WY(World.SY);
+        Rig.Sun = Atmos.Sun;
         AddChild(Rig);
         Rig.HomeAt(World.WX(Site.KeepX - Site.KeepR - 50), World.WZ(Site.KeepZ + 14));
         atmo.Follow = Rig;

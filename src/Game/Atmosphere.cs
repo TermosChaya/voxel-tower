@@ -134,7 +134,7 @@ public partial class Atmosphere : Node3D
             ShadowBias = .04f,
             ShadowNormalBias = 1.0f,
             DirectionalShadowMode = DirectionalLight3D.ShadowMode.Orthogonal,
-            DirectionalShadowMaxDistance = 115f,
+            DirectionalShadowMaxDistance = CameraRig.ShadowReach,
         };
         AddChild(sun);
         sun.LookAtFromPosition(new Vector3(-14, 16, 9), new Vector3(0, 3, 0), Vector3.Up);
