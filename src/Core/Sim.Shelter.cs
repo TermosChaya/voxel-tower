@@ -27,7 +27,7 @@ public sealed partial class Sim
         Alarm = true;
         Recall();
         foreach (var u in Units)
-            if (!u.Dead && u.Team == Team.Player && !Fighter(u) && !u.Hold) { ReleaseSite(u); u.Refuge = -1; u.Path = null; u.NextSearch = 0; Busy(u); }
+            if (!u.Dead && u.Team == Team.Player && !Fighter(u) && !u.Hold) { ReleaseSite(u); u.Refuge = -1; u.Path = null; u.NextSearch = u.NoWayUntil = 0; Busy(u); }
         Say("Тревога: рабочие уходят в убежища, солдаты встают на посты.", 2);
     }
 
@@ -92,13 +92,18 @@ public sealed partial class Sim
         u.Why = keep ? "тревога: идёт в цитадель" : "тревога: идёт в убежище";
         if (u.Path == null || u.PathI >= u.Path.Count)
         {
-            if (Time < u.NextSearch) { u.State = UnitState.Idle; return true; }
+            if (Time < u.NextSearch || Time < u.NoWayUntil) { u.State = UnitState.Idle; return true; }
             u.NextSearch = Time + 2;
             if (!GoTo(u, u.Refuge, adjacent: keep, budget: 40000))
             {
                 // the shelter can't be got to: the citadel then, or wait where it is
                 if (!keep && GoTo(u, Gate, adjacent: true, budget: 40000)) u.Refuge = Gate;
-                else { u.Path = null; u.Why = "тревога: до убежища не дойти"; u.State = UnitState.Idle; return true; }
+                else
+                {
+                    // (shut out, the gate closed on it: looked for again a good while after)
+                    u.NoWayUntil = Time + 8;
+                    u.Path = null; u.Why = "тревога: до убежища не дойти"; u.State = UnitState.Idle; return true;
+                }
             }
         }
         Walk(u, dt);

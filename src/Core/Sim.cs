@@ -529,7 +529,7 @@ public sealed partial class Sim
             var u = group[n];
             // sent out of the citadel: out of its door first
             if (u.Inside) { u.Mending = false; Leave(u); }
-            u.Refuge = -1;
+            u.Refuge = -1; u.NoWayUntil = 0;
             ReleaseSite(u);
             Busy(u);
             int spot = spots[n];
@@ -664,7 +664,7 @@ public sealed partial class Sim
             {
                 ReleaseSite(u);
                 Busy(u);
-                u.Prey = null;
+                u.Prey = null; u.NoWayUntil = 0;
                 GoTo(u, u.Post);
             }
     }

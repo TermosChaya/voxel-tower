@@ -267,11 +267,12 @@ public sealed partial class Sim
         if (u.Path == null || u.PathI >= u.Path.Count)
         {
             u.State = UnitState.Idle;
-            if (Time < u.NextSearch) return;
+            if (Time < u.NextSearch || Time < u.NoWayUntil) return;
             u.NextSearch = Time + 2;
             var (ox, oz) = Site.EntryNear(u.X, u.Z);
             int c = home >= 0 ? home : NearestStand(ox, oz, u.T.Move.Height);
-            if (c < 0 || !GoTo(u, c, adjacent: true, budget: 40000)) return;
+            // (no way out from where it is, shut in by walls: looked for again a good while after, a search being dear)
+            if (c < 0 || !GoTo(u, c, adjacent: true, budget: 40000)) { u.NoWayUntil = Time + 6; return; }
         }
         Walk(u, dt);
         u.State = UnitState.Flee;

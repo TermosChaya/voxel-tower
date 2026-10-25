@@ -129,10 +129,15 @@ public sealed partial class Sim
         {
             u.Why = "";
             // the way broke (a gate shut in its face, something built across it): find it again now and then
-            if (u.Dest >= 0 && u.Cell != u.Dest && Time >= u.NextSearch)
+            if (u.Dest >= 0 && u.Cell != u.Dest && Time >= u.NextSearch && Time >= u.NoWayUntil)
             {
                 u.NextSearch = Time + 2;
-                if (CellsApart(u.Cell, u.Dest) > 1 && (GoTo(u, u.Dest, budget: 100000) || GoTo(u, u.Dest, adjacent: true, budget: 100000))) { Busy(u); return; }
+                if (CellsApart(u.Cell, u.Dest) > 1)
+                {
+                    if (GoTo(u, u.Dest, budget: 100000) || GoTo(u, u.Dest, adjacent: true, budget: 100000)) { Busy(u); return; }
+                    // no way there at all: two searches round all it can walk, not to be made every two seconds
+                    u.NoWayUntil = Time + 8;
+                }
             }
             Idle(u, dt, stay: true);
             return;
@@ -141,7 +146,8 @@ public sealed partial class Sim
         {
             // while the horde is in the valley, or the alarm is up, soldiers keep to their posts and look out
             ReleaseSite(u);
-            if (u.Post >= 0 && u.Cell != u.Post && Time >= u.NextSearch) { u.NextSearch = Time + 2; Busy(u); GoTo(u, u.Post); }
+            // (no way to its post, say the stair to the wall burnt: looked for again a good while after)
+            if (u.Post >= 0 && u.Cell != u.Post && Time >= u.NextSearch && Time >= u.NoWayUntil) { u.NextSearch = Time + 2; Busy(u); if (!GoTo(u, u.Post)) u.NoWayUntil = Time + 8; }
             if (u.Path != null && u.Pastime != Pastime.Stroll) Walk(u, dt); else Idle(u, dt, stay: true);
             return;
         }
