@@ -9,7 +9,7 @@ namespace VoxelTower.Game;
 public enum Act
 {
     CamForward, CamBack, CamLeft, CamRight, CamTurnLeft, CamTurnRight, CamTop, CamHome, CamZoomIn, CamZoomOut,
-    ToolBrush, ToolLine, ToolBox, ToolCircle, ToolExtrude, ToolUnmark, ToolLadder, ToolGather, ToolGate, ToolRepair, ToolBridge, ToolCapture, ToolWand,
+    ToolBrush, ToolLine, ToolBox, ToolCircle, ToolExtrude, ToolUnmark, ToolLadder, ToolGather, ToolGate, ToolRepair, ToolBridge, ToolCapture, ToolWand, ToolYard,
     MatStone, MatWood, MatEarth, Pick, WidthLess, WidthMore, HeightLess, HeightMore, Form, Level, Grid, Rotate,
     Keep, Alarm, Possess,
     CallWave, Summon, Pause, Speed, Trails, QuickSave, QuickLoad, Help,
@@ -67,6 +67,7 @@ public static class Bindings
         D(Act.ToolBridge, Brushes, "Мост", "Мост от берега до берега, арочный или подъёмный.", Key.M),
         D(Act.ToolCapture, Brushes, "Снять чертёж", "Сохранить постройку как чертёж.", Key.B),
         D(Act.ToolWand, Brushes, "Волшебная палочка", "Выбрать всё прилегающее из одного материала: снести, переложить или снять чертёж.", Key.U),
+        D(Act.ToolYard, Brushes, "Обустройство", "Дорожки между домами и вещи: костры, скамьи, факелы, колодец, телега, изгородь.", Key.L),
 
         D(Act.MatStone, BrushOptions, "Камень", "Класть камень; на делянке — добывать камень.", Key.Z),
         D(Act.MatWood, BrushOptions, "Брёвна", "Класть брёвна; на делянке — рубить лес.", Key.X),
@@ -76,10 +77,10 @@ public static class Bindings
         D(Act.WidthMore, BrushOptions, "Толще", "Толщина, ширина или размер на шаг больше.", Key.Bracketright),
         D(Act.HeightLess, BrushOptions, "Ниже", "Высота на шаг меньше; с киркой — мельче.", Key.Minus),
         D(Act.HeightMore, BrushOptions, "Выше", "Высота на шаг больше; с киркой — глубже.", Key.Equal),
-        D(Act.Form, BrushOptions, "Форма или заливка", "Столб или шар у кисти; сплошная фигура или стенки у прямоугольника и круга; у прямоугольника ещё дом; у линии с киркой ров или подкоп.", Key.F),
+        D(Act.Form, BrushOptions, "Форма или заливка", "Столб или шар у кисти; сплошная фигура или стенки у прямоугольника и круга; у прямоугольника ещё дом; у линии с киркой ров или подкоп; у обустройства следующая дорожка или вещь.", Key.F),
         D(Act.Level, BrushOptions, "Ровно или по рельефу", "Верх стены (дно рва) ровный от начала штриха или идёт по рельефу.", Key.G),
         D(Act.Grid, BrushOptions, "Сетка", "Привязка к сетке от центра цитадели: концы штрихов в узлах, линии вдоль осей или под 45°. Шаг выбирают в нижней панели.", Key.N),
-        D(Act.Rotate, BrushOptions, "Повернуть чертёж или здание", "Повернуть копию чертежа или план здания на 90°. Здание берут кнопкой «Поставить» во вкладке «Город».", Key.R),
+        D(Act.Rotate, BrushOptions, "Повернуть чертёж или здание", "Повернуть копию чертежа, план здания или вещь обустройства на 90°. Здание берут кнопкой «Поставить» во вкладке «Город».", Key.R),
 
         D(Act.Keep, Orders, "Цитадель", "Набор войска в цитадели; ещё раз — показать цитадель.", Key.K),
         D(Act.Alarm, Orders, "Тревога", "Рабочие уходят в убежища и цитадель, солдаты встают на посты. Ещё раз — отбой.", Key.T),

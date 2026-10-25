@@ -374,6 +374,8 @@ public sealed partial class Sim
         }
         // a torch a witch put out gives no light till it is lit again
         foreach (var f in Fixtures) if (f.Kind == FixtureKind.Torch && f.DarkUntil <= Time) Around(f.LX, f.LZ, TorchLight);
+        // the fires set out in the settlement light more round them than a torch on a wall
+        foreach (var f in Fixtures) if (f.Kind is FixtureKind.Campfire or FixtureKind.Brazier && f.DarkUntil <= Time) Around(f.LX, f.LZ, TorchLight * 1.4f);
         Around(Site.KeepX, Site.KeepZ, Site.KeepR + 8 * VoxelWorld.PerMetre);
         int n = 0;
         foreach (int p in Burning.Keys)

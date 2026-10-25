@@ -28,6 +28,7 @@ public sealed class Unfold
         (Tool.Bridge, "Новое: мост ({ToolBridge}), через ров или реку."),
         (Tool.Capture, "Новое: чертёж ({ToolCapture}), сохраняет постройку, чтобы ставить её копии."),
         (Tool.Wand, "Новое: волшебная палочка ({ToolWand}). Выделяет всё прилегающее из одного материала, чтобы снести или переложить."),
+        (Tool.Yard, "Новое: обустройство ({ToolYard}). Дорожки между домами, костры, скамьи и факелы."),
     };
     const string LoreKey = "tab:lore", LoreLine = "Новое: вкладка «Знания». За отбитые волны дают знания, на них изучают улучшения.";
 
@@ -85,6 +86,8 @@ public sealed class Unfold
                 Tool.Bridge => _m.Tools.DigMarkings > 0,
                 Tool.Capture => made >= 10,
                 Tool.Wand => made >= 8 || _m.Tools.DigMarkings >= 3,
+                // the settlement's ways and things, once there is a house to set them round, or a good deal built
+                Tool.Yard => house || made >= 12,
                 _ => false,
             };
             if (want) Open(KeyOf(tool), line, () => _m.Hud.Freshen(tool));

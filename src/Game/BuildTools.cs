@@ -5,7 +5,7 @@ using VoxelTower.Core;
 
 namespace VoxelTower.Game;
 
-public enum Tool { None, Brush, Line, Box, Circle, Extrude, Ladder, Gate, Repair, Bridge, Gather, Unmark, Capture, Paste, Spell, Wand, Building }
+public enum Tool { None, Brush, Line, Box, Circle, Extrude, Ladder, Gate, Repair, Bridge, Gather, Unmark, Capture, Paste, Spell, Wand, Building, Yard }
 
 public enum BrushForm { Column, Ball }
 
@@ -32,6 +32,8 @@ public sealed class ToolOptions
     /// <summary>The magic wand: takes exactly the same voxel only (not any shade of stone with its mortar); takes what touches
     /// by an edge or a corner too; makes a blueprint of what it took instead of taking it down or laying it over again.</summary>
     public bool WandExact, WandCorners, WandCapture;
+    /// <summary>The «Обустройство» tool: what of its palette is in hand (the ways first, then the things), and how a thing is turned.</summary>
+    public int YardPick, YardRot;
     /// <summary>Snapping to a grid round the citadel's middle, its step in voxels (0: off); the step it had when it was last on.</summary>
     public int Grid, GridLast = 8;
 
@@ -61,7 +63,7 @@ public partial class BuildTools : Node3D
     {
         Tool.Brush => "Кисть", Tool.Line => "Линия", Tool.Box => "Прямоугольник", Tool.Circle => "Круг",
         Tool.Extrude => "Выдавить", Tool.Ladder => "Лестница", Tool.Gate => "Ворота", Tool.Repair => "Починка", Tool.Bridge => "Мост", Tool.Gather => "Делянка", Tool.Unmark => "Снять разметку", Tool.Capture => "Снять чертёж",
-        Tool.Paste => "Чертёж", Tool.Spell => "Заклинание", Tool.Wand => "Волшебная палочка", Tool.Building => "Здание", _ => "Без кисти",
+        Tool.Paste => "Чертёж", Tool.Spell => "Заклинание", Tool.Wand => "Волшебная палочка", Tool.Building => "Здание", Tool.Yard => "Обустройство", _ => "Без кисти",
     };
 
     public static string Hint(Tool t, bool dig) => Bindings.Fill(HintText(t, dig));
@@ -90,6 +92,7 @@ public partial class BuildTools : Node3D
         (Tool.Building, _) => "Щелчок ставит здание: рабочие построят стены, крышу и дверь и обставят его. {Rotate} поворачивает, Esc отменяет.",
         (Tool.Wand, true) => "Наведите на постройку: подсветится всё прилегающее из того же материала. Щелчок: рабочие это снесут.",
         (Tool.Wand, false) => "Наведите на постройку: подсветится всё прилегающее из того же материала. Щелчок: переложат из выбранного материала.",
+        (Tool.Yard, _) => "Внизу выберите дорожку или вещь ({Form} — следующая). Дорожку протяните по земле, вещь поставьте щелчком, {Rotate} поворачивает.",
         _ => "{Lmb} — выбрать, рамкой — нескольких, {Rmb} — послать. {ToolBrush}–{ToolExtrude} — кисти, {Pick} — кирка, {Help} — все клавиши.",
     };
 
@@ -230,7 +233,7 @@ public partial class BuildTools : Node3D
         // what the wand had chosen with Shift is let go with it
         WandDrop();
         // these only build
-        if (Tool is Tool.Bridge or Tool.Repair or Tool.Gate or Tool.Ladder) Opt.Dig = false;
+        if (Tool is Tool.Bridge or Tool.Repair or Tool.Gate or Tool.Ladder or Tool.Yard) Opt.Dig = false;
         if (Tool != Tool.Paste) PasteBp = null;
         if (Tool != Tool.Building) Placing = null;
         _lmb = _paint = _hasStart = false;
@@ -324,6 +327,8 @@ public partial class BuildTools : Node3D
         else if (Tool == Tool.Wand) Opt.WandExact = !Opt.WandExact;
         // the line with the pick: a ditch, or a countermine under the ground
         else if (Tool == Tool.Line) Opt.Mine = !Opt.Mine;
+        // the settlement's ways and things: on to the next of the palette
+        else if (Tool == Tool.Yard) { StepYard(1); return; }
         else Opt.Hollow = !Opt.Hollow;
         Changed();
     }
@@ -427,6 +432,7 @@ public partial class BuildTools : Node3D
             Act.ToolBrush => Tool.Brush, Act.ToolLine => Tool.Line, Act.ToolBox => Tool.Box, Act.ToolCircle => Tool.Circle,
             Act.ToolExtrude => Tool.Extrude, Act.ToolUnmark => Tool.Unmark, Act.ToolLadder => Tool.Ladder, Act.ToolGather => Tool.Gather,
             Act.ToolGate => Tool.Gate, Act.ToolRepair => Tool.Repair, Act.ToolCapture => Tool.Capture, Act.ToolBridge => Tool.Bridge, Act.ToolWand => Tool.Wand,
+            Act.ToolYard => Tool.Yard,
             _ => Tool.None,
         };
         if (t != Tool.None) { SetTool(t); return true; }
@@ -456,6 +462,7 @@ public partial class BuildTools : Node3D
             case Act.Grid: ToggleGrid(); return true;
             case Act.Rotate when Tool == Tool.Paste: PasteRot = (PasteRot + 1) & 3; Changed(); return true;
             case Act.Rotate when Tool == Tool.Building: TurnBuilding(); Changed(); return true;
+            case Act.Rotate when Tool == Tool.Yard: Opt.YardRot = (Opt.YardRot + 1) & 3; Changed(); return true;
         }
         return false;
     }
@@ -537,7 +544,7 @@ public partial class BuildTools : Node3D
             }
             return;
         }
-        if (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather or Tool.Repair or Tool.Bridge)
+        if (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather or Tool.Repair or Tool.Bridge || Paving)
         {
             if (click && Tool == Tool.Unmark) { UnmarkAt(); return; }
             if (click && Tool == Tool.Repair) { RepairAt(); return; }
@@ -561,6 +568,7 @@ public partial class BuildTools : Node3D
             if (Tool == Tool.Bridge && BridgeRefusal(a, b) is { } why) { Refuse(why); return; }
             if (Tool == Tool.Box && Opt.House && !dig) { MarkHouse(a, b); return; }
             if (Tool == Tool.Line && Opt.Mine && dig) { MarkCountermine(a, b); return; }
+            if (Paving) { MarkWay(a, b); return; }
             Designate(PlanDrag(a, b, dig), dig, ToolName(Tool), arched: Tool == Tool.Bridge);
             return;
         }
@@ -591,6 +599,7 @@ public partial class BuildTools : Node3D
         else if (Tool == Tool.Paste && PasteBp != null) Designate(PlanPasteAtHover(), false, PasteBp.Name);
         else if (Tool == Tool.Wand) WandAt();
         else if (Tool == Tool.Building) PutUpAtHover();
+        else if (Tool == Tool.Yard) PlaceYard();
     }
 
     /// <summary>
@@ -1081,7 +1090,7 @@ public partial class BuildTools : Node3D
             _hasTree = true;
         }
         _hasDrag = false;
-        if (_lmb && _hasStart && (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather or Tool.Repair || ColumnStroke || SpellStroke) && Math.Abs(d.Y) > 1e-4f)
+        if (_lmb && _hasStart && (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Capture or Tool.Unmark or Tool.Gather or Tool.Repair || Paving || ColumnStroke || SpellStroke) && Math.Abs(d.Y) > 1e-4f)
         {
             float t = (w.WY(_startPt.y) - o.Y) / d.Y;
             if (t > 0)
@@ -1290,9 +1299,9 @@ public partial class BuildTools : Node3D
         var st = _m.Sim.Stock;
         string stock = $"{(int)(st[1] / 400)}|{(int)(st[2] / 400)}|{(int)(st[3] / 400)}";
         bool dig = DigNow;
-        string opts = $"{dig}|{Opt.Material}|{Opt.Width}|{Opt.Height}|{Opt.Depth}|{Opt.Step}|{Opt.Level}|{Opt.Hollow}|{Opt.House}|{Opt.Mine}|{Opt.Form}|{_rev}|{stock}";
+        string opts = $"{dig}|{Opt.Material}|{Opt.Width}|{Opt.Height}|{Opt.Depth}|{Opt.Step}|{Opt.Level}|{Opt.Hollow}|{Opt.House}|{Opt.Mine}|{Opt.Form}|{Opt.YardPick}|{Opt.YardRot}|{_rev}|{stock}";
         string key = "";
-        bool dragging = Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Bridge && _lmb && _hasStart && _hasDrag;
+        bool dragging = (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Bridge || Paving) && _lmb && _hasStart && _hasDrag;
         if (Tool == Tool.Spell)
         {
             // a spell shows what it takes and whether it is ready, no ghost
@@ -1366,6 +1375,7 @@ public partial class BuildTools : Node3D
             key = Tool switch
             {
                 Tool.Line or Tool.Box or Tool.Circle => $"L|{g}",
+                Tool.Yard => $"Y|{g}",
                 Tool.Bridge => $"G|{g}",
                 Tool.Brush when Opt.Form == BrushForm.Column => $"C|{g}|{(_paint ? _level : -1)}",
                 Tool.Brush => $"B|{h}",
@@ -1412,7 +1422,16 @@ public partial class BuildTools : Node3D
             _plan = PlanDrag(_startPt, _dragPt, false);
             dig = false;
         }
+        else if (dragging && Paving) { _plan = WayAt(_startPt, _dragPt); name = Sim.WayName(WayPick); dig = false; }
         else if (dragging) _plan = PlanDrag(_startPt, _dragPt, dig);
+        else if (Paving) { _plan = WayAt(gp, gp); name = Sim.WayName(WayPick) + ", начало"; dig = false; }
+        else if (Tool == Tool.Yard)
+        {
+            _plan = DecorAtHover(out string why);
+            name = Yard.Name(DecorPick);
+            dig = false;
+            if (_plan == null) { _ghost.Visible = false; PlanText = $"{name}: {why}"; PlanAffordable = false; _planDig = false; return; }
+        }
         else if (Tool == Tool.Bridge) { _ghost.Visible = false; PlanText = null; return; }
         else if (Tool is Tool.Line or Tool.Box or Tool.Circle)
         {
@@ -1452,7 +1471,8 @@ public partial class BuildTools : Node3D
         _ghost.Visible = _ghost.Mesh != null;
         _ghostMat.SetShaderParameter("tint", dig ? new Vector3(.85f, .2f, .14f) : PlanAffordable ? new Vector3(.9f, .55f, .25f) : new Vector3(.85f, .2f, .16f));
         _ghostMat.SetShaderParameter("tint_mix", dig ? .62f : PlanAffordable ? .35f : .6f);
-        _ghostMat.SetShaderParameter("inflate", dig ? .1f : 0f);
+        // a way lies where the turf is now: drawn a hair over it
+        _ghostMat.SetShaderParameter("inflate", dig ? .1f : Paving ? .06f : 0f);
     }
 
     /// <summary>The ghost's mesh changed, the old one let go at once rather than left to the garbage collector.</summary>

@@ -126,6 +126,7 @@ public partial class FireView : Node3D
         var sim = _m.Sim; var w = _m.World;
         int torches = 0;
         foreach (var u in sim.Units) if (!u.Dead && u.Torch) torches++;
+        foreach (var f in sim.Fixtures) if (Hearth(f, sim)) torches += 4;
         Grow(_flames, ref _flameBuf, Math.Min(MaxFlames, sim.Burning.Count) + torches);
         int n = 0, every = Math.Max(1, sim.Burning.Count / MaxFlames + 1), k = 0;
         _clusters.Clear();
@@ -154,6 +155,19 @@ public partial class FireView : Node3D
             var at = new Vector3(w.WX(u.X + MathF.Cos(side) * reach * .8f + MathF.Cos(u.Facing) * .8f), w.WY(u.Y + u.T.BodyH * .72f + 1.4f),
                 w.WZ(u.Z + MathF.Sin(side) * reach * .8f + MathF.Sin(u.Facing) * .8f));
             Put(_flameBuf, n++, at, 1.2f * V, 2.4f * V, Colors.White, (u.Id * .37f) % 1, u.Kindling > 0 ? 1.6f : .8f);
+        }
+        // the fires set out in the settlement (Sim.Yard.cs): tongues licking up over their flames, a campfire's taller
+        foreach (var f in sim.Fixtures)
+        {
+            if (!Hearth(f, sim)) continue;
+            bool camp = f.Kind == FixtureKind.Campfire;
+            float s = camp ? 1.6f : 1f, seed0 = (f.LX * .37f + f.LZ * .11f) % 1;
+            for (int j = 0; j < 4; j++)
+            {
+                float a = j * 1.7f + seed0 * 6, r = j == 0 ? 0 : (camp ? .9f : .6f);
+                var at = new Vector3(w.WX(f.LX + MathF.Cos(a) * r), w.WY(f.LY - .4f + (j == 0 ? 1.4f : .8f) * s), w.WZ(f.LZ + MathF.Sin(a) * r));
+                Put(_flameBuf, n++, at, (j == 0 ? 2.2f : 1.5f) * s * V, (j == 0 ? 4.2f : 2.8f) * s * V, Colors.White, (seed0 + j * .29f) % 1, 1);
+            }
         }
         // nothing to hand over while nothing burns (an empty buffer is no buffer to the renderer)
         if (n > 0) RenderingServer.MultimeshSetBuffer(_flames.Multimesh.GetRid(), _flameBuf);
@@ -189,6 +203,18 @@ public partial class FireView : Node3D
             }
         }
         _smokeDue = Math.Min(_smokeDue, 10);
+        // a campfire's smoke goes up thin and steady, a brazier's thinner
+        foreach (var f in sim.Fixtures)
+        {
+            if (!Hearth(f, sim) || _puffs.Count >= MaxPuffs || _rnd.NextDouble() > dt * (f.Kind == FixtureKind.Campfire ? 2.2 : .8)) continue;
+            _puffs.Add(new Puff
+            {
+                P = new Vector3(w.WX(f.LX + (float)_rnd.NextDouble() - .5f), w.WY(f.LY + 3), w.WZ(f.LZ + (float)_rnd.NextDouble() - .5f)),
+                V = new Vector3(.08f + (float)_rnd.NextDouble() * .12f, .45f + (float)_rnd.NextDouble() * .25f, .05f + (float)_rnd.NextDouble() * .1f),
+                Life = 5 + (float)_rnd.NextDouble() * 3, Size = f.Kind == FixtureKind.Campfire ? .3f + (float)_rnd.NextDouble() * .2f : .2f,
+                Seed = (float)_rnd.NextDouble(),
+            });
+        }
         Grow(_smoke, ref _smokeBuf, _puffs.Count);
         int n = 0;
         for (int i = _puffs.Count - 1; i >= 0; i--)
@@ -209,6 +235,9 @@ public partial class FireView : Node3D
         if (n > 0) RenderingServer.MultimeshSetBuffer(_smoke.Multimesh.GetRid(), _smokeBuf);
         _smoke.Multimesh.VisibleInstanceCount = n;
     }
+
+    /// <summary>A campfire or a brazier of the settlement, alight (a witch puts them out too).</summary>
+    static bool Hearth(Fixture f, Sim sim) => f.Kind is FixtureKind.Campfire or FixtureKind.Brazier && f.DarkUntil <= sim.Time;
 
     /// <summary>A light on each of the biggest fires, flickering, stronger the more of it burns.</summary>
     void Light()

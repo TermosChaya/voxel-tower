@@ -53,6 +53,8 @@ public sealed class NavGrid
     /// top of the turf is, ground under the cell's own floor, as if the cell under it were full.
     /// </summary>
     public readonly byte[] Deck;
+    /// <summary>The cell has a way laid or trodden in it (a quarter of its columns or more): walked faster, and chosen.</summary>
+    public readonly byte[] Paved;
     public const byte DeckHigh = 1, DeckLow = 2;
     /// <summary>Columns of 64 one course of a cell must cover to be a floor to stand on.</summary>
     public const int DeckT = 40;
@@ -85,6 +87,7 @@ public sealed class NavGrid
         Ladder = new byte[Count]; Water = new ushort[Count]; GateFill = new ushort[Count]; Spikes = new ushort[Count];
         Tree = new byte[Count];
         Deck = new byte[Count];
+        Paved = new byte[Count];
         _dirty = new bool[Count];
         w.Edited += OnEdit;
     }
@@ -204,7 +207,7 @@ public sealed class NavGrid
         int i = I(c), k = K(c), y = Y(c), x0 = i << Shift, y0 = y << Shift, z0 = k << Shift;
         int ci = World.ChunkIndex(x0 >> VoxelWorld.Shift, y0 >> VoxelWorld.Shift, z0 >> VoxelWorld.Shift);
         var d = World.ChunkData(ci);
-        int fill = 0, e = 0, wd = 0, st = 0, rk = 0, hard = 0, keep = 0, lad = 0, wat = 0, gate = 0, spk = 0, tv = 0, low = 0, high = 0;
+        int fill = 0, e = 0, wd = 0, st = 0, rk = 0, hard = 0, keep = 0, lad = 0, wat = 0, gate = 0, spk = 0, tv = 0, low = 0, high = 0, pav = 0;
         Span<int> trunk = stackalloc int[4];
         if (d == null)
         {
@@ -231,6 +234,7 @@ public sealed class NavGrid
                             // a leaf voxel shuts twice its share of the cell, but takes no longer to hack
                             if (Mat.IsLeaf(v)) fill++;
                             if (v == Mat.Gate) gate += 2;
+                            if (Mat.IsPavement[v]) pav++;
                             if (Mat.IsTrunk(v))
                             {
                                 tv++;
@@ -258,6 +262,7 @@ public sealed class NavGrid
         Water[c] = (ushort)wat;
         GateFill[c] = (ushort)gate;
         Spikes[c] = (ushort)spk;
+        Paved[c] = (byte)(pav >= CS * CS / 4 ? 1 : 0);
         Tree[c] = (byte)(tree ? 1 : 0);
         Deck[c] = (byte)(fill >= SolidT ? 0 : (high >= DeckT ? DeckHigh : 0) | (low >= DeckT ? DeckLow : 0));
         Floor[c] = (ushort)FloorIn(x0, y0, z0);

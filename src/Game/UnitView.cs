@@ -583,6 +583,12 @@ public partial class UnitView : Node3D
                             // on its knees, sitting back on its heels, the hands tied behind, the head bowed
                             bob = -f.Shin * .95f; legR = legL = .08f; kneeR = kneeL = 1.55f; elbowR = elbowL = -.3f;
                         }
+                        else if (u.Pastime == Pastime.Sit && u.SeatH > 0)
+                        {
+                            // on a bench (Sim.Yard.cs): the thighs along the seat, the shins down, the hands on the knees
+                            bob = u.SeatH + .25f - (f.Thigh + f.Shin); legR = -1.5f; legL = -1.42f; kneeR = 1.5f; kneeL = 1.38f; elbowR = elbowL = -.6f;
+                            main = off = -.55f;
+                        }
                         else if (u.Pastime == Pastime.Sit)
                         {
                             // on the ground, the knees drawn up
@@ -1223,7 +1229,8 @@ public partial class UnitView : Node3D
         switch (u.Pastime)
         {
             case Pastime.Sit:
-                bob = -f.Joint[(int)Part.LegR].Y * .8f;
+                // on a bench, or on the ground
+                bob = u.SeatH > 0 ? u.SeatH + .25f - f.Joint[(int)Part.LegR].Y : -f.Joint[(int)Part.LegR].Y * .8f;
                 legR = -1.5f; legL = -1.38f;
                 main = -.62f; off = -.5f;
                 lean = .12f;

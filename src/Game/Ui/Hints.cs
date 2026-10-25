@@ -159,6 +159,16 @@ public partial class Hints : Control
                 o.Add((L(Act.Rotate), "повернуть"));
                 o.Add((Rmb, "убрать"));
                 return;
+            case Tool.Yard when t.Opt.YardPick < BuildTools.WayCount:
+                o.Add((Lmb, "протянуть дорожку"));
+                o.Add((size, "ширина"));
+                o.Add((L(Act.Form), "следующая"));
+                break;
+            case Tool.Yard:
+                o.Add((Lmb, "поставить"));
+                o.Add((L(Act.Rotate), "повернуть"));
+                o.Add((L(Act.Form), "следующая"));
+                break;
             case Tool.Paste:
                 o.Add((Lmb, "поставить копию"));
                 o.Add((L(Act.Rotate), "повернуть"));

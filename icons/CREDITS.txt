@@ -9,3 +9,5 @@ https://github.com/game-icons/icons под тем же именем файла.
 Иконка acid-flask.svg (склянка с кислотой, знание «Алхимики») нарисована для игры, её нет на game-icons.net.
 Иконки catapult.svg, trebuchet.svg, ballista.svg, pitch-keg.svg, winch.svg и heavy-stone.svg (наши осадные машины и
 знания ветки «Машины») нарисованы для игры, их нет на game-icons.net.
+
+Иконка campfire.svg (костёр, инструмент «Обустройство») нарисована для игры, её нет на game-icons.net.

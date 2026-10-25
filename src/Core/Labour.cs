@@ -40,7 +40,9 @@ public static class Labour
     static Labour()
     {
         void D(byte m, float dig, int kind, float share) { DigCost[m] = dig; Kind[m] = (byte)kind; Share[m] = share; }
-        foreach (var m in new[] { Mat.Soil, Mat.Grass, Mat.GrassDry, Mat.GrassLush, Mat.Scorch, Mat.Path, Mat.Tuft, Mat.Flower, Mat.Bloom }) D(m, 1, Stockpile.Earth, 1);
+        foreach (var m in new[] { Mat.Soil, Mat.Grass, Mat.GrassDry, Mat.GrassLush, Mat.Scorch, Mat.Path, Mat.Tuft, Mat.Flower, Mat.Bloom, Mat.Trodden, Mat.DirtPath }) D(m, 1, Stockpile.Earth, 1);
+        // the ways laid on purpose come up as what they were laid of
+        D(Mat.Gravel, 1, Stockpile.Stone, 1); D(Mat.Cobble, 1.5f, Stockpile.Stone, 1); D(Mat.Flag, 1.5f, Stockpile.Stone, 1); D(Mat.Boardwalk, 1, Stockpile.Wood, .75f);
         D(Mat.Rammed, 1, Stockpile.Earth, 1);
         D(Mat.Rock, 4, Stockpile.Stone, 1); D(Mat.Moss, 4, Stockpile.Stone, 1);
         foreach (var m in new[] { Mat.Stone, Mat.Mortar, Mat.StoneDark, Mat.StoneLight, Mat.StoneWarm, Mat.StoneCool }) D(m, 2.5f, Stockpile.Stone, .75f);
@@ -86,6 +88,8 @@ public static class Labour
         LayCost[Mat.Powder] = 3;
         // furniture is joinery, and the bedding is stuffed and sewn
         foreach (var m in new[] { Mat.Bunk, Mat.Bedding, Mat.Table, Mat.Bench }) LayCost[m] = 3;
+        // a way is quick to lay: earth stamped down, gravel spread, cobbles and flags set in sand, planks nailed
+        LayCost[Mat.DirtPath] = .4f; LayCost[Mat.Gravel] = .5f; LayCost[Mat.Cobble] = .9f; LayCost[Mat.Flag] = .9f; LayCost[Mat.Boardwalk] = .8f;
     }
 
     /// <summary>Pawns can take this out of the world (bedrock and the citadel they cannot).</summary>
@@ -101,7 +105,9 @@ public static class Labour
         Mat.Stone or Mat.Mortar or Mat.StoneDark or Mat.StoneLight or Mat.StoneWarm or Mat.StoneCool or Mat.DropStone => Stockpile.Stone,
         Mat.Wood or Mat.Ladder or Mat.Gate or Mat.GateShut or Mat.GateOpen or Mat.Pitch or Mat.Stakes or Mat.TrapDeck or Mat.DrawDeck or Mat.DropLog
             or Mat.Bunk or Mat.Bedding or Mat.Table or Mat.Bench => Stockpile.Wood,
-        Mat.Rammed or Mat.Powder => Stockpile.Earth,
+        Mat.Rammed or Mat.Powder or Mat.DirtPath => Stockpile.Earth,
+        Mat.Gravel or Mat.Cobble or Mat.Flag => Stockpile.Stone,
+        Mat.Boardwalk => Stockpile.Wood,
         _ => Stockpile.None,
     };
 

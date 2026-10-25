@@ -41,13 +41,16 @@ public partial class Hud : CanvasLayer
         (Tool.Wand, Icons.WandIcon, Act.ToolWand, "Волшебная палочка ({ToolWand})\nНаведите на постройку: подсветится всё, что примыкает к ней из того же материала. Например, каменная стена без деревянного настила на ней. " +
             "С киркой ({Pick}) щелчок сносит выделенное, с камнем, брёвнами или землёй перекладывает его из этого материала. В нижней панели с выделенного можно снять чертёж.\n" +
             "{Form} берёт только воксели того же цвета. Shift берёт и то, что касается ребром или углом."),
+        (Tool.Yard, Icons.YardIcon, Act.ToolYard, "Обустройство ({ToolYard})\nДорожки между домами и вещи для поселения. Внизу выберите, что класть. Дорожку (тропа, гравий, булыжник, плиты, мостки) " +
+            "протяните по земле: рабочие снимут дёрн и выложат её вровень с землёй, по ней ходят быстрее. Вещь (костёр, скамья, факел, жаровня, колодец и другие) " +
+            "ставится щелчком, {Rotate} поворачивает. У костра греются, на скамьях отдыхают, огни светят ночью.\nГде люди часто ходят, трава сама вытаптывается в тропу."),
     };
 
     /// <summary>The tools on the belt, a row to each purpose: building, the works of the fort, marking out.</summary>
     static readonly Tool[][] Belt =
     {
         new[] { Tool.Brush, Tool.Line, Tool.Box, Tool.Circle, Tool.Extrude },
-        new[] { Tool.Gate, Tool.Bridge, Tool.Ladder, Tool.Repair },
+        new[] { Tool.Gate, Tool.Bridge, Tool.Ladder, Tool.Repair, Tool.Yard },
         new[] { Tool.Gather, Tool.Unmark, Tool.Wand, Tool.Capture },
     };
     const float SlotSize = 44;

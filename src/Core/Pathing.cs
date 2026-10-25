@@ -82,7 +82,13 @@ public sealed class PathFinder
 
     /// <summary>How much more a step into a cell counts than on dry open ground: wading, or picking a way among stakes.</summary>
     public const float AmongStakes = 6;
-    static float Going(NavGrid g, int c) => (g.Water[c] > 0 ? FlowField.Wade : 1) * (g.Spikes[c] > 0 ? AmongStakes : 1);
+    static float Going(NavGrid g, int c) => (g.Water[c] > 0 ? FlowField.Wade : 1) * (g.Spikes[c] > 0 ? AmongStakes : 1) * (OnWay(g, c) ? OnPath : 1);
+
+    /// <summary>How much less a step along a laid or trodden way counts: walkers keep to the paths when it costs them little.</summary>
+    public const float OnPath = .8f;
+
+    /// <summary>A way under the feet of one standing in the cell: in the cell, or the top of the cell below.</summary>
+    public static bool OnWay(NavGrid g, int c) => g.Paved[c] != 0 || c >= g.Layer && g.Paved[c - g.Layer] != 0;
 
     /// <summary>
     /// Cells from start (exclusive) to the first cell that satisfies goal, or null.

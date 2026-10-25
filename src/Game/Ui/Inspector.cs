@@ -167,6 +167,7 @@ public partial class Inspector : Control
         head.AddThemeConstantOverride("separation", 14);
         head.AddChild(Hud.Text(t.Tool == Tool.Paste && t.PasteBp != null ? $"Чертёж «{t.PasteBp.Name}»" : BuildTools.ToolName(t.Tool), Ornament.Display, 22, Ornament.EmberGlow));
         var mat = Hud.CapsLabel((t.Tool == Tool.Gather ? (t.Shelter ? "убежище от орды" : t.Sanctum ? "святилище жрецов" : t.Dwelling ? "жилой дом" : "добывать: " + (t.GatherKind switch { Stockpile.Wood => "лес", Stockpile.Earth => "землю", _ => "камень" }))
+            : t.Tool == Tool.Yard ? (o.YardPick < BuildTools.WayCount ? "дорожка: " : "вещь: ") + BuildTools.YardName(o.YardPick).ToLowerInvariant()
             : t.Tool == Tool.Wand && o.WandCapture ? "снять чертёж" : o.Dig ? "кирка: копать и рубить" : (t.Tool == Tool.Wand ? "переложить в: " : "материал: ") + Mat.NameOf(o.Material).ToLowerInvariant()), 9);
         mat.VerticalAlignment = VerticalAlignment.Center;
         head.AddChild(mat);
@@ -198,10 +199,35 @@ public partial class Inspector : Control
         if (t.Tool == Tool.Wand && !o.Dig && !o.WandCapture)
             col.AddChild(new Choice("Переложить в", "Переложить в\nРабочие разберут выделенное и сложат заново из этого материала. Разобранное вернётся в запас. Клавиши {MatStone}, {MatWood} и {MatEarth}.",
                 new[] { "камень", "брёвна", "земля" }, Array.IndexOf(Relaid, o.Material), i => t.SetMaterial(Relaid[i])));
+        // the settlement's palette: the ways, then the things
+        if (t.Tool == Tool.Yard) col.AddChild(YardPalette());
         // the blueprints taken so far, with the tool that takes them and with a copy in hand
         if (t.Tool is Tool.Capture or Tool.Paste || t.Tool == Tool.Wand && o.WandCapture) col.AddChild(Shelf());
         if (opts.GetChildCount() == 0) col.AddChild(Hud.Text(Bindings.Fill("Esc — убрать кисть. {Help} — все клавиши."), Ornament.SerifItalic, 12, Ornament.Faded));
         return col;
+    }
+
+    /// <summary>The «Обустройство» palette: a row of the kinds of way and a row of the things, each with what it is in its tooltip.</summary>
+    Control YardPalette()
+    {
+        var t = _m.Tools; var o = t.Opt;
+        var box = new VBoxContainer();
+        box.AddThemeConstantOverride("separation", 4);
+        Choice Row(string caption, int from, int count)
+        {
+            var names = new string[count];
+            for (int i = 0; i < count; i++) names[i] = BuildTools.YardName(from + i).ToLowerInvariant();
+            var c = new Choice(caption, caption, names, o.YardPick - from, i => t.PickYard(from + i));
+            int k = 0;
+            foreach (var child in c.GetChildren())
+                if (child is Button b) { b.TooltipText = Bindings.Fill(BuildTools.YardName(from + k) + "\n" + BuildTools.YardAbout(from + k)); k++; }
+            return c;
+        }
+        var ways = Row("Дорожка", 0, BuildTools.WayCount);
+        KeyTags.Tag(ways, () => Bindings.Label(Act.Form));
+        box.AddChild(ways);
+        box.AddChild(Row("Вещь", BuildTools.WayCount, BuildTools.YardCount - BuildTools.WayCount));
+        return box;
     }
 
     /// <summary>The blueprints taken so far, a button each: a click takes up a copy to place, the cross throws the blueprint away.</summary>
@@ -348,11 +374,17 @@ public partial class Inspector : Control
                     new[] { "по граням", "с углами" }, o.WandCorners ? 1 : 0, i => { o.WandCorners = i == 1; t.Changed(); }));
                 opts.AddChild(Hud.CapsLabel(t.WandHeld > 0 ? $"выделено: {t.WandHeld} · Esc сбросит" : "Shift: добавить", 10, Ornament.Aged));
                 break;
+            case Tool.Yard when o.YardPick < BuildTools.WayCount:
+                opts.AddChild(Width("Ширина"));
+                break;
+            case Tool.Yard:
+                opts.AddChild(Hud.CapsLabel($"поворот {o.YardRot * 90}° · {Bindings.Label(Act.Rotate)} — повернуть", 10, Ornament.Aged));
+                break;
             case Tool.Paste when t.PasteBp != null:
                 opts.AddChild(Hud.CapsLabel($"поворот {t.PasteRot * 90}° · {Bindings.Label(Act.Rotate)} — повернуть · {t.PasteBp.Describe()}", 10, Ornament.Aged));
                 break;
         }
-        if (t.Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Paste or Tool.Gather or Tool.Repair or Tool.Capture or Tool.Unmark or Tool.Bridge)
+        if (t.Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Paste or Tool.Gather or Tool.Repair or Tool.Capture or Tool.Unmark or Tool.Bridge || t.Tool == Tool.Yard && o.YardPick < BuildTools.WayCount)
             opts.AddChild(Keyed(new Choice("Сетка", "Сетка\nКонцы штрихов встают в узлы сетки, линии идут вдоль осей или под 45°. Сетка отсчитывается от центра цитадели. Клавиша {Grid}.",
                 new[] { "нет", "50 см", "1 м", "2 м" }, Array.IndexOf(ToolOptions.Grids, o.Grid), i => t.SetGrid(ToolOptions.Grids[i])), () => Bindings.Label(Act.Grid)));
     }

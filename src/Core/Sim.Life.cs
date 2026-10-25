@@ -23,11 +23,13 @@ public sealed partial class Sim
             if (!stay && u.Path != null && u.PathI < u.Path.Count && !Walk(u, dt, .45f)) return;
             u.Path = null;
             var next = u.After == Pastime.None ? Pastime.Look : u.After;
-            Pass(u, next, next == Pastime.Warm ? 6 + Rng.NextDouble() * 8 : 2 + Rng.NextDouble() * 3);
+            Pass(u, next, next == Pastime.Warm ? 6 + Rng.NextDouble() * 8 : next == Pastime.Sit && u.SeatAt != null ? 10 + Rng.NextDouble() * 14 : 2 + Rng.NextDouble() * 3);
+            if (next == Pastime.Sit) SitDown(u);
             return;
         }
         if (u.Pastime == Pastime.Talk && (u.Mate == null || u.Mate.Dead || u.Mate.Mate != u)) u.PastimeUntil = 0;
         if (u.Pastime != Pastime.None && Time < u.PastimeUntil) { Tend(u, dt); return; }
+        StandUp(u);
         Choose(u, stay);
     }
 
@@ -42,6 +44,7 @@ public sealed partial class Sim
     void Busy(Unit u)
     {
         if (u.Pastime == Pastime.None) return;
+        StandUp(u);
         if (u.Mate != null && u.Mate.Mate == u) { u.Mate.Mate = null; u.Mate.PastimeUntil = 0; }
         u.Mate = null;
         u.Pastime = u.After = Pastime.None;
@@ -82,8 +85,11 @@ public sealed partial class Sim
             return;
         }
         double r = Rng.NextDouble();
+        // of an evening the fires and the benches draw them (Sim.Yard.cs)
+        if (Waves.Darkness > .3f && r < .45 && !stay && TryWarm(u)) return;
         if (r < .22 && TryTalk(u)) return;
         if (r < .34 && !stay && TryWarm(u)) return;
+        if (r < .5 && !stay && TrySit(u)) return;
         if (r < .62 && !stay && TryStroll(u, anchor, soldier ? 2 : 4)) return;
         if (r < .74) { Pass(u, Pastime.Sit, 6 + Rng.NextDouble() * 9); return; }
         if (r < .82) { Pass(u, Pastime.Stretch, 2.2); return; }
@@ -141,7 +147,7 @@ public sealed partial class Sim
     /// <summary>Goes to stand by a brazier close by and warms its hands.</summary>
     bool TryWarm(Unit u)
     {
-        foreach (var (fx, fy, fz) in Site.Torches)
+        foreach (var (fx, fy, fz) in Hearths())
         {
             float dx = fx - u.X, dz = fz - u.Z;
             if (dx * dx + dz * dz > 64 * 64 || MathF.Abs(fy - u.Y) > 12) continue;

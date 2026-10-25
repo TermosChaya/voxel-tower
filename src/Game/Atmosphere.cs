@@ -262,12 +262,14 @@ public partial class Atmosphere : Node3D
 
     void Lit(Fixture f)
     {
-        if (f.Kind != FixtureKind.Torch || _sconces.ContainsKey(f)) return;
+        if (f.Kind is not (FixtureKind.Torch or FixtureKind.Campfire or FixtureKind.Brazier) || _sconces.ContainsKey(f)) return;
+        // a campfire or a brazier set out on the ground lights more round it than a torch on a wall (Sim.Yard.cs)
+        bool hearth = f.Kind == FixtureKind.Campfire;
         var l = new OmniLight3D
         {
             LightColor = new Color("ff8a3a"),
-            LightEnergy = 1.6f,
-            OmniRange = 3.2f,
+            LightEnergy = f.Kind == FixtureKind.Torch ? 1.6f : hearth ? 2.4f : 2f,
+            OmniRange = f.Kind == FixtureKind.Torch ? 3.2f : hearth ? 5.5f : 4.5f,
             OmniAttenuation = 1.6f,
             ShadowEnabled = false,
             LightSpecular = 0,

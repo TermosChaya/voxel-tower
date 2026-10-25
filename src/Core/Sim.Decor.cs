@@ -3,7 +3,8 @@ using System.Collections.Generic;
 
 namespace VoxelTower.Core;
 
-public enum FixtureKind : byte { Torch, Banner, Barrel, Crate, Sacks }
+/// <summary>A building's dressing (a torch in a sconce, a banner, a barrel, a crate, sacks); or the fire of a campfire or of a torch or brazier set out on the ground (Sim.Yard.cs).</summary>
+public enum FixtureKind : byte { Torch, Banner, Barrel, Crate, Sacks, Campfire, Brazier }
 
 /// <summary>A piece of a building's dressing: what it is, the voxels it is made of, the building voxel it hangs on or stands by.</summary>
 public sealed class Fixture
@@ -102,13 +103,15 @@ public sealed partial class Sim
     {
         foreach (var f in Fixtures)
         {
-            if (f.Kind != kind && !(kind >= FixtureKind.Barrel && f.Kind >= FixtureKind.Barrel)) continue;
+            if (f.Kind != kind && !(IsProp(kind) && IsProp(f.Kind))) continue;
             var (fx, fy, fz) = f.Voxels.Count > 0 ? (f.Voxels[0].x, f.Voxels[0].y, f.Voxels[0].z) : (0, 0, 0);
             float dx = fx - x, dy = (fy - y) * 3, dz = fz - z;
             if (dx * dx + dz * dz < apart * apart && Math.Abs(dy) < apart) return false;
         }
         return true;
     }
+
+    static bool IsProp(FixtureKind k) => k is FixtureKind.Barrel or FixtureKind.Crate or FixtureKind.Sacks;
 
     bool NearGate(int x, int z, float r)
     {
@@ -153,7 +156,8 @@ public sealed partial class Sim
                 int x = bx + lx, z = bz + lz;
                 bool any = false;
                 for (int ly = 0; ly < VoxelWorld.CS && !any; ly++) any = d[(ly << 10) | (lz << 5) | lx] != 0;
-                if (!any || Site.Forbidden(x, z)) continue;
+                // (not round the settlement's furnishing: a torch on a pole is no wall to hang one on)
+                if (!any || Site.Forbidden(x, z) || InYard(x, z)) continue;
                 for (int dir = 0; dir < 4; dir++)
                 {
                     int nx = NX4[dir], nz = NZ4[dir], fx = x + nx, fz = z + nz;

@@ -659,6 +659,9 @@ public sealed class Unit
     /// <summary>Where it grazes and wanders round; for a pawn, where it idles round.</summary>
     public int Home = -1;
     public Pastime Pastime;
+    /// <summary>The seat it went to sit on (Sim.Yard.cs), and once it sits there, how high over the floor.</summary>
+    public Seat SeatAt;
+    public float SeatH;
     /// <summary>What it takes up when a stroll ends.</summary>
     public Pastime After;
     public double PastimeUntil;

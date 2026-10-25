@@ -122,6 +122,12 @@ public static class Mat
     /// </summary>
     public const byte Anvil = 160, Forge = 161, Coals = 162, Hay = 163, Butt = 164, ButtRing = 165, Rack = 166, Barrel = 167, Goods = 168, Block = 169;
     /// <summary>
+    /// The settlement's ways (Sim.Paths.cs): turf trodden bare where people keep walking, which grows over again when
+    /// they stop; and what the workers lay on purpose, flush with the ground: a path of rammed earth, gravel, cobbles
+    /// and flagstones in two shades, a boardwalk of planks over wet ground. People go faster on them.
+    /// </summary>
+    public const byte Trodden = 150, DirtPath = 151, Gravel = 152, Cobble = 153, Flag = 154, Boardwalk = 155;
+    /// <summary>
     /// For the figures: a hill giant's skin, weathered ruddy brown or grey as a crag, and the blue it daubs itself with
     /// in stripes.
     /// </summary>
@@ -140,6 +146,8 @@ public static class Mat
         IsNatural = new bool[Count], IsAnchor = new bool[Count];
     /// <summary>The dressing of the buildings: whatever is built or laid where it stands simply takes its place.</summary>
     public static readonly bool[] IsDecor = new bool[Count];
+    /// <summary>A way laid or trodden on the ground (Sim.Paths.cs): people walk it faster and choose it.</summary>
+    public static readonly bool[] IsPavement = new bool[Count];
     /// <summary>A dwelling's furnishing: walked through, but built on as on anything solid.</summary>
     public static readonly bool[] IsFurniture = new bool[Count];
     /// <summary>How it moves in the wind: 0 not at all, 1 at its tips (grass, flowers), 2 as a mass (leaves).</summary>
@@ -303,6 +311,12 @@ public static class Mat
         D(Woad, "вайда", 0x2c4a78, .08f, MatGroup.Hard, 0);
         D(Window, "Окно", 0x2e2116, .06f, MatGroup.Stone, Player); D(WindowLog, "Окно", 0x2e2116, .06f, MatGroup.Wood, Player);
         D(Shutter, "Ставни", 0x8a6640, .14f, MatGroup.Stone, Player); D(ShutterLog, "Ставни", 0x8a6640, .14f, MatGroup.Wood, Player);
+        D(Trodden, "Натоптанная тропа", 0x6e5a43, .22f, MatGroup.Earth, Natural | Earthy);
+        D(DirtPath, "Тропа", 0x76603f, .18f, MatGroup.Earth, Player | Earthy);
+        D(Gravel, "Гравий", 0x8a8277, .34f, MatGroup.Stone, Player);
+        D(Cobble, "Булыжник", 0x6f6a66, .22f, MatGroup.Stone, Player); D(Flag, "Плиты", 0x8d867b, .16f, MatGroup.Stone, Player);
+        D(Boardwalk, "Мостки", 0x7a5a37, .16f, MatGroup.Wood, Player);
+        foreach (var m in new[] { Trodden, DirtPath, Gravel, Cobble, Flag, Boardwalk }) IsPavement[m] = true;
         Emission[Phial] = .35f;
         Emission[Window] = Emission[WindowLog] = .45f;
 
@@ -313,7 +327,7 @@ public static class Mat
         IsLadder[Ladder] = IsLadder[SiegeLadder] = IsLadder[TowerLadder] = IsLadder[Scaffold] = true;
         foreach (var m in new[] { Tuft, Flower, Bloom }) SwayKind[m] = 1;
         foreach (var m in new[] { Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold }) SwayKind[m] = 2;
-        foreach (var m in new[] { Stone, StoneDark, StoneLight, StoneWarm, StoneCool, Mortar, Keep, KeepShade, KeepDark }) Smooth[m] = true;
+        foreach (var m in new[] { Stone, StoneDark, StoneLight, StoneWarm, StoneCool, Mortar, Keep, KeepShade, KeepDark, Cobble, Flag }) Smooth[m] = true;
         foreach (var m in new[] { Steel, Mail, Brass, Pitch, SteelEdge, SteelDark }) Metal[m] = true;
         for (int m = 0; m < Count; m++)
             Skin[m] = Smooth[m] ? (byte)1 : Metal[m] ? (byte)2 : IsGrass((byte)m) ? (byte)3 : m is Leaf or NeedleLight ? (byte)7
@@ -321,7 +335,7 @@ public static class Mat
         // acid wet and glossy as pitch is, without ringing like metal when struck
         Skin[Acid] = 2;
         // what holds the world up: loose pieces resting on these never fall
-        foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Scorch, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank, Menhir }) IsAnchor[m] = true;
+        foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Scorch, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank, Menhir, Trodden }) IsAnchor[m] = true;
 
         // what burns: needles and leaves flare up and are gone in seconds, grass and flowers in a moment; timber
         // catches slowly and burns long, and some of it stands charred after; a living trunk and oak bound with iron
@@ -333,6 +347,7 @@ public static class Mat
         F(.1f, 30, .6f, Snag);
         F(.04f, 35, .35f, Wood, DropLog);
         F(.03f, 30, .35f, Plank);
+        F(.04f, 25, .35f, Boardwalk);
         F(.12f, 15, 0, Ladder, SiegeLadder, Scaffold);
         F(.08f, 22, .1f, Prop);
         F(.1f, 20, .2f, Deck);

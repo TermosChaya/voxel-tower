@@ -223,6 +223,8 @@ public sealed partial class Sim
         Stage = "TickGates"; TickGates(dt);
         Stage = "TickDrawbridges"; TickDrawbridges(dt);
         Stage = "TickDecor"; TickDecor();
+        Stage = "TickWays"; TickWays(dt);
+        Stage = "TickYard"; TickYard(dt);
         Stage = "TickMines"; TickMines(dt);
         Stage = "TickTunnels"; TickTunnels(dt);
         Stage = "TickErrands"; TickErrands();
@@ -346,8 +348,10 @@ public sealed partial class Sim
         else { tx += u.OffX; tz += u.OffZ; }
         float speed = u.T.Move.Speed * NavGrid.CS * pace * u.Pace * CartPace(u) * TroopPace(u) * (u.Hp < u.MaxHp * .4f ? .7f : 1) * (Nav.Water[u.Cell] > 0 ? .6f : 1) * (u.Routed || u.State == UnitState.Flee ? .85f + .15f * PainPace(u) : .55f + .45f * PainPace(u))
             * (Nav.Spikes[u.Cell] > 0 ? .4f : 1) * Gait(u) * (Mires.Count > 0 && InMire(u.X, u.Z) ? .35f : 1)
-            * (DeadFogs.Count > 0 && u.Team == Team.Horde && !Deathless(u) && InDeadFog(u.X, u.Z) ? .5f : 1);
+            * (DeadFogs.Count > 0 && u.Team == Team.Horde && !Deathless(u) && InDeadFog(u.X, u.Z) ? .5f : 1) * WayPace(u);
         float step = speed * dt * (climbing ? .5f : 1);
+        // the turf wears where ours keep walking (Sim.Paths.cs)
+        if (!climbing) Tread(u, step);
         float dx = tx - u.X, dz = tz - u.Z, dyv = ty - u.Y;
         float dist = climbing ? MathF.Abs(dyv) : MathF.Sqrt(dx * dx + dz * dz);
         u.State = u.State == UnitState.Flee ? UnitState.Flee : UnitState.Walk;
