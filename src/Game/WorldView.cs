@@ -113,10 +113,27 @@ public partial class WorldView : Node3D
         _rx = (w.CX + 1) / 2; _ry = (w.CY + 1) / 2; _rz = (w.CZ + 1) / 2;
         _far = new MeshInstance3D[_rx * _ry * _rz];
         _farShade = new MeshInstance3D[_far.Length];
-        // the coarse level is wanted only from far off: meshed off the main thread, made Godot's a few dozen blocks a frame after
-        var all = new int[_far.Length];
-        for (int i = 0; i < all.Length; i++) all[i] = i;
-        _farMade = Task.Run(() => MakeFar(all));
+        // the coarse level is wanted only from far off: meshed off the main thread, made Godot's a few dozen blocks a
+        // frame as the blocks come, never many of them waiting at once (the whole valley's, waiting together, held
+        // some 380 MB of buffers on the larger valley)
+        _farQueue = new BlockingCollection<(int ri, MeshBuffers solid, MeshBuffers shadow)>(FarWaitingMost);
+        _farStop = new CancellationTokenSource();
+        var queue = _farQueue; var stop = _farStop.Token;
+        _farMade = Task.Run(() =>
+        {
+            try
+            {
+                Parallel.For(0, _far.Length, new ParallelOptions { CancellationToken = stop, MaxDegreeOfParallelism = Math.Max(1, System.Environment.ProcessorCount - 2) }, ri =>
+                {
+                    var k = Kits.Value;
+                    var solid = k.Mesher.MeshCoarse(_w, ri % _rx, ri / (_rx * _rz), ri / _rx % _rz, k.Pad, out var shadow);
+                    try { queue.Add((ri, solid, shadow), stop); }
+                    catch (OperationCanceledException) { solid?.Return(); shadow?.Return(); }
+                });
+            }
+            catch (OperationCanceledException) { }
+            finally { queue.CompleteAdding(); }
+        });
         LastFullMeshMs = sw.Elapsed.TotalMilliseconds;
     }
 
@@ -164,9 +181,11 @@ public partial class WorldView : Node3D
         return made;
     }
 
-    // the coarse level as the thread meshed it at the start, and how much of it is put in so far
-    Task<(MeshBuffers solid, MeshBuffers shadow)[]> _farMade;
-    int _farPut;
+    // the coarse level being meshed at the start, block by block, and the blocks meshed and waiting to be made Godot's
+    Task _farMade;
+    BlockingCollection<(int ri, MeshBuffers solid, MeshBuffers shadow)> _farQueue;
+    CancellationTokenSource _farStop;
+    const int FarWaitingMost = 192;
     bool FarReady => _farMade == null;
 
     // the batches being meshed on the workers in play, and what they are of
@@ -329,14 +348,12 @@ public partial class WorldView : Node3D
         // the first making of the coarse level, meshed off the main thread, made Godot's a few dozen blocks a frame
         if (_farMade != null)
         {
-            if (!_farMade.IsCompleted) return;
-            var made = _farMade.Result;
-            for (int n = 0; n < 48 && _farPut < made.Length; n++, _farPut++)
+            for (int n = 0; n < 48 && _farQueue.TryTake(out var b); n++)
             {
-                Put(_far, _farPut, ToGodot(made[_farPut].solid), _mat, GeometryInstance3D.ShadowCastingSetting.Off, _showSolid && _coarse);
-                Put(_farShade, _farPut, ToGodot(made[_farPut].shadow), null, GeometryInstance3D.ShadowCastingSetting.ShadowsOnly, _showSolid && _coarse);
+                Put(_far, b.ri, ToGodot(b.solid), _mat, GeometryInstance3D.ShadowCastingSetting.Off, _showSolid && _coarse);
+                Put(_farShade, b.ri, ToGodot(b.shadow), null, GeometryInstance3D.ShadowCastingSetting.ShadowsOnly, _showSolid && _coarse);
             }
-            if (_farPut >= made.Length) _farMade = null;
+            if (_farQueue.IsCompleted) { _farMade = null; _farQueue.Dispose(); _farQueue = null; _farStop.Dispose(); _farStop = null; }
             return;
         }
         if (_farMaking != null)
@@ -366,6 +383,9 @@ public partial class WorldView : Node3D
     /// </summary>
     public override void _ExitTree()
     {
+        // the coarse level's first making stopped, and what it left waiting given back
+        _farStop?.Cancel();
+        if (_farQueue != null) while (!_farQueue.IsCompleted) if (_farQueue.TryTake(out var b, 50)) { b.solid?.Return(); b.shadow?.Return(); }
         _making?.Wait(); _shading?.Wait(); _farMaking?.Wait(); _farMade?.Wait();
         _making = null; _shading = null; _farMaking = null; _farMade = null;
         _waiting.Clear();

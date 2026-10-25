@@ -25,15 +25,24 @@ public sealed class MeshBuffers
     {
         if (!Pooled) return;
         Pooled = false;
-        System.Buffers.ArrayPool<float>.Shared.Return(Pos);
-        System.Buffers.ArrayPool<float>.Shared.Return(Nrm);
-        if (Col != null) System.Buffers.ArrayPool<float>.Shared.Return(Col);
-        if (Uv != null) System.Buffers.ArrayPool<float>.Shared.Return(Uv);
-        if (Uv2 != null) System.Buffers.ArrayPool<float>.Shared.Return(Uv2);
-        System.Buffers.ArrayPool<int>.Shared.Return(Idx);
+        MeshPool<float>.Shared.Return(Pos);
+        MeshPool<float>.Shared.Return(Nrm);
+        if (Col != null) MeshPool<float>.Shared.Return(Col);
+        if (Uv != null) MeshPool<float>.Shared.Return(Uv);
+        if (Uv2 != null) MeshPool<float>.Shared.Return(Uv2);
+        MeshPool<int>.Shared.Return(Idx);
         Pos = Nrm = Col = Uv = Uv2 = null;
         Idx = null;
     }
+}
+
+/// <summary>
+/// The pool the meshes' buffers are borrowed from: a few of each size kept, not as many as the runtime's shared pool
+/// keeps for every core, which held some 160 MB of a whole valley's meshing long after it was done.
+/// </summary>
+static class MeshPool<T>
+{
+    public static readonly System.Buffers.ArrayPool<T> Shared = System.Buffers.ArrayPool<T>.Create(1 << 21, 16);
 }
 
 /// <summary>
@@ -90,6 +99,12 @@ public sealed class GreedyMesher
     readonly System.Collections.Generic.List<int> _sprigs = new(), _turf = new();
 
     public GreedyMesher() { Grow(2048); }
+
+    /// <summary>
+    /// Quads a mesher keeps room for between meshes. A large mesh (a coarse block, a crowded chunk) grows the buffers as
+    /// it needs, and they are let go again after it: every worker thread keeps a mesher, and each held 24 MB that way.
+    /// </summary>
+    const int KeptQ = 8192;
 
     void Grow(int capQ)
     {
@@ -357,7 +372,7 @@ public sealed class GreedyMesher
             }
         }
 
-        return new MeshBuffers
+        var made = new MeshBuffers
         {
             Quads = _q,
             Pooled = Pooled,
@@ -368,13 +383,20 @@ public sealed class GreedyMesher
             Uv2 = _shadow ? null : Out(_uv2, _q * 8),
             Idx = Out(_idx, _q * 6),
         };
+        if (_capQ > KeptQ)
+        {
+            _pos = _nrm = _col = _uv = _uv2 = Array.Empty<float>();
+            _idx = Array.Empty<int>();
+            Grow(KeptQ);
+        }
+        return made;
     }
 
     /// <summary>The first so many of a buffer, in an array of their own or one borrowed from the pool.</summary>
     T[] Out<T>(T[] from, int n)
     {
         if (!Pooled) return from.AsSpan(0, n).ToArray();
-        var a = System.Buffers.ArrayPool<T>.Shared.Rent(n);
+        var a = MeshPool<T>.Shared.Rent(n);
         from.AsSpan(0, n).CopyTo(a);
         return a;
     }
