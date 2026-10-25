@@ -54,9 +54,12 @@ public sealed partial class Sim
     }
 }
 
-/// <summary>Packs a voxel's place into one number (10 bits of x, 10 of z, 11 of y) and back.</summary>
+/// <summary>
+/// Packs a voxel's place into one number (11 bits of x, 11 of z, 9 of y: a valley up to 2048 across and 512 high) and
+/// back. It was 10 bits of x and z, and the valley of 1536 had its eastern and southern thirds folded onto the rest.
+/// </summary>
 static class WaterPlanner
 {
-    public static int Pack(int x, int y, int z) => (y << 20) | (z << 10) | x;
-    public static (int x, int y, int z) Unpack(int p) => (p & 1023, p >> 20, (p >> 10) & 1023);
+    public static int Pack(int x, int y, int z) => (y << 22) | (z << 11) | x;
+    public static (int x, int y, int z) Unpack(int p) => (p & 2047, (p >> 22) & 511, (p >> 11) & 2047);
 }

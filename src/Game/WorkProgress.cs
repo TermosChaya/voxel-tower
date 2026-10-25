@@ -44,7 +44,7 @@ public partial class WorkProgress : CanvasLayer
         AddChild(_root);
     }
 
-    static int Pack(int x, int y, int z) => (y << 20) | (z << 10) | x;
+    static int Pack(int x, int y, int z) => WaterPlanner.Pack(x, y, z);
 
     /// <summary>A stroke or shape just marked: what of it the orders took, followed from now on.</summary>
     public void Track(string name, VoxelList plan, bool dig)
@@ -123,7 +123,7 @@ public partial class WorkProgress : CanvasLayer
             int done = 0, left = 0;
             foreach (int p in job.V)
             {
-                int x = p & 1023, z = (p >> 10) & 1023, y = p >> 20;
+                var (x, y, z) = WaterPlanner.Unpack(p);
                 if (orders.At(x, y, z) != 0) { left++; continue; }
                 // the order gone: done if the world is as it was meant to be, else taken back
                 if ((w.Get(x, y, z) == 0) == job.Dig) done++;

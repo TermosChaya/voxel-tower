@@ -22,6 +22,19 @@ static class HexBench
 
     public static void Run(Action<string, bool, string> check)
     {
+        // a voxel's place packed into one number keeps it apart from every other across the game's valley and wider
+        // (it was 10 bits of x and z, and the valley of 1536 folded its far thirds onto the rest)
+        var seen = new HashSet<int>();
+        bool round = true;
+        int[] xs = { 0, 1, 1023, 1024, 1535, 2047 }, ys = { 0, 1, 191, 511 };
+        foreach (int x in xs) foreach (int z in xs) foreach (int y in ys)
+        {
+            int p = WaterPlanner.Pack(x, y, z);
+            round &= WaterPlanner.Unpack(p) == (x, y, z) && p >= 0;
+            seen.Add(p);
+        }
+        check("a voxel's place packed into a number comes back whole and apart from every other up to 2048 across and 512 high",
+            round && seen.Count == xs.Length * xs.Length * ys.Length, $"{seen.Count} of {xs.Length * xs.Length * ys.Length} apart, round trip {round}");
         Console.WriteLine();
         // the game's valley, in the game's box
         var mp = new MapParams { Hexagon = true, SizeX = MapParams.GameSize, SizeZ = MapParams.GameSize };
