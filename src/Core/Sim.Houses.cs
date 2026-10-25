@@ -121,10 +121,17 @@ public sealed partial class Sim
         door = default; arched = null; why = null; moves = null;
         if (over != null) return null;
         if (!World.OnLand(x0, z0) || !World.OnLand(x1, z0) || !World.OnLand(x0, z1) || !World.OnLand(x1, z1)) { why = "здесь край долины"; return null; }
+        // nor over the horde's strip or the citadel's ring: its walls would go up only on this side of them, a house
+        // with a side open that nobody could live in
+        for (int x = x0; x <= x1; x++) if (Site.Forbidden(x, z0) || Site.Forbidden(x, z1)) { why = NoBuildWhy(x, Site.Forbidden(x, z0) ? z0 : z1); return null; }
+        for (int z = z0; z <= z1; z++) if (Site.Forbidden(x0, z) || Site.Forbidden(x1, z)) { why = NoBuildWhy(Site.Forbidden(x0, z) ? x0 : x1, z); return null; }
         why = DoorsInTheWay(rect, out moves);
         if (why != null) return null;
         return Shapes.House(World, Site, x0, z0, x1, z1, st, 0, doorSide, TakenBesides(x0, z0, x1, z1), shared, out door, out why, out arched, lax);
     }
+
+    /// <summary>Why nothing is built over a column nobody may build on.</summary>
+    string NoBuildWhy(int x, int z) => Site.InStrip(x + .5f, z + .5f) ? "здесь входит орда, строить нельзя" : !World.OnLand(x, z) ? "здесь край долины" : "вплотную к цитадели не строят";
 
     /// <summary>A door of a house beside a new one that would be walled in by it: the gate there (or the door still waiting), and where it goes.</summary>
     public struct DoorMove { public Zone House; public Gateway Gate; public int Pending; public Shapes.HouseDoor To; }

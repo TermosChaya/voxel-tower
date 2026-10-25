@@ -9,8 +9,8 @@ using VoxelTower.Core;
 /// land; the citadel in the middle on level ground; the river in over one side and out over another, the roads in from
 /// the horde's side and out at the far one; the horde in over its side, whichever side that is; one thrown off the edge
 /// gone; the water at the edge standing; the beasts keeping off the edge; two neighbours meeting along the side they
-/// share; no building of the town over the edge; each kind with its places and its ground; the same seed the same
-/// valley; the kind, the size and the horde's side kept in a save.
+/// share; no building of the town over the edge, no house over the horde's strip; each kind with its places and its
+/// ground; the same seed the same valley; the kind, the size and the horde's side kept in a save.
 /// </summary>
 static class HexBench
 {
@@ -113,6 +113,21 @@ static class HexBench
         sim.BuildingPlan(barracks, ex - 90, ez, false, out _, out string whyIn, out _);
         check("a building of the town is not put up over the valley's edge, and is a little way in", overEdge == null && whyEdge == "здесь край долины" && whyIn != "здесь край долины",
             $"at the edge «{whyEdge}», 90 voxels in «{whyIn ?? "fits"}»");
+
+        // nor a house drawn over the horde's strip along its side (its walls would go up only on this side of it, one
+        // side open), and the same house a little way in is not turned away for it
+        const string StripWhy = "здесь входит орда, строить нельзя";
+        var houseWall = new Stroke { Mat = Mat.Wood, Width = Shapes.HouseWall, Height = Shapes.HouseHeight + 4, Level = true };
+        string HouseWhy(float d)
+        {
+            var (hx, hz) = hex.SidePoint(site.EntrySide, .5f, d);
+            sim.PlanHouseAt((int)hx, (int)hz - 16, (int)hx + 47, (int)hz + 15, houseWall, -1, out _, out string why, out _, out _, out _, out _);
+            return why;
+        }
+        string whyStrip = HouseWhy(8), whyPast = HouseWhy(48);
+        check("a house is not put up over the horde's strip, half of its walls left out, and is a little way in",
+            site.EntrySide == Hex.West && whyStrip == StripWhy && whyPast != StripWhy,
+            $"over the strip «{whyStrip ?? "fits"}», 6 m in «{whyPast ?? "fits"}»");
 
         // the river comes in over one side and goes out over another; the roads come in over the horde's side and go
         // out over the far one
