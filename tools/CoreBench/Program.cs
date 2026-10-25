@@ -6132,6 +6132,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--casual") CasualBench
 
 // houses the workers build: roofed whole, floored, furnished, and a storey on a storey (Houses.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--houses") HousesBench.Run(Check);
+// houses side by side, their doors as the player wants them (RowHouses.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--rowhouses") RowHousesBench.Run(Check);
 // the builders at work: what falls, who is shut in up there, thin decks walked on (Builders.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--builders") BuildersBench.Run(Check);
 // the settlement's ways and furnishing: laid, walked, worn, set out, lit, sat on (Decor.cs)

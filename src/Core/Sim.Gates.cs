@@ -95,9 +95,11 @@ public sealed class GatePlan
     /// <summary>
     /// A gate through the wall whose side face was clicked: the gateway centred on the click and snapped to the cells,
     /// the leaves on the side toward the citadel. Null if the face is no wall's side, or the wall is too thick. A house's
-    /// door gives its <paramref name="threshold"/>, the top of its floor; <paramref name="iron"/> hangs leaves of iron plate.
+    /// door gives its <paramref name="threshold"/>, the top of its floor, and hangs its leaves outside (<paramref name="outward"/>:
+    /// on the face clicked, whichever way the citadel is), so that they swing out over the street and not into the room;
+    /// <paramref name="iron"/> hangs leaves of iron plate.
     /// </summary>
-    public static GatePlan At(VoxelWorld w, Site site, VoxelHit hit, int threshold = -1, bool iron = false)
+    public static GatePlan At(VoxelWorld w, Site site, VoxelHit hit, int threshold = -1, bool iron = false, bool outward = false)
     {
         if (hit.NY != 0 || (hit.NX == 0 && hit.NZ == 0)) return null;
         bool alongX = hit.NZ != 0;
@@ -124,7 +126,7 @@ public sealed class GatePlan
         for (int k = 0; k < 2 && Stands(nearWall + n); k++) nearWall += n;
         for (int k = 0; k < 2 && Stands(farWall - n); k++) farWall -= n;
         // in is toward the citadel; the inner face is where the wall meets the yard
-        int inward = (keepA - hitA) * n > 0 ? n : -n;
+        int inward = outward || (keepA - hitA) * n > 0 ? n : -n;
         int innerWall = inward == n ? nearWall : farWall, outerWall = inward == n ? farWall : nearWall;
         int face = inward > 0 ? innerWall + 1 : innerWall;
         // the leaves hang flush on the inner face; the gateway is snapped to the cells, so open leaves clear it

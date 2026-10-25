@@ -112,6 +112,7 @@ public partial class Hints : Control
             case Tool.Box:
                 o.Add((Lmb, dig ? "котлован от угла до угла" : "от угла до угла"));
                 o.Add((L(Act.Form), "помост, стенки или дом"));
+                if (t.Opt.House && !dig) o.Add((L(Act.Rotate), t.Opt.HouseDoor < 0 ? "сторона двери" : "дверь " + VoxelTower.Core.Shapes.SideWords[t.Opt.HouseDoor]));
                 o.Add((height, dig ? "глубина" : "высота"));
                 o.Add((L(Act.Pick), dig ? "стройка" : "котлован"));
                 o.Add((L(Act.Grid), "сетка"));
@@ -134,7 +135,9 @@ public partial class Hints : Control
                 o.Add((Lmb, "по стене или обрыву"));
                 break;
             case Tool.Gate:
-                o.Add((Lmb, "по стене"));
+                // over a gate: walled up; over a house's wall: a door of the house
+                o.Add((Lmb, t.HoverGate != null ? "заложить ворота" : "по стене, по стене дома — дверь"));
+                if (t.HoverGate == null) o.Add(("ЛКМ по воротам", "заложить"));
                 break;
             case Tool.Repair:
                 o.Add((Lmb, "по разрушенной постройке"));
@@ -170,6 +173,18 @@ public partial class Hints : Control
                 o.Add((Lmb, "поставить"));
                 o.Add((L(Act.Rotate), "повернуть"));
                 o.Add((L(Act.Form), "следующая"));
+                break;
+            case Tool.Template when t.DecorTab:
+                o.Add((Lmb, "поставить"));
+                o.Add((L(Act.Rotate), "повернуть"));
+                o.Add((L(Act.Form), "следующая"));
+                break;
+            case Tool.Template when t.TemplatePick.Key == "house":
+                o.Add((Lmb, "поставить дом"));
+                o.Add((L(Act.Rotate), "повернуть, дверь туда же"));
+                o.Add((height, "длина"));
+                o.Add((size, "глубина"));
+                o.Add((L(Act.Form), "следующий"));
                 break;
             case Tool.Template when t.TemplatePick.Line:
                 o.Add((Lmb, "протянуть"));

@@ -947,6 +947,7 @@ public partial class Main
         await MinesSelfTest((what, ok, detail) => Check(what, ok, detail));
         await SelfTestYard(Check);
         await SelfTestTemplates(Check);
+        await SelfTestRowHouses(Check);
         await SelfTestHex(Check);
         await SelfTestCaptain(Check);
         await SelfTestMetal(Check);

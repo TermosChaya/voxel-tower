@@ -288,8 +288,10 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
 - `Sim.Templates.cs` — готовые шаблоны и уровень поселения. `Template` (данные: `Key`, `Name`, `About`, `Line` — тянется
   от конца до конца, высота `Size`/`SizeMin`/`SizeMax`, `Opens` — уровень, с которого открыт, `Plan` — функция мира,
   места, конца, поворота и высоты) и `TemplatePlan` (`Voxels`, `Arched`, `Door` — проём, который прорубят, когда стена
-  встанет, через `HouseDoors`, или `Why`). `Sim.Templates` — круглая и квадратная башни, участок стены, частокол,
-  надвратная башня, вышка, амбар, лестница на стену, настил; за краем `Inside` отказывает «здесь край долины».
+  встанет, через `HouseDoors`, или `Why`; у дома ещё `Dwelling` и `Moves`). `Template.Tab` — раздел библиотеки
+  (`TemplateTabs`: «Оборона», «Постройки», «Декор»; в «Декоре» шаблонов нет, там вещи `Yard.All`). `Sim.Templates` —
+  круглая и квадратная башни, участок стены, частокол, надвратная башня, вышка, жилой дом (`HouseTemplate`, длина —
+  высота шаблона, глубина отдельно, сторона двери от поворота — `SideOfTurn`), амбар, лестница на стену, настил; за краем `Inside` отказывает «здесь край долины».
   `PutTemplate` размечает (`DesignateBuild`, `Arch`, дверь). Уровень: `Standing` (сохраняется вместе с `BuiltVoxels`,
   уложенными рабочими, — `Do` в `Sim.Labour.cs` считает), `SettlementPoints`, `StandingPoints`, `StandingNames`,
   `TickStanding` раз в 5 с: новый уровень — строка в летописи, золото, событие `StandingRose`; `StandingLine` для
@@ -446,6 +448,18 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   — платит и сразу `Arrive` (`Spawn` у `Gate`, `Outfit` — стёганки, `Enter` — выходит сам через `Indoors`, когда у
   двери тихо). «drillyard» теперь даёт солдатам +15 % к ходу (`TroopPace`). `Hire` — для стенда и сцен. В сохранении
   набора нет (версия 27).
+- `Sim.Houses.cs` — дома вплотную и их двери (25.10.2026). `FitHouse` (рамка нарисованного дома: над чужой комнатой —
+  `over`, этаж или отказ; в `ShareGap` 4 вокселя от стены соседа — на его стену, `shared` — биты общих сторон),
+  `TakenBesides` (что держат другие дома и разметка — для `Shapes.DoorFree`), `PlanHouseAt` (рамка, край долины,
+  `DoorsInTheWay`, `Shapes.House` со стороной двери, занятым и общими сторонами), `DoorMove`/`MoveDoors` (дверь соседа
+  в общей стене: ворота закладываются, новая ждёт в `HouseDoors` на свободной стороне — противоположная стена, потом
+  торец к цитадели; ждущая — просто переезжает), `PutHouse` (разметка, арка, дверь, зона, переезды, снятие чужих
+  свесов над комнатой — `EavesOverHouse`). Двери: `HouseWallAt` (дом, сторона и место по грани стены),
+  `HouseDoorAt`/`AddHouseDoor` (новая дверь воротами), `WallUpPlan`/`WallUp` (заложить ворота: створки сняты, ворота
+  из списка, проём из материала косяков), `DoorsOf`, `DoorSidesOf`, `SharedSidesOf`, `DoorLeadsOut`, `DoorStillFree`
+  (ждущая дверь, перед которой встала постройка, переезжает); счётчики `DoorsAdded`, `DoorsWalled`. В `Shapes.cs`:
+  `HouseDoor.Side`, `SideNormal`, `SideOf`, `SideWords`, `DoorOn`, `DoorFree`, `DoorSides`, `Underfoot` (земля под
+  свесами соседа), `House(..., doorSide, taken, shared, ...)`, `Roof(shared)`, `Storey(doors, shared)`.
 - `Sim.Dwellings.cs` — жилые дома: `Zone.Dwelling = 11` (поля зоны `Closed`, `Beds`, `Planned`, `Area`, `Why`,
   `NextLook` не сохраняются — пересчитываются). `CheckDwelling(рамка)` → `DwellingCheck` (`Ok`, `Why`, `Area`, `Bunks`):
   заливка по вокселям от пола внутри рамки (сиды — открытые воксели над твёрдым от `GroundTop` вверх, ближние к
@@ -1093,6 +1107,10 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   (`--demo`, `--pose=…`: `Demo`, `Siege`, `Wounded`, `Flood`, `Grove`…); `Main.TutorialCheck.cs`, `Main.Trailer.cs` —
   прогон обучения и трейлер. Город: `Main.Poses.Town.cs` (`--pose=town`), `Main.SelfTest.Town.cs` (казарма через
   вкладку «Город»: «Поставить», призрак, щелчок, постройка, табличка, наём), стенд — `tools/CoreBench/Town.cs`.
+  Дома вплотную: `Main.Poses.RowHouses.cs` (`--pose=rowhouses`), `Main.SelfTest.RowHouses.cs` (второй дом к стене с
+  дверью первого, дверь воротами по стене, заложить ворота, «Декор» в библиотеке — всё через ввод), стенд —
+  `tools/CoreBench/RowHouses.cs`. Камера `Rig.SetAt(…, yaw, …)` стоит от точки в сторону (sin yaw, cos yaw): yaw 0 —
+  с юга, π/2 — с востока.
 - `CameraRig` — ортографическая камера: `Set(x, z, yaw, pitch, zoom)` в единицах движка, `Dist 80`,
   `ViewH 15.5` при zoom 1, смотрит на плоскость y = 4; наклон ≥ 0,35, zoom 0,28–8; WASD/QE, колесо и трекпад,
   край экрана двигает камеру. Тряска: `Shake(amount)` копит «встряску» (≤ 1, гаснет 1,3/с); в `Apply` — сдвиг кадра

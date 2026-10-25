@@ -81,6 +81,9 @@ public static class Labour
         D(Mat.Powder, 1, Stockpile.Earth, .5f);
         // a dwelling's furnishing is taken apart for a little of its timber
         foreach (var m in new[] { Mat.Bunk, Mat.Bedding, Mat.Table, Mat.Bench }) D(m, .5f, Stockpile.Wood, .5f);
+        // a house's window comes out with the wall it is in, its shutters as a few boards (a door cut where one was)
+        D(Mat.Window, 2.5f, Stockpile.Stone, .75f); D(Mat.WindowLog, 2, Stockpile.Wood, .75f);
+        D(Mat.Shutter, .5f, Stockpile.Wood, .3f); D(Mat.ShutterLog, .5f, Stockpile.Wood, .3f);
         LayCost[Mat.Rammed] = 1; LayCost[Mat.Wood] = 1.5f;
         foreach (var m in new[] { Mat.Stone, Mat.Mortar, Mat.StoneDark, Mat.StoneLight, Mat.StoneWarm, Mat.StoneCool }) LayCost[m] = 2;
         // a ladder is joinery: rails and rungs take longer than the logs they are made of; a gate more so

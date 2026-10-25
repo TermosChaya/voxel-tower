@@ -168,7 +168,7 @@ public partial class Inspector : Control
         head.AddChild(Hud.Text(t.Tool == Tool.Paste && t.PasteBp != null ? $"Чертёж «{t.PasteBp.Name}»" : BuildTools.ToolName(t.Tool), Ornament.Display, 22, Ornament.EmberGlow));
         var mat = Hud.CapsLabel((t.Tool == Tool.Gather ? (t.Shelter ? "убежище от орды" : t.Sanctum ? "святилище жрецов" : t.Dwelling ? "жилой дом" : "добывать: " + (t.GatherKind switch { Stockpile.Wood => "лес", Stockpile.Earth => "землю", Stockpile.Metal => "руду", _ => "камень" }))
             : t.Tool == Tool.Yard ? (o.YardPick < BuildTools.WayCount ? "дорожка: " : "вещь: ") + BuildTools.YardName(o.YardPick).ToLowerInvariant()
-            : t.Tool == Tool.Template ? "шаблон: " + t.TemplatePick.Name.ToLowerInvariant()
+            : t.Tool == Tool.Template ? (t.DecorTab ? "вещь: " + Yard.Name(Yard.All[Math.Clamp(o.TemplateDecor, 0, Yard.All.Length - 1)]).ToLowerInvariant() : "шаблон: " + t.TemplatePick.Name.ToLowerInvariant())
             : t.Tool == Tool.Wand && o.WandCapture ? "снять чертёж" : o.Dig ? "кирка: копать и рубить" : (t.Tool == Tool.Wand ? "переложить в: " : "материал: ") + Mat.NameOf(o.Material).ToLowerInvariant()), 9);
         mat.VerticalAlignment = VerticalAlignment.Center;
         head.AddChild(mat);
@@ -243,7 +243,10 @@ public partial class Inspector : Control
     {
         ["roundtower"] = "stone-tower", ["squaretower"] = "hill-fort", ["wall"] = "stone-wall", ["palisade"] = "stakes-fence",
         ["gatehouse"] = "gate", ["watchtower"] = "all-seeing-eye", ["barn"] = "medieval-barracks", ["stairs"] = "3d-stairs", ["floor"] = "wood-pile",
+        ["house"] = "bunk-beds",
     };
+
+    public const string TemplateTabTip = "Раздел библиотеки\nОборона: башни, стены, ворота, вышка. Постройки: жилой дом, амбар, настил. Декор: костёр, скамья, факел, колодец и другие вещи для поселения.";
 
     /// <summary>
     /// The library in one row: a medallion for each template, its name and what it is in its tooltip, those the
@@ -254,23 +257,43 @@ public partial class Inspector : Control
         var t = _m.Tools; var o = t.Opt;
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 4);
+        // the tabs first: defence, buildings, the settlement's things
+        row.AddChild(new Choice("Раздел", TemplateTabTip, Sim.TemplateTabs, o.TemplateTab, i => t.PickTemplateTab(i)));
+        row.AddChild(new Control { CustomMinimumSize = new Vector2(10, 0) });
+        if (o.TemplateTab == 2)
+        {
+            // the things, as the «Обустройство» tool has them
+            var names = new string[Yard.All.Length];
+            for (int i = 0; i < names.Length; i++) names[i] = Yard.Name(Yard.All[i]).ToLowerInvariant();
+            var things = new Choice("Вещь", "Вещь\nСтавится щелчком, {Rotate} поворачивает. Рабочие соберут её из запасов.", names, o.TemplateDecor, i => t.PickTemplateDecor(i));
+            int n = 0;
+            foreach (var child in things.GetChildren())
+                if (child is Button b) { b.TooltipText = Bindings.Fill(Yard.Name(Yard.All[n]) + "\n" + Yard.About(Yard.All[n]) + " Ставится щелчком, {Rotate} поворачивает."); n++; }
+            KeyTags.Tag(things, () => Bindings.Label(Act.Form));
+            row.AddChild(things);
+            return row;
+        }
         var head = Hud.CapsLabel("шаблон", 9);
         head.VerticalAlignment = VerticalAlignment.Center;
         row.AddChild(head);
+        bool first = true;
         for (int i = 0; i < Sim.Templates.Length; i++)
         {
             int k = i;
             var tp = Sim.Templates[i];
+            if (tp.Tab != o.TemplateTab) continue;
             bool open = _m.Sim.TemplateOpen(tp);
             var g = new Glyph(Icons.Of(TemplateIcons.GetValueOrDefault(tp.Key, "stone-tower")),
                 tp.Name + "\n" + tp.About + (open ? "" : $"\nОткроется на уровне «{Sim.StandingNames[tp.Opens]}»."), () => t.PickTemplate(k), toggle: true)
             { CustomMinimumSize = new Vector2(34, 30) };
             g.SetPressedNoSignal(o.TemplatePick == i);
             if (!open) g.Modulate = new Color(1, 1, 1, .4f);
-            if (i == 0) KeyTags.Tag(g, () => Bindings.Label(Act.Form));
+            if (first) KeyTags.Tag(g, () => Bindings.Label(Act.Form));
+            first = false;
             row.AddChild(g);
         }
-        row.AddChild(new Glyph(Icons.BridgeIcon, "Мост ({ToolBridge})\nМост тянут от берега до берега инструментом «Мост».", () => t.SetTool(Tool.Bridge)) { CustomMinimumSize = new Vector2(34, 30) });
+        if (o.TemplateTab == 0)
+            row.AddChild(new Glyph(Icons.BridgeIcon, "Мост ({ToolBridge})\nМост тянут от берега до берега инструментом «Мост».", () => t.SetTool(Tool.Bridge)) { CustomMinimumSize = new Vector2(34, 30) });
         row.AddChild(new Control { CustomMinimumSize = new Vector2(14, 0) });
         row.AddChild(Shelf());
         return row;
@@ -430,11 +453,20 @@ public partial class Inspector : Control
             case Tool.Yard:
                 opts.AddChild(Hud.CapsLabel($"поворот {o.YardRot * 90}° · {Bindings.Label(Act.Rotate)} — повернуть", 10, Ornament.Aged));
                 break;
+            case Tool.Template when t.DecorTab:
+                opts.AddChild(Hud.CapsLabel($"поворот {o.TemplateRot * 90}° · {Bindings.Label(Act.Rotate)} — повернуть", 10, Ornament.Aged));
+                break;
             case Tool.Template:
             {
                 var tp = t.TemplatePick;
-                if (tp.SizeMax > 0) opts.AddChild(Keyed(new Stepper("Высота", "Высота\nВысота шаблона. Клавиши {HeightLess} и {HeightMore}.", () => Len(t.TemplateSize(tp)), d => t.StepHeight(d)), () => Pair(Act.HeightLess, Act.HeightMore)));
-                opts.AddChild(Hud.CapsLabel(tp.Line ? "протяните от конца до конца" : $"поворот {o.TemplateRot * 90}° · {Bindings.Label(Act.Rotate)} — повернуть · Shift и протяжка — ряд", 10, Ornament.Aged));
+                // a house: its length by the height keys, its depth by the width keys, the side its door looks out of turned
+                if (tp.Key == "house")
+                {
+                    opts.AddChild(Keyed(new Stepper("Длина", "Длина\nДлина дома. Клавиши {HeightLess} и {HeightMore}.", () => Len(t.TemplateSize(tp)), d => t.StepHeight(d)), () => Pair(Act.HeightLess, Act.HeightMore)));
+                    opts.AddChild(Keyed(new Stepper("Глубина", "Глубина\nГлубина дома. Клавиши {WidthLess} и {WidthMore}.", () => Len(t.HouseDepth), d => t.StepHouseDepth(d)), () => Pair(Act.WidthLess, Act.WidthMore)));
+                }
+                else if (tp.SizeMax > 0) opts.AddChild(Keyed(new Stepper("Высота", "Высота\nВысота шаблона. Клавиши {HeightLess} и {HeightMore}.", () => Len(t.TemplateSize(tp)), d => t.StepHeight(d)), () => Pair(Act.HeightLess, Act.HeightMore)));
+                opts.AddChild(Hud.CapsLabel(tp.Key == "house" ? $"дверь {Shapes.SideWords[Sim.SideOfTurn(o.TemplateRot)]} · {Bindings.Label(Act.Rotate)} — другая сторона" : tp.Line ? "протяните от конца до конца" : $"поворот {o.TemplateRot * 90}° · {Bindings.Label(Act.Rotate)} — повернуть · Shift и протяжка — ряд", 10, Ornament.Aged));
                 var rank = Hud.CapsLabel("поселение: " + _m.Sim.StandingLine().ToLowerInvariant(), 10, Ornament.BronzeLight);
                 rank.TooltipText = StandingTip;
                 rank.MouseFilter = MouseFilterEnum.Pass;

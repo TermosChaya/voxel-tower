@@ -232,18 +232,30 @@ public sealed partial class Sim
     /// (null with why not).
     /// </summary>
     public VoxelList BuildingPlan(TownKind k, int cx, int cz, bool turned, out Shapes.HouseDoor door, out string why, out VoxelList arched)
+        => BuildingPlan(k, cx, cz, turned, out door, out why, out arched, out _);
+
+    /// <summary>
+    /// As above, with the rectangle it takes: put up against a house or a building, it shares its wall (Sim.Houses.cs),
+    /// and its door goes to a side that opens onto free ground.
+    /// </summary>
+    public VoxelList BuildingPlan(TownKind k, int cx, int cz, bool turned, out Shapes.HouseDoor door, out string why, out VoxelList arched, out (int x0, int z0, int x1, int z1) rect)
+        => BuildingPlan(k, cx, cz, turned, out door, out why, out arched, out rect, out _);
+
+    public VoxelList BuildingPlan(TownKind k, int cx, int cz, bool turned, out Shapes.HouseDoor door, out string why, out VoxelList arched, out (int x0, int z0, int x1, int z1) rect, out List<DoorMove> moves)
     {
+        moves = null;
         var (x0, z0, x1, z1) = BuildingRect(k, cx, cz, turned);
+        rect = (x0, z0, x1, z1);
         door = default; arched = null;
         // (the land convex, its four corners on it are the whole of it)
         if (x0 < 2 || z0 < 2 || x1 >= World.SX - 2 || z1 >= World.SZ - 2
             || !World.OnLand(x0, z0) || !World.OnLand(x1, z0) || !World.OnLand(x0, z1) || !World.OnLand(x1, z1)) { why = "здесь край долины"; return null; }
-        if (HouseUnder(x0, z0, x1, z1) != null || Buildings.Exists(b => b.X0 <= x1 + 2 && b.X1 >= x0 - 2 && b.Z0 <= z1 + 2 && b.Z1 >= z0 - 2))
-        { why = "здесь уже стоит дом"; return null; }
         // the miners' building stands on an outcrop of ore (Sim.Metal.cs)
         if (k.OnOre && OutcropUnder(x0, z0, x1, z1) < 0) { why = "ставится на рудный выход: ржавая скала, где жила выходит наружу"; return null; }
         var st = new Stroke { Mat = k.Wall, Width = Shapes.HouseWall, Height = Shapes.HouseHeight + 4, Level = true };
-        return Shapes.House(World, Site, x0, z0, x1, z1, st, Shapes.LevelTop(World, cx, cz, Shapes.HouseHeight + 4), out door, out why, out arched);
+        var plan = PlanHouseAt(x0, z0, x1, z1, st, -1, out door, out why, out arched, out rect, out _, out var over, out moves);
+        if (over != null) { why = "здесь уже стоит дом"; return null; }
+        return plan;
     }
 
     /// <summary>
@@ -255,12 +267,10 @@ public sealed partial class Sim
         b = null;
         string no = CantBuild(k);
         if (no != null) return no;
-        var plan = BuildingPlan(k, cx, cz, turned, out var door, out string why, out var arched);
+        var plan = BuildingPlan(k, cx, cz, turned, out var door, out string why, out var arched, out var rect, out var moves);
         if (plan == null) return why;
-        var (x0, z0, x1, z1) = BuildingRect(k, cx, cz, turned);
-        if (DesignateBuild(plan) == 0) return "здесь нечего класть";
-        Arch(arched);
-        PlanHouse(door, x0, z0, x1, z1);
+        var (x0, z0, x1, z1) = rect;
+        if (PutHouse(plan, arched, door, rect, moves) == 0) return "здесь нечего класть";
         if (!Sandbox) Stock.Gold -= k.Gold;
         TakeMetal(k.MetalCost);
         b = new Building { Kind = k.Key, X0 = x0, Z0 = z0, X1 = x1, Z1 = z1, Top0 = door.Top };

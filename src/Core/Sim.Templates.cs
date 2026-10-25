@@ -10,6 +10,10 @@ public sealed class TemplatePlan
     public VoxelList Voxels;
     public VoxelList Arched;
     public Shapes.HouseDoor? Door;
+    /// <summary>A dwelling's: the rectangle it takes (a house among houses, fitted onto a wall it shares), its floor to be furnished.</summary>
+    public (int x0, int z0, int x1, int z1)? Dwelling;
+    /// <summary>The doors of the houses beside it that it walls in, and where each goes (Sim.Houses.cs).</summary>
+    public List<Sim.DoorMove> Moves;
     public string Why;
 }
 
@@ -27,6 +31,8 @@ public sealed class Template
     public int Size, SizeMin, SizeMax;
     /// <summary>The settlement's rank it opens at (0: from the start).</summary>
     public int Opens;
+    /// <summary>The library's tab it is on (<see cref="Sim.TemplateTabs"/>): defence, or buildings.</summary>
+    public int Tab;
     /// <summary>The plan: the world, the site, where it is set (and, drawn, where it ends), its turn (0–3) and height.</summary>
     public Func<VoxelWorld, Site, int, int, int, int, int, int, TemplatePlan> Plan;
 }
@@ -46,6 +52,9 @@ public sealed partial class Sim
 
     /// <summary>The direction a turn faces: 0 south (+z), 1 east (+x), 2 north, 3 west.</summary>
     static (int x, int z) Facing4(int rot) => (rot & 3) switch { 0 => (0, 1), 1 => (1, 0), 2 => (0, -1), _ => (-1, 0) };
+
+    /// <summary>The library's tabs: what defends, what is lived and worked in, and the settlement's things (the «Обустройство» tool's).</summary>
+    public static readonly string[] TemplateTabs = { "Оборона", "Постройки", "Декор" };
 
     public static readonly Template[] Templates =
     {
@@ -67,13 +76,16 @@ public sealed partial class Sim
         new() { Key = "watchtower", Name = "Дозорная вышка", Opens = 1,
             About = "Деревянная вышка: площадка 3 × 3 м на высоте около 3,5 м, перила и приставная лестница. R поворачивает лестницу.",
             Plan = (w, s, x, z, _, _, rot, _) => Watchtower(w, s, x, z, rot) },
-        new() { Key = "barn", Name = "Амбар", Opens = 1,
+        new() { Key = "barn", Name = "Амбар", Opens = 1, Tab = 1,
             About = "Бревенчатый амбар с двускатной крышей и дверью. Не жилой дом: лежанок в нём нет.",
             Plan = (w, s, x, z, _, _, rot, _) => Barn(w, s, x, z, rot) },
         new() { Key = "stairs", Name = "Лестница на стену",
             About = "Каменная лестница с верха стены вниз. Наведите на верх стены, R поворачивает, куда она спустится.",
             Plan = (w, s, x, z, _, _, rot, _) => WallStairs(w, s, x, z, rot) },
-        new() { Key = "floor", Name = "Настил", Size = 24, SizeMin = 16, SizeMax = 40,
+        new() { Key = "house", Name = "Жилой дом", Size = 56, SizeMin = 40, SizeMax = 96, Tab = 1,
+            About = "Жилой дом с полом, двускатной крышей и лежанками. R поворачивает дом, дверь смотрит туда же. Высота — длина дома, ширина — его глубина. Поставленный вплотную к другому дому делит с ним стену.",
+            Plan = (w, s, x, z, _, _, rot, h) => HouseTemplate(w, s, x, z, rot, h, 36, null) },
+        new() { Key = "floor", Name = "Настил", Size = 24, SizeMin = 16, SizeMax = 40, Tab = 1,
             About = "Дощатый пол внутри готовых стен на заданной высоте: второй ярус башни или дома. Щёлкните внутри, высота — клавишами высоты. Шире 4 м без опоры не лечь.",
             Plan = (w, s, x, z, _, _, _, h) => Floor(w, s, x, z, h) },
     };
@@ -266,6 +278,31 @@ public sealed partial class Sim
         return new TemplatePlan { Voxels = L };
     }
 
+    /// <summary>The side of a house its door looks out of for a turn of the template: the way the turn faces.</summary>
+    public static int SideOfTurn(int rot) => (rot & 3) switch { 0 => 1, 1 => 3, 2 => 0, _ => 2 };
+
+    /// <summary>
+    /// A dwelling set at a point: so long along its door's wall and so deep, its door in the middle of the long wall the
+    /// turn faces (<see cref="SideOfTurn"/>). With a sim, it is fitted among the houses there and its door is kept off
+    /// what they hold (Sim.Houses.cs).
+    /// </summary>
+    public static TemplatePlan HouseTemplate(VoxelWorld w, Site s, int cx, int cz, int rot, int length, int depth, Sim sim)
+    {
+        int side = SideOfTurn(rot);
+        int sx = side < 2 ? length : depth, sz = side < 2 ? depth : length;
+        int x0 = cx - sx / 2, z0 = cz - sz / 2, x1 = x0 + sx - 1, z1 = z0 + sz - 1;
+        if (!Inside(w, s, x0 - 4, z0 - 4, x1 + 4, z1 + 4)) return No(Edge);
+        var st = new Stroke { Mat = Mat.Stone, Width = Shapes.HouseWall, Height = Shapes.HouseHeight + 4, Level = true };
+        if (sim == null)
+        {
+            var bare = Shapes.House(w, s, x0, z0, x1, z1, st, 0, side, null, 0, out var d0, out string why0, out var arched0);
+            return bare == null ? No(why0) : new TemplatePlan { Voxels = bare, Arched = arched0, Door = d0, Dwelling = (x0, z0, x1, z1) };
+        }
+        var plan = sim.PlanHouseAt(x0, z0, x1, z1, st, side, out var door, out string why, out var arched, out var rect, out _, out var over, out var moves);
+        if (over != null) return No("здесь уже стоит дом: второй этаж рисуют прямоугольником по его стенам");
+        return plan == null ? No(why) : new TemplatePlan { Voxels = plan, Arched = arched, Door = door, Dwelling = rect, Moves = moves };
+    }
+
     static TemplatePlan Barn(VoxelWorld w, Site s, int cx, int cz, int rot)
     {
         int across = 18, along = 22;
@@ -357,6 +394,8 @@ public sealed partial class Sim
     {
         if (!TemplateOpen(t)) return $"«{t.Name}» откроется на уровне «{StandingNames[t.Opens]}»";
         if (plan == null || plan.Voxels == null) return plan?.Why ?? "здесь нельзя";
+        // a dwelling: its floor to furnish, the neighbour's eaves over its room taken down (Sim.Houses.cs)
+        if (plan.Dwelling is { } rect && plan.Door is { } hd) return PutHouse(plan.Voxels, plan.Arched, hd, rect, plan.Moves) == 0 ? "здесь нечего класть" : null;
         if (DesignateBuild(plan.Voxels) == 0) return "здесь нечего класть";
         Arch(plan.Arched);
         if (plan.Door is { } door) HouseDoors.Add((door, Time));

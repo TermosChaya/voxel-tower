@@ -70,7 +70,8 @@ public sealed partial class Sim
             // the house taken back meanwhile: nothing to go up on
             if (zone == null) { Storeys.RemoveAt(i); continue; }
             if (Shapes.OverHouse(World, s.X0, s.Z0, s.X1, s.Z1, s.Top).Count > 0) continue;
-            var plan = Shapes.Storey(World, Site, s.X0, s.Z0, s.X1, s.Z1, s.Top, s.Mat, out var arched, out var ladder, out int newTop);
+            // its ladder against a long wall with no door in it, no eaves out over a house beside it (Sim.Houses.cs)
+            var plan = Shapes.Storey(World, Site, s.X0, s.Z0, s.X1, s.Z1, s.Top, s.Mat, DoorSidesOf(zone), SharedSidesOf(zone), out var arched, out var ladder, out int newTop);
             // what of the roof came down into the room as it was taken apart is carried off
             var debris = new VoxelList();
             for (int z = s.Z0; z <= s.Z1; z++)

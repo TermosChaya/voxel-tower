@@ -24,6 +24,8 @@ public sealed class ToolOptions
     public bool Hollow;
     /// <summary>The rectangle draws a house: walls, a roof of logs and a door, a dwelling once it stands.</summary>
     public bool House;
+    /// <summary>The side of a house drawn its door goes in (Shapes.SideNormal), or −1: the first that opens onto free ground. {Rotate} goes round them.</summary>
+    public int HouseDoor = -1;
     /// <summary>The line with the pick digs a countermine: a bore under the ground from its start, as deep as the depth, toward the horde's mine.</summary>
     public bool Mine;
     public bool Level = true;
@@ -36,6 +38,8 @@ public sealed class ToolOptions
     public int YardPick, YardRot;
     /// <summary>The «Шаблоны» tool: the template in hand (Sim.Templates), and how it is turned.</summary>
     public int TemplatePick, TemplateRot;
+    /// <summary>The library's tab (defence, buildings, decor: Sim.TemplateTabs), and the decor in hand on its last tab.</summary>
+    public int TemplateTab, TemplateDecor;
     /// <summary>Snapping to a grid round the citadel's middle, its step in voxels (0: off); the step it had when it was last on.</summary>
     public int Grid, GridLast = 8;
 
@@ -313,7 +317,13 @@ public partial class BuildTools : Node3D
     /// <summary>Call after any option changed: re-plans the ghost and updates the belt.</summary>
     public void Changed() { _planKey = "~"; _m.Hud.OnToolChanged(); }
 
-    public void StepWidth(int dir) { Opt.Width = ToolOptions.Next(ToolOptions.Widths, Opt.Width, dir); Changed(); }
+    public void StepWidth(int dir)
+    {
+        // a house template: its depth across its door's wall
+        if (Tool == Tool.Template && !DecorTab && TemplatePick.Key == "house") { StepHouseDepth(dir); return; }
+        Opt.Width = ToolOptions.Next(ToolOptions.Widths, Opt.Width, dir);
+        Changed();
+    }
 
     /// <summary>The second number of the current tool: height, digging depth or extrusion step.</summary>
     public void StepHeight(int dir)
@@ -474,6 +484,8 @@ public partial class BuildTools : Node3D
             case Act.Rotate when Tool == Tool.Building: TurnBuilding(); Changed(); return true;
             case Act.Rotate when Tool == Tool.Yard: Opt.YardRot = (Opt.YardRot + 1) & 3; Changed(); return true;
             case Act.Rotate when Tool == Tool.Template: Opt.TemplateRot = (Opt.TemplateRot + 1) & 3; Changed(); return true;
+            // a house drawn: its door goes round the sides, from where it opens by itself
+            case Act.Rotate when Tool == Tool.Box && Opt.House: Opt.HouseDoor = Opt.HouseDoor >= 3 ? -1 : Opt.HouseDoor + 1; Changed(); return true;
         }
         return false;
     }
@@ -594,6 +606,28 @@ public partial class BuildTools : Node3D
         }
         else if (Tool == Tool.Gate)
         {
+            // on a gate: walled up again (Sim.Houses.cs)
+            if (HoverGate is { } there)
+            {
+                string no = _m.Sim.WallUp(there);
+                if (no != null) { Refuse(no); return; }
+                _markName = "Заложить ворота";
+                _m.Hud.Log("Ворота заложат: рабочие снимут створки и заложат проём тем же, из чего стена.", Hud.Kind.Ok);
+                Sound.Ui("mark");
+                _planKey = "~";
+                return;
+            }
+            // on a house's wall: a door of the house, its leaves outside, where the ground before it is free
+            if (_m.Sim.HouseWallAt(_hover, out var house, out int side, out int along))
+            {
+                string no = _m.Sim.AddHouseDoor(house, side, along);
+                if (no != null) { Refuse($"Дверь: {no}"); return; }
+                _markName = "Дверь";
+                _m.Hud.Log($"{house.Name}: новая дверь {Shapes.SideWords[side]}. Рабочие прорубят её и навесят створки. Ненужную дверь заложите щелчком воротами по ней.", Hud.Kind.Ok);
+                Sound.Ui("mark");
+                _planKey = "~";
+                return;
+            }
             var gp = GatePlan.At(w, _m.Site, _hover, iron: IronGate);
             if (gp == null) { Refuse("ворота ставят в стену толщиной до 4 м"); return; }
             _markName = "Ворота";
@@ -919,7 +953,9 @@ public partial class BuildTools : Node3D
         var st = StrokeNow();
         st.Dig = false;
         int x0 = Math.Min(a.x, b.x), z0 = Math.Min(a.z, b.z), x1 = Math.Max(a.x, b.x), z1 = Math.Max(a.z, b.z);
-        if (_m.Sim.HouseUnder(x0, z0, x1, z1) is { } under)
+        // drawn up against a house it shares its wall (Sim.Houses.cs); over one's room it is a storey on it
+        var plan = _m.Sim.PlanHouseAt(x0, z0, x1, z1, st, Opt.HouseDoor, out var door, out string why, out var arched, out var rect, out int shared, out var under, out var moves);
+        if (under != null)
         {
             string no = _m.Sim.PlanStorey(under, x0, z0, x1, z1, st.Mat);
             if (no != null) { Refuse(no); return; }
@@ -928,21 +964,51 @@ public partial class BuildTools : Node3D
             _m.Hud.Log("Второй этаж: рабочие снимут крышу, поставят лестницу, настелют пол и поднимут стены с новой крышей.", Hud.Kind.Ok);
             return;
         }
-        var plan = Shapes.House(_m.World, _m.Site, a.x, a.z, b.x, b.z, st, _level, out var door, out string why, out var arched);
-        if (plan == null) { Refuse(why); return; }
+        if (plan == null) { Refuse(Bindings.Fill(why)); return; }
         if (!Designate(plan, false, "Дом")) return;
         _m.Sim.Arch(arched);
-        _m.Sim.PlanHouse(door, x0, z0, x1, z1);
-        _m.Hud.Log("Дом: когда стены встанут, рабочие прорубят дверь и навесят ворота, потом поставят лежанки. Каждая лежанка — место в войске.", Hud.Kind.Ok);
+        _m.Sim.PlanHouse(door, rect.x0, rect.z0, rect.x1, rect.z1);
+        _m.Sim.MoveDoors(moves);
+        var eaves = _m.Sim.EavesOverHouse(rect);
+        if (eaves.Count > 0) _m.Sim.DesignateRemove(eaves);
+        HousesDrawn++;
+        _m.Hud.Log($"Дом: дверь {Shapes.SideWords[door.Side]}" + (shared != 0 ? ", стена общая с соседним домом" : "") +
+            ". Когда стены встанут, рабочие прорубят дверь и навесят ворота, потом поставят лежанки. Каждая лежанка — место в войске.", Hud.Kind.Ok);
     }
+
+    /// <summary>Houses drawn with the rectangle this game (the tests ask).</summary>
+    public int HousesDrawn;
+
+    /// <summary>What a house drawn now says over its ghost: where its door goes, that it shares a wall, or why not.</summary>
+    string _houseNote;
+    /// <summary>The rectangle of the house last drawn, as the mouse gave it (for the self-test to say).</summary>
+    public (int x0, int z0, int x1, int z1) HouseDrawn { get; private set; }
+    /// <summary>The voxel face under the cursor, if any (for the self-test to say).</summary>
+    public VoxelHit? Hovered => _hasHover ? _hover : null;
 
     /// <summary>What a house drawn here would be: a house, or over a house the storey that would go up on it.</summary>
     VoxelList HousePreview((int x, int y, int z) a, (int x, int y, int z) b, Stroke st)
     {
         int x0 = Math.Min(a.x, b.x), z0 = Math.Min(a.z, b.z), x1 = Math.Max(a.x, b.x), z1 = Math.Max(a.z, b.z);
-        if (_m.Sim.HouseUnder(x0, z0, x1, z1) is { } under)
+        HouseDrawn = (x0, z0, x1, z1);
+        var plan = _m.Sim.PlanHouseAt(x0, z0, x1, z1, st, Opt.HouseDoor, out var door, out string why, out _, out _, out int shared, out var under);
+        if (under != null)
+        {
+            _houseNote = "второй этаж на дом";
             return under.Depth > 1 ? Shapes.Storey(_m.World, _m.Site, under.X0, under.Z0, under.X1, under.Z1, under.Depth, st.Mat, out _, out _, out _) : null;
-        return Shapes.House(_m.World, _m.Site, a.x, a.z, b.x, b.z, st, _level, out _, out _);
+        }
+        if (plan == null) { _houseNote = Bindings.Fill(why); return null; }
+        _houseNote = $"дверь {Shapes.SideWords[door.Side]}" + (Opt.HouseDoor < 0 ? Bindings.Fill(" ({Rotate} — выбрать сторону)") : "") + (shared != 0 ? ", стена общая с соседом" : "");
+        // the doorway shown open in the ghost, where it will be cut
+        int threshold = door.Y - 8, across = door.NX != 0 ? door.Z : door.X, u0 = (across - Gateway.Half + 4) & ~7;
+        var shown = new VoxelList();
+        for (int i = 0; i < plan.Count; i++)
+        {
+            int x = plan.X(i), y = plan.Y(i), z = plan.Z(i), u = door.NX != 0 ? z : x, k = door.NX != 0 ? (door.X - x) * door.NX : (door.Z - z) * door.NZ;
+            if (y >= threshold && y < threshold + Gateway.Height && u >= u0 && u < u0 + Gateway.Width && k >= 0 && k < Shapes.HouseWall) continue;
+            shown.Add(x, y, z, plan.M(i));
+        }
+        return shown;
     }
 
     /// <summary>A drawbridge from the bank at A over the gap to B, hinged on the bank nearer the citadel.</summary>
@@ -1315,7 +1381,7 @@ public partial class BuildTools : Node3D
         var st = _m.Sim.Stock;
         string stock = $"{(int)(st[1] / 400)}|{(int)(st[2] / 400)}|{(int)(st[3] / 400)}";
         bool dig = DigNow;
-        string opts = $"{dig}|{Opt.Material}|{Opt.Width}|{Opt.Height}|{Opt.Depth}|{Opt.Step}|{Opt.Level}|{Opt.Hollow}|{Opt.House}|{Opt.Mine}|{Opt.Form}|{Opt.YardPick}|{Opt.YardRot}|{_rev}|{stock}";
+        string opts = $"{dig}|{Opt.Material}|{Opt.Width}|{Opt.Height}|{Opt.Depth}|{Opt.Step}|{Opt.Level}|{Opt.Hollow}|{Opt.House}|{Opt.HouseDoor}|{Opt.Mine}|{Opt.Form}|{Opt.YardPick}|{Opt.YardRot}|{_rev}|{stock}";
         string key = "";
         bool dragging = (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Bridge || Paving) && _lmb && _hasStart && _hasDrag;
         if (Tool == Tool.Spell)
@@ -1445,7 +1511,17 @@ public partial class BuildTools : Node3D
             dig = false;
         }
         else if (dragging && Paving) { _plan = WayAt(_startPt, _dragPt); name = Sim.WayName(WayPick); dig = false; }
-        else if (dragging) _plan = PlanDrag(_startPt, _dragPt, dig);
+        else if (dragging)
+        {
+            _houseNote = null;
+            _plan = PlanDrag(_startPt, _dragPt, dig);
+            // a house: where its door goes, or why it cannot be here
+            if (Tool == Tool.Box && Opt.House && !dig && _houseNote != null)
+            {
+                if (_plan == null) { _ghost.Visible = false; PlanText = $"Дом: {_houseNote}"; PlanAffordable = false; return; }
+                name = $"Дом, {_houseNote}";
+            }
+        }
         else if (Paving) { _plan = WayAt(gp, gp); name = Sim.WayName(WayPick) + ", начало"; dig = false; }
         else if (Tool == Tool.Yard)
         {
@@ -1474,7 +1550,26 @@ public partial class BuildTools : Node3D
             if (dig) name = "Вдавить";
         }
         else if (Tool == Tool.Ladder) { _plan = Shapes.LadderAt(w, site, _hover); name = "Лестница"; dig = false; }
-        else if (Tool == Tool.Gate) { _gatePlan = GatePlan.At(w, site, _hover, iron: IronGate); _plan = _gatePlan?.Leaves; name = "Ворота"; dig = false; }
+        else if (Tool == Tool.Gate)
+        {
+            dig = false;
+            _gatePlan = null;
+            if (HoverGate is { } there)
+            {
+                // a gate under the cursor: what walling it up lays
+                _plan = _m.Sim.WallUpPlan(there);
+                name = "Заложить ворота";
+            }
+            else if (_m.Sim.HouseWallAt(_hover, out var house, out int side, out int along))
+            {
+                string no = _m.Sim.HouseDoorAt(house, side, along, out var door);
+                if (no != null) { _ghost.Visible = false; PlanText = $"Дверь {Shapes.SideWords[side]}: {no}"; PlanAffordable = false; return; }
+                _gatePlan = GatePlan.At(w, site, new VoxelHit { X = door.X, Y = door.Y, Z = door.Z, NX = door.NX, NZ = door.NZ }, door.Y - 8, iron: IronGate, outward: true);
+                _plan = _gatePlan?.Leaves;
+                name = $"Дверь дома {Shapes.SideWords[side]}";
+            }
+            else { _gatePlan = GatePlan.At(w, site, _hover, iron: IronGate); _plan = _gatePlan?.Leaves; name = "Ворота"; }
+        }
         else if (Tool == Tool.Paste) { _plan = PlanPasteAtHover(); name = PasteBp.Name; dig = false; }
         if (key[0] == 'T') dig = true;
         _planDig = dig;

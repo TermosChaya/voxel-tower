@@ -92,6 +92,12 @@ public sealed partial class Sim
         {
             var (d, since) = HouseDoors[i];
             int ax = -d.NX, az = -d.NZ;
+            // something put up before it since it was planned: to a free side of its house, or it waits (Sim.Houses.cs)
+            if (d.Top > 0)
+            {
+                if (DoorStillFree(d) is not { } free) continue;
+                if (free.X != d.X || free.Z != d.Z) { HouseDoors[i] = (free, since); continue; }
+            }
             bool stands = true, meant = false;
             int wallTop = d.Top > 0 ? d.Top : d.Y - 8 + Gateway.Height + 4;
             // the wall through its thickness at the door's middle, from the threshold to over the lintel
@@ -122,7 +128,7 @@ public sealed partial class Sim
             // iron over the doorway (the gatehouse's lintel, a house walled in iron): its leaves are iron too
             bool iron = false;
             for (int y = d.Y - 8 + Gateway.Height - 2; y < d.Y - 8 + Gateway.Height + 6 && !iron; y++) iron = Mat.IsMetalWork(World.Get(d.X, y, d.Z));
-            var plan = GatePlan.At(World, Site, new VoxelHit { X = d.X, Y = d.Y, Z = d.Z, NX = d.NX, NZ = d.NZ }, d.Top > 0 ? d.Y - 8 : -1, iron);
+            var plan = GatePlan.At(World, Site, new VoxelHit { X = d.X, Y = d.Y, Z = d.Z, NX = d.NX, NZ = d.NZ }, d.Top > 0 ? d.Y - 8 : -1, iron, outward: d.Top > 0);
             if (plan == null) continue;
             // the leaves hang on the face the door looks out of, their foot at the top of the floor, and that is a
             // course or more over the ground outside: a doorstep of what the wall is of is laid under them down to the
@@ -323,18 +329,29 @@ public sealed partial class Sim
         z.Closed = check.Ok;
         z.Why = check.Why;
         z.Area = check.Area;
+        // closed, but every door of it opening into a wall or another house: nobody gets in (Sim.Houses.cs)
+        if (check.Ok && z.Depth > 1 && DoorsOf(z) is { Count: > 0 } doors && !doors.Exists(g => g.Broken || DoorLeadsOut(g, z)))
+        {
+            check.Ok = false;
+            check.Why = "дверь упирается в стену: поставьте новую воротами ({ToolGate}) по стене дома, где снаружи свободно, а старую заложите щелчком воротами по ней";
+            z.Closed = false; z.Why = check.Why;
+            if (!quiet && _doorBlockedSaid.Add(-z.Id)) Say("Дверь жилого дома упирается в стену: в дом не войти. Поставьте новую дверь воротами по стене дома, где снаружи свободно, а старую заложите.", 2, (z.X0 + z.X1) / 2f, (z.Z0 + z.Z1) / 2f);
+        }
         // a town building is furnished as its kind wants, and gives no beds (Sim.Town.cs)
         if (BuildingOn(z) is { } building) { LookOverBuilding(z, building, check, floor, quiet); return; }
         if (!check.Ok)
         {
             z.Beds = 0;
             z.BunksWhole.Clear();
-            if (was && had > 0 && !quiet) Say($"Жилой дом открыт ({check.Why}): его {had} {PlacesWord(had)} не считаются, пока его не закроют.", 2, (z.X0 + z.X1) / 2f, (z.Z0 + z.Z1) / 2f);
+            // (not while its door is moving: the new one is cut as soon as its wall stands)
+            bool moving = HouseDoors.Exists(d => d.door.Top > 0 && d.door.X >= z.X0 && d.door.X <= z.X1 && d.door.Z >= z.Z0 && d.door.Z <= z.Z1);
+            if (was && had > 0 && !quiet && !moving) Say($"Жилой дом открыт ({check.Why}): его {had} {PlacesWord(had)} не считаются, пока его не закроют.", 2, (z.X0 + z.X1) / 2f, (z.Z0 + z.Z1) / 2f);
             return;
         }
-        // laid out once for its floor; again if the floor is another now (a storey over it, the floor laid since), what
-        // stands of the old layout and is not in the new one taken away
+        // laid out once for its floor and its doors; again if the floor is another now (a storey over it, the floor laid
+        // since) or a door is put in or walled up, what stands of the old layout and is not in the new one taken away
         long key = FloorKey(floor);
+        if (z.Depth > 1) foreach (var g in DoorsOf(z)) key = key * 37 + g.Id;
         if (!_furnishing.TryGetValue(z.Id, out var plan) || plan.Voxels.Count == 0 || plan.Key != key)
         {
             var fresh = FurnishLevels(floor, check.Bunks);
@@ -434,6 +451,15 @@ public sealed partial class Sim
         // no furniture in a door's way: the cells its leaves fill and sweep through are kept clear
         var clear = new HashSet<int>();
         foreach (var g in Gates) clear.UnionWith(g.Cells);
+        // and the way through a door kept clear a man's width either side of the wall: a house's door, hung outward,
+        // sweeps nothing in the room
+        foreach (var g in Gates)
+            for (int k = -Shapes.HouseWall - 6; k <= Shapes.HouseWall + 6; k += 2)
+                for (int u = g.U0; u < g.U0 + Gateway.Width; u += 2)
+                {
+                    int a = g.P + k;
+                    clear.Add(Nav.CellOf(g.AlongX ? u : a, g.Y, g.AlongX ? a : u));
+                }
         // nor at a ladder's foot: the cells it stands in are kept clear
         foreach (int p in floorCells)
         {
