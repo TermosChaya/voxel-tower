@@ -928,6 +928,7 @@ public partial class Main
         await SelfTestScaffold(Check);
         await SelfTestCarry(Check);
         await SelfTestOurEngines(Check);
+        await SelfTestTown(Check);
         await MinesSelfTest((what, ok, detail) => Check(what, ok, detail));
         // the report for the author: one file with the system, the hangs, the last events and the logs
         string report = Diag.Report(this, ProjectSettings.GlobalizePath("user://logs"));

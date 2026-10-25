@@ -279,6 +279,25 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `SergeantArm` (sergeants — `Strike`), `Steadfast` (veterans — `FallBack`), `StakeHarm`/`StakeHold`/`PitHarm`
   (spikes, deathtraps), `granite` — радиус `StoneLands` −1, `naphtha` — взрыв бочек ×1,33, `firestorm` — огненная
   стрела в налётчика; `Soldier(u)` — наш лучник или мечник (не рабочий, не жрец, не поднятый мертвец).
+  **С 25.10.2026 (город, `docs/handoff/08-town.md`)** страницы 0–1 — только право строить здания: `Skills` (8:
+  `b_hall`, `b_market`, `b_smithy`, `b_carpentry`, `b_masons`, `b_drill`, `b_infirmary`, `b_traps`; страница «Город»,
+  ветви «Хозяйство», «Ремёсла», «Кладка», «Дружина», «Ловушки») и `Troops` (9: `b_barracks` … `b_workshop`, ветви как
+  были). Прежние ключи (`yew`, `spearmen`, `mail`…) в древе больше не стоят: их даёт уровень здания (`TownKind.Grants1/2`
+  → `_granted`), и `Knows` спрашивает `Learnt` или `_granted`, так что всё, что читает изученное, работает как было.
+  Соперников (`Rival`) на этих страницах нет. В песочнице `Learnt` получает всё из `TownGrants()`.
+- `Sim.Town.cs` — город: `TownKind` (шаблон здания — данные: `Key`, `Name`, `About`, `Level2`, `Lore`, размер `W`×`D`
+  (37×57 вокселей, мастерская, конюшня и чертог 37×73), `Wall`, `MaxLevel`, `Gold`/`UpGold`, `Hires` (вид, с какого
+  уровня, прирост за волну), `Grants1/2`, `Needs` (вид и уровень), `Income1/2`, `Props1/2` — обстановка этажей),
+  `Building` (вид, рамка дома, `Level`, `Target`, `Ready`, `Top0`, `Stock` — запас найма по ключу вида), `TownKinds`
+  (17, порядок вкладки), `TownKindOf`, `TownGrants`, `CitadelHires` (рабочий, лучник, мечник, жрец), `BuildingOf/On/At`,
+  `ZoneOf`, `Stands`, `CantBuild`, `BuildingRect`, `BuildingPlan` (тот же `Shapes.House`, что «дом» прямоугольника),
+  `PutUp` (золото, `DesignateBuild`, `Arch`, `PlanHouse`, `Zone.Title`), `CantRaise`/`Raise` (`PlanStorey`),
+  `CantHireAt`/`HireAt` (из запаса, у двери — `DoorStand`; машины с расчётом), `MarketRates`/`Trade`, `TownIncome`,
+  `TickTown` (доход, прирост до двойного, здание без зоны забывается), `LookOverBuilding` (из `LookOver` жилья:
+  у здания `Beds` = 0, `Title`; заказ обстановки по `FloorKey`, готово при 85 % стоящей; во время подъёма этажа
+  здание работает), `FurnishBuilding`/`Place`/`Draw` (обстановка из материалов 160–169: наковальня, горн, угли, сено,
+  мишень, кольцо мишени, стойка, бочка, товар, чурбак — проходимые, `IsFurniture`, на `FloorKey` не влияют),
+  `WriteTown`/`ReadTown` (версия 38).
 - `Sim.Engines.cs` — осадные машины: `EngineTick`, `CatapultTick`/`AimFor`/`Throw`/`StoneLands`, `MantletTick`/`Cover`,
   `TowerTick`/`DockFor`/`Dock`/`TowerFell`, `KeepEscort`, `SpawnCatapult`.
 - `Sim.Thieves.cs` — грабители: `ThiefTick`, `LonePrey`, `Steal`, `Bind`/`Led`, `ThiefFell`/`ThiefGone`.
@@ -952,7 +971,8 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
 - `Main.cs` — запуск: флаги командной строки, генерация, сим, узлы, стартовые пешки, скриншоты.
 - `Main.SelfTest.cs` — самотест (`--selftest`); `Main.Poses.cs`, `Main.Poses.Figures.cs` — постановки для снимков
   (`--demo`, `--pose=…`: `Demo`, `Siege`, `Wounded`, `Flood`, `Grove`…); `Main.TutorialCheck.cs`, `Main.Trailer.cs` —
-  прогон обучения и трейлер.
+  прогон обучения и трейлер. Город: `Main.Poses.Town.cs` (`--pose=town`), `Main.SelfTest.Town.cs` (казарма через
+  вкладку «Город»: «Поставить», призрак, щелчок, постройка, табличка, наём), стенд — `tools/CoreBench/Town.cs`.
 - `CameraRig` — ортографическая камера: `Set(x, z, yaw, pitch, zoom)` в единицах движка, `Dist 80`,
   `ViewH 15.5` при zoom 1, смотрит на плоскость y = 4; наклон ≥ 0,35, zoom 0,28–8; WASD/QE, колесо и трекпад,
   край экрана двигает камеру. Тряска: `Shake(amount)` копит «встряску» (≤ 1, гаснет 1,3/с); в `Apply` — сдвиг кадра
@@ -1003,6 +1023,9 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   Shift и щелчок (`WandAdd`) копят области в `_wandHeld`; щелчок без Shift действует на них вместе с областью под
   курсором (`WandPick`) одной разметкой; `WandDrop` — по Esc, смене инструмента и после щелчка; `WandHeld` — для
   подсказки и нижней панели.
+- `BuildTools.Town.cs` — здание в руке (`Tool.Building`, «Здание»): `StartBuilding(kind)` из вкладки «Город», призрак
+  дома у курсора (`BuildingPlanAtHover`, строка с ценой и сроком), R — поворот (`TurnBuilding`), щелчок — `PutUpAtHover`
+  (`Sim.PutUp`), после него и по Esc/ПКМ инструмент убран.
 - `BuildTools` — кисти 1–9, 0 (починка), M (мост), B (чертёж), V (кирка), Z/X/C (материал), N (сетка),
   подписи, призраки; Ctrl+Z / ⌘Z — `Undo` (кнопка «Отменить» — в консоли у кисти). Каждый путь, который размечает,
   ставит `_markName` — название шага для летописи при отмене. Сетка (`ToolOptions.Grid`, шаг запоминается в
@@ -1084,7 +1107,10 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   середина — знак страницы и знания (на третьей — вмешательство и откровения); узлы — `Knot : BaseButton` (круглый
   `_HasPoint`, значок `Icons.SigilFor(key)`, обод и свечение по состоянию 0–3, «дышит» тот, что можно изучить, цена на
   бляхе цвета валюты, подсказка — `Tooltip`); место узла — угол ветви ± разлёт по `Lane` на кольцах 1–2;
-  `PlaqueOf(key)` (BaseButton) для самотеста, `Badge()` (знания или ✦); `Mysteries.cs` — `MysteryPanel` (вкладка
+  `PlaqueOf(key)` (BaseButton) для самотеста, `Badge()` (знания или ✦); `Town.cs` — `TownPanel` (вкладка «Город»,
+  ширина 470: доход, строка на каждый вид здания — значок, имя и состояние, «Поставить», наём с запасом, «Второй этаж»,
+  торг на рынке; перестраивается по ключу раз в 0,3 с), `SigilBox`, `TownPlates` (слой 0, под рамкой: таблички над
+  зданиями, `PlateOf` для самотеста; скрыты от первого лица, в меню и издали); `Mysteries.cs` — `MysteryPanel` (вкладка
   «Таинства»: вмешательство из потолка, святилища, жертвы, заклинания строками по кругам — взять в руку, а ещё не
   постигнутое открывает древо на странице «Вмешательство»); `MagicView.cs`
   (мир) — вспышка над алтарём, капли смолы, молния, трясины, кольца Ужаса и Цепей, метки Ока, пыль и искры; летящие куски

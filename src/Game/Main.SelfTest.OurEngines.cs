@@ -29,6 +29,8 @@ public partial class Main
         shop.Stock[Kinds.Mangonel.Key] = 1;
         sim.Buildings.Add(shop);
         bool took = sim.HireAt(shop, Kinds.Mangonel) != null;
+        // (read at once: the household brings timber in and takes it out while the engine comes out)
+        double wood1 = sim.Stock[Stockpile.Wood];
         sim.Buildings.Remove(shop);
         var e = sim.Units.FindLast(u => u.T == Kinds.Mangonel && !u.Dead);
         int crew = e == null ? 0 : sim.CrewOf(e);
@@ -56,8 +58,8 @@ public partial class Main
             doing = Retinue.Doing(e, sim);
         }
         check("a catapult of ours is learnt, taken on at the muster for gold and timber, comes out of the citadel with its crew of two and throws at a band within its reach, the stone in the air and the panel saying at whom",
-            learnt && took && crew == 2 && Math.Abs(wood0 - sim.Stock[Stockpile.Wood] - Kinds.Mangonel.Logs * VoxelWorld.PerM3) < .01 && sim.EngineShots > shots0 && aloft && doing.Contains("бьёт"),
-            $"learnt {learnt}, taken {took}, crew {crew}, timber {wood0:0.#} → {sim.Stock[Stockpile.Wood]:0.#}; thrown {sim.EngineShots - shots0}, aloft {aloft}; «{doing}»");
+            learnt && took && crew == 2 && Math.Abs(wood0 - wood1 - Kinds.Mangonel.Logs * VoxelWorld.PerM3) < .01 && sim.EngineShots > shots0 && aloft && doing.Contains("бьёт"),
+            $"learnt {learnt}, taken {took}, crew {crew}, timber {wood0:0.#} → {wood1:0.#}; thrown {sim.EngineShots - shots0}, aloft {aloft}; «{doing}»");
         foreach (var u in sim.Units)
             if (!u.Dead && (u == e || u.Escort == e && e != null || u.Team == Team.Horde)) { u.Dead = true; u.DiedAt = -999; }
         sim.Fliers.Clear();
