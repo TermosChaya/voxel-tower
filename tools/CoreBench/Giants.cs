@@ -245,8 +245,10 @@ static class GiantsBench
             {
                 float d = MathF.Sqrt((x - kx) * (x - kx) + (z - kz) * (z - kz));
                 if (d < ring || d >= ring + 8) continue;
+                // on the ground: its top is the first voxel of air (a voxel over it, the ring stood on nothing and all
+                // came down as it was set, and the giant threw at what was left of it)
                 int g = w.GroundTop(x, z);
-                for (int y = g + 1; y < g + 33; y++) w.Set(x, y, z, Mat.Stone);
+                for (int y = g; y < g + 32; y++) w.Set(x, y, z, Mat.Stone);
             }
         Run(.5);
         sim.ComputeFields();

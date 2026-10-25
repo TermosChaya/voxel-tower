@@ -269,12 +269,29 @@ public sealed partial class Sim
         float fx = MathF.Cos(u.Facing), fz = MathF.Sin(u.Facing);
         float x0 = u.X + fx * 4, y0 = u.Y + u.T.BodyH + 4, z0 = u.Z + fz * 4;
         // so long in the air that it comes down where it was meant to
-        float t = 1.6f + d / (30 * VoxelWorld.PerMetre);
-        float vx = (tx - x0) / t, vz = (tz - z0) / t, vy = (ty - y0 + .5f * Gravity * t * t) / t;
+        float t = 1.6f + d / (30 * VoxelWorld.PerMetre), vy = ArcUp(y0, ty, ref t);
+        float vx = (tx - x0) / t, vz = (tz - z0) / t;
         var f = Hurl(Ball(StoneBall, Mat.Rock), x0, y0, z0, vx, vy, vz, "камень из камнемёта");
         if (f == null) return;
         f.Smash = StoneR;
         f.By = u;
+    }
+
+    /// <summary>
+    /// How fast up a stone is thrown from one height to come down at another after so long in the air. An arc too high
+    /// for the sky over the valley (a long throw from high ground) is thrown flatter and comes down the sooner, where it
+    /// was meant to: it would stop under the sky and come down short.
+    /// </summary>
+    public float ArcUp(float y0, float ty, ref float flight)
+    {
+        float vy = (ty - y0 + .5f * Gravity * flight * flight) / flight, room = World.SY - 10 - y0;
+        if (room > 4 && vy * vy / (2 * Gravity) > room)
+        {
+            vy = MathF.Sqrt(2 * Gravity * room);
+            float under = vy * vy - 2 * Gravity * (ty - y0);
+            if (under > 0) flight = (vy + MathF.Sqrt(under)) / Gravity;
+        }
+        return vy;
     }
 
     /// <summary>

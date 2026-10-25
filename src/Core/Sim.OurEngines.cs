@@ -308,15 +308,7 @@ public sealed partial class Sim
             return;
         }
         float r = (treb ? 3.4f : 2.5f) * (Knows("heavystones") ? 1.1f : 1);
-        float vy = (ty - y0 + .5f * Gravity * flight * flight) / flight;
-        // an arc too high for the sky over the valley is thrown flatter, so as to come down where it was meant to
-        float room = World.SY - 10 - y0;
-        if (room > 4 && vy * vy / (2 * Gravity) > room)
-        {
-            vy = MathF.Sqrt(2 * Gravity * room);
-            float drop = ty - y0, under = vy * vy - 2 * Gravity * drop;
-            if (under > 0) flight = (vy + MathF.Sqrt(under)) / Gravity;
-        }
+        float vy = ArcUp(y0, ty, ref flight);
         float vx = (tx - x0) / flight, vz = (tz - z0) / flight;
         var f = Hurl(Ball(r, Mat.Rock), x0, y0, z0, vx, vy, vz, treb ? TrebuchetCause : MangonelCause);
         if (f == null) return;

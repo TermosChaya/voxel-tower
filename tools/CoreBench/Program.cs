@@ -2470,6 +2470,25 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--engines")
     simE.InstantLabour = false;
     int wall0 = Masonry(wxE - 6, wz0E, wxE + 6, wz1E, 0, topE + 2);
 
+    // a stone thrown at full reach from high ground at a mark as high: its arc is kept under the sky over the valley,
+    // and it comes down where it was aimed, not stopped under the sky and short
+    var rockE = new System.Collections.Generic.List<(sbyte, sbyte, sbyte, byte)>();
+    for (int dz = -1; dz <= 1; dz++) for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) rockE.Add(((sbyte)dx, (sbyte)dy, (sbyte)dz, Mat.Rock));
+    float ax0 = kxE - 400, az0 = kzE - 200, ay0 = wE.SY - 70, reachE = 40 * VoxelWorld.PerMetre;
+    float flightE = 1.6f + reachE / (30 * VoxelWorld.PerMetre), avy = simE.ArcUp(ay0, ay0, ref flightE);
+    var thrown = simE.Hurl(rockE, ax0, ay0, az0, reachE / flightE, avy, 0, "камень из камнемёта");
+    float highest = ay0, cameDown = float.NaN;
+    for (int i = 0; i < 200 && thrown != null && simE.Fliers.Contains(thrown) && float.IsNaN(cameDown); i++)
+    {
+        float wasX = thrown.X, wasY = thrown.Y;
+        simE.Step(.05f);
+        highest = Math.Max(highest, thrown.Y);
+        if (thrown.VY < 0 && wasY >= ay0 && thrown.Y < ay0) cameDown = wasX + (thrown.X - wasX) * (wasY - ay0) / (wasY - thrown.Y) - ax0;
+    }
+    Check("a stone thrown at full reach from high ground keeps under the sky and comes down where it was aimed",
+        !float.IsNaN(cameDown) && MathF.Abs(cameDown - reachE) < VoxelWorld.PerMetre && highest < wE.SY - 6,
+        $"thrown from {ay0:0} at a mark {reachE / VoxelWorld.PerMetre:0} m off: as high as {highest:0} under a sky at {wE.SY}, down at {cameDown / VoxelWorld.PerMetre:0.0} m");
+
     // a catapult sixty metres out: it comes to where it throws from, out of bowshot, and breaks the wall up; its guard keeps by it
     var cat = simE.Spawn(Kinds.Catapult, simE.NearestStand(wxE - 480, kzE, 3));
     var guardsE = new System.Collections.Generic.List<Unit>();
