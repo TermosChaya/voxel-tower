@@ -318,6 +318,9 @@ public partial class Main : Node3D
         var acid = new AcidView();
         AddChild(acid);
         acid.Init(this);
+        var chimneys = new ChimneyView();
+        AddChild(chimneys);
+        chimneys.Init(this);
         Tunnels = new TunnelView();
         AddChild(Tunnels);
         Tunnels.Init(this);

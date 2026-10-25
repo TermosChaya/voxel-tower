@@ -27,6 +27,12 @@ public partial class UnitView
         _splints = Multi(new BoxMesh { Size = Vector3.One }, mat, true);
     }
 
+    /// <summary>
+    /// What it holds is put away: one carrying a comrade has its hands full (the pick or the weapon slung), and one carried
+    /// has let go of its own; at the usual height the sticking-out weapons made a tangle of the two.
+    /// </summary>
+    static bool Stowed(Unit u) => u.Carrying is { Aloft: true } || Sim.OnShoulder(u);
+
     /// <summary>Up on a comrade's shoulder: where it lies, the waist on the shoulder, face down across it.</summary>
     Transform3D Shouldered(Unit u, Figure f)
     {

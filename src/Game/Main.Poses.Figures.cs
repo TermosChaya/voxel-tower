@@ -30,7 +30,7 @@ public partial class Main
             new[] { Kinds.Orc, Kinds.Miner, Kinds.Necromancer }, new[] { Kinds.Troll, Kinds.Deer, Kinds.Boar, Kinds.Hare, Kinds.Bear, Kinds.WhiteStag }, new[] { Kinds.Ram, Kinds.Catapult, Kinds.Mantlet, Kinds.SiegeTower },
             // the troops the lore opens: men on foot; men who throw and shoot, and the hounds; the riders; the great ones
             new[] { Kinds.Spearman, Kinds.Shieldbearer, Kinds.Halberdier, Kinds.Knight }, new[] { Kinds.Slinger, Kinds.Crossbowman, Kinds.Bombardier, Kinds.OurAlchemist, Kinds.Hound },
-            new[] { Kinds.Rider, Kinds.HorseArcher, Kinds.Lancer }, new[] { Kinds.TameTroll, Kinds.Giant },
+            new[] { Kinds.Rider, Kinds.HorseArcher, Kinds.Lancer }, new[] { Kinds.TameTroll, Kinds.Giant, Kinds.HillGiant },
         };
         const float yaw = -.3f, pitch = .42f, gap = 34;
         float sin = MathF.Sin(yaw), cos = MathF.Cos(yaw);

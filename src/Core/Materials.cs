@@ -115,7 +115,19 @@ public static class Mat
     /// horde sets alight to bring the wall down (Sim.Tunnels.cs).
     /// </summary>
     public const byte Prop = 143;
-    public const int Count = 144;
+    /// <summary>
+    /// For the figures: a hill giant's skin, weathered ruddy brown or grey as a crag, and the blue it daubs itself with
+    /// in stripes.
+    /// </summary>
+    public const byte SkinGiant = 175, SkinGiantGrey = 176, Woad = 177;
+    /// <summary>
+    /// A house's window, in its wall's outer face: the dark of the room behind closed shutters, a little warm light
+    /// showing through them (a stone or earth wall's, and a log wall's, so that each is laid of what the wall is).
+    /// </summary>
+    public const byte Window = 178, WindowLog = 179;
+    /// <summary>The shutters either side of a house's window and the board over it, light wood against the wall (of a stone and of a log wall).</summary>
+    public const byte Shutter = 180, ShutterLog = 181;
+    public const int Count = 182;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
     public static readonly bool[] IsVeg = new bool[Count], IsPlayer = new bool[Count], IsEarthy = new bool[Count],
@@ -273,7 +285,12 @@ public static class Mat
         D(Phial, "склянка", 0x5f9a3a, .1f, MatGroup.Hard, 0);
         D(Scaffold, "Леса", 0xa48659, .2f, MatGroup.Wood, 0);
         D(Prop, "Крепь", 0x7a5a38, .2f, MatGroup.Wood, 0);
+        D(SkinGiant, "кожа", 0x6e4c38, .1f, MatGroup.Hard, 0); D(SkinGiantGrey, "кожа", 0x5c584c, .1f, MatGroup.Hard, 0);
+        D(Woad, "вайда", 0x2c4a78, .08f, MatGroup.Hard, 0);
+        D(Window, "Окно", 0x2e2116, .06f, MatGroup.Stone, Player); D(WindowLog, "Окно", 0x2e2116, .06f, MatGroup.Wood, Player);
+        D(Shutter, "Ставни", 0x8a6640, .14f, MatGroup.Stone, Player); D(ShutterLog, "Ставни", 0x8a6640, .14f, MatGroup.Wood, Player);
         Emission[Phial] = .35f;
+        Emission[Window] = Emission[WindowLog] = .45f;
 
         foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage, Flower, Bloom, Birch, NeedleLight, FoliageLight, FoliageGold, PineBark, Snag }) IsVeg[m] = true;
         foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame, Stakes, Pitch, TowerLadder, Acid, Scaffold }) Passable[m] = true;

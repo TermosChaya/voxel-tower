@@ -397,7 +397,7 @@ public sealed partial class Sim
         }
 
         static bool IsSkin(byte m) => m is Mat.SkinHuman or Mat.SkinGoblin or Mat.SkinOrc or Mat.SkinTroll or Mat.SkinTan or Mat.SkinPale
-            or Mat.SkinGoblinDark or Mat.SkinGoblinPale or Mat.SkinOrcGrey or Mat.SkinTrollDark or Mat.Lips;
+            or Mat.SkinGoblinDark or Mat.SkinGoblinPale or Mat.SkinOrcGrey or Mat.SkinTrollDark or Mat.Lips or Mat.SkinGiant or Mat.SkinGiantGrey;
     }
 
     /// <summary>How much of a body's shield is left, as a share of it whole.</summary>

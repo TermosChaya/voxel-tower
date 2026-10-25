@@ -336,10 +336,11 @@ public partial class UnitView : Node3D
             var hurt = u.Wounds != null ? DrawOwn(u, k.Fig, tint) : null;
             int o = k.Count++ * 16;
             for (int b = 0; b < Figure.Bones; b++) Write(k.Bufs[b], o, hurt != null && hurt[(int)Figure.PartOf[b]] ? Folded : _xf[b], tint);
+            bool stowed = Stowed(u);
             for (int d = 0; d < k.DressBufs.Length; d++)
             {
                 int on = (int)k.Fig.DressOn[d];
-                Write(k.DressBufs[d], o, hurt != null && hurt[on] ? Folded : _xf[(int)k.Fig.DressBone[d]] * Wrist(u, k.Fig, d), tint);
+                Write(k.DressBufs[d], o, stowed || hurt != null && hurt[on] ? Folded : _xf[(int)k.Fig.DressBone[d]] * Wrist(u, k.Fig, d), tint);
             }
             // splints on what is splinted (UnitView.Carry.cs)
             Splints(u, k.Fig);
@@ -1050,7 +1051,8 @@ public partial class UnitView : Node3D
         }
         if (own.Hidden) { own.Hidden = false; Show(own, true); }
         for (int b = 0; b < Figure.Bones; b++) if (own.Parts[b] != null) own.Parts[b].Transform = _xf[b];
-        for (int d = 0; d < own.Dress.Length; d++) if (own.Dress[d] != null) own.Dress[d].Transform = _xf[(int)fig.DressBone[d]] * Wrist(u, fig, d);
+        bool stowed = Stowed(u);
+        for (int d = 0; d < own.Dress.Length; d++) if (own.Dress[d] != null) own.Dress[d].Transform = stowed ? Folded : _xf[(int)fig.DressBone[d]] * Wrist(u, fig, d);
         // for the arrows stuck in it
         for (int b = 0; b < Figure.Bones; b++) look_xf[u.Id * Figure.Bones + b] = _xf[b];
         return own.Hurt;

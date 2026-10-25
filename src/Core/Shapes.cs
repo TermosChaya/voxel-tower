@@ -266,10 +266,37 @@ public static class Shapes
         {
             int x = L.X(i), y = L.Y(i), z = L.Z(i);
             byte m = lintel.Contains(Key(w, x, y, z)) ? Mat.Wood : L.M(i);
+            // windows in the outer face of the long walls, over head height, clear of the door and the corners
+            if (m != Mat.Wood || !lintel.Contains(Key(w, x, y, z))) m = Windowed(x, y, z, m, x0, z0, x1, z1, ground, door);
             o.Add(x, y, z, m);
             if (m == Mat.Wood && lintel.Contains(Key(w, x, y, z))) arched.Add(x, y, z, m);
         }
         return o;
+    }
+
+    /// <summary>
+    /// What a voxel of a house's wall is laid as: a window where it is in the outer face of a long wall, three voxels
+    /// wide and five high from a metre and a third over the floor (the dark of the room between two shutters, a board
+    /// over them), one every two metres along the wall, none within a metre of the door or of the corners; else what
+    /// it was.
+    /// </summary>
+    static byte Windowed(int x, int y, int z, byte m, int x0, int z0, int x1, int z1, int ground, HouseDoor door)
+    {
+        if (m == Mat.Wood && y <= ground) return m;
+        bool alongX = x1 - x0 >= z1 - z0;
+        int c = alongX ? z : x, c0 = alongX ? z0 : x0, c1 = alongX ? z1 : x1, l = alongX ? x : z, l0 = alongX ? x0 : z0, l1 = alongX ? x1 : z1;
+        if (c != c0 && c != c1) return m;
+        int above = y - (ground + 1);
+        if (above < 11 || above > 15) return m;
+        int dl = door.NX != 0 ? door.Z : door.X;
+        bool doorSide = door.NX != 0 ? c == (door.NX > 0 ? c1 : c0) : c == (door.NZ > 0 ? c1 : c0);
+        if (doorSide && Math.Abs(l - dl) <= Gateway.Half + 8) return m;
+        int from = l - (l0 + HouseWall + 6);
+        if (from < 0 || l > l1 - HouseWall - 6 || from % 16 > 2) return m;
+        // the dark of the room between two shutters, a board over them
+        bool glass = from % 16 == 1 && above < 15, stone = Mat.IsMasonry(m) || m == Mat.Rammed;
+        if (!stone && m != Mat.Wood) return m;
+        return glass ? (stone ? Mat.Window : Mat.WindowLog) : stone ? Mat.Shutter : Mat.ShutterLog;
     }
 
     /// <summary>Whether a house of this outer size can be built: room enough inside to sleep in, and not too wide to floor over.</summary>
@@ -318,6 +345,18 @@ public static class Shapes
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Where a house's smoke goes out: under the ridge over its far gable, where a smoke hole is left in old houses with
+    /// no chimney (the ridge's voxel there; its smoke leaves from over it).
+    /// </summary>
+    public static (int x, int z, int top) SmokeHole(int x0, int z0, int x1, int z1, int top)
+    {
+        bool alongX = x1 - x0 >= z1 - z0;
+        int c0 = alongX ? z0 : x0, c1 = alongX ? z1 : x1, l1 = alongX ? x1 : z1;
+        int c = (c0 + c1) / 2, l = l1 - 2, ridge = top + (c1 - c0 + 2 * Eaves) / 2 / 2;
+        return alongX ? (l, c, ridge) : (c, l, ridge);
     }
 
     /// <summary>
