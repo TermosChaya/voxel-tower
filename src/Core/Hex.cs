@@ -23,7 +23,23 @@ public sealed class Hex
     {
         CX = cx; CZ = cz; R = r;
         HalfW = r * Root3 / 2;
+        _corners = new[]
+        {
+            (CX, CZ - R), (CX + HalfW, CZ - R / 2), (CX + HalfW, CZ + R / 2),
+            (CX, CZ + R), (CX - HalfW, CZ + R / 2), (CX - HalfW, CZ - R / 2),
+        };
+        for (int i = 0; i < 6; i++)
+        {
+            var (a, bb) = (_corners[i], _corners[(i + 1) % 6]);
+            float mx = (a.x + bb.x) / 2, mz = (a.z + bb.z) / 2, dx = CX - mx, dz = CZ - mz, l = MathF.Sqrt(dx * dx + dz * dz);
+            _inward[i] = (dx / l, dz / l);
+        }
     }
+
+    // the corners and the sides' inward ways, worked out once: the land's edge is asked of every column a plan or a
+    // stroke takes in, and a new array of corners each time came to a megabyte for one blueprint's ghost
+    readonly (float x, float z)[] _corners;
+    readonly (float x, float z)[] _inward = new (float, float)[6];
 
     /// <summary>The largest such hexagon in a box of these sides, a voxel or two in from its edges.</summary>
     public static Hex In(int sx, int sz) => new(sx / 2f, sz / 2f, Math.Min(sz / 2f, sx / Root3) - 2);
@@ -65,12 +81,8 @@ public sealed class Hex
         return (bx, bz);
     }
 
-    /// <summary>The six corners, from the northern point round by the east.</summary>
-    public (float x, float z)[] Corners() => new[]
-    {
-        (CX, CZ - R), (CX + HalfW, CZ - R / 2), (CX + HalfW, CZ + R / 2),
-        (CX, CZ + R), (CX - HalfW, CZ + R / 2), (CX - HalfW, CZ - R / 2),
-    };
+    /// <summary>The six corners, from the northern point round by the east (kept, not to be changed by the caller).</summary>
+    public (float x, float z)[] Corners() => _corners;
 
     /// <summary>Where the land begins and ends along a row (x), or (0, -1) for a row north or south of it.</summary>
     public (float x0, float x1) Row(float z)
@@ -93,11 +105,7 @@ public sealed class Hex
     public const int NorthEast = 0, East = 1, SouthEast = 2, SouthWest = 3, West = 4, NorthWest = 5;
 
     /// <summary>A side's two ends (from the corner it begins at to the one it ends at).</summary>
-    public ((float x, float z) a, (float x, float z) b) Side(int i)
-    {
-        var c = Corners();
-        return (c[i % 6], c[(i + 1) % 6]);
-    }
+    public ((float x, float z) a, (float x, float z) b) Side(int i) => (_corners[i % 6], _corners[(i + 1) % 6]);
 
     /// <summary>The point a part t (0…1) of the way along a side, moved in from it toward the middle by so many voxels.</summary>
     public (float x, float z) SidePoint(int i, float t, float inward = 0)
@@ -108,12 +116,7 @@ public sealed class Hex
     }
 
     /// <summary>The way in from a side, square to it: toward the middle.</summary>
-    public (float x, float z) Inward(int i)
-    {
-        var (a, b) = Side(i);
-        float mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, dx = CX - mx, dz = CZ - mz, l = MathF.Sqrt(dx * dx + dz * dz);
-        return (dx / l, dz / l);
-    }
+    public (float x, float z) Inward(int i) => _inward[i % 6];
 
     /// <summary>
     /// How far a point is in from a side's line (negative beyond it), and how far along the side it lies (t, 0 at its
