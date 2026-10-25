@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 
 namespace VoxelTower.Core;
@@ -159,7 +160,8 @@ public sealed class BodyPlan
 /// </summary>
 public static partial class Bodies
 {
-    static readonly Dictionary<(string, int), BodyPlan> Cache = new();
+    /// <summary>The bodies sculpted so far: a body is sculpted once, on whatever thread first wants it (<see cref="Warm"/>).</summary>
+    static readonly ConcurrentDictionary<(string, int), BodyPlan> Cache = new();
 
     /// <summary>How many looks a kind comes in.</summary>
     public static int Looks(UnitType t) => t.Key switch
@@ -177,9 +179,18 @@ public static partial class Bodies
     {
         look = Math.Clamp(look, 0, Looks(t) - 1);
         if (Cache.TryGetValue((t.Key, look), out var p)) return p;
-        p = Make(t, look);
-        Cache[(t.Key, look)] = p;
-        return p;
+        // a body sculpted on two threads at once is kept the once: the one first in
+        return Cache.GetOrAdd((t.Key, look), Make(t, look));
+    }
+
+    /// <summary>
+    /// Every look of these kinds sculpted ahead (from a worker thread while the valley is first shown): a body takes some
+    /// tens of milliseconds to sculpt, and a kind first seen, or a worker first come to its work, held up its frame for it.
+    /// </summary>
+    public static void Warm(IEnumerable<UnitType> kinds)
+    {
+        foreach (var t in kinds)
+            for (int l = 0; l < Looks(t); l++) Plan(t, l);
     }
 
     /// <summary>

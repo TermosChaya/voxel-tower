@@ -31,6 +31,10 @@ public sealed partial class Sim
         bool pit = InPit(u);
         if (u.ShutSince < 0 && !pit) { u.ShutSince = Time; return; }
         if (!pit && Time - u.ShutSince < 20) return;
+        // no way out found from the very same cells a while ago: nothing about it has changed to plan for, and a search
+        // round every wall about it is not cheap (looked at again when what it can walk to changes, or in half a minute)
+        int room = RoomKey();
+        if (room == u.NoWayOutRoom && Time < u.NoWayOutAt + 30) return;
         _roomSet.Clear();
         foreach (int c in _room) _roomSet.Add(c);
         // one way out for all who are shut in there together
@@ -49,10 +53,21 @@ public sealed partial class Sim
             return;
         }
         cut ??= pit ? null : WayOut(u);
-        if (cut == null) return;
+        if (cut == null) { u.NoWayOutAt = Time; u.NoWayOutRoom = room; return; }
         u.WayOutMarked = Time;
         u.ShutSince = -1;
         if (DesignateRemove(cut) > 0) Say($"{u.T.Name} оказался взаперти и прорубает себе выход.", 2, u);
+    }
+
+    /// <summary>
+    /// The cells a worker can walk to (<see cref="_room"/>) told by one number, whatever order they were found in, and
+    /// with them what else a way out is planned by: the scaffolding standing, and whether the stores have the logs for more.
+    /// </summary>
+    internal int RoomKey()
+    {
+        int key = _room.Count + Scaffolds.Count * 7919 + (Stock[Stockpile.Wood] >= 400 ? 104729 : 0);
+        unchecked { foreach (int c in _room) key += (c * -1640531535) ^ (c >> 5); }
+        return key;
     }
 
     /// <summary>
@@ -64,16 +79,20 @@ public sealed partial class Sim
         int i0 = Nav.I(u.Cell), k0 = Nav.K(u.Cell), f0 = Nav.Floor[u.Cell];
         // headroom kept open over each step: the body's height and a metre more to climb by
         int head = (u.T.Move.Height + 1) * NavGrid.CS;
-        VoxelList best = null;
+        // what each of the ways would cost reckoned first, and only the cheapest planned out voxel by voxel (a stair up
+        // out of a pit is some thousands of them)
+        int bestDir = -1; bool bestRising = false;
         float bestCost = float.MaxValue;
         for (int dir = 0; dir < 8; dir++)
-            foreach (bool rising in new[] { true, false })
+            for (int r = 0; r < 2; r++)
             {
-                var cut = new VoxelList();
-                float cost = PlanWayOut(u.T.Move, i0, k0, f0, dir, rising, head, cut);
-                if (cost < bestCost) { bestCost = cost; best = cut; }
+                float cost = PlanWayOut(u.T.Move, i0, k0, f0, dir, r == 0, head, null, bestCost);
+                if (cost < bestCost) (bestCost, bestDir, bestRising) = (cost, dir, r == 0);
             }
-        return best != null && best.Count > 0 ? best : null;
+        if (bestDir < 0) return null;
+        var best = new VoxelList();
+        PlanWayOut(u.T.Move, i0, k0, f0, bestDir, bestRising, head, best);
+        return best.Count > 0 ? best : null;
     }
 
     static readonly int[] WayDX = { 1, -1, 0, 0, 1, 1, -1, -1 }, WayDK = { 0, 0, 1, -1, 1, -1, 1, -1 };
@@ -82,9 +101,10 @@ public sealed partial class Sim
     /// Plans one way out step by step, the floor of each step following the ground where it can be walked (a metre up
     /// at most, four down), and cut where it cannot: a metre higher up the side of a pit (rising), or at the same level
     /// through a wall. It ends where the walk comes out beyond the shut-in cells. What it costs (masonry and wood count
-    /// double), or infinity when it cannot be cut (forbidden ground, nothing under a step, more than fourteen metres).
+    /// double), or infinity when it cannot be cut (forbidden ground, nothing under a step, more than fourteen metres)
+    /// or would cost <paramref name="beat"/> or more. The voxels to cut go into <paramref name="cut"/>, if it is given.
     /// </summary>
-    float PlanWayOut(Mover m, int i0, int k0, int f0, int dir, bool rising, int head, VoxelList cut)
+    float PlanWayOut(Mover m, int i0, int k0, int f0, int dir, bool rising, int head, VoxelList cut, float beat = float.MaxValue)
     {
         float cost = 0;
         int floor = f0;
@@ -114,10 +134,12 @@ public sealed partial class Sim
                         byte v = World.Get(x, y, z);
                         if (!Solid(v)) continue;
                         if (!Labour.Diggable(v)) return float.MaxValue;
-                        cut.Add(x, y, z, Mat.Air);
+                        cut?.Add(x, y, z, Mat.Air);
                         cost += Mat.IsMasonry(v) || Mat.Burns(v) ? 2 : 1;
                     }
                 }
+            // dearer already than a way found before it: no need to plan it out
+            if (cost >= beat) return float.MaxValue;
         }
         return float.MaxValue;
     }

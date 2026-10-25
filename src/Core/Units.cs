@@ -439,6 +439,12 @@ public static class Kinds
     };
     /// <summary>The horde's throwers of what is not a weapon of war: the alchemists.</summary>
     public static readonly UnitType[] Throwers = { Alchemist };
+    /// <summary>Every kind there is, ours, the horde's, the beasts', the risen and the engines (bodies sculpted ahead, saves read back).</summary>
+    public static IEnumerable<UnitType> All()
+    {
+        foreach (var arr in new[] { PlayerKinds, HordeKinds, WildKinds, Engines, Summoned, Casters, Throwers, Crews })
+            foreach (var t in arr) yield return t;
+    }
 }
 
 /// <summary>One pawn or attacker on the field. Positions are in voxels, feet on the ground.</summary>
@@ -473,6 +479,9 @@ public sealed class Unit
     public Zone Focus;
     /// <summary>When a worker next looks whether it is shut in, and when it last marked a way out (Sim.Escape.cs).</summary>
     public double NextWayOut, WayOutMarked = -999, ShutSince = -1;
+    /// <summary>When it last found no way out to mark, and the cells it was shut in then (<see cref="Sim.RoomKey"/>).</summary>
+    public double NoWayOutAt = -999;
+    public int NoWayOutRoom;
     /// <summary>The scaffolding it is raising, or taking down (Sim.Scaffold.cs); when it next looks to climb down by some.</summary>
     public Scaffold Raising;
     public double NextGetDown;
@@ -511,6 +520,12 @@ public sealed class Unit
     public float Circle;
     public double CircleNext;
     public double NextSearch;
+    /// <summary>
+    /// Till when it does not look again for a way that was not there a moment ago — to where it was sent, to its post,
+    /// to shelter, out of the valley: such a search goes round all it can walk to, and is dear (the player's word, or
+    /// the alarm, has it look at once).
+    /// </summary>
+    public double NoWayUntil;
     /// <summary>Why it is not working, for the panel: "нет камня", "не дойти".</summary>
     public string Why = "";
     public readonly Dictionary<int, double> Unreachable = new();

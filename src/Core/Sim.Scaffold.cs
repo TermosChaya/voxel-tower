@@ -120,7 +120,9 @@ public sealed partial class Sim
     {
         from = exit = -1; column = default;
         int best = int.MaxValue;
-        var set = new HashSet<int>(cells);
+        var set = _downSet;
+        set.Clear();
+        foreach (int c in cells) set.Add(c);
         foreach (int r in cells)
         {
             int ri = Nav.I(r), ry = Nav.Y(r), rk = Nav.K(r);
@@ -140,6 +142,11 @@ public sealed partial class Sim
         return best;
     }
 
+    readonly List<int> _escapeTop = new();
+    readonly HashSet<int> _escapeTried = new(), _downSet = new();
+    /// <summary>Walls' tops a shut-in worker tries for a way out at most: each is a search of its own.</summary>
+    const int EscapeTries = 16;
+
     /// <summary>
     /// The cheapest scaffolding out of the cells a shut-in worker can walk to (<see cref="_room"/>): a column down to the
     /// ground from the edge of where it stands; or one up a wall beside it to the wall's top, and then, unless it can get
@@ -155,10 +162,13 @@ public sealed partial class Sim
             best = new Scaffold { Escape = true, By = u, Exit = exit };
             best.Columns.Add((col.i, col.k, col.y0, col.y1, true)); best.From.Add(from);
         }
-        var top = new List<int>();
-        var tried = new HashSet<int>();
+        var top = _escapeTop;
+        var tried = _escapeTried;
+        tried.Clear();
         foreach (int r in _room)
         {
+            // the walls nearest first (the room is walked out from where it stands): sixteen tried are enough
+            if (tried.Count >= EscapeTries) break;
             int ri = Nav.I(r), ry = Nav.Y(r), rk = Nav.K(r);
             for (int dir = 0; dir < 4; dir++)
             {

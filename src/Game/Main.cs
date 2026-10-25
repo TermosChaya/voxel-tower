@@ -253,6 +253,8 @@ public partial class Main : Node3D
             PendingLoad = null;
             _demo = _selfTest = false;
         }
+        // every body sculpted while the valley is made, off the main thread: a body first wanted held up its frame
+        Task.Run(() => Bodies.Warm(Kinds.All()));
         var sw = Stopwatch.StartNew();
         var mp = new MapParams { Seed = _seed, Kind = _valley, Classic = _classic, Hexagon = _hexagon, EntrySide = _entry };
         // the game's valley: a hexagon in a box a half again as wide as the bench's (192 m from point to point)

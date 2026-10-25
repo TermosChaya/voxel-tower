@@ -312,7 +312,9 @@ public sealed partial class Sim
         int x0 = Math.Max(0, (i - Labour.ReachAside) * NavGrid.CS), x1 = Math.Min(World.SX, (i + 1 + Labour.ReachAside) * NavGrid.CS);
         int z0 = Math.Max(0, (k - Labour.ReachAside) * NavGrid.CS), z1 = Math.Min(World.SZ, (k + 1 + Labour.ReachAside) * NavGrid.CS);
         int y0 = Math.Max(0, feet - Labour.ReachDown), y1 = Math.Min(World.SY, feet + Labour.ReachUp);
+        // (the standing trunks apart: they go first, from the foot up)
         var digs = new List<(int x, int y, int z, byte m)>();
+        var trunks = new List<(int x, int y, int z, byte m)>();
         var builds = new List<(int x, int y, int z, byte m)>();
         string missing = "", held = "";
         bool crowded = false, unfooted = false, ownFeet = false, overhead = BuiltOverhead(u);
@@ -328,7 +330,7 @@ public sealed partial class Sim
                     {
                         // a roof comes off from the ridge down (Sim.Builders.cs); of a crown, so much at a time; the wood always
                         bool wood = Mat.IsTrunk(World.Get(x, y, z));
-                        if (digs.Count >= 2048 && !wood) continue;
+                        if (digs.Count + trunks.Count >= 2048 && !wood) continue;
                         // a standing trunk is cut at its foot only, never partway up: the top would come down on whoever is under it
                         if (wood && MidTrunk(x, y, z)) continue;
                         // the ground under its own feet is dug from beside, and the footing of what is built over its head
@@ -337,7 +339,7 @@ public sealed partial class Sim
                         if (!wood && Natural(World.Get(x, y, z)) && (UnderOwnFeet(u, x, y, z, feet) || overhead && BearsBuilt(x, y, z))) { ownFeet = true; continue; }
                         if (BoreHeld(x, y, z)) { held = "подкоп ждёт брёвен на крепь"; continue; }
                         if (_footingsAt.Count > 0 && _footingsAt.Contains(WaterPlanner.Pack(x, y, z))) continue;
-                        if (Arched.Get(x, y, z) == 0 || !ArchOver(x, y, z)) digs.Add((x, y, z, o));
+                        if (Arched.Get(x, y, z) == 0 || !ArchOver(x, y, z)) (wood ? trunks : digs).Add((x, y, z, o));
                         continue;
                     }
                     int ck = Labour.CostKind(o);
@@ -361,15 +363,10 @@ public sealed partial class Sim
         float ux = u.X, uz = u.Z;
         float Near((int x, int y, int z, byte m) j) => (j.x + .5f - ux) * (j.x + .5f - ux) + (j.z + .5f - uz) * (j.z + .5f - uz);
         // a tree is cut at its foot, so that it goes over whole on its stump; everything else is dug from the top down
-        int Foot((int x, int y, int z, byte m) j) => Mat.IsTrunk(World.Get(j.x, j.y, j.z)) ? 0 : 1;
-        digs.Sort((a, b) =>
-        {
-            int fa = Foot(a), fb = Foot(b);
-            if (fa != fb) return fa.CompareTo(fb);
-            if (a.y != b.y) return fa == 0 ? a.y.CompareTo(b.y) : b.y.CompareTo(a.y);
-            return Near(a).CompareTo(Near(b));
-        });
+        trunks.Sort((a, b) => a.y != b.y ? a.y.CompareTo(b.y) : Near(a).CompareTo(Near(b)));
+        digs.Sort((a, b) => a.y != b.y ? b.y.CompareTo(a.y) : Near(a).CompareTo(Near(b)));
         builds.Sort((a, b) => a.y != b.y ? a.y.CompareTo(b.y) : Near(a).CompareTo(Near(b)));
+        u.Jobs.AddRange(trunks);
         u.Jobs.AddRange(digs);
         u.Jobs.AddRange(builds);
         if (u.Jobs.Count == 0) u.Why = missing != "" ? "нет: " + missing : held != "" ? held : crowded ? "на месте кладки стоят"
