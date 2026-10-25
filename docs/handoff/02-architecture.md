@@ -26,7 +26,7 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   (секунды горения), `CharShare` (сколько остаётся головнями), `Heat` (смола 2), `Burns(m)`.
   Помощники: `IsTrunk`, `IsLeafy`, `IsMasonry`, `IsGrass`.
 - `Labour.cs` — сколько работы вынуть/положить воксель и что он даёт (`D(m, dig, kind, share)`, `LayCost`,
-  `CostKind`), `Stockpile` (камень, брёвна, земля, золото), слой разметки `Orders`: материал, который класть, или
+  `CostKind`), `Stockpile` (камень 1, брёвна 2, земля 3, металл 4, `Kinds` = 5; золото отдельно), слой разметки `Orders`: материал, который класть, или
   что вынуть — `Remove` (земля), `RemoveWood`, `RemoveStone` (вид решается при разметке, `RemoveFor`; проверять
   `Orders.IsRemove`, а не `== Remove`), счётчики по столбцам, в т.ч. `ColWork` по видам работ. Все изменения
   слоя рукой игрока идут через `Orders.Put`, который пишет «было/стало» в `Orders.Writing`, если тот открыт.
@@ -298,7 +298,7 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   (37×57 вокселей, мастерская, конюшня и чертог 37×73), `Wall`, `MaxLevel`, `Gold`/`UpGold`, `Hires` (вид, с какого
   уровня, прирост на рассвет), `Grants1/2`, `Needs` (вид и уровень), `Income1/2`, `Props1/2` — обстановка этажей),
   `Building` (вид, рамка дома, `Level`, `Target`, `Ready`, `Top0`, `Stock` — запас найма по ключу вида), `TownKinds`
-  (17, порядок вкладки), `TownKindOf`, `TownGrants`, `CitadelHires` (рабочий, лучник, мечник, жрец), `BuildingOf/On/At`,
+  (18, порядок вкладки), `TownKindOf`, `TownGrants`, `CitadelHires` (рабочий, лучник, мечник, жрец), `BuildingOf/On/At`,
   `ZoneOf`, `Stands`, `CantBuild`, `BuildingRect`, `BuildingPlan` (тот же `Shapes.House`, что «дом» прямоугольника),
   `PutUp` (золото, `DesignateBuild`, `Arch`, `PlanHouse`, `Zone.Title`), `CantRaise`/`Raise` (`PlanStorey`),
   `CantHireAt`/`HireAt` (из запаса, у двери — `DoorStand`; машины с расчётом), `MarketRates`/`Trade`, `TownIncome`,
@@ -306,7 +306,13 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   у здания `Beds` = 0, `Title`; заказ обстановки по `FloorKey`, готово при 85 % стоящей; во время подъёма этажа
   здание работает), `FurnishBuilding`/`Place`/`Draw` (обстановка из материалов 160–169: наковальня, горн, угли, сено,
   мишень, кольцо мишени, стойка, бочка, товар, чурбак — проходимые, `IsFurniture`, на `FloorKey` не влияют),
-  `WriteTown`/`ReadTown` (версия 38).
+  `WriteTown`/`ReadTown` (версия 38). Металл: `Metal1/2` (металл в минуту по уровням), `OnOre` (только на рудном
+  выходе), `MetalCost`/`UpMetal` (цена в металле), `Prop.Ingots`.
+- `Sim.Metal.cs` — железо: `OreSpan` (до какой руды в пределах глубины уходит столбец), `MineFloor` (дно рудника —
+  `Zone.Floor`: открытый карьер до руды, склоны воксель на воксель, расстояние двумя проходами), `OreDutyZone` (рудник
+  для работы «Добыча» с металлом), `StruckOre` (счёт `MetalMined`, строка летописи, флаг `OreStruck`),
+  `OutcropUnder`/`OreLeft` (годный выход под зданием), `TownMetal`, `HasMetal`/`TakeMetal`, `TickMetal`.
+  Железные ворота — `Gateway.Iron`, `Gateway.Leaf`, `GatePlan.At(…, iron)`.
 - `Sim.Engines.cs` — осадные машины: `EngineTick`, `CatapultTick`/`AimFor`/`Throw`/`StoneLands`, `MantletTick`/`Cover`,
   `TowerTick`/`DockFor`/`Dock`/`TowerFell`, `KeepEscort`, `SpawnCatapult`.
 - `Sim.Thieves.cs` — грабители: `ThiefTick`, `LonePrey`, `Steal`, `Bind`/`Led`, `ThiefFell`/`ThiefGone`.
@@ -543,7 +549,8 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
 - `MapGen.cs` — долина 1024×192×1024: плато на востоке (цитадель на x = 0,8·SX, z = SZ/2, радиус 24),
   обрыв, пандус, дорога с запада, река с севера на юг около x = 0,3·SX (уровень 31), старый мост там, где
   её пересекает дорога, брод севернее со сторожевой башней, обрушенный мост, пруды на плато, холмы, леса по
-  шуму с биомами, валуны, руины и рудники (`Landmarks.cs`), `Site` с картами высот и воды. Сиды —
+  шуму с биомами, валуны, руины и рудники (`Landmarks.cs`), железная руда (`MapGen.Ore.cs`, `OreVeins.Lay`: выходы
+  в `Site.Outcrops` и жилы, своим проходом после рельефа и мест, до валунов), `Site` с картами высот и воды. Сиды —
   `MapParams.Seed` (`--seed=N`). В игре суша — шестиугольник (`MapParams.Hexagon`, по умолчанию ядра — старый
   квадрат, на нём стоят проверки механик стенда; игра включает шестиугольник): `Hex.cs` (острый на север и юг,
   `Edge` — расстояние до края, `Nearest`, `Row`, `WestX/WestZ0/WestZ1`), `VoxelWorld.SetLand` — маска суши:
@@ -628,7 +635,9 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
 - `voxel.gdshader` — разброс цвета по вокселю, тонкая фаска на гранях (гаснет вдали), затенение углов,
   свечение углей, качание травы и листвы (мировая позиция, порывы), гладкий тёсаный камень с пятнистостью,
   блестящий металл (меньше шероховатость, `METALLIC`), лава (кожа 10: тёмная корка плитами, медленно плывущими, и
-  яркие трещины между ними, свечение только в трещинах, `lava()`). `uniform grid` — сколько ячеек в единице меша: у мира 1,
+  яркие трещины между ними, свечение только в трещинах, `lava()`), железные листы (кожа 11, `plates()`: листы 4 × 3
+  вокселя на грани, ряды со сдвигом в полуласт, тёмные швы, заклёпка на каждый воксель вдоль верха и низа листа,
+  тон по листу, головки заклёпок глаже; заклёпки гаснут мельче пикселя; без фаски вокселей). `uniform grid` — сколько ячеек в единице меша: у мира 1,
   у фигур — сколько их ячеек в вокселе: вблизи 4 (`BodyPlan.FineSub`), снаряжение 8 (`Dress.Sub`), на средней
   дистанции 2 (`BodyPlan.Sub`), вдали 1 (материалы — `Figure.Material(grid)`), так зерно и фаска идут по ячейкам. Мельче вокселей
   (по `Mat.Skin`, гаснет, когда пиксель накрывает больше трети штриха, то есть штрих уже ~3 пикселей — `fade`): штрихи травинок на дёрне сверху, сбоку —
@@ -1302,7 +1311,9 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
 | 122 | Scorch — гарь: дёрн, по которому прошёл огонь или который опалил взрыв, молния, огненный дождь (`Sim.Turf.cs`) |
 | 150–155 | дорожки (`Sim.Paths.cs`, `Mat.IsPavement`): Trodden (натоптанная, природная), DirtPath, Gravel, Cobble, Flag, Boardwalk (горят) |
 
-`Mat.Count = 123`. Новый материал: `D(...)` в `Materials.cs`, нужные флаги, строка в `Labour` (копать/класть,
+| 182–187 | железо (`MatGroup.Metal`, `Sim.Metal.cs`): IronOre (железная руда, скала), OreRust (рудный выход, ржавая корка), Plate (металл: железные листы, кожа 11), IronGate, IronGateShut, IronGateOpen (железные створки ворот, `Mat.IsLeaf`) |
+
+`Mat.Count = 190`. Новый материал: `D(...)` в `Materials.cs`, нужные флаги, строка в `Labour` (копать/класть,
 выход), при необходимости — в `NavGrid.Cls` (группа для рубки).
 
 ## Соглашения
