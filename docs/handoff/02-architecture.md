@@ -521,7 +521,9 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `Paths.Reach` < `RoomEnough` (240 клеток) и среди них нет `Gate` — 20 с подряд (`ShutSince`) → `WayOut`: по 8
   направлениям и двум видам (`rising` — ступени по метру вверх из ямы, иначе ровно сквозь стену) `PlanWayOut` идёт по
   клеткам навигации (`Walkable`), пока не выйдет за запертые (`_roomSet`), а где не пройти — режет ступень с
-  головой над ней (кладка и дерево — вдвое дороже, до 14 м, `Forbidden` — нельзя); самый дешёвый — `DesignateRemove`,
+  головой над ней (кладка и дерево — вдвое дороже, до 14 м, `Forbidden` — нельзя; сперва только цена, путь дороже
+  найденного бросается, воксели пишутся для одного самого дешёвого); не нашёл ни выхода, ни лесов — не ищет снова,
+  пока `RoomKey` (клетки, число лесов, есть ли брёвна) тот же, до 30 с (`NoWayOutAt`); самый дешёвый — `DesignateRemove`,
   в летопись «прорубает себе выход», снова не раньше чем через 40 с (`WayOutMarked`). Ничего не сохраняется.
 - `Sim.Felling.cs` — валка: `Danger` (полоса от комля или коробка, `Has`), `FellPlan`, `Dangers`, `Shouted`.
   `FellHold` (из `WorkTick` перед ударом и в цикле работ): `WouldFell`/`NearlyCut`+`TreeAbove` → `PlanFell` →
@@ -923,7 +925,9 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `BuildingDeed` (здание, этаж); `RaidSoon`, `RaidsInAll`, `ThreatOf`, `ThreatLine` (вкладка «Орда»), `EdgeName`,
   `WestEdge`; сохранение `WriteRaids`/`ReadRaids` (версия 48). `Warband.Edge` — сторона, откуда вошла (−1 запад);
   `DrawBands` (`Sim.Bands.cs`) раскладывает ватаги по любой стороне (`EdgePoint`), `Retreat` уводит туда же.
-- `Sim.Horde.cs` — налётчики: поля, рубка (`StartCarve/Carve`), осадные работы (лестница, настил, засыпка),
+- `Sim.Horde.cs` — налётчики (застрявший в пути или на отходе — за минуту не отошёл на 3 м — поворачивает назад, ещё
+  через минуту уходит из долины: `GettingNowhere`, `StuckSince`; набег кончается, когда нет `InRaid`): поля, рубка
+  (`StartCarve/Carve`), осадные работы (лестница, настил, засыпка),
   отступление раненых. `Sim.Bands.cs` — ватаги: `Coming → Forming → March → Rally → Storm`, вожак, замена
   павшего, пути между волнами, строй на марше (места вокруг вожака, `KeepPlace`), бегство разбитой (`Broken`),
   вождь (`ChooseSides`: сторона штурма по разведке, место сбора, путь к нему). `Sim.Command` ставит посланных
@@ -1080,7 +1084,8 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `Bodies.People.cs` — наши люди, жрецы и костяки (и их тонкая лепка); `Bodies.Wear.cs` — доспехи и оружие войск;
   `Bodies.Troops.cs` — войска из знаний и псы; `Bodies.Horde.cs` — орда и её машины; `Bodies.Beasts.cs` — звери;
   `Bodies.Alchemist.cs`, `Bodies.HillGiant.cs` — алхимик и горный великан.
-- `Bodies.cs` — тела: `BodyPlan` на вид × облик, пять частей (`Body`, `Main`, `Off`, `LegR`, `LegL`; у зверя
+- `Bodies.cs` — тела: `BodyPlan` на вид × облик (кэш `ConcurrentDictionary`; все виды из `Kinds.All()` лепятся в
+  фоне при загрузке, `Bodies.Warm` из `Main`), пять частей (`Body`, `Main`, `Off`, `LegR`, `LegL`; у зверя
   `Main/Off` — передние ноги), шарниры в вокселях. Координаты фигуры: начало между ступнями, +y вверх, +z — куда
   смотрит, правая рука (с орудием) на −x. Два разрешения:
   - **лепка** — `BodyPlan.Fine[p]` в ячейках по 3 см (`K = 2` на полувоксель, `FineSub = 4` на воксель) и
