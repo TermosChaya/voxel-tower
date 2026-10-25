@@ -5,7 +5,7 @@ using VoxelTower.Core;
 
 namespace VoxelTower.Game;
 
-public enum Tool { None, Brush, Line, Box, Circle, Extrude, Ladder, Gate, Repair, Bridge, Gather, Unmark, Capture, Paste, Spell, Wand }
+public enum Tool { None, Brush, Line, Box, Circle, Extrude, Ladder, Gate, Repair, Bridge, Gather, Unmark, Capture, Paste, Spell, Wand, Building }
 
 public enum BrushForm { Column, Ball }
 
@@ -61,7 +61,7 @@ public partial class BuildTools : Node3D
     {
         Tool.Brush => "Кисть", Tool.Line => "Линия", Tool.Box => "Прямоугольник", Tool.Circle => "Круг",
         Tool.Extrude => "Выдавить", Tool.Ladder => "Лестница", Tool.Gate => "Ворота", Tool.Repair => "Починка", Tool.Bridge => "Мост", Tool.Gather => "Делянка", Tool.Unmark => "Снять разметку", Tool.Capture => "Снять чертёж",
-        Tool.Paste => "Чертёж", Tool.Spell => "Заклинание", Tool.Wand => "Волшебная палочка", _ => "Без кисти",
+        Tool.Paste => "Чертёж", Tool.Spell => "Заклинание", Tool.Wand => "Волшебная палочка", Tool.Building => "Здание", _ => "Без кисти",
     };
 
     public static string Hint(Tool t, bool dig) => Bindings.Fill(HintText(t, dig));
@@ -87,6 +87,7 @@ public partial class BuildTools : Node3D
         (Tool.Unmark, _) => "Рамка снимает всю разметку и делянки внутри. Щелчок снимает разметку рядом и делянку под курсором.",
         (Tool.Capture, _) => "Обведите постройку рамкой, чтобы сохранить чертёж.",
         (Tool.Paste, _) => "Щелчок ставит копию. R поворачивает, Esc отменяет.",
+        (Tool.Building, _) => "Щелчок ставит здание: рабочие построят стены, крышу и дверь и обставят его. {Rotate} поворачивает, Esc отменяет.",
         (Tool.Wand, true) => "Наведите на постройку: подсветится всё прилегающее из того же материала. Щелчок: рабочие это снесут.",
         (Tool.Wand, false) => "Наведите на постройку: подсветится всё прилегающее из того же материала. Щелчок: переложат из выбранного материала.",
         _ => "{Lmb} — выбрать, рамкой — нескольких, {Rmb} — послать. {ToolBrush}–{ToolExtrude} — кисти, {Pick} — кирка, {Help} — все клавиши.",
@@ -222,7 +223,7 @@ public partial class BuildTools : Node3D
     public void SetTool(Tool t)
     {
         // what the tutorial has not come to yet stays shut
-        if (t != Tool.None && t != Tool.Paste && t != Tool.Spell && _m.Hud.Locked(t)) { Refuse(_m.Hud.LockedWhy); return; }
+        if (t != Tool.None && t != Tool.Paste && t != Tool.Spell && t != Tool.Building && _m.Hud.Locked(t)) { Refuse(_m.Hud.LockedWhy); return; }
         // what telekinesis holds is let go when the spell is put away
         Throw();
         Tool = Tool == t ? Tool.None : t;
@@ -231,6 +232,7 @@ public partial class BuildTools : Node3D
         // these only build
         if (Tool is Tool.Bridge or Tool.Repair or Tool.Gate or Tool.Ladder) Opt.Dig = false;
         if (Tool != Tool.Paste) PasteBp = null;
+        if (Tool != Tool.Building) Placing = null;
         _lmb = _paint = _hasStart = false;
         _planKey = "~";
         _m.Hud.OnToolChanged();
@@ -453,6 +455,7 @@ public partial class BuildTools : Node3D
             case Act.Level: ToggleLevel(); return true;
             case Act.Grid: ToggleGrid(); return true;
             case Act.Rotate when Tool == Tool.Paste: PasteRot = (PasteRot + 1) & 3; Changed(); return true;
+            case Act.Rotate when Tool == Tool.Building: TurnBuilding(); Changed(); return true;
         }
         return false;
     }
@@ -587,6 +590,7 @@ public partial class BuildTools : Node3D
         }
         else if (Tool == Tool.Paste && PasteBp != null) Designate(PlanPasteAtHover(), false, PasteBp.Name);
         else if (Tool == Tool.Wand) WandAt();
+        else if (Tool == Tool.Building) PutUpAtHover();
     }
 
     /// <summary>
@@ -1313,6 +1317,12 @@ public partial class BuildTools : Node3D
             bool any = false;
             PlanText = gk.Length == 0 ? null : SurveyText(_startPt.x, _startPt.z, _dragPt.x, _dragPt.z, out any);
             PlanAffordable = any;
+            return;
+        }
+        if (Tool == Tool.Building)
+        {
+            // a town building's ghost where it would go up (BuildTools.Town.cs)
+            BuildingPlanAtHover();
             return;
         }
         if (Tool == Tool.Wand)

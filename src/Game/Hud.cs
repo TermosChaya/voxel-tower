@@ -75,7 +75,8 @@ public partial class Hud : CanvasLayer
     TopBeam _beam;
     HBoxContainer _tabs;
     DropPanel _drop;
-    TabPlaque _goalsTab, _hordeTab, _loreTab, _worksTab;
+    TabPlaque _goalsTab, _hordeTab, _loreTab, _worksTab, _townTab;
+    TownPanel _town;
     VBoxContainer _toolGrid;
     LorePanel _lore;
     MysteryPanel _mysteries;
@@ -264,12 +265,17 @@ public partial class Hud : CanvasLayer
         _horde.Init(m);
         _lore = new LorePanel();
         _lore.Init(m);
-        _loreTab = Tab("lore", Icons.Tome, "Знания", "Знания\nДрево улучшений на трёх страницах: «Умения», «Войско» и «Вмешательство». Умения и войско покупают за знания, их дают за отбитые волны. Заклинания покупают за вмешательство и откровения. На четвёртой странице «Таинства»: вмешательство, святилища, жертвы. Число на вкладке — сколько знаний можно потратить, ✦ — можно изучить заклинание.", _lore, LorePanel.Width);
+        _loreTab = Tab("lore", Icons.Tome, "Знания", "Знания\nДрево на трёх страницах: «Город», «Войско» и «Вмешательство». Город и войско открывают здания, их покупают за знания, их дают за отбитые волны. Заклинания покупают за вмешательство и откровения. На четвёртой странице «Таинства»: вмешательство, святилища, жертвы. Число на вкладке — сколько знаний можно потратить, ✦ — можно изучить заклинание.", _lore, LorePanel.Width);
         _mysteries = new MysteryPanel();
         _mysteries.Init(m);
         _lore.AddMysteries(_mysteries, "Таинства\nВмешательство и откровения, святилища и жрецы, жертвы: пленные, туши с охоты или свои люди. " +
             "Число на вкладке — сколько пленных ждёт в цитадели.");
-        _squeeze.AddRange(new[] { worksTab, _goalsTab, _hordeTab, _loreTab });
+        // the town: its buildings put up, hiring and raised (Sim.Town.cs)
+        _town = new TownPanel();
+        _town.Init(m);
+        _townTab = Tab("town", Icons.Of("castle"), "Город", "Город\nЗдания: открытые в «Знаниях» ставят здесь, рабочие их строят. Готовое здание нанимает войска " +
+            "из запаса, который прибавляется каждую волну, а второй этаж улучшает их. Ратуша платит золото, рынок меняет запасы.", _town, TownPanel.Width);
+        _squeeze.AddRange(new[] { worksTab, _goalsTab, _hordeTab, _loreTab, _townTab });
 
         _stores = new Stores();
         _beam.AddChild(_stores);
@@ -367,7 +373,7 @@ public partial class Hud : CanvasLayer
     // ---------------------------------------------------------------- the frame let out part by part
 
     /// <summary>The parts of the frame the tutorial lets out one by one; in a game of one's own all of them are out from the start.</summary>
-    public enum Part { Map, Faces, Console, Stores, Clock, Goals, Works, Horde, Lore, Magic }
+    public enum Part { Map, Faces, Console, Stores, Clock, Goals, Works, Horde, Lore, Magic, Town }
 
     readonly HashSet<Part> _hidden = new();
     readonly HashSet<Tool> _lockedTools = new();
@@ -421,13 +427,13 @@ public partial class Hud : CanvasLayer
     static string KeyOf(Part p) => p switch
     {
         Part.Goals => "goals", Part.Works => "works",
-        Part.Horde => "horde", Part.Lore => "lore", _ => null,
+        Part.Horde => "horde", Part.Lore => "lore", Part.Town => "town", _ => null,
     };
 
     TabPlaque TabOf(Part p) => p switch
     {
         Part.Goals => _goalsTab, Part.Works => _worksTab,
-        Part.Horde => _hordeTab, Part.Lore => _loreTab, _ => null,
+        Part.Horde => _hordeTab, Part.Lore => _loreTab, Part.Town => _townTab, _ => null,
     };
 
     public void Unlock(Tool t)
@@ -477,7 +483,7 @@ public partial class Hud : CanvasLayer
         _ when key.StartsWith("tab:") => key[4..] switch
         {
             "goals" => _goalsTab, "works" => _worksTab,
-            "horde" => _hordeTab, "lore" => _loreTab, "magic" => _loreTab, _ => null,
+            "horde" => _hordeTab, "lore" => _loreTab, "magic" => _loreTab, "town" => _townTab, _ => null,
         },
         _ => null,
     };
@@ -875,6 +881,7 @@ public partial class Hud : CanvasLayer
     }
     public void ClosePanel() => _drop.Close();
     public LorePanel Lore => _lore;
+    public TownPanel Town => _town;
     public MysteryPanel Mysteries => _mysteries;
     public bool MenuOpen => _menu?.IsOpen == true;
     /// <summary>The page of the menu open now ("main", "save", "load", "settings", "controls"), or null with it shut.</summary>

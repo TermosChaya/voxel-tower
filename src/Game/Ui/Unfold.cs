@@ -60,6 +60,8 @@ public sealed class Unfold
         bool lore = Out(LoreKey);
         hud.Withhold(Hud.Part.Lore, !lore);
         hud.Withhold(Hud.Part.Magic, !lore);
+        // the town comes with the lore: what the lore opens is put up there
+        hud.Withhold(Hud.Part.Town, !lore);
     }
 
     /// <summary>Once a second: what is wanted now is let out.</summary>

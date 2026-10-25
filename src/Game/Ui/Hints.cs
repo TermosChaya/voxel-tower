@@ -154,6 +154,11 @@ public partial class Hints : Control
                 o.Add((L(Act.Form), t.Opt.WandExact ? "любой оттенок" : "точно такой"));
                 o.Add((L(Act.Pick), dig ? "переложить" : "снести"));
                 break;
+            case Tool.Building:
+                o.Add((Lmb, "поставить здание"));
+                o.Add((L(Act.Rotate), "повернуть"));
+                o.Add((Rmb, "убрать"));
+                return;
             case Tool.Paste:
                 o.Add((Lmb, "поставить копию"));
                 o.Add((L(Act.Rotate), "повернуть"));

@@ -63,6 +63,7 @@ public partial class Main : Node3D
     public Debris Debris { get; private set; }
     public BloodView Blood { get; private set; }
     public WorkProgress Progress { get; private set; }
+    public TownPlates Plates { get; private set; }
     public UnitView Units { get; private set; }
     public OrdersView Marks { get; private set; }
     public ZoneView Areas { get; private set; }
@@ -345,6 +346,10 @@ public partial class Main : Node3D
         var pins = new PinTags();
         AddChild(pins);
         pins.Init(this);
+        // the town's buildings, named over their roofs (Ui/Town.cs)
+        Plates = new TownPlates();
+        AddChild(Plates);
+        Plates.Init(this);
         Graphics.Apply(this);
         var meter = new CanvasLayer { Layer = 50 };
         AddChild(meter);
