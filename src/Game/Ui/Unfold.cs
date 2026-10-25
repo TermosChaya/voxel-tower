@@ -76,7 +76,8 @@ public sealed class Unfold
         bool stuck = false, house = false;
         foreach (var u in sim.Units) if (!u.Dead && u.Team == Team.Player && u.Why == "до работы не дойти") { stuck = true; break; }
         foreach (var z in sim.Zones) if (z.Kind == Zone.Dwelling) { house = true; break; }
-        bool night = sim.Waves.Number >= 1;
+        // the first night: the first raid come, or (where the raids keep no clock) the second day
+        bool night = sim.Raids.Count >= 1 || sim.Clock.Day >= 2;
         foreach (var (tool, line) in LaterTools)
         {
             bool want = tool switch
@@ -95,7 +96,7 @@ public sealed class Unfold
             };
             if (want) Open(KeyOf(tool), line, () => _m.Hud.Freshen(tool));
         }
-        if (night && !sim.Waves.Active || sim.Knowledge >= 1) Open(LoreKey, LoreLine, () => _m.Hud.Freshen(Hud.Part.Lore));
+        if (night && !sim.Raids.Active || sim.Knowledge >= 1) Open(LoreKey, LoreLine, () => _m.Hud.Freshen(Hud.Part.Lore));
     }
 
     void Open(string key, string line, Action fresh)

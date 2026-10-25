@@ -70,8 +70,8 @@ public sealed partial class Sim
     /// <summary>Bumped whenever a building is put up, rises a level or is lost, for whoever draws them.</summary>
     public int TownVersion { get; private set; }
 
-    /// <summary>How long a stock takes to grow by a building's growth: one wave, as a week in the Heroes.</summary>
-    public const float GrowthSpan = 600;
+    /// <summary>A building's stock grows by its growth at each daybreak, as at the start of a week in the Heroes (Sim.Raids.cs, DayClock).</summary>
+    public const float GrowthSpan = (float)DayClock.DayLength;
 
     static (UnitType, int, int) H(UnitType t, int level, int growth) => (t, level, growth);
 
@@ -293,7 +293,7 @@ public sealed partial class Sim
         foreach (var (kind, level, _) in b.K.Hires) if (kind == t) at = level;
         if (at < 0) return "здесь таких не нанимают";
         if (b.Level < at) return "сначала улучшите здание";
-        if (!Sandbox && (!b.Stock.TryGetValue(t.Key, out float n) || n < 1)) return "пока некого: подрастут к следующей волне";
+        if (!Sandbox && (!b.Stock.TryGetValue(t.Key, out float n) || n < 1)) return "пока некого: прибудут к утру";
         int have = Household();
         if (have + t.Room > Places) return $"мест нет: занято {have} из {Places}, постройте жилой дом";
         int cost = HireCost(t);
@@ -389,13 +389,10 @@ public sealed partial class Sim
         }
     }
 
-    /// <summary>The town looked over now and then: its stocks growing, its income paid; a building gone is let go.</summary>
-    void TickTown(float dt)
+    /// <summary>A new day: each building's stock of those it hires grows by its growth, up to twice that, as a week in the Heroes.</summary>
+    internal void TownDay()
     {
-        if (Buildings.Count == 0) return;
-        // gold and stocks run with the game's time, every step
-        float income = TownIncome();
-        if (income > 0 && !Over) Stock.Gold += income / 60 * dt;
+        int grew = 0;
         foreach (var b in Buildings)
         {
             if (!b.Ready) continue;
@@ -403,9 +400,21 @@ public sealed partial class Sim
             {
                 if (b.Level < level) continue;
                 b.Stock.TryGetValue(kind.Key, out float n);
-                b.Stock[kind.Key] = Math.Min(growth * 2, n + growth * dt / GrowthSpan);
+                float now = Math.Min(growth * 2, n + growth);
+                if (now > n) grew++;
+                b.Stock[kind.Key] = now;
             }
         }
+        if (grew > 0) { TownVersion++; Say("Новый день: в зданиях города прибавилось желающих наняться.", 0); }
+    }
+
+    /// <summary>The town looked over now and then: its stocks growing, its income paid; a building gone is let go.</summary>
+    void TickTown(float dt)
+    {
+        if (Buildings.Count == 0) return;
+        // gold and stocks run with the game's time, every step
+        float income = TownIncome();
+        if (income > 0 && !Over) Stock.Gold += income / 60 * dt;
         if (Time < _nextTown) return;
         _nextTown = Time + 2;
         for (int i = Buildings.Count - 1; i >= 0; i--)
@@ -478,6 +487,8 @@ public sealed partial class Sim
             Regrant();
             TownVersion++;
             if (!quiet) Say(first ? $"{k.Name} готова и работает. {k.About}" : was ? $"{k.Name}: второй этаж готов. {k.Level2}" : $"{k.Name} снова закрыта и работает.", 1, b.CX, b.CZ);
+            // a deed: a building put up, or raised a storey (not one only closed again)
+            if (!quiet && (first || was)) BuildingDeed(first ? k.Name : $"{k.Name}, второй этаж");
         }
     }
 

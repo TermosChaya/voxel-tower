@@ -194,7 +194,7 @@ public sealed partial class Sim
             SpellKind.FireRain => RainFireOn(x, z, s.Radius),
             SpellKind.Thunder => Thunderbolt(x, y, z, s.Radius),
             SpellKind.Weather => CallWeather(variant),
-            SpellKind.BloodMoon => Waves.Darkness < .3f ? "кровавая луна восходит только ночью" : Moon(),
+            SpellKind.BloodMoon => Clock.Darkness < .3f ? "кровавая луна восходит только ночью" : Moon(),
             SpellKind.BlackWind => Gale(x, z, s.Radius),
             SpellKind.Dread => Terrify(x, z, s.Radius),
             SpellKind.DeadFog => Shroud(x, z, s.Radius),

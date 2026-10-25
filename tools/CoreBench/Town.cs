@@ -97,14 +97,19 @@ static class TownBench
             raise == null && b?.Level == 2 && !knewWall && sim.Knows("shieldwall") && sim.Knows("shieldmen") && shield != null,
             $"raise «{raise}»; level {b?.Level} after {raised:0} s; the shield wall before {knewWall}, after {sim.Knows("shieldwall")}; a shieldbearer {(shield != null ? "hired" : sim.CantHireAt(b, Kinds.Shieldbearer))}");
 
-        // the stock grows by its growth in a wave, no more than twice it
+        // the stock grows by its growth at each daybreak (a week in the Heroes), no more than twice it; within the day not at all
         if (b != null) b.Stock[Kinds.Spearman.Key] = 0;
         Run(150);
+        float within = b == null ? -1 : b.Stock.GetValueOrDefault(Kinds.Spearman.Key);
+        int day0 = sim.Clock.Day;
+        void Daybreak() { sim.Clock.Night = true; sim.Clock.Break(sim); }
+        Daybreak();
         float grown = b == null ? 0 : b.Stock.GetValueOrDefault(Kinds.Spearman.Key);
-        Run(1500);
+        Daybreak(); Daybreak();
         float full = b == null ? 0 : b.Stock.GetValueOrDefault(Kinds.Spearman.Key);
-        check("a building's stock grows by its growth in a wave, up to twice it", MathF.Abs(grown - 1) < .15f && MathF.Abs(full - 8) < .01f,
-            $"a quarter of a wave {grown:0.00}, after long {full:0.00}");
+        check("a building's stock grows by its growth at each daybreak, up to twice it, and not within the day",
+            within == 0 && MathF.Abs(grown - 4) < .01f && MathF.Abs(full - 8) < .01f && sim.Clock.Day == day0 + 3,
+            $"within the day {within:0.00}, a day on {grown:0.00}, three days on {full:0.00}; day {day0} → {sim.Clock.Day}");
 
         // the town hall pays by the town's size; the market trades (put up at once, as a staged scene does)
         sim.InstantLabour = true;

@@ -19,7 +19,8 @@ public sealed partial class Sim
     public readonly List<Unit> Units = new();
     public readonly PathFinder Paths;
     public readonly Random Rng = new(17);
-    public readonly Waves Waves = new();
+    /// <summary>The siege's old face over the clock and the raids (Sim.Raids.cs).</summary>
+    public readonly Waves Waves;
 
     public double Time;
     public float KeepHp = 1000, KeepMax = 1000;
@@ -40,6 +41,7 @@ public sealed partial class Sim
     public Sim(VoxelWorld w, Site s)
     {
         World = w; Site = s;
+        Waves = new Waves(this);
         Nav = new NavGrid(w);
         Nav.BuildAll();
         Orders = new Orders(w, s);
@@ -134,7 +136,8 @@ public sealed partial class Sim
         // some of the horde come with torches, picked by the raider (not by the dice, which the rest of the valley shares)
         u.Torch = t.TorchShare > 0 && Hash.H3(u.Id, 11, 7) < t.TorchShare;
         // from the fifth wave some of the sappers come with a charge of powder on their backs, half of them from the ninth
-        u.Charge = t == Kinds.Sapper && Waves.Number >= 5 && Hash.H3(u.Id, 23, 5) < (Waves.Number >= 9 ? .5f : .3f);
+        // sappers with a charge of powder in the stronger raids, more of them in the strongest
+        u.Charge = t == Kinds.Sapper && Raids.Threat >= 5 && Hash.H3(u.Id, 23, 5) < (Raids.Threat >= 9 ? .5f : .3f);
         Units.Add(u);
         return u;
     }
@@ -231,7 +234,7 @@ public sealed partial class Sim
         Stage = "TickRelay"; TickRelay(dt);
         Stage = "NavFlush"; if (Nav.PendingEdits > 0) Nav.Flush();
         Stage = "UpdateFields"; UpdateFields();
-        Stage = "Waves"; Waves.Tick(this, dt);
+        Stage = "Raids"; TickRaids(dt);
         Stage = "TickBands"; TickBands();
         Stage = "TickTrails"; TickTrails();
         Stage = "TendWildlife"; TendWildlife();

@@ -374,9 +374,9 @@ public partial class Atmosphere : Node3D
         }
         if (_sim != null)
         {
-            var wv = _sim.Waves;
+            var clock = _sim.Clock;
             // a staged scene stops the clock far out: it keeps the afternoon light it always had
-            float day = _pin?.day ?? (wv.Countdown > Waves.Prep * 2 ? .7f : wv.Day), dark = _pin?.dark ?? wv.Darkness, k = (float)delta / 4;
+            float day = _pin?.day ?? (!clock.Night && clock.Left > DayClock.DayLength * 2 ? .7f : clock.Share), dark = _pin?.dark ?? clock.Darkness, k = (float)delta / 4;
             if (_day < 0 || _calm || _snap) { _day = day; _dark = dark; }
             else
             {

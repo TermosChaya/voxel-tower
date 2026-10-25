@@ -38,9 +38,8 @@ public sealed partial class Sim
     public void SetHardness(Hardness h)
     {
         Hardness = h;
-        if (Waves.Active) return;
-        Bands.RemoveAll(b => b.State == BandState.Coming);
-        PlanWave(Waves.Number + 1);
+        if (Raids.Active) return;
+        PlanRaid();
     }
 
     // ---------------------------------------------------------------- errands
@@ -125,9 +124,9 @@ public sealed partial class Sim
                 return new Errand { Key = key, Main = main, Text = "Навесьте ворота крепости: {ToolRepair} и щелчок по проёму ворот", Gold = 25 };
             case "night":
             {
-                int n = Waves.Number + (Waves.Active ? 0 : 1);
-                if (n > Waves.Total) return null;
-                return new Errand { Key = key, Main = main, From = n, Text = n == 1 ? "Выстойте первую ночь" : $"Выстойте ночь {n} из {Waves.Total}" };
+                int n = Raids.Count + (Raids.Active ? 0 : 1);
+                if (n > RaidsInAll) return null;
+                return new Errand { Key = key, Main = main, From = n, Text = n == 1 ? "Выстойте первую ночь" : RaidsInAll < int.MaxValue ? $"Выстойте ночь {n} из {RaidsInAll}" : "Отбейте следующий набег" };
             }
             case "copper":
             {
@@ -154,7 +153,7 @@ public sealed partial class Sim
             case "leader":
             {
                 // the leader of a band coming tonight (not a champion's: he has his own errand)
-                if (Waves.Active) return null;
+                if (Raids.Active) return null;
                 var b = Bands.Find(x => x.State == BandState.Coming && x.Champion == 0 && x.Name.StartsWith("Ватага "));
                 if (b == null) return null;
                 return new Errand { Key = key, Main = main, From = b.Id, Text = $"Убейте этой ночью вожака ватаги {b.Name[7..]}, у него красный стяг", Gold = 25, Knowledge = 1 };
@@ -162,7 +161,7 @@ public sealed partial class Sim
             case "weak":
             {
                 // the side the chief means to take: make it stronger before he comes
-                if (Waves.Active || Waves.Number < 1) return null;
+                if (Raids.Active || Raids.Count < 1) return null;
                 int side = -1, most = 0;
                 for (int i = 0; i < Sides; i++) if (SideBands[i] > most) { most = SideBands[i]; side = i; }
                 if (side < 0) return null;
@@ -170,15 +169,15 @@ public sealed partial class Sim
             }
             case "thief":
             {
-                int n = Waves.Number + (Waves.Active ? 0 : 1);
-                if (n < 2 || Waves.Active || !Bands.Exists(x => x.State == BandState.Coming && x.Roster.Contains(Kinds.Thief))) return null;
+                int n = Raids.Count + (Raids.Active ? 0 : 1);
+                if (n < 2 || Raids.Active || !Bands.Exists(x => x.State == BandState.Coming && x.Roster.Contains(Kinds.Thief))) return null;
                 return new Errand { Key = key, Main = main, From = n, Text = "Не дайте грабителю уйти с добычей этой ночью", Gold = 20 };
             }
             case "hunt":
-                if (Waves.Active || WildAlive() == 0) return null;
+                if (Raids.Active || WildAlive() == 0) return null;
                 return new Errand { Key = key, Main = main, From = Hunted, Text = "Добудьте зверя: выберите лучника и щёлкните {Rmb} по оленю или кабану", Gold = 15 };
             case "alive":
-                if (Waves.Number < 2 || !Units.Exists(u => !u.Dead && u.Team == Team.Player && Fighter(u) && !u.T.Ranged)) return null;
+                if (Raids.Count < 2 || !Units.Exists(u => !u.Dead && u.Team == Team.Player && Fighter(u) && !u.T.Ranged)) return null;
                 return new Errand { Key = key, Main = main, From = Prisoners(), Text = "Возьмите пленного: выберите бойца и включите в нижней панели «Брать живым» (кандалы)", Knowledge = 2 };
             case "champion":
             {
@@ -192,7 +191,7 @@ public sealed partial class Sim
                 return new Errand { Key = key, Main = main, From = c, Text = c == 4 ? $"Убейте Вождя орды {of}: тогда вся орда побежит" : $"Убейте {of}, вожака главы {Roman(c)}: это откроет новый ярус знаний", Gold = 40, Knowledge = 3 };
             }
             case "sanctum":
-                if (Waves.Number < 1 || !Mines.Exists(m => m.Power)) return null;
+                if (Raids.Count < 1 || !Mines.Exists(m => m.Power)) return null;
                 return new Errand { Key = key, Main = main, Text = "Поставьте святилище на месте силы: {ToolGather} → «святилище»", Knowledge = 2 };
         }
         return null;
@@ -216,7 +215,7 @@ public sealed partial class Sim
                 return false;
             case "quarry": return Zones.Exists(z => z.Kind == Stockpile.Stone);
             case "gate": return FortGate is { Ready: true, Broken: false };
-            case "night": return Waves.Number >= (int)e.From && !Waves.Active || Won;
+            case "night": return Raids.Count >= (int)e.From && !Raids.Active || Won;
             case "copper": case "silver": case "gold":
             {
                 var mines = Mines.FindAll(m => !m.Power);
@@ -228,7 +227,7 @@ public sealed partial class Sim
             case "wood": return Stock[Stockpile.Wood] - e.From >= 6 * VoxelWorld.PerM3;
             case "leader": return _slainBands.Contains((int)e.From) || Bands.Find(b => b.Id == (int)e.From) is { LostLeader: true };
             case "weak": return SideBands[(int)e.From] == 0 || SideSeen[(int)e.From] < .5f;
-            case "thief": return Waves.Number >= (int)e.From && !Waves.Active && !_thiefAway;
+            case "thief": return Raids.Count >= (int)e.From && !Raids.Active && !_thiefAway;
             case "hunt": return Hunted > e.From;
             case "alive": return Prisoners() > e.From;
             case "champion": return ChampionsKilled.Contains((int)e.From);
@@ -243,8 +242,8 @@ public sealed partial class Sim
     bool Failed(Errand e) => e.Key switch
     {
         "leader" => !Bands.Exists(b => b.Id == (int)e.From) && !_slainBands.Contains((int)e.From),
-        "weak" => Waves.Active,
-        "thief" => _thiefAway && Waves.Number >= (int)e.From,
+        "weak" => Raids.Active,
+        "thief" => _thiefAway && Raids.Count >= (int)e.From,
         _ => false,
     };
 
@@ -258,7 +257,7 @@ public sealed partial class Sim
         if (NoErrands || Time < _nextErrandLook) return;
         _nextErrandLook = Time + 1;
         // the horn: what is left of the first day's road gives way to the night
-        if (Waves.Active && Errands.Count > 0 && Errands[0].Main && Errands[0].Key != "night")
+        if (Raids.Active && Errands.Count > 0 && Errands[0].Main && Errands[0].Key != "night")
         {
             Errands.RemoveAt(0);
             _road = FirstDay.Length;

@@ -52,7 +52,7 @@ public sealed partial class Sim
     /// <summary>The champion's band for a chapter's third night (Garm's for the twelfth), or null if it is not one.</summary>
     Warband ChampionBand(int night)
     {
-        if (!OwnSiege || night % 3 != 0 || night > Waves.Total) return null;
+        if (!OwnSiege || night % 3 != 0 || night > RaidsInAll) return null;
         int c = ChapterOf(night);
         if (ChampionsKilled.Contains(c)) return null;
         var (title, of, kind, guard) = Champion(c);
@@ -82,7 +82,7 @@ public sealed partial class Sim
     void ChampionFell(Unit u)
     {
         ChampionsKilled.Add(u.Champion);
-        if (Waves.Active) _nightChampion = u.Champion;
+        if (Raids.Active) _nightChampion = u.Champion;
         if (u.Champion == 4)
         {
             foreach (var o in Units) if (!o.Dead && o.Team == Team.Horde && !o.Bound && !Kinds.IsEngine(o.T)) o.Routed = true;

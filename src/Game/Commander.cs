@@ -403,7 +403,8 @@ public partial class Commander : Node
         if (w.Active || _m.Sim.Over) return;
         // in the tutorial the horde comes when the lesson comes to it
         if (_m.Tutor is { Over: false }) { _m.Hud.Float("в обучении орду вызвать нельзя", Ornament.Aged); return; }
-        w.StartNow(_m.Sim);
+        // by the map's way the horde comes of itself, when it walks into the valley
+        if (!_m.Sim.CallRaid()) { _m.Hud.Float("орду не позвать: она придёт сама", Ornament.Aged); return; }
         _m.Hud.Refresh();
     }
 

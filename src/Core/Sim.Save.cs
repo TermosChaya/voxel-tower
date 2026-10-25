@@ -16,7 +16,7 @@ namespace VoxelTower.Core;
 public sealed partial class Sim
 {
     /// <summary>20: the bodies sculpted finer, their half-voxels (and so a wounded body's) not what they were.</summary>
-    public const int SaveVersion = 43;
+    public const int SaveVersion = 48;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -99,7 +99,7 @@ public sealed partial class Sim
         foreach (var u in living) WriteUnit(w, u);
         w.Write(Bands.Count);
         foreach (var b in Bands) WriteBand(w, b);
-        w.Write(Waves.Number); w.Write(Waves.Active); w.Write(Waves.Countdown); w.Write(Waves.Intel); w.Write(Waves._spawnT); w.Write(Waves.DawnLeft); w.Write(Alarm);
+        w.Write(Raids.Count); w.Write(Raids.Active); w.Write(Clock.Left); w.Write(Raids.Intel); w.Write(Raids._spawnT); w.Write(Clock.DawnLeft); w.Write(Alarm);
         w.Write((byte)Weather); w.Write(WeatherLeft); w.Write(_nextWeather); w.Write(_nextBeast); w.Write(_nextEnvoy); w.Write(Angered);
         w.Write(Offer != null); if (Offer != null) { w.Write((byte)Offer.Kind); w.Write(Offer.Store); w.Write(Offer.Cost); w.Write(Offer.Envoy?.Id ?? -1); w.Write(Offer.Until); }
         w.Write(Favour); w.Write(Revelations); w.Write(MournUntil);
@@ -141,9 +141,9 @@ public sealed partial class Sim
         }
         w.Write(Knowledge); w.Write(Learnt.Count);
         foreach (string k in Learnt) w.Write(k);
-        w.Write(Waves._lastBand?.Id ?? -1);
-        w.Write(Waves._queue.Count);
-        foreach (var (kind, band, back) in Waves._queue) { w.Write(kind.Key); w.Write(band?.Id ?? -1); WriteSurvivor(w, back); }
+        w.Write(Raids._lastBand?.Id ?? -1);
+        w.Write(Raids._queue.Count);
+        foreach (var (kind, band, back) in Raids._queue) { w.Write(kind.Key); w.Write(band?.Id ?? -1); WriteSurvivor(w, back); }
         w.Write(Escaped.Count);
         foreach (var s in Escaped) WriteSurvivor(w, s);
         w.Write(Whirls.Count);
@@ -152,7 +152,7 @@ public sealed partial class Sim
         WriteDawn(w);
         WriteChapters(w);
         WriteHouseDoors(w);
-        w.Write(Sandbox); w.Write(Waves.OnCall);
+        w.Write(Sandbox); w.Write(Source is OnCallRaids);
         w.Write(Unfolds); w.Write(LetOut.Count); foreach (var k in LetOut) w.Write(k);
         WriteAcid(w);
         w.Write(Cracks.Count); foreach (var (p, c) in Cracks) { w.Write(p); w.Write(c); }
@@ -165,6 +165,7 @@ public sealed partial class Sim
         WriteLiquids(w);
         WriteLava(w);
         WriteStanding(w);
+        WriteRaids(w);
         w.Write(extra ?? "");
     }
 
@@ -364,8 +365,8 @@ public sealed partial class Sim
         _escortOf.Clear();
         foreach (var (u, id) in _victimOf) if (id >= 0 && byId.TryGetValue(id, out var victim)) u.Rite.Victim = victim;
         _victimOf.Clear();
-        Waves.Number = r.ReadInt32(); Waves.Active = r.ReadBoolean(); Waves.Countdown = r.ReadDouble(); Waves.Intel = r.ReadDouble(); Waves._spawnT = r.ReadDouble();
-        Waves.DawnLeft = r.ReadDouble();
+        Raids.Count = r.ReadInt32(); Raids.Active = r.ReadBoolean(); Clock.Left = r.ReadDouble(); Raids.Intel = r.ReadDouble(); Raids._spawnT = r.ReadDouble();
+        Clock.DawnLeft = r.ReadDouble();
         Alarm = r.ReadBoolean();
         Weather = (Weather)r.ReadByte(); WeatherLeft = r.ReadDouble(); _nextWeather = r.ReadDouble(); _nextBeast = r.ReadDouble(); _nextEnvoy = r.ReadDouble(); Angered = r.ReadBoolean();
         Offer = null;
@@ -420,13 +421,13 @@ public sealed partial class Sim
         Learnt.Clear();
         for (int i = r.ReadInt32(); i > 0; i--) Learnt.Add(r.ReadString());
         int last = r.ReadInt32();
-        Waves._lastBand = Bands.Find(b => b.Id == last);
-        Waves._queue.Clear();
+        Raids._lastBand = Bands.Find(b => b.Id == last);
+        Raids._queue.Clear();
         int nq = r.ReadInt32();
         for (int i = 0; i < nq; i++)
         {
             var kind = KindOf(r.ReadString()); int band = r.ReadInt32(); var back = ReadSurvivor(r);
-            if (kind != null) Waves._queue.Enqueue((kind, Bands.Find(b => b.Id == band), back));
+            if (kind != null) Raids._queue.Enqueue((kind, Bands.Find(b => b.Id == band), back));
         }
         Escaped.Clear();
         int ne = r.ReadInt32();
@@ -438,7 +439,7 @@ public sealed partial class Sim
         ReadDawn(r);
         ReadChapters(r);
         ReadHouseDoors(r);
-        Sandbox = r.ReadBoolean(); Waves.OnCall = r.ReadBoolean();
+        Sandbox = r.ReadBoolean(); SetSource(r.ReadBoolean() ? new OnCallRaids() : new SiegeScenario());
         Unfolds = r.ReadBoolean(); LetOut.Clear();
         for (int i = r.ReadInt32(); i > 0; i--) LetOut.Add(r.ReadString());
         ReadAcid(r);
@@ -462,6 +463,7 @@ public sealed partial class Sim
         ReadLiquids(r);
         ReadLava(r);
         ReadStanding(r);
+        ReadRaids(r);
         string extra = r.ReadString();
         // the ways of the horde are worked out again for the valley as it now is, and the stones to throw down found again
         _fieldVersion = -1;

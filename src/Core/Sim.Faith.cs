@@ -65,7 +65,7 @@ public sealed partial class Sim
         // a sacrifice asked for comes before prayer
         if (u.Rite != null) { RiteTick(u, dt); return; }
         // while the horde is in the valley, into the citadel (or a shelter) and stay there till the morning
-        if (Waves.Active)
+        if (Raids.Active)
         {
             u.Shrine = -1;
             if (u.Pastime == Pastime.Pray) Busy(u);

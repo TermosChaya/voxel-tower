@@ -618,7 +618,7 @@ public partial class Hud : CanvasLayer
         // a sanctuary on a place of power we hold
         bool heard = false;
         foreach (var z in sim.Zones) if (z.Kind == Zone.Sanctum && sim.PowerUnder(z) is { Holder: Holder.Ours }) heard = true;
-        if (sim.Waves.Number > 0 || sim.Zones.Exists(z => z.Kind == Zone.Sanctum))
+        if (sim.Raids.Count > 0 || sim.Zones.Exists(z => z.Kind == Zone.Sanctum))
             yield return heard ? ("Святилище на месте силы", true) : ("Святилище на месте силы ({ToolGather} → «святилище») и жрецы в нём", false);
         foreach (var m in sim.Mines)
             // (one an errand already asks for is not said twice)
@@ -628,10 +628,9 @@ public partial class Hud : CanvasLayer
                 Holder.Horde => ($"Отбить у орды: {m.Name}, +{m.Income} зол./мин", false),
                 _ => ($"Занять: {m.Name}, +{m.Income} зол./мин", false),
             };
-        var w = sim.Waves;
-        int held = Math.Max(0, w.Number - (w.Active ? 1 : 0));
-        // (the sandbox with everything open has no end to stand till)
-        if (!sim.Sandbox) yield return sim.Won ? ("Осада снята", true) : ($"Выстоять: отбито волн {held} из {Waves.Total}", false);
+        // (only where what brings the raids brings so many: not the open sandbox's, nor the map's)
+        int all = sim.Source.Total(sim);
+        if (all > 0) yield return sim.Won ? ("Осада снята", true) : ($"Выстоять: отбито волн {sim.Raids.Repelled} из {all}", false);
     }
 
     readonly List<Label> _errandLines = new();
@@ -694,7 +693,7 @@ public partial class Hud : CanvasLayer
         string badge = open > 0 ? open.ToString() : "";
         if (_goalsTab.Badge != badge) { _goalsTab.Badge = badge; _goalsTab.QueueRedraw(); }
         int bands = 0;
-        foreach (var b in _m.Sim.Bands) if (b.State != BandState.Coming || !_m.Sim.Waves.Active) bands++;
+        foreach (var b in _m.Sim.Bands) if (b.State != BandState.Coming || !_m.Sim.Raids.Active) bands++;
         string hb = bands > 0 ? bands.ToString() : "";
         if (_hordeTab.Badge != hb) { _hordeTab.Badge = hb; _hordeTab.QueueRedraw(); }
         _horde.Refresh();

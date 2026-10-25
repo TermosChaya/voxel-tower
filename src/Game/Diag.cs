@@ -143,7 +143,7 @@ public static class Diag
         try
         {
             if (_sim is { } sim)
-                s.AppendLine($"  Игра: {sim.Time:0} с, волна {sim.Waves.Number} ({(sim.Waves.Active ? "идёт" : "ещё нет")}), всех тел {sim.Units.Count}, ватаг {sim.Bands.Count}" +
+                s.AppendLine($"  Игра: {sim.Time:0} с, набег {sim.Raids.Count} ({(sim.Raids.Active ? "идёт" : "ещё нет")}), день {sim.Clock.Day}, угроза {sim.PlannedThreat:0.##}, набеги {sim.Source.Key}, всех тел {sim.Units.Count}, ватаг {sim.Bands.Count}" +
                     $"{(sim.Sandbox ? ", песочница" : sim.Waves.OnCall ? ", песочница своими силами" : "")}{(sim.Over ? ", осада окончена" : "")}.");
         }
         catch (Exception) { }
@@ -185,7 +185,7 @@ public static class Diag
         s.AppendLine($"Экран: {DisplayServer.ScreenGetSize()} (масштаб {DisplayServer.ScreenGetScale()}), окно {DisplayServer.WindowGetSize()}, {DisplayServer.WindowGetMode()}");
         s.AppendLine($"Язык системы: {OS.GetLocale()}; кадров в секунду: {Engine.GetFramesPerSecond()}");
         if (m?.Sim is { } sim)
-            s.AppendLine($"Игра: {sim.Time:0} с, волна {sim.Waves.Number} из {Waves.Total}, сложность {sim.Hardness}, всех тел {sim.Units.Count}, ватаг {sim.Bands.Count}" +
+            s.AppendLine($"Игра: {sim.Time:0} с, набег {sim.Raids.Count}, отбито {sim.Raids.Repelled}, день {sim.Clock.Day}, набеги {sim.Source.Key}, сложность {sim.Hardness}, всех тел {sim.Units.Count}, ватаг {sim.Bands.Count}" +
                 $"{(sim.Sandbox ? ", песочница" : sim.Waves.OnCall ? ", песочница своими силами" : "")}{(m.Tutor != null ? ", обучение" : "")}");
         s.AppendLine($"Прошлый запуск: {(LastEndedBadly ? "закрылся аварийно (завис, упал или был снят)" : "закрылся как обычно")}");
 

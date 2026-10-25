@@ -74,7 +74,7 @@ public sealed partial class Sim
     /// </summary>
     public string Sacrifice(RiteKind kind, Unit victim = null)
     {
-        if (Waves.Active) return "жертвы приносят днём, когда орды нет в долине";
+        if (Raids.Active) return "жертвы приносят днём, когда орды нет в долине";
         if (!Zones.Exists(z => z.Kind == Zone.Sanctum)) return "нет святилища: отметьте его делянкой ({ToolGather} → «святилище»)";
         if (RiteNow != null) return "обряд уже идёт";
         Unit priest = null; float bd = float.MaxValue;
@@ -140,7 +140,7 @@ public sealed partial class Sim
     void RiteTick(Unit u, float dt)
     {
         var r = u.Rite;
-        if (Waves.Active) { CancelRite(u, "пришла ночь"); return; }
+        if (Raids.Active) { CancelRite(u, "пришла ночь"); return; }
         if (r.Victim != null && (r.Victim.Dead || r.Stage >= 1 && r.Victim.Captor != u)) { CancelRite(u, null); return; }
         switch (r.Stage)
         {

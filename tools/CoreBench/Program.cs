@@ -3805,8 +3805,9 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--lore")
     foreach (var u in simK.Units) if (u.Team == Team.Horde && !u.Dead) { u.Dead = true; u.DiedAt = -999; }
     double goldK0 = simK.Stock.Gold;
     RunK(.5);
-    Check("a wave beaten back brings gold and knowledge", !simK.Waves.Active && simK.Stock.Gold >= goldK0 + 40 && simK.Knowledge == 4,
-        $"gold {goldK0:0} → {simK.Stock.Gold:0}, knowledge {simK.Knowledge}");
+    // (gold by the raid's threat, 30 and 10 a point; knowledge for the deed: two and the threat, here 1, nobody felled)
+    Check("a raid beaten back brings gold by its threat and knowledge for beating it back", !simK.Waves.Active && simK.Stock.Gold >= goldK0 + 40 && simK.Knowledge == 3,
+        $"gold {goldK0:0} → {simK.Stock.Gold:0}, knowledge {simK.Knowledge}, the raid's threat {simK.Raids.Threat}");
 
     // lore is learnt in the order of its branch, and only for the knowledge it costs (since 25.10.2026 the first two
     // pages open buildings: the market rests on the town hall, the carpentry on the smithy)
@@ -6112,6 +6113,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--ourengines") OurEngi
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--wand") WandBench.Run(Check);
 // the town: buildings the lore opens, put up by the workers, hiring and raised a storey (Town.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--town") TownBench.Run(Check);
+// what brings the raids apart from the raid, the night, the threat and the rewards (RaidsBench.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--raids") RaidsBench.Run(Check);
 // the easier building: the pace of the usual works (Casual.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--casual") CasualBench.Run(Check);
 

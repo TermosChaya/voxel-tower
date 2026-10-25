@@ -84,6 +84,8 @@ public sealed partial class Sim
                 m.Holder = Holder.Ours;
                 Say(m.Power ? $"Место силы {m.Name} ваше: святилище здесь даёт втрое больше вмешательства."
                     : $"{m.Name} ваш: +{m.Income} золота в минуту, пока его держите.", 1, m.Place.StandX, m.Place.StandZ);
+                // a deed: knowledge for taking it, the first time
+                PlaceDeed("place:" + m.Name, m.Power ? "место силы" : m.Name.ToLowerInvariant(), m.Power ? 2 : 1);
             }
             else if (m.Grip <= -1 && m.Holder != Holder.Horde)
             {

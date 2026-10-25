@@ -296,13 +296,13 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   вкладки «Город» и библиотеки; `TemplateOpen` (в песочнице всё).
 - `Sim.Town.cs` — город: `TownKind` (шаблон здания — данные: `Key`, `Name`, `About`, `Level2`, `Lore`, размер `W`×`D`
   (37×57 вокселей, мастерская, конюшня и чертог 37×73), `Wall`, `MaxLevel`, `Gold`/`UpGold`, `Hires` (вид, с какого
-  уровня, прирост за волну), `Grants1/2`, `Needs` (вид и уровень), `Income1/2`, `Props1/2` — обстановка этажей),
+  уровня, прирост на рассвет), `Grants1/2`, `Needs` (вид и уровень), `Income1/2`, `Props1/2` — обстановка этажей),
   `Building` (вид, рамка дома, `Level`, `Target`, `Ready`, `Top0`, `Stock` — запас найма по ключу вида), `TownKinds`
   (17, порядок вкладки), `TownKindOf`, `TownGrants`, `CitadelHires` (рабочий, лучник, мечник, жрец), `BuildingOf/On/At`,
   `ZoneOf`, `Stands`, `CantBuild`, `BuildingRect`, `BuildingPlan` (тот же `Shapes.House`, что «дом» прямоугольника),
   `PutUp` (золото, `DesignateBuild`, `Arch`, `PlanHouse`, `Zone.Title`), `CantRaise`/`Raise` (`PlanStorey`),
   `CantHireAt`/`HireAt` (из запаса, у двери — `DoorStand`; машины с расчётом), `MarketRates`/`Trade`, `TownIncome`,
-  `TickTown` (доход, прирост до двойного, здание без зоны забывается), `LookOverBuilding` (из `LookOver` жилья:
+  `TickTown` (доход, здание без зоны забывается), `TownDay` (на каждом рассвете запас растёт на прирост, до двойного), `LookOverBuilding` (из `LookOver` жилья:
   у здания `Beds` = 0, `Title`; заказ обстановки по `FloorKey`, готово при 85 % стоящей; во время подъёма этажа
   здание работает), `FurnishBuilding`/`Place`/`Draw` (обстановка из материалов 160–169: наковальня, горн, угли, сено,
   мишень, кольцо мишени, стойка, бочка, товар, чурбак — проходимые, `IsFurniture`, на `FloorKey` не влияют),
@@ -840,6 +840,20 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   (`WoodPerTree` = 3500 — сколько в среднем даёт срубленное дерево: по шесть каждого вида, как их растит долина, рубят
   трое рабочих, среднее взвешено по составу долины зерна 7; воксель ствола даёт 4 бревна — `Labour`, было 6 при
   тонких стволах, — так дерево даёт на ~9 % больше прежнего).
+- `Sim.Raids.cs` — набеги без волн (замысел и таблица «что было к чему» — `10-raids.md`): `DayClock` (`Sim.Clock`:
+  `Day`, `Left`, `Night`, `NightT`, `DawnLeft`, `StandAtNoon`; ночь держится набегом, пришедшим ночью, без него
+  `NightLength` 150 с; `Fall`/`Break` → `Sim.Nightfall`/`NewDay`), `IRaidSource` (`Key`, `HoldsNoon`, `Foretold`,
+  `Total`, `Until`, `Threat`, `IntelNow`, `Title`, `Tick`, `Nightfall`, `CallNow`, `RepelledLine`, `Delay`) с
+  `SiegeScenario` («siege»), `OnCallRaids` («call»), `MapRaids` («map»); `Raids` (`Sim.Raids`: `Active`, `Count`,
+  `Repelled`, `Intel`, `Threat`, `AtNight`, очередь входа, `Begin`, `Join`, `Tick`, `CallOff`); `Waves` — старое лицо
+  над этим (`Number`, `Active`, `Countdown`, `OnCall`, `StartNow`…) для экрана, тестов и постановок. В `Sim`:
+  `Source`/`SetSource`/`SourceOf`, `Threat` (источник + `WealthThreat` = `WealthShare` · `Standing`), `PlannedThreat`,
+  `PlanRaid()` / `PlanWave(n)`, `CallRaid`, `BeginRaid`, `Raid(состав, сторона, разведка)` — вход для карты,
+  `RaidRepelled` (строка источника, `RaidReward`, `Dawn(n, last)`, `StandDown`, рассвет, финал или следующий план),
+  `NewDay` (`TownDay`), дела: `DeedKnowledge` (павшие: `KillDeed` из `Kill`), `PlaceDeed` (рудник, место силы — раз),
+  `BuildingDeed` (здание, этаж); `RaidSoon`, `RaidsInAll`, `ThreatOf`, `ThreatLine` (вкладка «Орда»), `EdgeName`,
+  `WestEdge`; сохранение `WriteRaids`/`ReadRaids` (версия 48). `Warband.Edge` — сторона, откуда вошла (−1 запад);
+  `DrawBands` (`Sim.Bands.cs`) раскладывает ватаги по любой стороне (`EdgePoint`), `Retreat` уводит туда же.
 - `Sim.Horde.cs` — налётчики: поля, рубка (`StartCarve/Carve`), осадные работы (лестница, настил, засыпка),
   отступление раненых. `Sim.Bands.cs` — ватаги: `Coming → Forming → March → Rally → Storm`, вожак, замена
   павшего, пути между волнами, строй на марше (места вокруг вожака, `KeepPlace`), бегство разбитой (`Broken`),
@@ -910,9 +924,9 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   Интерфейс: `Hud.RefreshErrands` (поручения над целями осады), `Ui/Dusk.cs` — `DuskCard` (за минуту до рога и 12 с
   после: ватаги, сторона вождя, впервые и против чего, прогноз). Меню: «Новая игра» → страница «Сложность»
   (`Menu.Hardness_`; в игре — `Main.PendingHardness` и перезапуск сцены).
-- `Sim.Dawn.cs` — рассвет. С рогом `NightBegins` (из `Waves.Start`: снимает невзятые дары, начинает счёт ночи),
+- `Sim.Dawn.cs` — рассвет. С рогом `NightBegins` (из `Raids.Begin`: снимает невзятые дары, начинает счёт ночи),
   `NightFell` (из `Kill`: наши павшие, убитые вожаки, кто кого — `_nightFelled`), после отбитой волны `Dawn`
-  (из `Waves.Tick` после `Reward`): `NightReport` (пало, наших, доля цитадели, вожаки, трое лучших, три звезды:
+  (из `Sim.RaidRepelled` после `RaidReward`): `NightReport` (пало, наших, доля цитадели, вожаки, трое лучших, три звезды:
   `Unharmed` < 2 %, `NoneLost`, `Headless`). Награда за звёзды и дары — только своя осада (`!NoErrands`): по 15 золота
   и знанию за звезду; `Gifts` — 3 (от двух звёзд 4): трофей (если вожак убит: изучимое знание за знания, `Grant` —
   бесплатно), пришлые (по местам `Places − Household`), обоз, знамение; выбор — `DawnDraw` (хэш, не `Rng`).

@@ -203,16 +203,6 @@ public sealed partial class Sim
         Say($"Изучено: «{l.Name}». {l.About}", 1);
     }
 
-    /// <summary>A wave beaten back: gold and knowledge for it, more the later the wave.</summary>
-    internal void Reward(int wave)
-    {
-        double gold = 30 + 10 * wave;
-        int know = 3 + wave;
-        Stock.Gold += gold;
-        Knowledge += know;
-        Say($"Награда за волну: {gold:0} золота и {know} {Plural(know, "знание", "знания", "знаний")}.", 1);
-    }
-
     static string Plural(int n, string one, string few, string many)
     {
         int m10 = n % 10, m100 = n % 100;

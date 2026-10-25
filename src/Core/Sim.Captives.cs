@@ -164,7 +164,7 @@ public sealed partial class Sim
     void Imprisoned(Unit u, float dt)
     {
         u.State = UnitState.Idle; u.Path = null;
-        if (!Waves.Active) return;
+        if (!Raids.Active) return;
         if (GuardedKeep()) return;
         u.Unguarded += dt;
         if (u.Unguarded < SlipsOut) return;

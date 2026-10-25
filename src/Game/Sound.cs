@@ -89,7 +89,7 @@ public partial class Sound : Node
         _rain = Loop("rain");
         _hum = Loop("hum");
         var sim = m.Sim;
-        _wave = sim.Waves.Number;
+        _wave = sim.Raids.Count;
         // a pawn's tool rings at each blow, whether a voxel comes away or not; a stone set down knocks softly
         sim.Worked += (x, y, z, mat, dig) => { if (dig) Struck(Dug(mat), x, y, z, .07); else Play("dig", x + .5f, y, z + .5f, .12, .35f, pitch: 1.45f); };
         sim.Hacked += (x, y, z, mat) => Struck(Dug(mat), x, y, z, .09);
@@ -237,8 +237,8 @@ public partial class Sound : Node
         _t += delta;
         var sim = _m.Sim;
         // the horn for every wave that comes, even one begun and over between two frames
-        if (sim.Waves.Number > _wave) Everywhere("horn", .9f);
-        _wave = sim.Waves.Number;
+        if (sim.Raids.Count > _wave) Everywhere("horn", .9f);
+        _wave = sim.Raids.Count;
         if (_m.Paused) { _fire.VolumeDb = _rain.VolumeDb = _hum.VolumeDb = -80; return; }
         _hum.VolumeDb = sim.HeldNow is { } held && Near(held.X, held.Z, far: true) is var hn && hn > .05f ? Mathf.LinearToDb(hn * .5f) : -80;
         // blows struck and bows loosed, as they happen; the fallen, once

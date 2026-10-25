@@ -118,7 +118,11 @@ public partial class Main : Node3D
     bool _sandbox;
     /// <summary>The seed the valley was made from: what a save keeps of it.</summary>
     public uint Seed => _seed;
-    bool _loaded, _waveWasActive;
+    bool _loaded;
+    // the raids beaten back as last looked at: one more is written down by itself
+    int _repelledSeen;
+    /// <summary>What brings the raids, asked for on the command line (--raids=siege|call|map).</summary>
+    string _raidsArg;
     string _loadedFrom;
     /// <summary>--menu or --menu=save|load|settings: the menu open at the start (screenshots).</summary>
     string _menu;
@@ -185,6 +189,7 @@ public partial class Main : Node3D
             else if (a.StartsWith("--alarm=") && double.TryParse(a["--alarm=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double al)) _alarmAt = al;
             else if (a.StartsWith("--weather=")) _weather = a["--weather=".Length..];
             else if (a == "--envoy") _envoy = true;
+            else if (a.StartsWith("--raids=")) _raidsArg = a["--raids=".Length..];
             else if (a.StartsWith("--lore=")) _lore = a["--lore=".Length..];
             else if (a.StartsWith("--sounds=")) _soundsTo = a["--sounds=".Length..];
             else if (a == "--select") _select = int.MaxValue;
@@ -410,7 +415,7 @@ public partial class Main : Node3D
             Saves.Apply(this, extra);
             Hud.Unfold.Apply();
             Hud.Log($"Игра загружена: {Saves.NameOf(System.IO.Path.GetFileNameWithoutExtension(_loadedFrom ?? ""))}.", Hud.Kind.Ok);
-            _waveWasActive = Sim.Waves.Active;
+            _repelledSeen = Sim.Raids.Repelled;
             GD.Print($"[voxel-tower] world {genMs:0} ms, navigation {navMs:0} ms, mesh {View.LastFullMeshMs:0} ms, {View.Triangles()} triangles; loaded");
             return;
         }
@@ -431,6 +436,13 @@ public partial class Main : Node3D
             else Welcome();
         }
         GD.Print($"[voxel-tower] world {genMs:0} ms, navigation {navMs:0} ms, mesh {View.LastFullMeshMs:0} ms, {View.Triangles()} triangles");
+        // another source of raids asked for: the sandbox's call, or the map's way (raids only by Sim.Raid, the nights going by)
+        if (_raidsArg != null)
+        {
+            Sim.SetSource(Sim.SourceOf(_raidsArg));
+            if (!Sim.Source.Foretold) Sim.Bands.RemoveAll(b => b.State == BandState.Coming);
+            Hud.Refresh();
+        }
 
         if (_demo) Demo();
         if (_look >= 0 && _look < Site.Landmarks.Count && !_demo)
@@ -677,8 +689,8 @@ public partial class Main : Node3D
         // a wave beaten back is written down by itself
         if (_shot == null && !_selfTest && !_demo)
         {
-            if (_waveWasActive && !Sim.Waves.Active && !Sim.Over && Tutor is not { Over: false } && Saves.Write(this, Saves.Auto)) Hud.Log("Автосохранение: волна отбита.", Hud.Kind.Ok, toast: false);
-            _waveWasActive = Sim.Waves.Active;
+            if (Sim.Raids.Repelled > _repelledSeen && !Sim.Over && Tutor is not { Over: false } && Saves.Write(this, Saves.Auto)) Hud.Log("Автосохранение: набег отбит.", Hud.Kind.Ok, toast: false);
+            _repelledSeen = Sim.Raids.Repelled;
         }
         Command.Prune();
         using (Prof.Time("Remesh"))
@@ -693,8 +705,9 @@ public partial class Main : Node3D
         if (Sim.Over && !_finale)
         {
             _finale = true;
-            if (Sim.Won) Hud.Finale("Осада снята", $"Отбито волн: {Waves.Total}. Налётчиков убито: {Sim.Kills}.", true);
-            else Hud.Finale("Цитадель пала", $"Отбито волн: {Math.Max(0, Sim.Waves.Number - 1)} из {Waves.Total}. Налётчиков убито: {Sim.Kills}.", false);
+            int all = Sim.Source.Total(Sim);
+            if (Sim.Won) Hud.Finale("Осада снята", $"Отбито волн: {Sim.Raids.Repelled}. Налётчиков убито: {Sim.Kills}.", true);
+            else Hud.Finale("Цитадель пала", $"Отбито волн: {Sim.Raids.Repelled}" + (all > 0 ? $" из {all}" : "") + $". Налётчиков убито: {Sim.Kills}.", false);
         }
         // the cursor laid over a voxel for a screenshot, once the view has settled
         if (_shot != null && _aim is { Length: 2 } && _frames == Math.Max(2, _shotFrames - 8))

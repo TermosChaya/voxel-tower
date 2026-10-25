@@ -107,7 +107,7 @@ public partial class Tutorial : Node
         _over = true;
         _m.Hud.RevealAll();
         _m.Sim.WantTrails = true;
-        if (!_m.Sim.Waves.Active) _m.Sim.Waves.Countdown = Waves.Prep;
+        if (!_m.Sim.Raids.Active) _m.Sim.Waves.Countdown = Waves.Prep;
         _m.Hud.Log("Обучение окончено. Орда придёт через 10 минут.", Hud.Kind.Warn);
         _card.QueueFree();
         _pointer.QueueFree();
@@ -122,7 +122,7 @@ public partial class Tutorial : Node
         _clock += delta;
         var sim = _m.Sim;
         // the horde keeps away while the lesson is not about it
-        if (!sim.Waves.Active) { sim.Waves.Countdown = HoldAt; sim.Waves.DawnLeft = Math.Min(sim.Waves.DawnLeft, 2); }
+        if (!sim.Raids.Active) { sim.Waves.Countdown = HoldAt; sim.Waves.DawnLeft = Math.Min(sim.Waves.DawnLeft, 2); }
         var s = _steps[_at];
         if (_doneAt < 0 && s.Done != null && s.Done())
         {
@@ -657,7 +657,7 @@ public partial class Tutorial : Node
             {
                 var sim = m.Sim;
                 fought = _clock;
-                if (sim.Waves.Active || sim.Waves.Number > 0) return;
+                if (sim.Raids.Active || sim.Raids.Count > 0) return;
                 sim.Waves.StartNow(sim);
                 // the lesson's band: the first three of the wave
                 var keep = new List<(UnitType, Warband, Survivor)>();
@@ -665,9 +665,9 @@ public partial class Tutorial : Node
                 sim.Waves._queue.Clear();
                 foreach (var e in keep) sim.Waves._queue.Enqueue(e);
             },
-            Done = () => !m.Sim.Waves.Active && m.Sim.Waves.Number > 0,
+            Done = () => !m.Sim.Raids.Active && m.Sim.Raids.Count > 0,
             // a raider the posts do not reach is to be gone after: told so once the fight has gone on a while
-            Status = () => !m.Sim.Waves.Active ? null : $"налётчиков в долине: {Raiders() + m.Sim.Waves.Coming}" +
+            Status = () => !m.Sim.Raids.Active ? null : $"налётчиков в долине: {Raiders() + m.Sim.Waves.Coming}" +
                 (_clock - fought > 75 ? Bindings.Fill(". Выберите солдат (портреты вверху) и щёлкните {RmbBy} по налётчику") : ""),
         });
         Add(new Step

@@ -102,13 +102,13 @@ public sealed partial class Sim
         // a priest prays by day and shelters by night, and does nothing else (unless the player sent it somewhere)
         if (u.T.Prays && !u.Hold) { PriestTick(u, dt); return; }
         // a comrade pinned under what came down comes before any work: dug out (a soldier only close by while the horde is here)
-        if (!u.T.Prays && handy && Rescue(u, dt, (soldier && Waves.Active ? 15 : 40) * VoxelWorld.PerMetre)) { Busy(u); return; }
+        if (!u.T.Prays && handy && Rescue(u, dt, (soldier && Raids.Active ? 15 : 40) * VoxelWorld.PerMetre)) { Busy(u); return; }
         // a comrade bleeding close by comes before any work (soldiers keep to their posts while the horde is here)
-        if (!u.T.Prays && handy && (!soldier || !Waves.Active) && Bandage(u, dt)) { Busy(u); return; }
+        if (!u.T.Prays && handy && (!soldier || !Raids.Active) && Bandage(u, dt)) { Busy(u); return; }
         // one who cannot get up carried to mend, one limping helped along (soldiers only while the horde is away)
-        if (!u.T.Prays && handy && (!soldier || !Waves.Active) && LookForFallen(u) && Aid(u, dt)) { Busy(u); return; }
+        if (!u.T.Prays && handy && (!soldier || !Raids.Active) && LookForFallen(u) && Aid(u, dt)) { Busy(u); return; }
         // a fire in what we built or round the citadel, if putting it out comes before the work at hand
-        if (!u.T.Prays && handy && (!soldier || !Waves.Active) && FightFire(u, dt)) { Busy(u); return; }
+        if (!u.T.Prays && handy && (!soldier || !Raids.Active) && FightFire(u, dt)) { Busy(u); return; }
         // a raider bound out in the field: a free worker goes for it and leads it into the citadel
         if (!soldier && !u.T.Prays && FetchCaptive(u, dt)) { Busy(u); return; }
         if (soldier && handy && HasMainHand(u) && PushLadders(u, dt)) { Busy(u); return; }
@@ -132,7 +132,7 @@ public sealed partial class Sim
             Idle(u, dt, stay: true);
             return;
         }
-        if (soldier && (Waves.Active || Alarm))
+        if (soldier && (Raids.Active || Alarm))
         {
             // while the horde is in the valley, or the alarm is up, soldiers keep to their posts and look out
             ReleaseSite(u);

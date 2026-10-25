@@ -25,7 +25,7 @@ public sealed partial class Sim
     public void BeginSandbox()
     {
         Sandbox = true;
-        Waves.OnCall = true;
+        SetSource(new OnCallRaids());
         NoErrands = true;
         Errands.Clear();
         foreach (var l in Lores)

@@ -37,7 +37,7 @@ public sealed partial class Sim
         if (!Alarm) return;
         Alarm = false;
         foreach (var u in Units) if (!u.Dead && !u.Inside) u.Refuge = -1;
-        Say(beaten ? "Отбой: волна отбита, мирные выходят из убежищ." : "Отбой: мирные возвращаются к работе.", 1);
+        Say(beaten ? "Отбой: орда отбита, мирные выходят из убежищ." : "Отбой: мирные возвращаются к работе.", 1);
     }
 
     /// <summary>One that stands and fights rather than run: a soldier, or a worker called up, with a hand to fight with.</summary>
@@ -226,7 +226,7 @@ public sealed partial class Sim
         u.Why = "в цитадели: пережидает";
         if (Alarm && !Fighter(u) || Time - _raiderByDoor < KeepInFor) return;
         // a priest keeps in till the morning
-        if (u.T.Prays && Waves.Active) { u.Why = "в цитадели: молится до утра"; return; }
+        if (u.T.Prays && Raids.Active) { u.Why = "в цитадели: молится до утра"; return; }
         Leave(u);
     }
 }

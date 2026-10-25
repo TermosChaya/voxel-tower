@@ -22,8 +22,10 @@ public sealed class Warband
     public BandState State;
     /// <summary>When the present state began, in game seconds.</summary>
     public double Since;
-    /// <summary>The cell on the western edge where it comes in.</summary>
+    /// <summary>The cell on the edge of the land where it comes in.</summary>
     public int Entry = -1;
+    /// <summary>The side of the land it came in by (<see cref="Sim.Raid"/>), −1 for the western, as the siege's bands always do.</summary>
+    public int Edge = -1;
     /// <summary>What it is made of, the leader first.</summary>
     public readonly List<UnitType> Roster = new();
     /// <summary>Those who got away from the last wave alive and come back with this band, after its roster.</summary>
@@ -97,13 +99,31 @@ public sealed partial class Sim
     static int Rank(UnitType t) => t == Kinds.Troll ? 5 : t == Kinds.Orc ? 4 : t == Kinds.Miner ? 3 : t == Kinds.Goblin ? 2 : Kinds.IsEngine(t) ? 0 : 1;
 
     /// <summary>
-    /// Draws up the next wave: who comes, split into warbands of six or so, each with its strongest at its head, and
-    /// where along the western edge each comes in. Shown on the map as soon as it is known, so its way can be read.
+    /// Draws up the next raid for a threat: who comes, split into warbands of six or so, each with its strongest at its
+    /// head, and where along the western edge each comes in. Shown on the map as soon as it is known, so its way can be
+    /// read. n is the raid's number, for its leaders' names and a chapter's champion.
     /// </summary>
-    public void PlanWave(int n)
+    public void PlanRaid(float threat, int n)
     {
         Bands.RemoveAll(b => b.State == BandState.Coming);
-        var list = Roster(n, HordeMany);
+        PlannedThreat = threat;
+        var planned = DrawBands(Roster(threat, HordeMany), WestEdge, n);
+        int count = planned.Count;
+        // a chapter's third night: its champion with his own guard
+        if (ChampionBand(n) is { } champion) planned.Add(champion);
+        // those who got away from the last wave alive come back with this one, shared among the bands
+        for (int i = 0; i < Escaped.Count; i++) planned[i % count].Veterans.Add(Escaped[i]);
+        Bands.AddRange(planned);
+        ChooseSides(Source.IntelNow(this));
+        _nextTrails = 0;
+    }
+
+    /// <summary>
+    /// Bands drawn up of a roster: of six or so each, the strongest dealt out first, one to a band, to lead it; coming
+    /// in spread along a side of the land, a little off even spacing (the western side as the siege's always have).
+    /// </summary>
+    List<Warband> DrawBands(List<UnitType> list, int edge, int n)
+    {
         int count = Math.Clamp((list.Count + 5) / 7, 1, 5);
         // the strongest are dealt out first, one to a band, and lead it
         for (int i = list.Count - 1; i > 0; i--) { int j = Rng.Next(i + 1); (list[i], list[j]) = (list[j], list[i]); }
@@ -111,35 +131,55 @@ public sealed partial class Sim
         var planned = new List<Warband>();
         for (int i = 0; i < count; i++) planned.Add(new Warband { Id = _nextBand++, State = BandState.Coming });
         for (int i = 0; i < list.Count; i++) planned[i % count].Roster.Add(list[i]);
-        // where they come in: spread along the western edge, a little off even spacing
+        // where they come in: spread along the side, a little off even spacing
         for (int i = 0; i < count; i++)
         {
             var b = planned[i];
-            int z0 = Site.Hex == null ? 0 : Site.WestZ0, span = Site.Hex == null ? World.SZ : Site.WestZ1 - Site.WestZ0;
-            int z = (int)(z0 + span * (i + 1.0) / (count + 1) + (Rng.NextDouble() - .5) * span / (count + 1) * .6);
-            b.Entry = NearestStand(Site.EntryX, Math.Clamp(z, Site.WestZ0, Site.WestZ1), 3);
+            double along = (i + 1.0) / (count + 1) + (Rng.NextDouble() - .5) / (count + 1) * .6;
+            if (edge == WestEdge)
+            {
+                int z0 = Site.Hex == null ? 0 : Site.WestZ0, span = Site.Hex == null ? World.SZ : Site.WestZ1 - Site.WestZ0;
+                b.Entry = NearestStand(Site.EntryX, Math.Clamp((int)(z0 + span * along), Site.WestZ0, Site.WestZ1), 3);
+            }
+            else
+            {
+                var (ex, ez) = EdgePoint(edge, along);
+                b.Entry = NearestStand(ex, ez, 3);
+            }
             b.Name = "Ватага " + LeaderNames[(b.Id * 7 + n) % LeaderNames.Length];
             // the tail of the shuffle beyond the leader: kinds come mixed
             for (int k = b.Roster.Count - 1; k > 1; k--) { int j = 1 + Rng.Next(k); (b.Roster[k], b.Roster[j]) = (b.Roster[j], b.Roster[k]); }
         }
-        // a chapter's third night: its champion with his own guard
-        if (ChampionBand(n) is { } champion) planned.Add(champion);
-        // those who got away from the last wave alive come back with this one, shared among the bands
-        for (int i = 0; i < Escaped.Count; i++) planned[i % count].Veterans.Add(Escaped[i]);
-        Bands.AddRange(planned);
-        ChooseSides(Waves.IntelNow);
-        _nextTrails = 0;
+        return planned;
     }
 
+    /// <summary>A point a few metres in from a side of the land (0 to 5 from the northern point round by the east), so far along it (0 to 1).</summary>
+    (int x, int z) EdgePoint(int edge, double along)
+    {
+        var hex = Site.Hex ?? Hex.In(World.SX, World.SZ);
+        var c = hex.Corners();
+        var (ax, az) = c[((edge % 6) + 6) % 6]; var (bx, bz) = c[(((edge + 1) % 6) + 6) % 6];
+        float t = (float)Math.Clamp(along, .08, .92), x = ax + (bx - ax) * t, z = az + (bz - az) * t;
+        // in from the side toward the middle, past the cut edge
+        float dx = hex.CX - x, dz = hex.CZ - z, d = MathF.Max(1, MathF.Sqrt(dx * dx + dz * dz)), inset = Site.SpawnStrip;
+        return (Math.Clamp((int)(x + dx / d * inset), 1, World.SX - 2), Math.Clamp((int)(z + dz / d * inset), 1, World.SZ - 2));
+    }
+
+    /// <summary>Who comes with the siege's night n (a threat of n).</summary>
+    public static List<UnitType> Roster(int n, float many) => Roster((float)n, many);
+
     /// <summary>
-    /// Who comes with wave n, as many of the common ones as the siege's hardness brings (<paramref name="many"/>), in no
-    /// order yet: the horde feels its wounds, breaks and goes down, and comes the more of it for that.
+    /// Who comes with a raid of this threat, as many of the common ones as the siege's hardness brings
+    /// (<paramref name="many"/>), in no order yet: the horde feels its wounds, breaks and goes down, and comes the more of
+    /// it for that. Its kinds come in by the threat's whole part (the shaman from four, the giant from nine), the goblins
+    /// by all of it; a threat of n brings what the siege's night n always brought.
     /// </summary>
-    public static List<UnitType> Roster(int n, float many)
+    public static List<UnitType> Roster(float threat, float many)
     {
         var list = new List<UnitType>();
+        int n = Math.Max(1, (int)MathF.Floor(threat + 1e-4f));
         int Many(float k) => Math.Max(0, (int)(k * many));
-        for (int i = 0; i < Math.Max(1, Many((2 + n) * 1.8f)); i++) list.Add(Kinds.Goblin);
+        for (int i = 0; i < Math.Max(1, Many((2 + Math.Max(1, threat)) * 1.8f)); i++) list.Add(Kinds.Goblin);
         for (int i = 0; i < Many((n / 2 + 1) * 1.8f); i++) list.Add(Kinds.Orc);
         for (int i = 0; i < Many((n + 1) / 3); i++) list.Add(Kinds.Miner);
         for (int i = 0; i < Many((1 + n / 3) * 1.5f); i++) list.Add(Kinds.Sapper);
@@ -316,7 +356,7 @@ public sealed partial class Sim
     internal List<Warband> Muster()
     {
         // what the horde scouted is all the chief will know: he chooses the sides once more by it
-        ChooseSides(Waves.Intel);
+        ChooseSides(Raids.Intel);
         var coming = Bands.FindAll(b => b.State == BandState.Coming);
         if (coming.Count == 0) return coming;
         Mine held = null;
@@ -386,7 +426,7 @@ public sealed partial class Sim
     void TickBands()
     {
         // while bands are still to come the chief keeps weighing the sides as the defences change
-        if (Time >= _nextChoice && Bands.Exists(b => b.State == BandState.Coming)) { _nextChoice = Time + 10; ChooseSides(Waves.Active ? Waves.Intel : Waves.IntelNow); }
+        if (Time >= _nextChoice && Bands.Exists(b => b.State == BandState.Coming)) { _nextChoice = Time + 10; ChooseSides(Raids.Active ? Raids.Intel : Source.IntelNow(this)); }
         for (int i = Bands.Count - 1; i >= 0; i--)
         {
             var b = Bands[i];

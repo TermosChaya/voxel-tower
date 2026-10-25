@@ -67,14 +67,14 @@ public partial class DuskCard : Control
         col.Resized += () => Size = new Vector2(W, col.Size.Y + 24);
     }
 
-    int Night => _m.Sim.Waves.Number + (_m.Sim.Waves.Active ? 0 : 1);
+    int Night => _m.Sim.Raids.Count + (_m.Sim.Raids.Active ? 0 : 1);
 
     /// <summary>Whether it is to hang now: from dusk till a little after the horn, in a siege of one's own.</summary>
     bool Due()
     {
         var sim = _m.Sim; var w = sim.Waves;
         if (sim.NoErrands || _m.Tutor != null || sim.Over || _shut == Night || _m.FP.On) return false;
-        return !w.Active ? w.Countdown < Waves.Dusk : sim.Time - _hornAt < 12;
+        return !w.Active ? sim.RaidSoon(Waves.Dusk) : sim.Time - _hornAt < 12;
     }
 
     double _hornAt = -99;
@@ -83,20 +83,21 @@ public partial class DuskCard : Control
     public void Refresh()
     {
         var sim = _m.Sim;
-        if (sim.Waves.Active && _hornFor != sim.Waves.Number) { _hornFor = sim.Waves.Number; _hornAt = sim.Time; }
+        if (sim.Raids.Active && _hornFor != sim.Raids.Count) { _hornFor = sim.Raids.Count; _hornAt = sim.Time; }
         bool due = Due();
         if (due != Visible) { Visible = due; if (due) Juice.Appear(this); }
         if (!due) return;
         int n = Night;
         int ch = Sim.ChapterOf(n);
-        _head.Text = $"Глава {Sim.Roman(ch)} · {Sim.ChapterNames[ch]} · ночь {n} из {Waves.Total}".ToUpperInvariant();
+        int all = sim.Source.Total(sim);
+        _head.Text = ($"Глава {Sim.Roman(ch)} · {Sim.ChapterNames[ch]} · ночь {n}" + (all > 0 ? $" из {all}" : "")).ToUpperInvariant();
         // the bands, each with its leader and what it brings
         var lines = new List<string>();
         // a chapter's first night: what it brings
         if ((n - 1) % 3 == 0) lines.Add(Sim.ChapterAbout[ch]);
         foreach (var b in sim.Bands)
         {
-            if (b.State != BandState.Coming && !sim.Waves.Active) continue;
+            if (b.State != BandState.Coming && !sim.Raids.Active) continue;
             lines.Add(b.Champion == 4 ? $"{b.Name}: Вождь орды {b.Title} с охраной ({HordeInfo.Kinds(b)}). Если он погибнет, вся орда побежит."
                 : b.Champion > 0 ? $"{b.Name}: вожак главы {b.Title} с охраной ({HordeInfo.Kinds(b)}). Его гибель откроет новый ярус знаний."
                 : $"{b.Name}: {HordeInfo.Kinds(b)}");
@@ -105,18 +106,19 @@ public partial class DuskCard : Control
         for (int i = 0; i < Sim.Sides; i++) if (sim.SideBands[i] > most) { most = sim.SideBands[i]; side = i; }
         if (side >= 0) lines.Add($"Вождь поведёт их на {Sim.SideNames[side]} сторону: он считает её самой слабой.");
         _bands.Text = string.Join("\n", lines);
-        // who comes for the first time, and what is good against it
-        var fresh = Sim.NewAt(n);
+        // who comes for the first time (by the threat the raid is drawn up for), and what is good against it
+        int level = Math.Max(1, (int)sim.PlannedThreat);
+        var fresh = Sim.NewAt(level);
         var said = new List<string>();
         foreach (var t in fresh) if (Against.TryGetValue(t.Key, out string how)) said.Add($"{t.Name}: {how}");
         _new.Visible = said.Count > 0;
         _new.Text = (n == 1 ? "Кто это:\n" : "Впервые этой ночью:\n") + string.Join("\n", said);
         // and the night after
-        if (n >= Waves.Total) _next.Text = "Это последняя ночь осады.";
+        if (all > 0 && n >= all) _next.Text = "Это последняя ночь осады.";
         else
         {
-            var then = Sim.NewAt(n + 1);
-            string boss = (n + 1) % 3 == 0 ? (n + 1 == Waves.Total ? " Придёт Вождь орды." : $" Придёт вожак главы {Sim.Roman(Sim.ChapterOf(n + 1))}.") : "";
+            var then = Sim.NewAt(level + 1);
+            string boss = (n + 1) % 3 == 0 ? (n + 1 == all ? " Придёт Вождь орды." : $" Придёт вожак главы {Sim.Roman(Sim.ChapterOf(n + 1))}.") : "";
             _next.Text = (then.Count == 0 ? "Следующей ночью те же, но больше." : $"Следующей ночью впервые: {string.Join(", ", then.ConvertAll(t => t.Name.ToLowerInvariant()))}.") + boss;
         }
     }

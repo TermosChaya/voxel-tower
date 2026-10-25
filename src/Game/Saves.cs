@@ -80,7 +80,7 @@ public static class Saves
             foreach (var (text, kind, x, z) in m.Hud.Lines)
                 screen.Log.Add(new Line { T = text, K = (int)kind, X = float.IsNaN(x) ? null : x, Z = float.IsNaN(z) ? null : z });
             var sim = m.Sim;
-            string label = sim.Waves.Active ? $"Волна {sim.Waves.Number} в долине" : $"Перед волной {sim.Waves.Number + 1}";
+            string label = sim.Raids.Active ? $"{sim.Source.Title(sim.Raids.Count)} в долине" : sim.Source.Foretold ? $"Перед: {sim.Source.Title(sim.Raids.Count + 1).ToLowerInvariant()}" : $"День {sim.Clock.Day}";
             string tmp = PathOf(slot) + ".part";
             using (var f = File.Create(tmp)) sim.Save(f, m.Seed, label, JsonSerializer.Serialize(screen));
             File.Move(tmp, PathOf(slot), overwrite: true);

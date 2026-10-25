@@ -148,7 +148,7 @@ public partial class MysteryPanel : VBoxContainer
         bool armed = one != null && one == _ownFor && Now - _ownArmed < 5;
         _own.Text = armed ? "Точно? Ещё раз — отдать" : one != null ? $"Своего: {one.T.Name.ToLowerInvariant()} №{one.Id}" : "Своего (выберите одного)";
         _own.Modulate = armed ? new Color(1.3f, .8f, .75f) : Colors.White;
-        bool busy = sim.RiteNow != null, day = !sim.Waves.Active, hasPriest = priests > 0, hasSanctum = sim.Zones.Exists(z => z.Kind == Zone.Sanctum);
+        bool busy = sim.RiteNow != null, day = !sim.Raids.Active, hasPriest = priests > 0, hasSanctum = sim.Zones.Exists(z => z.Kind == Zone.Sanctum);
         bool can = !busy && day && hasPriest && hasSanctum;
         _prisoner.Disabled = !can || prisoners == 0;
         _carcass.Disabled = !can || sim.Carcasses.Count == 0;

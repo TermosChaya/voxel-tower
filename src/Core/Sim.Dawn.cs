@@ -61,15 +61,15 @@ public sealed partial class Sim
     /// <summary>One fell in the night: counted for the dawn.</summary>
     void NightFell(Unit u, Unit by)
     {
-        if (!Waves.Active) return;
+        if (!Raids.Active) return;
         if (u.Team == Team.Player && u.T != Kinds.Risen) _nightLost++;
         if (u.Team != Team.Horde || u.T == Kinds.Thrall) return;
         if (u.Leader) { _nightLeadersKilled++; if (u.Band != null) _slainBands.Add(u.Band.Id); }
         if (by is { Team: Team.Player }) _nightFelled[by.Id] = _nightFelled.GetValueOrDefault(by.Id) + 1;
     }
 
-    /// <summary>A night beaten back: its report, the stars' extra reward, and the gifts to choose from.</summary>
-    internal void Dawn(int night)
+    /// <summary>A raid beaten back: its report, the stars' extra reward, and the gifts to choose from (none after the last of a siege).</summary>
+    internal void Dawn(int night, bool last = false)
     {
         var r = new NightReport
         {
@@ -99,14 +99,14 @@ public sealed partial class Sim
             Knowledge += r.Stars;
             Say($"Звёзды ночи: {r.Stars} из 3. Награда: {15 * r.Stars} золота и {r.Stars} {Plural(r.Stars, "знание", "знания", "знаний")}.", 1);
         }
-        if (night >= Waves.Total) return;
+        if (last) return;
         Gifts.Clear();
         // a champion fell this night: his trophies, the legendary ones, are the dawn's gifts
         if (_nightChampion > 0)
         {
             Gifts.AddRange(RelicGifts(night));
             _nightChampion = 0;
-            if (Gifts.Count > 0) { Say("Рассвет: выберите один из трёх трофеев вожака. Выбор ждёт до следующей волны.", 1); return; }
+            if (Gifts.Count > 0) { Say("Рассвет: выберите один из трёх трофеев вожака. Выбор ждёт до следующего набега.", 1); return; }
         }
         var trophy = Trophy(night);
         var deal = new List<Gift>();
@@ -120,13 +120,16 @@ public sealed partial class Sim
         // short of four: a second caravan's goods
         if (deal.Count < want && GiftOf(GiftKind.Caravan, night, 1) is { } more) deal.Add(more);
         for (int i = 0; i < Math.Min(want, deal.Count); i++) Gifts.Add(deal[i]);
-        if (Gifts.Count > 0) Say("Рассвет: выберите один из даров. Выбор ждёт до следующей волны.", 1);
+        if (Gifts.Count > 0) Say("Рассвет: выберите один из даров. Выбор ждёт до следующего набега.", 1);
     }
 
     /// <summary>A draw of the dawn's own, so that the valley's other chances run as they did.</summary>
     double DawnDraw(int night, int salt) => Hash.H3(night * 977 + salt, Kills, ErrandsDone + 13);
 
     /// <summary>A gift of a kind for this dawn (the <paramref name="nth"/> of that kind), or null if there is none to give.</summary>
+    /// <summary>What the merchants pay for the road kept: the more, the stronger the raid beaten back.</summary>
+    int CaravanGold => 50 + 10 * (int)Math.Round(Raids.Threat);
+
     Gift GiftOf(GiftKind kind, int night, int nth)
     {
         switch (kind)
@@ -139,7 +142,7 @@ public sealed partial class Sim
                 if (room >= 2) who.Add(("archers", "Двое лучников", "Охотники из леса: 2 лучника без найма.", 2));
                 if (room >= 1) who.Add(("swordsman", "Мечник", "Бывалый воин: мечник без найма.", 1));
                 if (room >= 1 && Mines.Exists(m => m.Power)) who.Add(("priest", "Жрец-отшельник", "Отшельник с холмов: жрец без найма.", 1));
-                if (room >= 2 && night >= 4) who.Add(("knight", "Странствующий рыцарь", "Рыцарь без господина: служит до конца осады, без найма и без знания.", 2));
+                if (room >= 2 && Raids.Threat >= 4) who.Add(("knight", "Странствующий рыцарь", "Рыцарь без господина: служит до конца осады, без найма и без знания.", 2));
                 if (who.Count == 0) return null;
                 var w = who[(int)(DawnDraw(night, 1 + nth) * who.Count) % who.Count];
                 return new Gift { Kind = kind, Key = w.key, Title = w.title, About = w.about };
@@ -151,7 +154,7 @@ public sealed partial class Sim
                     ("stone", "Обоз камня", "8 м³ камня."),
                     ("wood", "Обоз брёвен", "8 м³ брёвен."),
                     ("earth", "Обоз земли", "12 м³ земли."),
-                    ("gold", "Купеческий кошель", $"Купцы платят за защиту дороги: {50 + 10 * night} золота."),
+                    ("gold", "Купеческий кошель", $"Купцы платят за защиту дороги: {CaravanGold} золота."),
                 };
                 int i0 = (int)(DawnDraw(night, 7) * goods.Count) % goods.Count;
                 var g = goods[(i0 + nth * 2) % goods.Count];
@@ -208,7 +211,7 @@ public sealed partial class Sim
                     case "stone": Stock[Stockpile.Stone] += 8 * VoxelWorld.PerM3; break;
                     case "wood": Stock[Stockpile.Wood] += 8 * VoxelWorld.PerM3; break;
                     case "earth": Stock[Stockpile.Earth] += 12 * VoxelWorld.PerM3; break;
-                    case "gold": Stock.Gold += 50 + 10 * (LastNight?.Number ?? 1); break;
+                    case "gold": Stock.Gold += CaravanGold; break;
                 }
                 break;
             case GiftKind.Omen:

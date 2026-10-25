@@ -275,8 +275,9 @@ public partial class WaveClock : Control
         Craft.Plate(this, new Rect2(0, 2, W, H - 2));
     }
 
-    /// <summary>"of twelve" after the wave's number, but in the sandbox with everything open, whose waves go on past the twelfth.</summary>
-    static string Of(Sim sim) => sim.Sandbox ? "" : $" ИЗ {Waves.Total}";
+    /// <summary>"of twelve" after the wave's number, where what brings the raids brings so many (not the open sandbox's, nor the map's).</summary>
+    static string Of(Sim sim) => sim.Source.Total(sim) is > 0 and var t ? $" ИЗ {t}" : "";
+    const string CallTipMap = "Орду не позвать\nНабеги приходят сами, когда враг входит в долину. Днём или ночью, с любой стороны.";
 
     public void Refresh()
     {
@@ -285,31 +286,38 @@ public partial class WaveClock : Control
         if (sim.Over)
         {
             _title.Text = (sim.Won ? "Осада снята" : "Цитадель пала").ToUpperInvariant();
-            _time.Text = sim.Won ? $"{Waves.Total}/{Waves.Total}" : $"{w.Number}/{Waves.Total}";
+            int all = sim.Source.Total(sim);
+            _time.Text = all > 0 ? $"{sim.Raids.Repelled}/{all}" : sim.Raids.Repelled.ToString();
             _unit.Text = "ВОЛН ОТБИТО";
             _call.Text = "Конец"; _call.Disabled = true;
         }
         else if (w.Active)
         {
-            _title.Text = $"ВОЛНА {w.Number}{Of(sim)}" + (w.OnCall ? "" : $" · РАЗВЕДКА {w.Intel * 100:0} %") +
+            _title.Text = $"{sim.Source.Title(sim.Raids.Count).ToUpperInvariant()}{Of(sim)}" + (w.OnCall ? "" : $" · РАЗВЕДКА {w.Intel * 100:0} %") +
                 (sim.Weather != Weather.Clear ? " · " + Sim.WeatherName(sim.Weather).ToUpperInvariant() : "");
             _time.Text = (sim.RaidersAlive() + w.Coming).ToString();
             _unit.Text = "В ДОЛИНЕ";
             _call.Text = "Орда в долине"; _call.Disabled = true;
             _call.TooltipText = $"Запасы орды\nБрёвна на лестницы и мосты: {Fmt.M3(sim.HordeStock[Stockpile.Wood])} м³. Земля на засыпку рвов: {Fmt.M3(sim.HordeStock[Stockpile.Earth])} м³. " +
-                "Каждая волна приносит свои запасы, а половина прорубленного идёт орде.";
+                "Каждый набег приносит свои запасы, а половина прорубленного идёт орде.";
         }
         else
         {
             int bands = sim.Bands.FindAll(b => b.State == BandState.Coming).Count;
-            _title.Text = $"ВОЛНА {w.Number + 1}{Of(sim)}" + (bands > 0 ? $" · ВАТАГ {bands}" : "") +
-                (w.DawnLeft > 0 ? " · РАССВЕТ" : w.Countdown < Waves.Dusk ? " · ЗАКАТ" : "") +
+            var clock = sim.Clock;
+            // what brings the raids says what comes next: the siege its next wave, the map only the day it is
+            string next = sim.Source.Foretold ? sim.Source.Title(sim.Raids.Count + 1).ToUpperInvariant() + Of(sim) : $"ДЕНЬ {clock.Day}";
+            _title.Text = next + (bands > 0 ? $" · ВАТАГ {bands}" : "") +
+                (clock.Night ? " · НОЧЬ" : clock.DawnLeft > 0 ? " · РАССВЕТ" : clock.Left < DayClock.Dusk ? " · ЗАКАТ" : "") +
                 (sim.Weather != Weather.Clear ? " · " + Sim.WeatherName(sim.Weather).ToUpperInvariant() : "");
-            _time.Text = w.OnCall || w.Countdown >= 100 * 60 ? "—" : Fmt.Clock(w.Countdown);
-            _unit.Text = w.OnCall ? "ПО ЗОВУ" : "ДО ОРДЫ";
-            _call.Text = w.OnCall ? "На штурм" : $"На штурм · {w.IntelNow * 100:0} %";
-            _call.Disabled = false;
-            _call.TooltipText = w.OnCall ? CallTipOnCall : CallTip;
+            // the countdown only where something keeps the raids' time
+            double until = sim.Source.Until(sim);
+            _time.Text = until < 0 || until >= 100 * 60 ? "—" : Fmt.Clock(until);
+            _unit.Text = until >= 0 ? "ДО ОРДЫ" : w.OnCall ? "ПО ЗОВУ" : "НЕТ ВЕСТЕЙ";
+            bool callable = sim.Source is not MapRaids;
+            _call.Text = !callable ? "Орда не видна" : w.OnCall ? "На штурм" : $"На штурм · {w.IntelNow * 100:0} %";
+            _call.Disabled = !callable;
+            _call.TooltipText = !callable ? CallTipMap : w.OnCall ? CallTipOnCall : CallTip;
         }
         if (_m.Atmos != null) { _dial.Day = _m.Atmos.ShownDay; _dial.Dark = _m.Atmos.ShownDark; }
         _dial.QueueRedraw();

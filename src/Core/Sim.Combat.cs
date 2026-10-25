@@ -169,6 +169,7 @@ public sealed partial class Sim
         u.Dead = true; u.DiedAt = Time; u.State = UnitState.Dead; u.Hp = 0;
         u.KilledBy = cause ?? by?.T.Name ?? "";
         if (u.Team == Team.Horde && u.T != Kinds.Thrall) Kills++;
+        KillDeed(u);
         // the reaping: a raider the spells killed gives intervention back
         if (u.Team == Team.Horde && cause != null && SpellCauses.Contains(cause) && Knows("reap")) GainFavour(2);
         if (u.T == Kinds.Thief) ThiefFell(u);
@@ -365,7 +366,7 @@ public sealed partial class Sim
         _litAt = Time;
         _lit.Clear();
         // by day the whole valley is light
-        if (Waves.Darkness <= 0) return;
+        if (Clock.Darkness <= 0) return;
         void Around(float x, float z, float r)
         {
             for (float dz = -r; dz <= r; dz += 16)
@@ -392,10 +393,10 @@ public sealed partial class Sim
     public bool Lit(float x, float z) => Time < BloodMoonUntil || _lit.Contains(LitKey((int)Math.Clamp(x, 0, World.SX - 1), (int)Math.Clamp(z, 0, World.SZ - 1)));
 
     /// <summary>How far a bow carries into the dark now: all the way by day, little more than half at night.</summary>
-    public float DarkRange(Unit a) => ShotRange(a) * FogRange * (1 - .45f * Waves.Darkness * ShotDark(a));
+    public float DarkRange(Unit a) => ShotRange(a) * FogRange * (1 - .45f * Clock.Darkness * ShotDark(a));
 
     /// <summary>How far a bow carries to a spot: all the way by day or where it is light, little more than half in the dark.</summary>
-    public float RangeAt(Unit a, float x, float z) => Waves.Darkness <= 0 || Lit(x, z) || HasRelic("eye") && a.Team == Team.Player ? ShotRange(a) * FogRange : DarkRange(a);
+    public float RangeAt(Unit a, float x, float z) => Clock.Darkness <= 0 || Lit(x, z) || HasRelic("eye") && a.Team == Team.Player ? ShotRange(a) * FogRange : DarkRange(a);
 
     /// <summary>A raider in range and in sight; the ones hacking walls or battering the citadel come first.</summary>
     Unit BestTarget(Unit u)
@@ -446,7 +447,7 @@ public sealed partial class Sim
         float d = Dist(u, t);
         float chance = Math.Clamp(.9f - d / ShotRange(u) * .45f + (u.Y - t.Y > 16 ? .08f : 0), .35f, .92f);
         // a shape in the dark is harder to hit than one in the light; rain and wind spoil aim
-        if (!Lit(t.X, t.Z)) chance *= 1 - .2f * Waves.Darkness * ShotDark(u);
+        if (!Lit(t.X, t.Z)) chance *= 1 - .2f * Clock.Darkness * ShotDark(u);
         chance *= WeatherAim;
         u.Swing = 1;
         Shots++;

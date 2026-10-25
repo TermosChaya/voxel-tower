@@ -48,7 +48,7 @@ public sealed partial class Sim
     /// <summary>What the horde will have to build with: what it holds, or between waves what the next one brings (some of both).</summary>
     void Stores(out bool wood, out bool earth)
     {
-        bool between = !Waves.Active && !AnyRaider();
+        bool between = !Raids.Active && !AnyRaider();
         wood = HasWood || between;
         earth = HasEarth || between;
     }
@@ -71,7 +71,7 @@ public sealed partial class Sim
         }
         // wanted while the horde is coming or here, once at the start so an early call finds a way at hand, and between
         // waves while the bands' ways are shown (every few seconds: the defences change as they are built)
-        bool between = !Waves.Active && Waves.Countdown >= 12 && !AnyRaider();
+        bool between = !Raids.Active && !RaidSoon(12) && !AnyRaider();
         bool needed = !between || Fields.Count == 0 || WantTrails;
         Stores(out bool wood, out bool earth);
         bool same = _fieldVersion == Nav.Version && _fieldWood == wood && _fieldEarth == earth;
@@ -247,7 +247,11 @@ public sealed partial class Sim
     void Retreat(Unit u, float dt)
     {
         u.Raid = null;
-        if (u.X < Site.SpawnStrip)
+        // one come in by another side than the west goes out by where it came in
+        int home = u.Band is { Edge: >= 0 } hb && hb.Edge != WestEdge && hb.Entry >= 0 ? hb.Entry : -1;
+        var (hx, _, hz) = home >= 0 ? Nav.Feet(home) : (0f, 0f, 0f);
+        bool gone = home >= 0 ? (u.X - hx) * (u.X - hx) + (u.Z - hz) * (u.Z - hz) < 24 * 24 : u.X < Site.SpawnStrip;
+        if (gone)
         {
             if (u.T == Kinds.Thief) ThiefGone(u);
             if (u.Envoy) { u.Dead = true; u.DiedAt = -999; u.State = UnitState.Dead; return; }
@@ -255,7 +259,7 @@ public sealed partial class Sim
             {
                 if (u.Wounds != null) { u.Wounds.Bleed = 0; u.Wounds.Arrows.Clear(); }
                 Escaped.Add(new Survivor { Kind = u.T, Look = u.Look, Hp = u.Hp, Wounds = u.Wounds, Champion = u.Champion, Title = u.Title });
-                Say($"{u.T.Name} сбежал и вернётся со следующей волной.", 2, u);
+                Say($"{u.T.Name} сбежал и вернётся со следующим набегом.", 2, u);
             }
             u.Dead = true; u.DiedAt = -999; u.State = UnitState.Dead;
             return;
@@ -265,7 +269,7 @@ public sealed partial class Sim
             u.State = UnitState.Idle;
             if (Time < u.NextSearch) return;
             u.NextSearch = Time + 2;
-            int c = NearestStand(Site.EntryX, Site.EntryZ((int)u.Z), u.T.Move.Height);
+            int c = home >= 0 ? home : NearestStand(Site.EntryX, Site.EntryZ((int)u.Z), u.T.Move.Height);
             if (c < 0 || !GoTo(u, c, adjacent: true, budget: 40000)) return;
         }
         Walk(u, dt);
@@ -483,142 +487,4 @@ public sealed class Survivor
     public BodyState Wounds;
     public byte Champion;
     public string Title;
-}
-
-/// <summary>
-/// Preparation and assault: ten minutes between waves, the horn, and an early call. Calling the horde early pays nothing,
-/// but it comes knowing less about the defences: the share of the countdown it had for scouting is its intel.
-/// </summary>
-public sealed class Waves
-{
-    public const int Total = 12;
-    public const double Prep = 600;
-
-    public int Number;
-    public bool Active;
-    public double Countdown = Prep;
-    /// <summary>The dusk before the horn and the dawn after a wave beaten back, in seconds; how much of the dawn is left.</summary>
-    public const double Dusk = 60, Dawn = 30;
-    public double DawnLeft;
-    /// <summary>
-    /// The horde comes only when called (the sandbox): the day runs on to noon and stands there, and called, the horde
-    /// comes knowing all it would have learnt by sunset.
-    /// </summary>
-    public bool OnCall;
-
-    /// <summary>How dark it is: 0 by day, 1 at night — while a wave is in the valley — and between at dusk and at dawn.</summary>
-    public float Darkness => Active ? 1 : DawnLeft > 0 ? (float)(DawnLeft / Dawn) : Countdown < Dusk ? (float)(1 - Countdown / Dusk) : 0;
-
-    /// <summary>How far through the day it is, for the sun: 0 at dawn, ½ at noon, 1 at sunset (and through the night).</summary>
-    public float Day => Active ? 1 : (float)Math.Clamp(1 - Countdown / Prep, 0, 1);
-    /// <summary>How much the horde learnt of the defences before this wave (0 to 1): the share of the countdown it had.</summary>
-    public double Intel;
-    internal readonly Queue<(UnitType kind, Warband band, Survivor back)> _queue = new();
-    internal Warband _lastBand;
-    internal double _spawnT;
-
-    public int Coming => _queue.Count;
-
-    /// <summary>What the horde would know if it were called now.</summary>
-    public double IntelNow => OnCall ? 1 : Math.Clamp(1 - Countdown / Prep, 0, 1);
-
-    public void Tick(Sim s, float dt)
-    {
-        if (s.Over) return;
-        if (!Active && OnCall)
-        {
-            Countdown = Math.Max(Prep / 2, Countdown - dt);
-            DawnLeft = Math.Max(0, DawnLeft - dt);
-            return;
-        }
-        if (!Active)
-        {
-            double was = Countdown;
-            Countdown -= dt;
-            DawnLeft = Math.Max(0, DawnLeft - dt);
-            if (was >= Dusk && Countdown < Dusk)
-                s.Say(Number == 0
-                    ? "Закат. Через минуту придёт орда. Ночью лучники хорошо видят только освещённых врагов."
-                    : "Солнце садится: через минуту орда.", 2);
-            if (Countdown <= 0) Start(s);
-            return;
-        }
-        _spawnT -= dt;
-        if (_queue.Count > 0 && _spawnT <= 0)
-        {
-            var (kind, band, back) = _queue.Dequeue();
-            if (band != null) s.SpawnRaider(kind, band, back); else s.SpawnRaider(kind);
-            _lastBand = band;
-            // a band comes in at a run, one after another; the next band some seconds later, somewhere else
-            bool sameBand = _queue.Count > 0 && _queue.Peek().band == band;
-            _spawnT = sameBand ? .35 + s.Rng.NextDouble() * .2 : 4 + s.Rng.NextDouble() * 3;
-        }
-        if (_queue.Count == 0 && !s.AnyRaider())
-        {
-            Active = false;
-            Countdown = Prep;
-            DawnLeft = Dawn;
-            s.Bands.RemoveAll(b => b.State != BandState.Coming);
-            s.Say(OnCall ? $"Волна {Number} отбита. Следующая придёт, когда её позовёте." : $"Волна {Number} отбита. До следующей 10 минут.", 1);
-            s.Reward(Number);
-            s.Dawn(Number);
-            s.StandDown(beaten: true);
-            // the sandbox with everything open goes on as long as the horde is called
-            if (Number >= Total && !s.Sandbox) { s.Won = true; s.Over = true; s.Say("Осада снята. Вы выстояли.", 1); }
-            else s.PlanWave(Number + 1);
-        }
-    }
-
-    /// <summary>Ends the assault at once: no more raiders come, those in the valley vanish (tests and staged scenes).</summary>
-    public void CallOff(Sim s)
-    {
-        _queue.Clear();
-        foreach (var u in s.Units) if (u.Team == Team.Horde && !u.Dead) { u.Dead = true; u.DiedAt = -999; }
-        Active = false;
-        Countdown = Prep;
-        s.Bands.Clear();
-        s.PlanWave(Number + 1);
-    }
-
-    static string Bands(int n) => n == 1 ? "одна ватага" : n is >= 2 and <= 4 ? $"{n} ватаги" : $"{n} ватаг";
-
-    /// <summary>Calls the horde before the time is up; it comes knowing only what it scouted so far.</summary>
-    public double StartNow(Sim s)
-    {
-        if (Active || s.Over) return 0;
-        Start(s);
-        return Intel;
-    }
-
-    void Start(Sim s)
-    {
-        Intel = IntelNow;
-        Number++;
-        Active = true;
-        _queue.Clear();
-        int n = Number;
-        // the bands planned for this wave (and shown on the map while it was coming) march in one after another
-        if (!s.Bands.Exists(b => b.State == BandState.Coming)) s.PlanWave(n);
-        var bands = s.Muster();
-        int total = 0, back = 0;
-        foreach (var b in bands)
-        {
-            foreach (var t in b.Roster) _queue.Enqueue((t, b, null));
-            foreach (var v in b.Veterans) _queue.Enqueue((v.Kind, b, v));
-            total += b.Size; back += b.Veterans.Count;
-        }
-        s.Escaped.Clear();
-        s.NightBegins(bands.Count);
-        // timber for ladders and bridges, earth for fills, brought along
-        s.HordeStock[Stockpile.Wood] += (2.4 + 1 * n) * VoxelWorld.PerM3;
-        s.HordeStock[Stockpile.Earth] += (3.2 + 2 * n) * VoxelWorld.PerM3;
-        _spawnT = 1;
-        // the fields are rebuilt in the background for what the horde brought; until then the old ones lead the way
-        if (s.Fields.Count == 0) s.ComputeFields();
-        s.InvalidateFields();
-        s.Recall();
-        string intel = Intel >= .995 ? "" : $" Разведать вас она успела на {Intel * 100:0} %.";
-        string again = back == 0 ? "" : back == 1 ? " С ними и один из бежавших в прошлый раз." : $" С ними и бежавшие в прошлый раз: {back}.";
-        s.Say($"Рог! Волна {Number}: {total} налётчиков, {Bands(bands.Count)}, идут с запада.{again}{intel}", 2);
-    }
 }

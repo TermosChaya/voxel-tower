@@ -905,9 +905,9 @@ public partial class Main
         // belt nor its key, no lore tab, and so it stays while nothing is done; three markings let the circle out marked
         // new, a beaten night the lore; and all at once again after
         Tools.SetTool(Tool.None);
-        int markedWas = Sim.MarkingsMade, dugWas = Tools.DigMarkings, numberWas = Sim.Waves.Number;
+        int markedWas = Sim.MarkingsMade, dugWas = Tools.DigMarkings, numberWas = Sim.Waves.Number, dayWas = Sim.Clock.Day;
         double knewWas = Sim.Knowledge;
-        Sim.MarkingsMade = 0; Tools.DigMarkings = 0; Sim.Waves.Number = 0; Sim.Knowledge = 0;
+        Sim.MarkingsMade = 0; Tools.DigMarkings = 0; Sim.Waves.Number = 0; Sim.Knowledge = 0; Sim.Clock.Day = 1;
         Hud.Unfold.Begin();
         bool hiddenAtFirst = Hud.Locked(Tool.Circle) && Hud.Hidden(Hud.Part.Lore) && !Hud.Locked(Tool.Brush);
         Tools.SetTool(Tool.Circle);
@@ -919,7 +919,7 @@ public partial class Main
         for (ulong from = Time.GetTicksMsec(); Time.GetTicksMsec() - from < 1300;) await Frames(1);
         bool letOut = !Hud.Locked(Tool.Circle) && Sim.LetOut.Contains("tool:Circle") && Hud.Fresh(Tool.Circle) && Hud.Locked(Tool.Bridge)
             && !Hud.Hidden(Hud.Part.Lore);
-        Sim.MarkingsMade = markedWas; Tools.DigMarkings = dugWas; Sim.Waves.Number = numberWas; Sim.Knowledge = knewWas;
+        Sim.MarkingsMade = markedWas; Tools.DigMarkings = dugWas; Sim.Waves.Number = numberWas; Sim.Knowledge = knewWas; Sim.Clock.Day = dayWas;
         Hud.Unfold.OpenAll();
         Check("the frame unfolds: no circle and no lore at the start, its key refused, so while nothing is done; three markings let the circle out marked new (not the bridge), a night the lore",
             hiddenAtFirst && refused && stays && letOut,

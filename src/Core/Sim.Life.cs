@@ -78,7 +78,7 @@ public sealed partial class Sim
         // where it idles round: a soldier's post, or where a worker ran out of things to do
         if (u.Home < 0 || CellsApart(u.Home, u.Cell) > 6) u.Home = u.Cell;
         int anchor = soldier && u.Post >= 0 ? u.Post : u.Home;
-        if (soldier && Waves.Active)
+        if (soldier && Raids.Active)
         {
             u.Gaze = Westward;
             Pass(u, Rng.NextDouble() < .75 ? Pastime.Watch : Pastime.Look, 3 + Rng.NextDouble() * 4);
@@ -86,7 +86,7 @@ public sealed partial class Sim
         }
         double r = Rng.NextDouble();
         // of an evening the fires and the benches draw them (Sim.Yard.cs)
-        if (Waves.Darkness > .3f && r < .45 && !stay && TryWarm(u)) return;
+        if (Clock.Darkness > .3f && r < .45 && !stay && TryWarm(u)) return;
         if (r < .22 && TryTalk(u)) return;
         if (r < .34 && !stay && TryWarm(u)) return;
         if (r < .5 && !stay && TrySit(u)) return;

@@ -269,7 +269,7 @@ public partial class HordeInfo : VBoxContainer
 {
     Main _m;
     VBoxContainer _bands;
-    Label _stores;
+    Label _stores, _threat;
     string _key = "";
 
     public void Init(Main m)
@@ -277,6 +277,9 @@ public partial class HordeInfo : VBoxContainer
         _m = m;
         AddThemeConstantOverride("separation", 6);
         AddChild(Hud.CapsLabel("Орда"));
+        // how strong the next raid is drawn up: the night's (or the day's) part and the settlement's own
+        _threat = Hud.Text("", Ornament.Serif, 12, Ornament.BronzeLight, wrap: true);
+        AddChild(_threat);
         _bands = new VBoxContainer();
         _bands.AddThemeConstantOverride("separation", 8);
         AddChild(_bands);
@@ -301,6 +304,9 @@ public partial class HordeInfo : VBoxContainer
     static string Where(Main m, Warband b)
     {
         if (b.Target != null) return "на " + b.Target.Name.ToLowerInvariant();
+        // one come in by another side than the west: by that side
+        if (b.Edge >= 0 && b.Edge != Sim.WestEdge)
+            return b.State == BandState.Coming ? "войдёт " + Sim.EdgeName(b.Edge) : b.State == BandState.Storm ? "на штурме" : "пришла " + Sim.EdgeName(b.Edge);
         int z = b.Leader is { Dead: false } l ? (int)l.Z : b.Entry >= 0 ? m.Sim.Nav.K(b.Entry) << NavGrid.Shift : m.World.SZ / 2;
         float t = z / (float)m.World.SZ;
         string side = t < .33f ? "с северо-запада" : t > .67f ? "с юго-запада" : "с запада";
@@ -343,8 +349,9 @@ public partial class HordeInfo : VBoxContainer
                 _bands.AddChild(box);
             }
         }
+        _threat.Text = sim.ThreatLine();
         _stores.Text = $"Брёвна орды на лестницы и мосты: {Fmt.M3(sim.HordeStock[Stockpile.Wood])} м³, земля на засыпку рвов: {Fmt.M3(sim.HordeStock[Stockpile.Earth])} м³. " +
-            "Каждая волна приносит свои запасы, а половина прорубленного идёт орде.";
+            "Каждый набег приносит свои запасы, а половина прорубленного идёт орде.";
     }
 }
 

@@ -432,7 +432,7 @@ public sealed partial class Sim
             else target = u.KindleAt;
         }
         // between waves the horde's leftovers are timber to take apart, not to burn
-        if (target < 0 && (Waves.Active || AnyRaider()))
+        if (target < 0 && (Raids.Active || AnyRaider()))
         {
             float bd = ShotRange(u);
             foreach (int c in _works)

@@ -69,14 +69,16 @@ public sealed partial class Sim
         else if (Time >= _nextWeather)
         {
             _nextWeather = Time + 180 + _fate.NextDouble() * 180;
-            if (Waves.Number >= 1 && _fate.NextDouble() < .45) StartWeather((Weather)(1 + _fate.Next(3)), 150 + _fate.NextDouble() * 210);
+            // weather from the second day (or once a raid has been beaten back)
+            if ((Raids.Repelled >= 1 || Clock.Day >= 2) && _fate.NextDouble() < .45) StartWeather((Weather)(1 + _fate.Next(3)), 150 + _fate.NextDouble() * 210);
         }
         if (Time >= _nextBeast)
         {
             _nextBeast = Time + 300 + _fate.NextDouble() * 300;
             RareBeast();
         }
-        if (Offer == null && !Waves.Active && Waves.Number >= 1 && Time >= _nextEnvoy && Waves.Countdown > 150)
+        // the envoy comes between raids, once the horde has come at all, and not in the last minutes before the next
+        if (Offer == null && !Raids.Active && Raids.Count >= 1 && Time >= _nextEnvoy && !RaidSoon(150))
         {
             _nextEnvoy = Time + 400 + _fate.NextDouble() * 400;
             if (_fate.NextDouble() < .4) SendEnvoy();
@@ -107,10 +109,10 @@ public sealed partial class Sim
 
     // ------------------------------------------------------------ rare beasts
 
-    /// <summary>Now and then a rare beast in the valley: a white stag, or from the third wave a cave bear.</summary>
+    /// <summary>Now and then a rare beast in the valley: a white stag, or from the third day (or two raids beaten back) a cave bear.</summary>
     internal void RareBeast()
     {
-        bool bear = Waves.Number >= 2 && _fate.NextDouble() < .45;
+        bool bear = (Raids.Repelled >= 2 || Clock.Day >= 3) && _fate.NextDouble() < .45;
         if (!bear && _fate.NextDouble() > .5) return;
         var t = bear ? Kinds.Bear : Kinds.WhiteStag;
         for (int tries = 0; tries < 40; tries++)
@@ -185,12 +187,13 @@ public sealed partial class Sim
     /// <summary>What the envoy offers: one of the bargains the next wave allows.</summary>
     void MakeOffer(Unit u)
     {
-        var kinds = new List<DealKind> { DealKind.Delay, DealKind.Tribute };
+        // the next raid put off only where something keeps its time
+        var kinds = Source.Until(this) >= 0 ? new List<DealKind> { DealKind.Delay, DealKind.Tribute } : new List<DealKind> { DealKind.Tribute };
         if (Bands.Exists(b => b.State == BandState.Coming && b.Roster.Exists(Kinds.IsEngine))) kinds.Add(DealKind.NoEngines);
         // its own people in our hands: it would buy them back, and asks about that first and most often
         if (Prisoners() > 0) { kinds.Add(DealKind.Ransom); kinds.Add(DealKind.Ransom); }
         var kind = kinds[_fate.Next(kinds.Count)];
-        int n = Waves.Number + 1;
+        int n = (int)Math.Round(PlannedThreat);
         var d = Offer ?? new Deal { Envoy = u };
         d.Kind = kind; d.Envoy = u; d.Until = Time + 90;
         switch (kind)
@@ -208,12 +211,12 @@ public sealed partial class Sim
         Say("Посол орды говорит: " + OfferText(d), 2, u);
     }
 
-    /// <summary>"Дайте 70 золота — следующая волна придёт на три минуты позже."</summary>
+    /// <summary>"Дайте 70 золота — орда придёт на три минуты позже."</summary>
     public static string OfferText(Deal d) => d.Kind switch
     {
-        DealKind.Delay => $"«Дайте {d.Cost:0} золота, и следующая волна придёт на 3 минуты позже».",
-        DealKind.Tribute => $"«Отдайте {Fmt.M3(d.Cost)} м³ {(d.Store == Stockpile.Wood ? "брёвен" : d.Store == Stockpile.Stone ? "камня" : "земли")} и следующая волна будет на 25 % меньше».",
-        DealKind.NoEngines => $"«Дайте {d.Cost:0} золота, и следующая волна придёт без осадных машин».",
+        DealKind.Delay => $"«Дайте {d.Cost:0} золота, и орда придёт на 3 минуты позже».",
+        DealKind.Tribute => $"«Отдайте {Fmt.M3(d.Cost)} м³ {(d.Store == Stockpile.Wood ? "брёвен" : d.Store == Stockpile.Stone ? "камня" : "земли")} и следующий набег будет на 25 % меньше».",
+        DealKind.NoEngines => $"«Дайте {d.Cost:0} золота, и следующий набег придёт без осадных машин».",
         DealKind.Ransom => $"«Отпустите наших пленных, и мы дадим за них {d.Cost:0} золота».",
         _ => "",
     };
@@ -243,18 +246,18 @@ public sealed partial class Sim
         switch (d.Kind)
         {
             case DealKind.Delay:
-                Waves.Countdown += 180;
-                Say("Сделка: следующая волна придёт на 3 минуты позже.", 1, d.Envoy);
+                Source.Delay(this, 180);
+                Say("Сделка: орда придёт на 3 минуты позже.", 1, d.Envoy);
                 break;
             case DealKind.Tribute:
                 _waveShare = .75;
                 ThinNextWave();
-                Say("Сделка: следующая волна будет на 25 % меньше.", 1, d.Envoy);
+                Say("Сделка: следующий набег будет на 25 % меньше.", 1, d.Envoy);
                 break;
             case DealKind.NoEngines:
                 _waveNoEngines = true;
                 ThinNextWave();
-                Say("Сделка: следующая волна придёт без осадных машин.", 1, d.Envoy);
+                Say("Сделка: следующий набег придёт без осадных машин.", 1, d.Envoy);
                 break;
         }
         return true;
@@ -265,7 +268,7 @@ public sealed partial class Sim
     {
         var d = Offer;
         // the horde is coming: no more talk
-        if (Waves.Active && d.Envoy is { Dead: false }) { Offer = null; return; }
+        if (Raids.Active && d.Envoy is { Dead: false }) { Offer = null; return; }
         if (d.Envoy == null || d.Envoy.Dead)
         {
             Offer = null;
@@ -279,7 +282,7 @@ public sealed partial class Sim
     void EnvoyKilled()
     {
         Angered = true;
-        Say("Посол орды убит. Следующая волна будет на 20 % сильнее.", 3);
+        Say("Посол орды убит. Следующий набег будет на 20 % сильнее.", 3);
         AngerNextWave();
     }
 

@@ -93,7 +93,7 @@ public partial class WorkProgress : CanvasLayer
     void Idle()
     {
         var sim = _m.Sim;
-        if (_m.Scripted || _m.Tutor != null || _m.Paused || sim.Waves.Active) { _idleSince = -1; return; }
+        if (_m.Scripted || _m.Tutor != null || _m.Paused || sim.Raids.Active) { _idleSince = -1; return; }
         int idle = 0;
         string why = "";
         foreach (var u in sim.Units)
