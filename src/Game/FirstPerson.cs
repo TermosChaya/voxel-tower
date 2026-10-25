@@ -140,7 +140,8 @@ void fragment() {
     public void Face(float yaw, float pitch)
     {
         _yaw = yaw; _pitch = Math.Clamp(pitch, -PitchMax, PitchMax);
-        Update(0);
+        // (nobody gone into, the going in refused: no eyes to turn)
+        if (_u != null) Update(0);
     }
 
     /// <summary>Lets go of the one gone into, of the player's own will.</summary>
