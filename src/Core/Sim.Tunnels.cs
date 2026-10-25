@@ -680,7 +680,7 @@ public sealed partial class Sim
     {
         // a step left without props for want of logs is shored as soon as there are logs, before it falls in
         for (int i = 0; i < t.Dug && i < t.Cells.Count; i++)
-            if (!t.Shored[i] && !t.Fallen[i] && Stock[Stockpile.Wood] >= FrameLogs && Open(t, i) && Stock.Take(Stockpile.Wood, FrameLogs))
+            if (!t.Shored[i] && !t.Fallen[i] && Stock[Stockpile.Wood] >= FrameLogs && Stock.Take(Stockpile.Wood, FrameLogs))
             {
                 Shore(t.Cells[i]); t.Shored[i] = true; t.FallAt[i] = double.NaN;
             }

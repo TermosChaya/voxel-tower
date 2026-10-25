@@ -41,6 +41,9 @@ public sealed partial class Sim
         return false;
     }
 
+    /// <summary>The valley's own ground or rock, as it lies: what these rules are for (what is built is taken down as builders do it).</summary>
+    static bool Natural(byte m) => m != Mat.Air && !Mat.IsPlayer[m] && Labour.Diggable(m) && Mat.Def[m].Group is MatGroup.Earth or MatGroup.Rock;
+
     /// <summary>Something built and bearing (not a tree, not leaves): what comes down when what it rests on goes.</summary>
     static bool Bearing(byte m) => Holds(m) && !Mat.IsTrunk(m) && !Mat.IsLeaf(m);
 
@@ -113,7 +116,7 @@ public sealed partial class Sim
             zone = new Danger
             {
                 PX = cx, PZ = cz, Len = (x1 - x0 + 1) * .5f + round, Half = (z1 - z0 + 1) * .5f + round,
-                Y0 = y0 - 4 * VoxelWorld.PerMetre, Y1 = top + 2 * VoxelWorld.PerMetre, Why = "отошёл: сейчас рухнет",
+                Y0 = y0 - 4 * VoxelWorld.PerMetre, Y1 = top + 2 * VoxelWorld.PerMetre, Why = "отошёл: сейчас рухнет", Kept = true,
             };
             return true;
         }
@@ -129,7 +132,7 @@ public sealed partial class Sim
     bool DropHold(Unit u, (int x, int y, int z, byte m) j)
     {
         // (what is built is taken down as builders do it, from the top: Sim.Builders.cs)
-        if (Mat.IsPlayer[World.Get(j.x, j.y, j.z)] || !BearsBuilt(j.x, j.y, j.z)) return false;
+        if (!Natural(World.Get(j.x, j.y, j.z)) || !BearsBuilt(j.x, j.y, j.z)) return false;
         int key = WaterPlanner.Pack(j.x, j.y, j.z);
         if (_footingsAt.Contains(key)) return true;
         if (u.FellHold && u.FellLooked == key && Time < u.FellLookedUntil) return true;
@@ -200,8 +203,8 @@ public sealed partial class Sim
     }
 
     /// <summary>
-    /// Whether one stands at the bottom of a pit: the ground three metres off higher than it climbs, most of the way
-    /// round.
+    /// Whether one stands at the bottom of a pit: the valley's own ground three metres off higher than it climbs, most of
+    /// the way round (walls round it are no pit: one shut in by them waits a while, as a gate may open).
     /// </summary>
     bool InPit(Unit u) => PitAt(u.X, u.Z, Nav.Floor[u.Cell], (u.T.Move.Climb + 1) * NavGrid.CS);
 
@@ -211,7 +214,7 @@ public sealed partial class Sim
         foreach (var (dx, dz) in Ways8)
         {
             int x = (int)(px + dx * 3 * VoxelWorld.PerMetre), z = (int)(pz + dz * 3 * VoxelWorld.PerMetre);
-            if (World.InBounds(x, 2, z) && World.SurfAt(x, z) >= floor + over) higher++;
+            if (World.InBounds(x, 2, z) && World.GroundTop(x, z) >= floor + over) higher++;
         }
         return higher >= 6;
     }

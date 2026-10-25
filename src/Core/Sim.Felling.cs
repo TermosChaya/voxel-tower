@@ -19,6 +19,8 @@ public sealed class Danger
     /// <summary>What those keeping out of it say they are doing; the one whose work it is (it keeps to it).</summary>
     public string Why = "";
     public Unit By;
+    /// <summary>Kept clear the whole while (a feller's lane, a digger's box): whoever walks into it is sent out again.</summary>
+    public bool Kept;
 
     public bool Has(float x, float y, float z, float margin)
     {
@@ -210,7 +212,7 @@ public sealed partial class Sim
     static Danger LaneOf(float px, float pz, int baseY, int top, float spread, float butt, float dx, float dz) => new()
     {
         PX = px, PZ = pz, DX = dx, DZ = dz, Len = top - baseY + 3 * VoxelWorld.PerMetre,
-        Half = spread + 2 * VoxelWorld.PerMetre, HalfFoot = butt + VoxelWorld.PerMetre, Why = "отошёл: валят дерево",
+        Half = spread + 2 * VoxelWorld.PerMetre, HalfFoot = butt + VoxelWorld.PerMetre, Why = "отошёл: валят дерево", Kept = true,
     };
 
     /// <summary>
@@ -480,6 +482,7 @@ public sealed partial class Sim
             int top = baseY;
             foreach (var (x, y, z, m, _) in pieces) { if (!Mat.IsTrunk(m)) continue; top = Math.Max(top, y); spread = MathF.Max(spread, MathF.Max(MathF.Abs(x - t.PX), MathF.Abs(z - t.PZ))); }
             lane = LaneOf(t.PX, t.PZ, baseY, top, spread, 3, t.DX, t.DZ);
+            lane.Kept = false;
         }
         lane.Until = t.To + 1;
         if (!Dangers.Contains(lane)) Dangers.Add(lane);
@@ -503,7 +506,7 @@ public sealed partial class Sim
         if (Dangers.Count > 0) Dangers.RemoveAll(d => Time > d.Until);
         if (_fells.Count > 0) _fells.RemoveAll(p => Time - p.Made > 300);
         // whoever of ours walks into one while it lasts is sent out again
-        foreach (var d in Dangers) ClearLane(d, d.By);
+        foreach (var d in Dangers) if (d.Kept) ClearLane(d, d.By);
         TickUndercut();
     }
 
@@ -540,7 +543,9 @@ public sealed partial class Sim
         Unit near = null;
         float nd = 12 * VoxelWorld.PerMetre;
         foreach (var u in Units) { if (u.Dead || u.Inside) continue; float d = MathF.Abs(u.X - b.PX) + MathF.Abs(u.Z - b.PZ); if (d < nd) { nd = d; near = u; } }
-        float ax = near == null ? 0 : b.PX - near.X, az = near == null ? 0 : b.PZ - near.Z, al = MathF.Max(1, MathF.Sqrt(ax * ax + az * az));
+        // (nobody near: any way at all)
+        if (near == null) return Rng.Next(4) switch { 0 => (1f, 0f), 1 => (-1f, 0f), 2 => (0f, 1f), _ => (0f, -1f) };
+        float ax = b.PX - near.X, az = b.PZ - near.Z, al = MathF.Max(1, MathF.Sqrt(ax * ax + az * az));
         float best = float.MaxValue;
         (float, float) way = Ways8[0];
         foreach (var (dx, dz) in Ways8)

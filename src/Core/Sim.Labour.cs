@@ -334,7 +334,7 @@ public sealed partial class Sim
                         // the ground under its own feet is dug from beside, and the footing of what is built over its head
                         // from out from under it (what is built is taken down as builders do it); our countermine no
                         // further than its props (Sim.Undermine.cs)
-                        if (!wood && !Mat.IsPlayer[World.Get(x, y, z)] && (UnderOwnFeet(u, x, y, z, feet) || overhead && BearsBuilt(x, y, z))) { ownFeet = true; continue; }
+                        if (!wood && Natural(World.Get(x, y, z)) && (UnderOwnFeet(u, x, y, z, feet) || overhead && BearsBuilt(x, y, z))) { ownFeet = true; continue; }
                         if (BoreHeld(x, y, z)) { held = "подкоп ждёт брёвен на крепь"; continue; }
                         if (_footingsAt.Count > 0 && _footingsAt.Contains(WaterPlanner.Pack(x, y, z))) continue;
                         if (Arched.Get(x, y, z) == 0 || !ArchOver(x, y, z)) digs.Add((x, y, z, o));
