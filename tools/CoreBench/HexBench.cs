@@ -8,9 +8,9 @@ using VoxelTower.Core;
 /// The valley a hexagon, made by itself, and the kinds of valley (--hex): nothing made, walkable or buildable off the
 /// land; the citadel in the middle on level ground; the river in over one side and out over another, the roads in from
 /// the horde's side and out at the far one; the horde in over its side, whichever side that is; one thrown off the edge
-/// gone; the water at the edge standing; two neighbours meeting along the side they share; no building of the town over
-/// the edge; each kind with its places and its ground; the same seed the same valley; the kind, the size and the horde's
-/// side kept in a save.
+/// gone; the water at the edge standing; the beasts keeping off the edge; two neighbours meeting along the side they
+/// share; no building of the town over the edge; each kind with its places and its ground; the same seed the same
+/// valley; the kind, the size and the horde's side kept in a save.
 /// </summary>
 static class HexBench
 {
@@ -176,6 +176,36 @@ static class HexBench
         sim.Fling(thrown, -12 * VoxelWorld.PerMetre, 4 * VoxelWorld.PerMetre, 0, "взрыв");
         Run(sim, 6);
         check("one thrown off the land's edge is gone over it", thrown.Dead && thrown.KilledBy.Length > 0, $"dead {thrown.Dead}, {thrown.KilledBy}; at {thrown.X:0},{thrown.Z:0}");
+
+        // the beasts keep off the edge: their herds are set well in from it, and one bolting from a goblin toward the
+        // edge turns along it and stays clear of it
+        {
+            var (wb, sb) = Make();
+            wb.Compact();
+            var sim2 = new Sim(wb, sb);
+            sim2.Waves.Countdown = 1e9;
+            sim2.SeedWildlife(16);
+            var beasts = sim2.Units.Where(u => u.Team == Team.Wild && !u.Dead).ToList();
+            float homeMin = beasts.Count == 0 ? 0 : beasts.Min(u => { var (hx, _, hz) = sim2.Nav.Feet(u.Home); return hex.Edge(hx, hz); });
+            // a deer 6 m in from the north-western side, and a goblin come up behind it from inland
+            var (dx0, dz0) = sb.Hex.SidePoint(Hex.NorthWest, .5f, 48);
+            var (nx, nz) = sb.Hex.Inward(Hex.NorthWest);
+            var deer = sim2.Spawn(Kinds.Deer, sim2.NearestStand((int)dx0, (int)dz0, Kinds.Deer.Move.Height));
+            deer.Home = deer.Cell;
+            var goblin = sim2.Spawn(Kinds.Goblin, sim2.NearestStand((int)(dx0 + nx * 40), (int)(dz0 + nz * 40), 2));
+            goblin.Guard = true; goblin.Home = goblin.Cell;
+            float closest = 1e9f, closestHerd = 1e9f;
+            for (int sec = 0; sec < 90; sec++)
+            {
+                Run(sim2, 1);
+                if (!deer.Dead) closest = Math.Min(closest, hex.Edge(deer.X, deer.Z));
+                foreach (var u in beasts) if (!u.Dead) closestHerd = Math.Min(closestHerd, hex.Edge(u.X, u.Z));
+                if (sec == 20) { goblin.Dead = true; goblin.DiedAt = -999; }
+            }
+            check("the beasts keep off the land's edge: herds are set well in from it, they graze clear of it, and a deer bolting toward it turns along it",
+                beasts.Count >= 20 && homeMin >= 40 && closestHerd >= 12 && closest >= 12 && !deer.Dead,
+                $"{beasts.Count} beasts, the nearest home {homeMin / 8:0.0} m from the edge, the nearest a herd came {closestHerd / 8:0.0} m; the deer came {closest / 8:0.0} m, last {hex.Edge(deer.X, deer.Z) / 8:0.0} m");
+        }
 
         // the horde's side another: from the east the horde comes in, up its own road, under the plateau's long cliff,
         // and the raids drawn up for the siege come in by it

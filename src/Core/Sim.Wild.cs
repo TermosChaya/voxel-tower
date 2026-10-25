@@ -24,6 +24,8 @@ public sealed partial class Sim
         {
             int x = Site.SpawnStrip + 40 + Rng.Next(World.SX - Site.SpawnStrip - 80), z = 40 + Rng.Next(World.SZ - 80);
             if (Math.Abs(x - Site.KeepX) < 220 && Math.Abs(z - Site.KeepZ) < 220) continue;
+            // a herd's ground well in from the land's edge, where it has room to graze and to run
+            if (Site.Hex != null && (!Site.Inland(x, z, EdgeRoom + 24) || Site.InStrip(x, z))) continue;
             int top = World.SurfAt(x, z);
             byte m = World.Get(x, top - 1, z);
             if (!Mat.IsGrass(m) && m != Mat.Soil && m != Mat.Moss) continue;
@@ -44,6 +46,30 @@ public sealed partial class Sim
             return count;
         }
         return 0;
+    }
+
+    /// <summary>How far in from the land's edge a beast keeps when it can (voxels): it grazes and runs inside that.</summary>
+    const float EdgeRoom = 40;
+
+    /// <summary>
+    /// Where a beast bolts to: so far away along the way from the threat, give or take; and if that is out against the
+    /// land's edge, a way turned aside from it, a little at a time either way — along the edge rather than into it — or
+    /// failing that, back in toward the middle.
+    /// </summary>
+    (float x, float z) FleeTo(Unit u, float dx, float dz, float run, float jx, float jz)
+    {
+        float x = u.X + dx * run + jx, z = u.Z + dz * run + jz;
+        // (the box of the bench has no such edge to keep off: its sides only stop the way)
+        if (Site.Hex == null || Site.Inland(x, z, EdgeRoom)) return (x, z);
+        for (int k = 1; k <= 5; k++)
+            foreach (int sign in new[] { 1, -1 })
+            {
+                float a = sign * k * MathF.PI / 7, c = MathF.Cos(a), s = MathF.Sin(a);
+                float rx = dx * c - dz * s, rz = dx * s + dz * c;
+                float px = u.X + rx * run + jx, pz = u.Z + rz * run + jz;
+                if (Site.Inland(px, pz, EdgeRoom)) return (px, pz);
+            }
+        return Site.PullIn(x, z, EdgeRoom);
     }
 
     bool NearAny(int x, int z, Team team, float dist)
@@ -119,8 +145,9 @@ public sealed partial class Sim
                 float ax = threat != null ? u.X - threat.X : (float)(Rng.NextDouble() - .5), az = threat != null ? u.Z - threat.Z : (float)(Rng.NextDouble() - .5);
                 float len = MathF.Max(.01f, MathF.Sqrt(ax * ax + az * az));
                 float run = 14 * NavGrid.CS;
-                int tx = (int)Math.Clamp(u.X + ax / len * run + (Rng.NextDouble() - .5) * 60, 8, World.SX - 9);
-                int tz = (int)Math.Clamp(u.Z + az / len * run + (Rng.NextDouble() - .5) * 60, 8, World.SZ - 9);
+                float jx = (float)(Rng.NextDouble() - .5) * 60, jz = (float)(Rng.NextDouble() - .5) * 60;
+                var (fx, fz) = FleeTo(u, ax / len, az / len, run, jx, jz);
+                int tx = (int)Math.Clamp(fx, 8, World.SX - 9), tz = (int)Math.Clamp(fz, 8, World.SZ - 9);
                 int c = NearestStand(tx, tz, u.T.Move.Height);
                 if (c < 0 || !GoTo(u, c, budget: 3000)) u.Path = null;
             }
@@ -137,8 +164,10 @@ public sealed partial class Sim
         u.NextSearch = Time + 5 + Rng.NextDouble() * 10;
         int home = u.Home >= 0 ? u.Home : u.Cell;
         var (hx, _, hz) = Nav.Feet(home);
-        int wx = (int)Math.Clamp(hx + (Rng.NextDouble() - .5) * 2 * 10 * 16, 8, World.SX - 9);
-        int wz = (int)Math.Clamp(hz + (Rng.NextDouble() - .5) * 2 * 10 * 16, 8, World.SZ - 9);
+        float ox = (float)(Rng.NextDouble() - .5) * 2 * 10 * 16, oz = (float)(Rng.NextDouble() - .5) * 2 * 10 * 16;
+        // somewhere near home, and never out against the land's edge
+        var (gx, gz) = Site.Hex != null ? Site.PullIn(hx + ox, hz + oz, EdgeRoom) : (hx + ox, hz + oz);
+        int wx = (int)Math.Clamp(gx, 8, World.SX - 9), wz = (int)Math.Clamp(gz, 8, World.SZ - 9);
         int w = NearestStand(wx, wz, u.T.Move.Height);
         if (w >= 0 && !Nav.Deep(w) && !GoTo(u, w, budget: 2500)) u.Path = null;
     }
