@@ -58,6 +58,9 @@ public sealed class Site
     /// <summary>Mines worth holding and ruins of what stood here before: things to find, take and keep.</summary>
     public readonly List<Landmark> Landmarks = new();
 
+    /// <summary>The outcrops of iron ore (MapGen.Ore.cs): their middle, the top of it, and how far they reach, voxels.</summary>
+    public readonly List<(int X, int Z, int Y, int R)> Outcrops = new();
+
     /// <summary>What the ruins were meant to be, voxel by voxel, so they can be raised again; the game keeps adding to it.</summary>
     public VoxelWorld Design;
     /// <summary>Where the old bridges arch over the river: they stand as long as they touch the ground (<see cref="Sim.Arched"/>).</summary>

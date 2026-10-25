@@ -50,7 +50,7 @@ public sealed partial class Sim
     // of every voxel of a fort, a few hundred thousand times over
     static readonly byte[] Spans = ByMaterial(m => (byte)SpanOfMaterial(m));
     static readonly byte[] Grounds = ByMaterial(m => m != Mat.Air && (Mat.IsAnchor[m] || m == Mat.Ore) ? (byte)1 : (byte)0);
-    static readonly byte[] Hards = ByMaterial(m => m is Mat.Rock or Mat.Bed or Mat.Moss or Mat.Ore or Mat.Keep or Mat.KeepShade or Mat.KeepDark or Mat.Roof or Mat.Iron or Mat.Plank or Mat.Ember ? (byte)1 : (byte)0);
+    static readonly byte[] Hards = ByMaterial(m => m is Mat.Rock or Mat.Bed or Mat.Moss or Mat.Ore or Mat.IronOre or Mat.OreRust or Mat.Keep or Mat.KeepShade or Mat.KeepDark or Mat.Roof or Mat.Iron or Mat.Plank or Mat.Ember ? (byte)1 : (byte)0);
 
     /// <summary>A table of something by material, every byte a voxel can hold (nothing for those no material has).</summary>
     static byte[] ByMaterial(Func<byte, byte> of)
@@ -65,6 +65,8 @@ public sealed partial class Sim
         if (m == Mat.Air || Mat.Passable[m] || Mat.IsAnchor[m] || m == Mat.Water || Mat.IsDecor[m] || Mat.Swings(m) || m == Mat.Ore) return 0;
         if (Mat.IsMasonry(m) || m == Mat.Keep) return 10;
         if (Mat.IsTrunk(m)) return 30;
+        // iron plate holds out furthest of what is built: three metres from where it rests
+        if (m == Mat.Plate) return 24;
         return m switch { Mat.Wood or Mat.Deck or Mat.TrapDeck => 16, Mat.Rammed => 4, Mat.Char or Mat.Rubble or Mat.DropStone or Mat.DropLog => 2, Mat.Lumber => 4, Mat.Pitch => 1, Mat.Ruin => Free, _ => 8 };
     }
 
@@ -833,9 +835,10 @@ public sealed partial class Sim
     }
 
     /// <summary>What a voxel is once it has fallen: masonry broken stone, timber broken timber, rammed earth loose earth;
-    /// trees lie as logs, and the rest as it was.</summary>
+    /// trees lie as logs, iron leaves as loose plates, and the rest as it was.</summary>
     static byte Broken(byte m) =>
         Mat.IsMasonry(m) || m is Mat.Ruin or Mat.Keep or Mat.DropStone ? Mat.Rubble
+        : Mat.IsIronLeaf(m) ? Mat.Plate
         : m is Mat.Wood or Mat.Deck or Mat.Plank or Mat.TrapDeck or Mat.Stakes or Mat.DropLog || Mat.Swings(m) ? Mat.Lumber
         : m == Mat.Rammed ? Mat.Soil : m;
 

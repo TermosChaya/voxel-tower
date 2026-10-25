@@ -119,7 +119,10 @@ public sealed partial class Sim
                 continue;
             }
             // the threshold at the top of the house's floor, whatever the ground outside
-            var plan = GatePlan.At(World, Site, new VoxelHit { X = d.X, Y = d.Y, Z = d.Z, NX = d.NX, NZ = d.NZ }, d.Top > 0 ? d.Y - 8 : -1);
+            // iron over the doorway (the gatehouse's lintel, a house walled in iron): its leaves are iron too
+            bool iron = false;
+            for (int y = d.Y - 8 + Gateway.Height - 2; y < d.Y - 8 + Gateway.Height + 6 && !iron; y++) iron = Mat.IsMetalWork(World.Get(d.X, y, d.Z));
+            var plan = GatePlan.At(World, Site, new VoxelHit { X = d.X, Y = d.Y, Z = d.Z, NX = d.NX, NZ = d.NZ }, d.Top > 0 ? d.Y - 8 : -1, iron);
             if (plan == null) continue;
             // the leaves hang on the face the door looks out of, their foot at the top of the floor, and that is a
             // course or more over the ground outside: a doorstep of what the wall is of is laid under them down to the

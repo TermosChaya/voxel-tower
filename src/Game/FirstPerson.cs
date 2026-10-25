@@ -200,6 +200,7 @@ void fragment() {
                 if (Bindings.Is(k, Act.FpStone)) { sim.LayMat = Mat.Stone; break; }
                 if (Bindings.Is(k, Act.FpWood)) { sim.LayMat = Mat.Wood; break; }
                 if (Bindings.Is(k, Act.FpEarth)) { sim.LayMat = Mat.Rammed; break; }
+                if (Bindings.Is(k, Act.FpFourth)) { sim.LayMat = Mat.Plate; break; }
                 if (Bindings.Is(k, Act.FpKick)) { sim.WishKick = true; break; }
                 if (Bindings.Is(k, Act.FpSwitch)) { Switch(); break; }
                 if (Bindings.Is(k, Act.FpLadder)) { if (sim.PossessedLadder()) Said("лестница размечена: кладите её правой кнопкой"); else if (_u.T.Work <= 0) Said("лестницы ставят рабочие"); break; }
@@ -317,7 +318,7 @@ void fragment() {
         string walk = "{FpForward}{FpLeft}{FpBack}{FpRight} — идти, {FpRun} — бежать";
         string hands = u.T.Ranged ? "{Lmb} — выстрел" + (Sim.Kindles(u.T) ? " · {FpFire} — огненные стрелы" : "")
             : Sim.Fights(u) ? "{Lmb} — удар, держать — тяжёлый · {Rmb} — блок · {FpKick} — пинок"
-            : u.T.Work > 0 ? "{Lmb} — кирка · {Rmb} — класть ({FpStone} камень, {FpWood} брёвна, {FpEarth} земля) · {FpLadder} — лестница" : "{Lmb} — удар";
+            : u.T.Work > 0 ? "{Lmb} — кирка · {Rmb} — класть ({FpStone} камень, {FpWood} брёвна, {FpEarth} земля, {FpFourth} железо) · {FpLadder} — лестница" : "{Lmb} — удар";
         string calls = u.T == Kinds.Captain ? " · {FpStone}–{FpFourth} — призывы · {FpOrder} — приказ взглядом" : "";
         return walk + " · " + hands + calls + " · {FpUp} / {FpDown} — по лестнице · {FpSwitch} — в другого · Esc — выйти";
     }

@@ -111,7 +111,7 @@ public sealed partial class Sim
         {
             var (x, y, z) = g.Place(i, 0);
             byte m = World.Get(x, y, z);
-            if (m == Mat.Air || Mat.IsLeaf(m)) into.Add(x, y, z, Mat.Gate);
+            if (m == Mat.Air || Mat.IsLeaf(m)) into.Add(x, y, z, g.Leaf);
         }
     }
 

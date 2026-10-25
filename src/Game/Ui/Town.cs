@@ -59,7 +59,7 @@ public partial class TownPanel : VBoxContainer
             key.Append('|').Append(b.Kind).Append(b.Level).Append(b.Target).Append(b.Ready);
             foreach (var (k, n) in b.Stock) key.Append(k).Append((int)n);
         }
-        for (int k = 1; k <= 3; k++) key.Append('|').Append((int)(sim.Stock[k] / VoxelWorld.PerM3));
+        for (int k = 1; k < Stockpile.Kinds; k++) key.Append('|').Append((int)(sim.Stock[k] / VoxelWorld.PerM3));
         return key.ToString();
     }
 
@@ -69,11 +69,11 @@ public partial class TownPanel : VBoxContainer
         if (key == _key) return;
         _key = key;
         var sim = _m.Sim;
-        float income = sim.TownIncome();
+        float income = sim.TownIncome(), metal = sim.TownMetal();
         _standing.Text = "Поселение: " + sim.StandingLine();
         _income.Text = sim.Buildings.Count == 0
             ? "Здания открывают во вкладке «Знания» (страницы «Город» и «Войско»), а ставят здесь: рабочие строят их, потом здание нанимает войска и улучшает их."
-            : $"Доход города: {income:0.#} золота в минуту. Зданий: {sim.Buildings.FindAll(b => b.Ready).Count} из {sim.Buildings.Count}.";
+            : $"Доход города: {income:0.#} золота{(metal > 0 ? $" и {metal:0.#} м³ металла" : "")} в минуту. Зданий: {sim.Buildings.FindAll(b => b.Ready).Count} из {sim.Buildings.Count}.";
         for (int i = _rows.GetChildCount() - 1; i >= 0; i--) _rows.GetChild(i).QueueFree();
         foreach (var k in Sim.TownKinds) _rows.AddChild(Row(k));
     }
@@ -105,7 +105,9 @@ public partial class TownPanel : VBoxContainer
         {
             if (!open) return row;
             string no = sim.CantBuild(k);
-            var put = Button($"Поставить · {k.Gold} зол.", no == null ? $"Взять план здания: щелчок по земле ставит его, {Bindings.Label(Act.Rotate)} поворачивает." : $"Нельзя: {no}.");
+            string iron = k.MetalCost > 0 ? $" · {k.MetalCost:0.##} м³ мет." : "";
+            string where = k.OnOre ? " Ставится только на рудный выход: ржавую скалу, где жила выходит наружу. Пока план в руке, выходы отмечены." : "";
+            var put = Button($"Поставить · {k.Gold} зол.{iron}", no == null ? $"Взять план здания: щелчок по земле ставит его, {Bindings.Label(Act.Rotate)} поворачивает.{where}" : $"Нельзя: {no}.");
             put.Disabled = no != null && !no.StartsWith("нужно");
             put.Pressed += () =>
             {
@@ -122,7 +124,7 @@ public partial class TownPanel : VBoxContainer
             if (b.Level < level) continue;
             b.Stock.TryGetValue(kind.Key, out float n);
             string no = sim.CantHireAt(b, kind);
-            var hire = Button($"{kind.Name} · {(int)n} · {sim.HireCost(kind)} зол.", $"{kind.Name}: {Retinue.About(kind)}\nЖдут найма: {(int)n}, прибавляется {growth} за волну.\n" + (no == null ? "Щелчок — нанять, выйдет из двери здания." : $"Нельзя: {no}."));
+            var hire = Button($"{kind.Name} · {(int)n} · {sim.HireCost(kind)} зол.{(kind.Metal > 0 ? $" · {kind.Metal:0.##} м³ мет." : "")}", $"{kind.Name}: {Retinue.About(kind)}\nЖдут найма: {(int)n}, прибавляется {growth} за волну.\n" + (no == null ? "Щелчок — нанять, выйдет из двери здания." : $"Нельзя: {no}."));
             hire.Disabled = no != null;
             hire.Pressed += () =>
             {
@@ -135,13 +137,13 @@ public partial class TownPanel : VBoxContainer
         if (b.Level < k.MaxLevel && b.Target <= b.Level)
         {
             string no = sim.CantRaise(b);
-            var up = Button($"Второй этаж · {k.UpGold} зол.", $"Рабочие снимут крышу и поднимут второй этаж. Тогда: {k.Level2}" + (no != null ? $"\nНельзя: {no}." : ""));
+            var up = Button($"Второй этаж · {k.UpGold} зол.{(k.UpMetal > 0 ? $" · {k.UpMetal:0.##} м³ мет." : "")}", $"Рабочие снимут крышу и поднимут второй этаж. Тогда: {k.Level2}" + (no != null ? $"\nНельзя: {no}." : ""));
             up.Disabled = no != null;
             up.Pressed += () => { string why = sim.Raise(b); if (why != null) _m.Hud.Float(why, Ornament.Blood); else Sound.Ui("mark"); _key = ""; };
             buttons.AddChild(up);
         }
         if (k.Key == "market")
-            foreach (int kind in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth })
+            foreach (int kind in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth, Stockpile.Metal })
             {
                 var (sell, buy) = sim.MarketRates(kind);
                 var s = Button($"Продать 1 м³ ({Stockpile.Name(kind)}) · +{sell}", $"Продать кубометр: {Stockpile.Name(kind)} за {sell} золота.");
@@ -158,7 +160,9 @@ public partial class TownPanel : VBoxContainer
     {
         string needs = k.Needs.Length == 0 ? "" : "\nНужно: " + string.Join(", ", Array.ConvertAll(k.Needs, n => (n.level > 1 ? "улучшенная " : "") + "«" + Sim.TownKindOf(n.key)?.Name + "»"));
         string up = k.MaxLevel > 1 ? $"\nВторой этаж: {k.Level2}" : "";
-        return $"{k.Name}\n{k.About}{up}{needs}";
+        string where = k.OnOre ? "\nСтавится только на рудный выход." : "";
+        string iron = k.MetalCost > 0 ? $"\nМеталл: {k.MetalCost:0.##} м³" + (k.UpMetal > 0 ? $", этаж {k.UpMetal:0.##} м³." : ".") : "";
+        return $"{k.Name}\n{k.About}{up}{where}{iron}{needs}";
     }
 
     static Button Button(string text, string tip) => new()

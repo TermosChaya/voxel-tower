@@ -10,7 +10,7 @@ render_mode cull_back, diffuse_burley, specular_schlick_ggx;
 // over the earth down its sides, leaves and needles in every voxel of a crown, furrows up a trunk, dashes across a birch.
 // Vertex data: COLOR = linear rgb + colour variance, UV = (corner shade, glow),
 // UV2 = (sway, skin: 0 rough, 1 dressed stone, 2 metal, 3 turf, 4 leaves, 5 bark, 6 birch bark, 7 needles, 8 burnt turf,
-// 9 the earth of a bank under turf, grown over with grass, 10 lava).
+// 9 the earth of a bank under turf, grown over with grass, 10 lava, 11 iron plate).
 // The figures are meshed in their own voxels but sculpted in halves of them: grid says how many cells
 // a unit of the mesh holds, so the jitter and the bevel follow the cells they are made of.
 
@@ -205,18 +205,45 @@ vec3 lava(vec3 base, vec2 p, float t, out float hot) {
 	return mix(base * vec3(0.16, 0.1, 0.09) + vec3(0.03, 0.025, 0.022), base * 1.1 + vec3(0.25, 0.1, 0.0), crack);
 }
 
+// iron laid in plates half a metre by a little less, each row set half a plate over the one under it: dark seams
+// between them, a rivet head every voxel along a plate's top and bottom, each plate a tone of its own and hammered
+// faintly; the rivets go once they are smaller than a pixel. A rivet's head is smoother than the plate.
+vec3 plates(vec3 base, float var, vec2 face, float px, out float smooth_) {
+	vec2 size = vec2(4.0, 3.0);
+	float row = floor(face.y / size.y);
+	vec2 q = vec2(face.x / size.x + mod(row, 2.0) * 0.5, face.y / size.y);
+	vec2 id = floor(q);
+	vec2 f = fract(q) * size;
+	float edge = min(min(f.x, size.x - f.x), min(f.y, size.y - f.y));
+	float seam = 1.0 - smoothstep(0.02, 0.02 + max(0.08, px * 1.2), edge);
+	float dent = sin(face.x * 2.3 + id.y * 1.7) * sin(face.y * 2.9 - id.x * 2.1);
+	vec3 col = base * (1.0 + (vhash(vec3(id, 5.0)) - 0.5) * var * 2.4 + dent * 0.025);
+	float rv = min(abs(f.y - 0.36), abs(f.y - (size.y - 0.36)));
+	float d = length(vec2(fract(f.x) - 0.5, rv));
+	float near = 1.0 - smoothstep(0.25, 0.5, px);
+	float head = (1.0 - smoothstep(0.1, 0.14, d)) * near;
+	float rim = smoothstep(0.1, 0.14, d) * (1.0 - smoothstep(0.14, 0.19, d)) * near;
+	col *= mix(1.0, 0.45, seam) * (1.0 + head * 0.55 - rim * 0.3);
+	smooth_ = head;
+	return col;
+}
+
 void fragment() {
 	vec3 cell = floor(v_vox - v_nrm * 0.5 + 0.001);
 	vec3 col;
 	float line = 0.0;
 	int skin = v_skin;
 	float px = length(fwidth(v_vox));
-	float hot = 1.0;
+	float hot = 1.0, shine = 0.0;
 	if (skin == 10) {
 		// its plates a little over a voxel across, on the top and down the sides of a tongue of it
 		vec3 an = abs(v_nrm);
 		vec2 face = an.y > 0.5 ? v_vox.xz : (an.x > 0.5 ? v_vox.zy : v_vox.xy);
 		col = lava(COLOR.rgb, face * 0.4 + vec2(TIME * 0.03, TIME * 0.02), TIME, hot);
+	} else if (skin == 11) {
+		vec3 an = abs(v_nrm);
+		vec2 face = an.x > 0.5 ? v_vox.zy : (an.y > 0.5 ? v_vox.xz : v_vox.xy);
+		col = plates(COLOR.rgb, COLOR.a, face, px, shine);
 	} else if (skin == 1) {
 		// one stone, one tone, with a faint mottling and a darker skin toward its edges
 		vec3 p = v_vox * 0.55;
@@ -254,8 +281,8 @@ void fragment() {
 	}
 	col *= mix(1.0, 0.8, line);
 	ALBEDO = col * v_ext.x;
-	ROUGHNESS = skin == 2 ? 0.42 : skin == 1 ? 0.86 : 0.93;
-	METALLIC = skin == 2 ? 0.6 : 0.0;
-	SPECULAR = skin == 2 ? 0.6 : 0.3;
+	ROUGHNESS = skin == 11 ? mix(0.52, 0.3, shine) : skin == 2 ? 0.42 : skin == 1 ? 0.86 : 0.93;
+	METALLIC = skin == 11 ? 0.4 : skin == 2 ? 0.6 : 0.0;
+	SPECULAR = skin == 2 || skin == 11 ? 0.6 : 0.3;
 	EMISSION = col * v_ext.y * hot;
 }

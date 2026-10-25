@@ -87,7 +87,7 @@ public partial class BuildTools : Node3D
         (Tool.Gate, _) => "Щёлкните по стене. Рабочие прорубят проём и навесят ворота. Свои проходят, орде придётся их рубить.",
         (Tool.Repair, _) => "Щёлкните по разрушенной постройке, рабочие её восстановят. Рамкой можно чинить по частям.",
         (Tool.Bridge, _) => "Протяните от берега до берега. Камень ({MatStone}) или брёвна ({MatWood}), вид моста — внизу. {WidthLess} и {WidthMore} — ширина прохода.",
-        (Tool.Gather, _) => "Обведите участок рамкой. {MatStone} — камень, {MatWood} — лес, {MatEarth} — земля. Свободные рабочие будут добывать там сами.",
+        (Tool.Gather, _) => "Обведите участок рамкой. {MatStone} — камень, {MatWood} — лес, {MatEarth} — земля, {MatMetal} — руда. Свободные рабочие будут добывать там сами.",
         (Tool.Unmark, _) => "Рамка снимает всю разметку и делянки внутри. Щелчок снимает разметку рядом и делянку под курсором.",
         (Tool.Capture, _) => "Обведите постройку рамкой, чтобы сохранить чертёж.",
         (Tool.Paste, _) => "Щелчок ставит копию. R поворачивает, Esc отменяет.",
@@ -125,8 +125,8 @@ public partial class BuildTools : Node3D
     Vector3 _lastHit;
     int _strokeVox;
     double _strokeSec;
-    readonly double[] _est = new double[4];
-    readonly double[] _strokeEst = new double[4];
+    readonly double[] _est = new double[Stockpile.Kinds];
+    readonly double[] _strokeEst = new double[Stockpile.Kinds];
 
     Node3D _voxSpace;
     MeshInstance3D _ghost, _shape, _cursor;
@@ -150,7 +150,7 @@ public partial class BuildTools : Node3D
     public string PlanText { get; private set; }
     public bool PlanAffordable { get; private set; }
     /// <summary>Voxels the stroke under the cursor takes from each store (negative when digging fills it).</summary>
-    public readonly double[] PlanNeeds = new double[4];
+    public readonly double[] PlanNeeds = new double[Stockpile.Kinds];
     public bool PlanIsDig { get; private set; }
     /// <summary>The material under the cursor and what is marked there.</summary>
     public string HoverText { get; private set; } = "";
@@ -165,15 +165,18 @@ public partial class BuildTools : Node3D
     GatePlan _gatePlan;
 
     /// <summary>"брёвна 3,4 м³ · проём: камень +4,0 м³ · 6 мин работы одного".</summary>
+    /// <summary>The gate tool hangs leaves of iron plate: metal was chosen for it.</summary>
+    public bool IronGate => Opt.Material == Mat.Plate;
+
     string GateSummary(GatePlan gp)
     {
-        var lay = new double[4]; var cut = new double[4];
+        var lay = new double[Stockpile.Kinds]; var cut = new double[Stockpile.Kinds];
         double sec = Labour.Estimate(_m.World, gp.Leaves, false, lay) + Labour.Estimate(_m.World, gp.Cut, true, cut);
         var parts = new List<string>();
-        foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth })
+        foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth, Stockpile.Metal })
             if (lay[k] > .5) parts.Add($"{Stockpile.Name(k)} {Fmt.M3(lay[k])} м³");
         var got = new List<string>();
-        foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth })
+        foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth, Stockpile.Metal })
             if (cut[k] < -.5) got.Add($"{Stockpile.Name(k)} +{Fmt.M3(-cut[k])} м³");
         if (got.Count > 0) parts.Add("проём: " + string.Join(", ", got));
         parts.Add($"{Fmt.Duration(sec)} работы одного");
@@ -238,7 +241,7 @@ public partial class BuildTools : Node3D
         // these only build
         if (Tool is Tool.Bridge or Tool.Repair or Tool.Gate or Tool.Ladder or Tool.Yard or Tool.Template) Opt.Dig = false;
         if (Tool != Tool.Paste) PasteBp = null;
-        if (Tool != Tool.Building) Placing = null;
+        if (Tool != Tool.Building) { Placing = null; ShowOutcrops(false); }
         _lmb = _paint = _hasStart = false;
         _planKey = "~";
         _m.Hud.OnToolChanged();
@@ -384,7 +387,7 @@ public partial class BuildTools : Node3D
     (int x, int y, int z) HoverGround() => Snap(_hover.Ground(_m.World));
 
     /// <summary>What a gathering area takes: the material in hand says which; or a shelter.</summary>
-    public int GatherKind => Shelter ? Zone.Shelter : Sanctum ? Zone.Sanctum : Dwelling ? Zone.Dwelling : Opt.Material switch { Mat.Wood => Stockpile.Wood, Mat.Rammed => Stockpile.Earth, _ => Stockpile.Stone };
+    public int GatherKind => Shelter ? Zone.Shelter : Sanctum ? Zone.Sanctum : Dwelling ? Zone.Dwelling : Opt.Material switch { Mat.Wood => Stockpile.Wood, Mat.Rammed => Stockpile.Earth, Mat.Plate => Stockpile.Metal, _ => Stockpile.Stone };
 
     /// <summary>The pick is in hand, or Shift turns the brush into one for this stroke.</summary>
     bool DigNow => Opt.Dig || (Tool == Tool.Brush && (_lmb ? _shift : Input.IsKeyPressed(global::Godot.Key.Shift)));
@@ -458,6 +461,7 @@ public partial class BuildTools : Node3D
             case Act.MatStone: SetMaterial(Mat.Stone); return true;
             case Act.MatWood: SetMaterial(Mat.Wood); return true;
             case Act.MatEarth: SetMaterial(Mat.Rammed); return true;
+            case Act.MatMetal: SetMaterial(Mat.Plate); return true;
             case Act.Pick: SetDig(!Opt.Dig); return true;
             case Act.WidthLess: StepWidth(-1); return true;
             case Act.WidthMore: StepWidth(1); return true;
@@ -590,7 +594,7 @@ public partial class BuildTools : Node3D
         }
         else if (Tool == Tool.Gate)
         {
-            var gp = GatePlan.At(w, _m.Site, _hover);
+            var gp = GatePlan.At(w, _m.Site, _hover, iron: IronGate);
             if (gp == null) { Refuse("ворота ставят в стену толщиной до 4 м"); return; }
             _markName = "Ворота";
             _m.Sim.AddGate(gp);
@@ -714,13 +718,13 @@ public partial class BuildTools : Node3D
     /// <summary>"камень 3,2 м³ · завал 0,4 м³ · ворота · 5 мин работы одного".</summary>
     string MendSummary(out bool affordable)
     {
-        var lay = new double[4]; var cut = new double[4];
+        var lay = new double[Stockpile.Kinds]; var cut = new double[Stockpile.Kinds];
         double sec = Labour.Estimate(_m.World, _mendGhost, false, lay) + Labour.Estimate(_m.World, _mendClear, true, cut);
-        Array.Copy(lay, PlanNeeds, 4);
+        Array.Copy(lay, PlanNeeds, Stockpile.Kinds);
         var parts = new List<string>();
         string shortOf = "";
         var st = _m.Sim.Stock;
-        foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth })
+        foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth, Stockpile.Metal })
         {
             if (lay[k] > .5) parts.Add($"{Stockpile.Name(k)} {Fmt.M3(lay[k])} м³");
             if (lay[k] > st[k] + .5) shortOf += (shortOf.Length > 0 ? ", " : "") + $"{Stockpile.Name(k)} {Fmt.M3(st[k])}";
@@ -833,6 +837,9 @@ public partial class BuildTools : Node3D
         string name = Zone.Name0(kind);
         if (kind == Stockpile.Wood) return trees == 0 ? $"{name}: деревьев нет" : $"{name}: деревьев {trees}, ≈ {Fmt.M3(vox)} м³ брёвен";
         string depth = Len(Opt.Depth);
+        // a mine: the ore in reach, and the metal it gives (half of it)
+        if (kind == Stockpile.Metal)
+            return vox <= 0 ? $"{name}: руды здесь нет до {depth} вглубь" : $"{name}: ≈ {Fmt.M3(vox)} м³ руды до {depth} вглубь, металла выйдет ≈ {Fmt.M3(vox / 2)} м³";
         return vox <= 0 ? $"{name}: {(kind == Stockpile.Stone ? "скалы" : "земли")} здесь нет" : $"{name}: ≈ {Fmt.M3(vox)} м³ {(kind == Stockpile.Stone ? "камня" : "земли")} до {depth} вглубь";
     }
 
@@ -1028,7 +1035,7 @@ public partial class BuildTools : Node3D
         bool dig = DigNow;
         if (dig) plan = Shapes.WithTrees(_m.World, plan);
         _strokeSec += Labour.Estimate(_m.World, plan, dig, _est);
-        for (int k = 0; k < 4; k++) _strokeEst[k] += _est[k];
+        for (int k = 0; k < Stockpile.Kinds; k++) _strokeEst[k] += _est[k];
         int n = dig ? _m.Sim.DesignateRemove(plan) : _m.Sim.DesignateBuild(plan);
         _strokeVox += n;
         if (n > 0) for (int i = 0; i < plan.Count; i++) _strokePlan.Add(plan.X(i), plan.Y(i), plan.Z(i), plan.M(i));
@@ -1053,7 +1060,7 @@ public partial class BuildTools : Node3D
     public static string Summary(double[] stores, bool dig, double seconds)
     {
         var parts = new List<string>();
-        foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth })
+        foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth, Stockpile.Metal })
         {
             double v = stores[k];
             if (dig && v < -.5) parts.Add($"{Stockpile.Name(k)} +{Fmt.M3(-v)}");
@@ -1467,18 +1474,18 @@ public partial class BuildTools : Node3D
             if (dig) name = "Вдавить";
         }
         else if (Tool == Tool.Ladder) { _plan = Shapes.LadderAt(w, site, _hover); name = "Лестница"; dig = false; }
-        else if (Tool == Tool.Gate) { _gatePlan = GatePlan.At(w, site, _hover); _plan = _gatePlan?.Leaves; name = "Ворота"; dig = false; }
+        else if (Tool == Tool.Gate) { _gatePlan = GatePlan.At(w, site, _hover, iron: IronGate); _plan = _gatePlan?.Leaves; name = "Ворота"; dig = false; }
         else if (Tool == Tool.Paste) { _plan = PlanPasteAtHover(); name = PasteBp.Name; dig = false; }
         if (key[0] == 'T') dig = true;
         _planDig = dig;
 
         double sec = Labour.Estimate(w, _plan, dig, _est);
-        Array.Copy(_est, PlanNeeds, 4);
+        Array.Copy(_est, PlanNeeds, Stockpile.Kinds);
         PlanIsDig = dig;
         if (_plan == null || _plan.Count == 0 || sec <= 0) { _ghost.Visible = false; PlanText = null; return; }
         string shortOf = "";
         if (!dig)
-            foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth })
+            foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth, Stockpile.Metal })
                 if (_est[k] > st[k] + .5) shortOf += (shortOf.Length > 0 ? ", " : "") + $"{Stockpile.Name(k)} {Fmt.M3(st[k])}";
         PlanAffordable = dig || shortOf.Length == 0;
         PlanText = $"{name}: {(Tool == Tool.Gate && _gatePlan != null ? GateSummary(_gatePlan) : Summary(_est, dig, sec))}" + (shortOf.Length > 0 ? $" — в запасе {shortOf}" : "");

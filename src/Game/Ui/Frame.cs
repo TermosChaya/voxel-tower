@@ -332,20 +332,20 @@ public partial class WaveClock : Control
 }
 
 /// <summary>
-/// The stores on the beam: gold, then stone, logs and earth in cubic metres, the intervention, and the household against
+/// The stores on the beam: gold, then stone, logs, earth and metal in cubic metres, the intervention, and the household against
 /// its places; what a stroke lacks shows in blood, and so does a household with no place left.
 /// </summary>
 public partial class Stores : Control
 {
-    public readonly string[] Values = { "0", "0", "0", "0", "0", "0" };
-    public readonly bool[] Short = new bool[6];
-    public const float W = 610, MinW = 440;
+    public readonly string[] Values = { "0", "0", "0", "0", "0", "0", "0" };
+    public readonly bool[] Short = new bool[7];
+    public const float W = 690, MinW = 500;
 
     // the figures as they count toward what is in the stores, and what came in at once lately, sinking off the beam
-    readonly double[] _target = new double[6], _shown = new double[6], _notable = new double[6];
-    readonly float[] _glow = new float[6];
-    readonly bool[] _seen = new bool[6];
-    readonly Func<double, string>[] _fmt = new Func<double, string>[6];
+    readonly double[] _target = new double[7], _shown = new double[7], _notable = new double[7];
+    readonly float[] _glow = new float[7];
+    readonly bool[] _seen = new bool[7];
+    readonly Func<double, string>[] _fmt = new Func<double, string>[7];
     readonly List<(int cell, string text, float age)> _gains = new();
     const float GainLife = 1.6f;
 
@@ -394,6 +394,7 @@ public partial class Stores : Control
         (Icons.Material(Mat.Stone), "Камень, м³\nДобывают в скалах, валунах и руинах. Разобранная кладка возвращает 75 % камня."),
         (Icons.Material(Mat.Wood), "Брёвна, м³\nРубят в лесу. Идут на деревянные стены, лестницы, мосты и ворота."),
         (Icons.Earth, "Земля, м³\nДаёт любой ров и котлован. Насыпь кладётся быстрее всего."),
+        (Icons.Material(Mat.Plate), "Металл, м³\nДобывают из железной руды: ржавые скалы-выходы и жилы под землёй, делянка с металлом ({MatMetal}) или рудокопня. Идёт на железные стены и ворота, кузницу, мастерскую, машины и латников."),
         (Icons.Eye, "Вмешательство\nТратится на заклинания. Его копят жрецы молитвой в святилище (на месте силы втрое быстрее) и жертвы."),
         (Icons.Helm, "Войско: занято мест из скольких\nМеста дают цитадель (10, с «Казармами» 14) и жилые дома, по месту на лежанку. " +
             "Без свободных мест набор не идёт. Набор — щелчок по цитадели или K."),

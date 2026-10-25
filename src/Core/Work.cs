@@ -44,7 +44,7 @@ public static class Work
     };
 
     /// <summary>The work that brings in a store: stone is broken, timber felled, earth dug.</summary>
-    public static WorkKind For(int store) => store switch { Stockpile.Stone => WorkKind.Quarry, Stockpile.Wood => WorkKind.Fell, _ => WorkKind.Dig };
+    public static WorkKind For(int store) => store switch { Stockpile.Stone or Stockpile.Metal => WorkKind.Quarry, Stockpile.Wood => WorkKind.Fell, _ => WorkKind.Dig };
 
     /// <summary>The kinds of work a pawn takes up at a priority, as bits by <see cref="WorkKind"/>.</summary>
     public static int Mask(Unit u, int priority)

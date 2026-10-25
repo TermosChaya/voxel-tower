@@ -25,6 +25,7 @@ public static class Wand
             Mat.Soil or Mat.Path or Mat.Tuft or Mat.Flower or Mat.Bloom => Mat.Soil,
             Mat.Moss => Mat.Rock,
             Mat.GateShut or Mat.GateOpen => Mat.Gate,
+            Mat.IronGateShut or Mat.IronGateOpen => Mat.IronGate,
             _ => m,
         };
     }

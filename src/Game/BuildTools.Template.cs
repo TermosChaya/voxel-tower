@@ -107,7 +107,7 @@ public partial class BuildTools
         string name = plans.Count > 1 ? $"{t.Name} × {plans.Count}" : t.Name;
         if (all.Count == 0) { _ghost.Visible = false; PlanText = $"{name}: {why}"; PlanAffordable = false; return; }
         double sec = Labour.Estimate(_m.World, all, false, _est);
-        Array.Copy(_est, PlanNeeds, 4);
+        Array.Copy(_est, PlanNeeds, Stockpile.Kinds);
         string shortOf = "";
         foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood })
             if (_est[k] > st[k] + .5) shortOf += (shortOf.Length > 0 ? ", " : "") + $"{Stockpile.Name(k)} {Fmt.M3(st[k])}";

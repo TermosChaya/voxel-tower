@@ -23,6 +23,8 @@ public partial class Main
         bool learnt = sim.Knows("b_workshop") || sim.Learn("b_workshop");
         sim.Stock.Gold = Math.Max(sim.Stock.Gold, 400);
         sim.Stock[Stockpile.Wood] = Math.Max(sim.Stock[Stockpile.Wood], 10 * VoxelWorld.PerM3);
+        // (and some iron, since 25.10.2026)
+        sim.Stock[Stockpile.Metal] = Math.Max(sim.Stock[Stockpile.Metal], 2 * VoxelWorld.PerM3);
         double wood0 = sim.Stock[Stockpile.Wood];
         var (sx, _, sz) = sim.Nav.Feet(sim.Gate);
         var shop = new Building { Kind = "workshop", X0 = (int)sx - 18, Z0 = (int)sz + 30, X1 = (int)sx + 18, Z1 = (int)sz + 66, Level = 1, Ready = true };

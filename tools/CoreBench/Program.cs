@@ -3838,7 +3838,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--lore")
         $"reach {reachK0 / VoxelWorld.PerMetre:0.0} → {reachK1 / VoxelWorld.PerMetre:0.0} m; a swordsman {costK0} → {costK1} gold, paid {1000 - simK.Stock.Gold:0}; " +
         $"his life {swordK?.MaxHp:0} of {Kinds.Swordsman.Hp:0}");
 
-    // the tree: the town's eight buildings and the troops' nine, each branch's second resting on its first, and the
+    // the tree: the town's nine buildings (the miners' one since 25.10.2026) and the troops' nine, each branch's second resting on its first, and the
     // intervention as it was; longbows (now the archery range's second storey) carry yet further
     simK.Learnt.Add("longbows");
     float reachK2 = simK.RangeAt(bowK, bowK.X + 50, bowK.Z);
@@ -3849,8 +3849,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--lore")
         if (l.Page == 0) skills++; else if (l.Page == 1) troops++; else rites++;
         if (l.Page < 2 && (l.Tier == 0) != (l.Needs.Length == 0)) chained = false;
     }
-    Check("the town's page has eight buildings and the troops' nine, each branch's second resting on its first; the intervention's thirty",
-        skills == 8 && troops == 9 && rites == 30 && chained && MathF.Abs(reachK2 / reachK0 - 1.15f * 1.15f) < .01f,
+    Check("the town's page has nine buildings and the troops' nine, each branch's second resting on its first; the intervention's thirty",
+        skills == 9 && troops == 9 && rites == 30 && chained && MathF.Abs(reachK2 / reachK0 - 1.15f * 1.15f) < .01f,
         $"{skills} of the town, {troops} of the troops, {rites} of the intervention; chained {chained}; reach ×{reachK2 / reachK0:0.000}");
     // every page's branches are its own, each branch a tier 0 to a tier 3, every root on its own page
     bool shaped = true;
@@ -6138,6 +6138,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--decor") DecorBench.R
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--mines") MinesBench.Run(Check);
 // the valley a hexagon, and the kinds of valley (HexBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--hex") HexBench.Run(Check);
+// iron: ore in the valleys, the pick, the mine, the miners' building, plate and iron gates (Metal.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--metal") MetalBench.Run(Check);
 
 if (args.Length > 0 && args[0] == "--stress")
 {

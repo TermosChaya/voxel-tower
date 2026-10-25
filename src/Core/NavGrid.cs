@@ -65,7 +65,8 @@ public sealed class NavGrid
     /// <summary>Bumped whenever a cell turns from open to blocked or back.</summary>
     public int Version { get; private set; }
 
-    // what each material is to someone walking or hacking: 0 nothing, 1 earth, 2 wood, 3 stone, 4 rock, 5 hard, 6 citadel
+    // what each material is to someone walking or hacking: 0 nothing, 1 earth, 2 wood, 3 stone, 4 rock, 5 hard, 6 citadel,
+    // 7 metal (counted as stone thrice over: the horde takes that long to hack through it)
     static readonly byte[] Cls = new byte[Mat.Count];
 
     static NavGrid()
@@ -73,7 +74,7 @@ public sealed class NavGrid
         for (int m = 1; m < Mat.Count; m++)
         {
             if (Mat.Def[m].Name == null || Mat.Passable[m]) continue;
-            Cls[m] = Mat.Def[m].Group switch { MatGroup.Earth => 1, MatGroup.Wood => 2, MatGroup.Stone => 3, MatGroup.Rock => 4, _ => 5 };
+            Cls[m] = Mat.Def[m].Group switch { MatGroup.Earth => 1, MatGroup.Wood => 2, MatGroup.Stone => 3, MatGroup.Rock => 4, MatGroup.Metal => 7, _ => 5 };
         }
         foreach (var m in new[] { Mat.Keep, Mat.KeepShade, Mat.KeepDark, Mat.Roof }) Cls[m] = 6;
     }
@@ -233,7 +234,7 @@ public sealed class NavGrid
                             if (!Mat.IsTrunk(v)) covered++;
                             // a leaf voxel shuts twice its share of the cell, but takes no longer to hack
                             if (Mat.IsLeaf(v)) fill++;
-                            if (v == Mat.Gate) gate += 2;
+                            if (v is Mat.Gate or Mat.IronGate) gate += 2;
                             if (Mat.IsPavement[v]) pav++;
                             if (Mat.IsTrunk(v))
                             {
@@ -314,6 +315,7 @@ public sealed class NavGrid
             case 3: st += n; break;
             case 4: rk += n; break;
             case 5: hard += n; break;
+            case 7: st += 3 * n; break;
             default: hard += n; keep += n; break;
         }
     }

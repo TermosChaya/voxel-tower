@@ -17,7 +17,7 @@ public partial class BuildTools
     // the region under the cursor: made again only when the cursor leaves it, or the valley or the options change
     readonly VoxelList _wandL = new(), _wandPlan = new(), _wandTake = new();
     readonly HashSet<int> _wandSet = new();
-    readonly double[] _wandCut = new double[4];
+    readonly double[] _wandCut = new double[Stockpile.Kinds];
     bool _wandWhole = true;
     int _wandRev = -1, _wandGen;
     string _wandOpts = "";
@@ -110,7 +110,7 @@ public partial class BuildTools
     string RelaySummary(double sec)
     {
         string lay = Summary(_est, false, sec), got = "";
-        foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth })
+        foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth, Stockpile.Metal })
             if (_wandCut[k] < -.5) got += (got.Length > 0 ? ", " : "") + $"{Stockpile.Name(k)} +{Fmt.M3(-_wandCut[k])}";
         return got.Length > 0 ? lay.Replace(" · " + Fmt.Duration(sec), $" · разборка: {got} м³ · {Fmt.Duration(sec)}") : lay;
     }
@@ -138,7 +138,7 @@ public partial class BuildTools
         else if (dig)
         {
             double sec = Labour.Estimate(w, pick, true, _est);
-            System.Array.Copy(_est, PlanNeeds, 4);
+            System.Array.Copy(_est, PlanNeeds, Stockpile.Kinds);
             PlanText = sec <= 0 ? $"Палочка: {what} · это не копают" : $"Снести {what} · {Summary(_est, true, sec)}";
             PlanAffordable = sec > 0 && _wandWhole;
             Ghost(MeshPlan(pick, true));
@@ -148,9 +148,9 @@ public partial class BuildTools
         {
             WandRelayPlan(pick);
             double sec = Labour.Estimate(w, _wandTake, true, _wandCut) + Labour.Estimate(w, _wandPlan, false, _est);
-            System.Array.Copy(_est, PlanNeeds, 4);
+            System.Array.Copy(_est, PlanNeeds, Stockpile.Kinds);
             string shortOf = "";
-            foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth })
+            foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth, Stockpile.Metal })
                 if (_est[k] > st[k] + .5) shortOf += (shortOf.Length > 0 ? ", " : "") + $"{Stockpile.Name(k)} {Fmt.M3(st[k])}";
             PlanAffordable = _wandPlan.Count > 0 && shortOf.Length == 0 && _wandWhole;
             PlanText = _wandPlan.Count == 0

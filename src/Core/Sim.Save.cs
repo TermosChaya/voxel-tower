@@ -16,7 +16,7 @@ namespace VoxelTower.Core;
 public sealed partial class Sim
 {
     /// <summary>20: the bodies sculpted finer, their half-voxels (and so a wounded body's) not what they were.</summary>
-    public const int SaveVersion = 52;
+    public const int SaveVersion = 55;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -53,7 +53,7 @@ public sealed partial class Sim
 
         w.Write(KeepHp); w.Write(Over); w.Write(Won);
         w.Write(_nextId); w.Write(_nextGate); w.Write(_nextZone); w.Write(_nextBand);
-        foreach (var st in new[] { Stock, HordeStock }) { w.Write(st.Gold); for (int k = 1; k < 4; k++) w.Write(st[k]); }
+        foreach (var st in new[] { Stock, HordeStock }) { w.Write(st.Gold); for (int k = 1; k < Stockpile.Kinds; k++) w.Write(st[k]); }
         w.Write(Kills); w.Write(Shots); w.Write(ShotHits); w.Write(Hunted); w.Write(WildTarget); w.Write(_nextHerd);
         w.Write(FortArea.x0); w.Write(FortArea.z0); w.Write(FortArea.x1); w.Write(FortArea.z1);
         w.Write(FortGate?.Id ?? -1);
@@ -69,7 +69,7 @@ public sealed partial class Sim
         w.Write(Gates.Count);
         foreach (var g in Gates)
         {
-            w.Write(g.Id); w.Write(g.AlongX); w.Write(g.In); w.Write(g.U0); w.Write(g.P); w.Write(g.Y); w.Write((byte)g.Mode);
+            w.Write(g.Id); w.Write(g.AlongX); w.Write(g.In); w.Write(g.U0); w.Write(g.P); w.Write(g.Y); w.Write((byte)g.Mode); w.Write(g.Iron);
             w.Write(g.Open); w.Write(g.Want); w.Write(g.Ready); w.Write(g.Broken); w.Write(g.Missing); w.Write(g.Step);
             for (int i = 0; i < Gateway.Voxels; i++) { w.Write(g.At[i]); w.Write(g.Gone[i]); }
         }
@@ -167,6 +167,7 @@ public sealed partial class Sim
         WriteStanding(w);
         WriteRaids(w);
         WriteCaptains(w);
+        w.Write(OreStruck); w.Write(MetalMined);
         w.Write(extra ?? "");
     }
 
@@ -279,7 +280,7 @@ public sealed partial class Sim
         Orders.Restore(r);
         KeepHp = r.ReadSingle(); Over = r.ReadBoolean(); Won = r.ReadBoolean();
         _nextId = r.ReadInt32(); _nextGate = r.ReadInt32(); _nextZone = r.ReadInt32(); _nextBand = r.ReadInt32();
-        foreach (var st in new[] { Stock, HordeStock }) { st.Gold = r.ReadDouble(); for (int k = 1; k < 4; k++) st[k] = r.ReadDouble(); }
+        foreach (var st in new[] { Stock, HordeStock }) { st.Gold = r.ReadDouble(); for (int k = 1; k < Stockpile.Kinds; k++) st[k] = r.ReadDouble(); }
         Kills = r.ReadInt32(); Shots = r.ReadInt32(); ShotHits = r.ReadInt32(); Hunted = r.ReadInt32(); WildTarget = r.ReadInt32(); _nextHerd = r.ReadDouble();
         FortArea = (r.ReadInt32(), r.ReadInt32(), r.ReadInt32(), r.ReadInt32());
         int fortGate = r.ReadInt32();
@@ -300,7 +301,7 @@ public sealed partial class Sim
         for (int i = 0; i < ng; i++)
         {
             var g = new Gateway { Id = r.ReadInt32(), AlongX = r.ReadBoolean(), In = r.ReadInt32(), U0 = r.ReadInt32(), P = r.ReadInt32(), Y = r.ReadInt32() };
-            g.Mode = (GateMode)r.ReadByte(); g.Open = r.ReadSingle(); g.Want = r.ReadSingle(); g.Ready = r.ReadBoolean(); g.Broken = r.ReadBoolean();
+            g.Mode = (GateMode)r.ReadByte(); g.Iron = r.ReadBoolean(); g.Open = r.ReadSingle(); g.Want = r.ReadSingle(); g.Ready = r.ReadBoolean(); g.Broken = r.ReadBoolean();
             g.Missing = r.ReadInt32(); g.Step = r.ReadInt32();
             for (int k = 0; k < Gateway.Voxels; k++) { g.At[k] = r.ReadInt32(); g.Gone[k] = r.ReadBoolean(); }
             SweepOf(g);
@@ -466,6 +467,7 @@ public sealed partial class Sim
         ReadStanding(r);
         ReadRaids(r);
         ReadCaptains(r);
+        OreStruck = r.ReadBoolean(); MetalMined = r.ReadDouble();
         string extra = r.ReadString();
         // the ways of the horde are worked out again for the valley as it now is, and the stones to throw down found again
         _fieldVersion = -1;

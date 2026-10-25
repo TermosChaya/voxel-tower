@@ -144,7 +144,7 @@ public partial class Hints : Control
                 break;
             case Tool.Gather:
                 o.Add((Lmb, "обвести участок"));
-                o.Add(($"{L(Act.MatStone)} {L(Act.MatWood)} {L(Act.MatEarth)}", "камень, лес, земля"));
+                o.Add(($"{L(Act.MatStone)} {L(Act.MatWood)} {L(Act.MatEarth)} {L(Act.MatMetal)}", "камень, лес, земля, руда"));
                 break;
             case Tool.Capture:
                 o.Add((Lmb, "обвести постройку"));

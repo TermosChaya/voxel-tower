@@ -406,6 +406,8 @@ public sealed partial class Sim
             MatGroup.Earth => .16f,
             MatGroup.Wood => .22f,
             MatGroup.Stone => .2f / (StoneHack * HideHack) * (Knows("granite") ? 1.3f : 1),
+            // iron plate takes three times what stone does to break
+            MatGroup.Metal => .6f,
             _ => .8f,
         };
     }

@@ -72,8 +72,8 @@ static class OurEnginesBench
             Level();
         }
 
-        // not at the citadel since 25.10.2026: assembled at a workshop (Sim.Town.cs), gold and timber paid, out of its
-        // door with its crew (the workshop here as it would stand, built and working)
+        // not at the citadel since 25.10.2026: assembled at a workshop (Sim.Town.cs), gold, timber and iron paid, out of
+        // its door with its crew (the workshop here as it would stand, built and working)
         sim.Knowledge = 100;
         string before = sim.CantEnlist(Kinds.Mangonel);
         bool learnt = sim.Learn("b_workshop");
@@ -83,17 +83,21 @@ static class OurEnginesBench
         sim.Buildings.Add(shop);
         sim.Stock.Gold = 1000; sim.Stock[Stockpile.Wood] = 1;
         string shortWood = sim.CantHireAt(shop, Kinds.Mangonel);
-        sim.Stock[Stockpile.Wood] = 10 * VoxelWorld.PerM3;
-        double gold0 = sim.Stock.Gold, wood0 = sim.Stock[Stockpile.Wood];
+        sim.Stock[Stockpile.Wood] = 10 * VoxelWorld.PerM3; sim.Stock[Stockpile.Metal] = 0;
+        string shortIron = sim.CantHireAt(shop, Kinds.Mangonel);
+        sim.Stock[Stockpile.Metal] = 2 * VoxelWorld.PerM3;
+        double gold0 = sim.Stock.Gold, wood0 = sim.Stock[Stockpile.Wood], iron0 = sim.Stock[Stockpile.Metal];
         int people0 = sim.Household();
         bool took = sim.HireAt(shop, Kinds.Mangonel) != null;
         sim.Buildings.Remove(shop);
         var mustered = sim.Units.Find(u => u.T == Kinds.Mangonel && !u.Dead);
         int crewOut = mustered == null ? 0 : sim.CrewOf(mustered);
-        check("a stone-thrower is not taken on at the citadel; the workshop assembles one for gold and three cubic metres of timber, and it comes out with a crew of two, three places in all",
-            before != null && learnt && shortWood != null && shortWood.Contains("брёвен") && took && crewOut == 2 && sim.Household() - people0 == 3
-            && Math.Abs(wood0 - sim.Stock[Stockpile.Wood] - Kinds.Mangonel.Logs * VoxelWorld.PerM3) < .01 && sim.Stock.Gold < gold0,
-            $"before: «{before}»; short of timber: «{shortWood}»; crew {crewOut}; places +{sim.Household() - people0}; timber {wood0} → {sim.Stock[Stockpile.Wood]}");
+        check("a stone-thrower is not taken on at the citadel; the workshop assembles one for gold, three cubic metres of timber and some iron, and it comes out with a crew of two, three places in all",
+            before != null && learnt && shortWood != null && shortWood.Contains("брёвен") && shortIron != null && shortIron.Contains("металла") && took && crewOut == 2 && sim.Household() - people0 == 3
+            && Math.Abs(wood0 - sim.Stock[Stockpile.Wood] - Kinds.Mangonel.Logs * VoxelWorld.PerM3) < .01 && Math.Abs(iron0 - sim.Stock[Stockpile.Metal] - Kinds.Mangonel.Metal * VoxelWorld.PerM3) < .01
+            && sim.Stock.Gold < gold0,
+            $"before: «{before}»; short of timber: «{shortWood}»; short of iron: «{shortIron}»; crew {crewOut}; places +{sim.Household() - people0}; timber {wood0} → {sim.Stock[Stockpile.Wood]}, " +
+            $"iron {iron0} → {sim.Stock[Stockpile.Metal]}");
         foreach (var u in sim.Units) if (!u.Dead && (u.T == Kinds.Mangonel || u.T == Kinds.Crewman)) Gone(u);
 
         // sent somewhere: packed up, rolled there by its crew, set up again

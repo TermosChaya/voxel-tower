@@ -74,6 +74,19 @@ public static class Valleys
         return null;
     }
 
+    /// <summary>
+    /// How much iron a kind has: outcrops of ore come up to the surface, and veins lie hidden under the ground. The valleys
+    /// of ore are full of it, the mountains have a good deal, every valley a little.
+    /// </summary>
+    public static (int outcrops, int hidden) OreOf(ValleyKind k) => k switch
+    {
+        ValleyKind.Ore => (8, 6),
+        ValleyKind.Mountain => (6, 4),
+        ValleyKind.First => (3, 3),
+        ValleyKind.Marsh => (1, 2),
+        _ => (2, 2),
+    };
+
     public static Ground GroundOf(ValleyKind k) => k switch
     {
         // the valleys of ore: rock near the surface, many knolls, thin soil, fewer trees

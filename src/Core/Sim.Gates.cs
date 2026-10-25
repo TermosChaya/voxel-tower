@@ -10,7 +10,8 @@ public enum GateMode : byte { Auto, Open, Shut }
 /// A gate in a wall: two oak leaves bound with iron, hung on the inner face of the wall at the jambs and swinging inward
 /// till they stand square to it. The leaves are voxels like everything else and are rewritten as they turn, so a shut
 /// gate blocks the way, the horde hacks it like masonry, and what it hacks out is gone. Our people knock and it opens for
-/// them, unless the horde is right at it; it shuts behind them.
+/// them, unless the horde is right at it; it shuts behind them. A gate may be hung with leaves of iron plate instead
+/// (<see cref="Gateway.Iron"/>): laid from the store of metal, hacked three times as slowly, not burnt.
 /// </summary>
 public sealed class Gateway
 {
@@ -28,6 +29,8 @@ public sealed class Gateway
     /// <summary>The left jamb along the wall, the plane of the inner face across it (where the hinges are), and the threshold.</summary>
     public int U0, P, Y;
     public GateMode Mode;
+    /// <summary>Its leaves are of iron plate, not oak.</summary>
+    public bool Iron;
     /// <summary>How far the leaves stand open now (0 shut, 1 square to the wall), and where they are heading.</summary>
     public float Open, Want;
     /// <summary>All its leaves laid: it works.</summary>
@@ -69,12 +72,15 @@ public sealed class Gateway
     }
 
     internal static int StepOf(float open) => (int)MathF.Round(open * Steps);
+
+    /// <summary>What its leaves are laid of, shut and unbarred.</summary>
+    public byte Leaf => Iron ? Mat.IronGate : Mat.Gate;
 }
 
 /// <summary>Where a gate would go in a wall, and what cutting the gateway and hanging the leaves takes.</summary>
 public sealed class GatePlan
 {
-    public bool AlongX;
+    public bool AlongX, Iron;
     public int In, U0, P, Y;
     /// <summary>The wall to cut out of the gateway, and the leaves to lay in their shut place.</summary>
     public readonly VoxelList Cut = new(), Leaves = new();
@@ -89,9 +95,9 @@ public sealed class GatePlan
     /// <summary>
     /// A gate through the wall whose side face was clicked: the gateway centred on the click and snapped to the cells,
     /// the leaves on the side toward the citadel. Null if the face is no wall's side, or the wall is too thick. A house's
-    /// door gives its <paramref name="threshold"/>, the top of its floor.
+    /// door gives its <paramref name="threshold"/>, the top of its floor; <paramref name="iron"/> hangs leaves of iron plate.
     /// </summary>
-    public static GatePlan At(VoxelWorld w, Site site, VoxelHit hit, int threshold = -1)
+    public static GatePlan At(VoxelWorld w, Site site, VoxelHit hit, int threshold = -1, bool iron = false)
     {
         if (hit.NY != 0 || (hit.NX == 0 && hit.NZ == 0)) return null;
         bool alongX = hit.NZ != 0;
@@ -123,7 +129,7 @@ public sealed class GatePlan
         int face = inward > 0 ? innerWall + 1 : innerWall;
         // the leaves hang flush on the inner face; the gateway is snapped to the cells, so open leaves clear it
         int p = face;
-        var plan = new GatePlan { AlongX = alongX, In = inward, U0 = u0, P = p };
+        var plan = new GatePlan { AlongX = alongX, Iron = iron, In = inward, U0 = u0, P = p };
         // the threshold: the ground of the yard where the leaves will hang, under the click (not the roof of a house
         // whose door it is)
         int y0 = 0;
@@ -158,7 +164,7 @@ public sealed class GatePlan
         {
             var (x, y, z) = g.Place(i, 0);
             byte m = w.Get(x, y, z);
-            if (m == 0 || Mat.IsVeg[m] || Mat.Passable[m] || Mat.IsDecor[m]) plan.Leaves.Add(x, y, z, Mat.Gate);
+            if (m == 0 || Mat.IsVeg[m] || Mat.Passable[m] || Mat.IsDecor[m]) plan.Leaves.Add(x, y, z, g.Leaf);
         }
         if (plan.Leaves.Count < Gateway.Voxels / 2) return null;
         for (int u = u0 - 3; u < u0 + Gateway.Width + 3; u++)
@@ -171,7 +177,7 @@ public sealed class GatePlan
         return plan;
     }
 
-    internal Gateway Make() => new() { AlongX = AlongX, In = In, U0 = U0, P = P, Y = Y };
+    internal Gateway Make() => new() { AlongX = AlongX, Iron = Iron, In = In, U0 = U0, P = P, Y = Y };
 }
 
 public sealed partial class Sim
@@ -194,7 +200,7 @@ public sealed partial class Sim
                 World.Set(plan.Cut.X(i), plan.Cut.Y(i), plan.Cut.Z(i), Mat.Air);
                 Forget(plan.Cut.X(i), plan.Cut.Y(i), plan.Cut.Z(i));
             }
-            for (int i = 0; i < plan.Leaves.Count; i++) World.Set(plan.Leaves.X(i), plan.Leaves.Y(i), plan.Leaves.Z(i), Mat.Gate);
+            for (int i = 0; i < plan.Leaves.Count; i++) World.Set(plan.Leaves.X(i), plan.Leaves.Y(i), plan.Leaves.Z(i), g.Leaf);
             for (int i = 0; i < plan.Seal.Count; i++) { World.Set(plan.Seal.X(i), plan.Seal.Y(i), plan.Seal.Z(i), Mat.Mortar); Remember(plan.Seal.X(i), plan.Seal.Y(i), plan.Seal.Z(i), Mat.Mortar); }
             Mount(g);
         }
@@ -283,7 +289,7 @@ public sealed partial class Sim
         for (int i = 0; i < Gateway.Voxels; i++)
         {
             var (x, y, z) = g.Place(i, 0);
-            if (World.Get(x, y, z) == Mat.Air) L.Add(x, y, z, Mat.Gate);
+            if (World.Get(x, y, z) == Mat.Air) L.Add(x, y, z, g.Leaf);
         }
         return DesignateBuild(L);
     }
@@ -305,7 +311,9 @@ public sealed partial class Sim
     }
 
     /// <summary>What the leaves are made of at a step: shut (ours knock and pass) or barred, else swinging or open (in everyone's way).</summary>
-    static byte LeafMat(Gateway g, int step) => step > 0 ? Mat.GateOpen : g.Mode == GateMode.Shut ? Mat.GateShut : Mat.Gate;
+    static byte LeafMat(Gateway g, int step) => g.Iron
+        ? step > 0 ? Mat.IronGateOpen : g.Mode == GateMode.Shut ? Mat.IronGateShut : Mat.IronGate
+        : step > 0 ? Mat.GateOpen : g.Mode == GateMode.Shut ? Mat.GateShut : Mat.Gate;
 
     /// <summary>All the leaves laid where they hang shut: the gate starts working.</summary>
     void Mount(Gateway g)
@@ -328,7 +336,7 @@ public sealed partial class Sim
         for (int i = 0; i < Gateway.Voxels; i++)
         {
             var (x, y, z) = g.Place(i, 0);
-            if (Orders.At(x, y, z) == Mat.Gate) return false;
+            if (Orders.At(x, y, z) == g.Leaf) return false;
         }
         return true;
     }

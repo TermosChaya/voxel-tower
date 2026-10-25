@@ -14,6 +14,8 @@ public static class Landmarks
     public static bool Taken(Site s, int x, int z, int margin)
     {
         foreach (var l in s.Landmarks) if (Brushes.Dist(x - l.X, z - l.Z) < l.R + margin) return true;
+        // an outcrop of ore is kept clear too: no tree or boulder over it
+        foreach (var o in s.Outcrops) if (Brushes.Dist(x - o.X, z - o.Z) < o.R + margin) return true;
         return false;
     }
 

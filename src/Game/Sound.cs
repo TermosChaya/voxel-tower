@@ -150,7 +150,7 @@ public partial class Sound : Node
     void Landed(Smiting h)
     {
         byte m = h.Mat;
-        bool metal = m != Mat.Air && (Mat.Metal[m] && m != Mat.Pitch || m == Mat.Iron);
+        bool metal = m != Mat.Air && (Mat.Metal[m] && m != Mat.Pitch || m == Mat.Iron || Mat.IsMetalWork(m));
         bool crush = h.Stroke is StrokeKind.Smash or StrokeKind.Bash || Sim.WeaponOf(h.By.T).cut == Sim.Cut.Crush;
         if (metal) Play("blade", h.X, h.Y, h.Z, .06, m == Mat.Mail ? .6f : .85f, pitch: h.Glanced ? 1.15f : m == Mat.Mail ? .8f : 0);
         else if (m is Mat.Board or Mat.BoardDark or Mat.Handle) Play("chop", h.X, h.Y, h.Z, .06, .8f, pitch: 1.2f);
@@ -158,8 +158,8 @@ public partial class Sound : Node
         else if (m != Mat.Air) Play("blunt", h.X, h.Y, h.Z, .08, .5f);
     }
 
-    /// <summary>What a voxel dug or hacked out sounds like: rock and masonry knock, timber thuds, earth sighs.</summary>
-    static string Dug(byte m) => Mat.Def[m].Group switch { MatGroup.Wood => "chop", MatGroup.Earth => "dig", _ => "pick" };
+    /// <summary>What a voxel dug or hacked out sounds like: rock and masonry knock, timber thuds, earth sighs, iron rings.</summary>
+    static string Dug(byte m) => Mat.Def[m].Group switch { MatGroup.Wood => "chop", MatGroup.Earth => "dig", MatGroup.Metal => "blade", _ => "pick" };
 
     void Struck(string clip, int x, int y, int z, double every) => Play(clip, x + .5f, y, z + .5f, every, .8f);
 

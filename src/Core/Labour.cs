@@ -6,13 +6,15 @@ namespace VoxelTower.Core;
 /// <summary>What the stores hold. Materials are counted in voxels (4096 to the cubic metre).</summary>
 public sealed class Stockpile
 {
-    public const int None = 0, Stone = 1, Wood = 2, Earth = 3;
+    public const int None = 0, Stone = 1, Wood = 2, Earth = 3, Metal = 4;
+    /// <summary>How many stores there are, and the first index past them: a table by store is this long.</summary>
+    public const int Kinds = 5;
     public double Gold = 150;
-    readonly double[] _v = new double[4];
+    readonly double[] _v = new double[Kinds];
 
     public double this[int kind] { get => _v[kind]; set => _v[kind] = value; }
 
-    public static string Name(int kind) => kind switch { Stone => "камень", Wood => "брёвна", Earth => "земля", _ => "" };
+    public static string Name(int kind) => kind switch { Stone => "камень", Wood => "брёвна", Earth => "земля", Metal => "металл", _ => "" };
 
     public bool Take(int kind, double n)
     {
@@ -57,6 +59,11 @@ public static class Labour
         D(Mat.Gate, 2.5f, Stockpile.Wood, .75f); D(Mat.GateShut, 2.5f, Stockpile.Wood, .75f); D(Mat.GateOpen, 2.5f, Stockpile.Wood, .75f);
         // ore is hard and gives gold (see OreGold), old masonry comes apart like any
         D(Mat.Ore, 5, Stockpile.None, 0); D(Mat.Ruin, 2.5f, Stockpile.Stone, .75f);
+        // iron ore is hard too and goes to the store of metal, half a voxel for a voxel (smelted, as the store has it);
+        // laid metal is unbolted plate by plate, and three quarters of it comes back, as with masonry
+        D(Mat.IronOre, 5, Stockpile.Metal, .5f); D(Mat.OreRust, 4, Stockpile.Metal, .5f);
+        D(Mat.Plate, 3, Stockpile.Metal, .75f);
+        foreach (var m in new[] { Mat.IronGate, Mat.IronGateShut, Mat.IronGateOpen }) D(m, 3, Stockpile.Metal, .75f);
         // the dressing of the buildings comes away at a touch; casks and crates are a little timber
         foreach (var m in new[] { Mat.Banner, Mat.BannerTrim, Mat.Sconce, Mat.Flame, Mat.Hoop, Mat.Sack }) D(m, .25f, Stockpile.None, 0);
         foreach (var m in new[] { Mat.Cask, Mat.Crate, Mat.CrateEdge }) D(m, .5f, Stockpile.Wood, .3f);
@@ -89,6 +96,9 @@ public static class Labour
         LayCost[Mat.Powder] = 3;
         // furniture is joinery, and the bedding is stuffed and sewn
         foreach (var m in new[] { Mat.Bunk, Mat.Bedding, Mat.Table, Mat.Bench }) LayCost[m] = 3;
+        // iron is forged into plates and riveted: slower than stone; an iron gate is smith's work and joinery both
+        LayCost[Mat.Plate] = 2.5f;
+        LayCost[Mat.IronGate] = 5;
         // a way is quick to lay: earth stamped down, gravel spread, cobbles and flags set in sand, planks nailed
         LayCost[Mat.DirtPath] = .4f; LayCost[Mat.Gravel] = .5f; LayCost[Mat.Cobble] = .9f; LayCost[Mat.Flag] = .9f; LayCost[Mat.Boardwalk] = .8f;
     }
@@ -109,6 +119,7 @@ public static class Labour
         Mat.Rammed or Mat.Powder or Mat.DirtPath => Stockpile.Earth,
         Mat.Gravel or Mat.Cobble or Mat.Flag => Stockpile.Stone,
         Mat.Boardwalk => Stockpile.Wood,
+        Mat.Plate or Mat.IronGate or Mat.IronGateShut or Mat.IronGateOpen => Stockpile.Metal,
         _ => Stockpile.None,
     };
 
@@ -160,7 +171,8 @@ public sealed class Orders
     {
         Stockpile.Wood => RemoveWood,
         Stockpile.Stone => RemoveStone,
-        _ => m == Mat.Ore ? RemoveStone : Remove,
+        // ore of either kind is broken out as stone is
+        _ => m == Mat.Ore || Mat.IsIronOre(m) ? RemoveStone : Remove,
     };
 
     public readonly VoxelWorld Layer;
@@ -171,7 +183,7 @@ public sealed class Orders
     public readonly int[] ColCount;
     /// <summary>Of those, voxels to dig out, and voxels to lay from each store (indexed by store; None for what costs nothing).</summary>
     public readonly int[] ColDig;
-    public readonly int[][] ColLay = new int[4][];
+    public readonly int[][] ColLay = new int[Stockpile.Kinds][];
     /// <summary>The voxels to take out by the work they are (indexed by <see cref="WorkKind"/>; Build holds every lay).</summary>
     public readonly int[][] ColWork = new int[Work.Kinds][];
     public readonly HashSet<int> Active = new();
@@ -194,7 +206,7 @@ public sealed class Orders
         CellLay = new ushort[_nx * _nz * _ny];
         ColCount = new int[_nx * _nz];
         ColDig = new int[_nx * _nz];
-        for (int k = 0; k < 4; k++) ColLay[k] = new int[_nx * _nz];
+        for (int k = 0; k < Stockpile.Kinds; k++) ColLay[k] = new int[_nx * _nz];
         for (int k = 0; k < Work.Kinds; k++) ColWork[k] = new int[_nx * _nz];
     }
 
@@ -203,7 +215,7 @@ public sealed class Orders
     void Count(int x, int y, int z, int d, byte order)
     {
         int col = (z >> NavGrid.Shift) * _nx + (x >> NavGrid.Shift);
-        if (!IsRemove(order) && NavGrid.Blocks(order) && order != Mat.Gate)
+        if (!IsRemove(order) && NavGrid.Blocks(order) && order is not (Mat.Gate or Mat.IronGate))
         {
             int cell = (y >> NavGrid.Shift) * _nx * _nz + col;
             CellLay[cell] = (ushort)(CellLay[cell] + d);

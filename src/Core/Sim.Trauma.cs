@@ -34,7 +34,7 @@ public sealed partial class Sim
         if (m == Mat.Air || Mat.Passable[m] && !Mat.IsLadder[m]) return 0;
         if (m == Mat.Water) return 1.95f;
         if (Mat.IsLeafy(m) || Mat.IsSprig(m)) return .15f;
-        if (m is Mat.Iron or Mat.Steel) return 15;
+        if (m is Mat.Iron or Mat.Steel || Mat.IsMetalWork(m)) return 15;
         return Mat.Def[m].Group switch { MatGroup.Wood => 1.2f, MatGroup.Earth => 3.1f, MatGroup.Rock => 5, _ => 4.6f };
     }
 

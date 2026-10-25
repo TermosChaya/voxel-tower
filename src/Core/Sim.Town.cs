@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace VoxelTower.Core;
 
 /// <summary>What stands inside a town building and makes it that building: a forge and an anvil, targets, stalls…</summary>
-public enum Prop : byte { Anvil, Forge, Rack, Target, Stall, Workbench, Counter, Desk, Bunk, Still, Hay, Casks, Crates, Kennel, Seat, Blocks }
+public enum Prop : byte { Anvil, Forge, Rack, Target, Stall, Workbench, Counter, Desk, Bunk, Still, Hay, Casks, Crates, Kennel, Seat, Blocks, Ingots }
 
 /// <summary>
 /// A kind of town building (docs/handoff/08-town.md): what it is called and what it is for, the lore that opens it and
@@ -29,6 +29,11 @@ public sealed class TownKind
     public (string key, int level)[] Needs = Array.Empty<(string, int)>();
     /// <summary>Gold a minute at each level, before what the settlement's size adds.</summary>
     public float Income1, Income2;
+    /// <summary>Metal a minute at each level, cubic metres (the miners' building), and whether it stands only on an outcrop of ore.</summary>
+    public float Metal1, Metal2;
+    public bool OnOre;
+    /// <summary>Metal its iron asks, cubic metres, for building it and for its second storey.</summary>
+    public float MetalCost, UpMetal;
     public Prop[] Props1 = Array.Empty<Prop>(), Props2 = Array.Empty<Prop>();
 }
 
@@ -84,7 +89,7 @@ public sealed partial class Sim
         new() { Key = "market", Name = "Рынок", Lore = "b_market", Gold = 50, UpGold = 100, Income2 = 2, Wall = Mat.Wood,
             About = "Меняет запасы на золото и обратно: 1 м³ камня или брёвен продаётся за 3, покупается за 9.", Level2 = "Продаёт по 4, покупает по 7, даёт 2 золота в минуту.",
             Needs = new[] { ("hall", 1) }, Props1 = new[] { Prop.Counter, Prop.Crates, Prop.Casks }, Props2 = new[] { Prop.Crates, Prop.Casks } },
-        new() { Key = "smithy", Name = "Кузница", Lore = "b_smithy", Gold = 50, UpGold = 110,
+        new() { Key = "smithy", Name = "Кузница", Lore = "b_smithy", Gold = 50, UpGold = 110, MetalCost = .25f, UpMetal = 1,
             About = "Добрые кирки: копают и рубят на 25 % быстрее. Окованные ворота: ворота и мосты выдерживают вдвое больше. Жаровни на стенах: факелы светят дальше.",
             Level2 = "Кольчуги: солдаты получают на 20 % меньше урона. Закалённые клинки: в ближнем бою бьют на 20 % сильнее.",
             Grants1 = new[] { "picks", "ironbound", "braziers" }, Grants2 = new[] { "mail", "sergeants" },
@@ -117,7 +122,7 @@ public sealed partial class Sim
             Hires = new[] { H(Kinds.Spearman, 1, 4), H(Kinds.Shieldbearer, 2, 3), H(Kinds.Halberdier, 2, 3) },
             Grants1 = new[] { "spearmen", "barracks" }, Grants2 = new[] { "shieldmen", "halberds", "shieldwall", "longshafts" },
             Props1 = new[] { Prop.Rack, Prop.Bunk, Prop.Bunk }, Props2 = new[] { Prop.Rack, Prop.Bunk } },
-        new() { Key = "knights", Name = "Рыцарский двор", Lore = "b_knights", Gold = 120, MaxLevel = 1,
+        new() { Key = "knights", Name = "Рыцарский двор", Lore = "b_knights", Gold = 120, MaxLevel = 1, MetalCost = .5f,
             About = "Нанимает рыцарей в полных латах.",
             Needs = new[] { ("barracks", 2), ("smithy", 1) }, Hires = new[] { H(Kinds.Knight, 1, 2) }, Grants1 = new[] { "knights" },
             Props1 = new[] { Prop.Rack, Prop.Stall } },
@@ -149,12 +154,16 @@ public sealed partial class Sim
             About = "Нанимает великанов. Великан занимает 4 места.", Level2 = "Глыбы: великаны и тролли бросают в орду камни.",
             Needs = new[] { ("trolls", 1) }, Hires = new[] { H(Kinds.Giant, 1, 1) }, Grants1 = new[] { "giants" }, Grants2 = new[] { "boulders" },
             Props1 = new[] { Prop.Seat, Prop.Seat }, Props2 = new[] { Prop.Blocks } },
-        new() { Key = "workshop", Name = "Мастерская", Lore = "b_workshop", Gold = 80, UpGold = 160, Wall = Mat.Wood, D = 73,
+        new() { Key = "workshop", Name = "Мастерская", Lore = "b_workshop", Gold = 80, UpGold = 160, Wall = Mat.Wood, D = 73, MetalCost = .5f, UpMetal = 1,
             About = "Собирает катапульты. Вороты: машины заряжаются быстрее.",
             Level2 = "Собирает баллисты и требушеты. Бочонки со смолой и тяжёлые камни.",
             Needs = new[] { ("carpentry", 1) }, Hires = new[] { H(Kinds.Mangonel, 1, 1), H(Kinds.Ballista, 2, 1), H(Kinds.Trebuchet, 2, 1) },
             Grants1 = new[] { "mangonels", "windlass" }, Grants2 = new[] { "ballistas", "trebuchets", "pitchkegs", "heavystones" },
             Props1 = new[] { Prop.Workbench, Prop.Blocks, Prop.Crates }, Props2 = new[] { Prop.Workbench, Prop.Crates } },
+        // the miners' building, on an outcrop of iron ore (Sim.Metal.cs)
+        new() { Key = "mine", Name = "Рудокопня", Lore = "b_mine", Gold = 60, UpGold = 120, Metal1 = .3f, Metal2 = .7f, OnOre = true, W = 33, D = 41,
+            About = "Добывает металл: 0,3 м³ в минуту.", Level2 = "0,7 м³ металла в минуту.",
+            Props1 = new[] { Prop.Forge, Prop.Ingots, Prop.Crates }, Props2 = new[] { Prop.Ingots, Prop.Workbench } },
     };
 
     static Dictionary<string, TownKind> _townByKey;
@@ -206,6 +215,7 @@ public sealed partial class Sim
         foreach (var (key, level) in k.Needs)
             if (!Stands(key, level)) return $"сначала нужна {(level > 1 ? "улучшенная " : "")}«{TownKindOf(key)?.Name}»";
         if (!Sandbox && Stock.Gold < k.Gold) return $"нужно {k.Gold} золота";
+        if (k.MetalCost > 0 && !HasMetal(k.MetalCost)) return $"нужно {k.MetalCost:0.##} м³ металла";
         return null;
     }
 
@@ -230,6 +240,8 @@ public sealed partial class Sim
             || !World.OnLand(x0, z0) || !World.OnLand(x1, z0) || !World.OnLand(x0, z1) || !World.OnLand(x1, z1)) { why = "здесь край долины"; return null; }
         if (HouseUnder(x0, z0, x1, z1) != null || Buildings.Exists(b => b.X0 <= x1 + 2 && b.X1 >= x0 - 2 && b.Z0 <= z1 + 2 && b.Z1 >= z0 - 2))
         { why = "здесь уже стоит дом"; return null; }
+        // the miners' building stands on an outcrop of ore (Sim.Metal.cs)
+        if (k.OnOre && OutcropUnder(x0, z0, x1, z1) < 0) { why = "ставится на рудный выход: ржавая скала, где жила выходит наружу"; return null; }
         var st = new Stroke { Mat = k.Wall, Width = Shapes.HouseWall, Height = Shapes.HouseHeight + 4, Level = true };
         return Shapes.House(World, Site, x0, z0, x1, z1, st, Shapes.LevelTop(World, cx, cz, Shapes.HouseHeight + 4), out door, out why, out arched);
     }
@@ -250,6 +262,7 @@ public sealed partial class Sim
         Arch(arched);
         PlanHouse(door, x0, z0, x1, z1);
         if (!Sandbox) Stock.Gold -= k.Gold;
+        TakeMetal(k.MetalCost);
         b = new Building { Kind = k.Key, X0 = x0, Z0 = z0, X1 = x1, Z1 = z1, Top0 = door.Top };
         Buildings.Add(b);
         if (ZoneOf(b) is { } zone) zone.Title = k.Name;
@@ -265,6 +278,7 @@ public sealed partial class Sim
         if (b.Level >= k.MaxLevel || b.Target > b.Level) return b.Target > b.Level ? "уже строится" : "выше некуда";
         if (!b.Ready) return "здание ещё не готово";
         if (!Sandbox && Stock.Gold < k.UpGold) return $"нужно {k.UpGold} золота";
+        if (k.UpMetal > 0 && !HasMetal(k.UpMetal)) return $"нужно {k.UpMetal:0.##} м³ металла";
         return null;
     }
 
@@ -278,6 +292,7 @@ public sealed partial class Sim
         no = PlanStorey(zone, b.X0, b.Z0, b.X1, b.Z1, b.K.Wall);
         if (no != null) return no;
         if (!Sandbox) Stock.Gold -= b.K.UpGold;
+        TakeMetal(b.K.UpMetal);
         b.Target = b.Level + 1;
         TownVersion++;
         Say($"{b.K.Name}: рабочие поднимают второй этаж. Когда его обставят, здание станет лучше.", 1, b.CX, b.CZ);
@@ -299,6 +314,7 @@ public sealed partial class Sim
         int cost = HireCost(t);
         if (Stock.Gold < cost) return $"нужно {cost} золота";
         if (t.Logs > 0 && Stock[Stockpile.Wood] + 1e-6 < t.Logs * VoxelWorld.PerM3) return $"нужно {t.Logs:0.#} м³ брёвен";
+        if (t.Metal > 0 && !HasMetal(t.Metal)) return $"нужно {t.Metal:0.##} м³ металла";
         return null;
     }
 
@@ -308,6 +324,7 @@ public sealed partial class Sim
         if (CantHireAt(b, t) != null) return null;
         Stock.Gold -= HireCost(t);
         if (t.Logs > 0) Stock.Take(Stockpile.Wood, t.Logs * VoxelWorld.PerM3);
+        TakeMetal(t.Metal);
         if (!Sandbox) b.Stock[t.Key] = b.Stock[t.Key] - 1;
         int cell = DoorStand(b);
         var u = Spawn(t, cell >= 0 ? cell : Gate);
@@ -338,7 +355,8 @@ public sealed partial class Sim
         var m = Buildings.Find(b => b.Kind == "market" && b.Ready);
         if (m == null) return (0, 0);
         bool up = m.Level >= 2;
-        return kind == Stockpile.Earth ? (up ? 2 : 1, up ? 3 : 4) : (up ? 4 : 3, up ? 7 : 9);
+        // metal dearer than the rest: a cubic metre of iron is a deal of smith's work
+        return kind == Stockpile.Earth ? (up ? 2 : 1, up ? 3 : 4) : kind == Stockpile.Metal ? (up ? 10 : 8, up ? 16 : 20) : (up ? 4 : 3, up ? 7 : 9);
     }
 
     /// <summary>Trades a cubic metre of a store at the market: sold for gold, or bought. Why not, or null.</summary>
@@ -415,6 +433,8 @@ public sealed partial class Sim
         // gold and stocks run with the game's time, every step
         float income = TownIncome();
         if (income > 0 && !Over) Stock.Gold += income / 60 * dt;
+        // and metal, from the miners' buildings (Sim.Metal.cs)
+        TickMetal(dt);
         if (Time < _nextTown) return;
         _nextTown = Time + 2;
         for (int i = Buildings.Count - 1; i >= 0; i--)
@@ -609,6 +629,7 @@ public sealed partial class Sim
         Prop.Anvil => (4, 3), Prop.Forge => (7, 6), Prop.Rack => (8, 3), Prop.Target => (7, 3), Prop.Stall => (10, 14),
         Prop.Workbench => (10, 5), Prop.Counter => (12, 4), Prop.Desk => (8, 5), Prop.Bunk => (8, 16), Prop.Still => (8, 5),
         Prop.Hay => (5, 5), Prop.Casks => (6, 3), Prop.Crates => (6, 3), Prop.Kennel => (7, 6), Prop.Seat => (9, 7), Prop.Blocks => (6, 4),
+        Prop.Ingots => (6, 4),
         _ => (4, 4),
     };
 
@@ -715,6 +736,14 @@ public sealed partial class Sim
                 // a giant's seat: a block of rough stone, straw strewn before it
                 Box(x, y, z, x + w, y + 5, z + 4, Mat.Block);
                 Box(x, y, z + 4, x + w, y + 1, z + d, Mat.Hay);
+                break;
+            case Prop.Ingots:
+                // a pallet of boards, and the iron cast in bars stacked on it crosswise, a course a way
+                Box(x, y, z, x + w, y + 1, z + d, Mat.Rack);
+                for (int k = 0; k < 3; k++)
+                    for (int i = 0; i < (k % 2 == 0 ? w : d); i += 2)
+                        if (k % 2 == 0) Box(x + i, y + 1 + k, z, x + i + 1, y + 2 + k, z + d, Mat.Anvil);
+                        else Box(x, y + 1 + k, z + i, x + w, y + 2 + k, z + i + 1, Mat.Anvil);
                 break;
             case Prop.Blocks:
                 Box(x, y, z, x + 3, y + 3, z + 3, Mat.Block);

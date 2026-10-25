@@ -28,8 +28,8 @@ public partial class WorkTable : Control
     static float DoingX => MilitiaX + MilitiaW;
     public const float Width = 880;
 
-    static readonly string[] DutyNames = { "—", "камень", "брёвна", "землю" };
-    static readonly int[] Duties = { Stockpile.None, Stockpile.Stone, Stockpile.Wood, Stockpile.Earth };
+    static readonly string[] DutyNames = { "—", "камень", "брёвна", "землю", "металл" };
+    static readonly int[] Duties = { Stockpile.None, Stockpile.Stone, Stockpile.Wood, Stockpile.Earth, Stockpile.Metal };
 
     public void Init(Main m)
     {

@@ -24,6 +24,8 @@ static class CasualBench
         sim.Stock[Stockpile.Stone] += 1200.0 * VoxelWorld.PerM3;
         sim.Stock[Stockpile.Wood] += 600.0 * VoxelWorld.PerM3;
         sim.Stock[Stockpile.Earth] += 300.0 * VoxelWorld.PerM3;
+        // (the gatehouse's lintel and gate are of iron)
+        sim.Stock[Stockpile.Metal] += 20.0 * VoxelWorld.PerM3;
         int kx = site.KeepX, kz = site.KeepZ;
         var spots = new List<(int x, int z)>();
         for (int r = 110; r < 460 && spots.Count < 6; r += 8)
@@ -123,8 +125,9 @@ static class CasualBench
                 // the doorway cut and the leaves hung once the wall stands round it
                 for (int i = 0; i < 20 * 20 && (sim.HouseDoors.Count > 0 || sim.Orders.Total > 0); i++) sim.Step(.05f);
                 double cut = Until(sim);
-                ok &= sim.HouseDoors.Count == 0 && sim.Gates.Count > gates0 && cut >= 0;
-                more = $", the gate {(sim.Gates.Count > gates0 ? "hung" : "not hung")}";
+                // (under its iron lintel, in iron)
+                ok &= sim.HouseDoors.Count == 0 && sim.Gates.Count > gates0 && sim.Gates[^1].Iron && cut >= 0;
+                more = $", the gate {(sim.Gates.Count > gates0 ? sim.Gates[^1].Iron ? "hung in iron" : "hung in oak" : "not hung")}";
             }
             if (t.Key == "watchtower" && ok)
             {
@@ -194,7 +197,7 @@ static class CasualBench
             var p = t.Line ? t.Plan(wE, siteE, ex, ez, ex + 40, ez, 0, t.Size) : t.Plan(wE, siteE, ex, ez, 0, 0, 0, t.Size);
             if (p.Voxels == null && p.Why == "здесь край долины") edge++;
         }
-        check("every ready template is put up and built whole by four workers and nothing falls: the gatehouse's gate hung, the watchtower's deck reached by its ladder, the wall's merlons up; the stair down from the wall and a floor in a room built; over the valley's edge each is refused",
+        check("every ready template is put up and built whole by four workers and nothing falls: the gatehouse's gate hung in iron, the watchtower's deck reached by its ladder, the wall's merlons up; the stair down from the wall and a floor in a room built; over the valley's edge each is refused",
             all && stairs > 0 && floor > 0 && edge == Sim.Templates.Length,
             string.Join("; ", said) + $"; refused over the edge {edge} of {Sim.Templates.Length}");
     }

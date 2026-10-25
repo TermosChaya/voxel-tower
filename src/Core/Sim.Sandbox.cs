@@ -42,7 +42,7 @@ public sealed partial class Sim
     void Fill()
     {
         Stock.Gold = Math.Max(Stock.Gold, 5000);
-        foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth }) Stock[k] = Math.Max(Stock[k], 1000.0 * VoxelWorld.PerM3);
+        foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth, Stockpile.Metal }) Stock[k] = Math.Max(Stock[k], 1000.0 * VoxelWorld.PerM3);
         Favour = Math.Max(Favour, FavourCap);
         Revelations = Math.Max(Revelations, 20);
         Knowledge = Math.Max(Knowledge, 50);

@@ -166,7 +166,7 @@ public partial class Inspector : Control
         var head = new HBoxContainer();
         head.AddThemeConstantOverride("separation", 14);
         head.AddChild(Hud.Text(t.Tool == Tool.Paste && t.PasteBp != null ? $"Чертёж «{t.PasteBp.Name}»" : BuildTools.ToolName(t.Tool), Ornament.Display, 22, Ornament.EmberGlow));
-        var mat = Hud.CapsLabel((t.Tool == Tool.Gather ? (t.Shelter ? "убежище от орды" : t.Sanctum ? "святилище жрецов" : t.Dwelling ? "жилой дом" : "добывать: " + (t.GatherKind switch { Stockpile.Wood => "лес", Stockpile.Earth => "землю", _ => "камень" }))
+        var mat = Hud.CapsLabel((t.Tool == Tool.Gather ? (t.Shelter ? "убежище от орды" : t.Sanctum ? "святилище жрецов" : t.Dwelling ? "жилой дом" : "добывать: " + (t.GatherKind switch { Stockpile.Wood => "лес", Stockpile.Earth => "землю", Stockpile.Metal => "руду", _ => "камень" }))
             : t.Tool == Tool.Yard ? (o.YardPick < BuildTools.WayCount ? "дорожка: " : "вещь: ") + BuildTools.YardName(o.YardPick).ToLowerInvariant()
             : t.Tool == Tool.Template ? "шаблон: " + t.TemplatePick.Name.ToLowerInvariant()
             : t.Tool == Tool.Wand && o.WandCapture ? "снять чертёж" : o.Dig ? "кирка: копать и рубить" : (t.Tool == Tool.Wand ? "переложить в: " : "материал: ") + Mat.NameOf(o.Material).ToLowerInvariant()), 9);
@@ -196,10 +196,15 @@ public partial class Inspector : Control
             mats.AddChild(new Choice("Ловушка", TrapTip, new[] { "колья", "настил", "камни", "брёвна", "порох" }, Array.IndexOf(Traps, o.Material), i => t.SetMaterial(Traps[i])));
             col.AddChild(mats);
         }
+        // what a gate's leaves are of
+        if (t.Tool == Tool.Gate)
+            col.AddChild(new Choice("Створки", "Створки\nДубовые берутся из запаса брёвен и горят. Железные берутся из запаса металла, не горят, " +
+                "и орда рубит их втрое дольше. Клавиши {MatWood} и {MatMetal}.",
+                new[] { "дуб", "железо" }, t.IronGate ? 1 : 0, i => t.SetMaterial(i == 1 ? Mat.Plate : Mat.Wood)));
         // what the wand lays over again with
         if (t.Tool == Tool.Wand && !o.Dig && !o.WandCapture)
-            col.AddChild(new Choice("Переложить в", "Переложить в\nРабочие разберут выделенное и сложат заново из этого материала. Разобранное вернётся в запас. Клавиши {MatStone}, {MatWood} и {MatEarth}.",
-                new[] { "камень", "брёвна", "земля" }, Array.IndexOf(Relaid, o.Material), i => t.SetMaterial(Relaid[i])));
+            col.AddChild(new Choice("Переложить в", "Переложить в\nРабочие разберут выделенное и сложат заново из этого материала. Разобранное вернётся в запас. Клавиши {MatStone}, {MatWood}, {MatEarth} и {MatMetal}.",
+                new[] { "камень", "брёвна", "земля", "металл" }, Array.IndexOf(Relaid, o.Material), i => t.SetMaterial(Relaid[i])));
         // the settlement's palette: the ways, then the things
         if (t.Tool == Tool.Yard) col.AddChild(YardPalette());
         // the library: the ready templates, the bridge, the settlement's rank, and the blueprints taken
@@ -311,7 +316,7 @@ public partial class Inspector : Control
     }
 
     static readonly byte[] Laid = { Mat.Stone, Mat.Wood, Mat.Rammed, Mat.Pitch };
-    static readonly byte[] Relaid = { Mat.Stone, Mat.Wood, Mat.Rammed };
+    static readonly byte[] Relaid = { Mat.Stone, Mat.Wood, Mat.Rammed, Mat.Plate };
     static readonly byte[] Traps = { Mat.Stakes, Mat.TrapDeck, Mat.DropStone, Mat.DropLog, Mat.Powder };
 
     const string TrapTip = "Ловушки\nКолья: частокол заданной высоты. Кто идёт сквозь него, замедляется, ранится и понемногу его " +
@@ -324,7 +329,7 @@ public partial class Inspector : Control
         "Подорвать можно огненной стрелой: выберите лучника, включите огненные стрелы и щёлкните по бочкам. Рабочие порох " +
         "не тушат.";
 
-    const string MaterialTip = "Материал\nКамень ({MatStone}), брёвна ({MatWood}) и земля ({MatEarth}) берутся из запасов. Смолу варят из " +
+    const string MaterialTip = "Материал\nКамень ({MatStone}), брёвна ({MatWood}), земля ({MatEarth}) и железо ({MatMetal}) берутся из запасов. Железо прочнее всего и не горит. Смолу варят из " +
         "брёвен. Слой смолы на дне рва загорается целиком от огненной стрелы и горит долго и жарко. Рабочие смолу " +
         "не тушат, сгоревшую восстанавливает починка ({ToolRepair}).";
 
@@ -391,16 +396,17 @@ public partial class Inspector : Control
                 opts.AddChild(new Stepper("Шаг", "Шаг\nНа сколько грань нарастает или углубляется за щелчок. Клавиши {HeightLess} и {HeightMore}.", () => Len(o.Step), d => t.StepHeight(d)));
                 break;
             case Tool.Gather:
-                opts.AddChild(new Choice("Участок", "Участок\nКамень ({MatStone}), лес ({MatWood}), земля ({MatEarth}): здесь рабочие добывают ресурс.\n" +
+                opts.AddChild(new Choice("Участок", "Участок\nКамень ({MatStone}), лес ({MatWood}), земля ({MatEarth}): здесь рабочие добывают ресурс. " +
+                    "Руда ({MatMetal}): рудник, рабочие роют до железной руды и берут её в запас металла.\n" +
                     "Убежище: сюда по тревоге ({Alarm}) уходят рабочие. Лучше под крышей и за стенами.\n" +
                     "Святилище: здесь днём молятся жрецы. На месте силы, пока оно ваше, молитва даёт втрое больше.\n" +
                     "Жилой дом: обведите закрытую комнату со стенами, крышей и воротами. Рабочие поставят лежанки, каждая даёт место в войске. " +
                     "Построить новый дом целиком: прямоугольник ({ToolBox}) с заливкой «дом».",
-                    new[] { "камень", "лес", "земля", "убежище", "святилище", "жилой дом" },
-                    t.GatherKind switch { Stockpile.Wood => 1, Stockpile.Earth => 2, Zone.Shelter => 3, Zone.Sanctum => 4, Zone.Dwelling => 5, _ => 0 },
-                    i => { if (i == 3) t.SetShelter(true); else if (i == 4) t.SetSanctum(true); else if (i == 5) t.SetDwelling(true); else t.SetMaterial(new[] { Mat.Stone, Mat.Wood, Mat.Rammed }[i]); }));
-                if (t.GatherKind is Stockpile.Stone or Stockpile.Earth)
-                    opts.AddChild(new Stepper("Глубина", "Глубина\nДо какой глубины брать камень или землю. Клавиши {HeightLess} и {HeightMore}.", () => Len(o.Depth), d => t.StepHeight(d)));
+                    new[] { "камень", "лес", "земля", "руда", "убежище", "святилище", "жилой дом" },
+                    t.GatherKind switch { Stockpile.Wood => 1, Stockpile.Earth => 2, Stockpile.Metal => 3, Zone.Shelter => 4, Zone.Sanctum => 5, Zone.Dwelling => 6, _ => 0 },
+                    i => { if (i == 4) t.SetShelter(true); else if (i == 5) t.SetSanctum(true); else if (i == 6) t.SetDwelling(true); else t.SetMaterial(new[] { Mat.Stone, Mat.Wood, Mat.Rammed, Mat.Plate }[i]); }));
+                if (t.GatherKind is Stockpile.Stone or Stockpile.Earth or Stockpile.Metal)
+                    opts.AddChild(new Stepper("Глубина", "Глубина\nДо какой глубины брать камень, землю или руду. Клавиши {HeightLess} и {HeightMore}.", () => Len(o.Depth), d => t.StepHeight(d)));
                 break;
             case Tool.Wand:
                 opts.AddChild(Keyed(new Choice("Щелчок", "Что делает щелчок\nСнести: рабочие разберут выделенное, материал вернётся в запас. Кирка ({Pick}).\n" +
@@ -605,6 +611,7 @@ public partial class Inspector : Control
             (Icons.Of("stone-block"), Stockpile.Stone, "Добывать камень\nБез размеченной работы выбранные сами ломают ближайшие валуны и руины."),
             (Icons.Of("wood-pile"), Stockpile.Wood, "Добывать брёвна\nБез размеченной работы выбранные сами рубят ближайшие деревья."),
             (Icons.Of("dig-hole"), Stockpile.Earth, "Добывать землю\nБез размеченной работы выбранные копают общую яму в стороне от крепости."),
+            (Icons.Of("iron-ingot"), Stockpile.Metal, "Добывать металл\nБез размеченной работы выбранные сами ищут ближайшую железную руду: рыжую скалу-выход или жилу у поверхности."),
         })
         {
             int k = kind;
@@ -645,7 +652,7 @@ public partial class Inspector : Control
         }
         _refresh.Add(() =>
         {
-            int[] kinds = { Stockpile.None, Stockpile.Stone, Stockpile.Wood, Stockpile.Earth };
+            int[] kinds = { Stockpile.None, Stockpile.Stone, Stockpile.Wood, Stockpile.Earth, Stockpile.Metal };
             for (int i = 0; i < duty.Count; i++) duty[i].SetPressedNoSignal(chosen.TrueForAll(u => u.T.Prays || u.Duty == kinds[i]));
             militia?.SetPressedNoSignal(chosen.TrueForAll(u => u.T.Work < 1 || u.T.Prays || u.Militia));
             fire?.SetPressedNoSignal(chosen.TrueForAll(u => !u.T.Ranged || u.FireArrows));

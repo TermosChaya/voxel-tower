@@ -2,7 +2,9 @@ using System;
 
 namespace VoxelTower.Core;
 
-public enum MatGroup : byte { Earth, Wood, Stone, Rock, Hard }
+/// <summary>What a material is to whoever hacks, breaks or eats at it: Metal is iron the workers forged and laid, hard as
+/// stone thrice over.</summary>
+public enum MatGroup : byte { Earth, Wood, Stone, Rock, Hard, Metal }
 
 public readonly struct MaterialDef
 {
@@ -146,7 +148,21 @@ public static class Mat
     public const byte Window = 178, WindowLog = 179;
     /// <summary>The shutters either side of a house's window and the board over it, light wood against the wall (of a stone and of a log wall).</summary>
     public const byte Shutter = 180, ShutterLog = 181;
-    public const int Count = 182;
+    /// <summary>
+    /// Iron ore in the rock (MapGen.Ore.cs): dark rock flecked with rust, in veins that wind down through the hills; and
+    /// where a vein comes up to the surface, an outcrop of it weathered rusty, seen from afar. Dug, it goes to the store
+    /// of metal (smelting implied), half a voxel for a voxel.
+    /// </summary>
+    public const byte IronOre = 182, OreRust = 183;
+    /// <summary>
+    /// Metal laid by the workers: plates of dark iron riveted together (the voxel shader draws the plates, their seams and
+    /// their rivets). The strongest and the heaviest thing that is built: it does not burn, acid eats it slowly, the horde
+    /// hacks at it three times as long as at stone.
+    /// </summary>
+    public const byte Plate = 184;
+    /// <summary>The leaves of an iron gate: shut (ours walk through it), barred, swinging and open, as a timber gate's.</summary>
+    public const byte IronGate = 185, IronGateShut = 186, IronGateOpen = 187;
+    public const int Count = 190;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
     public static readonly bool[] IsVeg = new bool[Count], IsPlayer = new bool[Count], IsEarthy = new bool[Count],
@@ -328,6 +344,13 @@ public static class Mat
         D(Lava, "Лава", 0xff5a14, .3f, MatGroup.Hard, 0);
         Emission[Lava] = 2.4f;
         D(Basalt, "Застывшая лава", 0x2a2624, .2f, MatGroup.Rock, Natural);
+        // iron ore: dark rock, a little warmer than the valley's, and where it weathers at the surface, rust
+        D(IronOre, "Железная руда", 0x463734, .18f, MatGroup.Rock, Natural);
+        D(OreRust, "Рудный выход", 0x8c4a24, .16f, MatGroup.Rock, Natural);
+        D(Plate, "Металл", 0x5d636b, .05f, MatGroup.Metal, Player);
+        D(IronGate, "Железные ворота", 0x4e535a, .06f, MatGroup.Metal, Player);
+        D(IronGateShut, "Железные ворота на засове", 0x464a50, .06f, MatGroup.Metal, Player);
+        D(IronGateOpen, "Железные ворота", 0x4e535a, .06f, MatGroup.Metal, Player);
         Emission[Phial] = .35f;
         Emission[Window] = Emission[WindowLog] = .45f;
 
@@ -346,8 +369,9 @@ public static class Mat
         // acid wet and glossy as pitch is, without ringing like metal when struck
         Skin[Acid] = 2;
         Skin[Lava] = 10;
+        foreach (var m in new[] { Plate, IronGate, IronGateShut, IronGateOpen }) Skin[m] = 11;
         // what holds the world up: loose pieces resting on these never fall
-        foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Scorch, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank, Menhir, Trodden, Basalt }) IsAnchor[m] = true;
+        foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Scorch, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank, Menhir, Trodden, Basalt, IronOre, OreRust }) IsAnchor[m] = true;
 
         // what burns: needles and leaves flare up and are gone in seconds, grass and flowers in a moment; timber
         // catches slowly and burns long, and some of it stands charred after; a living trunk and oak bound with iron
@@ -419,7 +443,16 @@ public static class Mat
     public static bool IsMasonry(byte m) => m is Stone or Mortar or StoneDark or StoneLight or StoneWarm or StoneCool;
 
     /// <summary>A voxel of a gate's leaf: shut (ours walk through it), barred, or swinging and open.</summary>
-    public static bool IsLeaf(byte m) => m is Gate or GateShut or GateOpen;
+    public static bool IsLeaf(byte m) => m is Gate or GateShut or GateOpen or IronGate or IronGateShut or IronGateOpen;
+
+    /// <summary>Iron ore of either look: in the rock, or weathered at an outcrop.</summary>
+    public static bool IsIronOre(byte m) => m is IronOre or OreRust;
+
+    /// <summary>Laid metal or an iron gate's leaf: what the forge made.</summary>
+    public static bool IsMetalWork(byte m) => m is Plate or IronGate or IronGateShut or IronGateOpen;
+
+    /// <summary>A leaf of an iron gate.</summary>
+    public static bool IsIronLeaf(byte m) => m is IronGate or IronGateShut or IronGateOpen;
 
     /// <summary>What turns on hinges, a gate's leaves or a drawbridge's planks: it holds itself up, and is not remembered as building.</summary>
     public static bool Swings(byte m) => IsLeaf(m) || m == DrawDeck;

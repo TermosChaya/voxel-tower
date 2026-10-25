@@ -246,6 +246,7 @@ public sealed partial class Sim
             int kind = Labour.YieldKind(cur);
             if (kind != Stockpile.None) Stock[kind] += Labour.YieldShare(cur) * u.T.Yield * YieldMore;
             if (cur == Mat.Ore) Stock.Gold += Labour.OreGold * u.T.Yield;
+            if (Mat.IsIronOre(cur)) StruckOre(cur, Labour.YieldShare(cur) * u.T.Yield * YieldMore);
             Mined?.Invoke(j.x, j.y, j.z, cur);
             return true;
         }
@@ -629,17 +630,17 @@ public sealed partial class Sim
         for (int k = 1; k < Work.Kinds; k++) if ((mask >> k & 1) != 0 && Orders.ColWork[k][col] > 0) return true;
         if ((mask & 1) == 0) return false;
         if (Orders.ColLay[Stockpile.None][col] > 0) return true;
-        for (int k = 1; k < 4; k++) if (Orders.ColLay[k][col] > 0 && Stock[k] >= 1) return true;
+        for (int k = 1; k < Stockpile.Kinds; k++) if (Orders.ColLay[k][col] > 0 && Stock[k] >= 1) return true;
         return false;
     }
 
     /// <summary>What the marked work waits for most: "камень", "брёвна".</summary>
     string Wanting()
     {
-        var need = new long[4];
-        foreach (int col in Orders.Active) for (int k = 1; k < 4; k++) if (Stock[k] < 1) need[k] += Orders.ColLay[k][col];
+        var need = new long[Stockpile.Kinds];
+        foreach (int col in Orders.Active) for (int k = 1; k < Stockpile.Kinds; k++) if (Stock[k] < 1) need[k] += Orders.ColLay[k][col];
         int best = 1;
-        for (int k = 2; k < 4; k++) if (need[k] > need[best]) best = k;
+        for (int k = 2; k < Stockpile.Kinds; k++) if (need[k] > need[best]) best = k;
         return Stockpile.Name(best);
     }
 

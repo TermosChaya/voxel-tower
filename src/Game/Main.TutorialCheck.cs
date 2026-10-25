@@ -88,6 +88,15 @@ public partial class Main
                     await Drag((rx - 20, rz - 20), (rx + 20, rz + 20));
                     break;
                 }
+                case "Железная руда":
+                {
+                    if (Tools.Tool != Tool.Gather) Tools.SetTool(Tool.Gather);
+                    Tools.SetMaterial(Mat.Plate);
+                    var o = Site.Outcrops.Find(c => Sim.OreLeft(c.X, c.Z, c.R) >= 40);
+                    await Look(o.X, o.Z);
+                    await Drag((o.X - 16, o.Z - 16), (o.X + 16, o.Z + 16));
+                    break;
+                }
                 case "Убрать кисть": Tools.SetTool(Tool.None); break;
                 case "Старая крепость":
                 {

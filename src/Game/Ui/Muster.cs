@@ -40,7 +40,7 @@ public partial class KindTile : Control
         var sim = _m.Sim;
         string why = sim.CantEnlist(Kind);
         string room = Kind.Room > 1 ? $", занимает {Kind.Room} {Places(Kind.Room)}" : "";
-        string logs = Kind.Logs > 0 ? $" и {Kind.Logs:0.#} м³ брёвен" : "";
+        string logs = (Kind.Logs > 0 ? $" и {Kind.Logs:0.#} м³ брёвен" : "") + (Kind.Metal > 0 ? $" и {Kind.Metal:0.##} м³ металла" : "");
         string foot = why == null ? $"Щелчок — нанять за {sim.HireCost(Kind)} золота{logs}{room}. Выходит из цитадели сразу." : $"Нельзя: {why}.";
         // since 25.10.2026 the citadel hires only its own; the rest come out of their buildings (Sim.Town.cs)
         if (!Sim.CitadelHires(Kind) && !sim.Sandbox) foot = $"Цитадель таких не нанимает: {sim.HiredWhere(Kind)}.";

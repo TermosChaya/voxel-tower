@@ -174,6 +174,18 @@ public partial class Tutorial : Node
         return best == null ? null : (best.X, best.Z);
     }
 
+    /// <summary>The outcrop of ore nearest the citadel with its ore still in it.</summary>
+    (int x, int z)? Outcrop()
+    {
+        (int x, int z)? best = null; long bd = long.MaxValue;
+        foreach (var o in _m.Site.Outcrops)
+        {
+            long d = (long)(o.X - _m.Site.KeepX) * (o.X - _m.Site.KeepX) + (long)(o.Z - _m.Site.KeepZ) * (o.Z - _m.Site.KeepZ);
+            if (d < bd && _m.Sim.OreLeft(o.X, o.Z, o.R) >= 40) { bd = d; best = (o.X, o.Z); }
+        }
+        return best;
+    }
+
     Mine Copper()
     {
         Mine best = null; long bd = long.MaxValue;
@@ -421,6 +433,17 @@ public partial class Tutorial : Node
             Mark = Ruin,
             Enter = () => { if (Ruin() is { } r) Look(r.x, r.z, 1.6f); },
             Done = () => m.Sim.Zones.Exists(z => z.Kind == Stockpile.Stone),
+        });
+        Add(new Step
+        {
+            Chapter = stores, Title = "Железная руда",
+            Text = "Железная руда выходит наружу ржавыми скалами. Делянка с металлом ({MatMetal}) на такой скале станет " +
+                "рудником: рабочие роют до руды, и металл идёт в запасы. Из него кладут самые прочные стены и железные ворота.",
+            Task = "Делянка на руду: {ToolGather}, {MatMetal}, рамка",
+            Point = "mat:" + Mat.Plate,
+            Mark = Outcrop,
+            Enter = () => { if (Outcrop() is { } o) Look(o.x, o.z, 1.6f); },
+            Done = () => m.Sim.Zones.Exists(z => z.Kind == Stockpile.Metal),
         });
         Add(new Step
         {

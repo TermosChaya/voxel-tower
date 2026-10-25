@@ -46,6 +46,8 @@ public sealed class UnitType
     /// men work it (they come with it, and its places are theirs too).</summary>
     public float Logs;
     public int Crew;
+    /// <summary>Metal it is armed or built of, cubic metres from the stores besides the gold (plate, iron fittings, an engine's bands).</summary>
+    public float Metal;
 }
 
 public static class Kinds
@@ -103,21 +105,21 @@ public static class Kinds
     {
         Key = "shield", Name = "Щитоносец", Team = Team.Player,
         Move = new Mover { Height = 2, Climb = 2, Speed = 2.1f },
-        Work = .4f, Yield = .6f, Hp = 190, Damage = 10, AttackTime = 1.2f, Reach = 11, BodyR = 2.5f, Cost = 40, Lore = "shieldmen", Tool = "mace",
+        Work = .4f, Yield = .6f, Hp = 190, Damage = 10, AttackTime = 1.2f, Reach = 11, BodyR = 2.5f, Cost = 40, Metal = .1f, Lore = "shieldmen", Tool = "mace",
     };
     /// <summary>A halberdier in mail and a red tabard under a sallet: the axe on the end of his pole comes down deep.</summary>
     public static readonly UnitType Halberdier = new()
     {
         Key = "halberd", Name = "Алебардщик", Team = Team.Player,
         Move = new Mover { Height = 2, Climb = 2, Speed = 2.3f },
-        Work = .4f, Yield = .6f, Hp = 130, Damage = 24, AttackTime = 1.5f, Reach = 14, BodyR = 2.5f, Cost = 45, Lore = "halberds", Tool = "halberd",
+        Work = .4f, Yield = .6f, Hp = 130, Damage = 24, AttackTime = 1.5f, Reach = 14, BodyR = 2.5f, Cost = 45, Metal = .05f, Lore = "halberds", Tool = "halberd",
     };
     /// <summary>A knight in full plate under a great helm, a long sword and a heater shield: what a blade gets through is little.</summary>
     public static readonly UnitType Knight = new()
     {
         Key = "knight", Name = "Рыцарь", Team = Team.Player,
         Move = new Mover { Height = 2, Climb = 2, Speed = 2f },
-        Work = .4f, Yield = .6f, Hp = 240, Damage = 24, AttackTime = 1.1f, Reach = 12, BodyR = 2.5f, Cost = 90, Lore = "knights", Tool = "longsword",
+        Work = .4f, Yield = .6f, Hp = 240, Damage = 24, AttackTime = 1.1f, Reach = 12, BodyR = 2.5f, Cost = 90, Metal = .2f, Lore = "knights", Tool = "longsword",
     };
     /// <summary>A slinger, light and lean, a pouch of stones at his belt: cheap, quick, and his stones knock the wind out of a raider.</summary>
     public static readonly UnitType Slinger = new()
@@ -131,7 +133,7 @@ public static class Kinds
     {
         Key = "crossbow", Name = "Арбалетчик", Team = Team.Player,
         Move = new Mover { Height = 2, Climb = 2, Speed = 2.4f },
-        Work = .4f, Yield = .6f, Hp = 80, Damage = 34, AttackTime = 2.8f, Ranged = true, Range = 28 * VoxelWorld.PerMetre, Cost = 50, Lore = "crossbows", Tool = "crossbow",
+        Work = .4f, Yield = .6f, Hp = 80, Damage = 34, AttackTime = 2.8f, Ranged = true, Range = 28 * VoxelWorld.PerMetre, Cost = 50, Metal = .05f, Lore = "crossbows", Tool = "crossbow",
     };
     /// <summary>A bombardier in a leather apron with pots of powder: one bursts where it comes down, among the raiders and their ladders.</summary>
     public static readonly UnitType Bombardier = new()
@@ -179,7 +181,7 @@ public static class Kinds
     {
         Key = "lancer", Name = "Конный рыцарь", Team = Team.Player,
         Move = new Mover { Height = 3, Climb = 1, Drop = 2, Speed = 4.2f, Ladders = false },
-        Work = 0, Yield = 0, Hp = 280, Damage = 30, AttackTime = 1.3f, Reach = 15, BodyH = 22, BodyR = 3.5f, Cost = 140, Room = 3, Lore = "lancers", Tool = "lance", Mounted = true,
+        Work = 0, Yield = 0, Hp = 280, Damage = 30, AttackTime = 1.3f, Reach = 15, BodyH = 22, BodyR = 3.5f, Cost = 140, Metal = .25f, Room = 3, Lore = "lancers", Tool = "lance", Mounted = true,
     };
     /// <summary>A troll tamed and bought from the hill folk, in our blue, an iron collar on it and a broken chain: it mends as trolls do.</summary>
     public static readonly UnitType TameTroll = new()
@@ -204,7 +206,7 @@ public static class Kinds
         Key = "mangonel", Name = "Катапульта", Team = Team.Player,
         Move = new Mover { Height = 3, Climb = 1, Drop = 1, Speed = .8f, Ladders = false },
         Work = 0, Yield = 0, Hp = 300, Damage = 0, AttackTime = 7, Range = 46 * VoxelWorld.PerMetre, BodyH = 20, BodyR = 6,
-        Cost = 110, Logs = 3, Crew = 2, Room = 3, Lore = "mangonels",
+        Cost = 110, Logs = 3, Metal = .3f, Crew = 2, Room = 3, Lore = "mangonels",
     };
     /// <summary>A ballista: a great crossbow on a wheeled stand; a bolt like a spear, straight, through a file of raiders, and into a giant.</summary>
     public static readonly UnitType Ballista = new()
@@ -212,7 +214,7 @@ public static class Kinds
         Key = "ballista", Name = "Баллиста", Team = Team.Player,
         Move = new Mover { Height = 2, Climb = 1, Drop = 1, Speed = 1.1f, Ladders = false },
         Work = 0, Yield = 0, Hp = 220, Damage = 90, AttackTime = 4.5f, Range = 50 * VoxelWorld.PerMetre, BodyH = 12, BodyR = 5,
-        Cost = 120, Logs = 2, Crew = 2, Room = 3, Lore = "ballistas",
+        Cost = 120, Logs = 2, Metal = .4f, Crew = 2, Room = 3, Lore = "ballistas",
     };
     /// <summary>A trebuchet: a counterweight on a long arm in a tall frame; heavy stones farther than anything of the horde's, and set up where it stands.</summary>
     public static readonly UnitType Trebuchet = new()
@@ -220,7 +222,7 @@ public static class Kinds
         Key = "trebuchet", Name = "Требушет", Team = Team.Player,
         Move = new Mover { Height = 3, Climb = 1, Drop = 1, Speed = .55f, Ladders = false },
         Work = 0, Yield = 0, Hp = 480, Damage = 0, AttackTime = 12, Range = 90 * VoxelWorld.PerMetre, BodyH = 40, BodyR = 8,
-        Cost = 220, Logs = 8, Crew = 3, Room = 5, Lore = "trebuchets",
+        Cost = 220, Logs = 8, Metal = .8f, Crew = 3, Room = 5, Lore = "trebuchets",
     };
     /// <summary>One of an engine's crew, in a leather cap and apron: it winds the engine, loads it and pushes it; with its engine gone, a worker.</summary>
     public static readonly UnitType Crewman = new()

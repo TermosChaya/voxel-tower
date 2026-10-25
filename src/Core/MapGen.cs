@@ -389,6 +389,9 @@ public static class MapGen
             return k is Low or Plateau or Bank && !NearKeep(x, z, 48) && !Landmarks.Taken(site, x, z, 6);
         }
 
+        // iron: veins through the rock, outcrops where they come up (MapGen.Ore.cs), before what grows over the ground
+        OreVeins.Lay(w, site, seed);
+
         // boulders, more of them on the rocky ground
         for (int gz = 0; gz < SZ; gz += 56)
             for (int gx = 0; gx < SX; gx += 56)

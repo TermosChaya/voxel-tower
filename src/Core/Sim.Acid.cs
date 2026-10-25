@@ -59,7 +59,7 @@ public sealed partial class Sim
         if (Mat.IsLadder[m]) return 1 / 1.6f;
         if (Mat.IsSprig(m) || Mat.IsLeafy(m) || m is Mat.Banner or Mat.BannerTrim or Mat.Sack or Mat.Bedding) return 1 / .4f;
         if (m is Mat.Gate or Mat.GateShut or Mat.GateOpen or Mat.DrawDeck) return 1 / 12f;
-        if (m == Mat.Iron) return 1 / 25f;
+        if (m == Mat.Iron || Mat.IsMetalWork(m)) return 1 / 25f;
         // the valley's own ground drinks it in more than it is eaten by it
         if (Mat.IsNatural[m] && Mat.IsEarthy[m]) return 1 / 2.5f;
         return Mat.Def[m].Group switch { MatGroup.Earth => 1 / 1.4f, MatGroup.Wood => 1 / 2.2f, MatGroup.Stone or MatGroup.Rock => 1 / 5.5f, _ => 0 };
@@ -72,7 +72,7 @@ public sealed partial class Sim
     static float SpentOn(byte m)
     {
         if (Mat.IsSprig(m) || Mat.IsLeafy(m)) return .05f;
-        if (m is Mat.Gate or Mat.GateShut or Mat.GateOpen or Mat.DrawDeck or Mat.Iron) return .9f;
+        if (m is Mat.Gate or Mat.GateShut or Mat.GateOpen or Mat.DrawDeck or Mat.Iron || Mat.IsMetalWork(m)) return .9f;
         if (Mat.IsNatural[m] && Mat.IsEarthy[m]) return .45f;
         return Mat.Def[m].Group switch { MatGroup.Earth => .3f, MatGroup.Wood => .3f, _ => .35f };
     }

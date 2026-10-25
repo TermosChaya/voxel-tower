@@ -24,6 +24,7 @@ public partial class ZoneView : Node3D
     {
         Stockpile.Wood => new Color(.5f, .8f, .32f, alpha),
         Stockpile.Earth => new Color(.85f, .58f, .32f, alpha),
+        Stockpile.Metal => new Color(.86f, .4f, .2f, alpha),
         Zone.Shelter => new Color(.5f, .68f, .98f, alpha),
         Zone.Sanctum => new Color(.7f, .42f, .92f, alpha),
         Zone.Dwelling => new Color(.96f, .78f, .4f, alpha),
@@ -36,7 +37,7 @@ public partial class ZoneView : Node3D
         _w = sim.World;
         Position = new Vector3(_w.OriginX, 0, _w.OriginZ);
         Scale = Vector3.One * VoxelWorld.Vox;
-        foreach (int kind in new[] { Stockpile.Wood, Stockpile.Stone, Stockpile.Earth, Zone.Shelter, Zone.Sanctum, Zone.Dwelling })
+        foreach (int kind in new[] { Stockpile.Wood, Stockpile.Stone, Stockpile.Earth, Stockpile.Metal, Zone.Shelter, Zone.Sanctum, Zone.Dwelling })
             _mats[kind] = new StandardMaterial3D
             {
                 ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,

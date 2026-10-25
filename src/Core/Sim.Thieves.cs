@@ -117,7 +117,7 @@ public sealed partial class Sim
     void Steal(Unit u)
     {
         int kind = -1; double most = 0;
-        foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth })
+        foreach (int k in new[] { Stockpile.Stone, Stockpile.Wood, Stockpile.Earth, Stockpile.Metal })
             if (Stock[k] > most) { most = Stock[k]; kind = k; }
         if (Stock.Gold >= LootGold * 2 && (kind < 0 || most < LootVoxels)) kind = 0;
         if (kind < 0) { u.Loot = 0; u.LootKind = -2; return; }

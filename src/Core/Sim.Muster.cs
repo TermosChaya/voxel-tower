@@ -45,6 +45,7 @@ public sealed partial class Sim
         if (Stock.Gold < cost) return $"нужно {cost} золота";
         // an engine is built of the stores' timber besides
         if (t.Logs > 0 && Stock[Stockpile.Wood] + 1e-6 < t.Logs * VoxelWorld.PerM3) return $"нужно {t.Logs:0.#} м³ брёвен";
+        if (t.Metal > 0 && !HasMetal(t.Metal)) return $"нужно {t.Metal:0.##} м³ металла";
         return null;
     }
 
@@ -65,6 +66,7 @@ public sealed partial class Sim
         if (CantEnlist(t) != null) return false;
         Stock.Gold -= HireCost(t);
         if (t.Logs > 0) Stock.Take(Stockpile.Wood, t.Logs * VoxelWorld.PerM3);
+        TakeMetal(t.Metal);
         var u = Arrive(t);
         // an engine comes out with its crew (Sim.OurEngines.cs)
         if (t.Crew > 0)

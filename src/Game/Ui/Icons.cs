@@ -45,7 +45,8 @@ public static class Icons
 
     /// <summary>A material: a block of stone, a pile of logs, a pit of earth, in the material's own colour.</summary>
     public static Painter Material(byte m) => (c, r, ink) =>
-        Glyph(c, r, (m == Mat.Stone ? new Color("a9a3a6") : Ornament.MatColor(m)).Lerp(ink, .25f), m == Mat.Stone ? "stone-block" : m == Mat.Wood ? "wood-pile" : "dig-hole");
+        Glyph(c, r, (m == Mat.Stone ? new Color("a9a3a6") : m == Mat.Plate ? new Color("9ba3ad") : Ornament.MatColor(m)).Lerp(ink, .25f),
+            m == Mat.Stone ? "stone-block" : m == Mat.Wood ? "wood-pile" : m == Mat.Plate ? "iron-ingot" : "dig-hole");
 
     static readonly Dictionary<string, string> Sigils = new()
     {
@@ -70,7 +71,7 @@ public static class Icons
         ["b_hall"] = "castle", ["b_market"] = "two-coins", ["b_smithy"] = "anvil", ["b_carpentry"] = "axe-in-stump",
         ["b_masons"] = "trowel", ["b_drill"] = "target-dummy", ["b_infirmary"] = "bunk-beds", ["b_traps"] = "wolf-trap",
         ["b_barracks"] = "medieval-barracks", ["b_knights"] = "black-knight-helm", ["b_range"] = "bow-arrow", ["b_lab"] = "acid-flask",
-        ["b_kennel"] = "hound", ["b_stables"] = "horse-head", ["b_trolls"] = "troll", ["b_giants"] = "giant", ["b_workshop"] = "trebuchet",
+        ["b_kennel"] = "hound", ["b_stables"] = "horse-head", ["b_trolls"] = "troll", ["b_giants"] = "giant", ["b_workshop"] = "trebuchet", ["b_mine"] = "ore-pick",
         // the rites
         ["spell.Hand"] = "earth-spit", ["spell.Rift"] = "earth-crack", ["spell.Mire"] = "swamp", ["spell.Skin"] = "rock-golem",
         ["spell.Fall"] = "falling-rocks", ["spell.Quake"] = "quake-stomp", ["spell.FireRain"] = "fire-wave",

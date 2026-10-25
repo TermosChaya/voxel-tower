@@ -229,7 +229,7 @@ public sealed partial class Sim
         byte m = World.Get(x, y, z);
         if (m == Mat.Air && y > 0) m = World.Get(x, y - 1, z);
         if (m is Mat.Rubble or Mat.Lumber or Mat.Char) return .25f;
-        return Mat.Def[m].Group switch { MatGroup.Earth => .12f, MatGroup.Wood => .07f, MatGroup.Stone or MatGroup.Rock or MatGroup.Hard => .05f, _ => .12f };
+        return Mat.Def[m].Group switch { MatGroup.Earth => .12f, MatGroup.Wood => .07f, MatGroup.Stone or MatGroup.Rock or MatGroup.Hard or MatGroup.Metal => .05f, _ => .12f };
     }
 
     /// <summary>

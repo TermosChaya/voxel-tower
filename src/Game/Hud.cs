@@ -33,8 +33,8 @@ public partial class Hud : CanvasLayer
         (Tool.Extrude, Icons.Extrude, Act.ToolExtrude, "Выдавить ({ToolExtrude})\nЩелчок по ровной грани наращивает её на шаг. С киркой грань углубляется: так делают ступени в склоне и проходы в скале."),
         (Tool.Unmark, Icons.Erase, Act.ToolUnmark, "Снять разметку ({ToolUnmark})\nРамка снимает всю разметку внутри, щелчок — рядом с курсором. Сделанное остаётся."),
         (Tool.Ladder, Icons.Ladder, Act.ToolLadder, "Лестница ({ToolLadder})\nЩелчок по стене, башне или обрыву. Рабочие поставят лестницу от земли до верха. Орда тоже лазит по лестницам и ставит свои."),
-        (Tool.Gather, Icons.Gather, Act.ToolGather, "Делянка ({ToolGather})\nУчасток, где рабочие сами добывают ресурс: {MatStone} — камень, {MatWood} — лес, {MatEarth} — землю. Для камня и земли задаётся глубина. Стены и рвы рабочие делают в первую очередь.\nВ нижней панели делянку можно сделать убежищем (туда уходят по тревоге {Alarm}), святилищем (там молятся жрецы) или жилым домом (закрытая комната с воротами, каждая лежанка в нём даёт место в войске)."),
-        (Tool.Gate, Icons.GateIcon, Act.ToolGate, "Ворота ({ToolGate})\nЩелчок по стене. Рабочие прорубят проём 2 × 3 м и навесят дубовые створки. Свои проходят, перед ордой ворота закрыты. Щелчок по воротам без кисти: открываются сами, открыты или на засове. В стене пруда это затвор для воды."),
+        (Tool.Gather, Icons.Gather, Act.ToolGather, "Делянка ({ToolGather})\nУчасток, где рабочие сами добывают ресурс: {MatStone} — камень, {MatWood} — лес, {MatEarth} — землю, {MatMetal} — руду. Для камня, земли и руды задаётся глубина. Стены и рвы рабочие делают в первую очередь.\nВ нижней панели делянку можно сделать убежищем (туда уходят по тревоге {Alarm}), святилищем (там молятся жрецы) или жилым домом (закрытая комната с воротами, каждая лежанка в нём даёт место в войске)."),
+        (Tool.Gate, Icons.GateIcon, Act.ToolGate, "Ворота ({ToolGate})\nЩелчок по стене. Рабочие прорубят проём 2 × 3 м и навесят створки: дубовые или железные ({MatMetal}). Свои проходят, перед ордой ворота закрыты. Щелчок по воротам без кисти: открываются сами, открыты или на засове. В стене пруда это затвор для воды."),
         (Tool.Repair, Icons.Mend, Act.ToolRepair, "Починка ({ToolRepair})\nЩелчок по разрушенной постройке. Рабочие уберут завалы, восстановят кладку и ворота, переложат треснувшие камни. Чинится всё, что вы построили, и старая крепость. Рамкой можно чинить по частям."),
         (Tool.Bridge, Icons.BridgeIcon, Act.ToolBridge, "Мост ({ToolBridge})\nПротяните от берега до берега, пролёт от 2 до 25 м. Каменный ({MatStone}) идёт аркой и с парапетами, деревянный ({MatWood}) — настил с перилами.\nПодъёмный мост (вид выбирают в нижней панели) — настил над рвом от 2 до 6 м. Когда подходит орда, он поднимается сам и сбрасывает в ров тех, кто на нём. Щелчок по нему без кисти: сам, опущен или поднят."),
         (Tool.Capture, Icons.Scroll, Act.ToolCapture, "Снять чертёж ({ToolCapture})\nОбведите постройку рамкой, и она сохранится в нижней панели этого инструмента. {Rotate} поворачивает копию."),
@@ -63,6 +63,7 @@ public partial class Hud : CanvasLayer
         (Mat.Stone, Act.MatStone, Stockpile.Stone, "Камень ({MatStone})\nСамый прочный, но кладётся дольше всего. Добывают киркой в скалах и валунах. Разобранная кладка возвращает 75 % камня."),
         (Mat.Wood, Act.MatWood, Stockpile.Wood, "Брёвна ({MatWood})\nРубят в лесу. Кладутся быстрее камня, но орки легко их рубят, и они горят."),
         (Mat.Rammed, Act.MatEarth, Stockpile.Earth, "Земля ({MatEarth})\nДаёт любой ров и котлован. Кладётся быстрее всего. Гоблин без кирки сквозь насыпь не пройдёт."),
+        (Mat.Plate, Act.MatMetal, Stockpile.Metal, "Металл ({MatMetal})\nЖелезные листы на заклёпках: прочнее всего, держит пролёт до 3 м, не горит, орда рубит его втрое дольше камня. Добывают из железной руды: ржавые скалы-выходы и жилы под землёй."),
     };
 
     public const string UndoTip = "Отменить: Ctrl+Z (на Mac ⌘Z)\nСнимает последнюю разметку или возвращает снятую, до 40 шагов назад. Построенное и выкопанное остаётся.";
@@ -334,18 +335,21 @@ public partial class Hud : CanvasLayer
 
     static readonly Func<double, string> Whole = v => Fmt.Int(Math.Floor(v)), Cubic = v => Fmt.M3(v);
 
+    /// <summary>What the beam shows of a store now: 0 gold, the stores of <see cref="Stockpile"/>, then the intervention and the household.</summary>
+    public string StoreShown(int i) => _stores?.Values[i];
+
     public void Refresh()
     {
         if (_stores == null) return;
         RefreshGoals();
         var st = _m.Sim.Stock;
         _stores.Set(0, Math.Floor(st.Gold), Whole, 5);
-        _stores.Set(4, Math.Floor(_m.Sim.Favour), Whole, 5);
+        _stores.Set(Stockpile.Kinds, Math.Floor(_m.Sim.Favour), Whole, 5);
         int have = _m.Sim.Household(), places = _m.Sim.Places;
-        _stores.Values[5] = $"{have}/{places}";
-        _stores.Short[5] = have >= places;
+        _stores.Values[Stockpile.Kinds + 1] = $"{have}/{places}";
+        _stores.Short[Stockpile.Kinds + 1] = have >= places;
         var t = _m.Tools;
-        for (int k = 1; k <= 3; k++)
+        for (int k = 1; k < Stockpile.Kinds; k++)
         {
             _stores.Set(k, st[k], Cubic, 2 * VoxelWorld.PerM3);
             _stores.Short[k] = t.Tool != Tool.None && t.PlanText != null && !t.PlanIsDig && t.PlanNeeds[k] > st[k] + .5;

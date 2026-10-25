@@ -234,7 +234,11 @@ static class GiantsBench
             $"deep {deep}, wades {wades}; its field there {fieldG}, a troll's {fieldT}; in the water {wet}, now {(wader.X - dx0) / VoxelWorld.PerMetre:0.0} m past the near bank");
 
         // left to itself: a ring of stone round the citadel, and a hill giant coming at it by its field throws at the
-        // wall on its way and breaks it
+        // wall on its way and breaks it (the walls of the field taken away first: it comes on across the field, and one
+        // of them right before it would take the stone thrown at it point-blank back down on its head)
+        for (int z = fz0; z < fz0 + 280; z++)
+            for (int x = fx0; x < fx0 + 320; x++)
+                for (int y = fg; y < fg + 50; y++) if (w.Get(x, y, z) != Mat.Air) w.Set(x, y, z, Mat.Air);
         int kx = site.KeepX, kz = site.KeepZ, ring = site.KeepR + 70;
         for (int z = kz - ring - 8; z <= kz + ring + 8; z++)
             for (int x = kx - ring - 8; x <= kx + ring + 8; x++)

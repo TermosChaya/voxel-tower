@@ -41,7 +41,7 @@ public sealed class Zone
     /// <summary>What a dwelling is called when it is a town building (Sim.Town.cs): «Кузница», «Казарма»…</summary>
     public string Title = "";
     public string Name => Title.Length > 0 ? Title : Name0(Kind);
-    public static string Name0(int kind) => kind switch { Stockpile.Wood => "Делянка", Stockpile.Stone => "Каменоломня", Shelter => "Убежище", Sanctum => "Святилище", Dwelling => "Жилой дом", _ => "Карьер" };
+    public static string Name0(int kind) => kind switch { Stockpile.Wood => "Делянка", Stockpile.Stone => "Каменоломня", Stockpile.Metal => "Рудник", Shelter => "Убежище", Sanctum => "Святилище", Dwelling => "Жилой дом", _ => "Карьер" };
 }
 
 public sealed partial class Sim
@@ -61,11 +61,13 @@ public sealed partial class Sim
         if (z1 < z0) (z0, z1) = (z1, z0);
         x0 = Math.Max(0, x0); z0 = Math.Max(0, z0); x1 = Math.Min(World.SX - 1, x1); z1 = Math.Min(World.SZ - 1, z1);
         var zone = new Zone { Id = _nextZone++, X0 = x0, Z0 = z0, X1 = x1, Z1 = z1, Kind = kind, Depth = Math.Max(1, depth) };
-        if (kind is Stockpile.Stone or Stockpile.Earth)
+        if (kind is Stockpile.Stone or Stockpile.Earth or Stockpile.Metal)
         {
             zone.Floor = new int[zone.W * zone.D];
             for (int z = z0; z <= z1; z++)
                 for (int x = x0; x <= x1; x++) zone.Floor[(z - z0) * zone.W + (x - x0)] = Math.Max(3, World.SurfAt(x, z) - zone.Depth);
+            // a mine: an open pit down to the ore (Sim.Metal.cs)
+            if (kind == Stockpile.Metal) zone.Floor = MineFloor(zone);
         }
         Zones.Add(zone);
         Orders.Writing?.Added.Add(zone);
@@ -136,6 +138,17 @@ public sealed partial class Sim
             return (trees, trees * WoodPerTree);
         }
         double vox = 0;
+        // a mine: the ore in reach, not the rock and earth taken out over it
+        if (kind == Stockpile.Metal)
+        {
+            for (int z = z0; z <= z1; z += 2)
+                for (int x = x0; x <= x1; x += 2)
+                {
+                    int top = World.SurfAt(x, z);
+                    for (int y = top - 1; y >= Math.Max(3, top - depth); y--) if (Mat.IsIronOre(World.Get(x, y, z))) vox += 4;
+                }
+            return (0, vox);
+        }
         for (int z = z0; z <= z1; z += 2)
             for (int x = x0; x <= x1; x += 2)
             {
@@ -191,7 +204,8 @@ public sealed partial class Sim
     /// <summary>The voxels a zone of this kind takes: rock for stone, natural earth for earth.</summary>
     static bool Takes(int kind, byte m) => kind switch
     {
-        Stockpile.Stone => m is Mat.Rock or Mat.Moss or Mat.Ore or Mat.Ruin,
+        Stockpile.Stone => m is Mat.Rock or Mat.Moss or Mat.Ore or Mat.Ruin || Mat.IsIronOre(m),
+        Stockpile.Metal => m is Mat.Rock or Mat.Moss or Mat.Soil or Mat.Path or Mat.Scorch || Mat.IsGrass(m) || Mat.IsIronOre(m),
         Stockpile.Earth => m is Mat.Soil or Mat.Path or Mat.Scorch || Mat.IsGrass(m),
         _ => false,
     };
@@ -237,6 +251,7 @@ public sealed partial class Sim
             {
                 Stockpile.Wood => "Делянка вырублена.",
                 Stockpile.Stone => "Каменоломня выбрана до дна.",
+                Stockpile.Metal => "Рудник выбран: руды в нём больше нет.",
                 _ => "Карьер выкопан.",
             }, 1, (z.X0 + z.X1) / 2f, (z.Z0 + z.Z1) / 2f);
         return false;
@@ -263,6 +278,8 @@ public sealed partial class Sim
     Zone DutyZone(Unit u)
     {
         int kind = u.Duty;
+        // for metal: the nearest ore showing or just under the ground (Sim.Metal.cs)
+        if (kind == Stockpile.Metal) return OreDutyZone(u);
         if (kind == Stockpile.Earth)
         {
             // one pit, dug by all who are sent for earth

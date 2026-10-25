@@ -58,6 +58,7 @@ static class TownBench
         for (int i = 0; i < 6; i++) sim.Spawn(Kinds.Worker, sim.Gate);
         sim.Stock[Stockpile.Wood] += 800.0 * VoxelWorld.PerM3;
         sim.Stock[Stockpile.Stone] += 800.0 * VoxelWorld.PerM3;
+        sim.Stock[Stockpile.Metal] += 40.0 * VoxelWorld.PerM3;
         sim.Stock.Gold = 2000;
         void Run(double s) { for (double t = 0; t < s; t += .05) sim.Step(.05f); }
 

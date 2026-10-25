@@ -474,6 +474,7 @@ public sealed partial class Sim
             int kind = Labour.YieldKind(cur);
             if (kind != Stockpile.None) Stock[kind] += Labour.YieldShare(cur) * Math.Max(.6f, u.T.Yield) * YieldMore;
             if (cur == Mat.Ore) Stock.Gold += Labour.OreGold * Math.Max(.6f, u.T.Yield);
+            if (Mat.IsIronOre(cur)) StruckOre(cur, Labour.YieldShare(cur) * Math.Max(.6f, u.T.Yield) * YieldMore);
             Mined?.Invoke(x, y, z, cur);
         }
     }

@@ -48,7 +48,7 @@ public sealed partial class Sim
     /// </summary>
     bool ShutsIn(Unit u, int x, int y, int z, byte m)
     {
-        if (!NavGrid.Blocks(m) || m == Mat.Gate) return false;
+        if (!NavGrid.Blocks(m) || m is Mat.Gate or Mat.IronGate) return false;
         int c = Nav.CellOf(x, y, z);
         if (Held(c, out _)) return true;
         int now = Filling(c);
@@ -70,7 +70,7 @@ public sealed partial class Sim
     /// <summary>A voxel laid by a pawn, counted into its cell for the rest of the step.</summary>
     void Filled(int x, int y, int z, byte m)
     {
-        if (!NavGrid.Blocks(m) || m == Mat.Gate) return;
+        if (!NavGrid.Blocks(m) || m is Mat.Gate or Mat.IronGate) return;
         int c = Nav.CellOf(x, y, z);
         _filling[c] = Filling(c) + (Mat.IsLeaf(m) ? 2 : 1);
     }

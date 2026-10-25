@@ -62,7 +62,7 @@ public sealed partial class Sim
             About = "Частокол из заострённых брёвен. Строится быстро, но горит. Тяните мышью.",
             Plan = (w, s, ax, az, bx, bz, _, h) => Palisade(w, s, ax, az, bx, bz, h) },
         new() { Key = "gatehouse", Name = "Надвратная башня", Opens = 2,
-            About = "Стена 7 м с воротами посередине и двумя башнями по бокам. Ворота прорубят и навесят, когда стена встанет. R поворачивает.",
+            About = "Стена 7 м с железными воротами посередине и двумя башнями по бокам. Над воротами железная перемычка. Ворота прорубят и навесят, когда стена встанет. R поворачивает.",
             Plan = (w, s, x, z, _, _, rot, _) => Gatehouse(w, s, x, z, rot) },
         new() { Key = "watchtower", Name = "Дозорная вышка", Opens = 1,
             About = "Деревянная вышка: площадка 3 × 3 м на высоте около 3,5 м, перила и приставная лестница. R поворачивает лестницу.",
@@ -213,7 +213,14 @@ public sealed partial class Sim
                 if (!tower && (d < -4 || d >= 4)) continue;
                 int x = cx + px * a + dx * d, z = cz + pz * a + dz * d;
                 int y1 = tower ? towerTop : top;
-                Column(w, L, x, z, w.SurfAt(x, z), y1, Mat.Stone);
+                // an iron lintel over the gateway on its outer face, two courses of plate (the gate under it is hung in iron)
+                if (!tower && d >= 0 && Math.Abs(a + .5) < 13)
+                {
+                    Column(w, L, x, z, w.SurfAt(x, z), g + 24, Mat.Stone);
+                    Column(w, L, x, z, g + 24, g + 26, Mat.Plate);
+                    Column(w, L, x, z, g + 26, y1, Mat.Stone);
+                }
+                else Column(w, L, x, z, w.SurfAt(x, z), y1, Mat.Stone);
                 // battlements on the outer edge of the towers' tops and over the gate
                 bool outer = tower ? (Math.Abs(a + .5) > 41 || d >= 5 || d < -5) : d >= 2;
                 if (outer && Merlon(a + 44)) Column(w, L, x, z, y1, y1 + 5, Mat.Stone);

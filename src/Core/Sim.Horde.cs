@@ -303,7 +303,11 @@ public sealed partial class Sim
 
     static bool Blocks(byte m) => m != 0 && !Mat.Passable[m];
 
-    static int Group(byte m) => Mat.Def[m].Group switch { MatGroup.Earth => 0, MatGroup.Wood => 1, MatGroup.Stone => 2, MatGroup.Rock => 3, _ => -1 };
+    // metal is hacked at as stone is, three times as long (MetalHack)
+    static int Group(byte m) => Mat.Def[m].Group switch { MatGroup.Earth => 0, MatGroup.Wood => 1, MatGroup.Stone or MatGroup.Metal => 2, MatGroup.Rock => 3, _ => -1 };
+
+    /// <summary>How much longer the horde hacks at iron plate than at stone.</summary>
+    public const float MetalHack = 3;
 
     void Carve(Unit u, float dt)
     {
@@ -327,7 +331,8 @@ public sealed partial class Sim
             if (g < 0 || rate == null || rate[g] <= 0) { StopCarve(u); return; }
             // stone in lime mortar holds out a third longer; what a shaman cursed gives twice as fast
             // under a stone skin three times as long
-            float cost = 1f / (rate[g] * (g == 2 ? StoneHack * HideHack : 1) * (Curses.Count > 0 ? CurseHack(x, y, z) : 1) * (Skins.Count > 0 ? SkinHack(x, y, z) : 1));
+            float cost = 1f / (rate[g] * (g == 2 ? StoneHack * HideHack : 1) * (Curses.Count > 0 ? CurseHack(x, y, z) : 1) * (Skins.Count > 0 ? SkinHack(x, y, z) : 1))
+                * (Mat.Def[m].Group == MatGroup.Metal ? MetalHack : 1);
             if (u.CarveEffort < cost) break;
             u.CarveEffort -= cost;
             u.CarveI++;
