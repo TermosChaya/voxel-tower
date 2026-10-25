@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Godot;
 using VoxelTower.Core;
@@ -85,16 +86,28 @@ public partial class Main
         bool stepped = Tools.Opt.YardPick == 3;
         Tools.PickYard(BuildTools.WayCount + Array.IndexOf(Yard.All, DecorKind.Campfire));
         int yards0 = sim.Yards.Count, seats0 = sim.Seats.Count;
+        // (nobody of the household standing where the campfire and the bench go: nothing is built into anyone)
+        var aside = new List<Unit>();
+        foreach (var u in sim.Units)
+            if (!u.Dead && !u.Inside && !u.Hold && u.X > fx - 16 && u.X < fx + 40 && Math.Abs(u.Z - (fz + 20)) < 16)
+            {
+                u.Cell = sim.NearestStand(fx + 12, fz + 64, u.T.Move.Height); (u.X, u.Y, u.Z) = sim.Nav.Feet(u.Cell); u.Path = null;
+                u.Hold = true; u.Dest = u.Post = u.Cell;
+                aside.Add(u);
+            }
         await Click(fx, fz + 20);
         var fire = sim.Yards.Count > yards0 ? sim.Yards[^1] : null;
         Advance(1.2);
         Tools.PickYard(BuildTools.WayCount + Array.IndexOf(Yard.All, DecorKind.Bench));
         await Click(fx + 24, fz + 20);
-        Advance(1.2);
+        var bench = sim.Yards.Count > yards0 + 1 ? sim.Yards[^1] : null;
+        // (the bench's seats are counted once it stands and nobody of the household is in the way of it)
+        for (int i = 0; i < 10 && sim.Seats.Count - seats0 < 2; i++) Advance(.6);
         int seats = sim.Seats.Count - seats0;
+        foreach (var u in aside) u.Hold = false;
         check("{Form} goes on through the palette; a campfire set out with a click is put together and lit, a bench beside it gives two seats",
             stepped && fire is { Kind: DecorKind.Campfire, Ready: true, Light: not null } && sim.Fixtures.Contains(fire.Light) && sim.Yards.Count == yards0 + 2 && seats == 2,
-            $"stepped {stepped}; campfire {(fire == null ? "not set out" : $"ready {fire.Ready}, lit {fire.Light != null}")}; things {sim.Yards.Count - yards0}, seats {seats}");
+            $"stepped {stepped}; campfire {(fire == null ? "not set out" : $"ready {fire.Ready}, lit {fire.Light != null}")}; things {sim.Yards.Count - yards0}, bench {(bench == null ? "not set out" : $"{bench.Kind} ready {bench.Ready}")}, seats {seats}");
 
         // the campfire taken down: let go, its fire out
         if (fire != null)

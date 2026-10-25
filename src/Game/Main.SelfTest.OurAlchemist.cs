@@ -44,7 +44,9 @@ public partial class Main
         bool climbing = sim.Climbing(gob);
         int stone0 = Stone(), ate0 = sim.OurAte;
         Rig.Focus(w.WX(face - 20), w.WZ(kz));
+        // (as long as a flask or two more takes, now that the acid runs down the rungs as a liquid before it eats)
         Advance(10);
+        for (int i = 0; i < 30 && sim.Climbing(gob); i++) Advance(.5);
         await Frames(20);
         check("an alchemist of ours on our wall throws at the rungs under a goblin on the horde's ladder: they are eaten through, it comes down, our stone stands, the glass is heard",
             climbing && sim.OurAte > ate0 && !sim.Climbing(gob) && gob.Y < foot + 8 && Stone() == stone0 && Sound.Heard.Contains("glass"),

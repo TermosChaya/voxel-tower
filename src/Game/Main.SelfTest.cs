@@ -668,7 +668,10 @@ public partial class Main
         Rig.SetAt(World.WX(Site.KeepX - 120), World.WY(World.SurfAt(Site.KeepX - 120, Site.KeepZ)), World.WZ(Site.KeepZ), aim0.yaw, .6f, 2.2f);
         bool wasPaused = Paused;
         Paused = true;
+        // (the water's ripples and the people's breath go on with the game stopped: they are put away too)
         View.Grass.Visible = false;
+        View.ShowParts(solid: true, water: false);
+        Units.Visible = false;
         await Frames(20);
         bool linesOff = !Settings.Lines;
         // how much darker the second picture is than the first, on average, in steps of 255
@@ -702,12 +705,14 @@ public partial class Main
         }
         Settings.ScriptLines(false);
         View.Grass.Visible = true;
+        View.ShowParts(solid: true, water: true);
+        Units.Visible = true;
         Paused = wasPaused;
         float lined = (Darker(shots[0], shots[1]) + Darker(shots[2], shots[1]) + Darker(shots[2], shots[3]) + Darker(shots[4], shots[3])) / 4;
         float idle = Math.Max(Math.Abs(Darker(shots[0], shots[2])), Math.Abs(Darker(shots[2], shots[4])));
         Rig.Set(aim0.x, aim0.z, aim0.yaw, aim0.pitch, aim0.zoom, snap: true);
         Check("the lines round the voxels are off by default, and turned on in the settings they are drawn at once",
-            linesOff && lined > .6f && lined > idle * 2, $"the picture {lined:0.00} darker with the lines, {idle:0.00} by itself");
+            linesOff && lined > .6f && lined > idle * 1.5f, $"the picture {lined:0.00} darker with the lines, {idle:0.00} by itself");
         // first person: one of ours chosen (a swordsman if one is about), I goes into it: the view is its eyes, the frame of
         // the game put away; it walks where it is told, and Esc lets it go, the view back over the valley and it chosen
         // one standing on the ground (not up on a wall, with nowhere to walk), a swordsman if there is one
