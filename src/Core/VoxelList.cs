@@ -44,4 +44,12 @@ public sealed class VoxelList
         }
         return any;
     }
+
+    /// <summary>What the list holds, in one number: two plans with the same are the same plan (the ghost need not be drawn again).</summary>
+    public ulong Hash()
+    {
+        ulong h = 14695981039346656037UL ^ (ulong)Count;
+        for (int i = 0, n = Count * 4; i < n; i++) h = (h ^ (uint)_a[i]) * 1099511628211UL;
+        return h;
+    }
 }

@@ -132,7 +132,7 @@ public partial class BuildTools
             for (int i = 0; i < pick.Count; i++) if (Mat.IsPlayer[pick.M(i)]) _wandPlan.Add(pick.X(i), pick.Y(i), pick.Z(i), pick.M(i));
             PlanText = _wandPlan.Count == 0 ? $"Палочка: {what} · чертёж снимают только с вашей кладки" : $"Чертёж: {what}";
             PlanAffordable = _wandPlan.Count > 0 && _wandWhole;
-            Ghost(MeshPlan(_wandPlan.Count > 0 ? _wandPlan : pick, false));
+            GhostFor(_wandPlan.Count > 0 ? _wandPlan : pick, false);
             tint = new Vector3(.55f, .78f, .42f); mix = .45f;
         }
         else if (dig)
@@ -141,7 +141,7 @@ public partial class BuildTools
             System.Array.Copy(_est, PlanNeeds, Stockpile.Kinds);
             PlanText = sec <= 0 ? $"Палочка: {what} · это не копают" : $"Снести {what} · {Summary(_est, true, sec)}";
             PlanAffordable = sec > 0 && _wandWhole;
-            Ghost(MeshPlan(pick, true));
+            GhostFor(pick, true);
             tint = new Vector3(.85f, .2f, .14f); mix = .62f; inflate = .1f;
         }
         else
@@ -156,7 +156,7 @@ public partial class BuildTools
             PlanText = _wandPlan.Count == 0
                 ? $"Палочка: {what} · переложить можно только вашу кладку из другого материала"
                 : $"Переложить {what}, в {Into(Opt.Material)}: {RelaySummary(sec)}" + (shortOf.Length > 0 ? $" — в запасе {shortOf}" : "");
-            Ghost(MeshPlan(_wandPlan.Count > 0 ? _wandPlan : pick, false));
+            GhostFor(_wandPlan.Count > 0 ? _wandPlan : pick, false);
             tint = PlanAffordable ? new Vector3(.9f, .55f, .25f) : new Vector3(.85f, .2f, .16f); mix = PlanAffordable ? .35f : .6f;
         }
         if (!_wandWhole) { tint = new Vector3(.85f, .2f, .16f); mix = .7f; }

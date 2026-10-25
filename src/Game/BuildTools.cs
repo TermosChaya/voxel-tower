@@ -1219,12 +1219,18 @@ public partial class BuildTools : Node3D
     /// <summary>Points the tools at a spot on the map as if the mouse were there (screenshots and tests).</summary>
     public void PointAt(Vector3 world) => Pick(_m.Rig.Cam.UnprojectPosition(world));
 
-    VoxelList PlanPasteAtHover()
+    /// <summary>The list the blueprint's ghost is planned into, kept from one plan to the next.</summary>
+    readonly VoxelList _pasteGhost = new();
+    /// <summary>The plan the ghost was last drawn for, and whether as a dig: the same again is not drawn again.</summary>
+    ulong _ghostHash;
+    bool _ghostDig;
+
+    VoxelList PlanPasteAtHover(VoxelList into = null)
     {
         if (PasteBp == null || !_hasHover) return null;
         var g = HoverGround();
         int w = PasteBp.RotW(PasteRot), d = PasteBp.RotD(PasteRot);
-        return PasteBp.PlanPaste(_m.World, _m.Site, g.x - (w >> 1), g.z - (d >> 1), PasteRot, g.y);
+        return PasteBp.PlanPaste(_m.World, _m.Site, g.x - (w >> 1), g.z - (d >> 1), PasteRot, g.y, into);
     }
 
     public override void _Process(double delta)
@@ -1316,15 +1322,13 @@ public partial class BuildTools : Node3D
             int x0 = Math.Min(a.x, b.x), x1 = Math.Max(a.x, b.x) + 1, z0 = Math.Min(a.z, b.z), z1 = Math.Max(a.z, b.z) + 1;
             var c = Tool == Tool.Unmark ? new Color(.83f, .3f, .22f, .26f) : Tool == Tool.Gather ? ZoneView.Tint(GatherKind, .3f)
                 : Tool == Tool.Repair ? new Color(.55f, .72f, .42f, .26f) : new Color(.9f, .62f, .3f, .28f);
-            SetShape(new BoxMesh { Size = new Vector3((x1 - x0) * VoxelWorld.Vox, .04f, (z1 - z0) * VoxelWorld.Vox) },
+            ShapeBox(new Vector3((x1 - x0) * VoxelWorld.Vox, .04f, (z1 - z0) * VoxelWorld.Vox),
                 new Vector3(w.WX((x0 + x1) / 2f), w.WY(Math.Max(a.y, b.y)) + .05f, w.WZ((z0 + z1) / 2f)), c);
             show = true;
         }
         else if (Tool == Tool.Unmark && _hasHover)
         {
-            float r = (UnmarkR + .5f) * VoxelWorld.Vox;
-            SetShape(new SphereMesh { Radius = r, Height = r * 2, RadialSegments = 24, Rings = 12 },
-                new Vector3(w.WX(_hover.X + .5f), w.WY(_hover.Y + .5f), w.WZ(_hover.Z + .5f)), new Color(.83f, .3f, .22f, .22f));
+            ShapeBall((UnmarkR + .5f) * VoxelWorld.Vox, new Vector3(w.WX(_hover.X + .5f), w.WY(_hover.Y + .5f), w.WZ(_hover.Z + .5f)), new Color(.83f, .3f, .22f, .22f));
             show = true;
         }
         else if (Tool == Tool.Spell && _hasHover)
@@ -1336,41 +1340,63 @@ public partial class BuildTools : Node3D
             {
                 float dx = _dragPt.x - _startPt.x, dz = _dragPt.z - _startPt.z, len = Math.Min(MathF.Sqrt(dx * dx + dz * dz), 16 * VoxelWorld.PerMetre);
                 float yaw = -MathF.Atan2(dz, dx), l = Math.Max(1, MathF.Sqrt(dx * dx + dz * dz));
-                SetShape(new BoxMesh { Size = new Vector3(len * VoxelWorld.Vox, 20 * VoxelWorld.Vox, 2 * VoxelWorld.PerMetre * VoxelWorld.Vox) },
+                ShapeBox(new Vector3(len * VoxelWorld.Vox, 20 * VoxelWorld.Vox, 2 * VoxelWorld.PerMetre * VoxelWorld.Vox),
                     new Vector3(w.WX(_startPt.x + dx / l * len / 2 + .5f), w.WY(_startPt.y + 10), w.WZ(_startPt.z + dz / l * len / 2 + .5f)), violet, yaw);
                 show = true;
             }
             else if (sp.AtVoxel && !_holding)
             {
-                float r = sp.Radius * VoxelWorld.Vox;
-                SetShape(new SphereMesh { Radius = r, Height = r * 2, RadialSegments = 24, Rings = 12 },
-                    new Vector3(w.WX(_hover.X + .5f), w.WY(_hover.Y + .5f), w.WZ(_hover.Z + .5f)), violet);
+                ShapeBall(sp.Radius * VoxelWorld.Vox, new Vector3(w.WX(_hover.X + .5f), w.WY(_hover.Y + .5f), w.WZ(_hover.Z + .5f)), violet);
                 show = true;
             }
             else if (sp.Radius > 0)
             {
                 var g = HoverGround();
-                float r = sp.Radius * VoxelWorld.Vox;
-                SetShape(new CylinderMesh { TopRadius = r, BottomRadius = r, Height = .06f, RadialSegments = 40 },
-                    new Vector3(w.WX(g.x + .5f), w.WY(g.y) + .08f, w.WZ(g.z + .5f)), violet);
+                ShapeDisc(sp.Radius * VoxelWorld.Vox, new Vector3(w.WX(g.x + .5f), w.WY(g.y) + .08f, w.WZ(g.z + .5f)), violet);
                 show = true;
             }
         }
         _shape.Visible = show;
     }
 
-    string _shapeKey = "";
+    // the shape over the ground the tool takes in: one box, one ball and one disc, made once and resized as it goes,
+    // rather than a new mesh every frame left to the collector (which takes them down on a thread of its own)
+    BoxMesh _shapeBox;
+    SphereMesh _shapeBall;
+    CylinderMesh _shapeDisc;
+
+    void ShapeBox(Vector3 size, Vector3 at, Color c, float yaw = 0)
+    {
+        _shapeBox ??= new BoxMesh();
+        if (_shapeBox.Size != size) _shapeBox.Size = size;
+        SetShape(_shapeBox, at, c, yaw);
+    }
+
+    void ShapeBall(float r, Vector3 at, Color c)
+    {
+        _shapeBall ??= new SphereMesh { RadialSegments = 24, Rings = 12 };
+        if (_shapeBall.Radius != r) { _shapeBall.Radius = r; _shapeBall.Height = r * 2; }
+        SetShape(_shapeBall, at, c);
+    }
+
+    void ShapeDisc(float r, Vector3 at, Color c)
+    {
+        _shapeDisc ??= new CylinderMesh { Height = .06f, RadialSegments = 40 };
+        if (_shapeDisc.TopRadius != r) { _shapeDisc.TopRadius = r; _shapeDisc.BottomRadius = r; }
+        SetShape(_shapeDisc, at, c);
+    }
+
     void SetShape(PrimitiveMesh mesh, Vector3 at, Color c, float yaw = 0)
     {
         _shape.Rotation = new Vector3(0, yaw, 0);
-        string key = mesh switch
-        {
-            BoxMesh bm => "B" + bm.Size, CylinderMesh cm => "C" + cm.Height + "/" + cm.TopRadius, SphereMesh sm => "S" + sm.Radius, _ => "?",
-        };
-        if (key != _shapeKey) { _shape.Mesh = mesh; _shapeKey = key; }
+        if (_shape.Mesh != mesh) _shape.Mesh = mesh;
         _shape.Position = at;
         _shapeMat.AlbedoColor = c;
     }
+
+    long _optsHash;
+    string _opts, _stock;
+    static long Mix(long h, long v) => unchecked((h ^ v) * 1099511628211L + 7);
 
     /// <summary>The world's revision about the cursor and the drag, 12 m round them (a blueprint's ghost reaches so far).</summary>
     int PlanRevision(VoxelWorld w)
@@ -1393,9 +1419,19 @@ public partial class BuildTools : Node3D
         int rev = PlanRevision(w);
         if (rev != _rev && _clock - _revAt > Math.Max(.5, _planMs * .1)) { _rev = rev; _revAt = _clock; }
         var st = _m.Sim.Stock;
-        string stock = $"{(int)(st[1] / 400)}|{(int)(st[2] / 400)}|{(int)(st[3] / 400)}";
         bool dig = DigNow;
-        string opts = $"{dig}|{Opt.Material}|{Opt.Width}|{Opt.Height}|{Opt.Depth}|{Opt.Step}|{Opt.Level}|{Opt.Hollow}|{Opt.House}|{Opt.HouseDoor}|{Opt.Mine}|{Opt.Form}|{Opt.YardPick}|{Opt.YardRot}|{_rev}|{stock}";
+        // the words of what the hand holds and of the stores, made again only when one of them changed: built every
+        // frame they came to a good deal of garbage for nothing
+        int s1 = (int)(st[1] / 400), s2 = (int)(st[2] / 400), s3 = (int)(st[3] / 400);
+        long oh = Mix(Mix(Mix(Mix(Mix(Mix(Mix(Mix(dig ? 1 : 0, Opt.Material), Opt.Width), Opt.Height), Opt.Depth), Opt.Step), Opt.Level ? 1 : 0), Opt.Hollow ? 1 : 0), Opt.House ? 1 : 0);
+        oh = Mix(Mix(Mix(Mix(Mix(Mix(Mix(Mix(oh, Opt.HouseDoor), Opt.Mine ? 1 : 0), (int)Opt.Form), Opt.YardPick), Opt.YardRot), _rev), s1), Mix(s2, s3));
+        if (oh != _optsHash || _opts == null)
+        {
+            _optsHash = oh;
+            _stock = $"{s1}|{s2}|{s3}";
+            _opts = $"{dig}|{Opt.Material}|{Opt.Width}|{Opt.Height}|{Opt.Depth}|{Opt.Step}|{Opt.Level}|{Opt.Hollow}|{Opt.House}|{Opt.HouseDoor}|{Opt.Mine}|{Opt.Form}|{Opt.YardPick}|{Opt.YardRot}|{_rev}|{_stock}";
+        }
+        string stock = _stock, opts = _opts;
         string key = "";
         bool dragging = (Tool is Tool.Line or Tool.Box or Tool.Circle or Tool.Bridge || Paving) && _lmb && _hasStart && _hasDrag;
         if (Tool == Tool.Spell)
@@ -1461,7 +1497,7 @@ public partial class BuildTools : Node3D
             if (_mendGhost.Count == 0 && _mendClear.Count == 0) { _ghost.Visible = false; PlanText = _mendWaiting > 0 ? "Починка уже размечена: ждёт рабочих" : "Цело: чинить нечего"; PlanAffordable = true; return; }
             PlanText = "Починка: " + MendSummary(out bool ok);
             PlanAffordable = ok;
-            Ghost(MeshPlan(_mendGhost, false));
+            GhostFor(_mendGhost, false);
             _ghost.Visible = _ghost.Mesh != null;
             _ghostMat.SetShaderParameter("tint", ok ? new Vector3(.55f, .78f, .42f) : new Vector3(.85f, .2f, .16f));
             _ghostMat.SetShaderParameter("tint_mix", ok ? .3f : .6f);
@@ -1584,7 +1620,7 @@ public partial class BuildTools : Node3D
             }
             else { _gatePlan = GatePlan.At(w, site, _hover, iron: IronGate); _plan = _gatePlan?.Leaves; name = "Ворота"; }
         }
-        else if (Tool == Tool.Paste) { _plan = PlanPasteAtHover(); name = PasteBp.Name; dig = false; }
+        else if (Tool == Tool.Paste) { _plan = PlanPasteAtHover(_pasteGhost); name = PasteBp.Name; dig = false; }
         if (key[0] == 'T') dig = true;
         _planDig = dig;
 
@@ -1598,7 +1634,7 @@ public partial class BuildTools : Node3D
                 if (_est[k] > st[k] + .5) shortOf += (shortOf.Length > 0 ? ", " : "") + $"{Stockpile.Name(k)} {Fmt.M3(st[k])}";
         PlanAffordable = dig || shortOf.Length == 0;
         PlanText = $"{name}: {(Tool == Tool.Gate && _gatePlan != null ? GateSummary(_gatePlan) : Summary(_est, dig, sec))}" + (shortOf.Length > 0 ? $" — в запасе {shortOf}" : "");
-        Ghost(MeshPlan(_plan, dig));
+        GhostFor(_plan, dig);
         _ghost.Visible = _ghost.Mesh != null;
         _ghostMat.SetShaderParameter("tint", dig ? new Vector3(.85f, .2f, .14f) : PlanAffordable ? new Vector3(.9f, .55f, .25f) : new Vector3(.85f, .2f, .16f));
         _ghostMat.SetShaderParameter("tint_mix", dig ? .62f : PlanAffordable ? .35f : .6f);
@@ -1612,6 +1648,19 @@ public partial class BuildTools : Node3D
         var old = _ghost.Mesh;
         _ghost.Mesh = mesh;
         if (old != mesh) old?.Dispose();
+    }
+
+    /// <summary>
+    /// The ghost of a plan: meshed again only when the plan is not the one already shown — the valley changing near
+    /// the ghost (a worker busy beside it) plans it again, and mostly it comes out the same.
+    /// </summary>
+    void GhostFor(VoxelList plan, bool dig)
+    {
+        ulong hash = plan?.Hash() ?? 0;
+        if (hash == _ghostHash && dig == _ghostDig && _ghost.Mesh != null && hash != 0) return;
+        Ghost(MeshPlan(plan, dig));
+        _ghostHash = _ghost.Mesh != null ? hash : 0;
+        _ghostDig = dig;
     }
 
     ArrayMesh MeshPlan(VoxelList L, bool dig)

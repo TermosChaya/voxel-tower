@@ -156,7 +156,7 @@ public partial class BuildTools
         PlanAffordable = shortOf.Length == 0 && shut == null && why == null;
         PlanIsDig = false;
         PlanText = $"{name}: {Summary(_est, false, sec)}" + (shut != null ? $" — {shut}" : why != null ? $" — {why}" : shortOf.Length > 0 ? $" — в запасе {shortOf}" : "");
-        Ghost(MeshPlan(all, false));
+        GhostFor(all, false);
         _ghost.Visible = _ghost.Mesh != null;
     }
 
@@ -212,7 +212,7 @@ public partial class BuildTools
         PlanAffordable = shortOf.Length == 0;
         PlanIsDig = false;
         PlanText = $"{what}: {Summary(_est, false, sec)}" + (shortOf.Length > 0 ? $" — в запасе {shortOf}" : "");
-        Ghost(MeshPlan(plan, false));
+        GhostFor(plan, false);
         _ghost.Visible = _ghost.Mesh != null;
     }
 

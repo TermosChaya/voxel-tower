@@ -116,9 +116,11 @@ public sealed class Blueprint
     };
 
     /// <summary>Plans a copy with its corner at (ax, az), its lowest run resting at baseY.</summary>
-    public VoxelList PlanPaste(VoxelWorld w, Site site, int ax, int az, int rot, int baseY)
+    public VoxelList PlanPaste(VoxelWorld w, Site site, int ax, int az, int rot, int baseY, VoxelList into = null)
     {
-        var L = new VoxelList();
+        // a ghost planned over and over fills the same list again rather than growing a new one each time
+        var L = into ?? new VoxelList();
+        L.Clear();
         var r = Runs;
         for (int n = 0; n < r.Length; n += 5)
         {

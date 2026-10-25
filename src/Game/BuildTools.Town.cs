@@ -81,7 +81,7 @@ public partial class BuildTools
         string no = _m.Sim.CantBuild(k);
         _placeWhy = plan == null ? why : no;
         if (plan == null) { _ghost.Visible = false; PlanText = $"{k.Name}: {why}"; PlanAffordable = false; return; }
-        Ghost(MeshPlan(plan, false));
+        GhostFor(plan, false);
         _ghost.Visible = _ghost.Mesh != null;
         double sec = Labour.Estimate(_m.World, plan, false, _est);
         PlanText = $"{k.Name} · {k.Gold} золота мастерам{(k.MetalCost > 0 ? $" · {k.MetalCost:0.##} м³ металла" : "")} · {Summary(_est, false, sec)}" + (no != null ? $" — {no}" : "");
