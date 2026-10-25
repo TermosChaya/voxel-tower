@@ -9,7 +9,10 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   проверки). Всё, что можно проверить без экрана, живёт здесь.
 - `src/Game` — узлы Godot: мир на экране, фигуры, камера, инструменты, интерфейс (`src/Game/Ui`).
 - `shaders/` — `voxel` (мир и фигуры), `water`, `dusk_sky` (небо), `far_land` (земля за долиной), `ghost` (призраки разметки), `orders`.
-- `tools/CoreBench/Program.cs` — стенд: ~95 проверок на прототипной карте и на долине.
+- `tools/CoreBench/Program.cs` — стенд: ~500 проверок на прототипной карте, на квадрате 1024 и на шестиугольнике игры;
+  большие части — своими файлами рядом (`HexBench.cs`, `Liquids.cs`, `Strain.cs`, `WandBench.cs`, `AcidBench.cs`,
+  `OurAlchemistBench.cs`, `RaidsBench.cs`, `Casual.cs`, `Smartwork.cs` и др.), `BenchClock.cs` — часы проверок
+  на время (время работы своего потока, а не настенное).
 - `run-game.command` — собрать и запустить игру; аргументы игры после `--`.
 - `README.md` — описание для игрока; `CLAUDE.md` — правила для агента; `docs/handoff` — эти документы.
 
@@ -25,6 +28,8 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   используется), `Lin` (цвет), `Variance`, `Emission`; огонь — `Catch` (шанс в секунду от горящего соседа), `Fuel`
   (секунды горения), `CharShare` (сколько остаётся головнями), `Heat` (смола 2), `Burns(m)`.
   Помощники: `IsTrunk`, `IsLeafy`, `IsMasonry`, `IsGrass`.
+- `VoxelList.cs` — список вокселей к записи (что поставит кисть, ещё не оплачено), `Fmt.cs` — числа по-русски
+  (`One`, `Int`, `M3` — кубометры из вокселей) без зависимости от языка системы.
 - `Labour.cs` — сколько работы вынуть/положить воксель и что он даёт (`D(m, dig, kind, share)`, `LayCost`,
   `CostKind`), `Stockpile` (камень 1, брёвна 2, земля 3, металл 4, `Kinds` = 5; золото отдельно), слой разметки `Orders`: материал, который класть, или
   что вынуть — `Remove` (земля), `RemoveWood`, `RemoveStone` (вид решается при разметке, `RemoveFor`; проверять
@@ -523,7 +528,9 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `FellWay`/`FellCost` → окрик, `ClearLane`, ожидание; `KeepOut` в `PawnTick` уводит `Avoiding`. `TreeGoing` в
   `Fall` (полоса до конца падения, `Toppling.Felled`), `FallWay` — сторона плана или «сама» (`careful: false`),
   `TickDangers` после `TickCollapse`. `Lay` бьёт бревном (`упавшее дерево`), `RollFelled` — от 60 вокселей ствола.
-  У юнита `Avoiding`, `FellLooked`, `FellLookedUntil`, `FellHold`. `Sim.Hurting` — для стенда.
+  У юнита `Avoiding`, `FellLooked`, `FellLookedUntil`, `FellHold`. `Sim.Hurting` — для стенда. Окрик «Берегись!» (и
+  перед обвалом подрубленного, `Sim.Undermine.cs`) — над кричащим словом (`Ui/ShoutTags.cs`) и голосом
+  (`Sound.Shout.cs`).
 - `Sim.Undermine.cs` — копка: `UnderOwnFeet`, `BuiltOverhead`+`BearsBuilt` (в `Gather`), `DropHold` (из `FellHold`
   для не-ствола) → `WouldDrop` → зона, окрик, подрубка `_footings` → `TickUndercut` → `DigAway` (общий с `Do`).
   `InPit` для `LookForWayOut` (сразу, ступени раньше лесов, один выход на яму). `HoldBore`/`BoreHeld` — контрподкоп
@@ -868,7 +875,8 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `DeckT` = 40 из 64 столбцов, при неполной клетке; `DeckLow` в нижней половине — земля под самой клеткой,
   `DeckHigh` в верхней — земля для клетки над ней; `Ground` учитывает оба), `Hard` (нерубимое), счётчики
   земли/дерева/камня/скалы, `Water`, `Ladder`, `Keep`, `GateFill`, `Paved` (пол клетки на четверть и больше —
-  дорожка, `Mat.IsPavement`); `Version` растёт при правках.
+  дорожка, `Mat.IsPavement`); `Version` растёт при правках. `BuildAll` (при загрузке) считает клетки рядами по всем
+  ядрам: клетка считается только по своим вокселям, порядок не важен; на 1536 — около 0,5 с из 0,6–0,9 с подготовки сима.
 - `Pathing.cs`: `Mover` (рост, подъём, спуск, скорость, скорость рубки по группам материалов, стройка);
   `FlowField` — обратный Дейкстра от клеток у цитадели для каждого вида орды: идти, рубить, ставить
   лестницу, класть настил или засыпать; вброд ×3. `Next` выбирает шаг только «под гору» по полю (так
