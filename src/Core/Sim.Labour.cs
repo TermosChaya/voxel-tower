@@ -88,6 +88,9 @@ public sealed partial class Sim
         if (u.Shunning != null && KeepClear(u, dt)) { Busy(u); return; }
         // badly hurt: out of the fight to mend by the citadel
         if (FallBack(u, dt)) { Busy(u); return; }
+        // a commander looks over the field now and then and gives its orders; one following it keeps behind it (Sim.Captains.cs)
+        if (u.T == Kinds.Captain) CaptainThink(u);
+        if (u.Follows != null && FollowTick(u, dt)) { Busy(u); return; }
         // one that has lost the hand it fights with (or, with a bow, either hand) runs like a worker
         bool soldier = u.T.Work < 1, fighter = (soldier || u.Militia) && Armed(u);
         // a hound or a rider does none of what is done on foot with the hands: no ladder thrown down, no wound bound, no fire put out
@@ -739,7 +742,7 @@ public sealed partial class Sim
         float bleed = u.Wounds?.Bleed ?? 0;
         if (!u.Mending)
         {
-            if (u.Hp >= u.MaxHp * Steadfast(u.Hold) && bleed <= 1.2f && !Disabled(u)) return false;
+            if (u.Hp >= u.MaxHp * Steadfast(u.Hold) && bleed <= 1.2f && !Disabled(u) && !u.SentBack) return false;
             u.Mending = true;
             ReleaseSite(u);
             u.Prey = null; u.Path = null; u.NextSearch = 0; u.Patient = null;
@@ -748,6 +751,7 @@ public sealed partial class Sim
         else if (MendedEnough(u))
         {
             u.Mending = false;
+            u.SentBack = false;
             u.Why = "";
             if (u.Post >= 0) GoTo(u, u.Post);
             return false;

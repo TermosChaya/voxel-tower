@@ -124,6 +124,8 @@ public sealed partial class Sim
     /// </summary>
     Guarded Defend(Unit a, Unit b, StrokeKind k)
     {
+        // the one gone into guards as the player guards it: with the right button held, facing the blow (Sim.Possess.cs)
+        if (b == Possessed && !b.Dead && !b.Down) return PossessedGuard(a, b);
         if (b.Dead || b.Down || b.Bound || b.Airborne != null || b == Possessed || Kinds.IsEngine(b.T) || Time < b.StaggerUntil || Time < b.DazedUntil) return Guarded.None;
         float quick = Agility(b.T);
         if (quick <= 0) return Guarded.None;
@@ -134,6 +136,8 @@ public sealed partial class Sim
         float chance = quick * (1 - Math.Min(1, b.Pain)) * (1 - Agility(a.T) * .8f) * (b.Cooldown > b.T.AttackTime * .75f ? .5f : 1);
         bool shield = Bodies.Plan(b.T, b.Look).Shield && HasOffHand(b);
         if (shield) chance += .25f * (1 - Math.Min(1, b.Pain));
+        // in its commander's shield wall it looks for the blow (Sim.Captains.cs)
+        if (b.WallUntil > Time) chance += .2f;
         float roll = Draw(a, b, 1);
         if (roll >= chance) return Guarded.None;
         if (shield && roll < chance * .7f) return Guarded.Block;

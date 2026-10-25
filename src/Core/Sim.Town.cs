@@ -180,7 +180,7 @@ public sealed partial class Sim
     }
 
     /// <summary>The kinds the citadel itself takes on: the household's own. The rest are hired in their buildings.</summary>
-    public static bool CitadelHires(UnitType t) => t == Kinds.Worker || t == Kinds.Archer || t == Kinds.Swordsman || t == Kinds.Priest;
+    public static bool CitadelHires(UnitType t) => t == Kinds.Worker || t == Kinds.Archer || t == Kinds.Swordsman || t == Kinds.Priest || t == Kinds.Captain;
 
     /// <summary>The town building of a kind, if one is put up (standing or going up).</summary>
     public Building BuildingOf(string kind) => Buildings.Find(b => b.Kind == kind);

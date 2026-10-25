@@ -31,6 +31,8 @@ public static class Settings
     public static bool Advice { get; private set; } = true;
     /// <summary>Whether a new siege of one's own unfolds its frame (the main tools and tabs at first) or shows all at once.</summary>
     public static bool Unfold { get; private set; } = true;
+    /// <summary>Whether a new siege of one's own begins with a commander among the household, to try it.</summary>
+    public static bool StartCaptain { get; private set; } = true;
     /// <summary>The tools and tabs met already, that want no card again.</summary>
     static readonly HashSet<string> _met = new();
     /// <summary>Whether every voxel is drawn with a thin dark line round its edge, where it is big enough on screen to read.</summary>
@@ -137,6 +139,7 @@ public static class Settings
         Hints = cfg.GetValue("interface", "hints", true).AsBool();
         Advice = cfg.GetValue("interface", "advice", true).AsBool();
         Unfold = cfg.GetValue("interface", "unfold", true).AsBool();
+        StartCaptain = cfg.GetValue("game", "start_captain", true).AsBool();
         foreach (string k in cfg.GetValue("interface", "met", new string[0]).AsStringArray()) _met.Add(k);
         Lines = _keptLines = cfg.GetValue("view", "lines", false).AsBool();
         int grid = cfg.GetValue("tools", "grid", 0).AsInt32();
@@ -158,6 +161,7 @@ public static class Settings
         cfg.SetValue("interface", "hints", Hints);
         cfg.SetValue("interface", "advice", Advice);
         cfg.SetValue("interface", "unfold", Unfold);
+        cfg.SetValue("game", "start_captain", StartCaptain);
         var met = new string[_met.Count];
         _met.CopyTo(met);
         cfg.SetValue("interface", "met", met);
@@ -249,6 +253,13 @@ public static class Settings
     public static void ToggleUnfold()
     {
         Unfold = !Unfold;
+        Save();
+    }
+
+    /// <summary>A commander at the start of a new siege, or none; kept for next time.</summary>
+    public static void ToggleStartCaptain()
+    {
+        StartCaptain = !StartCaptain;
         Save();
     }
 

@@ -133,7 +133,7 @@ public sealed partial class Sim
         a.Strokes++;
         a.NextStroke = Choose(a, b);
         a.StrokeFor = b;
-        float dmg = a.T.Damage * (.8f + (float)Rng.NextDouble() * .4f) * share * Oath(a) * SergeantArm(a) * TroopArm(a, b, out bool charge) * ShieldWall(b) * Grip(a)
+        float dmg = a.T.Damage * (.8f + (float)Rng.NextDouble() * .4f) * share * Oath(a) * SergeantArm(a) * TroopArm(a, b, out bool charge) * ShieldWall(b) * Grip(a) * Heartened(a)
             * (a.Team == Team.Horde ? HordeHarm * ChampionArm(a) : 1);
         // told to take them alive: the blow that would bring a raider down to a quarter of itself (three fifths in
         // chains), or kill it, fells it instead, to be bound where it lies
@@ -151,7 +151,7 @@ public sealed partial class Sim
     public void Hurt(Unit b, Unit by, float dmg, string cause = null)
     {
         if (b.Dead) return;
-        dmg *= MailGuard(b);
+        dmg *= MailGuard(b) * Walled(b, Time);
         b.Hp -= dmg;
         b.LastHurt = Time;
         if (by != null) b.HurtBy = by;

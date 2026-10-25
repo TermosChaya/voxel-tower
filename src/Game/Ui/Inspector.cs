@@ -585,7 +585,8 @@ public partial class Inspector : Control
         if (chosen.Count == 1)
         {
             var possess = new Glyph(Icons.Eye, "Вселиться ({Possess})\nУправлять им от первого лица. {FpForward}{FpLeft}{FpBack}{FpRight} — идти, мышь — смотреть, {Lmb} — удар, " +
-                "выстрел или кирка, {Rmb} — положить блок, Esc — выйти.", () => _m.FP.Enter(chosen[0]));
+                "выстрел или кирка, {Rmb} — блок у бойца, кладка у рабочего, {FpSwitch} — в другого, Esc — выйти." +
+                (chosen[0].T == Kinds.Captain ? " Командир: {FpStone}–{FpFourth} — призывы, {FpOrder} — приказ взглядом." : ""), () => _m.FP.Enter(chosen[0]));
             KeyTags.Tag(possess, Act.Possess);
             row.AddChild(possess);
         }
@@ -613,7 +614,14 @@ public partial class Inspector : Control
         }
         }
         bool workers = chosen.Exists(u => u.T.Work >= 1 && !u.T.Prays), archers = chosen.Exists(u => u.T.Ranged), melee = chosen.Exists(Sim.TakesAlive);
-        Button militia = null, fire = null, alive = null;
+        Button militia = null, fire = null, alive = null, commands = null;
+        if (chosen.Exists(u => u.T == Kinds.Captain))
+        {
+            row.AddChild(new Rule(true));
+            commands = new Glyph(Icons.Helm, "Командует сам\nКомандир строит бойцов в 40 м у стены, к которой идёт орда, ставит стрелков на стену, отводит раненых, " +
+                "после боя зовёт рабочих чинить. {Rmb} по земле — место, которое он держит. Ещё раз — ждёт ваших приказов.", () => _m.Command.CommandsSelected(), toggle: true);
+            row.AddChild(commands);
+        }
         if (archers)
         {
             row.AddChild(new Rule(true));
@@ -642,6 +650,7 @@ public partial class Inspector : Control
             militia?.SetPressedNoSignal(chosen.TrueForAll(u => u.T.Work < 1 || u.T.Prays || u.Militia));
             fire?.SetPressedNoSignal(chosen.TrueForAll(u => !u.T.Ranged || u.FireArrows));
             alive?.SetPressedNoSignal(chosen.TrueForAll(u => !Sim.TakesAlive(u) || u.TakeAlive));
+            commands?.SetPressedNoSignal(chosen.TrueForAll(u => u.T != Kinds.Captain || u.Commands));
         });
         return row;
     }

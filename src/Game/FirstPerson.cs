@@ -8,9 +8,12 @@ namespace VoxelTower.Game;
 /// First person: the player gone into one of ours, seeing with its eyes. A camera of its own at the height of its eyes,
 /// dipping and swaying in step with its feet and shaken as the view is shaken; its hands with what they hold before the
 /// eyes at their true size (<see cref="ViewModel"/>), striking the strokes it strikes, drawing the bow, swinging the pick; a mark in the middle of the sight, red over one of
-/// the horde in reach, green over what the pick can take; its name and health at the foot, and the keys. The mouse is
-/// held and turns the head; the keys walk it; Esc lets it go and the view goes back over the valley above it. The
-/// frame of the game is put away meanwhile, all but the chronicle's toasts.
+/// the horde in reach, green over what the pick can take, brass over what is marked out to lay, amber over what is marked
+/// to come out, blue over one of ours to go into; its name, health, wind and wounds at the foot, what it holds and how
+/// much the stores have of what it lays, the chronicle's last lines and the clock of the horde, a commander's four calls
+/// with their waits, and the keys (FirstPerson.Hud.cs). The mouse is held and turns the head; the keys walk it; E goes
+/// into another of ours; Esc lets it go and the view goes back over the valley above it. When it dies the view falls
+/// and goes dark before it lets go. The frame of the game is put away meanwhile, all but the chronicle's toasts.
 /// </summary>
 public partial class FirstPerson : Node3D
 {
@@ -41,6 +44,12 @@ public partial class FirstPerson : Node3D
     public Unit Unit => _u;
     public Camera3D Cam => _cam;
 
+    // dying: the view falling and going dark this long more, and why it is let go after; going over into another
+    float _dying;
+    string _dyingWhy;
+    bool _switching;
+    float _roll;
+
     public void Init(Main m)
     {
         _m = m;
@@ -66,7 +75,14 @@ public partial class FirstPerson : Node3D
         _aim = Hud.Text("", Ornament.Serif, 14, Ornament.Aged, outline: 5);
         _hint = Hud.Text("", Ornament.Serif, 13, Ornament.Aged, outline: 5);
         foreach (var l in new[] { _name, _aim, _hint }) { l.MouseFilter = Control.MouseFilterEnum.Ignore; root.AddChild(l); }
-        m.Sim.Unpossessed += why => { if (_u != null) Leave(why); };
+        BuildHud(root);
+        m.Sim.Unpossessed += why =>
+        {
+            if (_switching || _u == null) return;
+            // fallen: the view goes down and dark before it lets go
+            if (_u.Dead && why != null) { _dying = 1.3f; _dyingWhy = why; _roll = 0; return; }
+            Leave(why);
+        };
         m.Units.Landed += Felt;
     }
 
@@ -95,6 +111,7 @@ void fragment() {
     {
         if (u == null || !_m.Sim.Possess(u)) return false;
         _u = u;
+        _dying = 0; _roll = 0;
         _yaw = u.Facing; _pitch = -.08f;
         _eyeSet = false;
         _m.Tools.SetTool(Tool.None);
@@ -114,7 +131,7 @@ void fragment() {
         _cam.MakeCurrent();
         _layer.Visible = !Bare;
         if (!_m.Scripted) Input.MouseMode = Input.MouseModeEnum.Captured;
-        _m.Hud.Log($"Вы в нём: {u.Name.ToLowerInvariant()} №{u.Id}. Esc — выйти.", Hud.Kind.Ok);
+        _m.Hud.Log($"Вы в нём: {u.Name.ToLowerInvariant()} №{u.Id}. Esc — выйти.", Hud.Kind.Ok, toast: !_switching);
         Update(0);
         return true;
     }
@@ -133,6 +150,8 @@ void fragment() {
     {
         var u = _u;
         _u = null;
+        _dying = 0;
+        _fade.Color = new Color(0, 0, 0, 0);
         if (_m.Sim.Possessed != null) _m.Sim.Unpossess(null);
         _m.Rig.Held = false;
         if (u != null) _m.Rig.Set(_m.World.WX(u.X), _m.World.WZ(u.Z), -_yaw - MathF.PI / 2, .62f, 2.4f, snap: true);
@@ -166,16 +185,25 @@ void fragment() {
             case InputEventMouseMotion:
                 break;
             case InputEventMouseButton mb:
+                if (_dying > 0) break;
                 if (Input.MouseMode != Input.MouseModeEnum.Captured && !_m.Scripted && mb.Pressed) Input.MouseMode = Input.MouseModeEnum.Captured;
                 if (mb.ButtonIndex == Bindings.First) sim.WishStrike = mb.Pressed;
-                else if (mb.ButtonIndex == Bindings.Second) sim.WishLay = mb.Pressed && _u.T.Work > 0;
+                // the right button: a soldier guards, a worker lays
+                else if (mb.ButtonIndex == Bindings.Second) { if (Sim.Fights(_u)) sim.WishGuard = mb.Pressed; else sim.WishLay = mb.Pressed && _u.T.Work > 0; }
                 break;
             case InputEventKey { Pressed: true, Echo: false } k:
                 if (k.PhysicalKeycode == Key.Escape) { Exit(); break; }
+                if (_dying > 0) break;
                 if (Bindings.Is(k, Act.FpFire) && Sim.Kindles(_u.T)) { _u.FireArrows = !_u.FireArrows; break; }
+                // a commander's calls on the keys a worker chooses what it lays with (FirstPerson.Hud.cs)
+                if (_u.T == Kinds.Captain && Slot(k) is int call and >= 0) { CallOut(call); break; }
                 if (Bindings.Is(k, Act.FpStone)) { sim.LayMat = Mat.Stone; break; }
                 if (Bindings.Is(k, Act.FpWood)) { sim.LayMat = Mat.Wood; break; }
                 if (Bindings.Is(k, Act.FpEarth)) { sim.LayMat = Mat.Rammed; break; }
+                if (Bindings.Is(k, Act.FpKick)) { sim.WishKick = true; break; }
+                if (Bindings.Is(k, Act.FpSwitch)) { Switch(); break; }
+                if (Bindings.Is(k, Act.FpLadder)) { if (sim.PossessedLadder()) Said("лестница размечена: кладите её правой кнопкой"); else if (_u.T.Work <= 0) Said("лестницы ставят рабочие"); break; }
+                if (Bindings.Is(k, Act.FpOrder)) { OrderByLook(); break; }
                 // the pause, the speed and the quick save go on as ever
                 if (Bindings.Is(k, Act.Pause) || Bindings.Is(k, Act.Speed) || Bindings.Is(k, Act.QuickSave) || Bindings.Is(k, Act.QuickLoad)) return;
                 break;
@@ -191,6 +219,7 @@ void fragment() {
     {
         using var prof = Prof.Time("FirstPerson");
         if (_u == null) return;
+        if (_dying > 0) { Fall((float)delta); return; }
         // the game's menu takes the mouse back
         if (_m.Hud.MenuOpen && Input.MouseMode == Input.MouseModeEnum.Captured) Input.MouseMode = Input.MouseModeEnum.Visible;
         Update((float)delta);
@@ -257,35 +286,55 @@ void fragment() {
         var vp = GetViewport().GetVisibleRect().Size;
         string hurt = Retinue.Hurt(u);
         _name.Text = $"{u.Name} №{u.Id} · {Math.Ceiling(Math.Max(0, u.Hp))} из {Math.Ceiling(u.MaxHp)}" + (hurt != "" ? $" · {hurt}" : "")
-            + (u.T.Ranged && u.FireArrows ? " · огненные стрелы" : "") + (u.T.Work > 0 ? $" · кладёт: {Mat.NameOf(sim.LayMat).ToLowerInvariant()}" : "");
-        _name.Position = new Vector2(24, vp.Y - 64);
+            + (u.T.Ranged && u.FireArrows ? " · огненные стрелы" : "");
+        _name.Position = new Vector2(96, vp.Y - 84);
         var seen = sim.Sighted(u, 40 * VoxelWorld.PerMetre, out float along);
+        bool looked = sim.LookedAt(u, 4 * VoxelWorld.PerMetre, out var hit);
+        byte order = looked ? sim.Orders.At(hit.X, hit.Y, hit.Z) : (byte)0;
+        if (looked && order == 0) { var (fx, fy, fz) = hit.Front; order = sim.Orders.At(fx, fy, fz); }
         string aim = seen != null ? $"{seen.Name} · {Math.Ceiling(Math.Max(0, seen.Hp))} из {Math.Ceiling(seen.MaxHp)} · {along / VoxelWorld.PerMetre:0} м"
-            : sim.LookedAt(u, 4 * VoxelWorld.PerMetre, out var hit) ? Mat.NameOf(hit.M) : "";
+            + (seen.Team == Team.Player && sim.CanPossess(seen) ? Bindings.Fill(" · {FpSwitch} — войти") : "")
+            : looked ? Mat.NameOf(hit.M) + (order == 0 ? "" : Orders.IsRemove(order) ? " · размечено снести" : " · размечено: " + Mat.NameOf(order).ToLowerInvariant()) : "";
         _aim.Text = aim;
-        _aim.Position = new Vector2((vp.X - _aim.Size.X) / 2, vp.Y / 2 + 26);
-        _hint.Text = Bindings.Fill("{FpForward}{FpLeft}{FpBack}{FpRight} — идти, {FpRun} — бежать · мышь — смотреть · {Lmb} — " + (u.T.Ranged ? "выстрел" : u.T.Work > 0 ? "удар или кирка" : "удар")
-            + (u.T.Work > 0 ? " · {Rmb} — класть ({FpStone} камень, {FpWood} брёвна, {FpEarth} земля)" : "") + (Sim.Kindles(u.T) ? " · {FpFire} — огненные стрелы" : "")
-            + " · {FpUp} / {FpDown} — вверх и вниз по лестнице · Esc — выйти");
+        _aim.Position = new Vector2((vp.X - _aim.Size.X) / 2, vp.Y / 2 + 38);
+        _hint.Text = Bindings.Fill(HintFor(u));
         _hint.Position = new Vector2((vp.X - _hint.Size.X) / 2, vp.Y - 34);
         _sights.Foe = sim.FoeInSight(u);
-        _sights.Work = !_sights.Foe && u.T.Work > 0 && sim.LookedAt(u, 4 * VoxelWorld.PerMetre, out var h2) && Labour.Diggable(h2.M);
+        _sights.Ally = !_sights.Foe && seen != null && seen.Team == Team.Player && seen != u;
+        _sights.Lay = !_sights.Foe && u.T.Work > 0 && order != 0 && !Orders.IsRemove(order);
+        _sights.Dig = !_sights.Foe && u.T.Work > 0 && order != 0 && Orders.IsRemove(order);
+        _sights.Work = !_sights.Foe && !_sights.Lay && !_sights.Dig && u.T.Work > 0 && looked && Labour.Diggable(hit.M);
         _sights.Health = Math.Clamp(u.Hp / u.MaxHp, 0, 1);
+        _sights.Wind = sim.Stamina;
+        _sights.Charge = sim.Charge;
+        _sights.Guard = sim.Guarding;
+        ShowHud(u, sim, vp);
     }
 
-    /// <summary>The mark in the middle of the sight and the health along the foot.</summary>
+    /// <summary>What the buttons and the keys do for this one, now.</summary>
+    static string HintFor(Unit u)
+    {
+        string walk = "{FpForward}{FpLeft}{FpBack}{FpRight} — идти, {FpRun} — бежать";
+        string hands = u.T.Ranged ? "{Lmb} — выстрел" + (Sim.Kindles(u.T) ? " · {FpFire} — огненные стрелы" : "")
+            : Sim.Fights(u) ? "{Lmb} — удар, держать — тяжёлый · {Rmb} — блок · {FpKick} — пинок"
+            : u.T.Work > 0 ? "{Lmb} — кирка · {Rmb} — класть ({FpStone} камень, {FpWood} брёвна, {FpEarth} земля) · {FpLadder} — лестница" : "{Lmb} — удар";
+        string calls = u.T == Kinds.Captain ? " · {FpStone}–{FpFourth} — призывы · {FpOrder} — приказ взглядом" : "";
+        return walk + " · " + hands + calls + " · {FpUp} / {FpDown} — по лестнице · {FpSwitch} — в другого · Esc — выйти";
+    }
+
+    /// <summary>The mark in the middle of the sight, the health and the wind along the foot, a blow drawn back, the guard.</summary>
     partial class Sights : Control
     {
         readonly FirstPerson _fp;
-        public bool Foe, Work;
-        public float Health = 1;
+        public bool Foe, Work, Lay, Dig, Ally, Guard;
+        public float Health = 1, Wind = 1, Charge;
         public Sights(FirstPerson fp) { _fp = fp; }
         public Sights() { }
 
         public override void _Draw()
         {
             var c = Size / 2;
-            var col = Foe ? Ornament.Blood : Work ? Ornament.Moss : Ornament.EmberGlow;
+            var col = Foe ? Ornament.Blood : Lay ? Ornament.BronzeLight : Dig ? Ornament.Ember : Ally ? new Color(.55f, .75f, 1f) : Work ? Ornament.Moss : Ornament.EmberGlow;
             DrawArc(c, 9, 0, MathF.Tau, 32, new Color(0, 0, 0, .55f), 3.5f, true);
             DrawArc(c, 9, 0, MathF.Tau, 32, col, 1.6f, true);
             for (int i = 0; i < 4; i++)
@@ -295,10 +344,29 @@ void fragment() {
                 DrawLine(c + d * 13, c + d * 19, col, 1.6f, true);
             }
             DrawCircle(c, 1.6f, col, true, -1, true);
-            // the health, a bar along the foot under its name
-            var bar = new Rect2(24, Size.Y - 38, 260, 9);
+            // marked work: a plus to lay, a cross to take out
+            if (Lay) { DrawLine(c + new Vector2(-5, 0), c + new Vector2(5, 0), col, 2); DrawLine(c + new Vector2(0, -5), c + new Vector2(0, 5), col, 2); }
+            if (Dig) { DrawLine(c + new Vector2(-4, -4), c + new Vector2(4, 4), col, 2); DrawLine(c + new Vector2(-4, 4), c + new Vector2(4, -4), col, 2); }
+            // a heavy blow drawn back: an arc round the mark filling; the guard: a half ring under it
+            if (Charge > 0)
+            {
+                DrawArc(c, 27, -MathF.PI / 2, -MathF.PI / 2 + MathF.Tau * Charge, 40, new Color(0, 0, 0, .6f), 5.5f, true);
+                DrawArc(c, 27, -MathF.PI / 2, -MathF.PI / 2 + MathF.Tau * Charge, 40, Charge >= 1 ? Ornament.Blood : Ornament.EmberGlow, 3, true);
+            }
+            if (Guard)
+            {
+                DrawArc(c, 27, .25f, MathF.PI - .25f, 24, new Color(0, 0, 0, .6f), 7, true);
+                DrawArc(c, 27, .25f, MathF.PI - .25f, 24, Ornament.BronzeLight, 4, true);
+            }
+            // the health and the wind, two bars along the foot under its name
+            Bar(new Rect2(96, Size.Y - 58, 300, 10), Health, Health > .6f ? Ornament.Moss : Health > .3f ? Ornament.Ember : Ornament.Blood);
+            Bar(new Rect2(96, Size.Y - 44, 300, 5), Wind, new Color(.75f, .78f, .62f));
+        }
+
+        void Bar(Rect2 bar, float v, Color fill)
+        {
             DrawRect(bar.Grow(1.5f), new Color(0, 0, 0, .7f));
-            DrawRect(new Rect2(bar.Position, new Vector2(bar.Size.X * Health, bar.Size.Y)), Health > .6f ? Ornament.Moss : Health > .3f ? Ornament.Ember : Ornament.Blood);
+            DrawRect(new Rect2(bar.Position, new Vector2(bar.Size.X * Math.Clamp(v, 0, 1), bar.Size.Y)), fill);
             DrawRect(bar, Craft.Brass, false, 1);
         }
     }

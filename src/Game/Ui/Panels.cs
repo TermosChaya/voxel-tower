@@ -102,6 +102,11 @@ public static class Retinue
         // carried, carrying, helped along, helping (Sim.Carry.cs)
         if (Sim.OnShoulder(u)) return u.CarriedBy.CarryTo == sim.Gate ? "его несут к цитадели" : "его несут в жилой дом";
         if (u.Carrying is { } carried) return carried.Aloft ? (u.CarryTo == sim.Gate ? "несёт раненого к цитадели" : "несёт раненого в жилой дом") : "идёт поднять раненого";
+        // a commander's word, and those under it (Sim.Captains.cs)
+        if (u.Follows != null && sim.Time < u.FollowUntil) return u.State == UnitState.Fight ? "в бою, за командиром" : "идёт за командиром";
+        if (u.WallUntil > sim.Time) return u.State == UnitState.Fight ? "держит строй, в бою" : "держит строй";
+        if (u.T == Kinds.Captain && !u.Mending && u.State != UnitState.Fight)
+            return !u.Commands ? "ждёт приказа: сам не командует" : u.Goal >= 0 ? "командует: держит указанное место" : "командует бойцами вокруг";
         if (u.Propping is { } led) return Sim.Propped(led) ? "ведёт хромого к цитадели" : "идёт помочь хромому";
         if (Sim.Propped(u)) return "хромает к цитадели, опираясь на товарища";
         // what blunt things did to it (Sim.Trauma.cs): pinned, senseless, lying with its legs broken; digging one out
@@ -238,6 +243,7 @@ public static class Retinue
             "archer" => new[] { "лучник", "лучника", "лучников" },
             "sword" => new[] { "мечник", "мечника", "мечников" },
             "priest" => new[] { "жрец", "жреца", "жрецов" },
+            "captain" => new[] { "командир", "командира", "командиров" },
             "spear" => new[] { "копейщик", "копейщика", "копейщиков" },
             "shield" => new[] { "щитоносец", "щитоносца", "щитоносцев" },
             "halberd" => new[] { "алебардщик", "алебардщика", "алебардщиков" },

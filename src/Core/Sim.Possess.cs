@@ -64,10 +64,10 @@ public sealed partial class Sim
         u.Why = "в нём игрок";
         Possessed = u;
         LookYaw = u.Facing; LookPitch = 0;
-        WishX = WishZ = 0; WishRun = WishStrike = WishLay = false; WishClimb = 0;
+        WishX = WishZ = 0; WishRun = WishStrike = WishLay = WishGuard = WishKick = false; WishClimb = 0;
         ShotAsked = false; Drawn = 0;
         _swingRight = _swingDown = 0; _lookYaw0 = float.NaN;
-        _handFoe = null;
+        _handFoe = null; _handHeavy = _heavyNext = _struckHeld = false; Charge = 0; Guarding = false;
         return true;
     }
 
@@ -80,9 +80,9 @@ public sealed partial class Sim
         var u = Possessed;
         if (u == null) return;
         Possessed = null;
-        WishX = WishZ = 0; WishStrike = WishLay = false; WishClimb = 0;
+        WishX = WishZ = 0; WishStrike = WishLay = WishGuard = WishKick = false; WishClimb = 0;
         ShotAsked = false; Drawn = 0;
-        _handFoe = null;
+        _handFoe = null; _handHeavy = _heavyNext = _struckHeld = false; Charge = 0; Guarding = false;
         u.Why = "";
         u.Effort = 0;
         if (!u.Dead && !u.Inside && u.Captor == null && u.T.Work < 1) { u.Post = u.Cell; u.Dest = u.Cell; }
@@ -115,7 +115,8 @@ public sealed partial class Sim
         _lookYaw0 = LookYaw; _lookPitch0 = LookPitch;
         float wl = MathF.Sqrt(WishX * WishX + WishZ * WishZ);
         bool moving = wl > .05f;
-        float speed = u.T.Move.Speed * NavGrid.CS * u.Pace * CartPace(u) * (WishRun ? 1.6f : 1) * (u.Hp < u.MaxHp * .4f ? .7f : 1)
+        bool run = WishRun && CanRun;
+        float speed = u.T.Move.Speed * NavGrid.CS * u.Pace * CartPace(u) * (run ? 1.6f : 1) * (Guarding ? .5f : 1) * (u.Hp < u.MaxHp * .4f ? .7f : 1)
             * (Nav.Water[u.Cell] > 0 ? .6f : 1) * (Nav.Spikes[u.Cell] > 0 ? .4f : 1) * Gait(u) * (Mires.Count > 0 && InMire(u.X, u.Z) ? .35f : 1);
         bool climbed = false;
         if (WishClimb != 0) climbed = ClimbBy(u, WishClimb * speed * .5f * dt);
@@ -132,10 +133,7 @@ public sealed partial class Sim
         u.State = moving || climbed ? UnitState.Walk : UnitState.Idle;
         u.Pastime = Pastime.None;
         if (_handFoe != null && Time >= _handLands) Land(u);
-        if (Bow(u.T)) Draw(u, dt);
-        else if (WishStrike && u.Cooldown <= 0) Blow(u);
-        else if (WishStrike && u.T.Work > 0 && !u.T.Ranged) Pick(u, dt);
-        if (WishLay && u.T.Work > 0) Trowel(u, dt);
+        Hands(u, dt, moving, run);
     }
 
     /// <summary>A step toward a spot: inside the cell it is in, or into the next cell — level, up a step its legs manage, or down off a ledge.</summary>
@@ -258,6 +256,8 @@ public sealed partial class Sim
 
     void Blow(Unit u)
     {
+        bool heavy = _heavyNext;
+        _heavyNext = false;
         if (!Armed(u)) return;
         if (u.T.Ranged) { Loose(u); return; }
         // whoever of the horde or the beasts stands before it in reach, nearest the line of its eyes
@@ -297,7 +297,7 @@ public sealed partial class Sim
         // swung now, for the eye; it lands when the blade comes to the body
         u.Swing = 1;
         u.Stroke = u.NextStroke; u.StrokeTime = Time; u.Glanced = false;
-        _handFoe = best; _handLands = Time + HandBlowLag;
+        _handFoe = best; _handLands = Time + HandBlowLag; _handHeavy = heavy;
     }
 
     /// <summary>
@@ -319,8 +319,21 @@ public sealed partial class Sim
             var g = Defend(u, t, k);
             if (g is Guarded.StepBack or Guarded.Dodge or Guarded.Duck) Missed(u, t, k, g);
             else if (g is Guarded.Block or Guarded.Parry) Turned(u, t, k, g);
-            else Strike(u, t, Math.Clamp(up, .05f, .98f), .5f);
+            else
+            {
+                // a blow held back lands the harder, and knocks one of a man's size back staggering (Sim.Possess.Hands.cs)
+                PossessedArm = _handHeavy ? 1.9f : 1;
+                Strike(u, t, Math.Clamp(up, .05f, .98f), .5f);
+                PossessedArm = 1;
+                if (_handHeavy && !t.Dead && t.T.BodyH <= 18 && !Kinds.IsEngine(t.T))
+                {
+                    float dx = t.X - u.X, dz = t.Z - u.Z, d = MathF.Max(.5f, MathF.Sqrt(dx * dx + dz * dz));
+                    t.StagX = dx / d * 10; t.StagZ = dz / d * 10;
+                    t.StaggerUntil = Math.Max(t.StaggerUntil, Time + .5);
+                }
+            }
         }
+        _handHeavy = false;
         u.Stroke = k; u.StrokeTime = swung;
     }
 
@@ -431,6 +444,8 @@ public sealed partial class Sim
     void Pick(Unit u, float dt)
     {
         if (!LookedAt(u, HandReach, out var hit) || !Labour.Diggable(hit.M) || Site.Forbidden(hit.X, hit.Z)) { u.Effort = 0; return; }
+        // what is marked to come out is dug as marked, and only that (Sim.Possess.Hands.cs)
+        if (DigMarked(u, dt, hit)) return;
         u.State = UnitState.Work;
         u.Effort += (float)(Labour.WorkPerSecond * Math.Max(.4f, u.T.Work) * u.Pace * dt);
         if (u.Swing <= 0) u.Swing = 1;
@@ -469,6 +484,8 @@ public sealed partial class Sim
     /// </summary>
     void Trowel(Unit u, float dt)
     {
+        // what is marked out to be laid where it looks is laid first, as marked (Sim.Possess.Hands.cs)
+        if (LayMarked(u, dt)) return;
         if (!LookedAt(u, HandReach, out var hit)) { u.Effort = 0; return; }
         var (fx, fy, fz) = hit.Front;
         int bx = fx & ~1, by = fy & ~1, bz = fz & ~1;

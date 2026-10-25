@@ -735,7 +735,7 @@ public partial class Tutorial : Node
             Chapter = eyes, Title = "Вселиться",
             Text = "Выберите мечника и нажмите {Possess}, чтобы управлять им от первого лица. " +
                 "{FpForward}{FpLeft}{FpBack}{FpRight} — идти, {FpRun} — бежать, мышь — смотреть, {Lmb} — " +
-                "удар, {Rmb} — положить блок.",
+                "удар, держать — тяжёлый удар, {Rmb} — блок, {FpKick} — пинок. Рабочий {Rmb} кладёт размеченное.",
             Task = "Вселитесь в мечника",
             Point = "faces",
             Done = () => m.FP.On,
@@ -743,7 +743,8 @@ public partial class Tutorial : Node
         Add(new Step
         {
             Chapter = eyes, Title = "Выйти",
-            Text = "Пройдитесь, ударьте по камню или дереву. Esc возвращает обычный вид.",
+            Text = "Пройдитесь, ударьте по камню или дереву. {FpSwitch} — войти в другого из своих. В осаде с вами будет " +
+                "командир: в нём {FpStone}–{FpFourth} — призывы, {FpOrder} — приказ взглядом. Esc возвращает обычный вид.",
             Task = "Выйдите: Esc",
             Done = () => !m.FP.On,
         });

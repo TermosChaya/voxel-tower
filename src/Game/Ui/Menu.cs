@@ -382,6 +382,10 @@ public partial class GameMenu : Control
             d => { Settings.ToggleUnfold(); if (!Settings.Unfold) _m.Hud.Unfold.OpenAll(); });
         unfold.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
         _page.AddChild(unfold);
+        var captain = new Stepper("Командир в начале", "Командир в начале\nВ новой осаде с рабочими приходит командир. Он сам строит бойцов к бою. " +
+            "В него можно вселиться ({Possess}) и командовать от первого лица.", () => Settings.StartCaptain ? "да" : "нет", d => Settings.ToggleStartCaptain());
+        captain.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
+        _page.AddChild(captain);
         var lines = new Stepper("Обводка вокселей", "Обводка вокселей\nТонкая тёмная линия по краям вокселей вблизи.", () => Settings.Lines ? "да" : "нет", d => Settings.ToggleLines());
         lines.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
         _page.AddChild(lines);

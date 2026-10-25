@@ -500,4 +500,42 @@ public static partial class Bodies
         Mallet(s, b);
         return Done(s, f, b);
     }
+
+    /// <summary>
+    /// A commander of ours: mail under a surcoat of its colour, steel on the shoulders, a long cloak down its back to the
+    /// knees, a nasal helm with a plume of the cloak's colour standing up from its top, a sword, and a hunting horn at
+    /// the left hip in brass mounts; no shield, the sword guards it. Three looks: red, blue and green.
+    /// </summary>
+    static BodyPlan Captain(int look)
+    {
+        var f = new BodyPlan { Chop = .8f, Carry = -.35f };
+        byte cloak = new[] { Mat.ClothRed, Mat.ClothBlue, Mat.ClothGreen }[look % 3];
+        var b = new Build
+        {
+            Shirt = Mat.Mail, Trousers = Mat.ClothDark, Sleeve = Mat.Mail, Belt = Mat.LeatherDark, Skin = HumanSkins[look % 3], Hair = Hairs[(look + 2) % 4], HairStyle = 1,
+        };
+        var s = Humanoid(b, f);
+        int hy1 = b.Crown, hz0 = b.HeadZ;
+        Mail(s, b);
+        Skirt(s, b, Mat.Mail, Tissue.Armor);
+        Surcoat(s, b, cloak, Mat.ClothOchre, drop: 4);
+        Spaulders(s, b);
+        Scabbard(s, b);
+        // the cloak: from the shoulders down the back to the knees, a little wider than the body, a brass clasp at the neck
+        s.Box(Body, -b.Chest - 1, b.Waist - 6, b.Z0 - 3, b.Chest + 1, b.Neck, b.Z0 - 2, cloak, Tissue.Armor);
+        s.Box(Body, -b.Chest - 1, b.Neck - 1, b.Z0 - 2, b.Chest + 1, b.Neck, b.Z1 + 1, cloak, Tissue.Armor);
+        s.Box(Body, -1, b.Neck - 2, b.Z1 + 1, 1, b.Neck - 1, b.Z1 + 2, Mat.Brass, Tissue.Gear);
+        // the horn at the left hip, its bell forward, in brass mounts on a strap
+        s.Box(Body, b.Chest, b.Waist - 2, -1, b.Chest + 1, b.Waist, 2, Mat.Horn, Tissue.Gear);
+        s.Box(Body, b.Chest, b.Waist - 1, 2, b.Chest + 1, b.Waist + 1, 3, Mat.Brass, Tissue.Gear);
+        s.Box(Body, b.Chest, b.Waist - 3, -2, b.Chest + 1, b.Waist - 2, -1, Mat.Brass, Tissue.Gear);
+        // the helm, and the plume up from its top falling back
+        NasalHelm(s, b, aventail: false);
+        s.Box(Body, -1, hy1 + 1, -1, 1, hy1 + 5, 1, cloak, Tissue.Gear);
+        s.Box(Body, -1, hy1 + 3, hz0, 1, hy1 + 6, -1, cloak, Tissue.Gear);
+        s.Box(Body, -1, hy1 + 1, hz0 - 1, 1, hy1 + 4, hz0, cloak, Tissue.Gear);
+        if (look != 1) Beard(s, b, b.Hair);
+        Sword(s, b, longsword: true);
+        return Done(s, f, b);
+    }
 }

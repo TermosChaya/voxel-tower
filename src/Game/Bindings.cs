@@ -14,6 +14,7 @@ public enum Act
     Keep, Alarm, Possess,
     CallWave, Summon, Pause, Speed, Trails, QuickSave, QuickLoad, Help,
     FpForward, FpBack, FpLeft, FpRight, FpRun, FpUp, FpDown, FpFire, FpStone, FpWood, FpEarth,
+    FpKick, FpSwitch, FpLadder, FpOrder, FpFourth,
 }
 
 /// <summary>
@@ -104,9 +105,14 @@ public static class Bindings
         D(Act.FpUp, Eyes, "Вверх по лестнице", "Держать у лестницы.", Key.Space),
         D(Act.FpDown, Eyes, "Вниз по лестнице", "Держать у лестницы.", Key.C, Key.Ctrl),
         D(Act.FpFire, Eyes, "Огненные стрелы", "Лучник зажигает или гасит стрелы, если огонь изучен.", Key.F),
-        D(Act.FpStone, Eyes, "Класть камень", "{Rmb} кладёт камень.", Key.Key1),
-        D(Act.FpWood, Eyes, "Класть брёвна", "{Rmb} кладёт брёвна.", Key.Key2),
-        D(Act.FpEarth, Eyes, "Класть землю", "{Rmb} кладёт землю.", Key.Key3),
+        D(Act.FpStone, Eyes, "Класть камень", "{Rmb} кладёт камень. Командир: «За мной!».", Key.Key1),
+        D(Act.FpWood, Eyes, "Класть брёвна", "{Rmb} кладёт брёвна. Командир: «Держать строй».", Key.Key2),
+        D(Act.FpEarth, Eyes, "Класть землю", "{Rmb} кладёт землю. Командир: «Залп!» туда, куда смотрите.", Key.Key3),
+        D(Act.FpFourth, Eyes, "Рог", "Командир трубит в рог: наши рядом забывают боль и страх.", Key.Key4),
+        D(Act.FpKick, Eyes, "Пинок", "Отталкивает врага перед собой или сбрасывает осадную лестницу.", Key.V),
+        D(Act.FpSwitch, Eyes, "Войти в другого", "В того из своих, на кого смотрите, иначе в ближайшего.", Key.E),
+        D(Act.FpLadder, Eyes, "Лестница", "Рабочий размечает лестницу к стене, на которую смотрит, и кладёт её {Rmb}.", Key.L),
+        D(Act.FpOrder, Eyes, "Приказ взглядом", "Командир: бойцы рядом идут туда, куда он смотрит, или бьют того, на кого смотрит.", Key.G),
     };
 
     /// <summary>What the mouse and the held keys do, which are not bound: shown on the page with the group they belong to.</summary>

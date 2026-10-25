@@ -533,6 +533,8 @@ public sealed partial class Sim
             Busy(u);
             int spot = spots[n];
             u.Hold = true;
+            // the player's word, or a commander's (which takes it under its own after)
+            u.Ward = null; u.Follows = null;
             u.Back = !stay && u.T.Work >= 1;
             u.Focus = null;
             u.Dest = spot;

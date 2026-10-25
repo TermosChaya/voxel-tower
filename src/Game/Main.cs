@@ -70,6 +70,8 @@ public partial class Main : Node3D
     public Commander Command { get; private set; }
     /// <summary>First person: the player in one of ours.</summary>
     public FirstPerson FP { get; private set; }
+    /// <summary>The rings where the player sent its people (OrderMarks.cs).</summary>
+    public OrderMarks Rings { get; private set; }
     /// <summary>The horde's ways and our archers' cover, drawn over the field: put away in first person.</summary>
     public Node3D Trails { get; private set; }
     public Node3D Cover { get; private set; }
@@ -116,6 +118,8 @@ public partial class Main : Node3D
     bool _titleArg;
     /// <summary>--sandbox: the sandbox with everything open and plenty of all, to try every part of it at once (Sim.Sandbox.cs).</summary>
     bool _sandbox;
+    /// <summary>--captain: a commander with the household in a scripted run too (a game of one's own has one by the setting).</summary>
+    bool _captainArg;
     /// <summary>The seed the valley was made from: what a save keeps of it.</summary>
     public uint Seed => _seed;
     bool _loaded;
@@ -208,6 +212,7 @@ public partial class Main : Node3D
             else if (a.StartsWith("--tutorial=") && int.TryParse(a["--tutorial=".Length..], out int ta)) _tutorialAt = ta;
             else if (a == "--title") _titleArg = true;
             else if (a == "--sandbox") _sandbox = true;
+            else if (a == "--captain") _captainArg = true;
             else if (a == "--tutorial-check") { _tutCheck = true; _tutorialAt = 0; }
             else if (a == "--menu" || a.StartsWith("--menu=")) _menu = a.Length > 7 ? a[7..] : "";
             else if (a.StartsWith("--pose=")) _pose = a["--pose=".Length..];
@@ -380,6 +385,9 @@ public partial class Main : Node3D
         Command = new Commander();
         AddChild(Command);
         Command.Init(this);
+        Rings = new OrderMarks();
+        AddChild(Rings);
+        Rings.Init(this);
         // last, so it hears the keys and the mouse before anything else when the player is in one of ours; the mouse,
         // held in first person, is free again in a game loaded from there
         Input.MouseMode = Input.MouseModeEnum.Visible;
@@ -421,6 +429,7 @@ public partial class Main : Node3D
         }
         // the household the siege finds at the citadel, the beasts of the valley, and the horde's camp at a mine
         foreach (var t in new[] { Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Archer, Kinds.Swordsman }) Sim.Spawn(t, Sim.Gate);
+        if (_captainArg) Sim.Spawn(Kinds.Captain, Sim.Gate);
         Sim.SeedWildlife();
         if (!_selfTest && !_demo) Sim.SeedMines();
 
@@ -616,7 +625,7 @@ public partial class Main : Node3D
         else
         {
             Sim.Waves.OnCall = true;
-            if (!Scripted) Sim.BeginErrands();
+            if (!Scripted) { Sim.BeginErrands(); GiveCaptain(); }
             Hud.Log("Песочница своими силами: всё как в осаде, только орда не придёт, пока её не позовёте.", Hud.Kind.Ok);
         }
         Hud.Log("{CallWave} — позвать волну. {Summon} — ватага орды под курсором, Shift+{Summon} — тяжёлая ватага.", Hud.Kind.Ok);
@@ -631,11 +640,20 @@ public partial class Main : Node3D
         {
             Sim.BeginErrands();
             Hud.Unfold.Begin();
+            GiveCaptain();
             Hud.Log("Орда придёт через 10 минут.", Hud.Kind.Warn);
             Hud.Log("Что делать дальше, написано слева в «Поручениях». {Help} — все клавиши.", Hud.Kind.Ok);
             return;
         }
         Hud.Log("Орда придёт с запада через 10 минут.", Hud.Kind.Warn);
+    }
+
+    /// <summary>A commander with the household at the start of a siege of one's own, to try it (the «Командир в начале» setting).</summary>
+    void GiveCaptain()
+    {
+        if (!Settings.StartCaptain || Sim.Units.Exists(u => u.T == Kinds.Captain && !u.Dead)) return;
+        Sim.Spawn(Kinds.Captain, Sim.Gate);
+        Hud.Log("С вами командир. Он сам строит бойцов к бою. Выберите его и вселитесь ({Possess}): 1–4 — призывы, {FpOrder} — приказ взглядом.", Hud.Kind.Ok);
     }
 
     /// <summary>The tutorial, from its step n: the frame shut, the card on the first step.</summary>

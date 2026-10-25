@@ -4222,11 +4222,16 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--possess")
     var mark = simQ.Spawn(Kinds.Goblin, simQ.NearestStand((int)bow.X - 80, (int)bow.Z + 6, 2));
     mark.Guard = true; mark.Home = mark.Cell;
     RunQ(.2);
-    float tdx = mark.X - bow.X, tdz = mark.Z - bow.Z, tdy = mark.Y + mark.T.BodyH * .55f - (bow.Y + bow.T.BodyH * .88f);
-    simQ.LookYaw = MathF.Atan2(tdz, tdx); simQ.LookPitch = MathF.Atan2(tdy, MathF.Sqrt(tdx * tdx + tdz * tdz));
+    // the eyes kept on it as it comes, as one's would be
+    void AimQ()
+    {
+        float tdx = mark.X - bow.X, tdz = mark.Z - bow.Z, tdy = mark.Y + mark.T.BodyH * .55f - (bow.Y + bow.T.BodyH * .88f);
+        simQ.LookYaw = MathF.Atan2(tdz, tdx); simQ.LookPitch = MathF.Atan2(tdy, MathF.Sqrt(tdx * tdx + tdz * tdz));
+    }
+    AimQ();
     int shots0 = simQ.Shots;
     simQ.WishStrike = true;
-    for (int t = 0; t < 60 && !(mark.Dead || mark.Hp < mark.MaxHp); t++) RunQ(.1);
+    for (int t = 0; t < 60 && !(mark.Dead || mark.Hp < mark.MaxHp); t++) { AimQ(); RunQ(.1); }
     simQ.WishStrike = false;
     var sighted = simQ.Sighted(bow, 200, out float along);
     Check("an archer gone into looses along its eyes, and the arrow strikes the goblin it looks at; letting go of the swordsman before",
@@ -4247,6 +4252,9 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--possess")
     // a worker: the pick takes out the earth it looks at, the trowel lays stone where it looks
     var dig = simQ.Spawn(Kinds.Worker, simQ.NearestStand(ox, oz - 60, 2));
     simQ.Possess(dig);
+    // (whenever it falls: what it lays over the hole it dug may come down on it first)
+    string why = null;
+    simQ.Unpossessed += w => why ??= w;
     simQ.LookYaw = 0; simQ.LookPitch = -.75f;
     double earth0 = simQ.Stock[Stockpile.Earth], stone0 = simQ.Stock[Stockpile.Stone];
     int below0 = wQ.SurfAt((int)dig.X + 10, (int)dig.Z);
@@ -4262,11 +4270,10 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--possess")
     Check("a worker gone into digs out the earth it looks at with the pick, and lays stone where it looks",
         dug > 100 && laid > 50, $"earth +{dug:0} voxels, stone laid {laid:0} voxels");
     // and when it falls, the player is out of it
-    string why = null;
-    simQ.Unpossessed += w => why = w;
-    simQ.Hurt(dig, null, 1000, "test");
+    if (!dig.Dead) simQ.Hurt(dig, null, 1000, "test");
     RunQ(.1);
-    Check("when the one gone into falls, the player is out of it", simQ.Possessed == null && why != null && why.Contains("пал"), $"«{why}»");
+    Check("when the one gone into falls, the player is out of it", simQ.Possessed == null && why != null && why.Contains("пал"),
+        $"«{why}», {(dig.Dead ? $"dead of {dig.KilledBy}" : $"{dig.Hp:0} of {dig.MaxHp:0}")}");
 }
 
 // ---- the citadel's muster: taken on for gold, made ready in turn, as many as there are places for
@@ -4987,7 +4994,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troops")
         if (t.Team != Team.Player || !(t.Work < 1) || t.Lore != loresT[i] || t.Room < 1 || t.Cost <= 0 || Bodies.Looks(t) < 2
             || Bodies.Plan(t, 0) == Bodies.Plan(Kinds.Worker, 0)) wrongT.Add(t.Key);
     }
-    bool orderT = Kinds.PlayerKinds.Length == 21 && Kinds.Troops.Length == 17 && Kinds.Troops.SequenceEqual(Kinds.PlayerKinds.Skip(4));
+    // (the household's four and its commander first, then the troops)
+    bool orderT = Kinds.PlayerKinds.Length == 22 && Kinds.Troops.Length == 17 && Kinds.Troops.SequenceEqual(Kinds.PlayerKinds.Skip(5));
     Check("seventeen new kinds of ours in the citadel's order, each waiting on its lore, with the places it fills, each in a body of its own",
         orderT && wrongT.Count == 0,
         $"{Kinds.PlayerKinds.Length} kinds of ours; wrong: {string.Join(", ", wrongT)}; " + string.Join(", ", Kinds.Troops.Select(t => $"{t.Key} {t.Lore} ×{t.Room}")));
@@ -6101,6 +6109,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--house")
 }
 
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--acid") AcidBench.Run((what, ok, detail) => Check(what, ok, detail));
+// commanders and the hands of one gone into (Captains.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--captains") CaptainsBench.Run((what, ok, detail) => Check(what, ok, detail));
 // the alchemists of ours (OurAlchemistBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--ouralchemist") OurAlchemistBench.Run((what, ok, detail) => Check(what, ok, detail));
 // the liquids running in their own time: a breach, a flood's cost, lava, a wave, the save (Liquids.cs)

@@ -90,6 +90,17 @@ public partial class Commander : Node
         _m.Hud.Refresh();
     }
 
+    /// <summary>The chosen commanders give their orders by themselves, or wait on the player's if all of them were giving them.</summary>
+    public void CommandsSelected()
+    {
+        bool any = false, all = true;
+        foreach (var u in _m.Selected) if (u.T == Kinds.Captain) { any = true; all &= u.Commands; }
+        if (!any) { _m.Hud.Float("это для командиров", Ornament.Aged); return; }
+        foreach (var u in _m.Selected) if (u.T == Kinds.Captain) { u.Commands = !all; u.NextOrders = 0; }
+        _m.Hud.Float(all ? "командир ждёт ваших приказов" : "командир командует сам", Ornament.BronzeLight);
+        _m.Hud.Refresh();
+    }
+
     /// <summary>Fire arrows for the chosen archers, or plain ones again if all of them had them.</summary>
     public void FireArrowsSelected()
     {
@@ -292,7 +303,7 @@ public partial class Commander : Node
         if (Sim.AidFor(prey) is { } aid && !_m.Selected.Contains(prey))
         {
             int n = _m.Sim.OrderAid(_m.Selected, prey);
-            if (n > 0) _m.Hud.Float(aid == "откопать" ? (n == 1 ? "откопать" : $"откапывают: {n}") : "вынести к цитадели", Ornament.EmberGlow);
+            if (n > 0) { _m.Hud.Float(aid == "откопать" ? (n == 1 ? "откопать" : $"откапывают: {n}") : "вынести к цитадели", Ornament.EmberGlow); _m.Rings.On(prey, OrderMarks.Kind.Aid); }
             else _m.Hud.Float("некому: нужны руки", Ornament.Blood);
             _m.Hud.OnSelectionChanged();
             return;
@@ -300,7 +311,11 @@ public partial class Commander : Node
         if (prey != null && prey.Team != Team.Player)
         {
             int n = _m.Sim.Hunt(_m.Selected, prey);
-            if (n > 0) _m.Hud.Float((prey.Team == Team.Wild ? "охота: " : "в атаку: ") + prey.T.Name.ToLowerInvariant(), Ornament.EmberGlow);
+            if (n > 0)
+            {
+                _m.Hud.Float((prey.Team == Team.Wild ? "охота: " : "в атаку: ") + prey.T.Name.ToLowerInvariant(), Ornament.EmberGlow);
+                _m.Rings.On(prey, prey.Team == Team.Wild ? OrderMarks.Kind.Hunt : OrderMarks.Kind.Strike);
+            }
             _m.Hud.OnSelectionChanged();
             return;
         }
@@ -319,9 +334,21 @@ public partial class Commander : Node
         var g = hit.Ground(w);
         int cell = _m.Sim.StandNear(g.x, g.y, g.z, 2);
         if (cell < 0) { _m.Hud.Float("туда не встать", Ornament.Blood); return; }
+        // commanders chosen alone: the spot is theirs to hold, with those under their word about it (Sim.Captains.cs)
+        bool captains = true;
+        foreach (var u in _m.Selected) captains &= u.T == Kinds.Captain;
+        if (captains)
+        {
+            int held = _m.Sim.Command(_m.Selected, cell, stay: true);
+            foreach (var u in _m.Selected) { u.Goal = u.Dest >= 0 ? u.Dest : cell; u.NextOrders = 0; }
+            if (held == 0) _m.Hud.Float("туда не дойти", Ornament.Blood);
+            else { _m.Hud.Float("держать это место", Ornament.EmberGlow); _m.Rings.At(cell, OrderMarks.Kind.Hold); }
+            _m.Hud.OnSelectionChanged();
+            return;
+        }
         int ok = _m.Sim.Command(_m.Selected, cell, stay: false);
         if (ok == 0) _m.Hud.Float("туда не дойти", Ornament.Blood);
-        else _m.Hud.Float(ok == 1 ? "иду" : $"идут: {ok}", Ornament.EmberGlow);
+        else { _m.Hud.Float(ok == 1 ? "иду" : $"идут: {ok}", Ornament.EmberGlow); _m.Rings.Sent(_m.Selected, OrderMarks.Kind.Go); }
         _m.Hud.OnSelectionChanged();
     }
 

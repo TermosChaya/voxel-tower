@@ -35,6 +35,7 @@ public sealed partial class Sim
         if (Over) return "осада окончена";
         // the household's own at the citadel; the rest in their buildings (Sim.Town.cs), save in the open sandbox
         if (!CitadelHires(t) && !Sandbox) return HiredWhere(t);
+        if (t == Kinds.Captain && Count(Kinds.Captain) >= MaxCaptains) return $"командиров не больше {MaxCaptains}";
         if (!Unlocked(t)) return $"сначала изучите «{LoreOf(t.Lore)?.Name ?? t.Lore}»";
         int have = Household();
         if (have + t.Room > Places) return t.Room > 1 && have < Places

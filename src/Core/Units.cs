@@ -70,6 +70,16 @@ public static class Kinds
         Move = new Mover { Height = 2, Climb = 2, Speed = 2.4f },
         Work = .4f, Yield = .6f, Hp = 140, Damage = 16, AttackTime = 1f, Cost = 35, Tool = "sword", BodyR = 2.5f, Reach = 11,
     };
+    /// <summary>
+    /// A commander of ours: a captain in a long cloak and a helm with a plume, a sword and a horn at the hip. It fights as a
+    /// swordsman does and sees to the soldiers about it by itself (Sim.Captains.cs); the citadel takes two at most.
+    /// </summary>
+    public static readonly UnitType Captain = new()
+    {
+        Key = "captain", Name = "Командир", Team = Team.Player,
+        Move = new Mover { Height = 2, Climb = 2, Speed = 2.5f },
+        Work = 0, Yield = 0, Hp = 190, Damage = 18, AttackTime = 1f, Cost = 120, Tool = "sword", BodyR = 2.5f, Reach = 11,
+    };
     /// <summary>A priest of the old powers: in a dark robe and hood, with a staff; it prays, and fights only for its life.</summary>
     public static readonly UnitType Priest = new()
     {
@@ -337,7 +347,7 @@ public static class Kinds
 
     public static readonly UnitType[] PlayerKinds =
     {
-        Worker, Archer, Swordsman, Priest, Spearman, Shieldbearer, Halberdier, Knight, Slinger, Crossbowman, Bombardier, OurAlchemist, Hound, Rider, HorseArcher, Lancer,
+        Worker, Archer, Swordsman, Priest, Captain, Spearman, Shieldbearer, Halberdier, Knight, Slinger, Crossbowman, Bombardier, OurAlchemist, Hound, Rider, HorseArcher, Lancer,
         TameTroll, Giant, Mangonel, Ballista, Trebuchet,
     };
     /// <summary>The horde's kinds that find their way by the field (the catapult goes its own way to where it throws from).</summary>
@@ -709,6 +719,22 @@ public sealed class Unit
     /// throw (−1 not yet known: read back from a save, it is set up if it stands where it was sent).
     /// </summary>
     public float Rig = -1;
+
+    /// <summary>
+    /// A commander of ours (Sim.Captains.cs): whether it sees to those about it by itself; the spot the player gave it to
+    /// hold (-1 none); when it next looks over the field; when each of its four calls is ready again.
+    /// </summary>
+    public bool Commands = true;
+    public int Goal = -1;
+    public double NextOrders;
+    public readonly double[] Ready = new double[4];
+    /// <summary>
+    /// One of ours under a commander's word: the commander who set it where it stands (null: the player, or nobody); sent
+    /// back by it to mend; following it till then; standing in its shield wall till then; heartened by it till then.
+    /// </summary>
+    public Unit Ward, Follows;
+    public bool SentBack;
+    public double FollowUntil, WallUntil, RallyUntil;
 
     public float Alive => Dead ? 0 : Hp / MaxHp;
 

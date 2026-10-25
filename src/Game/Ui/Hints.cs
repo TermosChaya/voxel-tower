@@ -73,7 +73,9 @@ public partial class Hints : Control
                 // our engines chosen alone: the right button rolls them where it points
                 bool engines = true;
                 foreach (var u in _m.Selected) if (!VoxelTower.Core.Kinds.IsOurEngine(u.T)) { engines = false; break; }
-                o.Add((Rmb, engines ? "перекатить машину" : "идти, охотиться, атаковать"));
+                bool captains = true;
+                foreach (var u in _m.Selected) if (u.T != VoxelTower.Core.Kinds.Captain) { captains = false; break; }
+                o.Add((Rmb, engines ? "перекатить машину" : captains ? "место, которое командир держит" : "идти, охотиться, атаковать"));
                 o.Add((Lmb, "выбрать других"));
                 if (_m.Selected.Count == 1) o.Add((L(Act.Possess), "вселиться"));
                 o.Add(("Ctrl+1…5", "запомнить отряд"));
