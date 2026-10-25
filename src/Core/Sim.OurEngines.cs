@@ -27,6 +27,8 @@ public sealed partial class Sim
 
     /// <summary>Stones, kegs and bolts our engines have let fly since the start; raiders their bolts went through.</summary>
     public int EngineShots, SpearsThrough;
+    /// <summary>An engine of ours has just loosed: its winding for the next shot is <see cref="Unit.Cooldown"/> now.</summary>
+    public Action<Unit> EngineLoosed;
     double _crewlessSaid = -99, _engineMarkSaid = -99;
 
     /// <summary>How long an engine takes to pack up for the road, and to set up where it stops, seconds (with a full crew).</summary>
@@ -128,6 +130,7 @@ public sealed partial class Sim
         else Lob(u, mark);
         u.Cooldown = EngineReload(u) * (.95f + .1f * (float)Rng.NextDouble());
         u.Why = "";
+        EngineLoosed?.Invoke(u);
     }
 
     /// <summary>

@@ -129,6 +129,7 @@ public partial class Sound : Node
         sim.Darkened += (x, y, z) => Play("hex", x, y, z, .6, .9f);
         sim.Woken += (x, y, z) => Play("gong", x, y, z, 1, .6f);
         HookAcid(sim);
+        HookEngines(sim);
         HookTunnel(sim);
         HookCollapse(sim);
         HookCarry(sim);

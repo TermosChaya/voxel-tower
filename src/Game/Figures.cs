@@ -111,7 +111,7 @@ public sealed class Figure
     /// <summary>The bones of a figure: where its parts are cut and turn, and the meshes of each piece.</summary>
     static void Bones_(Figure f, BodyPlan plan)
     {
-        f.Jointed = !plan.Beast && !plan.Mounted && plan.HeadY1 > plan.HeadY0 && plan.Grid[(int)Part.LegR] is { Count: > 0 } && plan.Grid[(int)Part.Main] is { Count: > 0 };
+        f.Jointed = !plan.Beast && !plan.Mounted && !plan.Machine && plan.HeadY1 > plan.HeadY0 && plan.Grid[(int)Part.LegR] is { Count: > 0 } && plan.Grid[(int)Part.Main] is { Count: > 0 };
         f.Legged = plan.Beast && !plan.Mounted && plan.NeckZ != int.MinValue && plan.Grid[(int)Part.LegR] is { Count: > 0 } && plan.Grid[(int)Part.Main] is { Count: > 0 };
         const int S = BodyPlan.Sub;
         // a part whole: every row of it

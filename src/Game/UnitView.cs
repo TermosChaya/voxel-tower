@@ -140,6 +140,7 @@ public partial class UnitView : Node3D
         _kegs = Multi(keg, null, false);
         m.Sim.Severed += Fall;
         StrokesInit(m.Sim);
+        EnginesInit(m.Sim);
         var ring = new TorusMesh { InnerRadius = .82f, OuterRadius = 1f, Rings = 32, RingSegments = 4 };
         var ringMat = new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, VertexColorUseAsAlbedo = true, AlbedoColor = Colors.White };
         _rings = Multi(ring, ringMat, true);
@@ -357,6 +358,7 @@ public partial class UnitView : Node3D
             if (_own.Remove(id, out var own)) Free(own);
         }
         DrawArrows(sim);
+        DrawTrails(sim, _dt);
         DrawStuck(sim);
         DrawFallen(dt);
         DrawRings();
@@ -426,13 +428,9 @@ public partial class UnitView : Node3D
         {
             // an engine does not walk: the ram's log swings as it batters, the catapult's arm flies up as it throws
             if (u.T == Kinds.Ram && u.State is UnitState.Carve or UnitState.Siege) main = MathF.Sin((float)_t * MathF.Tau / f.Chop + seed) * .28f;
-            // thrown, the arm stands up against the beam a while, then is winched back down for the next
-            else if (u.T == Kinds.Catapult || u.T == Kinds.Mangonel) main = u.Dead ? 0 : 1.9f * Math.Clamp(u.Cooldown / u.T.AttackTime * 1.5f, 0, 1);
-            // a trebuchet's beam lies with its long end down at the back; thrown, it swings up and over, and is hauled
-            // down again; packed for the road it lies level
-            else if (u.T == Kinds.Trebuchet) main = u.Dead ? 0 : u.Rig < 1 ? -.75f * Math.Max(0, u.Rig) : -.75f + 2.9f * Math.Clamp(u.Cooldown / u.T.AttackTime * 1.6f, 0, 1);
-            // a ballista's stock kicks a little as it looses
-            else if (u.T == Kinds.Ballista) main = u.Dead ? 0 : -.05f * Math.Clamp(u.Cooldown / u.T.AttackTime * 3 - 2, 0, 1);
+            // thrown, the arm stands up against the beam a while, then is winched back down for the next (ours have
+            // their pieces moved on their own: UnitView.Engines.cs)
+            else if (u.T == Kinds.Catapult) main = u.Dead ? 0 : 1.9f * Math.Clamp(u.Cooldown / u.T.AttackTime * 1.5f, 0, 1);
             if (u.Dead) sink = Math.Max(0, (float)(_m.Sim.Time - u.DiedAt) - 18) * .8f;
         }
         else if (u.Dead)
@@ -545,6 +543,10 @@ public partial class UnitView : Node3D
                 }
                 case UnitState.Work when u.JobI < u.Jobs.Count:
                     Labour(u, f, ref main, ref off, ref lean, ref elbowR, ref elbowL, ref kneeR, ref kneeL);
+                    break;
+                // one of an engine's crew at the windlass, the shot or the pins (UnitView.Engines.cs)
+                case UnitState.Work when u.Escort is { } engine && Kinds.IsOurEngine(engine.T):
+                    Crewing(u, engine, f, seed, ref main, ref off, ref lean, ref elbowR, ref elbowL, ref kneeR, ref kneeL);
                     break;
                 // an alchemist standing to throw: the flask drawn back over the shoulder and lobbed
                 case UnitState.Siege when u.T.Tool == "flask":
@@ -697,6 +699,7 @@ public partial class UnitView : Node3D
             _xf[(int)Bone.UpperL] = arms0 * TurnAt(f, Part.Off, turns.Off);
             _xf[(int)Bone.ThighR] = legs0 * Swing(f, Part.LegR, legR);
             _xf[(int)Bone.ThighL] = legs0 * Swing(f, Part.LegL, legL);
+            if (Kinds.IsOurEngine(u.T)) OurEngine(u, f, body0);
             return tint;
         }
         // the knees and the elbows, where the pose did not set them: a thigh raised forward lets its shin hang, an arm

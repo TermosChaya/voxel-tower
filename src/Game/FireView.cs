@@ -45,10 +45,28 @@ public partial class FireView : Node3D
         // what falls throws up chips, and a fall throws up dust
         m.Sim.Fell += (x, y, z, mat) => { if (_rnd.NextDouble() < .03) m.Debris.Spawn(mat, x, y, z, 1, 1.6f); };
         m.Sim.Collapsed += (n, x, y, z) => Dust(x, y, z, n);
+        // an engine of ours loosing kicks up the dust about its feet
+        m.Sim.EngineLoosed += u => Kick(u.X, u.Y, u.Z, u.T == Kinds.Trebuchet ? 8 : u.T == Kinds.Mangonel ? 5 : 3, u.T.BodyR + 2);
     }
 
     /// <summary>The dust and smoke in the air laid at once (a staged scene, before it is filmed).</summary>
     public void Settle() => _puffs.Clear();
+
+    /// <summary>A puff of dust kicked up about an engine's feet as it looses: a few small clouds, low, soon gone.</summary>
+    public void Kick(float x, float y, float z, int puffs, float r)
+    {
+        var w = _m.World;
+        for (int i = 0; i < puffs && _puffs.Count < MaxPuffs; i++)
+        {
+            float a = (float)_rnd.NextDouble() * MathF.Tau, d = r * (.5f + .5f * (float)_rnd.NextDouble());
+            _puffs.Add(new Puff
+            {
+                P = new Vector3(w.WX(x + MathF.Cos(a) * d), w.WY(y + (float)_rnd.NextDouble() * 2), w.WZ(z + MathF.Sin(a) * d)),
+                V = new Vector3(MathF.Cos(a) * .35f, .08f + (float)_rnd.NextDouble() * .1f, MathF.Sin(a) * .35f),
+                Life = 1.2f + (float)_rnd.NextDouble(), Size = .18f + (float)_rnd.NextDouble() * .16f, Seed = (float)_rnd.NextDouble(), Dust = true,
+            });
+        }
+    }
 
     /// <summary>A cloud of dust where something came down: more of it, and wider, the more that fell.</summary>
     public void Dust(float x, float y, float z, int voxels)

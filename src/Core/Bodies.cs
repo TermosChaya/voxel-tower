@@ -118,6 +118,9 @@ public sealed class BodyPlan
     /// is both the horse's forelegs (turning at the shoulder) and the left both its hind legs.
     /// </summary>
     public bool Mounted;
+    /// <summary>An engine of ours: its parts are timbers, ropes and what it throws, each moved by the view as the engine
+    /// works (the beam, the counterweight, the sling, the stone), not a body with knees, elbows and a neck.</summary>
+    public bool Machine;
     /// <summary>How far the off arm comes up in a fight (radians, up is negative): a round shield before the face, a tower shield hardly at all.</summary>
     public float Guard = -1.05f;
     /// <summary>The head's rows, in half-voxels; the top of the figure, in voxels.</summary>
