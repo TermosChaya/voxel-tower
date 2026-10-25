@@ -29,11 +29,12 @@ public partial class Main
             Move(a); await Frames(2);
             Button(a, true, shift);
             for (int i = 1; i <= 8; i++) { Move(a.Lerp(b, i / 8f)); await Frames(1); }
+            await GhostCaughtUp();
             said = Tools.PlanText ?? "";
             Button(b, false, shift);
             await Frames(2);
         }
-        async Task Click(int x, int z) { var p = Screen(x, z); Move(p); await Frames(3); said = Tools.PlanText ?? ""; Button(p, true); Button(p, false); await Frames(2); }
+        async Task Click(int x, int z) { var p = Screen(x, z); Move(p); await GhostCaughtUp(); said = Tools.PlanText ?? ""; Button(p, true); Button(p, false); await Frames(2); }
         int Builds() => sim.Orders.BuildTotal;
 
         // a field of level ground, bare of trees

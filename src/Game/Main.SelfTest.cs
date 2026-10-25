@@ -12,6 +12,17 @@ namespace VoxelTower.Game;
 public partial class Main
 {
     /// <summary>
+    /// Frames enough for the hand's ghost to catch up with the cursor, before what it says is read: it is planned again
+    /// no oftener than every 50 ms (a template dragged 100, a gathering or a mending 150), and with the frames not held
+    /// back a few of them pass well inside that, the ghost still where the cursor was a step before.
+    /// </summary>
+    async Task GhostCaughtUp()
+    {
+        int n = 0;
+        for (ulong from = Time.GetTicksMsec(); n < 3 || Time.GetTicksMsec() - from < 180; n++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+    }
+
+    /// <summary>
     /// Drives the tools and the commands through their input handlers with synthetic clicks and drags, lets the pawns
     /// work through what was marked, checks the results and quits.
     /// </summary>

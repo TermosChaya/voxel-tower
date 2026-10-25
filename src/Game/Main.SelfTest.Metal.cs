@@ -30,6 +30,7 @@ public partial class Main
             Move(a); await Frames(2);
             Button(a, true);
             for (int i = 1; i <= 8; i++) { Move(a.Lerp(b, i / 8f)); await Frames(1); }
+            await GhostCaughtUp();
             said = Tools.PlanText ?? "";
             Button(b, false);
             await Frames(2);

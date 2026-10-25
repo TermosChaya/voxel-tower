@@ -34,8 +34,7 @@ public partial class Main
             Move(a); await Frames(2);
             Button(a, true);
             for (int i = 1; i <= 8; i++) { Move(a.Lerp(b, i / 8f)); await Frames(1); }
-            // (the ghost caught up with the cursor)
-            await Frames(3);
+            await GhostCaughtUp();
             said = Tools.PlanText ?? "";
             Button(b, false);
             await Frames(2);
@@ -48,7 +47,7 @@ public partial class Main
             Rig.SetAt(w.WX(x), w.WY(y), w.WZ(z), MathF.Atan2(nx, nz), 1f, 1.1f);
             await Frames(4);
             var p = Rig.Cam.UnprojectPosition(new Vector3(w.WX(x), w.WY(y), w.WZ(z)));
-            Move(p); await Frames(3);
+            Move(p); await GhostCaughtUp();
             said = Tools.PlanText ?? "";
             hovered = (Tools.HoverGate != null ? $"gate {Tools.HoverGate.Id}" : "no gate") + (Tools.Hovered is { } h ? $" at {h.X},{h.Y},{h.Z} ({h.NX},{h.NY},{h.NZ}) {Mat.NameOf(h.M)}" : " over nothing") + $", screen {p}";
             Button(p, true); Button(p, false);
@@ -239,7 +238,7 @@ public partial class Main
         await Frames(4);
         int yards0 = sim.Yards.Count;
         var spot = OnField(fx, fz + 60);
-        Move(spot); await Frames(3);
+        Move(spot); await GhostCaughtUp();
         string decorSaid = Tools.PlanText ?? "";
         Button(spot, true); Button(spot, false);
         await Frames(2);
