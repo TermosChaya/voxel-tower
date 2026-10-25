@@ -395,6 +395,19 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   (`Flier.Bounces`); остальное — `Crater` по энергии (`Kj`, `BreakCost`) и `Fly` (куски `ChipsCause`). У стены —
   `GiantSmash` вместо рубки (из `Carve`), удар по людям — `Swat` (из `TroopBlow`). `OrderHurl`, `SmashInto` — для
   постановок и проверок. Ничего из броска не сохраняется: камень в руках после загрузки падает.
+- `Sim.Possess.Hands.cs` — руки вселённого: `Hands` каждый тик — силы `Stamina` (бег и блок тратят, без сил `_winded`),
+  блок `WishGuard` → `Guarding` (`PossessedGuard` в `Defend`: щит спереди, `GuardedBlows`), тяжёлый удар (держать ЛКМ,
+  `Charge` до 1 за `HeavyDraw`, `_heavyNext` в `Blow`/`Land`), пинок `WishKick` (`Kick`: толчок, лестница орды долой),
+  `LayMarked`/`DigMarked` (только размеченное, `_layingMarked` на всю протяжку, `OnMarked`), `PossessedLadder` (L,
+  `Shapes.LadderAt` → `DesignateBuild`); отказы `Refuse` → `Refused`/`RefusedAt` для слова посреди экрана.
+- `Sim.Captains.cs` — командиры (`Kinds.Captain`): `CaptainThink` раз в 2,5 с (из `PawnTick`): `Under` — бойцы в
+  `CaptainReach` 40 м, не посланные игроком (`Hold && Ward == null`) и не чужого командира; `Front` (строй в 3,5 м
+  внутри стены `WallBetween`, стрелки на `WallWalks` через `Command(...) > 0`, сам позади, раненых `SentBack`, рог и щит
+  сами), `MendFront` после боя (`MeantIn`/`MendPlan`/`Mend`), `HoldGoal` (место от игрока `Goal`), тревога — к воротам.
+  Призывы `Call(cap, n, x, y, z)` 0–3 (`CallNames`, `CallRest`, `Ready[n]`, событие `Called`): `Follows`/`FollowTick`,
+  `WallUntil` (`Walled` в `Hurt`), `Volley` (стрелы как у `ShotOf`), рог (`Pain`, `Mending`, `RallyUntil` →
+  `Heartened`). `Aimed`, `LookOrder`, `Heeding` — для первого лица. `Unit.Commands/Goal/NextOrders/Ready/Ward/Follows/
+  SentBack/FollowUntil/WallUntil/RallyUntil`; сохраняются в `WriteCaptains`/`ReadCaptains`.
 - `Sim.Possess.cs` — вселение: `Possessed`, намерения игрока `WishX/WishZ` (вектор в вокселях), `WishRun`,
   `LookYaw/LookPitch`, `WishStrike` (ЛКМ держится), `WishLay`, `WishClimb` (±1), `LayMat`; `CanPossess`, `Possess` (снимает
   с работы, цели, обезвреживания; `Why` = «в нём игрок»), `Unpossess(why)` + событие `Unpossessed` (солдату пост — где
@@ -1187,7 +1200,12 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   ходу приёма; руки — в `ArmSize` (0,65) от фигуры, оружие и щит — в настоящую величину; дыхание, покачивание, отставание от мыши, качание шага; лук — по
   `Cooldown` (выстрел → за стрелой → наложить → натянуть, натянут, пока `Sights.Foe`); кирка — круг длиной `Figure.Chop`.
   Материалы — `voxel.gdshader` с `#define VIEW_MODEL` (дописывается в код шейдера при загрузке): `POSITION.z` сжимается
-  к ближней плоскости, поэтому руки не уходят в стены; `Sights` — прицел (красный — враг в досягаемости, зелёный — что взять киркой) и здоровье; на входе
+  к ближней плоскости, поэтому руки не уходят в стены; `Sights` — прицел (красный — враг в досягаемости, зелёный — что взять киркой, латунь с плюсом — размечено к кладке,
+  янтарь с крестом — размечено снести, голубой — свой; дуга замаха тяжёлого удара, полукольцо блока), здоровье и силы;
+  `FirstPerson.Hud.cs` — `BodyChart` у имени, что кладёт и запас, часы орды, слово (`Said`, отказы ядра), `CallBar`
+  (призывы командира на 1–4), `CallOut`, `OrderByLook` (G), `Switch` (E), `Fall` (смерть: вид падает, `_fade` темнеет
+  1,3 с, затем `Leave`); `OrderMarks.cs` (`Main.Rings`) — кольца приказов, полосы к месту выбранных, кольцо слова
+  командира, один `ImmediateMesh` каждый кадр; на входе
   `Rig.Held`, `Hud.FirstPerson(true)`, `Units.HiddenId`/`ForceNear`, `Atmos.FogShift` −62, `Cover` скрыт (пути орды прячет
   сам `TrailView`, пока `Possessed`), `Rig.Focus` каждый кадр (звук, дождь); выход — Esc или `Sim.Unpossessed`; `Face`,
   `TestMove` — для сцен и самотеста;
