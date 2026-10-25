@@ -61,13 +61,17 @@ static class HousesBench
         }
         double Build(double limit)
         {
-            double done = -1, end = sim.Time + limit;
+            // done when nothing is ordered any more; then on until the work has been quiet half a minute, as the
+            // furnishing is ordered a moment after the walls stand and wants its time too
+            double done = -1, quiet = -1, end = sim.Time + limit;
             while (sim.Time < end)
             {
                 sim.Step(.05f);
                 foreach (var (_, c) in sim.Cracks) if (c > .5f) { cracked++; break; }
-                if (done < 0 && sim.Orders.Total == 0 && sim.Storeys.Count == 0) done = sim.Time;
-                if (done >= 0 && sim.Time - done > 30) break;
+                bool idle = sim.Orders.Total == 0 && sim.Storeys.Count == 0;
+                if (done < 0 && idle) done = sim.Time;
+                quiet = !idle ? -1 : quiet < 0 ? sim.Time : quiet;
+                if (quiet >= 0 && sim.Time - quiet > 30) break;
             }
             return done;
         }

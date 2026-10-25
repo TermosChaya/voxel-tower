@@ -309,6 +309,9 @@ public sealed partial class Sim
     {
         var floor = new List<int>();
         var check = Room(z.X0, z.Z0, z.X1, z.Z1, floor);
+        // the floor in one order however the room was flooded (a hatch swung open moves where the flood starts), so
+        // that its layout holds as long as the floor does
+        floor.Sort();
         bool was = z.Closed;
         int had = z.Beds;
         // looked over the first time (just set out, or read back from a save): no word of it, as nothing changed
