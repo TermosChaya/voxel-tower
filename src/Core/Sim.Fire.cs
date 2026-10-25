@@ -180,7 +180,9 @@ public sealed partial class Sim
     /// <summary>A cell burns, or the floor under it does.</summary>
     bool HotAt(int c) => _hot.ContainsKey(c) || (c >= Nav.Layer && _hot.ContainsKey(c - Nav.Layer));
 
-    static int Block(int x, int y, int z) => (x >> 1) | (z >> 1) << 9 | (y >> 1) << 18;
+    /// <summary>The block of 2×2×2 voxels a voxel is in, as one number: 10 bits of x and z each (a valley up to 2048 across).</summary>
+    static int Block(int x, int y, int z) => FireBlock(x >> 1, y >> 1, z >> 1);
+    static int FireBlock(int bx, int by, int bz) => bx | bz << 10 | by << 20;
 
     /// <summary>How hot the flames that touch a body are: something burning under its feet or against it; 0 for none.</summary>
     float FireOn(Unit u)
@@ -192,7 +194,7 @@ public sealed partial class Sim
         for (int by = y0; by <= y1; by++)
             for (int bz = z0; bz <= z1; bz++)
                 for (int bx = x0; bx <= x1; bx++)
-                    if (_hotBlocks.TryGetValue(bx | bz << 9 | by << 18, out float h) && h > heat) heat = h;
+                    if (_hotBlocks.TryGetValue(FireBlock(bx, by, bz), out float h) && h > heat) heat = h;
         return heat;
     }
 
