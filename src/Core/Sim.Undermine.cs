@@ -59,7 +59,7 @@ public sealed partial class Sim
     /// <summary>
     /// Whether taking out this voxel brings down something built that rests on it: what is built and joined to it that,
     /// without it, no longer rests on the ground anywhere (a tree is felled, not dug out: Sim.Felling.cs). The box it
-    /// would come down on and scatter over: its own breadth and, round it, a metre and a half and half its height more.
+    /// would come down on and scatter over: its own breadth and, round it, three metres and half its height more (what breaks off it flies).
     /// </summary>
     bool WouldDrop(int x, int y, int z, out Danger zone, out float cx, out float cz, out int y0)
     {
@@ -108,7 +108,7 @@ public sealed partial class Sim
                 x0 = Math.Min(x0, px); x1 = Math.Max(x1, px); z0 = Math.Min(z0, pz); z1 = Math.Max(z1, pz);
                 y0 = Math.Min(y0, py); top = Math.Max(top, py);
             }
-            float round = 1.5f * VoxelWorld.PerMetre + (top - y0) * .5f;
+            float round = 3 * VoxelWorld.PerMetre + (top - y0) * .5f;
             cx = (x0 + x1 + 1) * .5f; cz = (z0 + z1 + 1) * .5f;
             zone = new Danger
             {
@@ -145,10 +145,12 @@ public sealed partial class Sim
         }
         var zone = plan.Lane;
         if (!Dangers.Contains(zone)) Dangers.Add(zone);
+        zone.By = u;
         zone.Until = Math.Max(zone.Until, Time + 6);
         if (plan.Warned < 0) { plan.Warned = Time; Shouted?.Invoke(u, "Берегись!"); }
+        // (none of ours left under it, however long they take)
         int stay = ClearLane(zone, u);
-        if (stay > 0 && Time - plan.Warned < 12)
+        if (stay > 0)
         {
             u.Why = "ждёт, пока отойдут: сейчас рухнет";
             u.FellHold = true;
@@ -158,6 +160,7 @@ public sealed partial class Sim
         _footings.Add((j.x, j.y, j.z, World.Get(j.x, j.y, j.z), Time + FootingHolds, u, zone));
         _footingsAt.Add(key);
         zone.Until = Math.Max(zone.Until, Time + FootingHolds + 6);
+        zone.By = null;
         _drops.Remove(plan);
         if (zone.Has(u.X, u.Y, u.Z, u.T.BodyR + 2) && u != Possessed) { u.Avoiding = zone; u.Path = null; u.NextSearch = 0; }
         if (Time - _footingSaid > 30) { _footingSaid = Time; Say($"{u.T.Name} подкопал последнюю опору постройки и отходит: сейчас рухнет.", 1, u); }
@@ -199,15 +202,33 @@ public sealed partial class Sim
     /// Whether one stands at the bottom of a pit: the ground three metres off higher than it climbs, most of the way
     /// round.
     /// </summary>
-    bool InPit(Unit u)
+    bool InPit(Unit u) => PitAt(u.X, u.Z, Nav.Floor[u.Cell], (u.T.Move.Climb + 1) * NavGrid.CS);
+
+    bool PitAt(float px, float pz, int floor, int over)
     {
-        int floor = Nav.Floor[u.Cell], over = (u.T.Move.Climb + 1) * NavGrid.CS, higher = 0;
+        int higher = 0;
         foreach (var (dx, dz) in Ways8)
         {
-            int x = (int)(u.X + dx * 3 * VoxelWorld.PerMetre), z = (int)(u.Z + dz * 3 * VoxelWorld.PerMetre);
+            int x = (int)(px + dx * 3 * VoxelWorld.PerMetre), z = (int)(pz + dz * 3 * VoxelWorld.PerMetre);
             if (World.InBounds(x, 2, z) && World.SurfAt(x, z) >= floor + over) higher++;
         }
         return higher >= 6;
+    }
+
+    /// <summary>Scaffolding put up out of a pit: it stays, the pit's way out for whoever works in it after.</summary>
+    bool OutOfPit(Scaffold s)
+    {
+        var c = s.Columns[0];
+        return PitAt((c.i << NavGrid.Shift) + 4, (c.k << NavGrid.Shift) + 4, c.y0 << NavGrid.Shift, 2 * NavGrid.CS);
+    }
+
+    /// <summary>Where a worker would stand to work is in a danger not its own: a tree about to come down, something built.</summary>
+    bool SiteInDanger(Unit u)
+    {
+        if (Dangers.Count == 0 || u.Site < 0) return false;
+        float x = (u.Site % Nav.NX << NavGrid.Shift) + 4, z = (u.Site / Nav.NX << NavGrid.Shift) + 4;
+        foreach (var d in Dangers) if (d.By != u && d.Has(x, u.Y, z, u.T.BodyR + 2)) return true;
+        return false;
     }
 
     // ------------------------------------------------------------ our countermine, no further than its props

@@ -295,6 +295,8 @@ public sealed partial class Sim
         int bx0 = Math.Max(0, x0 - Margin), bz0 = Math.Max(0, z0 - Margin);
         int bx1 = Math.Min(World.SX - 1, x0 + size + Margin), bz1 = Math.Min(World.SZ - 1, z0 + size + Margin);
         int wx = bx1 - bx0 + 1, wz = bz1 - bz0 + 1, sy = World.SY;
+        // (a patch off the edge of the world, from something shaken out past it: nothing there to weigh)
+        if (wx <= 0 || wz <= 0) return;
         int n = wx * wz * sy;
         if (_reach.Length < n) _reach = new int[n];
         int I(int x, int y, int z) => ((y * wz) + (z - bz0)) * wx + (x - bx0);

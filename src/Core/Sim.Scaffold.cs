@@ -419,6 +419,8 @@ public sealed partial class Sim
                 if (s.By == null || s.By.Dead || s.By.Raising != s) TakeDown(s, quick: true);
                 continue;
             }
+            // one put up out of a pit stays there, its way out (Sim.Undermine.cs)
+            if (s.Escape && OutOfPit(s)) { s.Used = Time; continue; }
             // one put up to get out of somewhere: down as soon as its raiser has climbed down by it
             if (s.Escape && s.By is { Dead: false } by && by.Raising == null && s.Exit >= 0 && CellsApart(by.Cell, s.Exit) <= 1
                 && Math.Abs(Nav.Y(by.Cell) - Nav.Y(s.Exit)) <= 1 && !OnScaffold(s, by))

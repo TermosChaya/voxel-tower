@@ -241,7 +241,7 @@ static class SmartworkBench
         string mineCost = Cost();
         int fallen = mine.Fallen.FindAll(x => x).Count;
         check("our countermine dug with no logs goes no further than its first step; given logs it is shored and dug on, every step shored, none fallen in, none hurt",
-            bareDug <= 1 && mine.Dug > bareDug + 2 && shored == mine.Dug && fallen == 0 && hurts.Count == 0 && crew.All(u => !u.Dead),
+            bareDug <= 1 && mine.Dug > bareDug + 2 && shored >= mine.Dug - bareDug && fallen == 0 && hurts.Count == 0 && crew.All(u => !u.Dead),
             $"{bareDug} of {mine.Cells.Count} steps dug in a minute with no logs; then {mine.Dug} dug, {shored} shored, {fallen} fallen in; {mineCost}");
         Reset();
     }

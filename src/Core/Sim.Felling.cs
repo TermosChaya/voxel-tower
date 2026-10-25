@@ -16,8 +16,9 @@ public sealed class Danger
     /// <summary>The heights it covers, voxels (a lane covers all).</summary>
     public int Y0 = int.MinValue, Y1 = int.MaxValue;
     public double Until;
-    /// <summary>What those keeping out of it say they are doing.</summary>
+    /// <summary>What those keeping out of it say they are doing; the one whose work it is (it keeps to it).</summary>
     public string Why = "";
+    public Unit By;
 
     public bool Has(float x, float y, float z, float margin)
     {
@@ -282,7 +283,7 @@ public sealed partial class Sim
                 {
                     if (u.Dead || u.Inside || u == feller || u.Team != (horde ? Team.Horde : Team.Player)) continue;
                     float ax = u.X - b.PX, az = u.Z - b.PZ, along = ax * dx + az * dz, side = ax * nx + az * nz;
-                    if (along > -4 && along < lane.Len && MathF.Sign(side) == -MathF.Sign(rise) && MathF.Abs(side) < 12 * VoxelWorld.PerMetre) cost += 1500;
+                    if (along > -4 && along < lane.Len && MathF.Sign(side) == -MathF.Sign(rise) && MathF.Abs(side) < 30 * VoxelWorld.PerMetre) cost += 1500;
                 }
         }
         return cost;
@@ -342,6 +343,7 @@ public sealed partial class Sim
             return true;
         }
         if (!Dangers.Contains(plan.Lane)) Dangers.Add(plan.Lane);
+        plan.Lane.By = u;
         plan.Lane.Until = Math.Max(plan.Lane.Until, Time + 6);
         // the feller in the lane after all (it came round to the front): it leaves this side to another
         if (plan.Lane.Has(u.X, u.Y, u.Z, u.T.BodyR))
@@ -358,11 +360,20 @@ public sealed partial class Sim
             // a bough is let down without a word; a tree, or a great limb, with one
             if (tree.Count >= 200) Shouted?.Invoke(u, "Берегись!");
         }
+        // (never while one of ours is under it: one who cannot get out of the way in half a minute is left there, and
+        // the way chosen again later, round them)
         int stay = ClearLane(plan.Lane, u);
-        if (stay > 0 && Time - plan.Warned < 12)
+        if (stay > 0)
         {
             u.Why = "ждёт, пока отойдут от дерева";
             u.FellHold = true;
+            if (Time - plan.Warned > 30)
+            {
+                _fells.Remove(plan);
+                Dangers.Remove(plan.Lane);
+                u.Unreachable[u.Site] = Time + 20;
+                ReleaseSite(u);
+            }
             return true;
         }
         return false;
@@ -457,6 +468,8 @@ public sealed partial class Sim
         foreach (var p in _fells) if (p.Warned >= 0 && !p.Left && Time - p.Warned < 60 && Dangers.Contains(p.Lane)) p.Lane.Until = Math.Max(p.Lane.Until, Time + 1);
         if (Dangers.Count > 0) Dangers.RemoveAll(d => Time > d.Until);
         if (_fells.Count > 0) _fells.RemoveAll(p => Time - p.Made > 300);
+        // whoever of ours walks into one while it lasts is sent out again
+        foreach (var d in Dangers) ClearLane(d, d.By);
         TickUndercut();
     }
 

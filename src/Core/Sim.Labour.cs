@@ -177,6 +177,8 @@ public sealed partial class Sim
             Idle(u, dt, stay: false);
             return;
         }
+        // work where a tree is about to come down, or something built, waits till it is down (Sim.Undermine.cs)
+        if (SiteInDanger(u)) { u.Unreachable[u.Site] = Time + 8; ReleaseSite(u); u.Why = "ждёт: там сейчас упадёт"; return; }
         if (u.Path != null && u.PathI < u.Path.Count) { Walk(u, dt); return; }
         int si = u.Site % Nav.NX, sk = u.Site / Nav.NX;
         if (Math.Abs(Nav.I(u.Cell) - si) > 1 || Math.Abs(Nav.K(u.Cell) - sk) > 1) { ReleaseSite(u); return; }
