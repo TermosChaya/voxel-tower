@@ -23,9 +23,25 @@ string GoneLeaves(Sim sim, Gateway g)
     return parts.Count == 0 ? "" : "; gone: " + string.Join("; ", parts);
 }
 string Retinue0(Unit u) => u.Why != "" ? u.Why : u.State.ToString();
+// how long each check took to come to, and a watchdog: a bench that has come to no check for ten minutes is stuck
+// somewhere after the last one; it says where and gives up rather than spin on
+var checkClock = Stopwatch.StartNew();
+string lastCheck = "the start";
+new Thread(() =>
+{
+    while (true)
+    {
+        Thread.Sleep(5000);
+        if (checkClock.Elapsed.TotalMinutes < 10) continue;
+        Console.WriteLine($"FAIL the bench is stuck: nothing checked for 10 minutes after «{lastCheck}»");
+        Environment.Exit(3);
+    }
+}) { IsBackground = true }.Start();
 void Check(string what, bool ok, string detail = "")
 {
-    Console.WriteLine($"{(ok ? "ok  " : "FAIL")} {what}{(detail.Length > 0 ? "  — " + detail : "")}");
+    Console.WriteLine($"{(ok ? "ok  " : "FAIL")} {what}{(detail.Length > 0 ? "  — " + detail : "")}  [{checkClock.Elapsed.TotalSeconds:0.0} s]");
+    checkClock.Restart();
+    lastCheck = what;
     if (!ok) failures++;
 }
 
@@ -2340,20 +2356,25 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--mechanisms")
     // a heap of pitch on the bank beside the ditch
     int heap = 0;
     for (int z = qz - 4; z < qz + 4; z++) for (int x = qx + 12; x < qx + 18; x++) for (int y = qg; y < qg + 12; y++) { wM.Set(x, y, z, Mat.Pitch); heap++; }
-    for (int t = 0; t < 360 && simM.PitchBusy; t++) RunM(.5);
-    int inDitch = 0, onBank = 0, onWater = 0, pitchAll = 0;
-    for (int z = qz - 30; z < qz + 30; z++)
-        for (int x = qx - 30; x < qx + 30; x++)
-            for (int y = qg - 20; y < qg + 30; y++)
-            {
-                if (wM.Get(x, y, z) != Mat.Pitch) continue;
-                pitchAll++;
-                if (Math.Abs(x - qx) <= 8 && y < qg) inDitch++; else onBank++;
-                if (wM.Get(x, y - 1, z) == Mat.Water) onWater++;
-            }
+    // at rest: what lies in the ditch no longer changing (a film of it may creep on a long while, a voxel's hundredth at a time)
+    int inDitch = 0, onBank = 0, onWater = 0, was = -1;
+    void CountQ()
+    {
+        inDitch = onBank = onWater = 0;
+        for (int z = qz - 30; z < qz + 30; z++)
+            for (int x = qx - 30; x < qx + 30; x++)
+                for (int y = qg - 20; y < qg + 30; y++)
+                {
+                    if (wM.Get(x, y, z) != Mat.Pitch) continue;
+                    if (Math.Abs(x - qx) <= 8 && y < qg) inDitch++; else onBank++;
+                    if (wM.Get(x, y - 1, z) == Mat.Water) onWater++;
+                }
+    }
+    for (int t = 0; t < 36 && simM.PitchBusy; t++) { RunM(5); CountQ(); if (inDitch == was) break; was = inDitch; }
+    CountQ();
     double water1Q = WaterMass(simM), pitch1Q = simM.LiquidMass(Mat.Pitch) - pitch0Q;
     Check("pitch poured on a bank runs down into the ditch and comes to rest on the water in it, not mixing with it",
-        Math.Abs(pitch1Q - heap) < 1 && inDitch > heap * .25 && onWater > 50 && Math.Abs(water1Q - water0Q) < 2 && !simM.PitchBusy,
+        Math.Abs(pitch1Q - heap) < 1 && inDitch > heap * .25 && onWater > 50 && Math.Abs(water1Q - water0Q) < 2 && (inDitch == was || !simM.PitchBusy),
         $"{heap} voxels poured, {pitch1Q:0.0} there now: {inDitch} shown in the ditch ({onWater} lying on the water), {onBank} left on the bank; water {water0Q:0.0} → {water1Q:0.0}");
 }
 

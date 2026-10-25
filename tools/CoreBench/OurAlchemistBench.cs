@@ -108,16 +108,17 @@ static class OurAlchemistBench
         Run(1);
 
         // a knot of raiders out in the open: acid laid there; with the bombardiers' lore the fumes, coughing, the weaker run
-        int acid0 = sim.Acids.Count;
+        // the acid about the knot (what is left elsewhere of the acid before runs and dries as it will)
+        int AcidByKnot() => sim.Acids.Count(p => { var (x, _, z) = WaterPlanner.Unpack(p); return Math.Abs(x - (wx - 84)) < 24 && Math.Abs(z - (wz - 27)) < 24; });
         var knot = Enumerable.Range(0, 5).Select(i =>
         {
             var g = sim.Spawn(Kinds.Goblin, sim.NearestStand(wx - 90 + i % 3 * 6, wz - 30 + i / 3 * 6, 2));
             g.ChainedUntil = 1e9; g.Hp = g.MaxHp = 5000;
             return g;
         }).ToArray();
-        for (int i = 0; i < 300 && sim.Acids.Count <= acid0; i++) Run(.05);
+        for (int i = 0; i < 300 && AcidByKnot() == 0; i++) Run(.05);
         Run(2);
-        int laid = sim.Acids.Count - acid0;
+        int laid = AcidByKnot();
         sim.Learnt.Add("bombards");
         int fumes0 = sim.OurFumes, burst = 0;
         sim.Fumed += (_, _, _) => burst++;

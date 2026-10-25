@@ -79,6 +79,8 @@ public sealed partial class Sim
     /// rather than making every frame wait for it.
     /// </summary>
     const int LookASecond = 100000;
+    /// <summary>Voxels one turn may look at: more on the list wait for the next turns, so no one frame is held up long.</summary>
+    const int LookATurn = 12000;
     /// <summary>
     /// What a voxel of difference in level adds to the flow through a pipe in a turn, for each voxel of depth: weight's
     /// pull over a turn, g·dt²/dx (78 voxels a second² over a sixtieth of a second, squared).
@@ -111,7 +113,7 @@ public sealed partial class Sim
     /// <summary>The amounts kept for a block where something ran: how much of which liquid each voxel holds.</summary>
     sealed class Pool
     {
-        public readonly int Bi;
+        public int Bi;
         public readonly Cell[] C = new Cell[B3];
         // kept at a column's foot: what its pipes passed on its last turn each way (e, w, s, n), and what came into it
         public readonly float[] P = new float[B3 * 4], In = new float[B3 * 4];
@@ -121,6 +123,8 @@ public sealed partial class Sim
     }
 
     Pool[] _pools;
+    readonly Stack<Pool> _spare = new();
+    const int SpareMost = 16;
     bool[] _asleep;
     readonly List<Pool> _poolList = new();
     // the voxels only part full in blocks let go, by block: (voxel in the block, liquid, amount)
@@ -179,7 +183,9 @@ public sealed partial class Sim
         if (!make && !_asleep[bi]) return null;
         List<(int li, byte k, float m)> parts = null;
         bool asleep = _asleep[bi] && _sleeping.TryGetValue(bi, out parts);
-        p = _pools[bi] = new Pool(bi);
+        if (_spare.Count > 0) { p = _spare.Pop(); p.Bi = bi; }
+        else p = new Pool(bi);
+        _pools[bi] = p;
         _poolList.Add(p);
         // the amounts as the world has them: a voxel of a liquid is full of it
         int x0 = bi % _bx * BS, z0 = bi / _bx % _bz * BS, y0 = bi / (_bx * _bz) * BS;
@@ -397,6 +403,21 @@ public sealed partial class Sim
         (_now, _next) = (_next, _now);
         _next.Clear();
         Array.Clear(_busy);
+        // too many to look at in one turn: the rest wait for the next
+        if (_now.Count > LookATurn)
+        {
+            for (int i = LookATurn; i < _now.Count; i++)
+            {
+                var (x, y, z) = WaterPlanner.Unpack(_now[i]);
+                var p = PoolAt(x, y, z, false);
+                if (p == null) continue;
+                int li = Local(x, y, z);
+                p.C[li].Due = _turn + 2;
+                _next.Add(_now[i]);
+                _busy[p.C[li].K]++;
+            }
+            _now.RemoveRange(LookATurn, _now.Count - LookATurn);
+        }
         _turn++;
         LiquidLooked = _now.Count;
         if (_now.Count > _liquidPeak) _liquidPeak = _now.Count;
@@ -656,8 +677,10 @@ public sealed partial class Sim
         var L = Liquids[k];
         float depth = col.head - col.y0;
         float pull = Math.Min(PullMost, Weight * Math.Max(1, depth)) * L.Pull;
-        // what runs keeps its way, but a thin film drags on the ground and keeps none
+        // what runs keeps its way, but a thin film drags on the ground and keeps none, and lies still on a slighter
+        // slope than deep water does
         float way = L.Way * Math.Clamp((depth - .3f) / .9f, 0, 1);
+        float still = Level + Math.Max(0, 1 - depth) * .1f;
         // a shallow run carries its way on from one column into the next; in a deep body that would slosh
         float keep = KeepOn * Math.Clamp(1 - (depth - 2) / 3, 0, 1);
         // afloat on running water, it drifts with it: as fast as the water runs, as deep as it lies
@@ -697,25 +720,34 @@ public sealed partial class Sim
                 var nc = Column(nx, my, nz, k);
                 beyond = nc.head;
                 fy = nc.y0;
+                // a film thinner than the liquid runs does not run on over level ground, wet or dry, unless it is running
+                if (nc.y0 == col.y0 && depth < L.Thin && was < .05f && drift <= 0) continue;
             }
             else
             {
-                // over an edge: the ground (or what is full) under the dry voxel, a few voxels down at most
+                // over an edge: the ground under the dry voxel, a few voxels down at most — or what is full of this
+                // liquid, or any of another (pitch on water lies on the water as on ground)
                 int fl = my;
-                while (fl > 0 && fl > my - 8 && Open(World.Get(nx, fl - 1, nz)) && LiquidAt(nx, fl - 1, nz, out _) < .999f) fl--;
+                while (fl > 0 && fl > my - 8 && Open(World.Get(nx, fl - 1, nz)))
+                {
+                    float mb = LiquidAt(nx, fl - 1, nz, out byte kb);
+                    if (kb != 0 && (kb != k || mb >= .999f)) break;
+                    fl--;
+                }
                 beyond = fl;
-                // on dry level ground it runs out only standing deep enough, or running that way
-                if (fl == my && col.head - my < L.Thin && was < .05f && drift <= 0) continue;
+                // on dry level ground it runs out only standing deep enough, or running that way; and a film half as thin
+                // clings to an edge rather than trickle over it for ever
+                if (col.head - my < (fl == my ? L.Thin : L.Thin * .5f) && was < .05f && drift <= 0) continue;
                 fy = my;
             }
             float drive = col.head - beyond;
             // near enough level, and nothing running that way: at rest
-            if (drive < Level && was < Restful && drift <= 0) continue;
+            if (drive < still && was < Restful * 3 && drift <= 0) continue;
             float flow = was * way + pull * drive + drift;
             // never back the other way, never more than stands over the mouth
             if (drive <= 0) flow = Math.Min(flow, was * .5f + drift);
             flow = Math.Min(flow, Math.Max(0, col.head - my));
-            if (flow <= Restful * .5f) continue;
+            if (flow <= Restful) continue;
             int slot = Slot(PoolAt(nx, fy, nz, true), Local(nx, fy, nz), beyond);
             _plans.Add(new Plan { Job = j, Side = s, X = nx, Y = my, Z = nz, Slot = slot, Dry = dry, Flow = flow });
             total += flow;
@@ -820,7 +852,7 @@ public sealed partial class Sim
             Due(x + 1, y, z); Due(x - 1, y, z); Due(x, y + 1, z); Due(x, y, z + 1); Due(x, y, z - 1);
             if (k0 == 0 || m < Liquids[k0].ShowOn) Due(x, y - 1, z);
         }
-        else if (m > 0 && Math.Abs(d) > Restful * .25f) Due(x, y, z);
+        else if (m > 0 && Math.Abs(d) > Restful * .5f) Due(x, y, z);
     }
 
     /// <summary>The world shows a voxel as the liquid in it once it holds enough, and as air once it holds too little.</summary>
@@ -871,6 +903,8 @@ public sealed partial class Sim
             LiquidDried += lost;
             if (parts != null) { _sleeping[p.Bi] = parts; _asleep[p.Bi] = true; }
             _pools[p.Bi] = null;
+            // kept to be used again, rather than made anew (each is a few hundred kilobytes)
+            if (_spare.Count < SpareMost) { Array.Clear(p.C); Array.Clear(p.P); Array.Clear(p.In); _spare.Push(p); }
             _poolList.RemoveAt(i);
         }
     }

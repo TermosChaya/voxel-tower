@@ -74,7 +74,7 @@ public partial class Main
         {
             Sorcerous();
             sim.Cast(SpellKind.Meteor, lx + 20, g, lz);
-            Advance(_poseSeconds == 14 ? 5 : _poseSeconds);
+            Advance(_poseSeconds == 14 ? 16 : _poseSeconds);
         }
         else
         {

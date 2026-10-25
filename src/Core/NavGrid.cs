@@ -207,7 +207,7 @@ public sealed class NavGrid
         int i = I(c), k = K(c), y = Y(c), x0 = i << Shift, y0 = y << Shift, z0 = k << Shift;
         int ci = World.ChunkIndex(x0 >> VoxelWorld.Shift, y0 >> VoxelWorld.Shift, z0 >> VoxelWorld.Shift);
         var d = World.ChunkData(ci);
-        int fill = 0, e = 0, wd = 0, st = 0, rk = 0, hard = 0, keep = 0, lad = 0, wat = 0, gate = 0, spk = 0, tv = 0, low = 0, high = 0, pav = 0;
+        int fill = 0, e = 0, wd = 0, st = 0, rk = 0, hard = 0, keep = 0, lad = 0, wat = 0, lava = 0, gate = 0, spk = 0, tv = 0, low = 0, high = 0, pav = 0;
         Span<int> trunk = stackalloc int[4];
         if (d == null)
         {
@@ -241,8 +241,9 @@ public sealed class NavGrid
                                 if ((uint)(xx - 3) < 2 && (uint)(zz - 3) < 2) trunk[(zz - 3) * 2 + xx - 3]++;
                             }
                         }
-                        // pitch and acid are waded and drowned in like water
-                        else if (v == Mat.Water || v == Mat.Pitch || v == Mat.Acid || v == Mat.Lava) wat++;
+                        // pitch and acid are waded and drowned in like water; lava is not set foot in at all
+                        else if (v == Mat.Water || v == Mat.Pitch || v == Mat.Acid) wat++;
+                        else if (v == Mat.Lava) lava++;
                         else if (Mat.IsLadder[v]) lad++;
                         else if (v == Mat.Stakes) spk++;
                     }
@@ -259,7 +260,7 @@ public sealed class NavGrid
         Hard[c] = (byte)(hard > 0 ? 1 : 0);
         Keep[c] = (byte)(keep >= 64 ? 1 : 0);
         Ladder[c] = (byte)(lad >= 6 ? 1 : 0);
-        Water[c] = (ushort)wat;
+        Water[c] = (ushort)(lava > 0 ? Math.Max(wat + lava, DeepT) : wat);
         GateFill[c] = (ushort)gate;
         Spikes[c] = (ushort)spk;
         Paved[c] = (byte)(pav >= CS * CS / 4 ? 1 : 0);
