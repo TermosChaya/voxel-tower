@@ -61,15 +61,20 @@ public partial class Main
         // then the furnishing laid at once
         Sim.CompleteAll();
         for (int i = 0; i < 90 && Sim.Gates.Find(g => g.Y == floorTop) is not { Ready: true }; i++) Advance(1);
-        Sim.LookOver(home);
-        Sim.CompleteAll();
-        Sim.LookOver(home);
+        // nothing is laid where someone stands: those who hung the door are let out of the way a few times over
+        for (int i = 0; i < 8 && home.Beds < 2; i++)
+        {
+            Sim.LookOver(home);
+            Sim.CompleteAll();
+            Sim.LookOver(home);
+            if (home.Beds < 2) Advance(1);
+        }
         bool roofed = top > 0 && World.Get(rx, top + 6, hz) == Mat.Wood && World.Get(hx, top + 10, hz) == Mat.Wood && World.Get(hx, top + 6, hz) == Mat.Air;
         bool floored = top > 0 && World.Get(hx + 3, floorTop - 1, hz + 5) == Mat.Wood;
         int beds = home?.Beds ?? 0;
         check("the house form marks a pitched roof of logs standing as an arch, and a floor of logs; built, the house is closed and furnished",
             home != null && floorMeant && roofMeant && roofed && floored && home.Closed && beds >= 2,
-            $"dwelling {(home == null ? "none" : $"top {top}, closed {home.Closed} «{home.Why}», bunks {beds}")}; floor meant {floorMeant}, roof meant {roofMeant}, roofed {roofed}, floored {floored}");
+            $"dwelling {(home == null ? "none" : $"top {top}, closed {home.Closed} «{home.Why}», bunks {beds}")}; floor meant {floorMeant}, roof meant {roofMeant}, roofed {roofed}, floored {floored}; bunks planned {home.Planned}");
         // drawn again over it: a second storey
         await Drag(x0, z0, x1, z1);
         bool waiting = Sim.Storeys.Count == 1;

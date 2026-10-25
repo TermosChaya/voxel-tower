@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace VoxelTower.Core;
 
@@ -64,8 +65,9 @@ public sealed class VoxelWorld
     /// <summary>
     /// Whether a voxel is in the world: in the box, and on the land when the land is a shape within it (a hexagon, see
     /// <see cref="SetLand"/>) — outside that there is nothing, and nothing may be put there: water meets it as a wall,
-    /// whatever is laid or fallen there is gone.
+    /// whatever is laid or fallen there is gone. Asked in every search through the field, so it is kept inlined.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool InBounds(int x, int y, int z) => (uint)x < (uint)SX && (uint)y < (uint)SY && (uint)z < (uint)SZ && (_land == null || _land[z * SX + x]);
 
     /// <summary>The columns of the land (index z·SX + x), when it is a shape within the box; null for the whole box.</summary>
@@ -84,6 +86,7 @@ public sealed class VoxelWorld
     }
 
     /// <summary>Whether a column is on the land (and in the box).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool OnLand(int x, int z) => (uint)x < (uint)SX && (uint)z < (uint)SZ && (_land == null || _land[z * SX + x]);
 
     /// <summary>Material at a voxel. Everything below the field is bedrock, even past its edges; beside and above it is air.</summary>
