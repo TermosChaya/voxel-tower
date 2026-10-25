@@ -92,7 +92,10 @@ public sealed partial class Sim
 
     public static Template TemplateOf(string key) => Array.Find(Templates, t => t.Key == key);
 
-    /// <summary>Whether all of a footprint is in the valley (not over the hexagon's edge, nor where nothing is built).</summary>
+    /// <summary>
+    /// Whether all of a footprint is in the valley: not over the hexagon's edge nor the box's (the horde's strip and the
+    /// citadel's ring are left to the marking, which leaves them out).
+    /// </summary>
     static bool Inside(VoxelWorld w, Site s, int x0, int z0, int x1, int z1)
     {
         for (int z = z0; z <= z1; z += Math.Max(1, (z1 - z0) / 6))
