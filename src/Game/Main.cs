@@ -321,6 +321,9 @@ public partial class Main : Node3D
         var chimneys = new ChimneyView();
         AddChild(chimneys);
         chimneys.Init(this);
+        var boulders = new BoulderTrail();
+        AddChild(boulders);
+        boulders.Init(this);
         Tunnels = new TunnelView();
         AddChild(Tunnels);
         Tunnels.Init(this);

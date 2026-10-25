@@ -107,6 +107,12 @@ public partial class UnitView
         var xf = _xf[(int)bone];
         var p = f.Pivot[(int)bone];
         float half = leg ? .95f : .8f;
+        // from further off the sticks and their bindings are under a pixel: the limb is shown wrapped white its length
+        if (_lod > 0)
+        {
+            Box(xf * new Transform3D(Basis.FromScale(new Vector3(half * 2 + .6f, len * .8f, half * 2 + .6f)), p + new Vector3(0, -len * .5f, 0)), Linen);
+            return;
+        }
         for (int s = -1; s <= 1; s += 2)
         {
             var off = leg ? new Vector3(s * half, 0, 0) : new Vector3(0, 0, s * half);
@@ -132,7 +138,7 @@ public partial class UnitView
         if (x.LengthSquared() < 1e-6f) x = Vector3.Right;
         x = x.Normalized();
         var z = x.Cross(y);
-        float thick = .35f * VoxelWorld.Vox;
+        float thick = (_lod > 0 ? .9f : .35f) * VoxelWorld.Vox;
         Box(new Transform3D(new Basis(x * thick, y * len, z * thick), (a + b) / 2), Linen);
     }
 
