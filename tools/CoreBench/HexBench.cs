@@ -6,7 +6,7 @@ using VoxelTower.Core;
 /// <summary>
 /// The valley a hexagon, and the kinds of valley (--hex): nothing made, walkable or buildable off the land; the river in
 /// over one side and out over another; the horde in over the straight western side; one thrown off the edge gone; the
-/// water at the edge standing; each kind with its places, the first valley with every old place while the old set is
+/// water at the edge standing; no building of the town over the edge; each kind with its places, the first valley with every old place while the old set is
 /// kept and only ruins and bridges without it; the kind kept in a save.
 /// </summary>
 static class HexBench
@@ -54,6 +54,14 @@ static class HexBench
                 for (int y = 1; y < sim.Nav.NY; y++) if (sim.Nav.Stand(i, y, k, 2)) { standOff++; break; }
             }
         check("there is nowhere to stand off the land", standOff == 0, $"{standOff} cells off it to stand in");
+
+        // a building of the town is not put up over the edge, half of it on nothing
+        var barracks = Sim.TownKindOf("barracks");
+        int ex = (int)(hex.CX + hex.HalfW), ez = (int)hex.CZ + 120;
+        var overEdge = sim.BuildingPlan(barracks, ex - 6, ez, false, out _, out string whyEdge, out _);
+        sim.BuildingPlan(barracks, ex - 90, ez, false, out _, out string whyIn, out _);
+        check("a building of the town is not put up over the valley's edge, and is a little way in", overEdge == null && whyEdge == "здесь край долины" && whyIn != "здесь край долины",
+            $"at the edge «{whyEdge}», 90 voxels in «{whyIn ?? "fits"}»");
 
         // the river comes in over one side and goes out over another: its water at the edge north and south
         int northEdge = 0, southEdge = 0;

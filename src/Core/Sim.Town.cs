@@ -225,7 +225,9 @@ public sealed partial class Sim
     {
         var (x0, z0, x1, z1) = BuildingRect(k, cx, cz, turned);
         door = default; arched = null;
-        if (x0 < 2 || z0 < 2 || x1 >= World.SX - 2 || z1 >= World.SZ - 2) { why = "здесь край долины"; return null; }
+        // (the land convex, its four corners on it are the whole of it)
+        if (x0 < 2 || z0 < 2 || x1 >= World.SX - 2 || z1 >= World.SZ - 2
+            || !World.OnLand(x0, z0) || !World.OnLand(x1, z0) || !World.OnLand(x0, z1) || !World.OnLand(x1, z1)) { why = "здесь край долины"; return null; }
         if (HouseUnder(x0, z0, x1, z1) != null || Buildings.Exists(b => b.X0 <= x1 + 2 && b.X1 >= x0 - 2 && b.Z0 <= z1 + 2 && b.Z1 >= z0 - 2))
         { why = "здесь уже стоит дом"; return null; }
         var st = new Stroke { Mat = k.Wall, Width = Shapes.HouseWall, Height = Shapes.HouseHeight + 4, Level = true };
