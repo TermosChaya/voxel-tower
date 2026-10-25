@@ -13,7 +13,10 @@ public sealed class Liquid
 {
     public byte Mat;
     public string Name;
-    /// <summary>It moves sideways every this many turns (60 a second): water every turn, lava every eighth.</summary>
+    /// <summary>
+    /// It moves sideways every this many rounds of the list (a turn each, 60 a second, unless much is running): water
+    /// every round, lava every sixth.
+    /// </summary>
     public int Every;
     /// <summary>How hard a difference in level drives it through a pipe, as against water (thick liquids less).</summary>
     public float Pull;
@@ -81,8 +84,11 @@ public sealed partial class Sim
     /// rather than making every frame wait for it.
     /// </summary>
     const int LookASecond = 100000;
-    /// <summary>Voxels one turn may look at: more on the list wait for the next turns, so no one frame is held up long.</summary>
-    const int LookATurn = 12000;
+    /// <summary>
+    /// Voxels one turn may look at: more on the list are looked at over the next turns, a round of them, so no one frame
+    /// is held up long.
+    /// </summary>
+    const int LookATurn = 3000;
     /// <summary>
     /// What a voxel of difference in level adds to the flow through a pipe in a turn, for each voxel of depth: weight's
     /// pull over a turn, g·dt²/dx (78 voxels a second² over a sixtieth of a second, squared).
@@ -104,10 +110,10 @@ public sealed partial class Sim
         // the column it is part of, worked out on the turn in CAt: its foot, top, level and what is in it
         public ushort Y0, Y1;
         public float H, V;
-        // the turn it was last put on the list to be looked at, and last moved; and the turn its column was put down to
-        // pass liquid sideways (kept at the foot), with the job it is then
+        // the turn it was last looked at (or Waiting, on the list), and last moved; and the turn its column was put down
+        // to pass liquid sideways (kept at the foot), with the job it is then
         public int Due, Moved, CAt, Sent, JIx;
-        // of the turn in TAt, where what it is to take (as a column's foot, or dry) is added up; and the turns its
+        // of the turn in TAt, where what it is to take (as a column's foot, or dry) is added up; and the rounds its
         // pipes' flows out (P) and what came in (In) were kept
         public int TAt, TIx, PAt, InAt;
     }
@@ -132,15 +138,25 @@ public sealed partial class Sim
     // the voxels only part full in blocks let go, by block: (voxel in the block, liquid, amount)
     readonly Dictionary<int, List<(int li, byte k, float m)>> _sleeping = new();
     int _bx, _by, _bz;
-    // the voxels to look at this turn and the next, packed
-    List<int> _now = new(), _next = new();
+    // the voxels on the list to be looked at, packed, in the order they were put on it, with the liquid each held then
+    // (those before _lookedTo looked at already)
+    readonly List<int> _waiting = new();
+    readonly List<byte> _waitingK = new();
+    int _lookedTo;
+    // a voxel's Due while it is on the list
+    const int Waiting = int.MaxValue;
+    // a round: what was on the list when it began looked at once, over as many turns as that takes — one, unless the
+    // list is long — and what is put on the list meanwhile left for the next; the round, the turn it began, and where
+    // in the list it ends. Liquid runs a round at a time (what comes in keeps its way on into the next round, a slow
+    // liquid runs sideways on its own rounds), so a long list slows a flood but does not change how it runs.
+    int _round = 1, _roundTurn = 1, _roundEnd;
     readonly List<int> _moved = new();
     int _turn = 1;
     float _turnDue, _lookCredit;
     double _poolsLooked;
     // writing the liquids' own voxels into the world: not something done to them from outside
     bool _liquidWriting;
-    // voxels of each liquid on the list for the next turn
+    // voxels of each liquid on the list
     readonly int[] _busy = new int[5];
     /// <summary>What has been lost to drying out (amounts too small to keep), in voxels, since the start.</summary>
     public double LiquidDried { get; private set; }
@@ -290,9 +306,10 @@ public sealed partial class Sim
         }
         int li = Local(x, y, z);
         byte k = p.C[li].K;
-        if (k == 0 || p.C[li].M <= 0 || p.C[li].Due == _turn + 1) return;
-        p.C[li].Due = _turn + 1;
-        _next.Add(WaterPlanner.Pack(x, y, z));
+        if (k == 0 || p.C[li].M <= 0 || p.C[li].Due == Waiting) return;
+        p.C[li].Due = Waiting;
+        _waiting.Add(WaterPlanner.Pack(x, y, z));
+        _waitingK.Add(k);
         _busy[k]++;
     }
 
@@ -396,42 +413,63 @@ public sealed partial class Sim
     }
 
     /// <summary>
-    /// One turn: every voxel on the list falls or rises as it must, and the columns they are part of plan and pass what
+    /// One turn: every voxel looked at falls or rises as it must, and the columns they are part of plan and pass what
     /// runs sideways (all reckoned from the amounts as they stood at the turn's start); then what came and went is
-    /// added up, shown in the world, and whatever changed, and what lies about it, goes on the list for the next turn.
+    /// added up, shown in the world, and whatever changed, and what lies about it, goes on the list for the next round.
     /// </summary>
     void Turn()
     {
-        (_now, _next) = (_next, _now);
-        _next.Clear();
-        Array.Clear(_busy);
-        // too many to look at in one turn: the rest wait for the next
-        if (_now.Count > LookATurn)
+        // the round looked through: the next begins with what was put on the list during it
+        if (_lookedTo >= _roundEnd)
         {
-            for (int i = LookATurn; i < _now.Count; i++)
-            {
-                var (x, y, z) = WaterPlanner.Unpack(_now[i]);
-                var p = PoolAt(x, y, z, false);
-                if (p == null) continue;
-                int li = Local(x, y, z);
-                p.C[li].Due = _turn + 2;
-                _next.Add(_now[i]);
-                _busy[p.C[li].K]++;
-            }
-            _now.RemoveRange(LookATurn, _now.Count - LookATurn);
+            _waiting.RemoveRange(0, _lookedTo);
+            _waitingK.RemoveRange(0, _lookedTo);
+            _lookedTo = 0;
+            _roundEnd = _waiting.Count;
+            if (_roundEnd > LookATurn) SortRound();
+            _round++;
+            _roundTurn = _turn + 1;
+            if (Current.Count > 0 && _round % 2 == 0) Current.Clear();
         }
         _turn++;
-        LiquidLooked = _now.Count;
-        if (_now.Count > _liquidPeak) _liquidPeak = _now.Count;
-        if (_now.Count == 0) return;
-        if (Current.Count > 0 && _turn % 2 == 0) Current.Clear();
+        int from = _lookedTo, n = Math.Min(LookATurn, _roundEnd - from);
+        _lookedTo += n;
+        LiquidLooked = n;
+        if (n > _liquidPeak) _liquidPeak = n;
+        if (n == 0) return;
         _moved.Clear();
         _jobs.Clear();
-        foreach (int c in _now) Pass(c);
+        // (what is put on the list meanwhile goes on after the round's end)
+        for (int i = from; i < from + n; i++) { _busy[_waitingK[i]]--; Pass(_waiting[i]); }
         Sideways();
         _liquidWriting = true;
         try { foreach (int c in _moved) Settle(c); }
         finally { _liquidWriting = false; }
+    }
+
+    long[] _sorting = Array.Empty<long>();
+
+    /// <summary>
+    /// A round to be looked at over more than one turn put in order by place, a row of columns after another, so that
+    /// what lies together is looked at on the same turn, and passes liquid between as on one.
+    /// </summary>
+    void SortRound()
+    {
+        int n = _roundEnd;
+        if (_sorting.Length < n) _sorting = new long[Math.Max(n, _sorting.Length * 2)];
+        // by z, then x, then y (a voxel's place packed with y highest): with the liquid it held under it
+        for (int i = 0; i < n; i++)
+        {
+            int c = _waiting[i];
+            _sorting[i] = (long)((c & 0x3FFFFF) << 9 | c >> 22) << 3 | _waitingK[i];
+        }
+        Array.Sort(_sorting, 0, n);
+        for (int i = 0; i < n; i++)
+        {
+            int key = (int)(_sorting[i] >> 3);
+            _waiting[i] = (key & 511) << 22 | key >> 9;
+            _waitingK[i] = (byte)(_sorting[i] & 7);
+        }
     }
 
     static readonly (int dx, int dz)[] Runs = { (1, 0), (-1, 0), (0, 1), (0, -1) };
@@ -446,6 +484,8 @@ public sealed partial class Sim
         var p = PoolAt(x, y, z, false);
         if (p == null) return;
         int li = Local(x, y, z);
+        // off the list: what changes it from now on puts it on again
+        p.C[li].Due = _turn;
         byte k = p.C[li].K;
         float m = p.C[li].M;
         if (k == 0 || m <= 0) return;
@@ -476,7 +516,7 @@ public sealed partial class Sim
         var col = Column(x, y, z, k);
         var pf = PoolAt(x, col.y0, z, true);
         int lf = Local(x, col.y0, z);
-        if (pf.C[lf].Sent == _turn) return;
+        if (pf.C[lf].Sent >= _roundTurn) return;
         pf.C[lf].Sent = _turn;
         pf.C[lf].JIx = -1;
         // nor does a column standing on what is not full
@@ -485,8 +525,8 @@ public sealed partial class Sim
             LiquidAt(x, col.y0 - 1, z, out byte kb);
             if (kb == 0 || kb == k) return;
         }
-        // a slow liquid runs sideways only on its own turns, and waits for them on the list
-        if (_turn % Liquids[k].Every != 0) { Due(x, y, z); return; }
+        // a slow liquid runs sideways only on its own rounds, and waits for them on the list
+        if (_round % Liquids[k].Every != 0) { Due(x, y, z); return; }
         pf.C[lf].JIx = _jobs.Count;
         _jobs.Add(new Job(x, z, col, k, pf, lf));
     }
@@ -648,7 +688,7 @@ public sealed partial class Sim
             var job = _jobs[j];
             int pi = job.lf * 4;
             Array.Clear(job.pf.P, pi, 4);
-            job.pf.C[job.lf].PAt = _turn;
+            job.pf.C[job.lf].PAt = _round;
             float fx = 0, fz = 0, all = 0;
             for (int i = _jobFirst[j]; i < _jobFirst[j + 1]; i++)
             {
@@ -660,7 +700,7 @@ public sealed partial class Sim
                 // and what came in keeps its way on into the next column
                 var rp = _tPool[pl.Slot];
                 int rl = _tLi[pl.Slot];
-                if (rp.C[rl].InAt != _turn) { rp.C[rl].InAt = _turn; Array.Clear(rp.In, rl * 4, 4); }
+                if (rp.C[rl].InAt != _round) { rp.C[rl].InAt = _round; Array.Clear(rp.In, rl * 4, 4); }
                 rp.In[rl * 4 + pl.Side] += flow;
                 if (pl.Dry) Put(pl.X, pl.Y, pl.Z, job.k, flow);
                 else LayOnTop(pl.X, pl.Y, pl.Z, job.k, flow);
@@ -698,9 +738,9 @@ public sealed partial class Sim
         int top = Math.Min(World.SY - 1, (int)MathF.Ceiling(col.head) - 1);
         for (int s = 0; s < 4; s++)
         {
-            // what ran this way out of it on its last turn, or what ran into it this way, keeping its way on
-            float was = _turn - pf.C[lf].PAt <= L.Every ? pf.P[lf * 4 + s] : 0;
-            if (_turn - pf.C[lf].InAt <= L.Every) was = Math.Max(was, pf.In[lf * 4 + s] * keep);
+            // what ran this way out of it on its last round, or what ran into it this way, keeping its way on
+            float was = _round - pf.C[lf].PAt <= L.Every ? pf.P[lf * 4 + s] : 0;
+            if (_round - pf.C[lf].InAt <= L.Every) was = Math.Max(was, pf.In[lf * 4 + s] * keep);
             var (dx, dz) = Runs[s];
             float drift = Math.Max(0, dx * driftX + dz * driftZ);
             int nx = x + dx, nz = z + dz, my = -1;
@@ -894,7 +934,7 @@ public sealed partial class Sim
             bool due = false;
             for (int j = 0; j < B3; j++)
             {
-                if (p.C[j].Due > _turn) { due = true; break; }
+                if (p.C[j].Due == Waiting) { due = true; break; }
                 float m = p.C[j].M;
                 byte k = p.C[j].K;
                 if (k == 0) { lost += m; continue; }
@@ -927,13 +967,15 @@ public sealed partial class Sim
             foreach (var (li, k, m) in parts) all.Add((bi, li, k, m));
         w.Write(all.Count);
         foreach (var (bi, li, k, m) in all) { w.Write(bi); w.Write((ushort)li); w.Write(k); w.Write(m); }
-        w.Write(_next.Count);
-        foreach (int c in _next) w.Write(c);
+        w.Write(_waiting.Count - _lookedTo);
+        for (int i = _lookedTo; i < _waiting.Count; i++) w.Write(_waiting[i]);
     }
 
     void ReadLiquids(BinaryReader r)
     {
-        MakePools(); _poolList.Clear(); _sleeping.Clear(); _now.Clear(); _next.Clear(); Current.Clear();
+        MakePools(); _poolList.Clear(); _sleeping.Clear(); _waiting.Clear(); _waitingK.Clear(); Current.Clear();
+        _lookedTo = _roundEnd = 0;
+        Array.Clear(_busy);
         int n = r.ReadInt32();
         for (int i = 0; i < n; i++)
         {

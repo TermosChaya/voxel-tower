@@ -96,7 +96,7 @@ public sealed partial class Sim
             var (x, y, z) = WaterPlanner.Unpack(p);
             // still running, it keeps its heat
             var pool = PoolAt(x, y, z, false);
-            if (pool != null && pool.C[Local(x, y, z)].Due > _turn) continue;
+            if (pool != null && pool.C[Local(x, y, z)].Due == Waiting) continue;
             // its skin sets first: what has air over it or stone beside it
             bool skin = false;
             for (int d = 0; d < 6 && !skin; d++)
