@@ -73,6 +73,8 @@ public sealed partial class Sim
 
     /// <summary>How far the falling star's blast reaches (voxels), and the size of the rock itself.</summary>
     const float StarBlast = 3 * VoxelWorld.PerMetre, StarRock = 7.5f;
+    /// <summary>Voxels of lava a falling star leaves in its crater (more with the strength of faith).</summary>
+    const float StarLava = 90;
 
     /// <summary>
     /// A star brought down: a ball of burning rock comes in slantwise out of the west from high over the valley and
@@ -101,7 +103,8 @@ public sealed partial class Sim
 
     /// <summary>
     /// The star strikes: a blast where it came down that breaks out a crater and throws the raiders about it, every engine
-    /// near it battered, everything that burns about it alight; the rock goes on, rolling, and strikes as a rock.
+    /// near it battered, everything that burns about it alight, and the molten heart of it left glowing in the crater as
+    /// lava (Sim.Lava.cs); the rock goes on, rolling, and strikes as a rock.
     /// </summary>
     void StarStrikes(Flier f)
     {
@@ -111,6 +114,7 @@ public sealed partial class Sim
         foreach (var u in Units)
             if (!u.Dead && Kinds.IsEngine(u.T) && (u.X - f.X) * (u.X - f.X) + (u.Z - f.Z) * (u.Z - f.Z) < 4 * r * r) Hurt(u, null, 300 * Might, "звезда");
         int ix = (int)f.X, iz = (int)f.Z, ri = (int)(r * 1.6f), lit = 0;
+        LetLava(ix, iz, StarLava * Might);
         for (int dz = -ri; dz <= ri && lit < 12; dz += 3)
             for (int dx = -ri; dx <= ri && lit < 12; dx += 3)
             {

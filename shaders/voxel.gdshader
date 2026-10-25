@@ -10,7 +10,7 @@ render_mode cull_back, diffuse_burley, specular_schlick_ggx;
 // over the earth down its sides, leaves and needles in every voxel of a crown, furrows up a trunk, dashes across a birch.
 // Vertex data: COLOR = linear rgb + colour variance, UV = (corner shade, glow),
 // UV2 = (sway, skin: 0 rough, 1 dressed stone, 2 metal, 3 turf, 4 leaves, 5 bark, 6 birch bark, 7 needles, 8 burnt turf,
-// 9 the earth of a bank under turf, grown over with grass).
+// 9 the earth of a bank under turf, grown over with grass, 10 lava).
 // The figures are meshed in their own voxels but sculpted in halves of them: grid says how many cells
 // a unit of the mesh holds, so the jitter and the bevel follow the cells they are made of.
 
@@ -186,13 +186,38 @@ void vertex() {
 	}
 }
 
+// lava: a dark crust broken into plates that drift and turn slowly, molten rock showing bright in the cracks between
+// them, its glow breathing; how hot each point is (0 the crust, 1 the cracks)
+vec3 lava(vec3 base, vec2 p, float t, out float hot) {
+	vec2 i = floor(p), f = fract(p);
+	float d1 = 8.0, d2 = 8.0;
+	for (int y = -1; y <= 1; y++)
+		for (int x = -1; x <= 1; x++) {
+			vec2 o = vec2(float(x), float(y));
+			vec2 h = vhash3(vec3(i + o, 3.0)).xy;
+			h = 0.5 + 0.38 * sin(t * 0.35 + 6.2831 * h);
+			float d = length(o + h - f);
+			if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d;
+		}
+	float crack = 1.0 - smoothstep(0.02, 0.09, d2 - d1);
+	float pulse = 0.8 + 0.2 * sin(t * 1.4 + vhash(vec3(i, 7.0)) * 6.2831);
+	hot = mix(0.06, 0.8, crack) * pulse;
+	return mix(base * vec3(0.16, 0.1, 0.09) + vec3(0.03, 0.025, 0.022), base * 1.1 + vec3(0.25, 0.1, 0.0), crack);
+}
+
 void fragment() {
 	vec3 cell = floor(v_vox - v_nrm * 0.5 + 0.001);
 	vec3 col;
 	float line = 0.0;
 	int skin = v_skin;
 	float px = length(fwidth(v_vox));
-	if (skin == 1) {
+	float hot = 1.0;
+	if (skin == 10) {
+		// its plates a little over a voxel across, on the top and down the sides of a tongue of it
+		vec3 an = abs(v_nrm);
+		vec2 face = an.y > 0.5 ? v_vox.xz : (an.x > 0.5 ? v_vox.zy : v_vox.xy);
+		col = lava(COLOR.rgb, face * 0.4 + vec2(TIME * 0.03, TIME * 0.02), TIME, hot);
+	} else if (skin == 1) {
 		// one stone, one tone, with a faint mottling and a darker skin toward its edges
 		vec3 p = v_vox * 0.55;
 		float mott = sin(p.x * 1.7 + p.y * 0.9) * sin(p.z * 1.3 - p.y * 1.1) + sin(p.x * 3.1 - p.z * 2.3) * 0.35;
@@ -232,5 +257,5 @@ void fragment() {
 	ROUGHNESS = skin == 2 ? 0.42 : skin == 1 ? 0.86 : 0.93;
 	METALLIC = skin == 2 ? 0.6 : 0.0;
 	SPECULAR = skin == 2 ? 0.6 : 0.3;
-	EMISSION = col * v_ext.y;
+	EMISSION = col * v_ext.y * hot;
 }

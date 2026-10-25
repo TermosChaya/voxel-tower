@@ -74,6 +74,8 @@ public partial class Main
         if (_pose == "acid") { Acid(); return; }
         if (_pose == "ouralchemist") { OurAlchemists(); return; }
         if (_pose == "countermine") { Countermine(); return; }
+        if (_pose == "wave") { Wave(); return; }
+        if (_pose == "lava") { LavaPose(); return; }
         if (_pose == "wand") { WandPose(); return; }
         if (_pose == "square") { SquarePose(); return; }
         if (_pose == "sigils")

@@ -6,7 +6,7 @@ namespace VoxelTower.Game;
 
 /// <summary>
 /// The sounds of acid: a flask breaking, bright glass shattering over a wet slap; a fizz where it eats through
-/// something or is lost in water; a hoarse cough in its fumes; and the sizzle of it eating, a loop, as loud as there is
+/// something or is lost in water, and deeper where lava meets water; a hoarse cough in its fumes; and the sizzle of it eating, a loop, as loud as there is
 /// acid near the middle of the view.
 /// </summary>
 public partial class Sound
@@ -26,6 +26,8 @@ public partial class Sound
         _sizzle = Loop("sizzle");
         sim.FlaskBroke += (x, y, z) => { Play("glass", x, y, z, .05, .85f); Play("fizz", x, y, z, .05, .6f); };
         sim.Dissolved += (x, y, z, m) => Play("fizz", x + .5f, y, z + .5f, .35, m == Mat.Water ? .55f : .3f, pitch: m == Mat.Water ? .8f : 0);
+        // lava set by water hisses the same, deeper and louder
+        sim.Quenched += (x, y, z) => Play("fizz", x + .5f, y + .5f, z + .5f, .3, .7f, pitch: .55f);
         sim.Coughed += u => Play("cough", u.X, u.Y, u.Z, .5, .5f, pitch: u.T.BodyH < 12 ? 1.3f : 0);
         sim.Threw += u => Play("swish", u.X, u.Y, u.Z, .1, .4f, pitch: 1.25f);
     }

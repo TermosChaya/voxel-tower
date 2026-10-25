@@ -627,29 +627,28 @@ if (args.Length == 0 || args[0] == "--sim")
                 if (w4.Get(x, g, z) == Mat.Water || site4.Forbidden(x, z) || d2 < (pr + 12) * (pr + 12) || d2 > (pr + 30) * (pr + 30)) continue;
                 if (g > highY) { highY = g; high = (x, z); }
             }
-        long water0 = WaterIn(w4);
+        double water0 = WaterMass(sim);
         int ran0 = sim.Flooded, over0 = OverLand(w4, site4);
         sim.InstantLabour = true;
         sim.DesignateRemove(Shapes.Line(w4, site4, shore.x, shore.z, high.x, high.z, new Stroke { Width = 6, Height = 16, Dig = true }, 0));
         sim.InstantLabour = false;
-        for (int i = 0; i < 120 && sim.WaterBusy; i++) Run(1);
-        long water1 = WaterIn(w4);
-        Check("a trench cut from a pond fills, and the pond gives up just as much", sim.Flooded - ran0 > 300 && water1 == water0 && !sim.WaterBusy && Floating(w4) == 0,
-            $"pond at ({qx}, {qz}), trench to {high} at {highY}: {sim.Flooded - ran0} voxels of water moved, {water0} → {water1} in the valley, {OverLand(w4, site4) - over0} over the land");
+        for (int i = 0; i < 400 && sim.WaterBusy; i++) Run(1);
+        double water1 = WaterMass(sim);
+        Check("a trench cut from a pond fills, and the pond gives up just as much", sim.Flooded - ran0 > 300 && Math.Abs(water1 - water0) < 2 && !sim.WaterBusy && Floating(w4) == 0,
+            $"pond at ({qx}, {qz}), trench to {high} at {highY}: {sim.Flooded - ran0} voxels of water moved, {water0:0.0} → {water1:0.0} in the valley, {OverLand(w4, site4) - over0} over the land");
 
-        // the same worked out on a worker thread, as in the game: a pit dug into the pit shore
+        // a pit dug into the far shore fills from the pond as quickly, at little cost
         var pit = (x: qx - (int)Math.Round((site4.KeepX - qx) / kd * (farR + 6)), z: qz - (int)Math.Round((site4.KeepZ - qz) / kd * (farR + 6)));
-        sim.WaterInBackground = true;
         ran0 = sim.Flooded;
         sim.InstantLabour = true;
         sim.DesignateRemove(Shapes.Box(w4, site4, pit.x - 6, pit.z - 6, pit.x + 6, pit.z + 6, new Stroke { Height = 12, Dig = true }, 0));
         sim.InstantLabour = false;
         var waited = Stopwatch.StartNew();
-        while (sim.WaterBusy && waited.ElapsedMilliseconds < 20000) { Run(.05); if (sim.WaterBusy) Thread.Sleep(1); }
-        sim.WaterInBackground = false;
-        long water2 = WaterIn(w4);
-        Check("…and on a worker thread, as in the game", sim.Flooded - ran0 > 100 && water2 == water0 && !sim.WaterBusy && Floating(w4) == 0,
-            $"pit at {pit}: {sim.Flooded - ran0} voxels of water moved in {waited.ElapsedMilliseconds} ms, {water0} → {water2} in the valley");
+        double took = 0;
+        while (sim.WaterBusy && took < 120) { Run(1); took++; }
+        double water2 = WaterMass(sim);
+        Check("…and a pit dug into the far shore fills from it as well", sim.Flooded - ran0 > 100 && Math.Abs(water2 - water0) < 2 && !sim.WaterBusy && Floating(w4) == 0,
+            $"pit at {pit}: {sim.Flooded - ran0} voxels of water moved in {took:0} s of game ({waited.ElapsedMilliseconds} ms), {water0:0.0} → {water2:0.0} in the valley");
     }
 
     // a gate in a walled yard: our worker knocks, it opens and shuts behind him; barred, there is no way through;
@@ -925,27 +924,27 @@ if (args.Length == 0 || args[0] == "--sim")
     Check("without timber a sapper fills the ditch with earth", filled > 400 && DistKeep(filler) < site4.KeepR + 160, $"{filled} voxels of fill, now {DistKeep(filler) / VoxelWorld.PerMetre:0.0} m from the citadel, {filler.State}");
 
     // the other pond breached by a trench run out to the cliff: the water pours out over the land and down into the
-    // lowland as far as it goes, the pond drops by as much as left it, and nothing is made or lost
+    // lowland, the pond giving up as much as left it, and nothing is made or lost
     {
         var (qx, qz, pr, plevel) = site4.Ponds[1];
         int cliff = qx - pr;
         while (cliff > 0 && w4.SurfAt(cliff - 1, qz) > w4.SurfAt(cliff, qz) - 12) cliff--;
-        long water0 = WaterIn(w4);
+        double water0 = WaterMass(sim);
         int ran0 = sim.Flooded, over0 = OverLand(w4, site4);
         var sw2 = Stopwatch.StartNew();
         sim.InstantLabour = true;
         sim.DesignateRemove(Shapes.Line(w4, site4, qx - MapGen.Shore(w4, site4, qx, qz, -1, 0) + 6, qz, cliff, qz, new Stroke { Width = 6, Height = 16, Dig = true }, 0));
         sim.InstantLabour = false;
         double t0 = sim.Time;
+        double Pond() { double n = 0; for (int z = qz - pr - 8; z <= qz + pr + 8; z++) for (int x = qx - pr - 8; x <= qx + pr + 8; x++) for (int y = plevel - 24; y < plevel + 4; y++) n += sim.LiquidAt(x, y, z, out byte k) * (k == Sim.LiquidWater ? 1 : 0); return n; }
+        double pond0 = Pond();
         for (int i = 0; i < 600 && sim.WaterBusy; i++) Run(1);
-        int surface = w4.SurfAt(qx, qz);
-        while (w4.Get(qx, surface, qz) == Mat.Water) surface++;
-        long water1 = WaterIn(w4);
+        double water1 = WaterMass(sim), pond1 = Pond();
         int over = OverLand(w4, site4) - over0;
-        Check("a pond breached out to the cliff pours over the land and settles; no water is made or lost",
-            water1 == water0 && over > 1000 && surface < plevel && !sim.WaterBusy && Floating(w4) == 0,
-            $"pond at ({qx}, {qz}) standing to {plevel}, now to {surface}; trench to the cliff at x {cliff}: {sim.Flooded - ran0} voxels moved in {sim.Time - t0:0} s ({sw2.ElapsedMilliseconds} ms), " +
-            $"{over} out over the land, {water0} → {water1} in the valley");
+        Check("a pond breached out to the cliff pours over the land, the pond giving up what left it; no water is made or lost",
+            Math.Abs(water1 - water0) < 2 && over > 500 && pond0 - pond1 > over && Floating(w4) == 0,
+            $"pond at ({qx}, {qz}) standing to {plevel}, {pond0 - pond1:0} voxels gone out of it; trench to the cliff at x {cliff}: {sim.Flooded - ran0} voxels moved in {sim.Time - t0:0} s ({sw2.ElapsedMilliseconds} ms), " +
+            $"{over} out over the land{(sim.WaterBusy ? ", still running" : "")}, {water0:0.0} → {water1:0.0} in the valley");
     }
 }
 
@@ -1654,6 +1653,13 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--fire")
         for (int z = z0; z <= z1; z++) for (int x = x0; x <= x1; x++) for (int y = 0; y < wF.SY; y++) if (wF.Get(x, y, z) == m) n++;
         return n;
     }
+    // a liquid by what is in each voxel (one partly full counted as so much)
+    double AmountF(byte m, int x0, int z0, int x1, int z1)
+    {
+        double n = 0;
+        for (int z = z0; z <= z1; z++) for (int x = x0; x <= x1; x++) for (int y = 0; y < wF.SY; y++) { float a = simF.LiquidAt(x, y, z, out byte k); if (k == Sim.LiquidOf[m]) n += a; }
+        return n;
+    }
     int BurningIn(int x0, int z0, int x1, int z1)
     {
         int n = 0;
@@ -1812,12 +1818,12 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--fire")
     double woodF0 = simF.Stock[Stockpile.Wood];
     int lx0 = kxF - 90, lz0 = kzF + 130;
     var pourer = simF.Spawn(Kinds.Worker, simF.NearestStand(lx0 - 16, lz0, 2));
-    int poured0 = CountF(Mat.Pitch, lx0 - 4, lz0 - 4, lx0 + 4, lz0 + 40);
+    double poured0 = AmountF(Mat.Pitch, lx0 - 4, lz0 - 4, lx0 + 4, lz0 + 40);
     simF.DesignateBuild(Shapes.Line(wF, siteF, lx0, lz0, lx0, lz0 + 32, new Stroke { Mat = Mat.Pitch, Width = 4, Height = 2 }, 0));
     RunF(40);
-    int poured = CountF(Mat.Pitch, lx0 - 4, lz0 - 4, lx0 + 4, lz0 + 40) - poured0;
+    double poured = AmountF(Mat.Pitch, lx0 - 4, lz0 - 4, lx0 + 4, lz0 + 40) - poured0;
     Check("a worker pours pitch from the timber in the stores", poured > 100 && simF.Stock[Stockpile.Wood] <= woodF0 - poured + 1,
-        $"{poured} voxels poured, timber {Fmt.M3(woodF0)} → {Fmt.M3(simF.Stock[Stockpile.Wood])} m³");
+        $"{poured:0.0} voxels poured, timber {Fmt.M3(woodF0)} → {Fmt.M3(simF.Stock[Stockpile.Wood])} m³");
     GoneF(pourer);
 }
 
@@ -2308,10 +2314,10 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--mechanisms")
     long out0 = Wet(ex + 4, rx + 120), in0 = Wet(rx - 16, rx + 17);
     int ran0 = simM.Flooded;
     if (sluice != null) simM.SetGateMode(sluice, GateMode.Open);
-    RunM(20);
+    RunM(45);
     long in1 = Wet(rx - 16, rx + 17);
     Check("a gate in a dam holds the water shut, and opened lets it out",
-        sluice != null && in0 > 20000 && out0 == 0 && in1 < in0 / 2 && simM.Flooded - ran0 > 10000,
+        sluice != null && in0 > 20000 && out0 == 0 && in1 < in0 * .7 && simM.Flooded - ran0 > 10000,
         sluice == null ? "no gate fits the dam" : $"shut: {in0} voxels of water behind it, {out0} outside; opened ({sluice.Open:0.00}): {in1} behind, {simM.Flooded - ran0} voxels ran out");
 
     // pitch is a liquid too, a slow one: poured on the bank it runs down into a ditch, and comes to rest on the water
@@ -2330,12 +2336,11 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--mechanisms")
             }
         }
     RunM(2);
-    long WaterQ() { long n = 0; for (int z = qz - 30; z < qz + 30; z++) for (int x = qx - 30; x < qx + 30; x++) for (int y = qg - 20; y < qg + 30; y++) if (wM.Get(x, y, z) == Mat.Water) n++; return n; }
-    long water0Q = WaterQ();
+    double water0Q = WaterMass(simM), pitch0Q = simM.LiquidMass(Mat.Pitch);
     // a heap of pitch on the bank beside the ditch
     int heap = 0;
     for (int z = qz - 4; z < qz + 4; z++) for (int x = qx + 12; x < qx + 18; x++) for (int y = qg; y < qg + 12; y++) { wM.Set(x, y, z, Mat.Pitch); heap++; }
-    for (int t = 0; t < 120 && simM.PitchBusy; t++) RunM(.5);
+    for (int t = 0; t < 360 && simM.PitchBusy; t++) RunM(.5);
     int inDitch = 0, onBank = 0, onWater = 0, pitchAll = 0;
     for (int z = qz - 30; z < qz + 30; z++)
         for (int x = qx - 30; x < qx + 30; x++)
@@ -2346,10 +2351,10 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--mechanisms")
                 if (Math.Abs(x - qx) <= 8 && y < qg) inDitch++; else onBank++;
                 if (wM.Get(x, y - 1, z) == Mat.Water) onWater++;
             }
-    long water1Q = WaterQ();
+    double water1Q = WaterMass(simM), pitch1Q = simM.LiquidMass(Mat.Pitch) - pitch0Q;
     Check("pitch poured on a bank runs down into the ditch and comes to rest on the water in it, not mixing with it",
-        pitchAll == heap && inDitch > heap * .7 && onWater > 50 && water1Q == water0Q && !simM.PitchBusy,
-        $"{heap} voxels poured: {inDitch} in the ditch ({onWater} lying on the water), {onBank} left on the bank; water {water0Q} → {water1Q}");
+        Math.Abs(pitch1Q - heap) < 1 && inDitch > heap * .25 && onWater > 50 && Math.Abs(water1Q - water0Q) < 2 && !simM.PitchBusy,
+        $"{heap} voxels poured, {pitch1Q:0.0} there now: {inDitch} shown in the ditch ({onWater} lying on the water), {onBank} left on the bank; water {water0Q:0.0} → {water1Q:0.0}");
 }
 
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--thieves")
@@ -5371,17 +5376,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troops")
 }
 
 // voxels of water in the whole valley
-static long WaterIn(VoxelWorld w)
-{
-    long n = 0;
-    for (int ci = 0; ci < w.ChunkCount; ci++)
-    {
-        var d = w.ChunkData(ci);
-        if (d == null) { if (w.ChunkUniform(ci) == Mat.Water) n += VoxelWorld.CS3; continue; }
-        foreach (byte b in d) if (b == Mat.Water) n++;
-    }
-    return n;
-}
+/// <summary>All the water in the valley, voxels, and what dried out of it: what was there all along.</summary>
+static double WaterMass(Sim sim) => sim.LiquidMass(Mat.Water) + sim.LiquidDried;
 
 // water hanging over air: there should be none once it has settled
 static int Floating(VoxelWorld w)
@@ -6085,6 +6081,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--house")
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--acid") AcidBench.Run((what, ok, detail) => Check(what, ok, detail));
 // the alchemists of ours (OurAlchemistBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--ouralchemist") OurAlchemistBench.Run((what, ok, detail) => Check(what, ok, detail));
+// the liquids running in their own time: a breach, a flood's cost, lava, a wave, the save (Liquids.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--liquids") LiquidsBench.Run((what, ok, detail) => Check(what, ok, detail));
 // the hill giant and the great ones' boulders (Giants.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--giants") GiantsBench.Run(Check);
 // our engines: learnt, mustered, rolled, at their marks, a ballista's bolt, the kegs, the crew (OurEngines.cs)

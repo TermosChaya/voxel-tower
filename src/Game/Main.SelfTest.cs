@@ -921,6 +921,7 @@ public partial class Main
             $"hidden at first {hiddenAtFirst}, key refused {refused}, stays {stays}, let out {letOut}");
         await AcidSelfTest((what, ok, detail) => Check(what, ok, detail));
         await SelfTestOurAlchemist((what, ok, detail) => Check(what, ok, detail));
+        await LiquidsSelfTest((what, ok, detail) => Check(what, ok, detail));
         await SelfTestGiants(Check);
         await SelfTestTrauma(Check);
         await SelfTestWand(Check);

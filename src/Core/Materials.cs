@@ -128,6 +128,13 @@ public static class Mat
     /// </summary>
     public const byte Trodden = 150, DirtPath = 151, Gravel = 152, Cobble = 153, Flag = 154, Boardwalk = 155;
     /// <summary>
+    /// Lava: rock molten, glowing, thick and slow; it sets alight what burns, burns whoever it touches, and cools to stone
+    /// in a few minutes, at once where it meets water (Sim.Lava.cs). The falling star leaves it in its crater.
+    /// </summary>
+    public const byte Lava = 144;
+    /// <summary>Lava gone cold: black stone, glassy where water quenched it.</summary>
+    public const byte Basalt = 145;
+    /// <summary>
     /// For the figures: a hill giant's skin, weathered ruddy brown or grey as a crag, and the blue it daubs itself with
     /// in stripes.
     /// </summary>
@@ -317,13 +324,17 @@ public static class Mat
         D(Cobble, "Булыжник", 0x6f6a66, .22f, MatGroup.Stone, Player); D(Flag, "Плиты", 0x8d867b, .16f, MatGroup.Stone, Player);
         D(Boardwalk, "Мостки", 0x7a5a37, .16f, MatGroup.Wood, Player);
         foreach (var m in new[] { Trodden, DirtPath, Gravel, Cobble, Flag, Boardwalk }) IsPavement[m] = true;
+        // lava glows of itself, brightest in the cracks of its crust (the voxel shader's skin 10)
+        D(Lava, "Лава", 0xff5a14, .3f, MatGroup.Hard, 0);
+        Emission[Lava] = 2.4f;
+        D(Basalt, "Застывшая лава", 0x2a2624, .2f, MatGroup.Rock, Natural);
         Emission[Phial] = .35f;
         Emission[Window] = Emission[WindowLog] = .45f;
 
         // a number no material has been given yet (kept for one being made elsewhere) is at least something, not nothing
         for (int m = 1; m < Count; m++) if (Def[m].Name == null) D((byte)m, "—", 0x808080, 0, MatGroup.Hard, 0);
         foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage, Flower, Bloom, Birch, NeedleLight, FoliageLight, FoliageGold, PineBark, Snag }) IsVeg[m] = true;
-        foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame, Stakes, Pitch, TowerLadder, Acid, Scaffold }) Passable[m] = true;
+        foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame, Stakes, Pitch, TowerLadder, Acid, Scaffold, Lava }) Passable[m] = true;
         IsLadder[Ladder] = IsLadder[SiegeLadder] = IsLadder[TowerLadder] = IsLadder[Scaffold] = true;
         foreach (var m in new[] { Tuft, Flower, Bloom }) SwayKind[m] = 1;
         foreach (var m in new[] { Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold }) SwayKind[m] = 2;
@@ -334,8 +345,9 @@ public static class Mat
                 : IsLeafy((byte)m) ? (byte)4 : m == Birch ? (byte)6 : IsTrunk((byte)m) ? (byte)5 : m == Scorch ? (byte)8 : (byte)0;
         // acid wet and glossy as pitch is, without ringing like metal when struck
         Skin[Acid] = 2;
+        Skin[Lava] = 10;
         // what holds the world up: loose pieces resting on these never fall
-        foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Scorch, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank, Menhir, Trodden }) IsAnchor[m] = true;
+        foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Scorch, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank, Menhir, Trodden, Basalt }) IsAnchor[m] = true;
 
         // what burns: needles and leaves flare up and are gone in seconds, grass and flowers in a moment; timber
         // catches slowly and burns long, and some of it stands charred after; a living trunk and oak bound with iron

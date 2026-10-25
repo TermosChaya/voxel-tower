@@ -6,7 +6,7 @@ namespace VoxelTower.Core;
 
 /// <summary>
 /// Acid, out of the alchemists' flasks. A flask breaks where it comes down and lets out a splash of it, a dozen voxels
-/// or so, and those it broke on or beside are burnt. Acid is a liquid like water and pitch (Sim.Water.cs): it runs off
+/// or so, and those it broke on or beside are burnt. Acid is a liquid like water and pitch (Sim.Liquids.cs): it runs off
 /// whatever it lands on into the lowest place it can reach, down a wall's face to its foot, into a ditch. Lying there it
 /// eats whatever it touches below it and to its sides, each voxel at its own pace: turf and earth quickly, timber a
 /// little slower, laid stone slowly, a gate of oak bound with iron and iron itself slowest; the citadel's stone and the
@@ -77,18 +77,15 @@ public sealed partial class Sim
         return Mat.Def[m].Group switch { MatGroup.Earth => .3f, MatGroup.Wood => .3f, _ => .35f };
     }
 
-    /// <summary>Every voxel written: the acid in the valley kept count of, and acid let down into where acid went.</summary>
+    /// <summary>Every voxel written: the acid in the valley kept count of.</summary>
     void OnAcidEdit(int x, int y, int z, byte old)
     {
         byte now = World.Get(x, y, z);
         int p = WaterPlanner.Pack(x, y, z);
         if (now == Mat.Acid) { Acids.Add(p); return; }
         if (old != Mat.Acid) return;
+        // spent or lost where it lay: what lay over it or beside it higher up runs into its place as the liquids run
         Acids.Remove(p);
-        // spent or lost where it lay: what lay over it or beside it higher up runs into its place
-        if (now != Mat.Air || _acid.Pouring) return;
-        foreach (var (dx, dy, dz) in Inflow)
-            if (World.Get(x + dx, y + dy, z + dz) == Mat.Acid) { _acid.Events.Add((x, y, z, 0)); return; }
     }
 
     /// <summary>Acid at work, four times a second: eating, spent, thinned, lost in water; and the people in it and about it.</summary>
@@ -109,7 +106,6 @@ public sealed partial class Sim
             // water beside it or under it takes it up
             if (Wet(x, y, z)) { World.Set(x, y, z, Mat.Air); AcidDiluted++; Dissolved?.Invoke(x, y, z, Mat.Water); continue; }
             if (rain && World.ColTop(x, z) <= y + 1 && Rng.NextDouble() < step / AcidRain) { World.Set(x, y, z, Mat.Air); continue; }
-            if (Spill(x, y, z, step)) continue;
             // it eats all it touches below and to the sides at once, each at its own pace
             bool ate = false, spent = false;
             foreach (var (dx, dy, dz) in Touching)
@@ -146,30 +142,6 @@ public sealed partial class Sim
     }
 
     static readonly (int dx, int dz)[] SpillWays = { (1, 0), (0, 1), (-1, 0), (0, -1) };
-
-    /// <summary>
-    /// Acid is thin: lying on something, it runs on over the edge of it where there is a drop beside it (down a wall's face,
-    /// into a ditch), and a puddle of it spreads out a little at a time. A drop is found at once; the spreading is slow.
-    /// </summary>
-    bool Spill(int x, int y, int z, float step)
-    {
-        byte under = World.Get(x, y - 1, z);
-        if (under == Mat.Air || under == Mat.Acid) return false;
-        bool puddle = World.Get(x + 1, y, z) == Mat.Acid || World.Get(x - 1, y, z) == Mat.Acid || World.Get(x, y, z + 1) == Mat.Acid || World.Get(x, y, z - 1) == Mat.Acid;
-        bool spread = puddle && Rng.NextDouble() < step * .8f;
-        int pick = Rng.Next(4);
-        for (int k = 0; k < 4; k++)
-        {
-            var (dx, dz) = SpillWays[(k + pick) & 3];
-            int nx = x + dx, nz = z + dz;
-            if (!World.InBounds(nx, y, nz) || World.Get(nx, y, nz) != Mat.Air) continue;
-            if (World.Get(nx, y - 1, nz) != Mat.Air && !spread) continue;
-            World.Set(x, y, z, Mat.Air);
-            World.Set(nx, Trickle(nx, y, nz), nz, Mat.Acid);
-            return true;
-        }
-        return false;
-    }
 
     /// <summary>
     /// Acid running down from here, beside whatever face is there, to the first thing under it: it eats a little into
@@ -436,7 +408,7 @@ public sealed partial class Sim
             var (x, y, z) = WaterPlanner.Unpack(p);
             if (World.Get(x, y, z) != Mat.Acid) continue;
             Acids.Add(p);
-            _acid.Events.Add((x, y, z, 0));
+            Due(x, y, z);
         }
         for (int i = r.ReadInt32(); i > 0; i--) { int p = r.ReadInt32(); Etched[p] = r.ReadSingle(); }
         FlasksBroken = r.ReadInt32(); AcidAte = r.ReadInt32(); AcidDiluted = r.ReadInt32();

@@ -242,7 +242,7 @@ public sealed class NavGrid
                             }
                         }
                         // pitch and acid are waded and drowned in like water
-                        else if (v == Mat.Water || v == Mat.Pitch || v == Mat.Acid) wat++;
+                        else if (v == Mat.Water || v == Mat.Pitch || v == Mat.Acid || v == Mat.Lava) wat++;
                         else if (Mat.IsLadder[v]) lad++;
                         else if (v == Mat.Stakes) spk++;
                     }

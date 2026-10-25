@@ -546,6 +546,8 @@ public sealed class Unit
     /// </summary>
     public double StruckAt = -99, PinnedSince, DugAt;
     public float PinKg, FreeEffort;
+    /// <summary>Gone under deep water weighed down by its armour, since when (-1 not under): it drowns (Sim.Flood.cs).</summary>
+    public double UnderSince = -1;
     public Unit Digger, Freeing;
     public double NextLookForPinned;
     /// <summary>Whose wound it is binding, and who is binding its own; how far along it is.</summary>

@@ -254,14 +254,12 @@ public partial class Main : Node3D
         if (_demo && _pose == "traps") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
         if (_demo && _pose == "square") SquareGround();
         if (_trailer >= 0) TrailerGround();
-        if (_demo && _pose is "blast" or "grip" or "wind" or "hexes" or "sorcerers" or "wonders" or "fp" or "powder" or "charge" or "stones" or "topple" or "roll" or "crush" or "drops" or "troops") ClearTrees(Site.KeepX - Site.KeepR - 300, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 140);
+        if (_demo && _pose is "blast" or "grip" or "wind" or "hexes" or "sorcerers" or "wonders" or "fp" or "powder" or "charge" or "stones" or "topple" or "roll" or "crush" or "drops" or "troops" or "wave" or "lava") ClearTrees(Site.KeepX - Site.KeepR - 300, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 140);
         World.Compact();
         save?.Valley(World, Site);
         double genMs = sw.Elapsed.TotalMilliseconds;
         sw.Restart();
         Sim = new Sim(World, Site);
-        // in play, where water goes is worked out off the main thread; scripted runs want it at once
-        Sim.WaterInBackground = !_selfTest && !_demo && _shot == null;
         // a new game finds a fort half raised round the citadel; scripted runs set up their own scenes
         string extra = null;
         if (save != null)
@@ -336,6 +334,9 @@ public partial class Main : Node3D
         Tunnels = new TunnelView();
         AddChild(Tunnels);
         Tunnels.Init(this);
+        var lava = new LavaView();
+        AddChild(lava);
+        lava.Init(this);
         Magic = new MagicView();
         AddChild(Magic);
         Magic.Init(this);
@@ -519,9 +520,8 @@ public partial class Main : Node3D
     /// </summary>
     async void Perf(double seconds)
     {
-        // not held to the screen's refresh: as fast as it can be drawn; water worked out off the main thread, as in play
+        // not held to the screen's refresh: as fast as it can be drawn
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
-        Sim.WaterInBackground = true;
         Engine.MaxFps = 0;
         foreach (string part in _perfWithout)
             switch (part)

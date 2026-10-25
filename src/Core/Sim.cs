@@ -303,6 +303,8 @@ public sealed partial class Sim
         {
             // buried by what came down on it just now
             if (!Nav.Deep(u.Cell) && Time - u.StruckAt < 2 && TryPin(u)) return;
+            // weighed down by its armour, it goes under and does not come up (Sim.Flood.cs)
+            if (Nav.Fill[u.Cell] < NavGrid.SolidT && Sinks(u)) return;
             // walled in (a gate shut on it), or the water rose over it: out to the nearest free footing about where it
             // stands, beside it — not up on top of the wall that shut it in
             int c = StandNear((int)u.X, (int)u.Y, (int)u.Z, h);

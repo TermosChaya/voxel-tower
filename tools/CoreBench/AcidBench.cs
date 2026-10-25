@@ -88,6 +88,7 @@ static class AcidBench
         // (in a pit, so that the acid does not run off downhill)
         int qx = kx - 330, qz = kz + 260, qg = w.SurfAt(qx, qz);
         for (int z = qz - 5; z <= qz + 5; z++) for (int x = qx - 5; x <= qx + 5; x++) for (int y = qg - 3; y < w.ColTop(x, z); y++) w.Set(x, y, z, Mat.Air);
+        Run(1);
         var worker = Camp(Kinds.Worker, qx, qz);
         worker.Hp = worker.MaxHp = 5000;
         int coughs = 0; sim.Coughed += u => { if (u == worker) coughs++; };

@@ -62,7 +62,7 @@ public static class Bindings
         D(Act.ToolUnmark, Brushes, "Снять разметку", "Снять разметку рамкой или щелчком.", Key.Key6),
         D(Act.ToolLadder, Brushes, "Лестница", "Лестница на стену или обрыв.", Key.Key7),
         D(Act.ToolGather, Brushes, "Делянка", "Участок, где рабочие сами добывают камень, лес или землю. Также убежище, святилище, жилой дом.", Key.Key8),
-        D(Act.ToolGate, Brushes, "Ворота", "Проём со створками в стене.", Key.Key9),
+        D(Act.ToolGate, Brushes, "Ворота", "Проём со створками в стене. В стене пруда это затвор: открытый, он выпускает воду волной.", Key.Key9),
         D(Act.ToolRepair, Brushes, "Починка", "Восстановить разрушенную постройку.", Key.Key0),
         D(Act.ToolBridge, Brushes, "Мост", "Мост от берега до берега, арочный или подъёмный.", Key.M),
         D(Act.ToolCapture, Brushes, "Снять чертёж", "Сохранить постройку как чертёж.", Key.B),
