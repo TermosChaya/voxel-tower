@@ -117,7 +117,7 @@ public sealed partial class Sim
         foreach (double t in _spellReady) w.Write(t);
         w.Write(Mires.Count); foreach (var m in Mires) { w.Write(m.X); w.Write(m.Z); w.Write(m.R); w.Write(m.Until); }
         w.Write(BloodMoonUntil); w.Write(EyeUntil);
-        w.Write(Curses.Count); foreach (var c in Curses) { w.Write(c.X); w.Write(c.Y); w.Write(c.Z); w.Write(c.R); w.Write(c.Until); }
+        w.Write(Curses.Count); foreach (var c in Curses) { w.Write(c.X); w.Write(c.Y); w.Write(c.Z); w.Write(c.R); w.Write(c.Until); w.Write(c.Power); w.Write(c.Stone); }
         foreach (var list in new[] { Skins, DeadFogs })
         {
             w.Write(list.Count);
@@ -225,7 +225,7 @@ public sealed partial class Sim
         w.Write(u.TakeAlive); w.Write(u.Bound); w.Write(u.BoundAt); w.Write(u.Unguarded); w.Write(u.ChainedUntil); w.Write(u.CrumbleAt);
         w.Write(u.PlagueUntil); w.Write(u.OathUntil); w.Write(u.NextHeal); w.Write(u.NextCurse); w.Write(u.Charge);
         w.Write(u.Champion); w.Write(u.Title ?? "");
-        w.Write(u.Lord?.Id ?? -1); w.Write(u.CryReady); w.Write(u.SlamReady); w.Write(u.Abandoned);
+        w.Write(u.Lord?.Id ?? -1); w.Write(u.CryReady); w.Write(u.SlamReady); w.Write(u.Abandoned); w.Write(u.Lurking);
         // a sacrifice under way
         w.Write(u.Rite != null);
         if (u.Rite is { } rite)
@@ -279,6 +279,7 @@ public sealed partial class Sim
         w.Write(b.LostLeader); w.Write(b.Broken); w.Write(b.HX); w.Write(b.HZ);
         w.Write(b.History.Count); foreach (var s in b.History) w.Write((byte)s);
         w.Write(b.Lord?.Id ?? -1); w.Write(b.LordsOwn); w.Write(b.Spirit); w.Write(b.Wavered); w.Write(b.Taken);
+        w.Write(b.Lurk); w.Write(b.LurkCell);
     }
 
     /// <summary>Every warlord anything in the valley points at: in it, at the head of a band, still to come, got away.</summary>
@@ -437,7 +438,7 @@ public sealed partial class Sim
         for (int i = r.ReadInt32(); i > 0; i--) Mires.Add(new Mire { X = r.ReadSingle(), Z = r.ReadSingle(), R = r.ReadSingle(), Until = r.ReadDouble() });
         BloodMoonUntil = r.ReadDouble(); EyeUntil = r.ReadDouble();
         Curses.Clear();
-        for (int i = r.ReadInt32(); i > 0; i--) Curses.Add(new Curse { X = r.ReadSingle(), Y = r.ReadSingle(), Z = r.ReadSingle(), R = r.ReadSingle(), Until = r.ReadDouble() });
+        for (int i = r.ReadInt32(); i > 0; i--) Curses.Add(new Curse { X = r.ReadSingle(), Y = r.ReadSingle(), Z = r.ReadSingle(), R = r.ReadSingle(), Until = r.ReadDouble(), Power = r.ReadSingle(), Stone = r.ReadBoolean() });
         foreach (var list in new[] { Skins, DeadFogs })
         {
             list.Clear();
@@ -553,7 +554,7 @@ public sealed partial class Sim
         u.TakeAlive = r.ReadBoolean(); u.Bound = r.ReadBoolean(); u.BoundAt = r.ReadDouble(); u.Unguarded = r.ReadDouble(); u.ChainedUntil = r.ReadDouble(); u.CrumbleAt = r.ReadDouble();
         u.PlagueUntil = r.ReadDouble(); u.OathUntil = r.ReadDouble(); u.NextHeal = r.ReadDouble(); u.NextCurse = r.ReadDouble(); u.Charge = r.ReadBoolean();
         u.Champion = r.ReadByte(); u.Title = r.ReadString(); if (u.Title.Length == 0) u.Title = null;
-        u.Lord = LordById(r.ReadInt32()); u.CryReady = r.ReadDouble(); u.SlamReady = r.ReadDouble(); u.Abandoned = r.ReadBoolean();
+        u.Lord = LordById(r.ReadInt32()); u.CryReady = r.ReadDouble(); u.SlamReady = r.ReadDouble(); u.Abandoned = r.ReadBoolean(); u.Lurking = r.ReadBoolean();
         if (r.ReadBoolean())
         {
             var rite = new Rite { Kind = (RiteKind)r.ReadByte() };
@@ -646,6 +647,7 @@ public sealed partial class Sim
         n = r.ReadInt32();
         for (int i = 0; i < n; i++) b.History.Add((BandState)r.ReadByte());
         b.Lord = LordById(r.ReadInt32()); b.LordsOwn = r.ReadBoolean(); b.Spirit = r.ReadSingle(); b.Wavered = r.ReadBoolean(); b.Taken = r.ReadInt32();
+        b.Lurk = r.ReadBoolean(); b.LurkCell = r.ReadInt32();
         b.TrailRev = -1;
         return b;
     }

@@ -667,6 +667,8 @@ public partial class UnitView : Node3D
         // up on a comrade's shoulder: laid across it, not lying down (UnitView.Carry.cs)
         bool borne = f.Jointed && Sim.OnShoulder(u);
         if (borne) fall = 0;
+        // lying in wait: low in the grass, the top of the head over it (Sim.Ambush.cs)
+        if (u.Lurking && !u.Dead) sink += u.T.BodyH * .62f;
         var at = new Vector3(_w.WX(u.X), _w.WY(u.Y + bob - sink), _w.WZ(u.Z));
         // a leader stands a little taller than its kind
         var root = new Transform3D(new Basis(Vector3.Up, MathF.PI / 2 - look.Face).Scaled(Vector3.One * VoxelWorld.Vox * (u.Leader ? 1.15f : 1)), at);
@@ -1441,13 +1443,13 @@ public partial class UnitView : Node3D
     {
         var mm = _standards.Multimesh;
         int n = 0;
-        foreach (var u in sim.Units) if ((u.Leader || u.Envoy) && !u.Dead) n += 3;
+        foreach (var u in sim.Units) if ((u.Leader || u.Envoy) && !u.Dead && !u.Lurking) n += 3;
         if (n == 0) { mm.VisibleInstanceCount = 0; return; }
         if (mm.InstanceCount < n) { mm.InstanceCount = Math.Max(24, n * 2); _standardBuf = new float[mm.InstanceCount * 16]; }
         int i = 0;
         foreach (var u in sim.Units)
         {
-            if (!(u.Leader || u.Envoy) || u.Dead || !_looks.TryGetValue(u.Id, out var look)) continue;
+            if (!(u.Leader || u.Envoy) || u.Dead || u.Lurking || !_looks.TryGetValue(u.Id, out var look)) continue;
             float h = u.T.BodyH, back = -(u.T.BodyR + .6f), sway = MathF.Sin((float)_t * 2.1f + u.Id) * .25f;
             var b = look.Body;
             Box(ref i, b, new Vector3(0, h * .78f, back), new Vector3(.9f, h * 1.05f, .9f), 0, Pole);

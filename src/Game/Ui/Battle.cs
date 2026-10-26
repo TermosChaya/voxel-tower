@@ -14,8 +14,11 @@ public partial class LordBar : Control
     Main _m;
     Unit _lord;
     public const float W = 340, H = 44;
-    /// <summary>The warlord shown, by name.</summary>
+    /// <summary>The warlord shown, by name; and the line over his bars.</summary>
     public string Who => _lord?.Lord?.Name;
+    public string Line => _lord?.Lord is { } l ? Name(l) : null;
+
+    string Name(Warlord l) => $"{l.Name} · {l.Title} · ур. {l.Level}" + (_lord.Routed ? " · уходит" : "");
 
     public void Init(Main m)
     {
@@ -57,8 +60,15 @@ public partial class LordBar : Control
         if (!due) return;
         var l = lord.Lord;
         float spirit = Spirit(_m.Sim, l, out bool broken);
-        TooltipText = $"Военачальник {l.Name}, уровень {l.Level}\nВедёт войско орды. Рядом с ним налётчики терпят больше боли. Клич снимает им боль и возвращает бежавших, " +
-            "удар оземь раскидывает тех, кто рядом. Убейте его или возьмите в плен, и войско побежит.\nДух войска: " +
+        string gift = l.Gift switch
+        {
+            LordGift.Boulders => "мечет валуны в стены и в людей на них",
+            LordGift.Curse => "проклинает кладку стен, и она ломается втрое быстрее",
+            LordGift.Ambush => "прячет одну ватагу в засаде в траве",
+            _ => "удар оземь раскидывает тех, кто рядом",
+        };
+        TooltipText = $"{Cap(l.Title)} {l.Name}, уровень {l.Level}\nВедёт войско орды. Рядом с ним налётчики терпят больше боли. Клич снимает им боль и возвращает бежавших, " +
+            $"{gift}. Убейте его или возьмите в плен, и войско побежит.\nДух войска: " +
             (broken ? "войско бежит." : $"{spirit * 100:0} %. Падает от потерь, огня, взрывов и полётов, при 20 % ватага бежит.") + "\nЩелчок: показать его.";
         QueueRedraw();
     }
@@ -69,7 +79,7 @@ public partial class LordBar : Control
         var r = new Rect2(Vector2.Zero, Size);
         Ornament.Plate(this, r, .92f);
         float spirit = Spirit(_m.Sim, l, out bool broken);
-        string name = $"{l.Name} · военачальник · ур. {l.Level}" + (_lord.Routed ? " · уходит" : "");
+        string name = Name(l);
         Ornament.Lettering(this, Ornament.SerifBold, new Vector2(12, 17), name, 13, Ornament.Parchment);
         // his health, and his army's spirit under it
         float x0 = 12, w = Size.X - 24;
@@ -79,6 +89,8 @@ public partial class LordBar : Control
         float bx = x0 + w * Sim.BreakSpirit;
         DrawLine(new Vector2(bx, 31), new Vector2(bx, 39), Ornament.Faded, 1);
     }
+
+    static string Cap(string s) => s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s[1..];
 
     void Bar(Rect2 r, float f, Color c)
     {
@@ -119,7 +131,7 @@ public static class BattleLines
             ours == 0 ? "Наши: потерь нет." : $"Наши: пало {ours} ({Kinds(r.OursFell)}).",
         };
         if (r.Lord != null)
-            lines.Add($"Военачальник {r.Lord}, уровень {r.LordLevel}: " + r.LordFate switch
+            lines.Add($"{(r.LordTitle is { Length: > 0 } t ? char.ToUpperInvariant(t[0]) + t[1..] : "Военачальник")} {r.Lord}, уровень {r.LordLevel}: " + r.LordFate switch
             {
                 LordFate.Fell => "пал.",
                 LordFate.Taken => "взят в плен.",

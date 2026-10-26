@@ -40,7 +40,7 @@ public sealed partial class Sim
     /// <summary>Called as a boulder is let go: where, and how many voxels it is (for the sound of the heave).</summary>
     public event Action<float, float, float, int> Heaved;
 
-    static bool IsBoulder(Flier f) => f.Cause is HurledCause or BoulderCause || OurStone(f.Cause);
+    static bool IsBoulder(Flier f) => f.Cause is HurledCause or BoulderCause or LordStoneCause || OurStone(f.Cause);
 
     /// <summary>Whether one is at a throw: the stone in its hands, or just let go and the arms coming down.</summary>
     public bool Hurling(Unit u) => u.Hefted != null || Time - u.HurlFrom < HurlDone;
@@ -527,6 +527,8 @@ public sealed partial class Sim
                     if (!groundOnly && natural && dx * dx + dy * dy + dz * dz > f.R * f.R) continue;
                     float cost = BreakCost(m, spareOurs);
                     if (cost <= 0) continue;
+                    // stone under a warlord's curse breaks the easier
+                    if (Curses.Count > 0) cost /= CurseBlow(x, y, z);
                     cand.Add((MathF.Sqrt(l2) + MathF.Max(0, along) * .45f, x, y, z, cost));
                 }
         cand.Sort((a, b) => a.key.CompareTo(b.key));
@@ -556,6 +558,8 @@ public sealed partial class Sim
         int ourBroke = 0;
         foreach (var (x, y, z) in broke) if (Mat.IsPlayer[World.Get(x, y, z)]) ourBroke++;
         if (f.Cause == HurledCause) GiantBroke += ourBroke;
+        if (f.Cause == LordStoneCause) LordStoneBroke += ourBroke;
+        if (f.Cause is HurledCause or LordStoneCause) BattleBroke(ourBroke, f.By);
         Fly(broke, ix, iy, iz, ux, uy, uz, MathF.Sqrt(left / MathF.Max(1, kj)), ChipsCause);
         if (ourBroke >= 60 && Time - _giantWallSaid > 40 && f.Cause == HurledCause)
         {

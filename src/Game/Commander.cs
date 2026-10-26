@@ -180,7 +180,8 @@ public partial class Commander : Node
         float pxPerVox = PixelsPerVoxel();
         foreach (var u in _m.Sim.Units)
         {
-            if (u.Dead || u.Inside) continue;
+            // (one lying in wait in the grass is not seen)
+            if (u.Dead || u.Inside || u.Lurking) continue;
             var a = Screen(u, 0); var b = Screen(u, 1);
             float rad = Math.Max(10, (u.T.BodyR + 3) * pxPerVox);
             float d = DistToSegment(p, a, b) - rad;

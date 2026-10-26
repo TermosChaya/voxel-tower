@@ -82,7 +82,7 @@ public sealed partial class Sim
         int mark = -1;
         foreach (var o in Units)
         {
-            if (o.Dead || o.Team != Team.Horde || o.Inside || o.Bound || o.Envoy || o.Airborne != null) continue;
+            if (o.Dead || o.Team != Team.Horde || o.Inside || o.Bound || o.Envoy || o.Lurking || o.Airborne != null) continue;
             float d = Dist(u, o);
             if (d > far) continue;
             int spot = -1;

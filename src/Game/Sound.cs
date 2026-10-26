@@ -129,6 +129,8 @@ public partial class Sound : Node
         // a warlord's cry, a horn lower and longer than ours; his blow to the ground, a thud and what it shakes loose
         sim.LordCried += u => Play("horn", u.X, u.Y + u.T.BodyH, u.Z, .5, 1.2f, far: true, pitch: .62f);
         sim.LordSlammed += u => { Play("stomp", u.X, u.Y, u.Z, .1, 1.2f, pitch: .7f); Play("crash", u.X, u.Y, u.Z, .1, .6f, pitch: .8f); };
+        // an ambush rising out of the grass: a rush through it and a horn, short and high
+        sim.AmbushSprung += u => { Play("swish", u.X, u.Y, u.Z, .1, 1.1f, pitch: .7f); Play("horn", u.X, u.Y + u.T.BodyH, u.Z, .5, .9f, pitch: 1.1f); };
         sim.Healed += (x, y, z) => Play("hex", x, y, z, .6, .5f);
         sim.Hexed += (x, y, z) => Play("hex", x, y, z, .6, 1);
         sim.Darkened += (x, y, z) => Play("hex", x, y, z, .6, .9f);

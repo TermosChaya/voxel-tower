@@ -83,7 +83,7 @@ public sealed partial class Sim
         foreach (var o in Units)
         {
             // one bound and led off is in no fight, nor one lying bound, nor an envoy under a white rag
-            if (o.Dead || o.Inside || o.Captor != null || o.Bound || o.Envoy || o.Team != team) continue;
+            if (o.Dead || o.Inside || o.Captor != null || o.Bound || o.Envoy || o.Lurking || o.Team != team) continue;
             float d = Dist(u, o);
             // one down is out of the fight: it is passed over while any of its side still stand near
             if (o.Down) { if (d < dd) { dd = d; down = o; } continue; }
@@ -102,7 +102,7 @@ public sealed partial class Sim
         Unit best = null, down = null; float bd = maxDist, dd = maxDist;
         foreach (var o in Units)
         {
-            if (o.Dead || o.Inside || o.Captor != null || o.Bound || o.Envoy || o.Team != Team.Horde || o.Abandoned) continue;
+            if (o.Dead || o.Inside || o.Captor != null || o.Bound || o.Envoy || o.Lurking || o.Team != Team.Horde || o.Abandoned) continue;
             float d = Dist(u, o);
             if (d >= maxDist) continue;
             if (o.Down) { if (d < dd) { dd = d; down = o; } continue; }
@@ -339,7 +339,7 @@ public sealed partial class Sim
             var (px, py, pz) = Nav.Feet(u.Post);
             foreach (var o in Units)
             {
-                if (o.Dead || o.Team != Team.Horde || o.Bound || o.Inside || o.Envoy) continue;
+                if (o.Dead || o.Team != Team.Horde || o.Bound || o.Inside || o.Envoy || o.Lurking) continue;
                 float dx = o.X - px, dz = o.Z - pz;
                 if (dx * dx + dz * dz < leash * leash) { foe = o; break; }
             }
@@ -439,7 +439,7 @@ public sealed partial class Sim
         Unit best = null; float bd = float.MaxValue;
         foreach (var o in Units)
         {
-            if (o.Dead || o.Team != Team.Horde || o.Envoy || o.Bound || o.Inside) continue;
+            if (o.Dead || o.Team != Team.Horde || o.Envoy || o.Lurking || o.Bound || o.Inside) continue;
             float d = Dist(u, o);
             if (d > RangeAt(u, o.X, o.Z)) continue;
             // a pot is not thrown where one of ours is by the raider

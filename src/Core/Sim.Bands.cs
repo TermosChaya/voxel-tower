@@ -3,8 +3,8 @@ using System.Collections.Generic;
 
 namespace VoxelTower.Core;
 
-/// <summary>How far a warband has got: still to come, gathering where it came in, on the march, regrouping before the walls, storming.</summary>
-public enum BandState : byte { Coming, Forming, March, Rally, Storm }
+/// <summary>How far a warband has got: still to come, gathering where it came in, on the march, regrouping before the walls, storming, lying in wait.</summary>
+public enum BandState : byte { Coming, Forming, March, Rally, Storm, Lurk }
 
 /// <summary>
 /// A warband of the horde: a leader and those who follow it. It comes into the valley at one place and gathers there,
@@ -60,6 +60,10 @@ public sealed class Warband
     /// <summary>The warlord whose army it is, or null; and whether he leads this band of it himself.</summary>
     public Warlord Lord;
     public bool LordsOwn;
+    /// <summary>Told off by a goblin warlord to lie in wait (Sim.Ambush.cs), and where; when it last rose on ours.</summary>
+    public bool Lurk;
+    public int LurkCell = -1;
+    internal double SprungAt = -99;
     /// <summary>When its spirit was last shaken.</summary>
     internal double ShakenAt = -99;
     /// <summary>
@@ -480,17 +484,29 @@ public sealed partial class Sim
                 {
                     bool all = b.Spawned >= b.Size, near = true;
                     foreach (var u in b.Members) if (!u.Dead && CellsApart(u.Cell, l.Cell) > 5) near = false;
-                    if (all && (near || Time - b.Since > 8) || Time - b.Since > 20) Enter(b, BandState.March);
+                    if (all && (near || Time - b.Since > 8) || Time - b.Since > 20)
+                    {
+                        // one told off to lie in wait sets out for its hiding place
+                        if (b.Lurk) SetOutToLurk(b);
+                        Enter(b, BandState.March);
+                    }
                     break;
                 }
                 case BandState.March:
                 {
-                    // where the chief sent it, or short of the walls: stop and gather; a band after a mine just goes
+                    // where the chief sent it, or short of the walls: stop and gather; a band after a mine just goes;
+                    // one sent to lie in wait lies down where it was sent
                     float dx = l.X - Site.KeepX, dz = l.Z - Site.KeepZ;
                     bool there = b.RallyCell >= 0 ? CellsApart(l.Cell, b.RallyCell) <= 3 : dx * dx + dz * dz < RallyR * RallyR;
-                    if (b.Target == null && there) Enter(b, BandState.Rally);
+                    if (b.Lurk && b.LurkCell >= 0 && b.RallyCell == b.LurkCell && there) Enter(b, BandState.Lurk);
+                    else if (b.Target == null && there && !b.Lurk) Enter(b, BandState.Rally);
+                    // lost its way to its hiding place: it goes for the walls as the rest
+                    else if (b.Lurk && b.RallyCell < 0) b.Lurk = false;
                     break;
                 }
+                case BandState.Lurk:
+                    AmbushTick(b);
+                    break;
                 case BandState.Rally:
                 {
                     int alive = 0, near = 0;
@@ -559,8 +575,9 @@ public sealed partial class Sim
                 return true;
             }
             case BandState.Rally:
+            case BandState.Lurk:
             {
-                // all close round the leader, each in its place, then all at once
+                // all close round the leader, each in its place, then all at once (or down in the grass)
                 if (u != l && Apart(u, l) > CaughtUp * NavGrid.CS) return CatchUp(u, l, dt);
                 if (u != l && KeepPlace(u, b, l, dt, still: true)) return true;
                 u.State = UnitState.Idle;

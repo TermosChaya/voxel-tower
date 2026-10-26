@@ -543,6 +543,55 @@ public sealed partial class Sim
         // a new word takes back one to go out of the valley
         foreach (var u in group) u.LeaveBy = -1;
         var (spots, lanes) = Formation(group, target);
+        return Send(group, spots, lanes, stay);
+    }
+
+    /// <summary>
+    /// Sends soldiers to stand in a line across a way at a point (voxels), facing along it (a unit vector): so many
+    /// abreast, the shields in the front rank, then the spears, the rest after, the ranks behind one another; each to a
+    /// place of its own, the ones on the left to the left.
+    /// </summary>
+    public int CommandAcross(IEnumerable<Unit> units, float x, float z, float fx, float fz, int cols)
+    {
+        var group = new List<Unit>();
+        foreach (var u in units) if (!u.Dead && u.Team == Team.Player) group.Add(u);
+        int n = group.Count, target = NearestStand((int)x, (int)z, 2);
+        if (n == 0 || target < 0) return 0;
+        cols = Math.Clamp(cols, 1, n);
+        float rx = -fz, rz = fx;
+        var order = new List<int>();
+        for (int i = 0; i < n; i++) order.Add(i);
+        float Near(Unit u) => (u.X - x) * (u.X - x) + (u.Z - z) * (u.Z - z);
+        order.Sort((a, b) => FrontRank(group[a].T) != FrontRank(group[b].T) ? FrontRank(group[a].T).CompareTo(FrontRank(group[b].T)) : Near(group[a]).CompareTo(Near(group[b])));
+        var spots = new int[n];
+        var lanes = new Func<int, float>[n];
+        var taken = new HashSet<int>();
+        int level = Nav.Y(target);
+        for (int from = 0; from < n; from += cols)
+        {
+            var rank = order.GetRange(from, Math.Min(cols, n - from));
+            rank.Sort((a, b) => ((group[a].X - x) * rx + (group[a].Z - z) * rz).CompareTo((group[b].X - x) * rx + (group[b].Z - z) * rz));
+            float back = from / cols * FileGap;
+            for (int k = 0; k < rank.Count; k++)
+            {
+                var u = group[rank[k]];
+                float side = (k - (rank.Count - 1) / 2f) * FileGap;
+                int spot = PlaceNear(x + rx * side - fx * back, z + rz * side - fz * back, level, u.T.Move.Height, taken);
+                if (spot < 0) spot = Spread(target, taken.Count, u.T.Move.Height);
+                spots[rank[k]] = spot;
+                taken.Add(spot);
+            }
+        }
+        return Send(group, spots, lanes, stay: true);
+    }
+
+    /// <summary>Which rank of a line one stands in by its kind: the shields first, then the spears and halberds, then swords, then the rest.</summary>
+    static int FrontRank(UnitType t) =>
+        t == Kinds.Shieldbearer ? 0 : t == Kinds.Spearman || t == Kinds.Halberdier ? 1 : t == Kinds.Swordsman || t == Kinds.Knight ? 2 : 3;
+
+    /// <summary>A group sent each to its place, each kept to its line on the way (or none).</summary>
+    int Send(List<Unit> group, int[] spots, Func<int, float>[] lanes, bool stay)
+    {
         int ok = 0;
         for (int n = 0; n < group.Count; n++)
         {

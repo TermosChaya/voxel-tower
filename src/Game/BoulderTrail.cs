@@ -22,7 +22,7 @@ public partial class BoulderTrail : Node
         _next = now + .07;
         foreach (var f in _m.Sim.Fliers)
         {
-            if (f.Carrier != null || f.Unit != null || f.Voxels.Count == 0 || f.Cause is not (Sim.HurledCause or Sim.BoulderCause)) continue;
+            if (f.Carrier != null || f.Unit != null || f.Voxels.Count == 0 || f.Cause is not (Sim.HurledCause or Sim.BoulderCause or Sim.LordStoneCause)) continue;
             if (f.VX * f.VX + f.VY * f.VY + f.VZ * f.VZ < 25 * VoxelWorld.PerMetre * VoxelWorld.PerMetre) continue;
             var v = f.Voxels[(int)(now * 7) % f.Voxels.Count];
             _m.Debris.Spawn(v.m == Mat.Air ? Mat.Soil : v.m, (int)f.X, (int)f.Y, (int)f.Z, 1, .25f, .8f);

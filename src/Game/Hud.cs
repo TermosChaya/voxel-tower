@@ -653,6 +653,7 @@ public partial class Hud : CanvasLayer
     public string HordeSaid => _horde.Said;
     public void CloseDawn() => _dawn.Close();
     public string LordShown => _lordBar.Visible ? _lordBar.Who : null;
+    public string LordLine => _lordBar.Visible ? _lordBar.Line : null;
     VBoxContainer _errands;
     Label _errandsHead, _goalsHead;
 

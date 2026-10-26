@@ -265,7 +265,7 @@ public sealed partial class Sim
         float fx = MathF.Cos(LookYaw), fz = MathF.Sin(LookYaw);
         foreach (var t in Units)
         {
-            if (t.Dead || t.Inside || t.Team == Team.Player || t.Bound || t.Envoy) continue;
+            if (t.Dead || t.Inside || t.Team == Team.Player || t.Bound || t.Envoy || t.Lurking) continue;
             float dx = t.X - u.X, dz = t.Z - u.Z, d = MathF.Sqrt(dx * dx + dz * dz);
             if (d > ReachOf(u) + t.T.BodyR + 2 || MathF.Abs(t.Y - u.Y) > Math.Max(u.T.BodyH, t.T.BodyH)) continue;
             float ahead = d < .5f ? 1 : (dx * fx + dz * fz) / d;

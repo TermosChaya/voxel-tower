@@ -175,7 +175,7 @@ public sealed partial class Sim
         float bd = 24 * VoxelWorld.PerMetre;
         foreach (var o in Units)
         {
-            if (o.Dead || o.Team != Team.Horde || o.Inside || o.Bound || o.Envoy || o.Airborne != null) continue;
+            if (o.Dead || o.Team != Team.Horde || o.Inside || o.Bound || o.Envoy || o.Lurking || o.Airborne != null) continue;
             float d = Dist(u, o);
             if (d >= bd || d < ReachOf(u) + o.T.BodyR + 2 * VoxelWorld.PerMetre || !Sight(u, o)) continue;
             bd = d; at = o;

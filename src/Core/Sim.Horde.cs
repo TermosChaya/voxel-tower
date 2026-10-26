@@ -110,14 +110,16 @@ public sealed partial class Sim
         if (u.Bound) { BoundTick(u, dt); return; }
         // held fast in a spell's chains: it neither goes nor strikes
         if (Time < u.ChainedUntil) { u.State = UnitState.Idle; u.Path = null; return; }
+        // lying in wait in the grass: still till the band rises (Sim.Ambush.cs)
+        if (u.Lurking) { u.State = UnitState.Idle; u.Path = null; return; }
         // a bone thrall's minute is up
         if (u.T == Kinds.Thrall && Time >= u.CrumbleAt) { Kill(u, null, "рассыпался"); return; }
         // a sorcerer's spells, cast as it goes
         if (u.T == Kinds.Shaman && !u.Routed) ShamanTick(u);
         else if (u.T == Kinds.Witch && !u.Routed) WitchTick(u);
         else if (u.T == Kinds.Necromancer && !u.Routed) NecromancerTick(u, dt);
-        // a warlord: off the field when badly hurt, his cry, his blow to the ground (Sim.Warlords.cs)
-        if (u.Lord != null) LordTick(u);
+        // a warlord: off the field when badly hurt, his cry, what his kind does besides (Sim.Warlords.cs)
+        if (u.Lord != null && LordTick(u)) return;
         // an alchemist stops out of reach and throws its flasks while it has a mark and flasks to throw
         if (u.T == Kinds.Alchemist && !u.Routed && AlchemistTick(u, dt)) return;
         // hurt to a quarter of itself, a raider has had enough (a leader leads to the end, a guard keeps its camp)
@@ -155,6 +157,8 @@ public sealed partial class Sim
         if (u.Guard) { GuardTick(u, dt); return; }
         // an engine of ours near, with nobody of ours at hand: it goes for it and its crew (Sim.OurEngines.cs)
         if (u.CarveCell < 0 && u.BuildCell < 0 && GoForEngine(u, dt)) return;
+        // just risen from an ambush: for those of ours near
+        if (u.Band is { SprungAt: > 0 } && Pounce(u, dt)) return;
         // one of its own fighting close by: it goes to help
         if (u.CarveCell < 0 && u.BuildCell < 0 && u.Band is not { State: BandState.Forming } && Help(u, dt)) return;
         // a band gathers where it came in before it sets out

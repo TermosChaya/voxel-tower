@@ -231,7 +231,7 @@ public sealed partial class Sim
         const float Knot = 4 * VoxelWorld.PerMetre;
         foreach (var o in Units)
         {
-            if (o.Dead || o.Inside || o.Team != Team.Horde || o.Bound || o.Envoy || o.Airborne != null) continue;
+            if (o.Dead || o.Inside || o.Team != Team.Horde || o.Bound || o.Envoy || o.Lurking || o.Airborne != null) continue;
             float d = Flat(u, o);
             if (d > far || d < near) continue;
             float score;

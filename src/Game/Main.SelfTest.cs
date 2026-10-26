@@ -987,6 +987,7 @@ public partial class Main
         await SelfTestHex(Check);
         await SelfTestCaptain(Check);
         await SelfTestWar(Check);
+        await SelfTestWarlords(Check);
         await SelfTestMetal(Check);
         await SelfTestCampaign(Check);
         // the report for the author: one file with the system, the hangs, the last events and the logs

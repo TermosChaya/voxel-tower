@@ -262,8 +262,25 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `Bodies.OurAlchemist.cs`.
 - `Sim.Shamans.cs` — шаманы орды: `Kinds.Shaman` (в `Kinds.Casters`, не в `HordeKinds`: путь — поле гоблина через
   `FieldOf`), `ShamanTick` из `RaiderTick` (`Unit.NextHeal` — лечит в 6 м, `NextCurse` — `CurseTarget` → `Curse` в
-  `Curses` на 40 с, если не `Warded` — святилище или жрец ближе 20 м), `CurseHack` в `Carve` (×2), `TickCurses`;
-  события `Healed`, `Hexed`; в `BestTarget` шаман −110 к очереди; в `PlanWave` — с 4-й волны.
+  `Curses` на 40 с, если не `Warded` — святилище или жрец ближе 20 м), `CurseHack` в `Carve` (×`Curse.Power`, 2), `TickCurses`;
+  события `Healed`, `Hexed`; в `BestTarget` шаман −110 к очереди; в `PlanWave` — с 4-й волны. Проклятие камня
+  шамана-военачальника (`LordCurse` из `LordTick`, `StoneTarget` — стена в 24 м): `Curse.Stone`, `Power` 3, R 3 м
+  столбом от подножия до верха, 60 с; грани (`FacesOf` → `Curse.Faces`, не сохраняются, ищутся заново) сразу
+  трескаются на 0,4–0,65, `Crumble` каждые 0,5 с выбивает 2 камня граней; `CurseBlow` — ×3 к трещинам `Jar` и к силе
+  валуна в `Crater`. Вид: столб зелёной дымки в `MagicView.Curses`.
+- `Sim.Warlords.cs` — военачальники: `Warlord` (`Kind`, `Level`, `Xp`, `Health`, `Fate`, `Champion`; `Gift` по виду —
+  `LordGift.Slam` орк и вожаки глав, `Boulders` тролль, `Curse` шаман, `Ambush` гоблин; `Title` «тролль-военачальник»),
+  `NewWarlord(level, kind)`, `WarlordFor(threat, roster)` (уровень по силе войска, вид по составу и случаю; песочница),
+  `Ennoble`, `LordTick` (true — у броска; клич; по `Gift`: `Slam`, `LordHurl` — `GiantAim` + `HeftBoulder` R 2,8,
+  `LordStoneCause`, `LordStoneBroke`; `LordCurse`), `LordLost`, `LordAway`; `Unit.SlamReady` — часы умения любого вида.
+- `Sim.Ambush.cs` — засада гоблина-военачальника: `TellOffAmbush` в `Sim.Raid` (ватага с большинством гоблинов,
+  `Warband.Lurk`), `SetOutToLurk` при выходе из `Forming` (`AmbushSpot`: на 14 м дальше места сбора и 7 м вбок, гуще
+  укрытие в 10 м, ничего нашего в 5 м → `LurkCell` = `RallyCell`), `BandState.Lurk` в `TickBands` → `AmbushTick`
+  (`Unit.Lurking` через 3 с; наш в 7 м или раненый → `Spring`; войско разбито или 4 мин → встаёт сама), `Spring`
+  (испуг наших в 10 м: `StaggerUntil`, боль +0,25; `RallyUntil` своим; событие `AmbushSprung`), `Pounce` 20 с после.
+  Лежащих не выбирают целью (`|| o.Lurking` рядом с `o.Envoy` в `Nearest`, `MeleeFoe`, выборе лучника, командира,
+  машин, алхимиков, прицела от первого лица), их не видно: `UnitView` опускает фигуру в траву, без стяга, без точки
+  на мини-карте, без пути и таблички (`TrailView`), не выбираются мышью (`Commander.UnitAt`).
 - `Sim.Research.cs` — награды и знания: `Lore` (`Key`, `Branch`, `Name`, `About`, `Cost`, `Coin` — знания,
   вмешательство или откровения, `Needs` — массив опор, `Tier` 0–3 и `Lane` 0/½/1 — место на древе, `Page` 0–2, `Spell` —
   если это постижение заклинания), `Pages`, `PageBranches` (5 / 4 / 5 ветвей; ветви страницы 2 — это `Circles` и
@@ -430,9 +447,12 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `LayMarked`/`DigMarked` (только размеченное, `_layingMarked` на всю протяжку, `OnMarked`), `PossessedLadder` (L,
   `Shapes.LadderAt` → `DesignateBuild`); отказы `Refuse` → `Refused`/`RefusedAt` для слова посреди экрана.
 - `Sim.Captains.cs` — командиры (`Kinds.Captain`): `CaptainThink` раз в 2,5 с (из `PawnTick`): `Under` — бойцы в
-  `CaptainReach` 40 м, не посланные игроком (`Hold && Ward == null`) и не чужого командира; `Front` (строй в 3,5 м
-  внутри стены `WallBetween`, стрелки на `WallWalks` через `Command(...) > 0`, сам позади, раненых `SentBack`, рог и щит
-  сами), `MendFront` после боя (`MeantIn`/`MendPlan`/`Mend`), `HoldGoal` (место от игрока `Goal`), тревога — к воротам.
+  `CaptainReach` 40 м, не посланные игроком (`Hold && Ward == null`) и не чужого командира; `Front` (строй в пролом
+  `Breach`; иначе поперёк прохода `Opening` — по полю ближнего налётчика первое место без рубки, где наша стена с обеих
+  сторон в 6 м: `PlaceAcross` → `Sim.CommandAcross` — ряд от края до края в 1,5 м внутри лицом наружу, `FrontRank`:
+  щитоносцы, копья, мечи, прочие, счётчик `CaptainAcross`; иначе в 3,5 м внутри стены `WallBetween`; стрелки на
+  `WallWalks` через `Command(...) > 0`, сам позади, раненых `SentBack`, рог и щит сами), `MendFront` после боя
+  (`MeantIn`/`MendPlan`/`Mend`), `HoldGoal` (место от игрока `Goal`), тревога — к воротам.
   Призывы `Call(cap, n, x, y, z)` 0–3 (`CallNames`, `CallRest`, `Ready[n]`, событие `Called`): `Follows`/`FollowTick`,
   `WallUntil` (`Walled` в `Hurt`), `Volley` (стрелы как у `ShotOf`), рог (`Pain`, `Mending`, `RallyUntil` →
   `Heartened`). `Aimed`, `LookOrder`, `Heeding` — для первого лица. `Unit.Commands/Goal/NextOrders/Ready/Ward/Follows/

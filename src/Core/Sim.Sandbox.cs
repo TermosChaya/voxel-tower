@@ -51,7 +51,8 @@ public sealed partial class Sim
     /// <summary>A band of the horde called up at a place of the valley: light (goblins and orcs) or heavy (trolls, a shaman and a hill giant).</summary>
     /// <summary>
     /// The sandbox: an army of the horde's realm walks in by the side of the land nearest a spot, as one will from the
-    /// world map, a warlord of the second or third level at its head with his guard. The warlord, or null.
+    /// world map, a warlord of the second or third level at its head with his guard, of a kind as the army makes likely
+    /// (Sim.Warlords.cs). The warlord, or null.
     /// </summary>
     public Warlord SummonArmy(int x, int z)
     {
@@ -62,8 +63,8 @@ public sealed partial class Sim
             float d = (ex - x) * (ex - x) + (ez - z) * (ez - z);
             if (d < best) { best = d; edge = e; }
         }
-        var lord = NewWarlord(2 + Rng.Next(2));
         var roster = new List<UnitType> { Kinds.Orc, Kinds.Orc, Kinds.Orc, Kinds.Orc, Kinds.Goblin, Kinds.Goblin, Kinds.Goblin, Kinds.Goblin, Kinds.Goblin, Kinds.Goblin, Kinds.Sapper, Kinds.Sapper, Kinds.Troll, Kinds.Shaman };
+        var lord = WarlordFor(3 + Rng.Next(6), roster);
         Raid(roster, edge, .5, lord);
         return lord;
     }

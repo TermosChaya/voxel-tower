@@ -71,4 +71,130 @@ public partial class Main
         Hud.Refresh();
         Marks.Flush();
     }
+
+    /// <summary>
+    /// The warlords' kinds and the line across a gate (--pose=lords): a ring of stone wall round the citadel with
+    /// archers on its western arc and a line of foot inside, and an army from the west led by a warlord of a kind.
+    /// --look=1 a troll warlord with a boulder over his head and another in the air at the wall; --look=2 a shaman
+    /// warlord's curse on a stretch of the wall, cracked and crumbling; --look=3 a goblin warlord's band lying in wait in
+    /// the grass; --look=4 the same risen on three of ours walking by; --look=5 the line across an open way through the
+    /// ring, shields in front, an orc warlord's army coming at it.
+    /// </summary>
+    void LordsPose()
+    {
+        var w = World; var s = Site; var sim = Sim;
+        sim.Waves.Countdown = 1e9;
+        int kx = s.KeepX, kz = s.KeepZ, r = s.KeepR + 44, line = kx - r + 30;
+        sim.InstantLabour = true;
+        int top = Shapes.LevelTop(w, kx - 64, kz, 40);
+        var ring = Shapes.Circle(w, s, kx, kz, r, new Stroke { Mat = Mat.Stone, Width = 10, Height = 40, Level = true, Hollow = true }, top);
+        if (_look == 5)
+        {
+            // a way 3 m wide left open through the western arc
+            var open = new VoxelList();
+            for (int i = 0; i < ring.Count; i++) if (ring.X(i) > kx || Math.Abs(ring.Z(i) - kz) >= 12) open.Add(ring.X(i), ring.Y(i), ring.Z(i), ring.M(i));
+            ring = open;
+        }
+        sim.DesignateBuild(ring);
+        sim.InstantLabour = false;
+        Unit Stand(UnitType t, int x, int z)
+        {
+            int c = sim.NearestStand(x, z, t.Move.Height);
+            if (c < 0) return null;
+            var u = sim.Spawn(t, c);
+            sim.Command(new[] { u }, c);
+            u.Facing = MathF.PI;
+            return u;
+        }
+        if (_look is 1 or 2)
+            foreach (var (dx, dz) in new[] { (-62, -14), (-60, 18), (-63, 2), (-61, -6) }) Stand(Kinds.Archer, kx + dx, kz + dz);
+        var foot = new[] { Kinds.Shieldbearer, Kinds.Spearman, Kinds.Swordsman, Kinds.Shieldbearer, Kinds.Spearman, Kinds.Halberdier, Kinds.Shieldbearer, Kinds.Swordsman };
+        if (_look == 5)
+        {
+            for (int i = 0; i < foot.Length; i++) { var u = Stand(foot[i], kx - 20 + i % 4 * 10, kz + 40 + i / 4 * 10); if (u != null) u.Hold = false; }
+            var cap = Stand(Kinds.Captain, kx - 10, kz + 30);
+            if (cap != null) cap.Hold = false;
+        }
+        Advance(1);
+        var kind = _look switch { 1 => Kinds.Troll, 2 => Kinds.Shaman, 3 or 4 => Kinds.Goblin, _ => Kinds.Orc };
+        var lord = sim.NewWarlord(3, kind);
+        var roster = new List<UnitType>();
+        void Add(UnitType t, int n) { for (int i = 0; i < n; i++) roster.Add(t); }
+        Add(Kinds.Orc, 4); Add(Kinds.Goblin, 10);
+        sim.Raid(roster, Sim.WestEdge, .6, lord);
+        int k = 0;
+        foreach (var b in sim.Bands)
+        {
+            if (b.Lord != lord) continue;
+            int dz = b.LordsOwn ? 0 : (k % 2 == 0 ? -1 : 1) * (36 + k / 2 * 30);
+            b.Entry = sim.NearestStand(kx - r - 150 - (b.LordsOwn ? 20 : 0), kz + dz, 4);
+            if (!b.LordsOwn) k++;
+        }
+        sim.ComputeFields();
+        Unit Lord() { foreach (var u in sim.Units) if (u.Lord == lord && !u.Dead) return u; return null; }
+        switch (_look)
+        {
+            case 1:
+            {
+                // one stone in the air, the next over his head
+                Flier flying = null;
+                for (int t = 0; t < 900 && flying == null; t++) { Advance(.1); flying = sim.Fliers.Find(f => f.Cause == Sim.LordStoneCause && f.Carrier == null); }
+                for (int t = 0; t < 120 && sim.Fliers.Contains(flying); t++) Advance(.05);
+                var at = Lord();
+                if (at != null) at.SlamReady = 0;
+                for (int t = 0; t < 60 && at != null && !(sim.Hurling(at) && sim.Time - at.HurlFrom > Sim.HurlRaise - .1); t++) Advance(.05);
+                if (at != null) Rig.Set(World.WX((at.X + kx - r) / 2), World.WZ((at.Z + kz) / 2), -.75f, .55f, 1.7f, snap: true);
+                break;
+            }
+            case 2:
+            {
+                for (int t = 0; t < 900 && sim.LordCurses == 0; t++) Advance(.1);
+                Advance(8);
+                var c = sim.Curses.Find(cc => cc.Stone);
+                if (c != null) Rig.SetAt(World.WX(c.X - 30), World.WY(c.Y), World.WZ(c.Z + 10), -.9f, .5f, 2.6f);
+                break;
+            }
+            case 3:
+            case 4:
+            {
+                Warband lurk = sim.Bands.Find(b => b.Lurk);
+                for (int t = 0; t < 600 && !(lurk is { State: BandState.Lurk } && lurk.Members.FindAll(u => u.Lurking).Count >= 4); t++) Advance(.25);
+                if (lurk == null || lurk.Leader == null) break;
+                var (lx, _, lz) = sim.Nav.Feet(lurk.LurkCell);
+                if (_look == 4)
+                {
+                    // three of ours walking by it
+                    var by = new List<Unit>();
+                    for (int i = 0; i < 3; i++)
+                    {
+                        int c = sim.NearestStand((int)lx + 90 + i * 10, (int)lz + 30, 2);
+                        if (c >= 0) by.Add(sim.Spawn(i == 1 ? Kinds.Spearman : Kinds.Swordsman, c));
+                    }
+                    sim.Command(by, sim.NearestStand((int)lx - 60, (int)lz + 20, 2));
+                    for (int t = 0; t < 400 && sim.AmbushesSprung == 0; t++) Advance(.05);
+                    Advance(1.2);
+                }
+                Rig.Set(World.WX(lx + 8), World.WZ(lz + 6), -.75f, .55f, 2.6f, snap: true);
+                break;
+            }
+            default:
+            {
+                // the line formed across the way in and stood to, and the first of the horde at it
+                for (int t = 0; t < 600 && sim.CaptainAcross == 0; t++) Advance(.1);
+                Advance(6);
+                for (int t = 0; t < 600; t++)
+                {
+                    bool there = false;
+                    foreach (var u in sim.Units) if (!u.Dead && u.Team == Team.Horde && MathF.Abs(u.X - (kx - r)) < 120 && MathF.Abs(u.Z - kz) < 60) there = true;
+                    if (there) break;
+                    Advance(.1);
+                }
+                Godot.GD.Print($"[lords] lines across {sim.CaptainAcross}, formed {sim.CaptainFormed}, at {sim.Time:0} s");
+                Rig.SetAt(World.WX(kx - r + 12), World.WY(World.SurfAt(kx - r - 30, kz)), World.WZ(kz), -1.2f, 1.05f, 2.4f);
+                break;
+            }
+        }
+        Hud.Refresh();
+        Marks.Flush();
+    }
 }

@@ -157,7 +157,7 @@ public sealed partial class Sim
             Unit near = null; float bd = 40 * VoxelWorld.PerMetre;
             foreach (var u in Units)
             {
-                if (u.Dead || u.Inside || u.Team != Team.Horde || u.Airborne != null || u.Bound || u.Envoy) continue;
+                if (u.Dead || u.Inside || u.Team != Team.Horde || u.Airborne != null || u.Bound || u.Envoy || u.Lurking) continue;
                 float d = MathF.Sqrt((u.X - w.X) * (u.X - w.X) + (u.Z - w.Z) * (u.Z - w.Z));
                 if (d < bd) { bd = d; near = u; }
             }

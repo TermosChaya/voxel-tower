@@ -661,6 +661,8 @@ public sealed class Unit
     public readonly List<int> Docked = new();
     /// <summary>An envoy of the horde, under a white rag, come to bargain: no one of the horde strikes with it.</summary>
     public bool Envoy;
+    /// <summary>One of a band of the horde lying in wait low in the grass (Sim.Ambush.cs): ours do not see it till it rises.</summary>
+    public bool Lurking;
 
     // captives of ours, and what is given to the old powers
     /// <summary>One of ours told to take raiders alive: the blow that would bring one down to a quarter of itself fells and binds it instead.</summary>
@@ -772,12 +774,12 @@ public sealed class Unit
 
     /// <summary>"Орк-рубака", or "Вожак — орк-рубака" for the one who leads a warband.</summary>
     public string Name => Champion == 4 ? $"{Title}, вождь орды" : Champion > 0 ? $"{Title}, вожак главы {Sim.Roman(Champion)} ({T.Name.ToLowerInvariant()})"
-        : Lord != null ? $"{Lord.Name}, военачальник ({T.Name.ToLowerInvariant()})" : Leader ? "Вожак — " + T.Name.ToLowerInvariant() : T.Name;
+        : Lord != null ? $"{Lord.Name}, {Lord.Title}" : Leader ? "Вожак — " + T.Name.ToLowerInvariant() : T.Name;
     /// <summary>A chapter's champion (1–3) or the horde's chief (4), and his name; 0 for the rest.</summary>
     public byte Champion;
     public string Title;
     /// <summary>The warlord this is, at the head of his army (Sim.Warlords.cs); null for the rest.</summary>
     public Warlord Lord;
-    /// <summary>When a warlord's cry and his blow are ready again.</summary>
+    /// <summary>When a warlord's cry is ready again, and what his kind does besides: his blow, his throw or his curse.</summary>
     public double CryReady, SlamReady;
 }

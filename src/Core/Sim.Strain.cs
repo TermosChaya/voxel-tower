@@ -135,6 +135,8 @@ public sealed partial class Sim
                     if (!World.InBounds(x, y, z) || BearsDown(World.Get(x, y, z)) <= 0) continue;
                     uint h = (uint)(x * 73856093 ^ y * 19349663 ^ z * 83492791);
                     float add = k * (1 - d / r) * (.6f + (h >> 8 & 255) / 255f * .8f);
+                    // stone under a warlord's curse cracks the more
+                    if (Curses.Count > 0) add *= CurseBlow(x, y, z);
                     if (add < .04f) continue;
                     int p = WaterPlanner.Pack(x, y, z);
                     float c = Math.Min(1, Cracks.GetValueOrDefault(p) + add);

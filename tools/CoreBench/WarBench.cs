@@ -10,8 +10,11 @@ using VoxelTower.Core;
 /// the ground throws ours off their feet and cracks the wall by him, and killed he breaks his army; badly hurt he goes
 /// off the field, gets away with his wounds and comes on in level for what his army did, and comes back as he went.
 /// Engines left alone are given up and burn, so a raid ends. Our archers loose at the warlord first, our swordsmen go
-/// for the sapper with a charge, a commander stands its line at the breach. A warlord's raid fought out at a walled fort
-/// to its end, its report adding up and read back from a save; and a raid two hundred strong, for how long a step takes.
+/// for the sapper with a charge, a commander stands its line at the breach. A troll warlord's boulders break our wall, a
+/// shaman warlord's curse cracks it and makes it give way sooner, a goblin warlord's band lies in wait unseen and rises
+/// on one of ours passing; a commander stands its line across an open way through the wall and holds it. A warlord's
+/// raid fought out at a walled fort to its end, its report adding up and read back from a save, and one of each kind
+/// read back; and a raid two hundred strong, for how long a step takes.
 /// (--war-audit: raids of rising threat at the fort, told out for the review.)
 /// </summary>
 static class WarBench
@@ -73,6 +76,15 @@ static class WarBench
     }
 
     static void Run(Sim s, double seconds) { for (double t = 0; t < seconds; t += .05) s.Step(.05f); }
+    static (float x, float z) KeepAt(Sim s) => (s.Site.KeepX, s.Site.KeepZ);
+
+    /// <summary>Voxels of our building in a box of columns, from the bottom to the top of the valley.</summary>
+    static int Ours(Sim s, int x0, int z0, int x1, int z1)
+    {
+        int n = 0;
+        for (int z = z0; z < z1; z++) for (int x = x0; x < x1; x++) for (int y = 1; y < s.World.SY; y++) if (Mat.IsPlayer[s.World.Get(x, y, z)]) n++;
+        return n;
+    }
     static void Gone(Unit u) { u.Dead = true; u.DiedAt = -999; }
     static float Apart(Unit a, Unit b) => MathF.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Z - b.Z) * (a.Z - b.Z));
 
@@ -280,6 +292,191 @@ static class WarBench
                 climbing && postZ > wz + 70 && s.CaptainFormed >= 1, $"climbing {climbing}; the line's posts at z {postZ - wz:0} from the middle (the ladder at 90, the knot at 40–64)");
         }
 
+        // ---- a troll warlord hurls boulders at those up on our wall, and at the wall itself on his way, breaking it
+        {
+            var s = Fresh();
+            foreach (var u in s.Units) if (u.Team == Team.Player) Gone(u);
+            var w = s.World; var site = s.Site;
+            int wx = (site.KeepX - 300) & ~7, wz = site.KeepZ;
+            Level(s, wx - 80, wz, 200, 320);
+            int fg = w.SurfAt(wx, wz);
+            s.InstantLabour = true;
+            var wall = new VoxelList();
+            for (int z = wz - 300; z < wz + 300; z++) for (int x = wx; x < wx + 16; x++) for (int y = fg; y < fg + 32; y++) wall.Add(x, y, z, Mat.Stone);
+            s.DesignateBuild(wall);
+            s.CompleteAll();
+            s.InstantLabour = false;
+            int stone0 = Ours(s, wx, wz - 300, wx + 16, wz + 300);
+            // two archers together up on it
+            var archers = Enumerable.Range(0, 2).Select(i => s.Spawn(Kinds.Archer, s.NearestStand(wx + 8, wz - 4 + i * 8, 2))).ToList();
+            foreach (var a in archers) { s.Command(new[] { a }, a.Cell); a.ChainedUntil = 1e9; }
+            var troll = s.Spawn(Kinds.Troll, s.NearestStand(wx - 150, wz, 3));
+            troll.Lord = s.NewWarlord(3, Kinds.Troll);
+            troll.SlamReady = 0;
+            var said = new List<string>();
+            s.Said += (text, _, _, _) => said.Add(text);
+            int hurls0 = s.LordHurls;
+            for (int i = 0; i < 100 && !archers.Exists(a => a.Hp < a.MaxHp || a.Dead || a.Airborne != null); i++) Run(s, .1);
+            int atMen = s.LordHurls - hurls0, hurt = archers.Count(a => a.Hp < a.MaxHp || a.Dead || a.Airborne != null);
+            // nobody up there any more: at the wall on his way
+            foreach (var a in archers) Gone(a);
+            troll.SlamReady = 0;
+            for (int i = 0; i < 300 && s.LordStoneBroke < 20; i++) Run(s, .1);
+            int stone1 = Ours(s, wx, wz - 300, wx + 16, wz + 300);
+            check("a troll warlord hurls boulders at those up on our wall, and at the wall on his way, breaking the masonry where they strike",
+                troll.Lord.Gift == LordGift.Boulders && atMen >= 1 && hurt >= 1 && s.LordStoneBroke >= 20 && stone1 <= stone0 - 20 && said.Exists(t => t.Contains("мечет валуны")),
+                $"thrown at the men {atMen}, archers hurt {hurt}; thrown in all {s.LordHurls - hurls0}; broke {s.LordStoneBroke} of ours, the wall {stone0} → {stone1}");
+        }
+
+        // ---- a shaman warlord curses a stretch of our wall: it cracks over its faces and crumbles, and under the same
+        // blows it goes through sooner than a stretch uncursed
+        {
+            var s = Fresh();
+            foreach (var u in s.Units) if (u.Team == Team.Player) Gone(u);
+            var w = s.World; var site = s.Site;
+            int wx = (site.KeepX - 300) & ~7, wz = site.KeepZ;
+            Level(s, wx - 60, wz, 160, 220);
+            int fg = w.SurfAt(wx, wz);
+            s.InstantLabour = true;
+            var wall = new VoxelList();
+            // two stretches alike, 30 m apart along the same line
+            foreach (int oz in new[] { -120, 120 })
+                for (int z = wz + oz - 32; z < wz + oz + 32; z++) for (int x = wx; x < wx + 12; x++) for (int y = fg; y < fg + 32; y++) wall.Add(x, y, z, Mat.Stone);
+            s.DesignateBuild(wall);
+            s.CompleteAll();
+            s.InstantLabour = false;
+            Run(s, .2);
+            int a0 = Ours(s, wx, wz - 152, wx + 12, wz - 88), b0 = Ours(s, wx, wz + 88, wx + 12, wz + 152);
+            var shaman = s.Spawn(Kinds.Shaman, s.NearestStand(wx - 40, wz - 120, 2));
+            shaman.Lord = s.NewWarlord(3, Kinds.Shaman);
+            shaman.SlamReady = 0; shaman.NextCurse = 1e9; shaman.NextHeal = 1e9;
+            int cracks0 = s.Cracks.Count, curses0 = s.LordCurses;
+            Run(s, .3);
+            var curse = s.Curses.FirstOrDefault(c => c.Stone);
+            int cracked = s.Cracks.Count - cracks0;
+            Gone(shaman);
+            // it crumbles while nothing strikes it
+            Run(s, 12);
+            int a1 = Ours(s, wx, wz - 152, wx + 12, wz - 88), b1 = Ours(s, wx, wz + 88, wx + 12, wz + 152);
+            // the same 4 blows on each, at the middle of each stretch a man's height up, as a catapult's stones
+            int firstA = 0, firstB = 0;
+            for (int hit = 1; hit <= 4; hit++)
+            {
+                s.Jar(wx - 1, fg + 12, wz - 120, 3 * VoxelWorld.PerMetre, .3f);
+                s.Jar(wx - 1, fg + 12, wz + 120, 3 * VoxelWorld.PerMetre, .3f);
+                Run(s, .1);
+                if (firstA == 0 && Ours(s, wx, wz - 152, wx + 12, wz - 88) < a1) firstA = hit;
+                if (firstB == 0 && Ours(s, wx, wz + 88, wx + 12, wz + 152) < b1) firstB = hit;
+            }
+            int a2 = Ours(s, wx, wz - 152, wx + 12, wz - 88), b2 = Ours(s, wx, wz + 88, wx + 12, wz + 152);
+            check("a shaman warlord curses the stretch of our wall nearest him: it cracks over its faces at once and crumbles while the curse lasts; under the same blows it gives way sooner and loses more than a stretch uncursed",
+                s.LordCurses == curses0 + 1 && curse != null && MathF.Abs(curse.Z - (wz - 120)) < 40 && cracked > 300 && a1 < a0 && b1 == b0
+                && firstA > 0 && (firstB == 0 || firstA < firstB) && a1 - a2 > 2 * (b1 - b2) + 20 && s.Curses.Exists(c => c.Stone),
+                $"curses {s.LordCurses - curses0} at z {(curse == null ? "none" : $"{curse.Z - wz:0}")}; cracked at once {cracked}; crumbled {a0 - a1} (the other {b0 - b1}); " +
+                $"first gave way at blow {firstA} (the other {firstB}); lost to the blows {a1 - a2} (the other {b1 - b2})");
+        }
+
+        // ---- a goblin warlord's ambush: one band lies down in cover beside the way; unseen, it waits; one of ours
+        // passing near, it rises on them
+        {
+            var s = Fresh();
+            foreach (var u in s.Units) if (u.Team == Team.Player) Gone(u);
+            var lord = s.NewWarlord(2, Kinds.Goblin);
+            var said = new List<string>();
+            s.Said += (text, _, _, _) => said.Add(text);
+            s.Raid(new List<UnitType> { Kinds.Goblin, Kinds.Goblin, Kinds.Goblin, Kinds.Goblin, Kinds.Goblin, Kinds.Goblin, Kinds.Orc, Kinds.Orc, Kinds.Goblin, Kinds.Goblin, Kinds.Goblin, Kinds.Orc }, 4, .5, lord);
+            var lurk = s.Bands.FirstOrDefault(b => b.Lurk);
+            for (int i = 0; i < 400 && lurk != null && !(lurk.State == BandState.Lurk && lurk.Members.Count(u => u.Lurking) >= 3); i++)
+            {
+                Run(s, .5);
+                // the rest of the army held where it stands, so it is not over before anyone comes by
+                foreach (var u in s.Units) if (!u.Dead && u.Team == Team.Horde && u.Band != lurk && u.Band?.State is BandState.March or BandState.Rally or BandState.Storm) u.ChainedUntil = 1e9;
+            }
+            bool laid = lurk is { State: BandState.Lurk } && lurk.Members.Count(u => u.Lurking) >= 3;
+            var (sx, _, sz) = laid ? s.Nav.Feet(lurk.LurkCell) : (0f, 0f, 0f);
+            var near = laid ? lurk.Members.First(u => u.Lurking) : null;
+            // one of ours held 12 m off it, away from the walls: the nearest of the horde he sees is none of those lying there
+            Unit watch = null; Unit seen = null;
+            if (laid)
+            {
+                float ox = sx - KeepAt(s).x, oz = sz - KeepAt(s).z, ol = MathF.Max(1, MathF.Sqrt(ox * ox + oz * oz));
+                watch = s.Spawn(Kinds.Swordsman, s.NearestStand((int)(sx + ox / ol * 96), (int)(sz + oz / ol * 96), 2));
+                s.Command(new[] { watch }, watch.Cell);
+                watch.ChainedUntil = 1e9;
+            }
+            Run(s, 30);
+            if (laid) seen = s.Nearest(watch, Team.Horde, 30 * VoxelWorld.PerMetre);
+            bool waited = laid && lurk.State == BandState.Lurk && s.AmbushesSprung == 0 && seen?.Band != lurk && lurk.Members.Count(u => u.Lurking) >= 3;
+            check("a goblin warlord lays one band of his army in wait in cover beside the way; lying there, nobody of ours in 7 m, it waits, and one of ours 12 m off does not see it",
+                lord.Gift == LordGift.Ambush && laid && waited && said.Exists(t => t.Contains("засад")) && s.AmbushesLaid == 1,
+                $"told off {lurk?.Name ?? "none"}; state {lurk?.State}; lying {lurk?.Members.Count(u => u.Lurking)} of {lurk?.Members.Count}; sprung {s.AmbushesSprung}; the nearest he sees {seen?.T.Key ?? "none"} of {seen?.Band?.Name ?? "-"}");
+            if (watch != null) Gone(watch);
+            if (laid)
+            {
+                // a swordsman of ours walks by, 3 m off its middle
+                var man = s.Spawn(Kinds.Swordsman, s.NearestStand((int)sx + 160, (int)sz + 24, 2));
+                s.Command(new[] { man }, s.NearestStand((int)sx + 24, (int)sz - 24, 2));
+                double t0 = s.Time;
+                for (int i = 0; i < 300 && s.AmbushesSprung == 0; i++) Run(s, .1);
+                double rose = s.Time - t0;
+                float pain = man.Pain;
+                Run(s, 4);
+                int onHim = lurk.Members.Count(u => !u.Dead && (u.Target == man || Apart(u, man) < 4 * VoxelWorld.PerMetre));
+                check("…one of ours walking by within 7 m: it rises on him all at once, he is caught off guard, and it falls on him",
+                    s.AmbushesSprung == 1 && lurk.State == BandState.Storm && lurk.Members.All(u => !u.Lurking) && pain > .2f && onHim >= 3 && said.Exists(t => t.Contains("Засада!")),
+                    $"rose after {rose:0.0} s; band {lurk.State}; his pain then {pain:0.00}; on him {onHim}, hurt {man.MaxHp - man.Hp:0}");
+            }
+        }
+
+        // ---- a commander stands the line across an open way through our wall, shields in front, and it stops a band
+        {
+            var s = Fresh();
+            foreach (var u in s.Units) if (u.Team == Team.Player) Gone(u);
+            var w = s.World; var site = s.Site;
+            int wx = (site.KeepX - 300) & ~7, wz = site.KeepZ & ~7;
+            Level(s, wx - 60, wz, 200, 320);
+            int fg = w.SurfAt(wx, wz);
+            s.InstantLabour = true;
+            var wall = new VoxelList();
+            // a long wall with a way through it 3 m wide
+            for (int z = wz - 300; z < wz + 300; z++)
+            {
+                if (z >= wz - 12 && z < wz + 12) continue;
+                for (int x = wx; x < wx + 12; x++) for (int y = fg; y < fg + 32; y++) wall.Add(x, y, z, Mat.Stone);
+            }
+            s.DesignateBuild(wall);
+            s.CompleteAll();
+            s.InstantLabour = false;
+            Run(s, .5);
+            var cap = s.Spawn(Kinds.Captain, s.NearestStand(wx + 140, wz + 40, 2));
+            var kinds = new[] { Kinds.Swordsman, Kinds.Spearman, Kinds.Shieldbearer, Kinds.Swordsman, Kinds.Shieldbearer, Kinds.Spearman, Kinds.Shieldbearer, Kinds.Spearman };
+            var men = kinds.Select((k, i) => s.Spawn(k, s.NearestStand(wx + 110 + i % 4 * 12, wz + 30 + i / 4 * 12, 2))).ToList();
+            var knot = Enumerable.Range(0, 8).Select(i => s.Spawn(i % 3 == 0 ? Kinds.Orc : Kinds.Goblin, s.NearestStand(wx - 260 + i % 4 * 10, wz - 20 + i / 4 * 10, 2))).ToList();
+            var band = new Warband { Id = 777, Name = "Ватага у ворот", State = BandState.Storm };
+            foreach (var u in knot) { u.Band = band; band.Members.Add(u); u.ChainedUntil = 1e9; }
+            band.Leader = knot[0]; knot[0].Leader = true;
+            s.Bands.Add(band);
+            Run(s, 8);
+            float Inside(Unit u) => u.Post < 0 ? -999 : s.Nav.Feet(u.Post).x - (wx + 12);
+            float Across(Unit u) => u.Post < 0 ? 999 : s.Nav.Feet(u.Post).z - wz;
+            var shields = men.Where(u => u.T == Kinds.Shieldbearer).ToList();
+            var front = shields.Select(Inside).DefaultIfEmpty(-999).ToList();
+            bool across = s.CaptainAcross >= 1 && men.All(u => u.Post >= 0 && Inside(u) > 0 && Inside(u) < 64 && MathF.Abs(Across(u)) < 40)
+                && shields.All(sh => men.Where(u => u.T != Kinds.Shieldbearer).All(o => Inside(sh) <= Inside(o) + 2));
+            check("a commander stands its line across an open way through our wall the horde will walk in by, a step inside it, the shields in its front rank",
+                across, $"lines across {s.CaptainAcross}; posts (in, across) {string.Join(" ", men.Select(u => $"{u.T.Key[..2]}({Inside(u) / 8:0.0},{Across(u) / 8:0.0})"))} m");
+            foreach (var u in knot) u.ChainedUntil = 0;
+            int through = 0;
+            for (int i = 0; i < 900 && knot.Exists(u => !u.Dead && !u.Routed); i++)
+            {
+                Run(s, .1);
+                foreach (var u in knot) if (!u.Dead && u.X > wx + 12 + 10 * VoxelWorld.PerMetre) through = Math.Max(through, knot.Count(k => !k.Dead && k.X > wx + 12 + 10 * VoxelWorld.PerMetre));
+            }
+            int down = knot.Count(u => u.Dead || u.Routed);
+            check("…and the band that comes at it does not get past it",
+                through == 0 && down >= 6, $"past the line {through}; of the band fallen or running {down} of {knot.Count}; ours fallen {men.Count(u => u.Dead)}");
+        }
+
         // ---- a warlord's raid at a walled fort fought out to its end; its report read back from a save
         {
             var s = Fresh();
@@ -310,6 +507,41 @@ static class WarBench
                 back != null && (lordBack == null ? lord.Fate != LordFate.Field : lordBack.Lord.Name == lord.Name && lordBack.Lord.Level == lord.Level) && bandBack != null && bandBack.Lord != null
                 && back.Raids.Active && Reload(back) is { } again && again.Units.Count(u => !u.Dead) == back.Units.Count(u => !u.Dead),
                 back == null ? "not saved" : $"warlord {lordBack?.Lord.Name ?? "-"} level {lordBack?.Lord.Level}; a band {bandBack?.Name} spirit {bandBack?.Spirit:0.00} of {bandBack?.Lord?.Name}");
+        }
+
+        // ---- a raid led by a warlord of each kind but the orc at the fort, saved and read back in the middle of it
+        foreach (var kind in new[] { Kinds.Troll, Kinds.Shaman, Kinds.Goblin })
+        {
+            var s = Fresh();
+            Fort(s, 8, 8);
+            Run(s, .1);
+            var lord = s.NewWarlord(3, kind);
+            s.Raid(Sim.Roster(6, 1), 3, .5, lord);
+            for (int i = 0; i < 300 && lord.Fate is LordFate.Coming or LordFate.Field
+                && !(lord.Fate == LordFate.Field && (kind != Kinds.Goblin || s.Bands.Exists(b => b.State == BandState.Lurk && b.Members.Exists(u => u.Lurking))) && (kind != Kinds.Shaman || s.LordCurses > 0) && (kind != Kinds.Troll || s.LordHurls > 0)); i++)
+            {
+                Run(s, .5);
+                // (he is kept on his feet till then: the fort's archers would have him first; a goblin, who stays out of
+                // the fight while his band lies in wait, is kept where he came in)
+                if (s.Units.FirstOrDefault(u => u.Lord == lord && !u.Dead) is { } lu && lu.MaxHp < 1e5f)
+                {
+                    lu.MaxHp = 1e6f; lu.Hp = lu.MaxHp;
+                    if (kind == Kinds.Goblin && lu.Band?.Entry is int entry and >= 0) { lu.Cell = entry; (lu.X, lu.Y, lu.Z) = s.Nav.Feet(entry); lu.Path = null; lu.ChainedUntil = 1e9; }
+                }
+            }
+            var back = Reload(s);
+            var at = back.Units.FirstOrDefault(u => u.Lord != null && !u.Dead);
+            var lurkBack = back.Bands.FirstOrDefault(b => b.Lurk || b.State == BandState.Lurk);
+            var lurk = s.Bands.FirstOrDefault(b => b.Lurk || b.State == BandState.Lurk);
+            bool same = at != null && at.Lord.Kind == kind && at.Lord.Gift == lord.Gift && at.T == kind
+                && (lurk == null ? lurkBack == null : lurkBack != null && lurkBack.LurkCell == lurk.LurkCell && lurkBack.State == lurk.State && lurkBack.Members.Count(u => u.Lurking) == lurk.Members.Count(u => u.Lurking))
+                && back.Curses.Count(c => c.Stone) == s.Curses.Count(c => c.Stone);
+            // and it goes on from there
+            Run(back, 20);
+            check($"a raid led by a {lord.Title} at the fort, saved and read back in the middle of it: the warlord and his kind, a band in wait and its hiding place, a curse on the stone; it goes on",
+                same && (kind != Kinds.Goblin || lurk != null) && (kind != Kinds.Shaman || s.LordCurses > 0) && (kind != Kinds.Troll || s.LordHurls > 0),
+                $"{(at == null ? "no warlord read back" : $"{at.Lord.Title} {at.Lord.Name} ({at.T.Key})")}; in wait {lurk?.State} {lurk?.Members.Count(u => u.Lurking)} → {lurkBack?.State} {lurkBack?.Members.Count(u => u.Lurking)}; " +
+                $"stone curses {s.Curses.Count(c => c.Stone)} → {back.Curses.Count(c => c.Stone)}; thrown {s.LordHurls}, cursed {s.LordCurses}, ambushes {s.AmbushesLaid}, sprung {s.AmbushesSprung}; the warlord {lord.Fate} at {s.Time:0} s{(s.Units.FirstOrDefault(u => u.Lord == lord) is { Dead: true } dl ? $" ({dl.KilledBy})" : "")}");
         }
 
         // ---- two hundred of the horde at once round the fort, a warlord among them: how long a step takes

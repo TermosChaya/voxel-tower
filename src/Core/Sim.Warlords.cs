@@ -6,11 +6,15 @@ namespace VoxelTower.Core;
 /// <summary>What became of a warlord in a fight: still to come, in the field, gone off it alive, fallen, taken alive.</summary>
 public enum LordFate : byte { Coming, Field, Fled, Fell, Taken }
 
+/// <summary>What a warlord does besides his cry, by his kind: a blow to the ground, boulders hurled, a curse on our stone, an ambush.</summary>
+public enum LordGift : byte { Slam, Boulders, Curse, Ambush }
+
 /// <summary>
 /// A warlord of the horde's realm: one who leads an army — on the world map one day, as our commanders will lead ours,
-/// and into a valley at the head of a raid. He is himself one of the horde, an orc or a troll, the harder to kill and
-/// the harder hitting the higher his level; he carries his wounds from one fight to the next, and what his army does
-/// in a valley (ours killed, our building broken) and getting away alive bring him on in level.
+/// and into a valley at the head of a raid. He is himself one of the horde, an orc, a troll, a goblin shaman or a
+/// goblin, the harder to kill and the harder hitting the higher his level; he carries his wounds from one fight to the
+/// next, and what his army does in a valley (ours killed, our building broken) and getting away alive bring him on in
+/// level. Besides his war cry each kind has a way of its own (<see cref="Gift"/>).
 /// </summary>
 public sealed class Warlord
 {
@@ -33,23 +37,37 @@ public sealed class Warlord
     /// <summary>What a warlord of a level has to do to come to the next.</summary>
     public static float Next(int level) => 60 + 40 * level;
     public const int MaxLevel = 5;
+
+    /// <summary>
+    /// What he does besides his cry: an orc brings his weapon down on the ground and throws ours off their feet, a troll
+    /// hurls boulders at our walls and at those on them, a shaman curses the stone of our walls, a goblin lays one of
+    /// his bands in wait in the grass. A champion fights as an orc does, whatever he is.
+    /// </summary>
+    public LordGift Gift => Champion ? LordGift.Slam : Kind == Kinds.Troll ? LordGift.Boulders : Kind == Kinds.Shaman ? LordGift.Curse : Kind == Kinds.Goblin ? LordGift.Ambush : LordGift.Slam;
+
+    /// <summary>What he is called by his kind: «тролль-военачальник».</summary>
+    public string Title => Kind == Kinds.Troll ? "тролль-военачальник" : Kind == Kinds.Shaman ? "шаман-военачальник" : Kind == Kinds.Goblin ? "гоблин-военачальник" : "орк-военачальник";
 }
 
 /// <summary>
 /// The horde's warlords in the valley. One leads his own band at the head of his army (every band that came in with
 /// him), with a guard of his own. Those of the horde within his voice (<see cref="LordReach"/>) bear more pain before
 /// they break; when his own waver he roars his war cry, and those about him shrug off their pain, strike harder a while
-/// and the broken among them who can still fight turn back to it; when ours close on him he brings his weapon down on
-/// the ground and throws them off their feet, and what is built about him cracks. Badly hurt he goes off the field
-/// with his guard, and his army wavers; killed or taken alive, his army breaks and runs. A chapter's champion and the
-/// horde's chief lead as warlords too, but fight on to the end.
+/// and the broken among them who can still fight turn back to it. An orc, when ours close on him, brings his weapon down
+/// on the ground and throws them off their feet, and what is built about him cracks; a troll hurls boulders, a shaman
+/// curses our stone, a goblin lays an ambush (Sim.Ambush.cs). Badly hurt he goes off the field with his guard, and his
+/// army wavers; killed or taken alive, his army breaks and runs. A chapter's champion and the horde's chief lead as
+/// warlords too, but fight on to the end.
 /// </summary>
 public sealed partial class Sim
 {
     /// <summary>How far a warlord's voice carries, voxels (24 m).</summary>
     public const float LordReach = 24 * VoxelWorld.PerMetre;
-    /// <summary>How long his cry and his blow to the ground take to be ready again, seconds.</summary>
-    public const float CryRest = 40, SlamRest = 16;
+    /// <summary>How long his cry, his blow to the ground, his throw and his curse take to be ready again, seconds.</summary>
+    public const float CryRest = 40, SlamRest = 16, LordHurlRest = 9, StoneCurseRest = 30;
+    /// <summary>A troll warlord's boulder reaches this far from its middle (70 cm across).</summary>
+    const float LordStoneR = 2.8f;
+    public const string LordStoneCause = "валун тролля";
     /// <summary>How far his blow to the ground throws those of ours about him, voxels (6 m).</summary>
     const float SlamR = 6 * VoxelWorld.PerMetre;
     public const string SlamCause = "удар военачальника";
@@ -62,21 +80,44 @@ public sealed partial class Sim
         ("Скалозуб", "Скалозуба"), ("Ургаш", "Ургаша"), ("Ракх", "Ракха"), ("Зубодёр", "Зубодёра"), ("Ворг", "Ворга"),
     };
     int _nextLord = 1;
-    double _slamSaid = -999;
+    double _slamSaid = -999, _hurlSaid = -999;
 
     /// <summary>The warlords in the valley now, on their feet or not yet dead.</summary>
     public readonly List<Unit> LordsHere = new();
     /// <summary>A warlord roared his cry; brought his weapon down on the ground (for the view and the sound).</summary>
     public event Action<Unit> LordCried, LordSlammed;
-    /// <summary>Cries and blows to the ground since the start (the bench counts them).</summary>
-    public int LordCries, LordSlams;
+    /// <summary>Cries, blows to the ground, boulders hurled and stone curses laid since the start (the bench counts them);
+    /// voxels of ours a troll warlord's boulders broke.</summary>
+    public int LordCries, LordSlams, LordHurls, LordCurses, LordStoneBroke;
 
-    /// <summary>A new warlord of the horde's realm, of a level, an orc or a troll (an orc unless told).</summary>
+    /// <summary>A new warlord of the horde's realm, of a level and a kind (an orc unless told).</summary>
     public Warlord NewWarlord(int level, UnitType kind = null)
     {
         int id = _nextLord++;
         var (name, of) = LordNames[(id * 7 + level * 3 + (int)(Rng.NextDouble() * 4)) % LordNames.Length];
         return new Warlord { Id = id, Name = name, Of = of, Kind = kind ?? Kinds.Orc, Level = Math.Clamp(level, 1, Warlord.MaxLevel) };
+    }
+
+    /// <summary>The kinds a warlord may be.</summary>
+    public static readonly UnitType[] LordKinds = { Kinds.Orc, Kinds.Troll, Kinds.Shaman, Kinds.Goblin };
+
+    /// <summary>
+    /// A warlord for an army of a strength (the siege's nights, as <see cref="ThreatOf"/> reads it): the stronger the army,
+    /// the higher his level, a level every 3; his kind by chance and by what the army is made of, an orc most often, a
+    /// troll at the head of trolls, a shaman where shamans go, a goblin over many goblins; a troll and a shaman from the
+    /// second level only.
+    /// </summary>
+    public Warlord WarlordFor(float threat, IReadOnlyList<UnitType> roster)
+    {
+        int level = Math.Clamp(1 + (int)(threat / 3), 1, Warlord.MaxLevel), trolls = 0, shamans = 0, goblins = 0;
+        foreach (var t in roster) { if (t == Kinds.Troll) trolls++; else if (t == Kinds.Shaman) shamans++; else if (t == Kinds.Goblin) goblins++; }
+        float[] w = { 3, level >= 2 ? 1 + 1.5f * trolls : 0, level >= 2 ? 1 + 2 * shamans : 0, 1 + .25f * goblins };
+        float sum = 0;
+        foreach (float v in w) sum += v;
+        float pick = (float)Rng.NextDouble() * sum;
+        int k = 0;
+        while (k < w.Length - 1 && pick >= w[k]) pick -= w[k++];
+        return NewWarlord(level, LordKinds[k]);
     }
 
     /// <summary>The guard a warlord comes with: two orcs, a troll among them from the third level.</summary>
@@ -102,7 +143,15 @@ public sealed partial class Sim
             u.MaxHp *= 2 + .5f * lord.Level;
             u.Hp = u.MaxHp * Math.Clamp(lord.Health, .2f, 1);
         }
-        if (!lord.Champion) Say($"Войско ведёт военачальник {lord.Name}, уровень {lord.Level}. Убейте его, и войско побежит.", 1, u);
+        if (lord.Champion) return;
+        Say($"Войско ведёт {lord.Title} {lord.Name}, уровень {lord.Level}. Убейте его, и войско побежит.", 1, u);
+        string how = lord.Gift switch
+        {
+            LordGift.Curse => "Шаман-военачальник проклинает кладку стен: она трескается, крошится и ломается втрое быстрее. Святилище рядом защищает от проклятий.",
+            LordGift.Ambush => "Гоблин-военачальник прячет одну ватагу в засаде в траве. Не выходите за стены по одному.",
+            _ => null,
+        };
+        if (how != null) Say(how, 2, u);
     }
 
     /// <summary>A warlord who got away, setting out again: mended halfway since, as any who got away is.</summary>
@@ -142,21 +191,27 @@ public sealed partial class Sim
         foreach (var u in Units) if (u.Lord != null && !u.Dead && u.Team == Team.Horde) LordsHere.Add(u);
     }
 
-    /// <summary>A warlord, each tick: off the field if badly hurt; his cry when his own waver; his blow when ours close on him.</summary>
-    void LordTick(Unit u)
+    /// <summary>
+    /// A warlord, each tick: off the field if badly hurt; his cry when his own waver; what his kind does besides — his blow
+    /// when ours close on him, his throw, his curse. True while he is at a throw (he does nothing else).
+    /// </summary>
+    bool LordTick(Unit u)
     {
         var lord = u.Lord;
-        if (u.Bound || Time < u.ChainedUntil) return;
+        if (u.Bound || Time < u.ChainedUntil) return false;
         if (!lord.Champion && !u.Routed && u.Hp < u.MaxHp * LordGives)
         {
             // his own band covers him going
             u.Routed = true;
             if (u.Band != null) foreach (var m in u.Band.Members) if (!m.Dead && !m.Bound) m.Routed = true;
             foreach (var b in ArmyOf(lord)) Dismay(b, .3f);
+            // the stone in his hands, if any, let fall
+            u.Hefted = null;
             Say($"{lord.Name} тяжело ранен и уходит с поля. Его войско дрогнуло.", 1, u);
-            return;
+            return false;
         }
-        if (u.Routed || u.Down || Time < u.StaggerUntil) return;
+        if (u.Routed || u.Down || Time < u.StaggerUntil) return false;
+        if (lord.Gift == LordGift.Boulders && Hurling(u)) { HurlTick(u); return true; }
         if (Time >= u.CryReady)
         {
             // those about him wavering, or a band of his low in spirit, or his own band going up to storm
@@ -172,6 +227,9 @@ public sealed partial class Sim
             foreach (var b in ArmyOf(lord)) if (b.Spirit < WaverSpirit) low = true;
             if (wavering >= 3 || low || u.Band is { State: BandState.Storm } && Time - u.Band.Since < 2) Cry(u);
         }
+        if (lord.Gift == LordGift.Boulders) return LordHurl(u);
+        if (lord.Gift == LordGift.Curse) { if (Time >= u.SlamReady) LordCurse(u); return false; }
+        if (lord.Gift == LordGift.Ambush) return false;
         if (Time >= u.SlamReady && !u.T.Ranged)
         {
             int close = 0;
@@ -183,6 +241,29 @@ public sealed partial class Sim
             }
             if (close >= 2) Slam(u);
         }
+        return false;
+    }
+
+    /// <summary>
+    /// A troll at the head of an army hurls boulders as a hill giant does, smaller ones: every nine seconds or so, out of
+    /// reach of ours, at a knot of ours in his throw (the more the likelier, those up on a wall the likeliest), else at
+    /// the first wall of ours on his way. True while he is at a throw.
+    /// </summary>
+    bool LordHurl(Unit u)
+    {
+        if (Hurling(u)) { HurlTick(u); return true; }
+        if (Time < u.SlamReady || u.CarveCell >= 0 || u.Band is { State: BandState.Forming }) return false;
+        u.SlamReady = Time + 1;
+        if (Nearest(u, Team.Player, ReachOf(u) + 10) is { } foe && Dist(u, foe) < ReachOf(u) + foe.T.BodyR + 10) return false;
+        if (!GiantAim(u, out float tx, out float ty, out float tz, out var at)) return false;
+        u.Facing = MathF.Atan2(tz - u.Z, tx - u.X);
+        var stone = HeftBoulder(u, LordStoneR, LordStoneCause);
+        if (stone == null) { u.SlamReady = Time + 3; return false; }
+        u.SlamReady = Time + LordHurlRest * (.85f + .3f * (float)Rng.NextDouble());
+        BeginHurl(u, stone, tx, ty, tz, at);
+        LordHurls++;
+        if (Time - _hurlSaid > 120) { _hurlSaid = Time; Say($"{u.Lord.Name} мечет валуны. Уводите людей со стены, по которой он бьёт.", 2, u); }
+        return true;
     }
 
     /// <summary>

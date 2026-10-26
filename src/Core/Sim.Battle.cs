@@ -33,6 +33,8 @@ public sealed class BattleReport
     /// <summary>The warlord at its head, if any: his name, his level when he came, what became of him, how many of ours his army killed.</summary>
     public string Lord;
     public int LordLevel, LordSlew;
+    /// <summary>His kind («тролль-военачальник»).</summary>
+    public string LordTitle = "";
     public LordFate LordFate;
     /// <summary>Voxels of our building the horde broke: hacked, smashed by stones and by a giant.</summary>
     public int Broke;
@@ -106,7 +108,7 @@ public sealed partial class Sim
     void BattleLord(Warlord lord)
     {
         if (_battle == null || lord.Champion) return;
-        if (_battle.Lord == null) { _battle.Lord = lord.Name; _battle.LordLevel = lord.Level; }
+        if (_battle.Lord == null) { _battle.Lord = lord.Name; _battle.LordLevel = lord.Level; _battle.LordTitle = lord.Title; }
         if (_battle.Lord != lord.Name) return;
         _battle.LordFate = lord.Fate;
         _battle.LordSlew = lord.Slew;
@@ -138,7 +140,7 @@ public sealed partial class Sim
             Tally(w, r.Came); Tally(w, r.Fell); Tally(w, r.Fled); Tally(w, r.Taken); Tally(w, r.OursFell);
             w.Write(r.Bands.Count);
             foreach (var b in r.Bands) { w.Write(b.Id); w.Write(b.Name); w.Write(b.Size); w.Write(b.Fell); w.Write(b.Fled); w.Write(b.Taken); w.Write(b.Broken); w.Write(b.Spirit); }
-            w.Write(r.Lord ?? ""); w.Write(r.LordLevel); w.Write(r.LordSlew); w.Write((byte)r.LordFate);
+            w.Write(r.Lord ?? ""); w.Write(r.LordLevel); w.Write(r.LordSlew); w.Write((byte)r.LordFate); w.Write(r.LordTitle ?? "");
             w.Write(r.Broke); w.Write(r.KeepLost); w.Write(r.Keep0);
         }
         // the last few raids: the screen and the map look no further back
@@ -160,7 +162,7 @@ public sealed partial class Sim
             for (int n = r.ReadInt32(); n > 0; n--)
                 b.Bands.Add(new BandEnd { Id = r.ReadInt32(), Name = r.ReadString(), Size = r.ReadInt32(), Fell = r.ReadInt32(), Fled = r.ReadInt32(), Taken = r.ReadInt32(), Broken = r.ReadBoolean(), Spirit = r.ReadSingle() });
             b.Lord = r.ReadString(); if (b.Lord.Length == 0) b.Lord = null;
-            b.LordLevel = r.ReadInt32(); b.LordSlew = r.ReadInt32(); b.LordFate = (LordFate)r.ReadByte();
+            b.LordLevel = r.ReadInt32(); b.LordSlew = r.ReadInt32(); b.LordFate = (LordFate)r.ReadByte(); b.LordTitle = r.ReadString();
             b.Broke = r.ReadInt32(); b.KeepLost = r.ReadSingle(); b.Keep0 = r.ReadSingle();
             return b;
         }

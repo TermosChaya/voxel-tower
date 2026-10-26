@@ -86,7 +86,8 @@ public sealed partial class Sim
     {
         if (b.Broken) return;
         b.Broken = true;
-        foreach (var m in b.Members) if (!m.Dead && !m.Bound) m.Routed = true;
+        b.Lurk = false;
+        foreach (var m in b.Members) { m.Lurking = false; if (!m.Dead && !m.Bound) m.Routed = true; }
         int alive = b.Alive;
         if (alive > 0) Say($"{b.Name} бежит: {(alive == 1 ? "уцелел один" : $"уцелело {alive}")}.", 1, b.Leader is { Dead: false } l ? l : b.Members.Find(m => !m.Dead));
     }

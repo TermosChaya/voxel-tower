@@ -8,7 +8,8 @@ namespace VoxelTower.Core;
 /// Commanders of ours: a captain in a cloak and a plumed helm, with a sword and a horn, who sees to the soldiers about it
 /// by itself, as far as <see cref="CaptainReach"/> — the player may turn that off and on, and give it a spot to hold.
 /// Every few seconds it looks over the field. With the horde coming it forms those on foot up inside the wall the horde is
-/// coming at (or before the citadel, where there is no wall), sends those who shoot up onto the wall-walks facing it,
+/// coming at (or before the citadel, where there is no wall), across the way in where the horde will walk in through an
+/// open gate or a gap with the shields in front, sends those who shoot up onto the wall-walks facing it,
 /// sends the badly hurt back to mend, sounds the horn when its people waver and closes the shield wall when the horde is
 /// on them; the band beaten off, it calls the workers to mend what was broken about it. At the alarm with no horde in
 /// sight it forms them at the citadel's gate. Those the player sent somewhere itself are left be. Its four calls
@@ -32,8 +33,8 @@ public sealed partial class Sim
     };
     /// <summary>A commander made a call: who, and which (0–3).</summary>
     public event Action<Unit, int> Called;
-    /// <summary>Orders a commander gave the field over (for the bench): formed up, sent onto the walls, sent back to mend, mendings called.</summary>
-    public int CaptainFormed, CaptainPosted, CaptainSentBack, CaptainMended, CaptainVolleys;
+    /// <summary>Orders a commander gave the field over (for the bench): formed up, sent onto the walls, sent back to mend, mendings called, volleys, lines across a way in.</summary>
+    public int CaptainFormed, CaptainPosted, CaptainSentBack, CaptainMended, CaptainVolleys, CaptainAcross;
 
     // one line in the chronicle for each kind of order, not oftener than a minute
     readonly Dictionary<string, double> _orderSaid = new();
@@ -82,7 +83,7 @@ public sealed partial class Sim
         float best = 110 * VoxelWorld.PerMetre;
         foreach (var o in Units)
         {
-            if (o.Dead || o.Inside || o.Team != Team.Horde || o.Bound || o.Envoy || o.Routed) continue;
+            if (o.Dead || o.Inside || o.Team != Team.Horde || o.Bound || o.Envoy || o.Lurking || o.Routed) continue;
             float d = MathF.Sqrt((o.X - cx) * (o.X - cx) + (o.Z - cz) * (o.Z - cz));
             if (d < best) { best = d; lead = o; }
         }
@@ -115,7 +116,7 @@ public sealed partial class Sim
         float tx = 0, tz = 0; int n = 0;
         foreach (var o in Units)
         {
-            if (o.Dead || o.Inside || o.Team != Team.Horde || o.Bound || o.Envoy) continue;
+            if (o.Dead || o.Inside || o.Team != Team.Horde || o.Bound || o.Envoy || o.Lurking) continue;
             if ((o.X - lead.X) * (o.X - lead.X) + (o.Z - lead.Z) * (o.Z - lead.Z) > 24 * 24 * 64) continue;
             tx += o.X; tz += o.Z; n++;
         }
@@ -123,14 +124,18 @@ public sealed partial class Sim
         // where the horde breaks into our building — hacking through it, up a ladder or a tower onto it — nearest what
         // is kept: the breach, which the line holds; else the first wall of ours on the way from the knot to what is kept
         var breach = Breach(tx, tz, cx, cz);
-        var wall = breach ?? WallBetween(tx, tz, cx, cz);
+        // where it will walk in through an open gate or a gap in our walls with nothing to hack: the line across that
+        var gap = breach == null ? Opening(lead, cx, cz, cap.Goal >= 0 ? 3 * VoxelWorld.PerMetre : Site.KeepR + VoxelWorld.PerMetre) : null;
+        var wall = breach ?? (gap is { } g ? ((int)g.x, (int)g.z) : WallBetween(tx, tz, cx, cz));
         float lx, lz;
-        if (wall is { } w) { (lx, lz) = Toward(w.x, w.z, cx, cz, 3.5f * VoxelWorld.PerMetre); _lastFront[cap.Id] = (w.x, w.z); }
+        if (gap is { } way) { (lx, lz) = (way.x + way.ix * 1.5f * VoxelWorld.PerMetre, way.z + way.iz * 1.5f * VoxelWorld.PerMetre); _lastFront[cap.Id] = ((int)way.x, (int)way.z); }
+        else if (wall is { } w) { (lx, lz) = Toward(w.x, w.z, cx, cz, 3.5f * VoxelWorld.PerMetre); _lastFront[cap.Id] = (w.x, w.z); }
         else if (cap.Goal >= 0) (lx, lz) = (cx, cz);
         else (lx, lz) = Toward(cx, cz, tx, tz, 14 * VoxelWorld.PerMetre);
         int line = NearestStand((int)lx, (int)lz, 2);
         var melee = Melee(men);
-        if (breach != null) Place(cap, melee, line, "breach", "Командир ставит бойцов в пролом, который пробивает орда.");
+        if (gap is { } across) PlaceAcross(cap, melee, lx, lz, across.ix, across.iz, across.width);
+        else if (breach != null) Place(cap, melee, line, "breach", "Командир ставит бойцов в пролом, который пробивает орда.");
         else Place(cap, melee, line, "line", wall != null ? "Командир строит бойцов у стены, к которой идёт орда." : "Командир строит бойцов навстречу орде.");
         // the shooters onto the wall-walks that face the horde; with no wall, behind the line
         var shooters = Shooters(men);
@@ -219,13 +224,72 @@ public sealed partial class Sim
         return best;
     }
 
+    /// <summary>
+    /// Where the horde about to come in will walk through our walls with nothing to hack or climb, through an open gate
+    /// or a gap left in them: along the way of the nearest of it, the first place where our wall stands close on either
+    /// side of that way (within 6 m), short of so near what is kept. Its middle, the way in there (a unit vector) and how
+    /// wide it is, voxels; null if the way goes in by no such place, or hacks or climbs its way in.
+    /// </summary>
+    (float x, float z, float ix, float iz, float width)? Opening(Unit lead, float cx, float cz, float stop)
+    {
+        if (FieldOf(lead.T) is not { } f) return null;
+        float reach = 6 * VoxelWorld.PerMetre;
+        float Side(float x, float z, float sx, float sz)
+        {
+            for (float s = 2; s <= reach; s += 2) if (OurWallAt((int)(x + sx * s), (int)(z + sz * s))) return s;
+            return -1;
+        }
+        int c = lead.Cell;
+        for (int step = 0; step < 160; step++)
+        {
+            int next = f.Next(Nav, c, out float carve, out var works);
+            if (next < 0 || next == c || carve > 0 || works != Works.None) return null;
+            var (ax, _, az) = Nav.Feet(c);
+            var (bx, _, bz) = Nav.Feet(next);
+            float dx = bx - ax, dz = bz - az, d = MathF.Sqrt(dx * dx + dz * dz);
+            if (d > .1f && !OurWallAt((int)bx, (int)bz))
+            {
+                float ux = dx / d, uz = dz / d, left = Side(bx, bz, -uz, ux), right = Side(bx, bz, uz, -ux);
+                if (left > 0 && right > 0)
+                {
+                    float mid = (left - right) * .5f;
+                    return (bx - uz * mid, bz + ux * mid, ux, uz, left + right);
+                }
+            }
+            // at what is kept with no wall passed: it comes in by no gate
+            if ((bx - cx) * (bx - cx) + (bz - cz) * (bz - cz) < stop * stop) return null;
+            c = next;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// The line across an opening in our walls, a step inside it: the front rank from side to side of it facing out,
+    /// the shields in it first and the spears after, the rest in ranks behind; unless they stand so already.
+    /// </summary>
+    void PlaceAcross(Unit cap, List<Unit> men, float x, float z, float ix, float iz, float width)
+    {
+        int spot = NearestStand((int)x, (int)z, 2);
+        if (spot < 0 || men.Count == 0) return;
+        bool same = _placed.TryGetValue((cap.Id, "gap"), out int was) && CellsApart(was, spot) <= 2;
+        bool all = true;
+        foreach (var u in men) if (u.Ward != cap || u.Post < 0 || !same && CellsApart(u.Post, spot) > 4) all = false;
+        if (all) return;
+        _placed[(cap.Id, "gap")] = spot;
+        int cols = Math.Max(2, (int)MathF.Round(width / NavGrid.CS));
+        CommandAcross(men, x, z, -ix, -iz, cols);
+        foreach (var u in men) u.Ward = cap;
+        CaptainFormed++; CaptainAcross++;
+        OrderSaid(cap, "gap", "Командир ставит строй поперёк прохода в стене, щиты вперёд.");
+    }
+
     /// <summary>A warlord on his feet, or a ram or a siege tower at our building, in bowshot of three of a commander's shooters: where to loose a volley.</summary>
     Unit VolleyMark(Unit cap, List<Unit> shooters)
     {
         if (shooters.Count < 3) return null;
         foreach (var o in Units)
         {
-            if (o.Dead || o.Team != Team.Horde || o.Inside || o.Bound || o.Abandoned) continue;
+            if (o.Dead || o.Team != Team.Horde || o.Inside || o.Bound || o.Abandoned || o.Lurking) continue;
             bool lord = o.Lord != null && !o.Routed, engine = (o.T == Kinds.Ram || o.T == Kinds.SiegeTower) && o.State is UnitState.Siege or UnitState.Carve || o.T == Kinds.SiegeTower && o.Docked.Count > 0;
             if (!lord && !engine) continue;
             int near = 0;

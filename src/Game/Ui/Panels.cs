@@ -321,6 +321,7 @@ public partial class HordeInfo : VBoxContainer
     static string Where(Main m, Warband b)
     {
         if (b.Target != null) return "на " + b.Target.Name.ToLowerInvariant();
+        if (b.State == BandState.Lurk) return "скрылась из виду";
         // one come in by another side than the west: by that side
         int edge = b.Edge >= 0 ? b.Edge : m.Sim.HomeEdge;
         if (edge != Sim.WestEdge)
@@ -358,7 +359,7 @@ public partial class HordeInfo : VBoxContainer
                 box.AddChild(Hud.Text(Where(_m, b), Ornament.SerifItalic, 12, Ornament.Aged));
                 // a warlord at its head; its spirit once it has come in
                 if (b.Lord is { Champion: false } lord)
-                    box.AddChild(Hud.Text(b.LordsOwn ? $"ведёт военачальник {lord.Name}, уровень {lord.Level}" : $"войско военачальника {lord.Name}", Ornament.Serif, 12, Ornament.EmberGlow));
+                    box.AddChild(Hud.Text(b.LordsOwn ? $"ведёт {lord.Title} {lord.Name}, уровень {lord.Level}" : $"войско военачальника {lord.Name}", Ornament.Serif, 12, Ornament.EmberGlow));
                 if (b.State != BandState.Coming)
                     box.AddChild(Hud.Text(b.Broken ? "бежит" : $"дух {b.Spirit * 100:0} %" + (b.Spirit < Sim.WaverSpirit ? ", дрогнула" : ""), Ornament.Serif, 12, b.Spirit < Sim.WaverSpirit || b.Broken ? Ornament.Ember : Ornament.Aged));
                 if (b.Side >= 0 && b.State is BandState.Coming or BandState.Forming or BandState.March)

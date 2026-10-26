@@ -132,7 +132,7 @@ public sealed partial class Sim
         Unit best = null; float bd = ReachOf(u) + 8;
         foreach (var t in Units)
         {
-            if (t.Dead || t.Inside || t.Team == Team.Player || t.Bound || t.Envoy) continue;
+            if (t.Dead || t.Inside || t.Team == Team.Player || t.Bound || t.Envoy || t.Lurking) continue;
             float dx = t.X - u.X, dz = t.Z - u.Z, d = MathF.Sqrt(dx * dx + dz * dz);
             if (d > bd || MathF.Abs(t.Y - u.Y) > u.T.BodyH || d > 1 && (dx * fx + dz * fz) / d < .55f) continue;
             bd = d; best = t;

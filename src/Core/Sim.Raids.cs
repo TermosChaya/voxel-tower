@@ -461,6 +461,8 @@ public sealed partial class Sim
             foreach (var b in bands) b.Lord = lord;
             Rested(lord);
             lord.Fate = LordFate.Coming;
+            // a goblin lays one of his bands in wait (Sim.Ambush.cs)
+            if (lord.Gift == LordGift.Ambush) TellOffAmbush(bands);
         }
         foreach (var b in bands) b.Edge = edge;
         if (Raids.Active)

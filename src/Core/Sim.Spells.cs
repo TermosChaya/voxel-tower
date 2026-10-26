@@ -584,7 +584,7 @@ public sealed partial class Sim
             u.Target = null; float bd = Seek;
             foreach (var o in Units)
             {
-                if (o.Dead || o.Inside || o.Bound || o.Envoy || o.Team != Team.Horde) continue;
+                if (o.Dead || o.Inside || o.Bound || o.Envoy || o.Lurking || o.Team != Team.Horde) continue;
                 float d = Dist(u, o);
                 if (d < bd) { bd = d; u.Target = o; }
             }

@@ -153,6 +153,9 @@ public partial class TrailView : Node3D
         var w = _m.World;
         var nav = _m.Sim.Nav;
         Vector3 at;
+        // one lying in wait is not shown, nor its way
+        d.Line.Visible = b.State != BandState.Lurk;
+        if (b.State == BandState.Lurk) { d.Tag.Visible = false; return; }
         if (b.Leader is { Dead: false } l) at = new Vector3(w.WX(l.X), w.WY(l.Y + l.T.BodyH + 9), w.WZ(l.Z));
         else if (b.Entry >= 0) { var (x, y, z) = nav.Feet(b.Entry); at = new Vector3(w.WX(x), w.WY(y + 22), w.WZ(z)); }
         else { d.Tag.Visible = false; return; }

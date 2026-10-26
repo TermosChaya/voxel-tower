@@ -704,7 +704,10 @@ public partial class MagicView : Node3D
         if (gone != null) foreach (var m in gone) _mires.Remove(m);
     }
 
-    /// <summary>Each cursed patch of our walls under a faint green haze while the curse lasts.</summary>
+    /// <summary>
+    /// Each cursed patch of our walls under a faint green haze while the curse lasts; a stretch under a warlord's curse
+    /// on the stone in a column of it from the foot of the wall to over its top.
+    /// </summary>
     void Curses(Sim sim)
     {
         foreach (var c in sim.Curses)
@@ -712,7 +715,14 @@ public partial class MagicView : Node3D
             if (_curses.ContainsKey(c)) continue;
             var mat = new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = new Color(Hex, 0), Transparency = BaseMaterial3D.TransparencyEnum.Alpha, CullMode = BaseMaterial3D.CullModeEnum.Disabled };
             float r = c.R * VoxelWorld.Vox * 1.3f;
-            var node = new MeshInstance3D { Mesh = new SphereMesh { Radius = r, Height = r * 2, RadialSegments = 20, Rings = 10 }, MaterialOverride = mat, Position = At(c.X, c.Y, c.Z), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+            Mesh mesh = new SphereMesh { Radius = r, Height = r * 2, RadialSegments = 20, Rings = 10 };
+            if (c.Stone)
+            {
+                float ground = _m.World.GroundTop((int)c.X, (int)c.Z), h = (c.Y - ground) * 2 + 2 * VoxelWorld.PerMetre;
+                r = c.R * VoxelWorld.Vox * 1.05f;
+                mesh = new CylinderMesh { TopRadius = r, BottomRadius = r, Height = h * VoxelWorld.Vox, RadialSegments = 24, Rings = 1 };
+            }
+            var node = new MeshInstance3D { Mesh = mesh, MaterialOverride = mat, Position = At(c.X, c.Y, c.Z), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
             AddChild(node);
             _curses[c] = (node, mat);
         }
@@ -721,7 +731,7 @@ public partial class MagicView : Node3D
         {
             double left = c.Until - sim.Time;
             if (!sim.Curses.Contains(c) || left <= 0) { node.QueueFree(); (gone ??= new()).Add(c); continue; }
-            mat.AlbedoColor = new Color(Hex, (float)Math.Clamp(left / 3, 0, 1) * (.16f + .05f * MathF.Sin((float)_t * 3)));
+            mat.AlbedoColor = new Color(Hex, (float)Math.Clamp(left / 3, 0, 1) * ((c.Stone ? .12f : .16f) + .04f * MathF.Sin((float)_t * 3)));
         }
         if (gone != null) foreach (var c in gone) _curses.Remove(c);
     }
