@@ -42,7 +42,7 @@ public partial class Main
         await Frames(4);
         string said = Hud.DawnSaid;
         check("the raid over, the card after it tells how it went: who came and fell, the warlord fallen",
-            said.Contains("НАБЕГ") && said.Contains("Орда: пришло") && said.Contains($"Военачальник {lord.Name}, уровень 2: пал") && Hud.LordShown == null,
+            (said.Contains("ВОЛНА") || said.Contains("НАБЕГ")) && said.Contains("Орда: пришло") && said.Contains($"Военачальник {lord.Name}, уровень 2: пал") && Hud.LordShown == null,
             $"the card: «{said.Replace("\n", " / ")}»; the bar {Hud.LordShown ?? "gone"}");
         Hud.CloseDawn();
         await Frames(2);

@@ -109,7 +109,7 @@ public partial class DawnCard : Control
         // the stars are the night's, when this raid was that night
         bool starred = r != null && b != null && r.Number == b.Number;
         bool legend = sim.Gifts.Exists(g => g.Kind == GiftKind.Relic);
-        string head = taking && r != null ? $"Рассвет после ночи {r.Number}" : b == null ? "" : !b.Held ? "Цитадель пала" : $"Набег {b.Number} отбит";
+        string head = taking && r != null ? $"Рассвет после ночи {r.Number}" : b == null ? "" : !b.Held ? "Цитадель пала" : sim.Source.Key == "map" ? $"Набег {b.Number} отбит" : $"Волна {b.Number} отбита";
         _head.Text = (legend ? head + " · трофеи вожака главы" : head).ToUpperInvariant();
         _stars.Visible = starred;
         _stars.Lit = starred ? r.Stars : 0;
