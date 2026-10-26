@@ -74,7 +74,7 @@ public sealed partial class Sim
     /// <summary>The share of his health under which a warlord leaves the field.</summary>
     const float LordGives = .3f;
 
-    static readonly (string name, string of)[] LordNames =
+    internal static readonly (string name, string of)[] LordNames =
     {
         ("Угрюм", "Угрюма"), ("Кривоклык", "Кривоклыка"), ("Бурзаг", "Бурзага"), ("Гхаш", "Гхаша"), ("Мордрак", "Мордрака"),
         ("Скалозуб", "Скалозуба"), ("Ургаш", "Ургаша"), ("Ракх", "Ракха"), ("Зубодёр", "Зубодёра"), ("Ворг", "Ворга"),

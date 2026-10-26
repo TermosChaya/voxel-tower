@@ -6181,6 +6181,10 @@ if (args.Length > 0 && args[0] == "--war-audit") WarBench.Audit();
 // the map of valleys' ground: the campaign, its one clock, parties coming in and going out over the sides, a valley's
 // fall its own, the outpost's place and the horde's town, the campaign's folder (CampaignBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--campaign") CampaignBench.Run(Check);
+// the map's own life: the ways, the horde's realm, quick battles, the valleys we are not in, the campaign lost (MapBench.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--map") MapBench.Run(Check);
+if (args.Length > 0 && args[0] == "--map-trace")
+    MapBench.Trace(args.Length > 1 ? uint.Parse(args[1]) : 11, args.Length > 2 ? int.Parse(args[2]) : 30, args.Length > 3 && args[3] == "weak");
 
 if (args.Length > 0 && args[0] == "--stress")
 {

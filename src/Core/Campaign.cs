@@ -102,7 +102,7 @@ public sealed class Party
 /// sides shared with its neighbours and the side its enemy comes by); whose it is, whether it is the first valley, and
 /// whether we have been in it — then its valley lies in a file of the campaign's folder, as play left it.
 /// </summary>
-public sealed class MapCell
+public sealed partial class MapCell
 {
     public int Q, R;
     public uint Seed;
@@ -117,11 +117,17 @@ public sealed class MapCell
     public string File => $"valley_{Q}_{R}.sav";
 }
 
-/// <summary>A party of ours on the map, in a cell, at the side it came out by (phase 1 walks them from cell to cell).</summary>
-public sealed class MapParty
+/// <summary>
+/// A party on the map, ours or the horde's: in a cell, the cells it is to walk through next and how far it has gone
+/// toward the first of them, seconds of the map's time (Campaign.Turn.cs walks it, MapPath.cs finds its way).
+/// </summary>
+public sealed partial class MapParty
 {
     public int Q, R;
     public Party Party;
+    public Owner Owner = Owner.Ours;
+    public List<MapCell> Path;
+    public double Progress;
 }
 
 /// <summary>
@@ -132,9 +138,9 @@ public sealed class MapParty
 /// (<see cref="Sim.Save"/>). What is decided on the map — who walks where, the enemy's turns, quick battles — comes
 /// with the map itself (docs/handoff/13-world-map.md); this is what it stands on.
 /// </summary>
-public sealed class Campaign
+public sealed partial class Campaign
 {
-    public const int Version = 1;
+    public const int Version = 2;
     public const string FileName = "campaign.dat";
     static readonly byte[] Magic = { (byte)'V', (byte)'T', (byte)'C', (byte)'M' };
 
@@ -287,6 +293,7 @@ public sealed class Campaign
             }
             sim.Campaign = true;
             Enter(sim);
+            Settle(cell, sim);
             return sim;
         }
         finally { save?.Dispose(); }
@@ -300,6 +307,7 @@ public sealed class Campaign
     {
         sim.SetClock(Clock);
         sim.Stock.Gold = Gold;
+        Live = sim; InValley = true;
     }
 
     /// <summary>
@@ -310,8 +318,9 @@ public sealed class Campaign
     {
         Clock = sim.Clock.Now;
         Gold = sim.Stock.Gold;
-        foreach (var p in sim.TakeDeparted()) Parties.Add(new MapParty { Q = cell.Q, R = cell.R, Party = p });
+        foreach (var p in sim.TakeDeparted()) Parties.Add(new MapParty { Id = _nextParty++, Q = cell.Q, R = cell.R, CameQ = cell.Q, CameR = cell.R, Party = p });
         if (cell.Home && sim.Lost && HomeFell < 0) HomeFell = sim.LostDay;
+        Summarise(cell, sim);
     }
 
     // ------------------------------------------------------------ the folder
@@ -347,7 +356,8 @@ public sealed class Campaign
                 foreach (var e in c.Edges) { w.Write(e.Seed); w.Write(e.River); w.Write(e.Road); }
             }
             w.Write(Parties.Count);
-            foreach (var p in Parties) { w.Write(p.Q); w.Write(p.R); p.Party.Write(w); }
+            foreach (var p in Parties) { w.Write(p.Q); w.Write(p.R); p.Party.Write(w); WriteWay(w, p); }
+            WriteTurn(w);
         }
         System.IO.File.Move(tmp, path, overwrite: true);
     }
@@ -376,7 +386,13 @@ public sealed class Campaign
             for (int s = 0; s < 6; s++) cell.Edges[s] = new HexEdge { Seed = r.ReadUInt32(), River = r.ReadSingle(), Road = r.ReadSingle() };
             c.Cells.Add(cell);
         }
-        for (int n = r.ReadInt32(); n > 0; n--) c.Parties.Add(new MapParty { Q = r.ReadInt32(), R = r.ReadInt32(), Party = Party.Read(r) });
+        for (int n = r.ReadInt32(); n > 0; n--)
+        {
+            var p = new MapParty { Q = r.ReadInt32(), R = r.ReadInt32(), Party = Party.Read(r) };
+            c.ReadWay(r, p);
+            c.Parties.Add(p);
+        }
+        c.ReadTurn(r);
         return c;
     }
 }
