@@ -118,7 +118,7 @@ public sealed class DemoHexes : IHexSource
                 int i = I(c, r), z = zone[i];
                 var g = zoneGround[z];
                 double f = forest.Sample(c * .23, r * .23), h = hills.Sample(c * .19 + 40, r * .19), w = lakes.Sample(c * .16 + 90, r * .16 + 30);
-                var look = new HexLook { Ground = g, Zone = (short)z, Variant = (byte)(Hash.H3(c, r, (int)seed) * 256), Height = (byte)Math.Clamp((int)(heights.Sample(c * .045, r * .045) * 5) - 1, 0, 3) };
+                var look = new HexLook { Ground = g, Zone = (short)z, Height = (byte)Math.Clamp((int)(heights.Sample(c * .045, r * .045) * 5) - 1, 0, 3) };
                 double woods = g switch { HexGround.Grass => .6, HexGround.Swamp => .55, HexGround.Snow => .58, HexGround.Dirt => .64, HexGround.Sand => .8, HexGround.Rough => .74, _ => .9 };
                 double hilly = g switch { HexGround.Rough or HexGround.Snow => .66, HexGround.Dirt or HexGround.Sand => .72, _ => .78 };
                 if (f > woods) look.Relief = HexRelief.Forest;

@@ -14,7 +14,7 @@ public partial class HexMapView
     MultiMeshInstance3D _arrows;
     MeshInstance3D _cross;
     Label3D _days;
-    static readonly Color Today = new("74c94f"), Later = new("c8331f");
+    static readonly Color Today = new("2fb52f"), Later = new("d2261a");
     /// <summary>The way shown, for the self-test: how many arrows, how many of them green.</summary>
     public int ArrowsShown { get; private set; }
     public int ArrowsToday { get; private set; }
@@ -23,7 +23,7 @@ public partial class HexMapView
     {
         var mat = new StandardMaterial3D
         {
-            VertexColorUseAsAlbedo = true, ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+            VertexColorUseAsAlbedo = true, VertexColorIsSrgb = true, ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, CullMode = BaseMaterial3D.CullModeEnum.Disabled,
             NoDepthTest = false, RenderPriority = 1,
         };
         _arrows = new MultiMeshInstance3D
@@ -116,7 +116,7 @@ public partial class HexMapView
         _cross.Visible = true;
         int days = last.Day + 1;
         _days.Text = days == 1 ? "" : $"{days} {DaysWord(days)}";
-        _days.Position = new Vector3(0, 6f, 0);
+        _days.Position = new Vector3(0, .9f, 0);
         _days.Modulate = last.Day == 0 ? new Color("e9f5dc") : new Color("ffd9cf");
         // the cross's colour: as its step's
         _cross.MaterialOverride = new StandardMaterial3D

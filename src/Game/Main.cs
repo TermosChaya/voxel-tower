@@ -770,6 +770,8 @@ public partial class Main : Node3D
         }
         // the map runs with the valley (Main.Campaign.cs)
         if (Atlas != null && !_selfTest) CampaignTick(ran);
+        // (the map may have begun the scene again on another valley: this one is let go)
+        if (!IsInsideTree()) return;
         // a wave beaten back is written down by itself
         if (_shot == null && !_selfTest && !_demo)
         {

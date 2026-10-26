@@ -58,6 +58,8 @@ public partial class Main
         Tools.SetTool(Tool.None);
         AtlasLand?.Open(Atlas);
         AtlasOpen = true;
+        // the big map: its own drawing of hexes (Main.BigMap.cs)
+        if (Atlas.Big) OpenBigMap();
         Rig.Held = true;
         Hud.ShowAtlas(true);
         Hud.MapPane.Open();
@@ -68,6 +70,7 @@ public partial class Main
     {
         if (!AtlasOpen) return;
         AtlasLand?.Close();
+        if (Atlas?.Big == true) WorldMap?.Close();
         AtlasOpen = false;
         Rig.Held = FP.On;
         Rig.Cam.Current = true;

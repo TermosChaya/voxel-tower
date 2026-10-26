@@ -903,7 +903,10 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   полуклеток (`HexMapLayout.FogW × FogH`), её читают `voxel.gdshader`, `water.gdshader` (`atlas_fog`, `atlas_size`,
   новый `atlas_through` — сколько видно сквозь туман) и `world_far.gdshader`; мини-карта, плашка, стрелки пути
   (`ShowPath`), события `Clicked` и `ClickedHex`. Фигуры — `HexMapFigures.cs` (`MapWalker` — временная замена
-  отряда кампании, пока `hommworld` не отдаст свои `HexStep` и поля `MapParty`). Сцены — `Main.Poses.World.cs`.
+  отряда кампании; `Main.BigMap.cs` переводит в них отряды кампании каждый кадр, `Sync`). `Main.BigMap.cs` —
+  большая карта кампании: `OpenBigMap` (из `OpenAtlas`, когда `Atlas.Big`), источник `CampaignHexes`, щелчки —
+  `AtlasHud.HexClicked`, стрелки — из `AtlasHud.Planned` или `MapParty.Steps`. Сцены — `Main.Poses.World.cs`
+  (`--demo --pose=world` на выдуманном мире, `--campaign --pose=bigmap` на настоящей кампании).
 - `AtlasView.cs` — карта долин как земля на экране (13-world-map.md, 2.14): `CanvasLayer` (−1, под рамкой `Hud`,
   которая рисует поверх неё рамку карты `Ui/AtlasHud.cs`) с `SubViewportContainer`
   и `SubViewport` со своим миром (`OwnWorld3D`): `WorldView` поля карты (`Init(мир)`, грубый уровень издалека через

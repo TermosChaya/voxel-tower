@@ -36,6 +36,8 @@ public partial class HexMapView : Node3D
     public (int Col, int Row) Chosen = (-1, -1);
     /// <summary>What the plate by the pointer says of a hex; by default its ground, its relief and its thing.</summary>
     public Func<int, int, string> Describe;
+    /// <summary>Frames in which the map's own work took over 40 ms (one or two may be the machine's, not the map's).</summary>
+    public int SlowWorkFrames;
     /// <summary>The eye drawn across the map by itself, voxels a second (to measure the drawing while it goes).</summary>
     public Vector2 AutoPan;
     /// <summary>The slowest frame since the map was opened, ms (pictures and the self-test read it).</summary>
@@ -194,6 +196,7 @@ public partial class HexMapView : Node3D
         if (IsOpen) return;
         IsOpen = true;
         WorstFrameMs = WorstPutMs = WorstWorkMs = 0;
+        SlowWorkFrames = 0;
         _layer.Visible = _ui.Visible = true;
         _vp.RenderTargetUpdateMode = SubViewport.UpdateMode.Always;
         Cam.MakeCurrent();
@@ -403,7 +406,12 @@ public partial class HexMapView : Node3D
         _solid.SetShaderParameter("atlas_hover", new Vector4(hv.Item1, hv.Item2, ch.Item1, ch.Item2));
         FarShow();
         _mini.QueueRedraw();
-        if (Engine.GetFramesDrawn() > 10) WorstWorkMs = Math.Max(WorstWorkMs, work.Elapsed.TotalMilliseconds);
+        if (Engine.GetFramesDrawn() > 10)
+        {
+            double ms = work.Elapsed.TotalMilliseconds;
+            WorstWorkMs = Math.Max(WorstWorkMs, ms);
+            if (ms > 40) SlowWorkFrames++;
+        }
     }
 
     public override void _UnhandledInput(InputEvent e)

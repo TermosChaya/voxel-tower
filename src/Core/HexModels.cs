@@ -150,10 +150,10 @@ public static class HexModels
     {
         if (l.Ground is HexGround.Water or HexGround.DeepWater || l.Relief == HexRelief.Mountain) return;
         bool thing = l.Icon != HexIcon.None && l.Icon != HexIcon.Monster;
-        int seed = col * 7919 + row * 104729 + l.Variant;
+        int vr = HexTiles.Vary(col, row), seed = col * 7919 + row * 104729 + vr;
         if (l.Relief == HexRelief.Forest)
         {
-            int want = 9 + l.Variant % 5, put = 0;
+            int want = 9 + vr % 5, put = 0;
             Span<(float x, float z)> at = stackalloc (float, float)[16];
             for (int k = 0; k < 90 && put < want; k++)
             {
@@ -184,7 +184,7 @@ public static class HexModels
         if (thing) return;
         if (l.Relief == HexRelief.Hills)
         {
-            for (int k = 0; k < 1 + l.Variant % 2; k++)
+            for (int k = 0; k < 1 + vr % 2; k++)
             {
                 double a = Hash.H3(seed, k, 5) * Math.Tau;
                 int x = (int)(cx + Math.Cos(a) * 9), z = (int)(cz + Math.Sin(a) * 9);
@@ -194,7 +194,7 @@ public static class HexModels
             return;
         }
         // open land: a bush or a stone in one hex of three, flowers on a meadow
-        if (l.Variant % 3 == 0 && l.Ground is not (HexGround.Lava or HexGround.Scorched))
+        if (vr % 3 == 0 && l.Ground is not (HexGround.Lava or HexGround.Scorched))
         {
             double a = Hash.H3(seed, 0, 6) * Math.Tau;
             int x = (int)(cx + Math.Cos(a) * 10), z = (int)(cz + Math.Sin(a) * 10);
@@ -224,12 +224,17 @@ public static class HexModels
 
     // ------------------------------------------------------------ the things
 
-    /// <summary>A hex's thing at its middle (cx, cz), on its ground (y the first voxel over it).</summary>
-    public static void Thing(HexCanvas c, in HexLook l, float fx, float fz, int y)
+    /// <summary>
+    /// A hex's thing at its middle (cx, cz), on its ground (y the first voxel over it), as unlike others of its kind as
+    /// <paramref name="vary"/> says. Spent, it shows it: a windmill's sails gone, a water wheel's wheel, a treasure's
+    /// bones and its fire out.
+    /// </summary>
+    public static void Thing(HexCanvas c, in HexLook l, float fx, float fz, int y, int vary)
     {
         int x = (int)fx, z = (int)fz;
-        int seed = l.Variant * 31 + x;
+        int seed = vary * 31 + x;
         byte own = l.Owner;
+        bool spent = HexTiles.Spent(l);
         switch (l.Icon)
         {
             case HexIcon.Citadel: Citadel(c, x, y, z, own); break;
@@ -318,7 +323,7 @@ public static class HexModels
                 }
                 Flag(c, x + 8, y, z + 5, own, 8);
                 break;
-            case HexIcon.Pile: Pile(c, x, y, z, l.Variant); break;
+            case HexIcon.Pile: Pile(c, x, y, z, vary); break;
             case HexIcon.Chest:
                 Box(c, x - 2, y, z - 1, x + 3, y + 3, z + 2, Mat.Board);
                 Box(c, x - 2, y + 3, z - 1, x + 3, y + 4, z + 2, Mat.BoardDark);
@@ -342,8 +347,8 @@ public static class HexModels
                 Drum(c, x + .5f, z + .5f, 3, y, y + 9, Mat.Daub);
                 Cone(c, x + .5f, z + .5f, 3.6f, y + 9, 5, Mat.Thatch);
                 Box(c, x, y, z + 3, x + 1, y + 3, z + 4, Mat.Wood);
-                // the sails, a cross before its south face
-                for (int k = -7; k <= 7; k++)
+                // the sails, a cross before its south face (gone once its week's flour is given)
+                for (int k = -7; k <= 7 && !spent; k++)
                 {
                     c.Put(x + k, y + 9 + (int)(k * .2f), z + 4, Mat.Plank);
                     c.Put(x - (int)(k * .2f), y + 9 + k, z + 4, Mat.Plank);
@@ -352,7 +357,7 @@ public static class HexModels
                 break;
             case HexIcon.WaterWheel:
                 Hut(c, x - 5, y, z - 4, Mat.Board, Mat.Shingle);
-                for (int k = 0; k < 24; k++)
+                for (int k = 0; k < 24 && !spent; k++)
                 {
                     double a = k * Math.Tau / 24;
                     c.Put(x + 3, y + 3 + (int)Math.Round(Math.Sin(a) * 3.5), z + (int)Math.Round(Math.Cos(a) * 3.5), k % 3 == 0 ? Mat.Wood : Mat.Plank);
@@ -377,7 +382,7 @@ public static class HexModels
                 Box(c, x - 2, y, z + 2, x - 1, y + 4, z + 3, Mat.Snag); Box(c, x + 2, y, z + 2, x + 3, y + 3, z + 3, Mat.Snag);
                 Box(c, x - 2, y + 3, z + 2, x + 2, y + 4, z + 3, Mat.Snag);
                 Box(c, x - 1, y, z + 1, x + 2, y + 2, z + 3, Mat.Rubble);
-                for (int k = 0; k < 4; k++) c.Put(x - 4 + k * 3, y, z + 5 + (k & 1), Mat.Bone);
+                for (int k = 0; k < 4 && !spent; k++) c.Put(x - 4 + k * 3, y, z + 5 + (k & 1), Mat.Bone);
                 break;
             case HexIcon.Ruins:
                 for (int k = 0; k < 6; k++)
@@ -394,7 +399,7 @@ public static class HexModels
             case HexIcon.Den:
                 Blob(c, x + .5f, y + 1, z - 2.5f, 8.5f, 6.5f, 6, Mat.Rock, Mat.Moss, seed);
                 Box(c, x - 2, y, z + 1, x + 3, y + 4, z + 4, Mat.Air);
-                for (int k = 0; k < 7; k++) c.Put(x - 5 + (int)(Hash.H3(seed, k, 1) * 11), y, z + 4 + (int)(Hash.H3(seed, k, 2) * 4), k % 2 == 0 ? Mat.BonePile : Mat.Bone);
+                for (int k = 0; k < 7 && !spent; k++) c.Put(x - 5 + (int)(Hash.H3(seed, k, 1) * 11), y, z + 4 + (int)(Hash.H3(seed, k, 2) * 4), k % 2 == 0 ? Mat.BonePile : Mat.Bone);
                 break;
             case HexIcon.Trial:
                 for (int k = 0; k < 7; k++)
@@ -404,7 +409,7 @@ public static class HexModels
                     Box(c, px, y, pz, px + 2, y + 6 + (k & 1), pz + 2, Mat.Menhir);
                 }
                 Box(c, x - 1, y, z - 1, x + 2, y + 2, z + 2, Mat.StoneDark);
-                c.Put(x, y + 2, z, Mat.SoulFire);
+                c.Put(x, y + 2, z, spent ? Mat.Char : Mat.SoulFire);
                 break;
             case HexIcon.Signpost:
                 Box(c, x, y, z, x + 1, y + 6, z + 1, Mat.Wood);

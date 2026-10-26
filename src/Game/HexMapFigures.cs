@@ -32,6 +32,11 @@ public partial class HexMapFigures : Node3D
 {
     HexMapView _view;
     public readonly List<MapWalker> Walkers = new();
+    /// <summary>Called first every frame: whoever feeds the figures (the campaign) brings <see cref="Walkers"/> up to date.</summary>
+    public Action Sync;
+    /// <summary>The kind and the number of the stack keeping a hex, when the source knows them (the campaign does).</summary>
+    public Func<int, int, UnitType> KindOf;
+    public Func<int, int, int> CountOf;
     public MapWalker Chosen;
     readonly Dictionary<MapWalker, Token> _tokens = new();
     readonly Dictionary<(int, int), Token> _keepers = new();
@@ -72,12 +77,21 @@ public partial class HexMapFigures : Node3D
 
     Vector3 Spot(MapWalker w, out float facing)
     {
-        var a = _view.HexToScene(w.Col, w.Row);
+        var a = Stand(w.Col, w.Row);
         facing = 0;
         if (w.Steps.Count == 0) return a;
-        var b = _view.HexToScene(w.Steps[0].Col, w.Steps[0].Row);
+        var b = Stand(w.Steps[0].Col, w.Steps[0].Row);
         facing = MathF.Atan2(b.Z - a.Z, b.X - a.X);
         return a.Lerp(b, (float)Math.Clamp(w.Progress, 0, 1));
+    }
+
+    /// <summary>Where one stands on a hex: its middle, or before its thing on the south side, the thing whole to the eye (as a hero at a castle's gate).</summary>
+    Vector3 Stand(int col, int row)
+    {
+        var l = _view.Source.Look(col, row);
+        if (l.Icon is HexIcon.None or HexIcon.Monster or HexIcon.Pile or HexIcon.Chest or HexIcon.Campfire or HexIcon.Signpost) return _view.HexToScene(col, row);
+        var (x, z) = _view.Layout.Center(col, row);
+        return _view.ToScene(x, z + 12);
     }
 
     /// <summary>The walker of ours whose figure is nearest a point of the map (its voxels), within reach of a click; null if none.</summary>
@@ -97,6 +111,7 @@ public partial class HexMapFigures : Node3D
     public override void _Process(double delta)
     {
         if (_view == null || !_view.IsOpen || _view.Layout == null) return;
+        Sync?.Invoke();
         OursDrawn = TheirsDrawn = 0;
         bool near = _view.Distance < HexMapView.NearMost * 1.2f;
         foreach (var t in _tokens.Values) t.Seen = false;
@@ -144,16 +159,22 @@ public partial class HexMapFigures : Node3D
             foreach (var (c, r) in hexes)
             {
                 var l = src.Look(c, r);
-                if (l.Icon != HexIcon.Monster || !src.Seen(c, r)) continue;
+                // a stack on its hex, or one keeping the thing of a hex beside it
+                bool stack = l.Icon == HexIcon.Monster, keeping = !stack && HexTiles.Kept(l) && l.Icon != HexIcon.None;
+                if (!stack && !keeping || !src.Seen(c, r)) continue;
                 keep.Add((c, r));
                 if (_keepers.ContainsKey((c, r))) continue;
-                var kind = Keepers[l.Variant % Keepers.Length];
-                var t = Make(Bodies.Plan(kind, l.Variant), 0, banner: false);
-                t.Count.Text = (4 + l.Variant % 23).ToString();
+                int vr = HexTiles.Vary(c, r);
+                var kind = KindOf?.Invoke(c, r) ?? Keepers[vr % Keepers.Length];
+                var t = Make(Bodies.Plan(kind, vr), 0, banner: false);
+                int n = CountOf?.Invoke(c, r) ?? 4 + vr % 23;
+                t.Count.Text = n > 1 ? n.ToString() : "";
                 var at = _view.HexToScene(c, r);
+                // (one keeping a thing stands by it, toward the south-east, the thing whole to the eye)
+                if (keeping) { var (hx, hz) = lay.Center(c, r); at = _view.ToScene(hx + 9, hz + 8); }
                 t.Position = at;
                 float s = _scale * 1.15f;
-                t.Basis = new Basis(Vector3.Up, MathF.PI / 2 + (float)(l.Variant % 6) * .6f + 2.1f).Scaled(Vector3.One * s);
+                t.Basis = new Basis(Vector3.Up, MathF.PI / 2 + (float)(vr % 6) * .6f + 2.1f).Scaled(Vector3.One * s);
                 t.Count.Scale = Vector3.One / s;
                 t.Pose(false, 0);
                 AddChild(t);

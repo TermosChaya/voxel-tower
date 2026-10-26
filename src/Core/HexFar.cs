@@ -79,7 +79,7 @@ public static class HexFar
                 uint colour = ColourOf(l);
                 if (l.Relief is HexRelief.Mountain or HexRelief.Hills)
                 {
-                    float peak = l.Relief == HexRelief.Mountain ? (24 + l.Variant % 11) * .55f : 1.5f;
+                    float peak = l.Relief == HexRelief.Mountain ? (24 + HexTiles.Vary(col, row) % 11) * .55f : 1.5f;
                     var top = (cx, y + peak, cz);
                     for (int k = 0; k < 6; k++)
                     {

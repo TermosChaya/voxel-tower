@@ -47,6 +47,16 @@ public partial class Main
             $"the map {AtlasOpen}, {c.Width}×{c.Height}, hero {hero != null} moves {hero?.MovesLeft}/{hero?.MovesMax}, home seen {c.Seen(home)}, the far corner {c.Seen(far)}");
         if (hero == null) return true;
 
+        // the big map drawn by its view of hexes (HexMapView.cs): its land about the hero made, the hero's figure on it, the
+        // far corner dark; a click on a hex goes to the map's frame, a way planned is laid out in arrows, green today
+        int settle = 0;
+        for (; settle < 600 && !(WorldMap?.Settled ?? false); settle++) await Frames(1);
+        await Frames(2);
+        check("the big map is drawn as a land of hexes about the hero, his figure on it, the far corner in the dark",
+            WorldMap is { IsOpen: true } && WorldMap.Settled && WorldMap.PiecesShown >= 4 && WorldFigures.OursDrawn >= 1
+            && WorldMap.Seen(home.Col, home.Row) && !WorldMap.Seen(far.Col, far.Row),
+            $"open {WorldMap?.IsOpen}, settled after {settle} frames, {WorldMap?.PiecesShown} pieces, {WorldFigures?.OursDrawn} of ours drawn");
+
         // a hex of open ground a few steps off in our zone, nothing on it and nothing kept: planned, planned again, walked
         MapCell Open(MapCell from, int least, int most) => c.Cells
             .Where(x => x.Zone == home.Zone && x.Passable && x.Thing == null && x.Sum.Keep.Count == 0 && !x.Pass)
@@ -56,6 +66,8 @@ public partial class Main
         Hud.MapPane.Choose(hero);
         bool planned = Hud.MapPane.PlanTo(to.Col, to.Row);
         var steps = Hud.MapPane.Planned?.ToList() ?? new List<HexStep>();
+        await Frames(2);
+        int arrows = WorldMap?.ArrowsShown ?? 0, green = WorldMap?.ArrowsToday ?? 0;
         bool sent = Hud.MapPane.PlanTo(to.Col, to.Row);
         int m0 = hero.MovesLeft, cost = 0;
         var a = home;
@@ -63,8 +75,9 @@ public partial class Main
         double took = 0;
         for (int i = 0; i < 400 && hero.Moving; i++) { Run(1); took += 1; }
         check("a hex planned shows its way and its days, planned again the hero goes: he walks it in the map's time, his moves spent by the ground",
-            planned && sent && steps.Count >= 3 && steps.All(s => s.Day == 0) && c.CellOf(hero) == to && m0 - hero.MovesLeft == cost && Math.Abs(took - MapWalk.Seconds(cost)) < 8,
-            $"planned {planned} ({steps.Count} hexes), sent {sent}; came {c.CellOf(hero) == to}, moves {m0} → {hero.MovesLeft} (should spend {cost}), {took:0} s of {MapWalk.Seconds(cost):0}");
+            planned && sent && steps.Count >= 3 && steps.All(s => s.Day == 0) && arrows == steps.Count && green == steps.Count
+            && c.CellOf(hero) == to && m0 - hero.MovesLeft == cost && Math.Abs(took - MapWalk.Seconds(cost)) < 8,
+            $"planned {planned} ({steps.Count} hexes, {arrows} arrows of them {green} green), sent {sent}; came {c.CellOf(hero) == to}, moves {m0} → {hero.MovesLeft} (should spend {cost}), {took:0} s of {MapWalk.Seconds(cost):0}");
 
         // too few moves for the next step: he waits; «До рассвета» brings the dawn at once, his moves whole, and he goes on
         var next = Enumerable.Range(0, 6).Select(s => c.Neighbour(to, s)).First(n => n != null && n.Passable && n.Thing == null && n.Sum.Keep.Count == 0 && !n.Pass);

@@ -227,9 +227,12 @@ public partial class AtlasHud : Control
         Refresh();
     }
 
+    /// <summary>The big map's drawing (HexMapView.cs) brought over a hero, where there is no land of the small maps to.</summary>
+    public Action<MapParty> FocusOn;
+
     void Focus(MapParty p)
     {
-        if (_figs == null || _view == null) return;
+        if (_figs == null || _view == null) { if (p != null) FocusOn?.Invoke(p); return; }
         var (x, z, _) = _figs.Spot(p);
         _view.Focus(x, z);
     }
@@ -259,6 +262,31 @@ public partial class AtlasHud : Control
             Refresh();
         }
         else if (button == Bindings.Second && Hero != null) Go(spot);
+    }
+
+    /// <summary>
+    /// A click on a hex of the big map (HexMapView.cs): a hero of ours standing on it chosen (chosen again, his card); with
+    /// a hero chosen, the way planned to it, and on a second click on the same hex, or with the second button, walked.
+    /// </summary>
+    public void HexClicked(int col, int row, MouseButton button)
+    {
+        if (C == null || !IsOpen || !C.Big) return;
+        if (button == Bindings.First)
+        {
+            var who = C.Parties.Find(p => p.Owner == Holder.Ours && p.Col == col && p.Row == row && !p.Moving);
+            if (who != null && (who != Hero || Planned == null))
+            {
+                bool again = who == Hero || who == _lastClicked && Time.GetTicksMsec() / 1000.0 - _lastClickAt < .4;
+                _lastClicked = who; _lastClickAt = Time.GetTicksMsec() / 1000.0;
+                Choose(who);
+                if (again && who.Party.Commander?.Hero != null) _m.Hud.HeroPane.Show(who);
+                return;
+            }
+            if (Hero != null) { PlanTo(col, row); return; }
+            Cell = C.Cell(col, row) ?? Cell;
+            Refresh();
+        }
+        else if (button == Bindings.Second && Hero != null) GoTo(col, row);
     }
 
     /// <summary>The way the hero chosen would walk to a spot, shown; false if there is none.</summary>

@@ -29,7 +29,17 @@ public static class HexTiles
     /// <summary>The look of a hex, off the field the mountains that frame it.</summary>
     public static HexLook LookOf(IHexSource src, int col, int row) =>
         (uint)col < (uint)src.Width && (uint)row < (uint)src.Height ? src.Look(col, row)
-        : new HexLook { Ground = HexGround.Rough, Relief = HexRelief.Mountain, Height = 2, Variant = (byte)(Hash.H3(col, row, 3) * 256) };
+        : new HexLook { Ground = HexGround.Rough, Relief = HexRelief.Mountain, Height = 2 };
+
+    /// <summary>
+    /// What makes one hex unlike the next of its kind (how many trees, how tall its peak, where its mounds), 0…255, from its
+    /// place alone: the look's Variant says what became of its thing (bit 0 spent, bit 1 kept by a stack).
+    /// </summary>
+    public static int Vary(int col, int row) => (int)(Hash.H3(col, row, 977) * 256);
+
+    /// <summary>A hex's thing spent (picked up, opened, its week's given, its treasure taken); kept by a stack.</summary>
+    public static bool Spent(in HexLook l) => (l.Variant & 1) != 0;
+    public static bool Kept(in HexLook l) => (l.Variant & 2) != 0;
 
     static bool Wet(HexGround g) => g is HexGround.Water or HexGround.DeepWater;
 
@@ -37,7 +47,7 @@ public static class HexTiles
     static float LevelOf(in HexLook l) => Wet(l.Ground) ? LakeFloor - (l.Ground == HexGround.DeepWater ? 2 : 0) : Base + l.Height * Step;
 
     /// <summary>How tall a mountain's peak stands over its hex's ground.</summary>
-    static float PeakOf(in HexLook l) => 24 + l.Variant % 11;
+    static float PeakOf(int vary) => 24 + vary % 11;
 
     /// <summary>A smooth noise 0…1 over the map, its features so many voxels across (a lattice of hashed values, eased between).</summary>
     public static double Patch(int x, int z, int scale, int salt)
@@ -89,6 +99,7 @@ public static class HexTiles
     {
         var (col, row) = lay.HexAt(x + .5f, z + .5f);
         var l = LookOf(src, col, row);
+        int vr = Vary(col, row);
         var (cx, cz) = lay.Center(col, row);
         float dx = x + .5f - cx, dz = z + .5f - cz;
         float e = HexMapLayout.EdgeDistance(dx, dz);
@@ -112,10 +123,10 @@ public static class HexTiles
         // hills: two or three low mounds
         if (l.Relief == HexRelief.Hills && !thing)
         {
-            int n = 2 + l.Variant % 2;
+            int n = 2 + vr % 2;
             for (int k = 0; k < n; k++)
             {
-                double a = (l.Variant * .7 + k * Math.Tau / n);
+                double a = (vr * .7 + k * Math.Tau / n);
                 float mx = (float)Math.Cos(a) * 6.5f, mz = (float)Math.Sin(a) * 6.5f;
                 float d = MathF.Sqrt((dx - mx) * (dx - mx) + (dz - mz) * (dz - mz)) / 8f;
                 if (d < 1) { float c = MathF.Cos(d * MathF.PI / 2); h = MathF.Max(h, LevelOf(l) + (3.2f + k) * c * c); }
@@ -143,8 +154,8 @@ public static class HexTiles
         // lava in cracks over the horde's burnt ground
         if (g == HexGround.Lava || g == HexGround.Scorched && f > .78)
         {
-            double crack = Math.Abs(Math.Sin((x * .37 + Math.Sin(z * .21) * 2.4) + l.Variant) + Math.Sin(z * .29 - x * .11));
-            if (crack < (g == HexGround.Lava ? .16 : .08)) { col0.Mat = Mat.Lava; col0.Top -= 0; }
+            double crack = Math.Abs(Math.Sin((x * .37 + Math.Sin(z * .21) * 2.4) + vr) + Math.Sin(z * .29 - x * .11));
+            if (crack < (g == HexGround.Lava ? .09 : .05)) { col0.Mat = Mat.Lava; col0.Top -= 0; }
         }
         // a lake: water to its top, a shore of sand
         if (wet || col0.Top < WaterTop)
@@ -159,7 +170,7 @@ public static class HexTiles
             // a swamp's pools
             if (g == HexGround.Swamp && !thing)
             {
-                double p = Math.Sin(x * .41 + l.Variant) * Math.Sin(z * .37 - l.Variant * .3) + Hash.H3(x >> 2, z >> 2, 5) * .6;
+                double p = Math.Sin(x * .41 + vr) * Math.Sin(z * .37 - vr * .3) + Hash.H3(x >> 2, z >> 2, 5) * .6;
                 if (p > .62 && e > 2) { col0.Water = col0.Top; col0.Top -= 1; col0.Mat = Mat.Soil; }
             }
             // roads and rivers
@@ -203,16 +214,17 @@ public static class HexTiles
             if (l.Relief != HexRelief.Mountain) continue;
             var (cx, cz) = lay.Center(c, r);
             // the peak a little off the middle, as the variant has it
-            float ox = (l.Variant % 7 - 3) * .7f, oz = (l.Variant / 7 % 7 - 3) * .7f;
+            int vm = Vary(c, r);
+            float ox = (vm % 7 - 3) * .7f, oz = (vm / 7 % 7 - 3) * .7f;
             float dx = x + .5f - cx - ox, dz = z + .5f - cz - oz;
             float d = MathF.Sqrt(dx * dx + dz * dz), reach = HexMapLayout.R * 1.2f;
             if (d < reach)
             {
                 float k = 1 - d / reach;
-                float h = PeakOf(l) * MathF.Pow(k, 1.35f);
+                float h = PeakOf(vm) * MathF.Pow(k, 1.35f);
                 // the rock's ribs down its sides
                 float ang = MathF.Atan2(dz, dx);
-                h += (MathF.Sin(ang * 5 + l.Variant) * .5f + .5f) * 3.5f * k * (1 - k) * 4;
+                h += (MathF.Sin(ang * 5 + vm) * .5f + .5f) * 3.5f * k * (1 - k) * 4;
                 best = MathF.Max(best, h);
             }
             // a ridge to each mountain beside it, so a range is one wall and not a string of beads
@@ -225,7 +237,7 @@ public static class HexTiles
                 float rd = SegDist(x + .5f, z + .5f, cx, cz, ex, ez), across = HexMapLayout.R * .8f;
                 if (rd >= across) continue;
                 float kk = 1 - rd / across;
-                best = MathF.Max(best, MathF.Min(PeakOf(l), PeakOf(m)) * .55f * MathF.Pow(kk, 1.2f));
+                best = MathF.Max(best, MathF.Min(PeakOf(vm), PeakOf(Vary(mc, mr))) * .55f * MathF.Pow(kk, 1.2f));
             }
         }
         return best;
@@ -278,7 +290,7 @@ public static class HexTiles
             canvas.Src = src; canvas.Lay = lay;
             HexModels.Relief(canvas, l, cx, cz, col, row);
             if (l.Icon != HexIcon.None && l.Icon != HexIcon.Monster)
-                HexModels.Thing(canvas, l, cx, cz, ColumnAt(src, lay, (int)cx, (int)cz).Top);
+                HexModels.Thing(canvas, l, cx, cz, ColumnAt(src, lay, (int)cx, (int)cz).Top, Vary(col, row));
         }
         return w;
     }
