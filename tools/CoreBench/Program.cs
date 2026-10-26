@@ -6245,6 +6245,12 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troves") TrovesBench
 // castle everywhere, the same each time, a cell put on again as its holder changed (LandBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--atlas") LandBench.Run(Check);
 if (args.Length > 0 && args[0] == "--atlas-rivers") LandBench.Rivers();
+// the big world map's drawing: the hexes' places, the fog's grid, the pieces, the made-up world, a piece made and meshed,
+// the far view (WorldViewBench.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--worldview") WorldViewBench.Run(Check);
+if (args.Length > 0 && args[0] == "--worldview-probe") WorldViewBench.Probe();
+if (args.Length > 0 && args[0] == "--worldview-dump")
+    WorldViewBench.Dump(args.Length > 1 ? args[1] : "S", args.Length > 2 ? uint.Parse(args[2]) : 11, args.Length > 3 ? args[3] : "world.ppm");
 if (args.Length > 0 && args[0] == "--atlas-walkdump") LandBench.WalkDump(uint.Parse(args[1]), int.Parse(args[2]), args[3]);
 if (args.Length > 0 && args[0] == "--atlas-dump")
     LandBench.Dump(args.Length > 1 ? uint.Parse(args[1]) : 11, args.Length > 2 ? int.Parse(args[2]) : 3, args.Length > 3 ? args[3] : "atlas.ppm");

@@ -35,6 +35,8 @@ uniform vec2 atlas_size = vec2(1.0);
 uniform sampler2D atlas_fog : filter_linear, repeat_disable;
 uniform vec4 atlas_hover = vec4(-1e5);
 uniform vec3 atlas_dark = vec3(0.035, 0.04, 0.06);
+// how much of what lies in the fog still shows through it (the big world map has it nearly black, as «Heroes»)
+uniform float atlas_through = 0.1;
 
 varying vec3 v_vox;
 varying vec3 v_nrm;
@@ -308,7 +310,7 @@ void fragment() {
 			col = mix(col * (hov ? 1.07 : 1.0), pick ? vec3(1.0, 0.82, 0.38) : vec3(0.96, 0.95, 0.86), ring * 0.85);
 		}
 		float seen = texture(atlas_fog, p / atlas_size).r;
-		col = mix(atlas_dark, col, 0.1 + 0.9 * seen);
+		col = mix(atlas_dark, col, atlas_through + (1.0 - atlas_through) * seen);
 	}
 	ALBEDO = col * v_ext.x;
 	ROUGHNESS = skin == 11 ? mix(0.52, 0.3, shine) : skin == 2 ? 0.42 : skin == 1 ? 0.86 : 0.93;

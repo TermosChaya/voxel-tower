@@ -75,6 +75,14 @@ public partial class Main
         }
         // SELFTEST_ONLY=board: only the campaign's part
         if (System.Environment.GetEnvironmentVariable("SELFTEST_ONLY") == "board" && await SelfTestBoard(Check, () => fails)) return;
+        // SELFTEST_ONLY=hexview: only the big world map's view
+        if (System.Environment.GetEnvironmentVariable("SELFTEST_ONLY") == "hexview")
+        {
+            await SelfTestHexView(Check);
+            GD.Print($"[selftest] {(fails == 0 ? "all passed" : fails + " failed")}");
+            GetTree().Quit(fails == 0 ? 0 : 1);
+            return;
+        }
         // SELFTEST_ONLY=land: only the map of valleys as a land
         if (System.Environment.GetEnvironmentVariable("SELFTEST_ONLY") == "land")
         {
@@ -1017,6 +1025,7 @@ public partial class Main
         await SelfTestMetal(Check);
         await SelfTestCampaign(Check);
         await SelfTestLand(Check);
+        await SelfTestHexView(Check);
         // the report for the author: one file with the system, the hangs, the last events and the logs
         string report = Diag.Report(this, ProjectSettings.GlobalizePath("user://logs"));
         string body = System.IO.File.Exists(report) ? System.IO.File.ReadAllText(report) : "";

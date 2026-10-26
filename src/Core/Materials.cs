@@ -195,6 +195,11 @@ public static class Mat
     /// </summary>
     public const byte Snow = 230, Sand = 231, Wheat = 232, Ash = 233, BloomRed = 234, BloomYellow = 235, BloomWhite = 236,
         BloomBlue = 237, Reedbed = 238, Dust = 239;
+    /// <summary>
+    /// The riches of the world map's mines and piles (HexModels.cs), seen from high over them: gold, a dune of sulphur, a
+    /// pool of quicksilver, crystals that glow, gems. None of it is in a valley.
+    /// </summary>
+    public const byte Nugget = 190, Sulphur = 191, Quicksilver = 192, Crystal = 193, Gem = 194;
     public const int Count = 253;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
@@ -401,6 +406,10 @@ public static class Mat
         D(BloomRed, "Цветы", 0xc8352c, .2f, MatGroup.Earth, Natural); D(BloomYellow, "Цветы", 0xe3c13a, .2f, MatGroup.Earth, Natural);
         D(BloomWhite, "Цветы", 0xe6e2d6, .12f, MatGroup.Earth, Natural); D(BloomBlue, "Цветы", 0x4a62c4, .2f, MatGroup.Earth, Natural);
         D(Reedbed, "Камыш", 0x7b7a3c, .26f, MatGroup.Earth, Natural); D(Dust, "Дорога", 0xb69c6e, .16f, MatGroup.Earth, Natural | Earthy);
+        // the world map's riches (HexModels.cs)
+        D(Nugget, "Золото", 0xe8b83a, .14f, MatGroup.Metal, Natural); D(Sulphur, "Сера", 0xd9cc3a, .16f, MatGroup.Earth, Natural);
+        D(Quicksilver, "Ртуть", 0xb9c2cc, .06f, MatGroup.Metal, Natural); D(Crystal, "Кристаллы", 0x7fe3f0, .12f, MatGroup.Hard, Natural | Glows);
+        D(Gem, "Самоцветы", 0xd2357a, .2f, MatGroup.Hard, Natural | Glows);
         Emission[Brew] = .7f;
         // what grows by itself: flowers of three more colours, ferns, reeds, mushrooms and lilies drawn in blades and
         // petals; juniper, berries and a nest are leaves to everyone, an anthill is earth, a hollow is the tree's own wood
@@ -430,7 +439,7 @@ public static class Mat
         foreach (var m in new[] { Tuft, Flower, Bloom, FlowerRed, FlowerWhite, FlowerBlue, Fern, Reed, Mushroom, Lily }) SwayKind[m] = 1;
         foreach (var m in new[] { Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold, Juniper, BerryRed, BerryBlue, Nest }) SwayKind[m] = 2;
         foreach (var m in new[] { Stone, StoneDark, StoneLight, StoneWarm, StoneCool, Mortar, Keep, KeepShade, KeepDark, Cobble, Flag }) Smooth[m] = true;
-        foreach (var m in new[] { Steel, Mail, Brass, Pitch, SteelEdge, SteelDark }) Metal[m] = true;
+        foreach (var m in new[] { Steel, Mail, Brass, Pitch, SteelEdge, SteelDark, Nugget, Quicksilver }) Metal[m] = true;
         for (int m = 0; m < Count; m++)
             Skin[m] = Smooth[m] ? (byte)1 : Metal[m] ? (byte)2 : IsGrass((byte)m) ? (byte)3 : m is Leaf or NeedleLight ? (byte)7
                 : IsLeafy((byte)m) ? (byte)4 : m == Birch ? (byte)6 : IsTrunk((byte)m) ? (byte)5 : m == Scorch ? (byte)8 : (byte)0;

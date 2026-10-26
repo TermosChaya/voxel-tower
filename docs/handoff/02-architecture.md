@@ -814,6 +814,12 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   святилища — `TrialTick`), `TrialReset`, `Spirit(u)` (мертвец испытания: скелет не страж); туман `Seen`/`Sight`
   (0, 1 или 2 клетки: 2 у ратуши 2-го уровня и у разведки; `RevealAll` для снимков); `MapParty.Scouting`, `Light`,
   `ScoutPace` (0,6). Логова — `MapAI.cs`: `Lairs`, у отряда `Den` (своё логово), `Prepare()` (стража до первого хода).
+- `HexLook.cs` — договор большой карты: вид клетки (`HexGround`, `HexRelief`, `HexIcon`, высота, дороги и реки по
+  сторонам, хозяин, вариант, зона) и `IHexSource`. `HexMapLayout.cs` — где лежат клетки в вокселях (остриём на север,
+  нечётные ряды сдвинуты, R = 18), какая клетка в точке, соседи, сетка тумана, куски по 128. `HexTiles.cs` — кусок
+  карты в вокселях по видам клеток (высоты, наклон к соседям, вода, лужи, дороги, реки, мосты, горы хребтами) и его
+  меш (`Mesh(…, shadow)`); `HexModels.cs` — деревья, бугры и вещи клеток; `HexFar.cs` — плоская карта издали и цвета
+  мини-карты; `DemoHexes.cs` — выдуманный мир с зонами, проходами, дорогами, реками и вещами (до карты кампании).
 - `Atlas.cs`, `Atlas.Land.cs`, `Atlas.Dress.cs`, `Atlas.Works.cs` — карта долин как земля (13-world-map.md, 2.14):
   `Atlas.Build(кампания)` — воксельное поле на всю карту (`CellR` = 56, `Margin` = 72, высота 128, земля на 40, вода
   на 39), клетка по осям как на доске (`Center`, `CellAt`, `CellOfColumn`, `HexOf`). `Land` раз и навсегда: дороги и
@@ -890,6 +896,14 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   вокселями: горят, копаются, их выжигает огонь и взрыв (`Sim.Turf`). Вода в меше останавливается у пучка, как и
   в мире (пучки вынимаются из блока после разбора воды); разметка работ (`OrdersView`), призрак кисти и летящие куски
   их тоже не рисуют кубиками, а клики и глаза вселённого проходят сквозь них (`Raycast.Cast(skipGrass)`).
+- `HexMapView.cs`, `HexMapView.Pieces.cs`, `HexMapView.Fog.cs`, `HexMapView.Marks.cs` — большая карта на экране
+  (13-world-map.md, 2.15): свой мир в `SubViewport` поверх всего, как `AtlasView`; источник клеток — `IHexSource`
+  (`Open(источник, x, z)`); куски земли у глаза делаются `HexTiles` на потоках (`Task.Run`), в меши — на главном
+  потоке по 50 тыс. вершин за кадр; плоская карта `HexFar` блоками 16 × 16 под ними и издали; туман — текстура
+  полуклеток (`HexMapLayout.FogW × FogH`), её читают `voxel.gdshader`, `water.gdshader` (`atlas_fog`, `atlas_size`,
+  новый `atlas_through` — сколько видно сквозь туман) и `world_far.gdshader`; мини-карта, плашка, стрелки пути
+  (`ShowPath`), события `Clicked` и `ClickedHex`. Фигуры — `HexMapFigures.cs` (`MapWalker` — временная замена
+  отряда кампании, пока `hommworld` не отдаст свои `HexStep` и поля `MapParty`). Сцены — `Main.Poses.World.cs`.
 - `AtlasView.cs` — карта долин как земля на экране (13-world-map.md, 2.14): `CanvasLayer` (−1, под рамкой `Hud`,
   которая рисует поверх неё рамку карты `Ui/AtlasHud.cs`) с `SubViewportContainer`
   и `SubViewport` со своим миром (`OwnWorld3D`): `WorldView` поля карты (`Init(мир)`, грубый уровень издалека через
