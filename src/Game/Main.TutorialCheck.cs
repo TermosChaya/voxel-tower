@@ -184,7 +184,7 @@ public partial class Main
                         if (copper.Holder != Holder.Ours)
                         {
                             GD.Print($"[tutorial]      {copper.Name}: ours {copper.Ours}, theirs {copper.Theirs}, grip {copper.Grip:0.00}, sent to {cell}");
-                            foreach (var u in folk) GD.Print($"[tutorial]        #{u.Id} at {u.X:0},{u.Y:0},{u.Z:0} {u.State} «{u.Why}» hold {u.Hold} dest {u.Dest} path {u.Path?.Count - u.PathI} from the stand {MathF.Sqrt((u.X - copper.Place.StandX) * (u.X - copper.Place.StandX) + (u.Z - copper.Place.StandZ) * (u.Z - copper.Place.StandZ)):0}");
+                            foreach (var u in folk) GD.Print($"[tutorial]        #{u.Id} at {u.X:0},{u.Y:0},{u.Z:0} {u.State} «{u.Why}» hold {u.Hold} dest {u.Dest} path {u.Path?.Count - u.PathI} from the stand {MathF.Sqrt((u.X - copper.Place.StandX) * (u.X - copper.Place.StandX) + (u.Z - copper.Place.StandZ) * (u.Z - copper.Place.StandZ)):0} keeping out of {(u.Avoiding == null ? "nothing" : $"#{u.Avoiding.By?.Id}'s lane at {u.Avoiding.PX:0},{u.Avoiding.PZ:0} till {u.Avoiding.Until:0} s")}");
                         }
                     }
                     break;

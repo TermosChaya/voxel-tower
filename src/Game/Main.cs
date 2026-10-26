@@ -447,7 +447,7 @@ public partial class Main : Node3D
         // an errand done rings the small bell
         Sim.ErrandDone += _ => Sound.Ui("done");
         // the chronicle in the self-test's log, for when something goes wrong
-        if (_selfTest) Sim.Said += (text, kind, x, z) => GD.Print($"[chronicle] {Sim.Time:0} s: {text}");
+        if (_selfTest || _tutCheck) Sim.Said += (text, kind, x, z) => GD.Print($"[chronicle] {Sim.Time:0} s: {text}");
         // (added to, not set: the sounds hear these too)
         Sim.Mined += (x, y, z, m) => { if (Random.Shared.NextDouble() < .12) Debris.Spawn(m, x, y, z, 1, 1.3f); };
         Sim.Hacked += (x, y, z, m) => { if (Random.Shared.NextDouble() < .16) Debris.Spawn(m, x, y, z, 1, 1.8f); };

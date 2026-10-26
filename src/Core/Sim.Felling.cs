@@ -44,6 +44,8 @@ public sealed class FellPlan
     /// <summary>How many times its way was chosen again, those in the lane not having left.</summary>
     public int Tries;
     public Danger Lane;
+    /// <summary>Its feller was sent elsewhere by the player, or fell, before it was cut through: nobody holds its lane any more, and a feller coming to it after chooses its way afresh.</summary>
+    public bool Abandoned;
 }
 
 /// <summary>
@@ -314,7 +316,7 @@ public sealed partial class Sim
     FellPlan PlanFell(in FellBulk b, Unit feller)
     {
         foreach (var p in _fells)
-            if (MathF.Abs(p.PX - b.PX) < 10 && MathF.Abs(p.PZ - b.PZ) < 10 && Math.Abs(p.Base - b.Base) < 16 && Time - p.Made < 300) return p;
+            if (!p.Abandoned && MathF.Abs(p.PX - b.PX) < 10 && MathF.Abs(p.PZ - b.PZ) < 10 && Math.Abs(p.Base - b.Base) < 16 && Time - p.Made < 300) return p;
         var (dx, dz) = FellWay(b, feller, feller?.Team == Team.Horde, out float built);
         var plan = new FellPlan { CX = b.CX, CZ = b.CZ, PX = b.PX, PZ = b.PZ, DX = dx, DZ = dz, Base = b.Base, Top = b.Top, Made = Time, Left = built >= 1 };
         plan.Lane = LaneOf(b.PX, b.PZ, b.Base, b.Top, b.Spread, b.Butt, dx, dz);
@@ -501,13 +503,37 @@ public sealed partial class Sim
     /// <summary>The dangers over are let go; the plans of trees long since down forgotten.</summary>
     void TickDangers()
     {
-        // a tree cut through but held a while (its crown caught in another's): its lane is kept clear till it comes down
-        foreach (var p in _fells) if (p.Warned >= 0 && !p.Left && Time - p.Warned < 60 && Dangers.Contains(p.Lane)) p.Lane.Until = Math.Max(p.Lane.Until, Time + 1);
+        // a tree cut through but held a while (its crown caught in another's): its lane is kept clear till it comes down;
+        // one whose feller was sent elsewhere by the player, or fell, before it was cut through is let go, and its lane
+        // goes a few seconds after the last blow held, so that nobody stands waiting by a tree that nobody will fell (and
+        // is there when it comes down by itself)
+        foreach (var p in _fells)
+        {
+            if (p.Warned < 0 || p.Left || Time - p.Warned >= 60 || !Dangers.Contains(p.Lane)) continue;
+            bool cut = CutThrough(p);
+            if (!cut && p.Lane.By is { Dead: true } or { Hold: true }) p.Abandoned = true;
+            if (cut || !p.Abandoned) p.Lane.Until = Math.Max(p.Lane.Until, Time + 1);
+        }
         if (Dangers.Count > 0) Dangers.RemoveAll(d => Time > d.Until);
         if (_fells.Count > 0) _fells.RemoveAll(p => Time - p.Made > 300);
         // whoever of ours walks into one while it lasts is sent out again
         foreach (var d in Dangers) if (d.Kept) ClearLane(d, d.By);
         TickUndercut();
+    }
+
+    /// <summary>Its butt cut through: its lowest wood resting on nothing (held only by its crown caught in another's).</summary>
+    bool CutThrough(FellPlan p)
+    {
+        int px = (int)p.PX, pz = (int)p.PZ, wood = 0;
+        for (int z = pz - 8; z <= pz + 8; z++)
+            for (int x = px - 8; x <= px + 8; x++)
+            {
+                if (!World.InBounds(x, p.Base, z) || !Mat.IsTrunk(World.Get(x, p.Base, z))) continue;
+                wood++;
+                byte under = World.Get(x, p.Base - 1, z);
+                if (under != Mat.Air && !Mat.Passable[under] && !Mat.IsLeafy(under)) return false;
+            }
+        return wood > 0;
     }
 
     /// <summary>

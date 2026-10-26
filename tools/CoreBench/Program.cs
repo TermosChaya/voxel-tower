@@ -5894,6 +5894,51 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--felling")
         Check("…and a crown left hanging by an older felling comes down when the game is read back", hung.plan != null && crown > 500 && after == 0,
             $"tree at {hung.x},{hung.z}: {crown} leaves hanging, {after} left");
     }
+    // a feller sent elsewhere while it holds its last blows, one of ours lying hurt at the tree's foot: the tree stays half
+    // cut, and its lane goes in a few seconds, so that nobody stands waiting a minute for a tree that nobody fells (the
+    // tutorial's two sent to the mine stood by such a one till it came down on them)
+    {
+        string said = "no tree held at its last blows";
+        bool ok = false, caught = false;
+        for (int r = 120, tries = 0; r < 480 && !caught && tries < 6; r += 10)
+            for (int a2 = 0; a2 < 48 && !caught && tries < 6; a2++)
+            {
+                int x = siteF.KeepX + (int)(Math.Sin(a2 * Math.Tau / 48) * r), z = siteF.KeepZ - (int)(Math.Cos(a2 * Math.Tau / 48) * r);
+                if (!wF.InBounds(x, 2, z)) continue;
+                int g = wF.SurfAt(x, z);
+                if (!Mat.IsTrunk(wF.Get(x, g + 2, z)) || taken.Contains(K(x, g + 2, z))) continue;
+                var plan = Shapes.Tree(wF, x, g + 2, z);
+                if (plan.Count < 300) continue;
+                for (int i = 0; i < plan.Count; i++) taken.Add(K(plan.X(i), plan.Y(i), plan.Z(i)));
+                tries++;
+                // one of ours lying hurt by the trunk: every way the tree could go, its foot is on him
+                var hurt = sim.Spawn(Kinds.Worker, sim.NearestStand(x + 6, z, 2));
+                (hurt.X, hurt.Z) = (x + 4.5f, z + .5f);
+                hurt.Down = true; hurt.DownSince = sim.Time; hurt.DownUntil = sim.Time + 60;
+                sim.DesignateRemove(plan);
+                Danger lane = null;
+                for (int t = 0; t < 4000 && lane == null; t++)
+                {
+                    sim.Step(.05f);
+                    lane = sim.Dangers.Find(d => d.By is { Dead: false, FellHold: true } && MathF.Abs(d.PX - x) < 12 && MathF.Abs(d.PZ - z) < 12);
+                }
+                bool standing() => Mat.IsTrunk(wF.Get(x, g + 6, z)) || Mat.IsTrunk(wF.Get(x, g + 10, z));
+                if (lane == null || !standing()) { sim.CancelArea(x - 30, z - 30, x + 30, z + 30); hurt.DownUntil = sim.Time; continue; }
+                var feller = lane.By;
+                caught = true;
+                // just then: sent back to the gate, and the tree's marks taken off so nobody else takes it up
+                sim.Command(new List<Unit> { feller }, sim.Gate);
+                sim.CancelArea(x - 30, z - 30, x + 30, z + 30);
+                var kept = new List<string>();
+                for (int sec = 0; sec < 20; sec++) { Run(1); if (sec % 4 == 0) kept.Add($"{sim.Time:0}:{(sim.Dangers.Contains(lane) ? $"till {lane.Until:0}" : "-")}"); }
+                if (Environment.GetEnvironmentVariable("FELL_DEBUG") == "2") Console.WriteLine($"     lane by #{feller.Id} {feller.Why} warned; {string.Join(" ", kept)}; hurt in it {lane.Has(hurt.X, hurt.Y, hurt.Z, 2)}");
+                int waiting = sim.Units.Count(u => !u.Dead && u.Avoiding == lane);
+                ok = !sim.Dangers.Contains(lane) && waiting == 0 && standing();
+                said = $"tree at {x},{z}: lane by #{feller.Id} (now #{lane.By?.Id}, the feller hold {feller.Hold} dest {feller.Dest} «{feller.Why}») {(sim.Dangers.Contains(lane) ? $"still kept till {lane.Until:0} s (now {sim.Time:0} s)" : "gone")}, {waiting} waiting out of it, the tree {(standing() ? "standing" : "down")}";
+                hurt.DownUntil = sim.Time;
+            }
+        Check("a feller sent elsewhere while it holds its last blows: the half-cut tree's lane goes within seconds, nobody stands waiting for it", ok, said);
+    }
 }
 
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--sandbox")

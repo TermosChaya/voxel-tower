@@ -588,7 +588,10 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `FellHold` (из `WorkTick` перед ударом и в цикле работ): `WouldFell`/`NearlyCut`+`TreeAbove` → `PlanFell` →
   `FellWay`/`FellCost` → окрик, `ClearLane`, ожидание; `KeepOut` в `PawnTick` уводит `Avoiding`. `TreeGoing` в
   `Fall` (полоса до конца падения, `Toppling.Felled`), `FallWay` — сторона плана или «сама» (`careful: false`),
-  `TickDangers` после `TickCollapse`. `Lay` бьёт бревном (`упавшее дерево`), `RollFelled` — от 60 вокселей ствола.
+  `TickDangers` после `TickCollapse` (полосу предупреждённого дерева держит до минуты; если лесоруба до того, как ствол
+  перерублен — `CutThrough`, — игрок послал в другое место или он пал, план брошен — `FellPlan.Abandoned`: полоса
+  уходит за секунды, а пришедший потом лесоруб выбирает сторону заново; иначе рабочие, посланные мимо, стояли бы до
+  минуты у недорубленного дерева, и оно потом падало на них). `Lay` бьёт бревном (`упавшее дерево`), `RollFelled` — от 60 вокселей ствола.
   У юнита `Avoiding`, `FellLooked`, `FellLookedUntil`, `FellHold`. `Sim.Hurting` — для стенда. Окрик «Берегись!» (и
   перед обвалом подрубленного, `Sim.Undermine.cs`) — над кричащим словом (`Ui/ShoutTags.cs`) и голосом
   (`Sound.Shout.cs`).
