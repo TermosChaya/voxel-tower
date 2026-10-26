@@ -9,7 +9,9 @@ namespace VoxelTower.Game;
 /// The areas set aside for gathering, drawn as a coloured ribbon along their edges, laid over the ground,
 /// with a little post at each corner: green for a grove, grey for a quarry, brown for an earth cut, pale blue for a shelter,
 /// violet for a sanctuary, warm straw for a dwelling.
-/// Redrawn when an area is set or used up, and now and then as the ground under the ribbon is dug away.
+/// Redrawn when an area is set or used up, and now and then as the ground under the ribbon is dug away. A house that
+/// stands closed and the town's buildings show none (it would lie along their roofs): only while the areas' brush or
+/// the unmarking is in hand (<see cref="ShowAll"/>).
 /// </summary>
 public partial class ZoneView : Node3D
 {
@@ -19,6 +21,9 @@ public partial class ZoneView : Node3D
     double _t, _next;
     readonly Dictionary<int, MeshInstance3D> _meshes = new();
     readonly Dictionary<int, StandardMaterial3D> _mats = new();
+    double _nextShow;
+    /// <summary>Whether every area's edge shows, the houses' that stand too.</summary>
+    public Func<bool> ShowAll;
 
     public static Color Tint(int kind, float alpha) => kind switch
     {
@@ -52,6 +57,13 @@ public partial class ZoneView : Node3D
         using var prof = Prof.Time("ZoneView");
         if (_sim == null) return;
         _t += delta;
+        if (_t >= _nextShow)
+        {
+            _nextShow = _t + .25;
+            bool all = ShowAll?.Invoke() ?? false;
+            foreach (var z in _sim.Zones)
+                if (_meshes.TryGetValue(z.Id, out var shown)) shown.Visible = all || z.Kind != Zone.Dwelling || !z.Closed && _sim.BuildingOn(z) == null;
+        }
         bool changed = _sim.ZonesVersion != _version;
         if (!changed && (_w.Revision == _rev || _t < _next)) return;
         _version = _sim.ZonesVersion; _rev = _w.Revision; _next = _t + 1;
@@ -71,6 +83,9 @@ public partial class ZoneView : Node3D
         foreach (var id in _meshes.Keys) if (!alive.Contains(id)) gone.Add(id);
         foreach (var id in gone) { _meshes[id].QueueFree(); _meshes.Remove(id); }
     }
+
+    /// <summary>Whether an area's edge shows now (for the self-test).</summary>
+    public bool Shows(Zone z) => _meshes.TryGetValue(z.Id, out var mi) && mi.Visible;
 
     /// <summary>The edge of an area as a band two and a half voxels wide lying on the ground, and a post at each corner.</summary>
     ArrayMesh Ribbon(Zone z)

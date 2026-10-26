@@ -162,6 +162,12 @@ public static class Mat
     public const byte Plate = 184;
     /// <summary>The leaves of an iron gate: shut (ours walk through it), barred, swinging and open, as a timber gate's.</summary>
     public const byte IronGate = 185, IronGateShut = 186, IronGateOpen = 187;
+    /// <summary>
+    /// What the town's buildings show outside (Sim.Frontage.cs): the boards of a sign and the paint on them, the canvas of
+    /// an awning, the stone of a chimney, dressed stone stacked in a mason's yard, bales of hay, a heap of ore, bones, an
+    /// alchemist's green glass. Dressing like the rest: whatever is built or laid where it stands takes its place.
+    /// </summary>
+    public const byte Signboard = 146, Paint = 147, Canvas = 148, Flue = 149, Hewn = 159, Bale = 170, OreHeap = 171, Brew = 172, BonePile = 173;
     public const int Count = 190;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
@@ -351,6 +357,14 @@ public static class Mat
         D(IronGate, "Железные ворота", 0x4e535a, .06f, MatGroup.Metal, Player);
         D(IronGateShut, "Железные ворота на засове", 0x464a50, .06f, MatGroup.Metal, Player);
         D(IronGateOpen, "Железные ворота", 0x4e535a, .06f, MatGroup.Metal, Player);
+        // the town's buildings' frontage (Sim.Frontage.cs): the thin things of it are walked through, the heaps and the chimney not
+        D(Signboard, "Вывеска", 0x9a7a52, .12f, MatGroup.Wood, Decor); D(Paint, "Краска", 0x9a2b23, .08f, MatGroup.Wood, Decor);
+        D(Canvas, "Холст", 0xd9cfb4, .08f, MatGroup.Wood, Decor); D(Flue, "Труба", 0x6c6460, .22f, MatGroup.Stone, Decor);
+        D(Hewn, "Тёсаный камень", 0x8e8981, .14f, MatGroup.Stone, Decor); D(Bale, "Тюк сена", 0xc4a457, .2f, MatGroup.Wood, Decor);
+        D(OreHeap, "Руда", 0x7d4a33, .3f, MatGroup.Stone, Decor); D(Brew, "Зелье", 0x6fcf6a, .1f, MatGroup.Hard, Decor);
+        D(BonePile, "Кости", 0xd6ccb2, .1f, MatGroup.Hard, Decor);
+        foreach (var m in new[] { Signboard, Paint, Canvas, Brew, BonePile }) Passable[m] = true;
+        Emission[Brew] = .7f;
         Emission[Phial] = .35f;
         Emission[Window] = Emission[WindowLog] = .45f;
 

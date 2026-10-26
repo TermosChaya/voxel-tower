@@ -3,8 +3,12 @@ using System.Collections.Generic;
 
 namespace VoxelTower.Core;
 
-/// <summary>A building's dressing (a torch in a sconce, a banner, a barrel, a crate, sacks); or the fire of a campfire or of a torch or brazier set out on the ground (Sim.Yard.cs).</summary>
-public enum FixtureKind : byte { Torch, Banner, Barrel, Crate, Sacks, Campfire, Brazier }
+/// <summary>
+/// A building's dressing (a torch in a sconce, a banner, a barrel, a crate, sacks); or the fire of a campfire or of a torch
+/// or brazier set out on the ground (Sim.Yard.cs); or a town building's frontage: its sign, its chimney, a thing of its
+/// trade set out before it (Sim.Frontage.cs).
+/// </summary>
+public enum FixtureKind : byte { Torch, Banner, Barrel, Crate, Sacks, Campfire, Brazier, Sign, Chimney, Trade }
 
 /// <summary>A piece of a building's dressing: what it is, the voxels it is made of, the building voxel it hangs on or stands by.</summary>
 public sealed class Fixture
@@ -13,7 +17,7 @@ public sealed class Fixture
     /// <summary>The voxel of the building it belongs to, packed: when that is gone, so is it.</summary>
     public int Anchor;
     public readonly List<(int x, int y, int z, byte m)> Voxels = new();
-    /// <summary>Where a torch's flame burns, in voxels.</summary>
+    /// <summary>Where a torch's flame burns, in voxels (where a chimney smokes).</summary>
     public float LX, LY, LZ;
     /// <summary>A torch a witch of the horde put out: till when it stays dark (0 for one alight).</summary>
     public double DarkUntil;
@@ -165,6 +169,8 @@ public sealed partial class Sim
                     int ground = World.SurfAt(fx, fz);
                     bool inward = nx * (Site.KeepX - x) + nz * (Site.KeepZ - z) > 0;
                     TryTorch(x, z, nx, nz, ground, inward, by);
+                    // (a town building has its own frontage before it: Sim.Frontage.cs)
+                    if (BuildingAt(x, z) != null) continue;
                     if (!inward) TryBanner(x, z, nx, nz, ground, by);
                     else TryProp(x, z, nx, nz, ground, by);
                 }

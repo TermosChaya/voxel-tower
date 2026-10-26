@@ -327,6 +327,7 @@ public partial class Main : Node3D
         Areas = new ZoneView();
         AddChild(Areas);
         Areas.Init(Sim);
+        Areas.ShowAll = () => Tools?.Tool is Tool.Gather or Tool.Unmark;
         var flags = new MineView();
         AddChild(flags);
         flags.Init(this);

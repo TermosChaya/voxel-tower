@@ -12,7 +12,8 @@ public partial class Main
     /// A town building put up through the «Город» tab as the player does it (Sim.Town.cs): the barracks' lore learnt,
     /// its «Поставить» pressed, its plan following the cursor and a click setting it down; built at once and furnished
     /// by the workers, it is called «Казарма», its plate stands over it, and the tab hires a spearman out of its door,
-    /// which the citadel will not.
+    /// which the citadel will not; its sign, torch, chimney and racks go up before it (Sim.Frontage.cs), and the edge of
+    /// its room no longer lies along its roof.
     /// </summary>
     async Task SelfTestTown(Action<string, bool, string> check)
     {
@@ -100,5 +101,21 @@ public partial class Main
             $"spearmen {spears} → {Sim.Count(Kinds.Spearman)}; the citadel «{atCitadel}»");
         Hud.ClosePanel();
         await Frames(2);
+
+        // working, it shows its trade outside: its sign by the door, a torch the other side, its chimney, its spears and
+        // shields; the straw edge of its room shows over its roof no more, but for while the areas' brush is in hand
+        Sim.DressTown();
+        await Frames(20);
+        var front = Sim.FrontageOf(b);
+        int Of(FixtureKind k) => front.FindAll(f => f.Kind == k).Count;
+        bool hidden = zone != null && !Areas.Shows(zone);
+        Tools.SetTool(Tool.Gather);
+        await Frames(20);
+        bool shown = zone != null && Areas.Shows(zone);
+        Tools.SetTool(Tool.None);
+        await Frames(2);
+        check("working, the barracks shows its trade outside: a sign by its door, a torch, a chimney and its racks; the edge of its room shows only while the areas' brush is in hand",
+            Of(FixtureKind.Sign) == 1 && Of(FixtureKind.Torch) >= 1 && Of(FixtureKind.Chimney) == 1 && Of(FixtureKind.Trade) == 2 && hidden && shown,
+            $"{string.Join(", ", front.ConvertAll(f => f.Kind.ToString()))}; the edge hidden {hidden}, with the brush {shown}");
     }
 }

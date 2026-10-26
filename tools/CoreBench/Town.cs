@@ -135,6 +135,26 @@ static class TownBench
             && sim.Stock[Stockpile.Stone] < stone0 && gSold > 0,
             $"hall «{hallPut}» ready {hall?.Ready}, market «{marketPut}» ready {mk?.Ready}; {income:0.#} a minute, paid {paid:0.#} in one; sold «{sold}», bought «{bought}»");
 
+        // each working building shows its trade outside: a sign by its door, a chimney over a hearth, the things of its
+        // trade before it; none of it where the door's leaves swing, and the door still walked out of
+        Run(12);
+        string Front(Building x) => x == null ? "none" : string.Join(" ", sim.FrontageOf(x).GroupBy(f => f.Kind).Select(g => $"{g.Key}×{g.Count()}"));
+        int Of(Building x, FixtureKind k) => x == null ? 0 : sim.FrontageOf(x).Count(f => f.Kind == k);
+        bool inSwing = false;
+        foreach (var x in new[] { hall, mk, b })
+            if (x != null && sim.DoorOf(x) is { } door)
+            {
+                var swept = new HashSet<(int, int, int)>();
+                for (int st = 0; st <= Gateway.StepOf(1); st++) for (int i = 0; i < Gateway.Voxels; i++) swept.Add(door.Place(i, st));
+                foreach (var f in sim.FrontageOf(x)) foreach (var (vx, vy, vz, _) in f.Voxels) inSwing |= swept.Contains((vx, vy, vz));
+            }
+        var outOfDoor = b == null ? null : sim.HireAt(b, Kinds.Spearman);
+        check("each working building shows its trade outside: a sign by its door, a chimney over its hearth, the things of its trade before it, none of it where the door swings",
+            Of(hall, FixtureKind.Sign) == 1 && Of(hall, FixtureKind.Chimney) == 1 && Of(hall, FixtureKind.Trade) >= 3
+            && Of(mk, FixtureKind.Sign) == 1 && Of(mk, FixtureKind.Chimney) == 0 && Of(mk, FixtureKind.Trade) == 2
+            && Of(b, FixtureKind.Sign) == 1 && Of(b, FixtureKind.Chimney) == 1 && Of(b, FixtureKind.Trade) >= 1 && !inSwing && outOfDoor != null,
+            $"the hall: {Front(hall)}; the market: {Front(mk)}; the barracks: {Front(b)}; in the door's swing {inSwing}; one hired {(outOfDoor != null ? "out of the door" : "not")}");
+
         // all of it read back
         var buf = new System.IO.MemoryStream();
         sim.Save(buf, mp.Seed, "town", "");
@@ -150,8 +170,8 @@ static class TownBench
             sim2.Load(save);
         }
         var b2 = sim2.BuildingOf("barracks");
-        check("the town is read back from a save: its buildings, their levels and stocks, and what they give",
-            sim2.Buildings.Count == sim.Buildings.Count && b2 is { Level: 2, Ready: true } && sim2.Knows("shieldwall") && sim2.ZoneOf(b2)?.Name == "Казарма"
+        check("the town is read back from a save: its buildings, their levels and stocks, and what they give, and what stands before them",
+            sim2.Buildings.Count == sim.Buildings.Count && sim2.FrontageOf(b2).Count == sim.FrontageOf(b).Count && sim2.FrontageOf(b2).Count > 0 && b2 is { Level: 2, Ready: true } && sim2.Knows("shieldwall") && sim2.ZoneOf(b2)?.Name == "Казарма"
             && Math.Abs(b2.Stock.GetValueOrDefault(Kinds.Spearman.Key) - b.Stock.GetValueOrDefault(Kinds.Spearman.Key)) < .01f,
             $"{sim2.Buildings.Count} of {sim.Buildings.Count}; the barracks level {b2?.Level}, ready {b2?.Ready}; the shield wall {sim2.Knows("shieldwall")}");
     }
