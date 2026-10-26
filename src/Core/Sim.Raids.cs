@@ -505,7 +505,7 @@ public sealed partial class Sim
     }
 
     /// <summary>A new day: what grows by the day grows.</summary>
-    internal void NewDay() => TownDay();
+    internal void NewDay() { TownDay(); if (Campaign) SettleGuests(); }
 
     // ------------------------------------------------------------ deeds
 

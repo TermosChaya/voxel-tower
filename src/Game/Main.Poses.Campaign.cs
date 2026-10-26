@@ -83,7 +83,10 @@ public partial class Main
     /// What a campaign's scene is staged as for a picture (--campaign with --pose=): «march» a party of ours halfway to the
     /// ore valley on the board; «arrived» it come there, its card up; «taken» the ore valley ours with its outpost, paying,
     /// a party on its way on toward the lair; «horde» the map left to itself until an army of the horde is on its way to
-    /// the first valley; «lairfight» ours fighting in the horde's town (--at= seconds, 26 by itself).
+    /// the first valley; «lairfight» ours fighting in the horde's town (--at= seconds, 26 by itself); «places» the first
+    /// valley's places with three of its own out on the map and three guests of the ore valley come in, its town hall
+    /// standing (the town tab and the citadel's muster open); «edge» a commander gone into at the side toward the ore
+    /// valley, his men about him, the offer to go out to the map in his eyes.
     /// </summary>
     void CampaignPose()
     {
@@ -138,6 +141,58 @@ public partial class Main
                 Atlas.News.Clear();
                 Hud.Board?.Open();
                 if (Atlas.Coming() is { Count: > 0 } coming) Hud.Board?.Choose(Atlas.At(coming[0].GoalQ, coming[0].GoalR));
+                break;
+            }
+            case "places":
+            {
+                // a town hall standing, put up at once
+                Sim.Knowledge += 10;
+                Sim.Learn("b_hall");
+                var (hx, hz) = LevelNearKeep();
+                Sim.InstantLabour = true;
+                if (hx >= 0) Sim.PutUp(Sim.TownKindOf("hall"), hx, hz, false, out _);
+                for (int i = 0; i < 60 && Sim.HallLevel() == 0; i++) { Sim.CompleteAll(); Advance(1); foreach (var b in Sim.Buildings) if (Sim.ZoneOf(b) is { } z) Sim.LookOver(z); }
+                Sim.InstantLabour = false;
+                // three of the household out over the side toward the forest and onto the map
+                var forest = Atlas.Cells.Find(c => c.Kind == ValleyKind.Forest && Campaign.Distance(0, 0, c.Q, c.R) == 1);
+                int side = Campaign.SideToward(Atlas.Here, forest.Q, forest.R);
+                var three = new List<Unit> { Sim.Units.Find(u => !u.Dead && u.T == Kinds.Captain), Sim.Units.Find(u => !u.Dead && u.T == Kinds.Swordsman), Sim.Units.Find(u => !u.Dead && u.T == Kinds.Archer) };
+                Sim.Depart(three, side);
+                _outbound[side] = forest;
+                for (int i = 0; i < 400 && Sim.Units.Exists(u => !u.Dead && u.LeaveBy >= 0); i++) { Advance(1); CampaignTick(0); }
+                CampaignTick(0);
+                // three guests of the ore valley come in
+                var guests = PartyOf(Kinds.Spearman, Kinds.Spearman, Kinds.Archer);
+                foreach (var m in guests.Members) m.Billet = Campaign.KeyOf(ore);
+                Come(guests, Campaign.SideToward(Atlas.Here, ore.Q, ore.R), select: false);
+                Advance(4);
+                Atlas.News.Clear();
+                Hud.OpenPanel("town");
+                Selected.Clear();
+                KeepChosen = true;
+                Hud.OnSelectionChanged();
+                Hud.Refresh();
+                Rig.SetAt(World.WX(Site.KeepX), World.WY(Site.KeepBase), World.WZ(Site.KeepZ), Rig.Aim.yaw, .62f, 1.4f);
+                break;
+            }
+            case "edge":
+            {
+                // a commander and three of his men by the side toward the ore valley; gone into him, looking out
+                int side = Campaign.SideToward(Atlas.Here, ore.Q, ore.R);
+                var hex = Site.Hex;
+                var four = new List<Unit> { Sim.Units.Find(u => !u.Dead && u.T == Kinds.Captain), Sim.Units.Find(u => !u.Dead && u.T == Kinds.Swordsman),
+                    Sim.Units.Find(u => !u.Dead && u.T == Kinds.Archer), Sim.Units.Find(u => !u.Dead && u.T == Kinds.Worker) };
+                for (int i = 0; i < four.Count; i++)
+                {
+                    var (px, pz) = hex.SidePoint(side, .47f + .02f * i, (3 + (i == 0 ? 0 : 3)) * VoxelWorld.PerMetre);
+                    var u = four[i];
+                    u.Cell = Sim.NearestStand((int)px, (int)pz, u.T.Move.Height); (u.X, u.Y, u.Z) = Sim.Nav.Feet(u.Cell); u.Path = null; u.Hold = true;
+                }
+                var (ix, iz) = hex.Inward(side);
+                four[0].Facing = MathF.Atan2(-iz, -ix);
+                Advance(1);
+                FP.Enter(four[0]);
+                FP.Face(MathF.Atan2(-iz, -ix) + .35f, -.05f);
                 break;
             }
             case "lairfight":

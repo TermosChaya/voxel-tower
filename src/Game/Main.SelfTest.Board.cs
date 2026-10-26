@@ -37,6 +37,28 @@ public partial class Main
         return true;
     }
 
+    /// <summary>Level ground near the citadel for a building: the first spot round it with its height even and no trees or water on it.</summary>
+    (int x, int z) LevelNearKeep()
+    {
+        var w = World;
+        for (int r = 120; r < 420; r += 8)
+            for (int k = 0; k < 24; k++)
+            {
+                int x = Site.KeepX + (int)(Math.Cos(k * Math.Tau / 24) * r), z = Site.KeepZ + (int)(Math.Sin(k * Math.Tau / 24) * r);
+                if (!w.OnLand(x, z) || Site.Forbidden(x, z)) continue;
+                int lo = int.MaxValue, hi = 0;
+                for (int dx = -44; dx <= 44; dx += 4)
+                    for (int dz = -44; dz <= 44; dz += 4)
+                    {
+                        if (!w.OnLand(x + dx, z + dz)) { hi = 999; continue; }
+                        int h = w.SurfAt(x + dx, z + dz); lo = Math.Min(lo, h); hi = Math.Max(hi, h);
+                        if (Mat.IsTrunk(w.Get(x + dx, h + 2, z + dz)) || w.Get(x + dx, h, z + dz) == Mat.Water) hi = 999;
+                    }
+                if (hi - lo <= 2) return (x, z);
+            }
+        return (-1, -1);
+    }
+
     /// <summary>The scene begun again for the campaign's next valley, the failures carried over.</summary>
     bool Again(string stage, Func<int> fails)
     {
@@ -71,6 +93,28 @@ public partial class Main
                 await Frames(3);
                 check("the board opens with its key: nineteen cells drawn, twelve of them in the fog (only round the first valley seen)",
                     Hud.Board.IsOpen && Hud.Board.Drawn == 19 && Hud.Board.Fogged == 12, $"open {Hud.Board.IsOpen}, drawn {Hud.Board.Drawn}, in the fog {Hud.Board.Fogged}");
+                Hud.Board.Close();
+                // two commanders; a town hall standing, a third, hired at the citadel
+                int cap0 = Sim.CaptainCap;
+                string refused = Sim.CantEnlist(Kinds.Captain);
+                Sim.Knowledge += 10;
+                Sim.Learn("b_hall");
+                var (hx, hz) = LevelNearKeep();
+                Sim.InstantLabour = true;
+                string put = hx < 0 ? "no level ground" : Sim.PutUp(Sim.TownKindOf("hall"), hx, hz, false, out var hall);
+                for (int i = 0; i < 60 && Sim.HallLevel() == 0; i++) { Sim.CompleteAll(); Advance(1); foreach (var b in Sim.Buildings) if (Sim.ZoneOf(b) is { } z) Sim.LookOver(z); }
+                Sim.InstantLabour = false;
+                Sim.Stock.Gold = 2000;
+                Hud.OpenPanel("town");
+                await Frames(3);
+                string line = Hud.Town.CaptainsLine;
+                bool third = Command.Enlist(Kinds.Captain);
+                Hud.OpenPanel("town");
+                check("two commanders at first; a town hall standing gives room for a third: the town tab says «Командиры: 2 из 3», and he is hired at the citadel",
+                    cap0 == 2 && refused != null && refused.Contains("2 из 2") && put == null && Sim.HallLevel() == 1 && line != null && line.StartsWith("Командиры: 2 из 3") && third && Sim.Count(Kinds.Captain) == 3,
+                    $"cap {cap0}: «{refused}»; the hall «{put}», level {Sim.HallLevel()}; the tab «{line}»; hired {third}, commanders {Sim.Count(Kinds.Captain)}");
+                Hud.Board.Open();
+                await Frames(2);
                 // a commander and three men chosen, sent to the ore valley
                 Selected.Clear();
                 var captain = Sim.Units.Find(u => !u.Dead && u.T == Kinds.Captain);
@@ -88,6 +132,12 @@ public partial class Main
                     why == null && going == 4 && party != null && party.Moving && party.Path[^1] == ore && party.Party.Members.Count == 4 && party.Party.Commander != null,
                     $"refused «{why}», {going} going, on the map {party != null}{(party != null ? $", {party.Party.Members.Count} of them walking {party.Moving} to {party.Path.LastOrDefault()?.Kind}" : "")}");
                 if (party == null) return true;
+                Hud.Refresh();
+                string shown = Hud.StoreShown(Stockpile.Kinds + 1);
+                check("the valley keeps the places of those gone out on the map: the beam counts them, the citadel's line says how many are away",
+                    Sim.AwayPlaces == 4 && shown == $"{Sim.Household()}/{Sim.Places}" && Sim.Household() == Sim.Units.Count(u => !u.Dead && u.Team == Team.Player) + 4
+                    && Hud.PlacesNote(Sim, "") == "4 в походе",
+                    $"away {Sim.AwayPlaces}, the beam «{shown}», household {Sim.Household()} of {Sim.Places}, «{Hud.PlacesNote(Sim, "")}»");
                 for (int i = 0; i < 400 && party.Moving; i++) CampaignTick(5);
                 await Frames(4);
                 check("walked there, it stands in the ore valley and the card asks to go in",
@@ -120,6 +170,33 @@ public partial class Main
                 check("standing in it takes nothing; its outpost marked for the workers beside the stone and built, the valley is ours, and the chronicle says so",
                     stillNobodys && why == null && ore.Outpost && marked > 500 && ore.Owner == Holder.Ours && Hud.Lines.Any(l => l.text.StartsWith("Застава в рудной долине готова")),
                     $"nobody's after standing {stillNobodys}; refused «{why}», marked {marked}; owner {ore.Owner}");
+                Hud.Refresh();
+                string guestsShown = Hud.StoreShown(Stockpile.Kinds + 1);
+                check("come into another valley the four are its guests: they hold the first valley's places, the beam shows them after a plus",
+                    Sim.Guests() == 4 && Sim.Household() == 0 && guestsShown == $"0/{Sim.Places} +4", $"guests {Sim.Guests()}, household {Sim.Household()}, the beam «{guestsShown}»");
+                // in first person at the side across from the first valley, all four by it: out to the map on its key
+                int away = (Campaign.SideToward(ore, 0, 0) + 3) % 6;
+                var beyond = c.Neighbour(ore, away);
+                var four = Sim.Units.FindAll(u => !u.Dead && u.Team == Team.Player);
+                var leader = four.Find(u => u.T == Kinds.Captain);
+                for (int i = 0; i < four.Count; i++)
+                {
+                    var (px, pz) = hex.SidePoint(away, .45f + .03f * i, 3 * VoxelWorld.PerMetre);
+                    var u = four[i];
+                    u.Cell = Sim.NearestStand((int)px, (int)pz, u.T.Move.Height); (u.X, u.Y, u.Z) = Sim.Nav.Feet(u.Cell); u.Path = null; u.Dest = -1;
+                }
+                bool inside = leader != null && FP.Enter(leader);
+                await Frames(3);
+                string offer = FP.EdgeLine;
+                FP._Input(new InputEventKey { PhysicalKeycode = Bindings.KeyOf(Act.FpLeave), Keycode = Bindings.KeyOf(Act.FpLeave), Pressed = true });
+                MapParty walked = null;
+                for (int i = 0; i < 120 && walked == null; i++) { Run(1); walked = c.Parties.Find(x => x.Owner == Holder.Ours && x.Party.Members.Count == 4 && c.CellOf(x) == ore); }
+                await Frames(2);
+                check("in first person at the valley's edge the commander is offered the map; on its key he and those about him go over the edge onto the map toward the cell beyond, and the board opens on them",
+                    inside && offer.StartsWith("Край долины") && !FP.On && walked != null && walked.Moving && walked.Path[^1] == beyond && Hud.Board.IsOpen && Hud.Board.Party == walked
+                    && walked.Party.Members.All(m => m.Billet == Campaign.KeyOf(c.Home)),
+                    $"in him {inside}, offered «{offer}», still in him {FP.On}; on the map {walked != null}, walking {walked?.Moving} to {walked?.Path.LastOrDefault()?.Kind}; board {Hud.Board.IsOpen}, chosen {Hud.Board.Party == walked}");
+                Hud.Board.Close();
                 // a strong party put at the horde's town, as if it had walked there
                 var p = new MapParty { Q = lair.Q, R = lair.R, Owner = Holder.Ours, Party = new Party() };
                 var before = c.Neighbour(lair, Campaign.SideToward(lair, 0, 0));

@@ -15,7 +15,7 @@ public enum Act
     CallWave, Summon, Pause, Speed, Trails, QuickSave, QuickLoad, Help,
     FpForward, FpBack, FpLeft, FpRight, FpRun, FpUp, FpDown, FpFire, FpStone, FpWood, FpEarth,
     FpKick, FpSwitch, FpLadder, FpOrder, FpFourth,
-    Board,
+    Board, FpLeave,
 }
 
 /// <summary>
@@ -35,10 +35,10 @@ public static class Bindings
     public sealed record Def(Act Act, string Group, string Name, string About, Key Key, Key Alt, Scope Scope);
 
     public const string Camera = "Камера", Brushes = "Кисти", BrushOptions = "Материал и настройки кисти", Orders = "Дружина и приказы",
-        Game = "Время и игра", Eyes = "От первого лица";
+        Game = "Время и игра", Campaign = "Кампания", Eyes = "От первого лица";
 
     /// <summary>The groups in the order the page shows them.</summary>
-    public static readonly string[] Groups = { Camera, Brushes, BrushOptions, Orders, Game, Eyes };
+    public static readonly string[] Groups = { Camera, Brushes, BrushOptions, Orders, Game, Campaign, Eyes };
 
     static Def D(Act a, string group, string name, string about, Key key, Key alt = Key.None) =>
         new(a, group, name, about, key, alt, group == Eyes ? Scope.Eyes : Scope.Field);
@@ -98,7 +98,7 @@ public static class Bindings
         D(Act.QuickSave, Game, "Быстрое сохранение", "", Key.F5),
         D(Act.QuickLoad, Game, "Быстрая загрузка", "", Key.F9),
         D(Act.Help, Game, "Управление", "Открыть этот список.", Key.F1),
-        D(Act.Board, Game, "Карта долин", "В кампании: все долины, отряды на карте, походы.", Key.F2),
+        D(Act.Board, Campaign, "Карта долин", "Все долины кампании, отряды на карте, походы. Открыть и закрыть.", Key.F2),
 
         D(Act.FpForward, Eyes, "Идти вперёд", "", Key.W, Key.Up),
         D(Act.FpBack, Eyes, "Назад", "", Key.S, Key.Down),
@@ -116,6 +116,7 @@ public static class Bindings
         D(Act.FpSwitch, Eyes, "Войти в другого", "В того из своих, на кого смотрите, иначе в ближайшего.", Key.E),
         D(Act.FpLadder, Eyes, "Лестница", "Рабочий размечает лестницу к стене, на которую смотрит, и кладёт её {Rmb}.", Key.L),
         D(Act.FpOrder, Eyes, "Приказ взглядом", "Командир: бойцы рядом идут туда, куда он смотрит, или бьют того, на кого смотрит.", Key.G),
+        D(Act.FpLeave, Eyes, "Уйти на карту", "В кампании у края долины: вы и наши в 20 м уходите на карту, в соседнюю долину. В отряде нужен командир.", Key.Enter),
     };
 
     /// <summary>What the mouse and the held keys do, which are not bound: shown on the page with the group they belong to.</summary>
@@ -144,6 +145,13 @@ public static class Bindings
         (Orders, "Esc", "Снять выбор. Если ничего не выбрано — меню."),
         (Game, "Ctrl и + или −", "Интерфейс крупнее или мельче, Ctrl+0 — обычный размер (на Mac ⌘)."),
         (Game, "Alt (держать)", "Показать клавиши на кнопках."),
+        (Campaign, "Отряд в поход", "Выберите командира и бойцов рамкой, откройте карту ({Board}), щёлкните соседнюю долину и «Отправить выбранных сюда». Отряд уйдёт за край и пойдёт по карте."),
+        (Campaign, "{Rmb} по долине на карте", "Вести выбранный на карте отряд туда."),
+        (Campaign, "Отряд дошёл", "«Войти» — играть в той долине. «Бой сразу» — исход по силе отрядов. «На карту» и «Позже» — решить потом."),
+        (Campaign, "Застава", "В ничьей долине: карта, «Поставить заставу». Рабочие строят башню у камня, и долина ваша."),
+        (Campaign, "Места в войске", "Гости из другой долины держат места в своей, на шкале они после «+». За ушедшими в поход места остаются. На рассвете гости занимают свободные места."),
+        (Campaign, "Командиры", "2 в начале и по 1 за каждый уровень ратуши."),
+        (Campaign, "От первого лица у края", "{FpLeave} — уйти на карту с теми, кто рядом."),
         (Eyes, "Мышь", "Смотреть"),
         (Eyes, "{Lmb}", "Удар, выстрел или кирка"),
         (Eyes, "{Rmb}", "Положить блок выбранного материала"),

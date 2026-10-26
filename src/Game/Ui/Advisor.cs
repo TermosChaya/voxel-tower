@@ -60,6 +60,11 @@ public partial class Advisor : VBoxContainer
         var sim = _m.Sim;
         var list = new List<Advice>();
         if (sim.Over) return list;
+        // in a campaign, the map of valleys till it has been opened once
+        if (Main.Atlas != null && !Settings.Met("board") && _m.Hud.Board != null)
+            list.Add(new Advice("board", Icons.Of("tied-scroll"), Bindings.Fill("Карта долин: {Board}. По ней отряды ходят в другие долины"),
+                Bindings.Fill("Карта долин ({Board})\nВсе долины кампании. Выберите командира и бойцов, щёлкните на карте соседнюю долину и «Отправить выбранных сюда». Щелчок откроет карту."),
+                () => _m.Hud.Board.Open()));
         var stuck = new List<Unit>(); var idle = new List<Unit>(); var unfooted = new List<Unit>();
         int wanting = Stockpile.None;
         bool barred = false, idleLong = false;

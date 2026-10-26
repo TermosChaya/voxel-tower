@@ -13,7 +13,7 @@ namespace VoxelTower.Game;
 public partial class FirstPerson
 {
     ColorRect _fade;
-    Label _held, _clock, _said;
+    Label _held, _clock, _said, _edge;
     BodyChart _chart;
     CallBar _calls;
     string _saidText = "";
@@ -26,7 +26,8 @@ public partial class FirstPerson
         _held = Hud.Text("", Ornament.Serif, 14, Ornament.Parchment, outline: 5);
         _clock = Hud.Text("", Ornament.Serif, 14, Ornament.Aged, outline: 5);
         _said = Hud.Text("", Ornament.SerifBold, 15, Ornament.BronzeLight, outline: 6);
-        foreach (var l in new[] { _held, _clock, _said }) { l.MouseFilter = Control.MouseFilterEnum.Ignore; root.AddChild(l); }
+        _edge = Hud.Text("", Ornament.SerifBold, 16, Ornament.EmberGlow, outline: 6);
+        foreach (var l in new[] { _held, _clock, _said, _edge }) { l.MouseFilter = Control.MouseFilterEnum.Ignore; root.AddChild(l); }
         _calls = new CallBar { MouseFilter = Control.MouseFilterEnum.Ignore, Visible = false };
         root.AddChild(_calls);
         // over everything: the dark it goes into as it dies
@@ -38,6 +39,8 @@ public partial class FirstPerson
     /// <summary>What the frame says now (the self-test reads it): its name line, what it holds, the word in the middle, whether a commander's calls show, whether it is dying.</summary>
     public string NameLine => _name.Text;
     public string HeldLine => _held.Text;
+    /// <summary>The offer to go out to the map at the valley's edge, as it shows (empty when there is none).</summary>
+    public string EdgeLine => _edge.Text;
     public string SaidLine => _said.Text;
     public bool CallsShown => _calls.Visible && _layer.Visible;
     public bool Dying => _dying > 0;
@@ -74,6 +77,9 @@ public partial class FirstPerson
         _said.Text = left > 0 ? _saidText : "";
         _said.Modulate = new Color(1, 1, 1, Math.Clamp(left / .6f, 0, 1));
         _said.Position = new Vector2((vp.X - _said.Size.X) / 2, vp.Y / 2 + 62);
+        // in a campaign, at the valley's edge: the offer to go out to the map with those about
+        _edge.Text = _m.EdgeOffer(u);
+        _edge.Position = new Vector2((vp.X - _edge.Size.X) / 2, vp.Y / 2 - 96);
         // a commander's four calls, above the keys
         _calls.Visible = u.T == Kinds.Captain;
         if (_calls.Visible)

@@ -27,15 +27,15 @@ public static class MapPath
     };
 
     /// <summary>
-    /// The hours from one cell into its neighbour across a side: half of each cell's crossing; the less along a road over
-    /// that side, and a ford's more over a river without one.
+    /// The hours from one cell into its neighbour across a side: half of each cell's crossing, the less in a cell whose
+    /// road runs to that side; and a ford's more over a river crossing the side where no road does.
     /// </summary>
     public static double StepHours(MapCell a, MapCell b, int side)
     {
-        double h = (Hours(a) + Hours(b)) / 2;
-        var e = a.Edges[side];
-        if (e != null && e.Road >= 0) h *= RoadShare;
-        else if (e != null && e.River >= 0) h += FordHours;
+        var ea = a.Edges[side]; var eb = b.Edges[(side + 3) % 6];
+        bool ra = ea != null && ea.Road >= 0, rb = eb != null && eb.Road >= 0;
+        double h = (Hours(a) * (ra ? RoadShare : 1) + Hours(b) * (rb ? RoadShare : 1)) / 2;
+        if (!ra && !rb && (ea != null && ea.River >= 0 || eb != null && eb.River >= 0)) h += FordHours;
         return h;
     }
 

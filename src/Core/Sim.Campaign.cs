@@ -23,6 +23,17 @@ public sealed partial class Sim
     public event Action ValleyFell;
     /// <summary>Parties of ours gone out over the valley's sides, a party a side, for the map to take (<see cref="TakeDeparted"/>).</summary>
     public readonly List<Party> Departed = new();
+    /// <summary>
+    /// The valley's cell on the map (<see cref="VoxelTower.Core.Campaign.KeyOf"/>), set as it is entered; -1 outside a
+    /// campaign. Those come in who hold the places of another valley are its guests (<see cref="Unit.Billet"/>).
+    /// </summary>
+    public int CellKey = -1;
+    /// <summary>
+    /// What the rest of the realm keeps for the valley, set by the map as it runs: the places held by the valley's own
+    /// who are away (on the map or in another valley), the commanders not in it, and the levels of the town halls of
+    /// the other valleys of ours (each gives a commander more, <see cref="CaptainCap"/>).
+    /// </summary>
+    public int AwayPlaces, CaptainsAway, HallsAway;
     double _nextDepartLook;
 
     /// <summary>How far in from its side a party come into the valley stands (30 m), and how far apart its file walks in (1½ m).</summary>
@@ -61,13 +72,24 @@ public sealed partial class Sim
             int cell = NearestStand(x, z, m.Kind.Move.Height);
             if (cell < 0) continue;
             var u = Spawn(m.Kind, cell);
-            m.Onto(u);
+            m.Onto(u, CellKey);
             u.Facing = MathF.Atan2(iz, ix);
             come.Add(u);
         }
         if (come.Count == 0) return come;
         var (sx, sz) = hex.SidePoint(side, .5f, ArriveIn);
         int spot = NearestStand((int)sx, (int)sz, Kinds.Worker.Move.Height);
+        // short of what stands in the way (a river, a crag, a thick wood): the farthest spot in along the middle they get
+        // to without going far round
+        int from = come[come.Count / 2].Cell;
+        for (float d = ArriveIn; d >= 6 * VoxelWorld.PerMetre; d -= 3 * VoxelWorld.PerMetre)
+        {
+            var (px, pz) = hex.SidePoint(side, .5f, d);
+            int c = NearestStand((int)px, (int)pz, Kinds.Worker.Move.Height);
+            if (c < 0) continue;
+            var way = Paths.Find(from, x => x == c, _ => 0, Kinds.Worker.Move, 8000);
+            if (way != null && way.Count <= d / NavGrid.CS * 1.5f + 8) { spot = c; break; }
+        }
         if (spot >= 0) Command(come, spot);
         if (Site.Holding == Holding.HordeTown)
         {
@@ -148,7 +170,7 @@ public sealed partial class Sim
         int side = u.LeaveBy;
         var party = Departed.Find(p => p.Side == side);
         if (party == null) Departed.Add(party = new Party { Side = side });
-        party.Members.Add(Traveller.Of(u));
+        party.Members.Add(Traveller.Of(u, CellKey));
         if (u.Captive != null) { u.Captive.Captor = null; u.Captive = null; }
         ReleaseSite(u);
         u.LeaveBy = -1;
@@ -162,6 +184,9 @@ public sealed partial class Sim
     /// palisade — each keeping by its own spot, falling on whoever of ours comes near and going back after, as the camps
     /// at the mines do. Engines and those who only come raiding (miners, sappers, thieves) stay out of it. Returns them.
     /// </summary>
+    /// <summary>Whether one of this kind stands in a garrison: not engines, nor those who only come raiding (miners, sappers, thieves).</summary>
+    public static bool Holds(UnitType t) => !Kinds.IsEngine(t) && t != Kinds.Miner && t != Kinds.Sapper && t != Kinds.Thief;
+
     public List<Unit> Garrison(IReadOnlyList<UnitType> roster)
     {
         var list = new List<Unit>();
@@ -169,7 +194,7 @@ public sealed partial class Sim
         int k = 0;
         foreach (var t in roster)
         {
-            if (Kinds.IsEngine(t) || t == Kinds.Miner || t == Kinds.Sapper || t == Kinds.Thief) continue;
+            if (!Holds(t)) continue;
             var (px, pz) = posts[k++ % posts.Count];
             int c = NearestStand(px + Rng.Next(-6, 7), pz + Rng.Next(-6, 7), t.Move.Height);
             if (c < 0) continue;
@@ -212,6 +237,9 @@ public sealed partial class Sim
         foreach (var u in leaving) { w.Write(u.Id); w.Write(u.LeaveBy); }
         w.Write(Departed.Count);
         foreach (var p in Departed) p.Write(w);
+        var guests = Units.FindAll(u => !u.Dead && u.Billet >= 0);
+        w.Write(guests.Count);
+        foreach (var u in guests) { w.Write(u.Id); w.Write(u.Billet); }
     }
 
     void ReadCampaign(BinaryReader r)
@@ -226,5 +254,10 @@ public sealed partial class Sim
         }
         Departed.Clear();
         for (int n = r.ReadInt32(); n > 0; n--) Departed.Add(Party.Read(r));
+        for (int n = r.ReadInt32(); n > 0; n--)
+        {
+            int id = r.ReadInt32(), billet = r.ReadInt32();
+            if (Units.Find(u => u.Id == id) is { } u) u.Billet = billet;
+        }
     }
 }

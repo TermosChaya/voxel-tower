@@ -16,12 +16,54 @@ public sealed partial class Campaign
 
     public MapCell CellOf(MapParty p) => At(p.Q, p.R);
 
+    /// <summary>A cell as those of ours keep the valley whose places they hold (<see cref="Unit.Billet"/>, <see cref="Traveller.Billet"/>).</summary>
+    public static int KeyOf(MapCell c) => (c.Q + 64) * 128 + (c.R + 64);
+
+    /// <summary>The cell of a key, or null.</summary>
+    public MapCell CellOfKey(int key) => key < 0 ? null : At(key / 128 - 64, key % 128 - 64);
+
+    /// <summary>
+    /// What the rest of the realm keeps for the valley open now (<paramref name="cell"/>'s): the places held by its own who
+    /// are away (gone over its edges, walking the map, kept in another valley of ours), the commanders not in it, and the
+    /// levels of the town halls of the other valleys of ours. Set as it is entered and as the map runs.
+    /// </summary>
+    public void Reckon(Sim sim, MapCell cell)
+    {
+        int key = KeyOf(cell), places = 0, captains = 0, halls = 0;
+        void Count(Traveller m)
+        {
+            if (m.Billet == key) places += m.Kind.Room;
+            if (m.Kind == Kinds.Captain) captains++;
+        }
+        foreach (var p in sim.Departed) foreach (var m in p.Members) Count(m);
+        foreach (var p in Parties) if (p.Owner == Owner.Ours) foreach (var m in p.Party.Members) Count(m);
+        foreach (var c in Cells)
+        {
+            if (c == cell || c.Owner != Owner.Ours) continue;
+            foreach (var m in c.Sum.Keep) Count(m);
+            halls += c.Sum.Hall;
+        }
+        sim.AwayPlaces = places; sim.CaptainsAway = captains; sim.HallsAway = halls;
+    }
+
+    /// <summary>The places of a valley of ours we are not in, as the map keeps them: held by its own (here or away) of so many.</summary>
+    public (int held, int guests) PlacesOf(MapCell cell)
+    {
+        int key = KeyOf(cell), held = 0, guests = 0;
+        foreach (var m in cell.Sum.Keep) { if (m.Billet == key || m.Billet < 0) held += m.Kind.Room; else guests += m.Kind.Room; }
+        foreach (var p in Parties) if (p.Owner == Owner.Ours) foreach (var m in p.Party.Members) if (m.Billet == key) held += m.Kind.Room;
+        foreach (var c in Cells)
+            if (c != cell && c.Owner == Owner.Ours) foreach (var m in c.Sum.Keep) if (m.Billet == key) held += m.Kind.Room;
+        return (held, guests);
+    }
+
     /// <summary>Our parties standing in a cell, not walking on.</summary>
     public List<MapParty> PartiesIn(MapCell c) => Parties.FindAll(p => p.Owner == Owner.Ours && p.Q == c.Q && p.R == c.R && !p.Moving);
 
     /// <summary>A party of ours gone out of the valley we are in, onto the map at its cell, and sent on toward a cell if it was sent to one.</summary>
     public MapParty Out(Party party, MapCell to)
     {
+        foreach (var m in party.Members) if (m.Billet < 0) m.Billet = KeyOf(Here);
         var p = new MapParty { Id = _nextParty++, Q = HereQ, R = HereR, CameQ = HereQ, CameR = HereR, Party = party, Owner = Owner.Ours };
         Parties.Add(p);
         if (to != null && to != Here) Send(p, to);

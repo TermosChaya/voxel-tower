@@ -115,15 +115,17 @@ static class CampaignBench
         for (int s = 0; s < 6; s++)
         {
             var p = parties[s];
-            var (sx, sz) = hex.SidePoint(s, .5f, Sim.ArriveIn);
-            float least = p.Count == 0 ? 0 : p.Min(u => hex.FromSide(s, u.X, u.Z).d), most = p.Count == 0 ? 0 : p.Max(u => MathF.Sqrt((u.X - sx) * (u.X - sx) + (u.Z - sz) * (u.Z - sz)));
+            // (they stand together where they were sent: 30 m in along the side's middle, or short of a river or a crag
+            // across the way)
+            float cx = p.Count == 0 ? 0 : p.Average(u => u.X), cz = p.Count == 0 ? 0 : p.Average(u => u.Z);
+            float least = p.Count == 0 ? 0 : p.Min(u => hex.FromSide(s, u.X, u.Z).d), most = p.Count == 0 ? 0 : p.Max(u => MathF.Sqrt((u.X - cx) * (u.X - cx) + (u.Z - cz) * (u.Z - cz)));
             var worker = p.Find(u => u.T == Kinds.Worker);
-            bool ok = p.Count == 6 && p.All(u => !u.Dead) && p.Count(u => u.T == Kinds.Captain) == 1 && least >= 15 * VoxelWorld.PerMetre && most <= 20 * VoxelWorld.PerMetre
-                && worker != null && Math.Abs(cameHurt[s] - .5f) < .001f;
+            bool ok = p.Count == 6 && p.All(u => !u.Dead && u.State != UnitState.Walk) && p.Count(u => u.T == Kinds.Captain) == 1 && least >= 2 * VoxelWorld.PerMetre
+                && hex.FromSide(s, cx, cz).d <= Sim.ArriveIn + 4 * VoxelWorld.PerMetre && most <= 8 * VoxelWorld.PerMetre && worker != null && Math.Abs(cameHurt[s] - .5f) < .001f;
             if (ok) sidesOk++;
-            lines.Add($"side {s}: {p.Count(u => !u.Dead)} of {p.Count} standing, {least / VoxelWorld.PerMetre:0} m in at the least, {most / VoxelWorld.PerMetre:0} m from the spot at the most, worker came {cameHurt[s]:0.00}");
+            lines.Add($"side {s}: {p.Count(u => !u.Dead)} of {p.Count} standing, {least / VoxelWorld.PerMetre:0} m in at the least, {hex.FromSide(s, cx, cz).d / VoxelWorld.PerMetre:0} m in on the whole, {most / VoxelWorld.PerMetre:0} m apart at the most, worker came {cameHurt[s]:0.00}");
         }
-        check("a party comes in over each of the six sides, the commander in it and the hurt worker hurt still, and stands inside, some way in from its side",
+        check("a party comes in over each of the six sides, the commander in it and the hurt worker hurt still, and stands together inside, some way in from its side",
             sidesOk == 6, string.Join("; ", lines));
 
         // ---- going out over a side: taken off, and handed to the map as they were
@@ -290,6 +292,184 @@ static class CampaignBench
             spot.Owner == Owner.Ours && spot.Sum.Raised >= 1 && raise.News.Exists(n => n.Kind == NewsKind.Taken && n.Cell == spot) && sent && coming.Count == 1 && coming[0] == foe
             && rb.At(spot.Q, spot.R) is { Owner: Owner.Ours, Outpost: true },
             $"owner {spot.Owner}, raised {spot.Sum.Raised}; sent {sent}, coming {coming.Count}; read back {rb.At(spot.Q, spot.R).Owner} outpost {rb.At(spot.Q, spot.R).Outpost}");
+
+        Realm(check, Step);
+    }
+
+    /// <summary>
+    /// The realm's places, commanders, roads and rivers (closing what phase 1 left): the places of a valley are its own —
+    /// ours gone out on the map keep theirs, ours come from another valley are its guests and hold their own valley's, and
+    /// at dawn guests settle where there is room; two commanders, and one more for each level of a working town hall, this
+    /// valley's or another of ours; the lair's garrison on the board is the one met in it; every cell has its river and its
+    /// road, two cells side by side agree on them, no river runs in a ring, and a way along roads is quicker.
+    /// </summary>
+    static void Realm(Action<string, bool, string> check, Action<Sim, double> Step)
+    {
+        string dir = Path.Combine(Path.GetTempPath(), $"vt-campaign-realm-{Environment.ProcessId}");
+        if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        var realm = Campaign.New(31);
+        realm.Advance(1);
+        var home = realm.Home;
+        var ore = realm.Cells.First(c => c.Kind == ValleyKind.Ore && Campaign.Distance(0, 0, c.Q, c.R) == 1);
+        var sim = realm.OpenValley(dir, home, out _);
+        sim.WildTarget = 0; sim.Clock.Left = 1e9;
+        foreach (var k in new[] { Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Archer, Kinds.Swordsman, Kinds.Captain, Kinds.Captain }) sim.Spawn(k, sim.Gate);
+        int own0 = sim.Household();
+        // four of them out over the side toward the ore valley, onto the map
+        int side = Campaign.SideToward(home, ore.Q, ore.R);
+        var four = new List<Unit>
+        {
+            sim.Units.First(u => !u.Dead && u.T == Kinds.Captain), sim.Units.First(u => !u.Dead && u.T == Kinds.Swordsman),
+            sim.Units.First(u => !u.Dead && u.T == Kinds.Archer), sim.Units.First(u => !u.Dead && u.T == Kinds.Worker),
+        };
+        sim.Depart(four, side);
+        for (int i = 0; i < 300 && sim.Units.Exists(u => !u.Dead && u.LeaveBy >= 0); i++) Step(sim, 1);
+        var gone = sim.TakeDeparted();
+        var party = gone.Count == 1 ? realm.Out(gone[0], ore) : null;
+        realm.Reckon(sim, home);
+        int away = sim.AwayPlaces, own1 = sim.Household(), key = Campaign.KeyOf(home);
+        string full = sim.CantEnlist(Kinds.Archer);
+        sim.Stock.Gold = 5000;
+        int hired = 0;
+        while (sim.CantEnlist(Kinds.Archer) == null && hired < 10) { sim.Enlist(Kinds.Archer); hired++; }
+        check("ours gone out of the valley onto the map keep their places in it: the household counts them, hiring fills only what is left, and on the map they hold the valley's places",
+            party != null && party.Party.Members.Count == 4 && party.Party.Members.All(m => m.Billet == key) && away == 4 && own1 == own0 && hired == sim.Places - own0,
+            $"on the map {party?.Party.Members.Count}, holding {party?.Party.Members.Count(m => m.Billet == key)}; away {away}, household {own0} → {own1} of {sim.Places}; hired {hired}");
+        // they come into the ore valley as its guests
+        realm.Parties.Remove(party);
+        var osim = realm.OpenValley(dir, ore, out _);
+        osim.WildTarget = 0; osim.Clock.Left = 1e9;
+        var come = osim.Arrive(party.Party, Campaign.SideToward(ore, 0, 0));
+        bool settledThere = osim.SettleGuests();
+        check("come into another valley they are its guests: they hold their own valley's places, not its; with no room there (no citadel, no dwellings) they do not settle at dawn",
+            come.Count == 4 && osim.Guests() == 4 && osim.Household() == 0 && osim.Places == 0 && come.All(u => u.Billet == key) && !settledThere,
+            $"come {come.Count}, guests {osim.Guests()}, household {osim.Household()} of {osim.Places}, holding home's {come.Count(u => u.Billet == key)}; settled {settledThere}");
+        // the ore valley ours and left with them in it: the first valley still keeps their places
+        ore.Owner = Owner.Ours; ore.Outpost = true;
+        realm.Leave(osim, ore);
+        realm.Reckon(sim, home);
+        int awayKept = sim.AwayPlaces;
+        // guests of the ore valley come to the first one, and settle there at dawn while it has room
+        var visit = new Party();
+        foreach (var k in new[] { Kinds.Spearman, Kinds.Spearman })
+            visit.Members.Add(new Traveller { Kind = k, Look = 5, Hp = k.Hp, MaxHp = k.Hp, Billet = Campaign.KeyOf(ore) });
+        foreach (var u in sim.Units.Where(u => !u.Dead && u.T == Kinds.Archer).Take(2).ToList()) sim.Hurt(u, null, 1e6f);
+        Step(sim, 1);
+        var visitors = sim.Arrive(visit, side);
+        int guests = sim.Guests(), before = sim.Household();
+        string room = sim.CantEnlist(Kinds.Archer);
+        bool settled = sim.SettleGuests();
+        check("kept in another valley of ours, they still hold the first valley's places; guests come to it hold theirs, and settle in it at dawn while it has room",
+            awayKept == 4 && visitors.Count == 2 && guests == 2 && settled && sim.Guests() == 0 && sim.Household() == before + 2 && visitors.All(u => u.Billet < 0),
+            $"kept away {awayKept}; guests {guests}, household {before} → {sim.Household()} of {sim.Places}, hiring before «{room}»; settled {settled}");
+
+        // two commanders, and one more for each level of a working town hall, here or in another valley of ours
+        sim.Knowledge = 20;
+        sim.Learn("b_hall");
+        int cap0 = sim.CaptainCap, have0 = sim.Captains;
+        string refused = sim.CantEnlist(Kinds.Captain);
+        ore.Sum.Hall = 1;
+        realm.Reckon(sim, home);
+        int capAway = sim.CaptainCap;
+        ore.Sum.Hall = 0;
+        realm.Reckon(sim, home);
+        // a town hall of the first valley's own, put up at once on level ground near the citadel
+        var (hx, hz) = Level(sim);
+        sim.InstantLabour = true;
+        string put = hx < 0 ? "no level ground" : sim.PutUp(Sim.TownKindOf("hall"), hx, hz, false, out var hall);
+        for (int i = 0; i < 120 && sim.HallLevel() == 0; i++) { sim.CompleteAll(); Step(sim, 1); }
+        sim.InstantLabour = false;
+        int cap1 = sim.CaptainCap;
+        // (a place made for him: the household is full)
+        sim.Hurt(sim.Units.First(u => !u.Dead && u.T == Kinds.Worker), null, 1e6f);
+        Step(sim, .1);
+        string third = sim.CantEnlist(Kinds.Captain);
+        bool took = third == null && sim.Enlist(Kinds.Captain);
+        check("the realm has two commanders, one away on the map counted; a town hall's level gives one more, another valley's or this one's: a third is hired",
+            cap0 == Sim.MaxCaptains && have0 == 2 && refused != null && refused.Contains("2 из 2") && capAway == 3 && put == null && sim.HallLevel() == 1 && cap1 == 3 && took && sim.Captains == 3,
+            $"cap {cap0}, have {have0} (away {sim.CaptainsAway}): «{refused}»; with a hall elsewhere {capAway}; the hall «{put}», level {sim.HallLevel()}, cap {cap1}: «{third}», hired {took}, now {sim.Captains}");
+
+        // the lair's garrison as the board counts it is the one met in it
+        for (int d = 0; d < 4; d++) realm.Advance(DayClock.Cycle);
+        var lair = realm.Cells.Single(c => c.Holding == Holding.HordeTown);
+        int counted = realm.Foes(lair), all = lair.Sum.Keep.Count;
+        var lsim = realm.OpenValley(dir, lair, out _);
+        int met = lsim.Units.Count(u => !u.Dead && u.Team == Team.Horde);
+        check("the lair's garrison on the board is the one met in its valley; those who only come raiding wait outside it",
+            counted > 5 && counted == met && counted <= all, $"counted {counted} of {all} kept, met {met}");
+        if (Directory.Exists(dir)) Directory.Delete(dir, true);
+
+        // roads and rivers: every cell has both, neighbours agree, no ring, the way along roads quicker
+        int cells = 0, rivers = 0, roads = 0, agree = 0, sides = 0, rings = 0, apart = 0;
+        foreach (uint seed in new uint[] { 3, 11, 23, 31, 47, 59, 71, 97 })
+        {
+            var m = Campaign.New(seed);
+            foreach (var c in m.Cells)
+            {
+                cells++;
+                var rs = Enumerable.Range(0, 6).Where(s => c.Edges[s].River >= 0).ToList();
+                // two sides, not next to each other, one on each side of the road's line (the road fords it)
+                int e0 = c.EntrySide;
+                bool OnArc(int x) => x == (e0 + 1) % 6 || x == (e0 + 2) % 6;
+                if (rs.Count == 2 && OnArc(rs[0]) != OnArc(rs[1]) && !rs.Contains(e0) && !rs.Contains((e0 + 3) % 6)) rivers++;
+                if (rs.Count == 2 && (rs[1] - rs[0]) is 1 or 5) apart++;
+                if (c.Edges[c.EntrySide].Road >= 0 && c.Edges[(c.EntrySide + 3) % 6].Road >= 0 && Enumerable.Range(0, 6).Count(s => c.Edges[s].Road >= 0) == 2) roads++;
+                for (int s = 0; s < 6; s++)
+                    if (m.Neighbour(c, s) is { } n)
+                    {
+                        sides++;
+                        // both or neither have a river over it, at one spot (each reads it from its own first corner),
+                        // and not where a road crosses
+                        float pa = Campaign.RiverAt(c, s), pb = Campaign.RiverAt(n, (s + 3) % 6);
+                        bool road = c.Edges[s].Road >= 0 || n.Edges[(s + 3) % 6].Road >= 0;
+                        if (pa < 0 && pb < 0 || pa >= 0 && pb >= 0 && Math.Abs(pa + pb - 1) < 1e-4 && (!road || Math.Abs(pa - .5f) > .1f)) agree++;
+                    }
+            }
+            // a river followed from a cell comes back to it only in a ring
+            foreach (var c in m.Cells)
+            {
+                var at = c; int s0 = Enumerable.Range(0, 6).FirstOrDefault(s => c.Edges[s].River >= 0, -1), steps = 0;
+                while (s0 >= 0 && m.Neighbour(at, s0) is { } n && steps++ < 40)
+                {
+                    int back = (s0 + 3) % 6;
+                    s0 = Enumerable.Range(0, 6).FirstOrDefault(s => s != back && n.Edges[s].River >= 0, -1);
+                    at = n;
+                    if (at == c) { rings++; break; }
+                }
+            }
+        }
+        var rm = Campaign.New(31);
+        var lr = rm.Cells.Single(c => c.Holding == Holding.HordeTown);
+        var way = MapPath.Find(rm, rm.Home, lr, Owner.Ours);
+        double along = MapPath.WayHours(rm.Home, way);
+        int onRoads = 0, prev = 0;
+        var a = rm.Home;
+        foreach (var b in way) { int s = MapPath.Side(a, b); if (a.Edges[s].Road >= 0 || b.Edges[(s + 3) % 6].Road >= 0) onRoads++; a = b; prev++; }
+        check("every cell has its river and its road as its valley lays them, the river between the road's two sides (the road fords it), two cells side by side agree on a river between them and where it crosses, no river runs in a ring; a way to the lair takes the roads",
+            rivers == cells && roads == cells && agree == sides && rings == 0 && apart == 0 && way != null && onRoads >= 1,
+            $"{cells} cells: rivers {rivers}, roads {roads}, sides agreeing {agree} of {sides}, rings {rings}, rivers turning at once {apart}; to the lair {way?.Count} cells, {along:0.0} h, {onRoads} steps on a road");
+    }
+
+    /// <summary>Level ground near the citadel for a building: the first spot round it with its height even and no trees.</summary>
+    static (int x, int z) Level(Sim sim)
+    {
+        var w = sim.World; var site = sim.Site;
+        for (int r = 120; r < 420; r += 8)
+            for (int k = 0; k < 24; k++)
+            {
+                int x = site.KeepX + (int)(Math.Cos(k * Math.Tau / 24) * r), z = site.KeepZ + (int)(Math.Sin(k * Math.Tau / 24) * r);
+                if (!w.OnLand(x, z) || site.Forbidden(x, z)) continue;
+                int lo = int.MaxValue, hi = 0;
+                for (int dx = -44; dx <= 44; dx += 4)
+                    for (int dz = -44; dz <= 44; dz += 4)
+                    {
+                        if (!w.OnLand(x + dx, z + dz)) { hi = 999; continue; }
+                        int h = w.SurfAt(x + dx, z + dz); lo = Math.Min(lo, h); hi = Math.Max(hi, h);
+                        if (Mat.IsTrunk(w.Get(x + dx, h + 2, z + dz)) || w.Get(x + dx, h - 1, z + dz) == Mat.Water) hi = 999;
+                    }
+                if (hi - lo <= 2) return (x, z);
+            }
+        return (-1, -1);
     }
 
     /// <summary>Every voxel of a world summed up into one number.</summary>

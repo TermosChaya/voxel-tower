@@ -242,6 +242,9 @@ public static class Settings
     }
 
     /// <summary>A tool or a tab met: true the first time, and kept so; a scripted run meets nothing.</summary>
+    /// <summary>Whether this has been met before (asked without meeting it).</summary>
+    public static bool Met(string key) => _met.Contains(key);
+
     public static bool Meet(string key)
     {
         if (_scripted || !_met.Add(key)) return false;

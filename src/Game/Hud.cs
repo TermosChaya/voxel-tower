@@ -352,6 +352,20 @@ public partial class Hud : CanvasLayer
 
     static readonly Func<double, string> Whole = v => Fmt.Int(Math.Floor(v)), Cubic = v => Fmt.M3(v);
 
+    /// <summary>
+    /// In a campaign, what of the army's places is not plain from the count: «3 в гостях» (ours from another valley, who
+    /// hold its places), «4 в походе» (the valley's own away, whose places are kept). Empty when there is none.
+    /// </summary>
+    public static string PlacesNote(Sim sim, string lead)
+    {
+        int guests = sim.Guests(), away = sim.AwayPlaces;
+        if (guests == 0 && away == 0) return "";
+        var parts = new List<string>();
+        if (guests > 0) parts.Add($"{guests} в гостях");
+        if (away > 0) parts.Add($"{away} в походе");
+        return lead + string.Join(", ", parts);
+    }
+
     /// <summary>What the beam shows of a store now: 0 gold, the stores of <see cref="Stockpile"/>, then the intervention and the household.</summary>
     public string StoreShown(int i) => _stores?.Values[i];
 
@@ -362,8 +376,9 @@ public partial class Hud : CanvasLayer
         var st = _m.Sim.Stock;
         _stores.Set(0, Math.Floor(st.Gold), Whole, 5);
         _stores.Set(Stockpile.Kinds, Math.Floor(_m.Sim.Favour), Whole, 5);
-        int have = _m.Sim.Household(), places = _m.Sim.Places;
-        _stores.Values[Stockpile.Kinds + 1] = $"{have}/{places}";
+        int have = _m.Sim.Household(), places = _m.Sim.Places, guests = _m.Sim.Guests();
+        // (in a campaign, guests from another valley after a plus: their places are their own valley's)
+        _stores.Values[Stockpile.Kinds + 1] = guests > 0 ? $"{have}/{places} +{guests}" : $"{have}/{places}";
         _stores.Short[Stockpile.Kinds + 1] = have >= places;
         var t = _m.Tools;
         for (int k = 1; k < Stockpile.Kinds; k++)
@@ -603,7 +618,7 @@ public partial class Hud : CanvasLayer
             if (u == null && t.HoverKeep)
             {
                 var sim = _m.Sim;
-                _tag.Show($"Цитадель · войско {sim.Household()} из {sim.Places}", Ornament.EmberGlow, Bindings.Fill("щелчок или {Keep} — набор войска"));
+                _tag.Show($"Цитадель · войско {sim.Household()} из {sim.Places}{PlacesNote(sim, " · ")}", Ornament.EmberGlow, Bindings.Fill("щелчок или {Keep} — набор войска"));
                 return;
             }
             if (u == null && t.HoverPlace is { } place)

@@ -14,17 +14,52 @@ public sealed partial class Sim
     /// <summary>The places the citadel itself has, before any dwelling is built.</summary>
     public const int CitadelPlaces = 10;
 
-    /// <summary>The places the household fills now: each of ours alive by its kind's room (the risen dead are not the household's).</summary>
+    /// <summary>
+    /// The places the household fills now: each of ours alive by its kind's room (the risen dead are not the household's),
+    /// and in a campaign the places kept for the valley's own who are away; guests from another valley hold its places,
+    /// not these (<see cref="Guests"/>).
+    /// </summary>
     public int Household()
     {
-        int n = 0;
+        int n = AwayPlaces;
         foreach (var u in Units)
-            if (!u.Dead && u.Team == Team.Player && u.T != Kinds.Risen) n += u.T.Room;
+            if (!u.Dead && u.Team == Team.Player && u.T != Kinds.Risen && u.Billet < 0) n += u.T.Room;
         return n;
     }
 
-    /// <summary>The places there are: the citadel's (more with barracks), and a place for each bed in a dwelling (two with bunks).</summary>
-    public int Places => CitadelPlaces + (Knows("barracks") ? 4 : 0) + DwellingBeds() * (Knows("bunks") ? 2 : 1) + (Sandbox ? 100 : 0);
+    /// <summary>The places guests of the valley fill, ours come from another valley whose places they hold (in a campaign).</summary>
+    public int Guests()
+    {
+        int n = 0;
+        foreach (var u in Units)
+            if (!u.Dead && u.Team == Team.Player && u.T != Kinds.Risen && u.Billet >= 0) n += u.T.Room;
+        return n;
+    }
+
+    /// <summary>
+    /// The places there are: the citadel's (more with barracks), and a place for each bed in a dwelling (two with bunks).
+    /// A valley without a citadel (an outpost's) has only its dwellings'.
+    /// </summary>
+    public int Places => (Site.HasKeep ? CitadelPlaces + (Knows("barracks") ? 4 : 0) : 0) + DwellingBeds() * (Knows("bunks") ? 2 : 1) + (Sandbox ? 100 : 0);
+
+    /// <summary>
+    /// At dawn, guests of the valley settle in it while it has places for them: they hold its places from then on, and
+    /// their own valley's are free. True if any did.
+    /// </summary>
+    public bool SettleGuests()
+    {
+        int room = Places - Household();
+        bool any = false;
+        foreach (var u in Units)
+        {
+            if (u.Dead || u.Team != Team.Player || u.Billet < 0 || u.T.Room > room) continue;
+            u.Billet = -1;
+            room -= u.T.Room;
+            any = true;
+        }
+        if (any) Say("Гости долины заняли свободные места в ней. Их места в прежней долине свободны.", 1);
+        return any;
+    }
 
     /// <summary>Whether the household has learnt what this kind waits on.</summary>
     public bool Unlocked(UnitType t) => t.Lore == "" || Knows(t.Lore);
@@ -36,7 +71,8 @@ public sealed partial class Sim
         if (!Site.HasKeep) return "в этой долине нет цитадели";
         // the household's own at the citadel; the rest in their buildings (Sim.Town.cs), save in the open sandbox
         if (!CitadelHires(t) && !Sandbox) return HiredWhere(t);
-        if (t == Kinds.Captain && Count(Kinds.Captain) >= MaxCaptains) return $"командиров не больше {MaxCaptains}";
+        if (t == Kinds.Captain && Captains >= CaptainCap)
+            return HallLevel() < 3 ? $"командиров {Captains} из {CaptainCap}: ратуша даёт ещё одного за каждый уровень" : $"командиров не больше {CaptainCap}";
         if (!Unlocked(t)) return $"сначала изучите «{LoreOf(t.Lore)?.Name ?? t.Lore}»";
         int have = Household();
         if (have + t.Room > Places) return t.Room > 1 && have < Places

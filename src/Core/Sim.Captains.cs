@@ -19,8 +19,25 @@ public sealed partial class Sim
 {
     /// <summary>How far a commander's word reaches, voxels (40 m).</summary>
     public const float CaptainReach = 40 * VoxelWorld.PerMetre;
-    /// <summary>How many commanders the citadel takes.</summary>
+    /// <summary>How many commanders the realm has room for without a town hall: each level of a working town hall gives one more (<see cref="CaptainCap"/>).</summary>
     public const int MaxCaptains = 2;
+
+    /// <summary>
+    /// How many commanders the realm has room for: two, and one more for each level of a working town hall, this valley's
+    /// and (in a campaign) the other valleys' of ours.
+    /// </summary>
+    public int CaptainCap => MaxCaptains + HallLevel() + HallsAway;
+
+    /// <summary>The commanders the realm has: those in this valley and (in a campaign) those away from it.</summary>
+    public int Captains => Count(Kinds.Captain) + CaptainsAway;
+
+    /// <summary>The level of the valley's town hall if it stands and works (0 without one).</summary>
+    public int HallLevel()
+    {
+        int n = 0;
+        foreach (var b in Buildings) if (b.Kind == "hall" && b.Ready) n = Math.Max(n, b.Level);
+        return n;
+    }
     /// <summary>The four calls, their names and how long each takes to be ready again, seconds.</summary>
     public static readonly string[] CallNames = { "За мной!", "Держать строй", "Залп!", "Рог" };
     public static readonly float[] CallRest = { 40, 45, 30, 60 };

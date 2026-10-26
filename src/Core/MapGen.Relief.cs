@@ -233,7 +233,21 @@ public static partial class MapGen
 
         // ---- a stream from a third side joins the river, round the plateau's other flank
         int sStream = near ? (entry + 3) % 6 : entry;
-        var (sx0, sz0) = hex.SidePoint(sStream, (float)(.35 + Rand() * .3));
+        double tStream = .35 + Rand() * .3;
+        // on the map of valleys the stream is the valley's own: in by a side no road or river of the map crosses, and
+        // clear of its middle, where parties walk in
+        bool mapped = false;
+        for (int i = 0; i < 6 && p.Edges != null; i++) mapped |= p.Edges[i]?.Road >= 0 || p.Edges[i]?.River >= 0;
+        if (mapped)
+        {
+            for (int k = 0; k < 6; k++)
+            {
+                int s2 = (sStream + k) % 6;
+                if (!(p.Edges[s2]?.Road >= 0) && !(p.Edges[s2]?.River >= 0)) { sStream = s2; break; }
+            }
+            tStream += tStream < .5 ? -.2 : .2;
+        }
+        var (sx0, sz0) = hex.SidePoint(sStream, (float)tStream);
         // where it meets the river: a point of the river's course inside the land, a good way down it
         int inside0 = -1, inside1 = -1;
         for (int i = 0; i < river.Count; i++) if (hex.Edge((float)river[i].x, (float)river[i].z) > 30) { if (inside0 < 0) inside0 = i; inside1 = i; }
@@ -438,18 +452,21 @@ public static partial class MapGen
                 short wl = 0;
                 // the river: banks that slope down to the water, a bed that drops away from them; shallow at the ford
                 double rd = riverD[i], rh = riverH[i];
+                // (on the map of valleys a road fords the river where it crosses, so that every side of the valley is to be
+                // got to and gone out by: the bed shallow along the road and the banks gentle)
+                bool forded = mapped && roadD[i] < 28;
                 if (k is not (Relief.Plateau or Relief.Rim) || rd < rh + 20)
                 {
                     if (rd < rh)
                     {
                         double t = rd / rh, deep = 3 + (1 - t * t) * 13;
-                        double ford = Brushes.Dist(x - fordAt.x, z - fordAt.z);
+                        double ford = Math.Min(Brushes.Dist(x - fordAt.x, z - fordAt.z), mapped ? roadD[i] : 1e9);
                         h = MapGen.RiverLevel - (2 + (deep - 2) * Smooth((ford - 8) / 16));
                         k = Relief.River; wl = MapGen.RiverLevel;
                     }
                     else if (rd < rh + 140)
                     {
-                        double bank = MapGen.RiverLevel + 2 + (rd - rh) * .42 + Math.Max(0, rd - rh - 30) * .95;
+                        double bank = forded ? MapGen.RiverLevel + 2 + (rd - rh) * .2 : MapGen.RiverLevel + 2 + (rd - rh) * .42 + Math.Max(0, rd - rh - 30) * .95;
                         if (h > bank) { h = bank; if (k is Relief.Low or Relief.Knoll) k = Relief.Bank; }
                         h = Math.Max(h, MapGen.RiverLevel + 1 - Math.Max(0, rd - rh - 40) * .25);
                     }
@@ -458,10 +475,11 @@ public static partial class MapGen
                 double sd = streamD[i];
                 if (sd < streamHalf + 60 && k is not (Relief.Plateau or Relief.Rim or Relief.River))
                 {
-                    if (sd < streamHalf) { h = MapGen.RiverLevel - 2 - (1 - sd / streamHalf) * 2; k = Relief.River; wl = MapGen.RiverLevel; }
+                    // (on the map of valleys waded anywhere, its ravine gentle: it cuts nothing off)
+                    if (sd < streamHalf) { h = mapped ? MapGen.RiverLevel - 1 - (1 - sd / streamHalf) : MapGen.RiverLevel - 2 - (1 - sd / streamHalf) * 2; k = Relief.River; wl = MapGen.RiverLevel; }
                     else
                     {
-                        double bank = MapGen.RiverLevel + 1 + (sd - streamHalf) * .5 + Math.Max(0, sd - streamHalf - 14) * .8;
+                        double bank = mapped ? MapGen.RiverLevel + 1 + (sd - streamHalf) * .2 : MapGen.RiverLevel + 1 + (sd - streamHalf) * .5 + Math.Max(0, sd - streamHalf - 14) * .8;
                         if (h > bank) { h = bank; if (k is Relief.Low or Relief.Knoll) k = Relief.Bank; }
                     }
                 }

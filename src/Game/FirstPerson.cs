@@ -206,6 +206,7 @@ void fragment() {
                 if (Bindings.Is(k, Act.FpSwitch)) { Switch(); break; }
                 if (Bindings.Is(k, Act.FpLadder)) { if (sim.PossessedLadder()) Said("лестница размечена: кладите её правой кнопкой"); else if (_u.T.Work <= 0) Said("лестницы ставят рабочие"); break; }
                 if (Bindings.Is(k, Act.FpOrder)) { OrderByLook(); break; }
+                if (Bindings.Is(k, Act.FpLeave) && Main.Atlas != null) { if (_m.LeaveInPerson() is { } no) Said(no); break; }
                 // the pause, the speed and the quick save go on as ever
                 if (Bindings.Is(k, Act.Pause) || Bindings.Is(k, Act.Speed) || Bindings.Is(k, Act.QuickSave) || Bindings.Is(k, Act.QuickLoad)) return;
                 break;
@@ -321,6 +322,7 @@ void fragment() {
             : Sim.Fights(u) ? "{Lmb} — удар, держать — тяжёлый · {Rmb} — блок · {FpKick} — пинок"
             : u.T.Work > 0 ? "{Lmb} — кирка · {Rmb} — класть ({FpStone} камень, {FpWood} брёвна, {FpEarth} земля, {FpFourth} железо) · {FpLadder} — лестница" : "{Lmb} — удар";
         string calls = u.T == Kinds.Captain ? " · {FpStone}–{FpFourth} — призывы · {FpOrder} — приказ взглядом" : "";
+        if (Main.Atlas != null) calls += " · у края {FpLeave} — на карту";
         return walk + " · " + hands + calls + " · {FpUp} / {FpDown} — по лестнице · {FpSwitch} — в другого · Esc — выйти";
     }
 

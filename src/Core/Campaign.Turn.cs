@@ -115,6 +115,7 @@ public sealed partial class Campaign
         }
         Dawns();
         Judge();
+        if (Live != null && InValley && Here != null) Reckon(Live, Here);
     }
 
     void Dawns()
@@ -229,7 +230,7 @@ public sealed partial class Campaign
     /// <summary>The enemies in a cell for a party of ours: the horde's parties standing there and the cell's keepers if they are not ours.</summary>
     public int Foes(MapCell cell)
     {
-        int n = cell.Owner != Owner.Ours ? cell.Sum.Keep.Count : 0;
+        int n = cell.Owner != Owner.Ours ? cell.Sum.Holders().Count : 0;
         foreach (var h in Parties) if (h.Owner == Owner.Horde && h.Q == cell.Q && h.R == cell.R) n += h.Party.Members.Count + (h.Lord != null ? 1 : 0);
         return n;
     }
@@ -411,7 +412,11 @@ public sealed partial class Campaign
         {
             bool lair = cell.Holding == Holding.HordeTown && cell.Owner == Owner.Horde;
             var keepers = cell.Owner == Owner.Horde ? "гарнизон" : "зверей";
-            last = QuickBattle.Fight(ours.Party.Members, null, cell.Sum.Keep, null, cell.Owner == Owner.Horde ? cell.Sum.Walls : 0, cell.Kind, Roll);
+            // those met in the valley fight: the raiders who only come raiding are not in its garrison
+            var holders = cell.Sum.Holders();
+            last = holders.Count == 0 ? new QuickResult { AttackerWon = true, Odds = 1 }
+                : QuickBattle.Fight(ours.Party.Members, null, holders, null, cell.Owner == Owner.Horde ? cell.Sum.Walls : 0, cell.Kind, Roll);
+            cell.Sum.Keep.RemoveAll(m => Sim.Holds(m.Kind) && !holders.Contains(m));
             if (!last.AttackerWon)
             {
                 Tell(NewsKind.Fought, $"Бой {Names(cell).prep}: отряд не взял {keepers}. Пало наших {last.AttackerFell.Count}, врагов {last.DefenderFell.Count}.", cell, ours);
@@ -537,10 +542,9 @@ public sealed partial class Campaign
         }
         else if (!cell.Visited && cell.Owner == Owner.Horde && s.Keep.Count > 0)
         {
-            // a lair never visited has its garrison of old (Campaign.OpenValley): only what it mustered since comes on top
+            // the garrison the map keeps for it, as the board counts it (those who only come raiding wait outside it)
             var kinds = new List<UnitType>();
             foreach (var m in s.Keep) kinds.Add(m.Kind);
-            if (cell.Holding == Holding.HordeTown) foreach (var t in Sim.Roster(LairThreat, 1)) kinds.Remove(t);
             sim.Garrison(kinds);
         }
     }
@@ -554,7 +558,7 @@ public sealed partial class Campaign
     {
         if (cell.Owner == Owner.Ours)
         {
-            cell.Sum.Take(sim, sim.Lost ? Team.Horde : Team.Player);
+            cell.Sum.Take(sim, sim.Lost ? Team.Horde : Team.Player, KeyOf(cell));
             if (sim.Lost) Fall(cell);
         }
         else if (cell.Owner == Owner.Horde)

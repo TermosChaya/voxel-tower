@@ -40,27 +40,30 @@ public sealed class Traveller
     public byte[] Priority;
     public bool Militia, Commands = true;
     public string Title;
+    /// <summary>The valley whose places he holds (its cell's key, <see cref="Campaign.KeyOf"/>); -1 for the valley he walked out of.</summary>
+    public int Billet = -1;
 
-    /// <summary>A pawn of the valley taken off as he walks out of it.</summary>
-    public static Traveller Of(Unit u) => new()
+    /// <summary>A pawn of the valley taken off as he walks out of it; one of the valley's own holds the places of the valley <paramref name="here"/>.</summary>
+    public static Traveller Of(Unit u, int here = -1) => new()
     {
         Kind = u.T, Look = u.Look, Hp = u.Hp, MaxHp = u.MaxHp, Wounds = u.Wounds, Priority = (byte[])u.Priority.Clone(),
-        Militia = u.Militia, Commands = u.Commands, Title = u.Title,
+        Militia = u.Militia, Commands = u.Commands, Title = u.Title, Billet = u.Billet >= 0 ? u.Billet : here,
     };
 
-    /// <summary>He as he was, onto one come into a valley.</summary>
-    internal void Onto(Unit u)
+    /// <summary>He as he was, onto one come into a valley: a guest there unless it is the valley whose places he holds (<paramref name="here"/>).</summary>
+    internal void Onto(Unit u, int here = -1)
     {
         u.Look = Look; u.MaxHp = MaxHp; u.Hp = Math.Min(Hp, MaxHp); u.Wounds = Wounds;
         if (Priority != null) Array.Copy(Priority, u.Priority, Math.Min(Priority.Length, u.Priority.Length));
         u.Militia = Militia; u.Commands = Commands; u.Title = Title;
+        u.Billet = Billet < 0 || Billet == here ? -1 : Billet;
     }
 
     internal void Write(BinaryWriter w)
     {
         w.Write(Kind.Key); w.Write(Look); w.Write(Hp); w.Write(MaxHp);
         w.Write((byte)(Priority?.Length ?? 0)); if (Priority != null) w.Write(Priority);
-        w.Write(Militia); w.Write(Commands); w.Write(Title ?? "");
+        w.Write(Militia); w.Write(Commands); w.Write(Title ?? ""); w.Write(Billet);
         Sim.WriteBody(w, Wounds);
     }
 
@@ -69,7 +72,7 @@ public sealed class Traveller
         var kind = Sim.KindOf(r.ReadString());
         var t = new Traveller { Kind = kind, Look = r.ReadInt32(), Hp = r.ReadSingle(), MaxHp = r.ReadSingle() };
         t.Priority = r.ReadBytes(r.ReadByte());
-        t.Militia = r.ReadBoolean(); t.Commands = r.ReadBoolean(); t.Title = r.ReadString();
+        t.Militia = r.ReadBoolean(); t.Commands = r.ReadBoolean(); t.Title = r.ReadString(); t.Billet = r.ReadInt32();
         if (t.Title.Length == 0) t.Title = null;
         t.Wounds = Sim.ReadBody(r, kind, t.Look);
         return kind == null ? null : t;
@@ -142,7 +145,7 @@ public sealed partial class MapParty
 /// </summary>
 public sealed partial class Campaign
 {
-    public const int Version = 2;
+    public const int Version = 3;
     public const string FileName = "campaign.dat";
     static readonly byte[] Magic = { (byte)'V', (byte)'T', (byte)'C', (byte)'M' };
 
@@ -226,7 +229,143 @@ public sealed partial class Campaign
             // the enemy comes by the side toward the lair; the lair's own, toward the first valley
             if (den != null) cell.EntrySide = cell == den ? SideToward(cell, 0, 0) : SideToward(cell, den.Q, den.R);
         }
+        c.LayWays(new Mulberry32(seed * 2246822519u + 77));
         return c;
+    }
+
+    /// <summary>
+    /// The roads and the rivers over the sides of the cells, as their valleys lay them (MapGen.Relief.cs): each valley's
+    /// road comes in at the middle of the side its enemy comes by, up to the stronghold, and out at the middle of the side
+    /// across; its river comes in over one side and goes out over another, between the road's two sides, so that the road
+    /// fords it and no part of the valley is cut off. Two cells side by side agree whether a river runs between them, and
+    /// where; no river runs round in a ring, they run off the map at its rim. The enemy comes by the side toward the lair,
+    /// or by one next to it where the rivers need it (never so in the first valley or the lair). A river crosses a side a
+    /// quarter of the way along it, clear of the middle where parties walk in.
+    /// </summary>
+    void LayWays(Mulberry32 rnd)
+    {
+        var cells = new List<MapCell>(Cells);
+        cells.Sort((a, b) => a.R != b.R ? a.R.CompareTo(b.R) : a.Q.CompareTo(b.Q));
+        var index = new Dictionary<MapCell, int>();
+        for (int i = 0; i < cells.Count; i++) index[cells[i]] = i;
+        // what each cell may have: its enemy's side (the one toward the lair first, then those next to it, unless it is the
+        // first valley or the lair), and its river's two sides, one on each side of the road's line, in an order of the seed's
+        var choices = new List<(int entry, int a, int b)>[cells.Count];
+        void Shuffle()
+        {
+            for (int i = 0; i < cells.Count; i++)
+            {
+                var c = cells[i];
+                var entries = c.Home || c.Holding == Holding.HordeTown ? new[] { c.EntrySide } : new[] { c.EntrySide, (c.EntrySide + 1) % 6, (c.EntrySide + 5) % 6 };
+                var list = new List<(int, int, int)>();
+                foreach (int e in entries)
+                {
+                    var one = new List<(int, int, int)>();
+                    foreach (int x in new[] { (e + 1) % 6, (e + 2) % 6 })
+                        foreach (int y in new[] { (e + 4) % 6, (e + 5) % 6 })
+                            one.Add((e, Math.Min(x, y), Math.Max(x, y)));
+                    for (int k = one.Count - 1; k > 0; k--) { int j = (int)(rnd.Next() * (k + 1)); (one[k], one[j]) = (one[j], one[k]); }
+                    list.AddRange(one);
+                }
+                choices[i] = list;
+            }
+        }
+        var pick = new (int entry, int a, int b)[cells.Count];
+        int tried = 0;
+        static bool Has((int entry, int a, int b) p, int s) => p.a == s || p.b == s;
+        // a river leaving one cell over a side goes into the next over the side across; round in a ring, it never reaches the rim
+        int Next(int at, ref int side)
+        {
+            var n = Neighbour(cells[at], side);
+            if (n == null) return -1;
+            int j = index[n], back = (side + 3) % 6;
+            side = pick[j].a == back ? pick[j].b : pick[j].a;
+            return j;
+        }
+        bool Ringless()
+        {
+            for (int i = 0; i < cells.Count; i++)
+            {
+                int side = pick[i].a, at = i;
+                for (int steps = 0; ; steps++)
+                {
+                    at = Next(at, ref side);
+                    if (at < 0) break;
+                    if (at == i || steps > cells.Count) return false;
+                }
+            }
+            return true;
+        }
+        bool Fits(int i, (int entry, int a, int b) p)
+        {
+            var c = cells[i];
+            for (int s = 0; s < 6; s++)
+            {
+                if (Neighbour(c, s) is not { } n || index[n] >= i) continue;
+                if (Has(p, s) != Has(pick[index[n]], (s + 3) % 6)) return false;
+            }
+            // both its river's ends running into cells laid already: followed from one, it must not come back by the other
+            if (Neighbour(c, p.a) is { } na && index[na] < i && Neighbour(c, p.b) is { } nb && index[nb] < i)
+            {
+                int at = index[na], side = (p.a + 3) % 6;
+                side = pick[at].a == side ? pick[at].b : pick[at].a;
+                for (int steps = 0; steps <= cells.Count; steps++)
+                {
+                    if (at == index[nb]) return false;
+                    var n = Neighbour(cells[at], side);
+                    if (n == null || index[n] >= i) break;
+                    int back = (side + 3) % 6;
+                    at = index[n];
+                    side = pick[at].a == back ? pick[at].b : pick[at].a;
+                }
+            }
+            return true;
+        }
+        bool Lay(int i)
+        {
+            if (i == cells.Count) return Ringless();
+            foreach (var p in choices[i])
+            {
+                if (++tried > 150000) return false;
+                if (!Fits(i, p)) continue;
+                pick[i] = p;
+                if (Lay(i + 1)) return true;
+            }
+            return false;
+        }
+        // (the search given up after so many tries, it begins again in another order of the seed's)
+        bool laid = false;
+        for (int round = 0; round < 12 && !laid; round++) { Shuffle(); tried = 0; laid = Lay(0); }
+        for (int i = 0; i < cells.Count; i++)
+        {
+            var c = cells[i];
+            if (laid) c.EntrySide = pick[i].entry;
+            c.Edges[c.EntrySide].Road = .5f;
+            c.Edges[(c.EntrySide + 3) % 6].Road = .5f;
+        }
+        if (!laid) return;
+        // where along each side the river crosses: a quarter of the way from the first corner of the side of the cell
+        // first in the order; the cell across reads it from its own first corner, and a valley reads the side its river
+        // comes in by as it is and the side it goes out by the other way round
+        for (int i = 0; i < cells.Count; i++)
+        {
+            var c = cells[i];
+            foreach (int side in new[] { pick[i].a, pick[i].b })
+            {
+                var n = Neighbour(c, side);
+                float at = n != null && index[n] < i ? .75f : .25f;
+                c.Edges[side].River = side == pick[i].a ? at : 1 - at;
+            }
+        }
+    }
+
+    /// <summary>Where along a side of a cell its river crosses, from that side's first corner (round by the east); -1 if none does.</summary>
+    public static float RiverAt(MapCell c, int side)
+    {
+        if (c.Edges[side] is not { River: >= 0 } e) return -1;
+        // (the first of its river's sides is read as it is, the other the other way round, as the valley lays it)
+        for (int s = 0; s < side; s++) if (c.Edges[s] is { River: >= 0 }) return 1 - e.River;
+        return e.River;
     }
 
     /// <summary>Which side of the middle cell a cell of the first ring lies across.</summary>
@@ -293,10 +432,11 @@ public sealed partial class Campaign
                 sim.SetSource(new MapRaids());
                 // the siege's first raid, drawn up as the valley was made, is not the map's
                 sim.Bands.RemoveAll(b => b.State == BandState.Coming);
-                if (cell.Holding == Holding.HordeTown) sim.Garrison(Sim.Roster(LairThreat, 1));
+                // (a lair the map keeps a garrison for gets that one as it settles)
+                if (cell.Holding == Holding.HordeTown && cell.Sum.Keep.Count == 0) sim.Garrison(Sim.Roster(LairThreat, 1));
             }
             sim.Campaign = true;
-            Enter(sim);
+            Enter(sim, cell);
             Settle(cell, sim);
             return sim;
         }
@@ -306,12 +446,18 @@ public sealed partial class Campaign
     /// <summary>How strong a lair's garrison is, against the siege's nights.</summary>
     public const float LairThreat = 3;
 
-    /// <summary>A valley we go into runs by the map's clock and holds the realm's gold.</summary>
-    public void Enter(Sim sim)
+    /// <summary>
+    /// A valley we go into (the cell we are in, if not said) runs by the map's clock and holds the realm's gold; it knows
+    /// its cell, and what the rest of the realm keeps for it (<see cref="Reckon"/>).
+    /// </summary>
+    public void Enter(Sim sim, MapCell cell = null)
     {
+        cell ??= Here;
         sim.SetClock(Clock);
         sim.Stock.Gold = Gold;
+        sim.CellKey = KeyOf(cell);
         Live = sim; InValley = true;
+        Reckon(sim, cell);
     }
 
     /// <summary>
@@ -322,7 +468,11 @@ public sealed partial class Campaign
     {
         Clock = sim.Clock.Now;
         Gold = sim.Stock.Gold;
-        foreach (var p in sim.TakeDeparted()) Parties.Add(new MapParty { Id = _nextParty++, Q = cell.Q, R = cell.R, CameQ = cell.Q, CameR = cell.R, Party = p });
+        foreach (var p in sim.TakeDeparted())
+        {
+            foreach (var m in p.Members) if (m.Billet < 0) m.Billet = KeyOf(cell);
+            Parties.Add(new MapParty { Id = _nextParty++, Q = cell.Q, R = cell.R, CameQ = cell.Q, CameR = cell.R, Party = p });
+        }
         if (cell.Home && sim.Lost && HomeFell < 0) HomeFell = sim.LostDay;
         Summarise(cell, sim);
     }

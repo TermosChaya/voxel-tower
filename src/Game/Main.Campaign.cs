@@ -28,8 +28,9 @@ public partial class Main
     /// <summary>--campaign[=seed]: a new campaign at once, in the third slot (screenshots, tests).</summary>
     bool _campaignArg;
 
-    /// <summary>Where each side's party sent out of this valley is going, till it is over the edge.</summary>
+    /// <summary>Where each side's party sent out of this valley is going, till it is over the edge; whether the board opens on it then (it went out in first person).</summary>
     readonly MapCell[] _outbound = new MapCell[6];
+    readonly bool[] _boardOnOut = new bool[6];
     /// <summary>The horde's armies of the map brought into the valley as the raid now in it.</summary>
     readonly List<MapParty> _raiding = new();
     /// <summary>Seconds the horde's town has had nobody of the horde standing in it; seconds the valley has been empty of ours.</summary>
@@ -136,9 +137,11 @@ public partial class Main
             if (Sim.Units.Exists(u => !u.Dead && u.LeaveBy == p.Side)) continue;
             Sim.Departed.Remove(p);
             var to = _outbound[p.Side];
-            _outbound[p.Side] = null;
+            bool open = _boardOnOut[p.Side];
+            _outbound[p.Side] = null; _boardOnOut[p.Side] = false;
             var mp = Atlas.Out(p, to);
             Hud.Log(to != null && mp.Moving ? $"Отряд идёт по карте: {Campaign.Names(to).nom}, {Fmt.Clock(Atlas.WalkLeft(mp))}." : "Отряд вышел на карту.", Hud.Kind.Ok);
+            if (open && Hud.Board != null) { Hud.Board.Open(); Hud.Board.ChooseParty(mp); }
         }
         while (Atlas.TakeRaid(out var enemy, out int side))
         {
@@ -260,6 +263,66 @@ public partial class Main
         int n = Sim.Depart(group, side);
         if (n == 0) return "отряду не дойти до края долины";
         _outbound[side] = to;
+        return null;
+    }
+
+    /// <summary>How near a side the one gone into must stand to be offered the map (the horde's strip and 2 m more), and how far about him those go who go with him (20 m, as far as «За мной!» calls).</summary>
+    const float EdgeNear = Site.StripDepth + 2 * VoxelWorld.PerMetre, WithHim = 20 * VoxelWorld.PerMetre;
+
+    /// <summary>The side of the valley the one gone into stands at in a campaign, a cell of the map beyond it; -1 if none.</summary>
+    public int EdgeAt(Unit u)
+    {
+        if (Atlas?.Here is not { } here || u == null || u.Dead || u.Inside) return -1;
+        var hex = Site.Hex ?? Hex.In(World.SX, World.SZ);
+        for (int s = 0; s < 6; s++)
+        {
+            var (d, t) = hex.FromSide(s, u.X, u.Z);
+            if (d <= EdgeNear && t >= 0 && t <= 1 && Atlas.Neighbour(here, s) != null) return s;
+        }
+        return -1;
+    }
+
+    /// <summary>Those who go out with the one gone into: he, and ours within 20 m of him standing free (not inside, not down, not held).</summary>
+    public List<Unit> PartyAbout(Unit u)
+    {
+        var list = new List<Unit> { u };
+        foreach (var o in Sim.Units)
+        {
+            if (o == u || o.Dead || o.Team != Team.Player || o.T == Kinds.Risen || o.Inside || o.Down || o.Captor != null || o.CarriedBy != null) continue;
+            float dx = o.X - u.X, dz = o.Z - u.Z;
+            if (dx * dx + dz * dz <= WithHim * WithHim) list.Add(o);
+        }
+        return list;
+    }
+
+    /// <summary>What first person offers at the valley's edge: where the side leads and how many go; empty away from an edge.</summary>
+    public string EdgeOffer(Unit u)
+    {
+        int side = EdgeAt(u);
+        if (side < 0) return "";
+        var to = Atlas.Neighbour(Atlas.Here, side);
+        int n = PartyAbout(u).Count;
+        return Bindings.Fill($"Край долины. За ним {Campaign.Names(to).nom}. {{FpLeave}} — уйти на карту: {n} {Sim.Plural(n, "человек", "человека", "человек")}");
+    }
+
+    /// <summary>
+    /// The one gone into walks out over the side he stands at, those about him with him, toward the cell beyond: the
+    /// eyes let go, they go over the edge and onto the map, and the board opens on them. Null, or why not.
+    /// </summary>
+    public string LeaveInPerson()
+    {
+        var u = Sim.Possessed;
+        int side = EdgeAt(u);
+        if (side < 0) return "подойдите к краю долины";
+        var to = Atlas.Neighbour(Atlas.Here, side);
+        var group = PartyAbout(u);
+        if (!group.Exists(o => o.T == Kinds.Captain)) return "в отряде нужен командир: войдите в него или подведите его";
+        FP.Exit();
+        Selected.Clear();
+        Hud.OnSelectionChanged();
+        if (Sim.Depart(group, side) == 0) return "отряду не дойти до края долины";
+        _outbound[side] = to;
+        _boardOnOut[side] = true;
         return null;
     }
 

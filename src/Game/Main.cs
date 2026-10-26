@@ -308,7 +308,8 @@ public partial class Main : Node3D
         }
         else if (!_selfTest && !_demo && Site.HasKeep) StartingFort.Raise(Sim);
         // the horde's town has its garrison from the start
-        if (save == null && Site.Holding == Holding.HordeTown) Sim.Garrison(Sim.Roster(Campaign.LairThreat, 1));
+        // (a lair the map keeps a garrison for gets that one, as it settles: Campaign.Settle)
+        if (save == null && Site.Holding == Holding.HordeTown && (Atlas?.Here?.Sum.Keep.Count ?? 0) == 0) Sim.Garrison(Sim.Roster(Campaign.LairThreat, 1));
         double navMs = sw.Elapsed.TotalMilliseconds;
 
         var atmo = Atmos = new Atmosphere();

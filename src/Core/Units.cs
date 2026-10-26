@@ -491,6 +491,11 @@ public sealed class Unit
     public int Post = -1;
     /// <summary>The side of the valley it was sent out by, to the map (Sim.Campaign.cs); -1 for none.</summary>
     public int LeaveBy = -1;
+    /// <summary>
+    /// In a campaign, the valley whose places it holds while it is a guest in this one (its cell's key, <see cref="Campaign.KeyOf"/>);
+    /// -1 when it is this valley's own.
+    /// </summary>
+    public int Billet = -1;
 
     // labour
     public int Site = -1;

@@ -673,6 +673,15 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   столбами с костями (`Mat.BonePile`), четыре хижины и большая вождя (бревенчатые стены, конус соломы `Mat.Hay`,
   двери к середине), костёр в кольце камней (`Mat.Ember`, свет в `Site.Torches`), тотем с красной тряпкой
   (`Mat.Paint`) и черепом, кучи костей; места гарнизона — `Site.HordePosts`; место `LandmarkKind.Lair` «Логово орды».
+- Кампания: места и реки (развилка mapgaps). `Campaign.KeyOf`/`CellOfKey` — ключ клетки для `Billet`;
+  `Reckon(sim, клетка)` — что держава держит за долиной (ушедшие за край, на карте, в сводках наших долин; командиры
+  не в ней; ратуши других долин), из `Enter` и после каждого `Advance`; `PlacesOf` — места долины без нас;
+  `Traveller.Billet` (в файле карты и в сохранении долины), `Out`/`Leave`/`Summarise` проставляют ключ своей долины.
+  `ValleySummary.Hall`, `Room`, `Holders()`. `LayWays` (в `Campaign.New`): дороги по сторонам `EntrySide` и напротив,
+  реки — перебором с откатом (сторона врага к логову или соседняя; река между сторонами дороги; соседи согласны; без
+  колец; `RiverAt` — где река пересекает сторону от её первого угла). `MapGen.Relief`: в долине карты (`mapped`)
+  дорога переходит реку бродом, берега у неё пологие, ручей мелкий, со свободной стороны и мимо её середины.
+  `MapPath.StepHours` — по полклетки в каждой, дорога каждой своя.
 - `Campaign.cs` — основа карты долин (замысел — `13-world-map.md`): `Holding`, `Owner`; `ClockTime(Day, At)` —
   одни часы карты (`At` — секунды от рассвета, ночь после дня, `Total`); `Traveller` (род, облик, раны `BodyState`,
   работы, ополчение, командует ли) и `Party` (сторона, люди, `Commander`) — наши между долинами; `MapCell` (q, r,
@@ -949,8 +958,12 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `OutpostStands`; падение — `Fall`; победа и поражение — на весь экран; пустая чужая долина — `GoHome`),
   `KeepersLeft` (звери ничьей клетки при уходе — в её сводку), `SendOut`, `EnterCell`, `QuickFight` (`FightHere`),
   `RaiseOutpost`, `GoHome`, `NewCampaign`, `LoadCampaign`, `SaveCampaign`, `LeaveCampaign`; `--campaign[=зерно]`,
-  `--board`. Постановки — `Main.Poses.Campaign.cs` (`--pose=march|arrived|taken|lairfight`), самотест —
+  `--board`. Постановки — `Main.Poses.Campaign.cs` (`--pose=march|arrived|taken|lairfight|places|edge`), самотест —
   `Main.SelfTest.Board.cs` (через четыре начала сцены, `_boardStage`/`_boardFails`; `SELFTEST_ONLY=board`).
+  Уход от первого лица: `EdgeAt` (сторона, у которой стоит тот, в ком игрок, с клеткой за ней), `PartyAbout` (он и
+  наши в 20 м), `EdgeOffer` (строка в глазах, `FirstPerson.EdgeLine`), `LeaveInPerson` (по `Act.FpLeave` = Enter:
+  глаза отпускают, `Depart`, `_outbound`; `_boardOnOut` — карта открывается на этом отряде, когда он на ней).
+  Места: `Hud.PlacesNote` («3 в гостях, 4 в походе») — у цитадели и в панели набора; шкала «8/10 +3».
 - `Ui/MapBoard.cs` — доска карты долин в `Hud` (только в кампании; медальон `tied-scroll` у меню, `Act.Board` = F2):
   `Field` рисует шестиугольники (острым верхом, север сверху: x = √3(q + r/2), y = 1,5r), туман, хозяев, «вы здесь»,
   пути и отряды (лица командиров `Portraits`); правая колонка — выбранная долина с действиями («Отправить выбранных
@@ -1092,7 +1105,13 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   не лежащий, не несомый, не несущий, не тот, в ком игрок); `TakeDeparted`; `Garrison(состав)` — гарнизон города орды
   у `Site.HordePosts` (`Guard`, `Home`; без машин, рудокопов, сапёров и воров); `ValleyLost` (при `KeepHp` ≤ 0 в
   кампании: набег кончается, его налётчики остаются сторожами долины, летопись, событие); сохранение
-  `WriteCampaign`/`ReadCampaign` (версия 60: флаг, падение, `Gate`, кто уходит, ушедшие). Без цитадели (`!Site.HasKeep`)
+  `WriteCampaign`/`ReadCampaign` (версия 60: флаг, падение, `Gate`, кто уходит, ушедшие; с 64 — чьи места держат гости).
+  Места и командиры державы: `CellKey` (клетка долины, ставит `Campaign.Enter`), `AwayPlaces`, `CaptainsAway`,
+  `HallsAway` (ставит `Campaign.Reckon`); `Unit.Billet` — клетка, чьи места держит гость (−1 — свой); `Household`
+  считает своих и ушедших, не гостей; `Guests`; `SettleGuests` на рассвете (`NewDay`); `Places` без цитадели — только
+  жилые дома; `CaptainCap` = 2 + уровень ратуши (`HallLevel`) + `HallsAway`, `Captains` — здесь и в отлучке
+  (Sim.Captains.cs). `Holds(вид)` — встаёт ли в гарнизон. `Arrive` ставит отряд в 30 м или ближе, если дальше путь
+  в обход (река, скала). Без цитадели (`!Site.HasKeep`)
   `Enter` не уводит внутрь — ждут у места (`Gate`: у камня заставы или у лагеря), `CantEnlist` — «в этой долине нет
   цитадели», `Site.Forbidden` середину не запрещает. Заголовок сохранения с версии 60 хранит `Holding` и стороны
   (`Site.Edges`, `SaveReader.Holding/Edges`).

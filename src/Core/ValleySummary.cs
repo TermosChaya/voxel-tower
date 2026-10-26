@@ -18,6 +18,10 @@ public sealed class ValleySummary
     public float Walls;
     /// <summary>Gold its town pays a minute (the town hall, the market, the houses' dues).</summary>
     public float TownGold;
+    /// <summary>The level of its town hall standing and working, 0 without one: each gives the realm a commander more.</summary>
+    public int Hall;
+    /// <summary>The places in the army its citadel and dwellings have (<see cref="Sim.Places"/>).</summary>
+    public int Room;
     /// <summary>How far an outpost raised by a party of ours has got, 0 to 1 (an outpost of the valley's own counts done).</summary>
     public float Raised;
     /// <summary>Stone, logs and metal its workers got while we were away, cubic metres: into its stores when we come.</summary>
@@ -30,6 +34,12 @@ public sealed class ValleySummary
     /// <summary>The mines' gold while nobody of ours stands at each: so much of what they pay with our men at them.</summary>
     public const float MineShare = .6f;
 
+    /// <summary>
+    /// Those of its keepers who stand in the valley and are met there: of the horde's, not those who only come raiding
+    /// (<see cref="Sim.Holds"/>); they wait at the lair for the next army.
+    /// </summary>
+    public List<Traveller> Holders() => Keep.FindAll(m => Sim.Holds(m.Kind));
+
     public int Workers
     {
         get { int n = 0; foreach (var m in Keep) if (m.Kind == Kinds.Worker) n++; return n; }
@@ -40,13 +50,15 @@ public sealed class ValleySummary
     /// masonry and timber built about its stronghold, its town's pay; what it had earned while we were away is in its
     /// stores by now.
     /// </summary>
-    public void Take(Sim sim, Team team)
+    public void Take(Sim sim, Team team, int key = -1)
     {
         Keep.Clear();
         foreach (var u in sim.Units)
-            if (!u.Dead && u.Team == team && !u.Bound && !u.Envoy && u.Captor == null) Keep.Add(Traveller.Of(u));
+            if (!u.Dead && u.Team == team && !u.Bound && !u.Envoy && u.Captor == null) Keep.Add(Traveller.Of(u, team == Team.Player ? key : -1));
         Walls = WallsOf(sim);
         TownGold = team == Team.Player ? sim.TownIncome() : 0;
+        Hall = team == Team.Player ? sim.HallLevel() : 0;
+        Room = team == Team.Player ? sim.Places : 0;
         Stone = Logs = Metal = 0;
         Known = true;
     }
@@ -98,6 +110,7 @@ public sealed class ValleySummary
         w.Write(Keep.Count);
         foreach (var m in Keep) m.Write(w);
         w.Write(Walls); w.Write(TownGold); w.Write(Raised); w.Write(Stone); w.Write(Logs); w.Write(Metal); w.Write(Known);
+        w.Write(Hall); w.Write(Room);
     }
 
     internal void Read(BinaryReader r)
@@ -106,6 +119,7 @@ public sealed class ValleySummary
         for (int n = r.ReadInt32(); n > 0; n--) if (Traveller.Read(r) is { } m) Keep.Add(m);
         Walls = r.ReadSingle(); TownGold = r.ReadSingle(); Raised = r.ReadSingle();
         Stone = r.ReadDouble(); Logs = r.ReadDouble(); Metal = r.ReadDouble(); Known = r.ReadBoolean();
+        Hall = r.ReadInt32(); Room = r.ReadInt32();
     }
 }
 

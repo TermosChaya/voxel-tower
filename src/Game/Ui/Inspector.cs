@@ -801,7 +801,7 @@ public partial class Inspector : Control
         _refresh.Add(() =>
         {
             int have = sim.Household(), places = sim.Places, beds = places - Sim.CitadelPlaces - (sim.Knows("barracks") ? 4 : 0);
-            head.Text = $"Войско: {have} из {places} мест";
+            head.Text = $"Войско: {have} из {places} мест{Hud.PlacesNote(sim, " · ")}";
             head.AddThemeColorOverride("font_color", have >= places ? Ornament.Ember : Ornament.Parchment);
             note.Text = beds > 0 ? $"места: цитадель {places - beds}, жилые дома {beds}" : Bindings.Fill("места дают цитадель и жилые дома ({ToolGather})");
             foreach (var k in _tiles) k.QueueRedraw();

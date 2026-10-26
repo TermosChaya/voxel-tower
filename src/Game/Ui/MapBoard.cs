@@ -297,7 +297,8 @@ public partial class MapBoard : Control
         foreach (var h in coming)
         {
             var goal = C.At(h.GoalQ, h.GoalR);
-            int n = h.Party.Members.Count + (h.Lord != null ? 1 : 0);
+            // (the raiders, as the token and the news count them; the warlord leading them named apart)
+            int n = h.Party.Members.Count;
             _warn.AddChild(Line($"На {Campaign.Names(goal).acc}: {n} {Sim.Plural(n, "налётчик", "налётчика", "налётчиков")}{(h.Lord != null ? $", ведёт {h.Lord.Name}" : "")}. Будет через {Fmt.Clock(C.WalkLeft(h))}.", Ornament.Blood));
         }
         foreach (var c in _parties.GetChildren()) c.QueueFree();
@@ -526,8 +527,8 @@ public partial class MapBoard : Control
                 bool seen = C.Seen(c);
                 var pts = Corners(ctr, _s - 2);
                 DrawColoredPolygon(pts, seen ? KindColor(c.Kind).Darkened(.18f) : Fog);
-                // a lighter middle, as land seen from above
-                if (seen) DrawColoredPolygon(Corners(ctr, _s * .78f), KindColor(c.Kind));
+                // a lighter middle, as land seen from above; its river and its road over it
+                if (seen) { DrawColoredPolygon(Corners(ctr, _s * .78f), KindColor(c.Kind)); Ways(c, ctr); }
                 var ring = new Vector2[7]; Array.Copy(pts, ring, 6); ring[6] = pts[0];
                 DrawPolyline(ring, Ornament.Fade(Ornament.Bronze, seen ? .45f : .2f), 1, true);
                 Drawn++;
@@ -552,8 +553,9 @@ public partial class MapBoard : Control
                 string name = Valleys.Name(c.Kind).Split(' ')[0];
                 Ornament.Lettering(this, font, ctr + new Vector2(-_s, g * .15f + fs * .8f), Upper(name), fs, Ornament.Parchment, HorizontalAlignment.Center, _s * 2);
                 if (KindIcon(c.Kind) is { } ki) Icons.Glyph(this, new Rect2(ctr + new Vector2(-_s * .62f, -_s * .2f), new Vector2(_s * .22f, _s * .22f)), Ornament.Fade(Ornament.Parchment, .8f), ki);
-                if (c.Owner != Holder.Ours && c.Sum.Keep.Count > 0)
-                    Ornament.Lettering(this, Ornament.SerifBold, ctr + new Vector2(_s * .32f, -_s * .02f), c.Sum.Keep.Count.ToString(), fs, c.Owner == Holder.Horde ? Theirs : Ornament.Aged);
+                int keep = c.Owner != Holder.Ours ? c.Sum.Holders().Count : 0;
+                if (keep > 0)
+                    Ornament.Lettering(this, Ornament.SerifBold, ctr + new Vector2(_s * .32f, -_s * .02f), keep.ToString(), fs, c.Owner == Holder.Horde ? Theirs : Ornament.Aged);
                 double gold = c == C.Here ? 0 : Campaign.AwayGold(c);
                 if (gold > 0) Ornament.Lettering(this, Ornament.SerifBold, ctr + new Vector2(-_s, -_s * .62f), $"+{Fmt.Int(gold)}", fs, Ornament.BronzeLight, HorizontalAlignment.Center, _s * 2);
                 if (c == C.Here)
@@ -596,6 +598,57 @@ public partial class MapBoard : Control
                 else Icons.Glyph(this, box.Grow(-3), Theirs, "goblin-head");
                 Ornament.Lettering(this, Ornament.SerifBold, at + new Vector2(t / 2 + 3, t / 2), p.Party.Members.Count.ToString(), fs - 1, Ornament.Parchment);
             }
+        }
+
+        static readonly Color Water = new("5a8db8"), Bank = new("2f4f6a"), RoadDust = new("e0c98f"), RoadEdge = new("5b4a32");
+
+        /// <summary>The middle of a side of a cell drawn at a centre: the sides from the north-eastern round by the east, as the valleys number them.</summary>
+        Vector2 SideMid(Vector2 ctr, int side)
+        {
+            float a = MathF.PI / 180 * (-60 + 60 * side);
+            return ctr + new Vector2(MathF.Cos(a), MathF.Sin(a)) * (_s - 2) * R3 / 2;
+        }
+
+        /// <summary>A point a part t of the way along a side of a cell drawn at a centre, from its first corner round by the east.</summary>
+        Vector2 Along(Vector2 ctr, int side, float t)
+        {
+            float a0 = MathF.PI / 180 * (60 * side - 90), a1 = MathF.PI / 180 * (60 * side - 30);
+            var p0 = ctr + new Vector2(MathF.Cos(a0), MathF.Sin(a0)) * (_s - 2);
+            var p1 = ctr + new Vector2(MathF.Cos(a1), MathF.Sin(a1)) * (_s - 2);
+            return p0.Lerp(p1, Math.Clamp(t, 0, 1));
+        }
+
+        /// <summary>
+        /// A cell's river and road, as its valley has them (Campaign.LayWays): the river in over the middle of one side and
+        /// out over another, bending through the land; the road from each of its sides to the middle, where the valley's
+        /// stronghold stands. Where two cells' roads meet at a side, the way along them is quicker.
+        /// </summary>
+        void Ways(MapCell c, Vector2 ctr)
+        {
+            int ra = -1, rb = -1;
+            for (int s = 0; s < 6; s++) if (c.Edges[s] is { River: >= 0 }) { if (ra < 0) ra = s; else rb = s; }
+            if (rb >= 0)
+            {
+                // (where along each side the valley has it: a quarter of the way from one corner or the other)
+                Vector2 a = Along(ctr, ra, Campaign.RiverAt(c, ra)), b = Along(ctr, rb, Campaign.RiverAt(c, rb)), mid = (a + b) / 2;
+                var across = (b - a).Normalized().Orthogonal();
+                // bent toward the middle, and a little aside by the cell's seed
+                var bend = ctr.Lerp(mid, .35f) + across * _s * (((c.Seed >> 5) & 7) / 7f - .5f) * .25f;
+                var pts = new Vector2[13];
+                for (int i = 0; i < pts.Length; i++)
+                {
+                    float t = i / (pts.Length - 1f);
+                    pts[i] = a * (1 - t) * (1 - t) + bend * 2 * t * (1 - t) + b * t * t;
+                }
+                DrawPolyline(pts, Bank, _s * .09f, true);
+                DrawPolyline(pts, Water, _s * .06f, true);
+            }
+            for (int s = 0; s < 6; s++)
+                if (c.Edges[s] is { Road: >= 0 })
+                {
+                    DrawLine(SideMid(ctr, s), ctr, Ornament.Fade(RoadEdge, .7f), MathF.Max(3, _s * .055f), true);
+                    DrawLine(SideMid(ctr, s), ctr, RoadDust, MathF.Max(2, _s * .03f), true);
+                }
         }
 
         void Dashes(Vector2 a, Vector2 b, Color col)

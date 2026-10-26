@@ -17,8 +17,10 @@ public partial class TownPanel : VBoxContainer
     public const float Width = 470;
     /// <summary>The line of what to build next, as it shows (for the self-test).</summary>
     public string Advice => _advice is { Visible: true } ? _advice.Text : null;
+    /// <summary>The line of the commanders, as it shows (for the self-test).</summary>
+    public string CaptainsLine => _captains?.Text;
     Main _m;
-    Label _income, _standing, _advice;
+    Label _income, _standing, _advice, _captains;
     VBoxContainer _rows;
     string _key = "";
     double _next;
@@ -36,6 +38,12 @@ public partial class TownPanel : VBoxContainer
         _income = Hud.Text("", Ornament.Serif, 13, Ornament.Aged, wrap: true);
         _income.CustomMinimumSize = new Vector2(Width - 24, 0);
         AddChild(_income);
+        _captains = Hud.Text("", Ornament.Serif, 13, Ornament.Aged, wrap: true);
+        _captains.CustomMinimumSize = new Vector2(Width - 24, 0);
+        _captains.TooltipText = Bindings.Fill("Командиры\nВ начале их 2. Каждый уровень работающей ратуши даёт место ещё одному, в кампании ратуша любой нашей долины. " +
+            "Нанимают командира в цитадели ({Keep}).");
+        _captains.MouseFilter = MouseFilterEnum.Pass;
+        AddChild(_captains);
         _advice = Hud.Text("", Ornament.Serif, 13, Ornament.BronzeLight, wrap: true);
         _advice.CustomMinimumSize = new Vector2(Width - 24, 0);
         AddChild(_advice);
@@ -59,7 +67,7 @@ public partial class TownPanel : VBoxContainer
     {
         var sim = _m.Sim;
         var key = new System.Text.StringBuilder();
-        key.Append(sim.StandingLine()).Append('|').Append(sim.TownNext()).Append('|').Append((int)(sim.Dues() * 10)).Append('|').Append(sim.TownVersion).Append('|').Append((int)sim.Stock.Gold).Append('|').Append(sim.Learnt.Count).Append('|').Append(sim.Household()).Append('|').Append(sim.Places);
+        key.Append(sim.StandingLine()).Append('|').Append(sim.TownNext()).Append('|').Append((int)(sim.Dues() * 10)).Append('|').Append(sim.TownVersion).Append('|').Append((int)sim.Stock.Gold).Append('|').Append(sim.Learnt.Count).Append('|').Append(sim.Household()).Append('|').Append(sim.Places).Append('|').Append(sim.Captains).Append(sim.CaptainCap);
         foreach (var b in sim.Buildings)
         {
             key.Append('|').Append(b.Kind).Append(b.Level).Append(b.Target).Append(b.Ready);
@@ -81,6 +89,8 @@ public partial class TownPanel : VBoxContainer
             ? "Здания открывают во вкладке «Знания» (страницы «Город» и «Войско»), а ставят здесь: рабочие строят их, потом здание нанимает войска и улучшает их."
             : $"Доход города: {income:0.#} золота{(metal > 0 ? $" и {metal:0.#} м³ металла" : "")} в минуту{(dues > 0 ? $", из них подать с домов {dues:0.#}" : "")}. Зданий: {sim.Buildings.FindAll(b => b.Ready).Count} из {sim.Buildings.Count}.";
         _income.TooltipText = Sim.DuesTip;
+        int cap = sim.CaptainCap, have = sim.Captains;
+        _captains.Text = $"Командиры: {have} из {cap}." + (sim.HallLevel() < 3 ? " Каждый уровень ратуши даёт место ещё одному." : "");
         _income.MouseFilter = MouseFilterEnum.Pass;
         string next = sim.TownNext();
         _advice.Text = next ?? "";
