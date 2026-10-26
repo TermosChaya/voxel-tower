@@ -8,10 +8,11 @@ namespace VoxelTower.Game;
 public partial class Main
 {
     /// <summary>
-    /// Every kind of town building at once (--pose=street, Sim.Frontage.cs): on a field evened out by the citadel, three
-    /// rows of them put up as by many hands, the doors to the citadel, each with its sign, its chimney if it has a hearth
-    /// and the things of its trade before it (the miners' building, which wants an outcrop of ore, is in --pose=metal).
-    /// --look=0…5 three of them at a time from before their doors, 6 the first three at night, 7 all of it from above;
+    /// Every kind of town building at once (--pose=street, Sim.Frontage.cs): on fields evened out about the citadel, six
+    /// rows of three put up as by many hands, the doors to the citadel, each with its sign, its chimney if it has a hearth
+    /// and the things of its trade before it (the miners' building, which wants an outcrop of ore, is in --pose=metal);
+    /// each row as long as its buildings and what stands by their ends ask, so that all of it has room.
+    /// --look=0…5 a row at a time from before their doors, 6 the first three at night, 7 all of it from above;
     /// 8 the first three by day with the household at their street (Sim.Streets.cs), keeping the stalls, choosing, at the
     /// anvil and the board; 9 the town hall raised to the Capitol, its third storey (Sim.Town.cs).
     /// </summary>
@@ -24,14 +25,18 @@ public partial class Main
         // another's doors; three buildings a look
         string[][] rows =
         {
-            new[] { "hall", "market", "smithy", "carpentry", "masons", "workshop" },
-            new[] { "barracks", "knights", "drill", "infirmary", "range", "lab" },
-            new[] { "kennel", "stables", "traps", "trolls", "giants" },
+            new[] { "hall", "market", "smithy" }, new[] { "carpentry", "masons", "workshop" },
+            new[] { "barracks", "knights", "drill" }, new[] { "infirmary", "range", "lab" },
+            new[] { "kennel", "stables", "traps" }, new[] { "trolls", "giants" },
         };
-        (int dx, int dz)[] sides = { (1, 0), (-1, 0), (0, 1) };
-        const int Along = 560;
-        // (far enough out that the rows' ends do not meet at the corners)
-        int dist = Math.Max(s.KeepR + 170, 300);
+        // two rows on each side, the second behind the first; the rows to the south further out, so that their ends
+        // do not meet the others' at the corners
+        (int dx, int dz)[] sides = { (1, 0), (1, 0), (-1, 0), (-1, 0), (0, 1), (0, 1) };
+        int near = Math.Max(s.KeepR + 170, 290);
+        int[] dists = { near, near + 200, near, near + 200, near + 60, near + 240 };
+        // what stands by a building's ends, the most of any of its looks: room left for it on either side
+        int Ends(TownKind k) { int e = 0; foreach (var l in Sim.LooksOf(k)) foreach (var a in l.Annexes) if (a.At is Flank.Left or Flank.Right) e = Math.Max(e, a.Depth + 8); return e; }
+        int Length(string[] row) { int n = -16; foreach (var key in row) { var k = Sim.TownKindOf(key); n += k.D + 2 * Ends(k) + 16; } return n; }
         foreach (var r in rows) foreach (var key in r) sim.Learnt.Add(Sim.TownKindOf(key).Lore);
         sim.Stock.Gold = Math.Max(sim.Stock.Gold, 9000);
         sim.Stock[Stockpile.Wood] += 3000.0 * VoxelWorld.PerM3;
@@ -53,15 +58,15 @@ public partial class Main
         for (int r = 0; r < rows.Length; r++)
         {
             var (dx, dz) = sides[r];
-            int ax = Math.Abs(dz), az = Math.Abs(dx);
-            int cx = kx + dx * dist, cz = kz + dz * dist;
+            int ax = Math.Abs(dz), az = Math.Abs(dx), Along = Length(rows[r]);
+            int cx = kx + dx * dists[r], cz = kz + dz * dists[r];
             int g = ground[r] = w.SurfAt(cx, cz);
             for (int a = -Along / 2 - 20; a <= Along / 2 + 20; a++)
-                for (int c = -60; c <= 36; c++)
+                for (int c = -60; c <= 110; c++)
                 {
                     int x = cx + ax * a + dx * c, z = cz + az * a + dz * c;
                     if (!w.InBounds(x, 0, z) || s.Forbidden(x, z)) continue;
-                    for (int y = g - 8; y < g + 48; y++)
+                    for (int y = g - 8; y < g + 96; y++)
                     {
                         byte want = y < g ? (y == g - 1 ? Mat.Grass : Mat.Soil) : Mat.Air;
                         if (w.Get(x, y, z) != want) w.Set(x, y, z, want);
@@ -74,19 +79,17 @@ public partial class Main
         {
             var (dx, dz) = sides[r];
             int ax = Math.Abs(dz), az = Math.Abs(dx);
-            int cx = kx + dx * dist, cz = kz + dz * dist;
+            int cx = kx + dx * dists[r], cz = kz + dz * dists[r];
             sim.InstantLabour = true;
-            int at = 0;
-            foreach (var key in rows[r]) at -= Sim.TownKindOf(key).D + 24;
-            at /= 2;
+            int at = -Length(rows[r]) / 2;
             foreach (var key in rows[r])
             {
                 var k = Sim.TownKindOf(key);
                 if (key == "knights") Raise("barracks");
-                int along = at + k.D / 2;
+                int along = at + Ends(k) + k.D / 2;
                 string no = sim.PutUp(k, cx + ax * along, cz + az * along, turned: ax == 1, out var b);
                 if (no != null) GD.Print($"[pose] {key}: {no}");
-                at += k.D + 24;
+                at += k.D + 2 * Ends(k) + 16;
                 if (b == null) continue;
                 put.Add(b);
                 for (int t = 0; t < 40 && !b.Ready; t++) { sim.CompleteAll(); Advance(1); if (sim.ZoneOf(b) is { } z) sim.LookOver(z); }
@@ -148,16 +151,16 @@ public partial class Main
             for (int t = 0; t < 6; t++) { sim.Waves.Countdown = 8; Advance(1); }
         }
         if (look == 7) { Rig.SetAt(w.WX(kx), w.WY(ground[0]), w.WZ(kz), .5f, 1.2f, .3f); Hud.Refresh(); if (_bare) Hud.Visible = false; return; }
-        int group = look >= 8 ? 0 : look % 6, row = group / 2;
+        int row = look >= 8 ? 0 : look % 6;
         var three = new List<Building>();
-        foreach (var b in put) if (Array.IndexOf(rows[row], b.Kind) is int i && i >= 0 && i / 3 == group % 2) three.Add(b);
+        foreach (var b in put) if (Array.IndexOf(rows[row], b.Kind) >= 0) three.Add(b);
         if (three.Count == 0) return;
         float mx = 0, mz = 0;
         foreach (var b in three) { mx += b.CX; mz += b.CZ; }
         mx /= three.Count; mz /= three.Count;
         // from before the doors, which look to the citadel
         var (sx, sz) = sides[row];
-        Rig.SetAt(w.WX(mx - sx * 30), w.WY(ground[row] + 10), w.WZ(mz - sz * 30), MathF.Atan2(-sx, -sz) + .4f, look == 9 ? .45f : .55f, look == 8 ? .8f : 1.05f);
+        Rig.SetAt(w.WX(mx - sx * 30), w.WY(ground[row] + 10), w.WZ(mz - sz * 30), MathF.Atan2(-sx, -sz) + .4f, look == 9 ? .45f : .55f, look == 8 ? .8f : .62f);
         Hud.Refresh();
         if (_bare) Hud.Visible = false;
     }

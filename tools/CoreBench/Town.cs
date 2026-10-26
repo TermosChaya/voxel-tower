@@ -43,13 +43,14 @@ static class TownBench
         sim.Waves.Countdown = 1e9; sim.WildTarget = 0;
         StartingFort.Raise(sim);
         int kx = site.KeepX, kz = site.KeepZ;
-        // level spots of the plateau a walk from the citadel, far enough apart for a building each
+        // level spots of the plateau a walk from the citadel, far enough apart for a building each with what stands by
+        // its ends (a courtyard, a market hall) and a street before it
         var spots = new List<(int x, int z)>();
-        for (int r = 120; r < 420 && spots.Count < 4; r += 8)
+        for (int r = 120; r < 460 && spots.Count < 4; r += 8)
             for (int a = 0; a < 24 && spots.Count < 4; a++)
             {
                 int x = kx + (int)(Math.Cos(a * Math.Tau / 24) * r), z = kz + (int)(Math.Sin(a * Math.Tau / 24) * r);
-                if (x < 90 || z < 90 || x > w.SX - 90 || z > w.SZ - 90 || spots.Exists(s => Math.Abs(s.x - x) < 110 && Math.Abs(s.z - z) < 110)) continue;
+                if (x < 90 || z < 90 || x > w.SX - 90 || z > w.SZ - 90 || spots.Exists(s => Math.Abs(s.x - x) < 170 && Math.Abs(s.z - z) < 170)) continue;
                 int lo = int.MaxValue, hi = 0;
                 for (int dx = -44; dx <= 44; dx += 4) for (int dz = -44; dz <= 44; dz += 4) { int h = w.SurfAt(x + dx, z + dz); lo = Math.Min(lo, h); hi = Math.Max(hi, h); if (Mat.IsTrunk(w.Get(x + dx, h + 2, z + dz))) hi = 999; }
                 if (hi - lo <= 2 && !site.Forbidden(x, z)) spots.Add((x, z));
@@ -58,6 +59,8 @@ static class TownBench
         for (int i = 0; i < 6; i++) sim.Spawn(Kinds.Worker, sim.Gate);
         sim.Stock[Stockpile.Wood] += 800.0 * VoxelWorld.PerM3;
         sim.Stock[Stockpile.Stone] += 800.0 * VoxelWorld.PerM3;
+        // (earth too: the daub of a timber-framed look and the tiles are of it)
+        sim.Stock[Stockpile.Earth] += 800.0 * VoxelWorld.PerM3;
         sim.Stock[Stockpile.Metal] += 40.0 * VoxelWorld.PerM3;
         sim.Stock.Gold = 2000;
         void Run(double s) { for (double t = 0; t < s; t += .05) sim.Step(.05f); }
@@ -71,11 +74,37 @@ static class TownBench
         check("a building is refused till its lore is learnt, and one till the buildings it needs stand",
             before != null && learnt && after == null && market != null && market.Contains("Ратуша"), $"before «{before}»; learnt {learnt}; after «{after}»; the market «{market}»");
 
-        // the barracks put up and built by the workers: closed, furnished, working
+        // the barracks put up and built by the workers: closed, furnished, working (fourteen metres long, longer than
+        // the spot is level: the ground about it evened out first, nothing standing on it)
+        {
+            int gb = w.SurfAt(spots[0].x, spots[0].z);
+            for (int x = spots[0].x - 50; x <= spots[0].x + 50; x++)
+                for (int z = spots[0].z - 90; z <= spots[0].z + 90; z++)
+                {
+                    if (!w.InBounds(x, 0, z) || site.Forbidden(x, z) || spots.Skip(1).Any(s => Math.Abs(s.x - x) < 50 && Math.Abs(s.z - z) < 50)) continue;
+                    for (int y = gb - 12; y < gb + 60; y++)
+                    {
+                        byte want = y < gb ? (y == gb - 1 ? Mat.Grass : Mat.Soil) : Mat.Air;
+                        if (w.Get(x, y, z) != want) w.Set(x, y, z, want);
+                    }
+                }
+            Run(2);
+        }
         string put = sim.PutUp(barracks, spots[0].x, spots[0].z, false, out var b);
         double built = -1;
         for (int i = 0; i < 1200 && b != null && !b.Ready; i++) { Run(.5); if (b.Ready) built = sim.Time; }
         var zone = b == null ? null : sim.ZoneOf(b);
+        if (b is { Ready: false } && Environment.GetEnvironmentVariable("TOWN_SAY") != null)
+        {
+            var (fs, fp, fb) = sim.FurnitureOf(b);
+            Console.WriteLine($"  the barracks at {b.X0},{b.Z0}-{b.X1},{b.Z1} «{b.Look?.Name}»: closed {zone?.Closed} «{zone?.Why}», furniture {fs} of {fp} ({fb})");
+            int n = 0, g = w.GroundTop((int)b.CX, (int)b.CZ);
+            for (int z = b.Z0 - 60; z <= b.Z1 + 60 && n < 12; z++)
+                for (int x = b.X0 - 60; x <= b.X1 + 60 && n < 12; x++)
+                    for (int y = g - 8; y < g + 80 && n < 12; y++)
+                        if (sim.Orders.At(x, y, z) is var o && o != 0) { n++; Console.WriteLine($"  marked {(Orders.IsRemove(o) ? "out" : Mat.NameOf(o))} at {x - b.X0},{y - g},{z - b.Z0}, now {Mat.NameOf(w.Get(x, y, z))}, footed {sim.Footed(x, y, z)}"); }
+            foreach (var u in sim.Units) if (!u.Dead && u.Team == Team.Player && Math.Abs(u.X - b.CX) < 80 && Math.Abs(u.Z - b.CZ) < 90) Console.WriteLine($"  {u.T.Name} at {u.X - b.X0:0},{u.Y - g:0},{u.Z - b.Z0:0} {u.State} «{u.Why}»");
+        }
         int placesWith = sim.Places;
         string atCitadel = sim.CantEnlist(Kinds.Spearman);
         float stock0 = b == null ? 0 : b.Stock.GetValueOrDefault(Kinds.Spearman.Key);
@@ -281,6 +310,7 @@ static class TownBench
             }
         }
         double streetAt = sim.Time;
+        string how = string.Join(", ", idle.Where(u => u.Spot != null).Select(u => $"{u.Pastime} at {MathF.Sqrt((u.X - u.Spot.X) * (u.X - u.Spot.X) + (u.Z - u.Spot.Z) * (u.Z - u.Spot.Z)):0.0} of «{u.Spot.Of?.Kind}» {u.State}"));
         sim.RaiseAlarm();
         Run(1.5);
         int afterAlarm = idle.Count(u => u.Spot != null);
@@ -304,7 +334,7 @@ static class TownBench
         check("by day idle workers go to the town's street, to keep the market's stalls, to choose at them, to read the hall's board, and stand at their places facing them; the alarm, the dusk and work send them off",
             places.GetValueOrDefault(Pastime.Sell) == 2 && places.GetValueOrDefault(Pastime.Shop) == 4 && places.GetValueOrDefault(Pastime.Read) == 1
             && atStreet >= 3 && facing == atStreet && afterAlarm == 0 && back >= 2 && atDusk == 0 && keepers.Count >= 2 && stayed == 0,
-            $"places {string.Join(", ", places.Select(p => $"{p.Key} {p.Value}"))}; at them {atStreet} ({string.Join(", ", doing)}), {facing} standing on theirs facing it, by {streetAt:0} s; " +
+            $"places {string.Join(", ", places.Select(p => $"{p.Key} {p.Value}"))}; at them {atStreet} ({string.Join(", ", doing)}), {facing} standing on theirs facing it, by {streetAt:0} s ({how}); " +
             $"after the alarm {afterAlarm}, back {back}; at dusk {atDusk}; given work {stayed} of {keepers.Count} stayed");
 
         // the Capitol: the hall's third storey waits for the settlement to be a «Посад»; raised by the workers it pays more

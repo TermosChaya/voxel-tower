@@ -21,9 +21,10 @@ public enum RidgeTop : byte { None, Belfry, Louvre, Spire }
 
 /// <summary>
 /// A part built on to a building outside its walls, open to the air so that the rules of the room inside are its own:
-/// a canopy on posts, a shed leaning on a wall, a porch over the door, a fenced yard, a tower standing by an end.
+/// a canopy on posts, a shed leaning on a wall, a porch over the door, a fenced yard, a tower standing by an end, a wing
+/// of walls and a roof of its own standing out square from the building with a wide way into it at its far end.
 /// </summary>
-public enum AnnexKind : byte { Canopy, Shed, Porch, Yard, Tower }
+public enum AnnexKind : byte { Canopy, Shed, Porch, Yard, Tower, Wing }
 
 /// <summary>A side of a building as one stepping out of its door sees it: the door's wall, the one behind, the wall on the left, the one on the right.</summary>
 public enum Flank : byte { Front, Back, Left, Right }
@@ -32,7 +33,8 @@ public enum Flank : byte { Front, Back, Left, Right }
 /// A part built on to a building (see <see cref="AnnexKind"/>): the side it stands by, how far out it reaches, how much of
 /// the wall it runs along (0, all of it), how high it stands to its eaves, what its roof is covered with (0, the
 /// building's covering), a canopy's roof in two slopes with its ridge running out from the wall (else one slope down
-/// from the wall), a tower round, and what stands under it or in it.
+/// from the wall), a tower round, at the wall's end rather than its middle (a tower, a wing: the building's plan an L),
+/// a yard walled in stone rather than fenced (a courtyard), and what stands under it or in it.
 /// </summary>
 public sealed class Annex
 {
@@ -40,14 +42,14 @@ public sealed class Annex
     public Flank At;
     public int Depth, Span, Height;
     public byte Covering;
-    public bool Gabled, Round;
+    public bool Gabled, Round, AtEnd, Walled;
     public Prop[] Holds = Array.Empty<Prop>();
 }
 
 /// <summary>
 /// One of the looks a kind of town building is put up in (Sim.Looks.cs): its name for the player, how its walls are
-/// laid, its roof's form and covering (0, the kind's), what stands on its ridge, how much longer or shorter and how
-/// much narrower than the kind's it is, and what is built on to it.
+/// laid, its roof's form and covering (0, the kind's), what stands on its ridge, how much longer or shorter, how much
+/// narrower and how much higher than the kind's it is, and what is built on to it.
 /// </summary>
 public sealed class Look
 {
@@ -57,6 +59,8 @@ public sealed class Look
     public byte Covering;
     public RidgeTop Crown;
     public int DD, DW;
+    /// <summary>How much higher its first walls stand than its kind's.</summary>
+    public int DH;
     public Annex[] Annexes = Array.Empty<Annex>();
 }
 
@@ -73,10 +77,10 @@ public static class Looks
 
     /// <summary>
     /// What a voxel of a building's wall is laid as: the look's walls at <paramref name="h"/> voxels over the floor of
-    /// the storey (<paramref name="upper"/> for one over the first), <paramref name="a"/> along a wall
-    /// <paramref name="len"/> long, on its outer face or not.
+    /// the storey (<paramref name="upper"/> for one over the first), its walls <paramref name="high"/> voxels high,
+    /// <paramref name="a"/> along a wall <paramref name="len"/> long, on its outer face or not.
     /// </summary>
-    static byte Face(Look look, byte wallMat, int x, int y, int z, int h, int a, int len, bool outer, bool upper)
+    static byte Face(Look look, byte wallMat, int x, int y, int z, int h, int a, int len, bool outer, bool upper, int high)
     {
         bool corner = a < T || a >= len - T;
         int q = a - T;
@@ -88,14 +92,14 @@ public static class Looks
                 return Shapes.Masonry(x >> 1, y >> 1, z >> 1);
             case WallStyle.Plaster:
                 if (h < (upper ? 0 : 3)) return Shapes.Masonry(x, y, z);
-                if (corner || h >= Shapes.HouseHeight - 1) return Mat.Wood;
+                if (corner || h >= high - 1) return Mat.Wood;
                 return Mat.Daub;
             case WallStyle.StoneBase:
                 if (!upper && h < Rail) return Shapes.Masonry(x, y, z);
-                return Frame(h, q, len, corner, post, outer, braced: upper);
+                return Frame(h, q, len, corner, post, outer, braced: upper, high);
             case WallStyle.Frame:
                 if (!upper && h < 2) return Shapes.Masonry(x, y, z);
-                return Frame(h, q, len, corner, post, outer, braced: true);
+                return Frame(h, q, len, corner, post, outer, braced: true, high);
             default:
                 return Shapes.Lay(wallMat, x, y, z);
         }
@@ -106,9 +110,9 @@ public static class Looks
     /// at the top of logs; on the outer face a brace rising to the rail in the end panels and another from the rail up;
     /// daub between.
     /// </summary>
-    static byte Frame(int h, int q, int len, bool corner, bool post, bool outer, bool braced)
+    static byte Frame(int h, int q, int len, bool corner, bool post, bool outer, bool braced, int high)
     {
-        if (corner || post || h <= 0 || h == Rail || h >= Shapes.HouseHeight - 1) return Mat.Wood;
+        if (corner || post || h <= 0 || h == Rail || h >= high - 1) return Mat.Wood;
         if (!outer) return Mat.Daub;
         // the end panels' braces, leaning in toward the middle of the wall
         int inner = len - 2 * T, p = q % PostEvery - 2, last = inner - q - 1;
@@ -117,14 +121,17 @@ public static class Looks
         return Mat.Daub;
     }
 
-    /// <summary>A voxel of a wall in the band of a building's rectangle: where along which wall it is, and laid as the look has it.</summary>
-    public static byte Wall(Look look, byte wallMat, int x, int y, int z, int x0, int z0, int x1, int z1, int floor, bool upper)
+    /// <summary>
+    /// A voxel of a wall in the band of a building's rectangle, its walls <paramref name="high"/> voxels over the floor of
+    /// the storey: where along which wall it is, and laid as the look has it.
+    /// </summary>
+    public static byte Wall(Look look, byte wallMat, int x, int y, int z, int x0, int z0, int x1, int z1, int floor, bool upper, int high = Shapes.HouseHeight)
     {
         if (look == null) return Shapes.Lay(wallMat, x, y, z);
         bool zWall = z - z0 < T || z1 - z < T;
         int a = zWall ? x - x0 : z - z0, len = zWall ? x1 - x0 + 1 : z1 - z0 + 1;
         bool outer = x == x0 || x == x1 || z == z0 || z == z1;
-        return Face(look, wallMat, x, y, z, y - floor, a, len, outer, upper);
+        return Face(look, wallMat, x, y, z, y - floor, a, len, outer, upper, high);
     }
 
     /// <summary>

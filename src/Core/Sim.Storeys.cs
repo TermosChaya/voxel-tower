@@ -43,8 +43,9 @@ public sealed partial class Sim
             return "второй этаж встаёт ровно на дом: рисуйте по его стенам";
         int top = house.Depth;
         int ground = World.GroundTop((house.X0 + house.X1) / 2, (house.Z0 + house.Z1) / 2);
+        // (a town building's first walls may stand lower or higher than a house's, Sim.Town.cs)
         if (top <= 1 || top - ground < Shapes.HouseHeight - 4) return "надстроить можно дом, нарисованный прямоугольником";
-        if (top - ground > (storeys - 1) * Shapes.HouseHeight + 8) return storeys > 2 ? "выше трёх этажей не строят" : "выше двух этажей не строят";
+        if (top - ground > (storeys - 2) * Shapes.HouseHeight + Shapes.TallestRise + 8) return storeys > 2 ? "выше трёх этажей не строят" : "выше двух этажей не строят";
         foreach (var s in Storeys) if (s.X0 == house.X0 && s.Z0 == house.Z0) return "второй этаж здесь уже размечен";
         // what is still marked to be laid up there is let go: it is coming down
         for (int z = house.Z0 - Shapes.Eaves; z <= house.Z1 + Shapes.Eaves; z++)
@@ -81,7 +82,7 @@ public sealed partial class Sim
             var debris = new VoxelList();
             for (int z = s.Z0; z <= s.Z1; z++)
                 for (int x = s.X0; x <= s.X1; x++)
-                    for (int y = s.Top - Shapes.HouseHeight - 4; y < s.Top; y++)
+                    for (int y = s.Top - Shapes.TallestRise - 4; y < s.Top; y++)
                         if (World.Get(x, y, z) is Mat.Lumber or Mat.Rubble) debris.Add(x, y, z, Mat.Air);
             if (debris.Count > 0) DesignateRemove(debris);
             DesignateBuild(ladder);

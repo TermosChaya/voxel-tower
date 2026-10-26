@@ -21,6 +21,8 @@ public struct Stroke
     public byte Roof;
     /// <summary>A town building's look (Looks.cs): how its walls are laid and its roof formed; null for a plain house.</summary>
     public Look Look;
+    /// <summary>A house's first walls: how high they stand over its floor (0, a house's usual three and a half metres).</summary>
+    public int Rise;
 }
 
 /// <summary>
@@ -308,6 +310,9 @@ public static class Shapes
     /// <summary>How thick a house's walls are, how high they stand over its floor, and how far its eaves reach out.</summary>
     public const int HouseWall = 4, HouseHeight = 28, Eaves = 2;
 
+    /// <summary>How high a town building's first walls may stand over its floor: a hall for giants.</summary>
+    public const int TallestRise = 40;
+
     /// <summary>
     /// A house drawn as a rectangle: walls of the stroke's material round it, half a metre thick whatever the brush's
     /// width, three and a half metres over the highest ground under them; a floor of logs laid over the ground
@@ -349,7 +354,7 @@ public static class Shapes
                 if ((shared & 1) != 0 && z < z0 + t || (shared & 2) != 0 && z > z1 - t || (shared & 4) != 0 && x < x0 + t || (shared & 8) != 0 && x > x1 - t) continue;
                 ground = Math.Max(ground, Underfoot(w, x, z));
             }
-        int top = ground + 1 + HouseHeight;
+        int rise = st.Rise > 0 ? st.Rise : HouseHeight, top = ground + 1 + rise;
         var wall = st; wall.Width = t; wall.Level = true; wall.Hollow = true; wall.Dig = false;
         var L = new VoxelList();
         arched = new VoxelList();
@@ -363,7 +368,7 @@ public static class Shapes
                 {
                     int last = Underfoot(w, x, z);
                     for (int y = Math.Max(1, last); y < top && y < w.SY; y++)
-                        if (Brushes.Free(w.Get(x, y, z))) { L.Add(x, y, z, Looks.Wall(st.Look, wall.Mat, x, y, z, x0, z0, x1, z1, ground + 1, false)); last = y + 1; }
+                        if (Brushes.Free(w.Get(x, y, z))) { L.Add(x, y, z, Looks.Wall(st.Look, wall.Mat, x, y, z, x0, z0, x1, z1, ground + 1, false, rise)); last = y + 1; }
                     Brushes.ClearVegAbove(w, L, x, z, last);
                     continue;
                 }
@@ -549,9 +554,27 @@ public static class Shapes
         // (unless the door is in that one and not the other)
         int farSide = alongX ? (far0 ? 0 : 1) : (far0 ? 2 : 3), nearSide = alongX ? 1 - farSide : 5 - farSide;
         if ((doors & 1 << farSide) != 0 && (doors & 1 << nearSide) == 0) far0 = !far0;
-        var hit = alongX
-            ? new VoxelHit { X = x0 + t + 12, Y = lowerTop - 20, Z = far0 ? z0 + t - 1 : z1 - t + 1, NZ = far0 ? 1 : -1 }
-            : new VoxelHit { X = far0 ? x0 + t - 1 : x1 - t + 1, Y = lowerTop - 20, Z = z0 + t + 12, NX = far0 ? 1 : -1 };
+        VoxelHit At(int a) => alongX
+            ? new VoxelHit { X = x0 + t + a, Y = lowerTop - 20, Z = far0 ? z0 + t - 1 : z1 - t + 1, NZ = far0 ? 1 : -1 }
+            : new VoxelHit { X = far0 ? x0 + t - 1 : x1 - t + 1, Y = lowerTop - 20, Z = z0 + t + a, NX = far0 ? 1 : -1 };
+        // (where nothing of the floor below's furniture stands before the wall: a ladder set against a chest stands out
+        // in the room, on nothing, once the chest is moved for the storey's own)
+        bool Clear(VoxelHit h)
+        {
+            // (the floor before the wall all of one height: nothing standing on it)
+            int tx = h.NZ != 0 ? 1 : 0, tz = h.NX != 0 ? 1 : 0, lo = int.MaxValue, hi = int.MinValue;
+            for (int o = 1; o <= 3; o++)
+                for (int s = -3; s <= 4; s++)
+                {
+                    int x = h.X + h.NX * o + tx * s, z = h.Z + h.NZ * o + tz * s, y = lowerTop - 3;
+                    while (y > lowerTop - TallestRise - 2 && w.Get(x, y, z) == Mat.Air) y--;
+                    lo = Math.Min(lo, y); hi = Math.Max(hi, y);
+                }
+            return hi - lo <= 1;
+        }
+        int inner = (alongX ? x1 - x0 : z1 - z0) + 1 - 2 * t;
+        var hit = At(12);
+        for (int a = 12; a <= inner - 12; a += 6) if (Clear(At(a))) { hit = At(a); break; }
         ladder = LadderAt(w, site, hit);
         var hatch = new HashSet<int>();
         for (int i = 0; i < ladder.Count; i++) hatch.Add((ladder.Z(i) >> 3) * 4096 + (ladder.X(i) >> 3));
@@ -562,7 +585,7 @@ public static class Shapes
                 bool room = x - x0 >= t && x1 - x >= t && z - z0 >= t && z1 - z >= t;
                 if (!room)
                 {
-                    for (int y = lowerTop; y < newTop && y < w.SY - 1; y++) if (Brushes.Free(w.Get(x, y, z))) L.Add(x, y, z, Looks.Wall(look, wallMat, x, y, z, x0, z0, x1, z1, lowerTop, true));
+                    for (int y = lowerTop; y < newTop && y < w.SY - 1; y++) if (Brushes.Free(w.Get(x, y, z))) L.Add(x, y, z, Looks.Wall(look, wallMat, x, y, z, x0, z0, x1, z1, lowerTop, true, HouseHeight));
                     continue;
                 }
                 if (hatch.Contains((z >> 3) * 4096 + (x >> 3))) continue;

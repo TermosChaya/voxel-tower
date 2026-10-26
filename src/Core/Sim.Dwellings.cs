@@ -412,12 +412,15 @@ public sealed partial class Sim
     /// <summary>What stands of an old layout and has no place in the new: taken away, as the workers would carry it off.</summary>
     void Unfurnish(Furnishing old, Furnishing fresh)
     {
-        var keep = new HashSet<int>();
-        for (int i = 0; i < fresh.Voxels.Count; i++) keep.Add(WaterPlanner.Pack(fresh.Voxels.X(i), fresh.Voxels.Y(i), fresh.Voxels.Z(i)));
+        // (a piece kept only where the new plan has the very same voxel: a crate standing where a desk now goes is
+        // taken away, or the desk would wait for it for ever; and only what was laid as the old plan's furniture)
+        var keep = new HashSet<long>();
+        for (int i = 0; i < fresh.Voxels.Count; i++) keep.Add((long)WaterPlanner.Pack(fresh.Voxels.X(i), fresh.Voxels.Y(i), fresh.Voxels.Z(i)) << 8 | fresh.Voxels.M(i));
         for (int i = 0; i < old.Voxels.Count; i++)
         {
             int x = old.Voxels.X(i), y = old.Voxels.Y(i), z = old.Voxels.Z(i);
-            if (keep.Contains(WaterPlanner.Pack(x, y, z)) || !Mat.IsFurniture[World.Get(x, y, z)]) continue;
+            byte now = World.Get(x, y, z);
+            if (keep.Contains((long)WaterPlanner.Pack(x, y, z) << 8 | now) || now != old.Voxels.M(i) && !Mat.IsFurniture[now]) continue;
             World.Set(x, y, z, Mat.Air);
             Forget(x, y, z);
         }

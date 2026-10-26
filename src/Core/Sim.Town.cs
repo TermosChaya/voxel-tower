@@ -15,8 +15,12 @@ public enum Prop : byte { Anvil, Forge, Rack, Target, Stall, Workbench, Counter,
 public sealed class TownKind
 {
     public string Key = "", Name = "", About = "", Lore = "", Level2 = "";
-    /// <summary>The house it goes up as: the outer size across and along, voxels (across no more than 38: a house's floor is no wider).</summary>
-    public int W = 37, D = 57;
+    /// <summary>
+    /// The house it goes up as: the outer size across and along, voxels (across no more than 38: a house's floor is no
+    /// wider), and how high its first walls stand over its floor (28, a house's three and a half metres, up to
+    /// Shapes.TallestRise).
+    /// </summary>
+    public int W = 37, D = 57, H = Shapes.HouseHeight;
     public byte Wall = Mat.Stone;
     public int MaxLevel = 2;
     /// <summary>The masters' gold for building it, and for raising its second storey.</summary>
@@ -104,88 +108,88 @@ public sealed partial class Sim
     /// <summary>Every kind of town building, in the order the «Город» tab shows them.</summary>
     public static readonly TownKind[] TownKinds =
     {
-        new() { Key = "hall", Name = "Ратуша", Lore = "b_hall", Gold = 60, UpGold = 120, Income1 = 3, Income2 = 6, Roof = Mat.Tile,
+        new() { Key = "hall", W = 38, D = 81, H = 34, Name = "Ратуша", Lore = "b_hall", Gold = 60, UpGold = 120, Income1 = 3, Income2 = 6, Roof = Mat.Tile,
             About = "Платит золото: 3 в минуту и по 1 за каждые 2 здания города. Собирает подать с жилых домов.", Level2 = "6 золота в минуту и по 1 за каждое здание.",
             // the Capitol: a third storey once the settlement is a «Посад»
             MaxLevel = 3, Up3Gold = 300, Up3Metal = .5f, Income3 = 12, Rank3 = 3,
             Level3 = "Капитолий: 12 золота в минуту и по 1,5 за каждое здание, подать с домов на 50 % больше.",
             Props1 = new[] { Prop.Desk, Prop.Crates }, Props2 = new[] { Prop.Desk, Prop.Casks }, Props3 = new[] { Prop.Desk, Prop.Counter, Prop.Casks } },
-        new() { Key = "market", Name = "Рынок", Lore = "b_market", Gold = 50, UpGold = 100, Income2 = 2, Wall = Mat.Wood, Roof = Mat.Tile,
+        new() { Key = "market", W = 37, D = 57, Name = "Рынок", Lore = "b_market", Gold = 50, UpGold = 100, Income2 = 2, Wall = Mat.Wood, Roof = Mat.Tile,
             About = "Меняет запасы на золото и обратно: 1 м³ камня или брёвен продаётся за 3, покупается за 9.", Level2 = "Продаёт по 4, покупает по 7, даёт 2 золота в минуту.",
             Needs = new[] { ("hall", 1) }, Props1 = new[] { Prop.Counter, Prop.Crates, Prop.Casks }, Props2 = new[] { Prop.Crates, Prop.Casks } },
-        new() { Key = "smithy", Name = "Кузница", Lore = "b_smithy", Gold = 50, UpGold = 110, MetalCost = .25f, UpMetal = 1, Roof = Mat.Slate,
+        new() { Key = "smithy", W = 33, D = 45, Name = "Кузница", Lore = "b_smithy", Gold = 50, UpGold = 110, MetalCost = .25f, UpMetal = 1, Roof = Mat.Slate,
             About = "Добрые кирки: копают и рубят на 25 % быстрее. Окованные ворота: ворота и мосты выдерживают вдвое больше. Жаровни на стенах: факелы светят дальше.",
             Level2 = "Кольчуги: солдаты получают на 20 % меньше урона. Закалённые клинки: в ближнем бою бьют на 20 % сильнее.",
             Grants1 = new[] { "picks", "ironbound", "braziers" }, Grants2 = new[] { "mail", "sergeants" },
             Props1 = new[] { Prop.Forge, Prop.Anvil, Prop.Rack }, Props2 = new[] { Prop.Rack, Prop.Crates } },
-        new() { Key = "carpentry", Name = "Плотницкая", Lore = "b_carpentry", Gold = 40, UpGold = 90, Wall = Mat.Wood, Roof = Mat.Shingle,
+        new() { Key = "carpentry", W = 33, D = 41, Name = "Плотницкая", Lore = "b_carpentry", Gold = 40, UpGold = 90, Wall = Mat.Wood, Roof = Mat.Shingle,
             About = "Тачки: добыча на 20 % больше. Пожарные вёдра: огонь тушат вдвое быстрее. Мокрые шкуры: наше дерево загорается вдвое реже.",
             Level2 = "Тропы и носилки: рабочие на 20 % быстрее. Двухъярусные нары: лежанка даёт 2 места. Гильдия мастеров: работа ещё на 20 % быстрее.",
             Needs = new[] { ("smithy", 1) }, Grants1 = new[] { "barrows", "buckets", "hides" }, Grants2 = new[] { "carts", "bunks", "guild" },
             Props1 = new[] { Prop.Workbench, Prop.Blocks }, Props2 = new[] { Prop.Workbench, Prop.Crates } },
-        new() { Key = "masons", Name = "Двор каменщиков", Lore = "b_masons", Gold = 50, UpGold = 120, Roof = Mat.Slate,
+        new() { Key = "masons", W = 33, D = 41, Name = "Двор каменщиков", Lore = "b_masons", Gold = 50, UpGold = 120, Roof = Mat.Slate,
             About = "Известковый раствор: орда ломает камень на 33 % дольше. Артель каменщиков: строят на 25 % быстрее.",
             Level2 = "Тёсаный камень, цитадель на скале и крепость: камни бьют вдвое меньше, цитадель получает вдвое меньше урона, орда ломает камень ещё дольше.",
             Grants1 = new[] { "mortar", "masons" }, Grants2 = new[] { "granite", "bastion", "fortress" },
             Props1 = new[] { Prop.Blocks, Prop.Workbench }, Props2 = new[] { Prop.Blocks, Prop.Blocks } },
-        new() { Key = "drill", Name = "Учебный плац", Lore = "b_drill", Gold = 40, UpGold = 90, Roof = Mat.Shingle,
+        new() { Key = "drill", W = 37, D = 57, Name = "Учебный плац", Lore = "b_drill", Gold = 40, UpGold = 90, Roof = Mat.Shingle,
             About = "Наём на 20 % дешевле, стёганки: у новых солдат на 20 % больше здоровья.", Level2 = "Солдаты ходят и бегают на 15 % быстрее.",
             Grants1 = new[] { "drill", "gambesons" }, Grants2 = new[] { "drillyard" },
             Props1 = new[] { Prop.Rack, Prop.Target }, Props2 = new[] { Prop.Rack, Prop.Target } },
-        new() { Key = "infirmary", Name = "Лазарет", Lore = "b_infirmary", Gold = 40, UpGold = 90, Wall = Mat.Wood, Roof = Mat.Tile,
+        new() { Key = "infirmary", W = 37, D = 97, Name = "Лазарет", Lore = "b_infirmary", Gold = 40, UpGold = 90, Wall = Mat.Wood, Roof = Mat.Tile,
             About = "Раненые у цитадели и в лазарете заживают вдвое быстрее.", Level2 = "Ветераны: раненые остаются в строю дольше.",
             Needs = new[] { ("drill", 1) }, Grants1 = new[] { "banners" }, Grants2 = new[] { "veterans" },
             Props1 = new[] { Prop.Bunk, Prop.Bunk }, Props2 = new[] { Prop.Bunk, Prop.Bunk } },
-        new() { Key = "traps", Name = "Ловчий двор", Lore = "b_traps", Gold = 40, UpGold = 90, Wall = Mat.Wood, Roof = Mat.Shingle,
+        new() { Key = "traps", W = 33, D = 49, Name = "Ловчий двор", Lore = "b_traps", Gold = 40, UpGold = 90, Wall = Mat.Wood, Roof = Mat.Shingle,
             About = "Острые колья, густая смола, пропитанные стрелы: колья ранят сильнее, смола горит дольше, огненные стрелы чаще поджигают.",
             Level2 = "Горючая смесь, огненный ливень и ловчая наука: взрывы шире, горят дольше, колья и ямы страшнее.",
             Grants1 = new[] { "spikes", "tar", "soaked" }, Grants2 = new[] { "naphtha", "firestorm", "deathtraps" },
             Props1 = new[] { Prop.Rack, Prop.Casks }, Props2 = new[] { Prop.Casks, Prop.Crates } },
-        new() { Key = "barracks", Name = "Казарма", Lore = "b_barracks", Gold = 50, UpGold = 110, Roof = Mat.Slate,
+        new() { Key = "barracks", W = 38, D = 113, Name = "Казарма", Lore = "b_barracks", Gold = 50, UpGold = 110, Roof = Mat.Slate,
             About = "Нанимает копейщиков. В войске на 4 места больше.", Level2 = "Нанимает щитоносцев и алебардщиков. Стена щитов и длинные древки.",
             Hires = new[] { H(Kinds.Spearman, 1, 4), H(Kinds.Shieldbearer, 2, 3), H(Kinds.Halberdier, 2, 3) },
             Grants1 = new[] { "spearmen", "barracks" }, Grants2 = new[] { "shieldmen", "halberds", "shieldwall", "longshafts" },
             Props1 = new[] { Prop.Rack, Prop.Bunk, Prop.Bunk }, Props2 = new[] { Prop.Rack, Prop.Bunk } },
-        new() { Key = "knights", Name = "Рыцарский двор", Lore = "b_knights", Gold = 120, MaxLevel = 1, MetalCost = .5f, Roof = Mat.Slate,
+        new() { Key = "knights", W = 38, D = 81, H = 32, Name = "Рыцарский двор", Lore = "b_knights", Gold = 120, MaxLevel = 1, MetalCost = .5f, Roof = Mat.Slate,
             About = "Нанимает рыцарей в полных латах.",
             Needs = new[] { ("barracks", 2), ("smithy", 1) }, Hires = new[] { H(Kinds.Knight, 1, 2) }, Grants1 = new[] { "knights" },
             Props1 = new[] { Prop.Rack, Prop.Stall } },
-        new() { Key = "range", Name = "Стрельбище", Lore = "b_range", Gold = 40, UpGold = 100, Wall = Mat.Wood, Roof = Mat.Shingle,
+        new() { Key = "range", W = 33, D = 65, Name = "Стрельбище", Lore = "b_range", Gold = 40, UpGold = 100, Wall = Mat.Wood, Roof = Mat.Shingle,
             About = "Нанимает пращников. Тисовые луки и гранёные наконечники: лучники бьют дальше и сильнее.",
             Level2 = "Нанимает арбалетчиков. Частая стрельба, совиный глаз, длинные луки, бронебойные болты, ядра и горшки.",
             Hires = new[] { H(Kinds.Slinger, 1, 4), H(Kinds.Crossbowman, 2, 3) },
             Grants1 = new[] { "slingers", "yew", "barbs" }, Grants2 = new[] { "crossbows", "volley", "owleye", "longbows", "bodkins", "leadshot" },
             Props1 = new[] { Prop.Target, Prop.Target, Prop.Rack }, Props2 = new[] { Prop.Target, Prop.Rack } },
-        new() { Key = "lab", Name = "Лаборатория алхимиков", Lore = "b_lab", Gold = 80, UpGold = 140, Roof = Mat.Tile,
+        new() { Key = "lab", W = 33, D = 41, Name = "Лаборатория алхимиков", Lore = "b_lab", Gold = 80, UpGold = 140, Roof = Mat.Tile,
             About = "Нанимает алхимиков: их кислота проедает лестницы и машины орды.", Level2 = "Нанимает бомбардиров, алхимики бросают склянки едкого дыма.",
             Needs = new[] { ("range", 1) }, Hires = new[] { H(Kinds.OurAlchemist, 1, 2), H(Kinds.Bombardier, 2, 2) },
             Grants1 = new[] { "alchemists" }, Grants2 = new[] { "bombards" },
             Props1 = new[] { Prop.Still, Prop.Casks }, Props2 = new[] { Prop.Still, Prop.Crates } },
-        new() { Key = "kennel", Name = "Псарня", Lore = "b_kennel", Gold = 30, UpGold = 70, Wall = Mat.Wood, Roof = Mat.Thatch,
+        new() { Key = "kennel", W = 29, D = 73, Name = "Псарня", Lore = "b_kennel", Gold = 30, UpGold = 70, Wall = Mat.Wood, Roof = Mat.Thatch,
             About = "Нанимает боевых псов.", Level2 = "Травля: псы и всадники догоняют бегущих и бьют их сильнее.",
             Hires = new[] { H(Kinds.Hound, 1, 4) }, Grants1 = new[] { "hounds" }, Grants2 = new[] { "hunt" },
             Props1 = new[] { Prop.Kennel, Prop.Hay }, Props2 = new[] { Prop.Kennel, Prop.Hay } },
-        new() { Key = "stables", Name = "Конюшня", Lore = "b_stables", Gold = 80, UpGold = 150, Wall = Mat.Wood, D = 73, Roof = Mat.Thatch,
+        new() { Key = "stables", W = 38, D = 121, Name = "Конюшня", Lore = "b_stables", Gold = 80, UpGold = 150, Wall = Mat.Wood, Roof = Mat.Thatch,
             About = "Нанимает всадников.", Level2 = "Нанимает конных лучников и конных рыцарей. Натиск: удар с разгона вдвое сильнее.",
             Needs = new[] { ("kennel", 1) }, Hires = new[] { H(Kinds.Rider, 1, 3), H(Kinds.HorseArcher, 2, 2), H(Kinds.Lancer, 2, 1) },
             Grants1 = new[] { "riders" }, Grants2 = new[] { "horsearchers", "lancers", "charge" },
             Props1 = new[] { Prop.Stall, Prop.Stall, Prop.Hay }, Props2 = new[] { Prop.Hay, Prop.Crates } },
-        new() { Key = "trolls", Name = "Логово троллей", Lore = "b_trolls", Gold = 90, UpGold = 120, Roof = Mat.Thatch,
+        new() { Key = "trolls", W = 38, D = 73, Name = "Логово троллей", Lore = "b_trolls", Gold = 90, UpGold = 120, Roof = Mat.Thatch,
             About = "Нанимает ручных троллей.", Level2 = "Глыбы: тролли и великаны бросают в орду камни.",
             Needs = new[] { ("barracks", 1) }, Hires = new[] { H(Kinds.TameTroll, 1, 1) }, Grants1 = new[] { "trolls" }, Grants2 = new[] { "boulders" },
             Props1 = new[] { Prop.Seat, Prop.Hay }, Props2 = new[] { Prop.Blocks } },
-        new() { Key = "giants", Name = "Чертог великанов", Lore = "b_giants", Gold = 140, UpGold = 160, D = 73, Roof = Mat.Shingle,
+        new() { Key = "giants", W = 38, D = 105, H = 40, Name = "Чертог великанов", Lore = "b_giants", Gold = 140, UpGold = 160, Roof = Mat.Shingle,
             About = "Нанимает великанов. Великан занимает 4 места.", Level2 = "Глыбы: великаны и тролли бросают в орду камни.",
             Needs = new[] { ("trolls", 1) }, Hires = new[] { H(Kinds.Giant, 1, 1) }, Grants1 = new[] { "giants" }, Grants2 = new[] { "boulders" },
             Props1 = new[] { Prop.Seat, Prop.Seat }, Props2 = new[] { Prop.Blocks } },
-        new() { Key = "workshop", Name = "Мастерская", Lore = "b_workshop", Gold = 80, UpGold = 160, Wall = Mat.Wood, D = 73, MetalCost = .5f, UpMetal = 1, Roof = Mat.Shingle,
+        new() { Key = "workshop", W = 38, D = 89, H = 38, Name = "Мастерская", Lore = "b_workshop", Gold = 80, UpGold = 160, Wall = Mat.Wood, MetalCost = .5f, UpMetal = 1, Roof = Mat.Shingle,
             About = "Собирает катапульты. Вороты: машины заряжаются быстрее.",
             Level2 = "Собирает баллисты и требушеты. Бочонки со смолой и тяжёлые камни.",
             Needs = new[] { ("carpentry", 1) }, Hires = new[] { H(Kinds.Mangonel, 1, 1), H(Kinds.Ballista, 2, 1), H(Kinds.Trebuchet, 2, 1) },
             Grants1 = new[] { "mangonels", "windlass" }, Grants2 = new[] { "ballistas", "trebuchets", "pitchkegs", "heavystones" },
             Props1 = new[] { Prop.Workbench, Prop.Blocks, Prop.Crates }, Props2 = new[] { Prop.Workbench, Prop.Crates } },
         // the miners' building, on an outcrop of iron ore (Sim.Metal.cs)
-        new() { Key = "mine", Name = "Рудокопня", Lore = "b_mine", Gold = 60, UpGold = 120, Metal1 = .3f, Metal2 = .7f, OnOre = true, W = 33, D = 41, Roof = Mat.Slate,
+        new() { Key = "mine", W = 33, D = 41, Name = "Рудокопня", Lore = "b_mine", Gold = 60, UpGold = 120, Metal1 = .3f, Metal2 = .7f, OnOre = true, Roof = Mat.Slate,
             About = "Добывает металл: 0,3 м³ в минуту.", Level2 = "0,7 м³ металла в минуту.",
             Props1 = new[] { Prop.Forge, Prop.Ingots, Prop.Crates }, Props2 = new[] { Prop.Ingots, Prop.Workbench } },
     };
@@ -246,6 +250,9 @@ public sealed partial class Sim
         return null;
     }
 
+    /// <summary>How high a building of this kind in this look stands to the top of its first walls over its floor.</summary>
+    public static int RiseOf(TownKind k, Look look) => Math.Clamp(k.H + (look?.DH ?? 0), Shapes.HouseHeight, Shapes.TallestRise);
+
     /// <summary>The rectangle a building of this kind put up round a column would stand on: along x unless turned; its look may make it longer or shorter.</summary>
     public static (int x0, int z0, int x1, int z1) BuildingRect(TownKind k, int cx, int cz, bool turned, Look look = null)
     {
@@ -287,7 +294,8 @@ public sealed partial class Sim
         // the miners' building stands on an outcrop of ore (Sim.Metal.cs)
         if (k.OnOre && OutcropUnder(x0, z0, x1, z1) < 0) { why = "ставится на рудный выход: ржавая скала, где жила выходит наружу"; return null; }
         byte covering = look != null && look.Covering != 0 ? look.Covering : k.Roof;
-        var st = new Stroke { Mat = k.Wall, Width = Shapes.HouseWall, Height = Shapes.HouseHeight + 4, Level = true, Roof = covering, Look = look };
+        int rise = RiseOf(k, look);
+        var st = new Stroke { Mat = k.Wall, Width = Shapes.HouseWall, Height = rise + 4, Level = true, Roof = covering, Look = look, Rise = rise };
         // (a building goes where its kind must, on rough ground too: its door wants only nothing built before it)
         var plan = PlanHouseAt(x0, z0, x1, z1, st, -1, out door, out why, out arched, out rect, out int shared, out var over, out moves, lax: true);
         if (over != null) { why = "здесь уже стоит дом"; return null; }
@@ -599,6 +607,26 @@ public sealed partial class Sim
         }
     }
 
+    /// <summary>
+    /// How much of a building's furniture stands, of how much is planned, and what stands where a piece of it would go
+    /// instead (the first such voxel), for whoever looks into why a building will not work.
+    /// </summary>
+    public (int standing, int planned, string blocked) FurnitureOf(Building b)
+    {
+        var z = ZoneOf(b);
+        if (z == null || !_furnishing.TryGetValue(z.Id, out var plan)) return (0, 0, null);
+        int standing = 0;
+        string blocked = null;
+        for (int i = 0; i < plan.Voxels.Count; i++)
+        {
+            int x = plan.Voxels.X(i), y = plan.Voxels.Y(i), zz = plan.Voxels.Z(i);
+            byte now = World.Get(x, y, zz);
+            if (now == plan.Voxels.M(i)) standing++;
+            else if (blocked == null && !Brushes.Free(now)) blocked = $"{Mat.NameOf(now)} at {x - b.X0},{y},{zz - b.Z0} where {Mat.NameOf(plan.Voxels.M(i))} goes";
+        }
+        return (standing, plan.Voxels.Count, blocked);
+    }
+
     /// <summary>Whether anything is still marked to be laid on a building's columns (its storey going up).</summary>
     bool BuildOrdersIn(Building b)
     {
@@ -645,14 +673,17 @@ public sealed partial class Sim
         }
         // (a storey not yet floored lends its pieces to the one under it)
         Dictionary<int, int> On(int i) => floors[i].Count > 20 || i == 0 ? floors[i] : On(i - 1);
-        Place(plan, floors[0], k.Props1);
-        if (level >= 2) Place(plan, On(1), k.Props2);
-        if (level >= 3) Place(plan, On(2), k.Props3);
+        // (what is set out on a floor is kept clear of by whatever else is set out on the same floor)
+        var taken = new Dictionary<Dictionary<int, int>, HashSet<int>>();
+        HashSet<int> TakenOn(Dictionary<int, int> f) => taken.TryGetValue(f, out var t) ? t : taken[f] = new HashSet<int>();
+        Place(plan, floors[0], k.Props1, TakenOn(floors[0]));
+        if (level >= 2) Place(plan, On(1), k.Props2, TakenOn(On(1)));
+        if (level >= 3) Place(plan, On(2), k.Props3, TakenOn(On(2)));
         return plan;
     }
 
     /// <summary>The pieces set on one floor: each where its footprint is free and level, a wall at its back if it can.</summary>
-    void Place(Furnishing plan, Dictionary<int, int> floor, Prop[] props)
+    void Place(Furnishing plan, Dictionary<int, int> floor, Prop[] props, HashSet<int> taken)
     {
         if (floor.Count == 0) return;
         int Col(int x, int z) => z * 4096 + x;
@@ -663,7 +694,6 @@ public sealed partial class Sim
         var off = new List<int>();
         foreach (var (key, y) in floor) if (y > usual + 2) off.Add(key);
         foreach (int key in off) floor.Remove(key);
-        var taken = new HashSet<int>();
         int Fits(int x0, int z0, int w, int d, int margin)
         {
             int lo = int.MaxValue, hi = int.MinValue;
