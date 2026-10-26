@@ -118,6 +118,12 @@ public static class MapDress
         MapModel.OutpostPlace => 6.5f, MapModel.Pass => 11, _ => 9,
     };
 
+    /// <summary>
+    /// How far about a hex's middle the land is made level under its thing, the map's voxels (HexTiles.cs): the
+    /// ground under its model, its footing a little beyond, a castle and its walls nearly the whole hex.
+    /// </summary>
+    public static float LevelOf(HexIcon icon) => ModelOf(icon) is { } m ? Math.Clamp((Reach(m) - 1) * Scale, 6, 14.5f) : 9.5f;
+
     /// <summary>How far south of a hex's middle one stands before its thing, the map's voxels: at its gate, the thing whole to the eye.</summary>
     public static float StandOff(HexIcon icon) => ModelOf(icon) is { } m && icon is not (HexIcon.Pile or HexIcon.Chest or HexIcon.Campfire or HexIcon.Signpost)
         ? MathF.Min(Reach(m) + 1.5f, 16.5f) * Scale : 0;
@@ -207,7 +213,8 @@ public static class MapDress
             if (WayNear(l.Rivers, dx, dz) < (3.2f + r * .5f) * s) return false;
             foreach (var p in spots) if ((p.X - ux) * (p.X - ux) + (p.Z - uz) * (p.Z - uz) < (p.R + r) * (p.R + r)) return false;
             var c = HexTiles.ColumnAt(src, lay, (int)MathF.Floor(cx + dx), (int)MathF.Floor(cz + dz));
-            return c.Water <= c.Top;
+            // (nor on a bridge, nor up a mountain's rock beyond its foothills)
+            return c.Water <= c.Top && !c.Bridge && c.Mount <= 5;
         }
         bool Try(MapModel m, float ux, float uz, float r, int variant, int rot = 0, float edge = .6f)
         {
@@ -372,7 +379,8 @@ public static class MapDress
     static void Shore(IHexSource src, HexMapLayout lay, int col, int row, float cx, float cz, in HexLook l, Dressed d, bool deep)
     {
         float s = Scale;
-        int reeds = deep ? 3 + HexTiles.Vary(col, row) % 3 : 2, lilies = deep ? 2 : 1;
+        // (the shore's own reed beds are the land's, HexTiles.cs: here only reeds standing out in the water, and lilies)
+        int reeds = deep ? 1 + HexTiles.Vary(col, row) % 2 : 0, lilies = deep ? 3 : 1;
         var taken = new List<(float, float)>();
         for (int k = 0; k < 60 && reeds + lilies > 0; k++)
         {

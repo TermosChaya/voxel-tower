@@ -29,8 +29,10 @@ public static class HexTiles
     public const int Base = 16, Step = 2, WaterTop = 15, LakeFloor = 11;
     /// <summary>A piece's world: the margin about the piece, its side, its height.</summary>
     public const int Pad = 32, Size = HexMapLayout.Tile + 2 * Pad, SY = 96;
-    /// <summary>Half the width of a road and of a river's bed; how near the middle a thing's ground is made level.</summary>
-    const float RoadHalf = 1.45f, RiverHalf = 2.1f, Level = 9.5f;
+    /// <summary>Half the width of a road and of a river's bed.</summary>
+    const float RoadHalf = 1.45f, RiverHalf = 2.1f;
+    /// <summary>How near the middle a thing's ground is made level, voxels, when nothing says otherwise.</summary>
+    const float Level = 9.5f;
     /// <summary>How far a column's ground wanders from its own place when it takes a hex's ground; a river's, a road's wander.</summary>
     const float Wander = 4.5f, RiverWander = 2.4f, RoadWander = 1.4f;
 
@@ -244,6 +246,8 @@ public static class HexTiles
         double hs = Hash.H3(x, z, 313);
         float r0 = MathF.Sqrt(dx * dx + dz * dz);
         bool thing = own.Icon != HexIcon.None && own.Icon != HexIcon.Monster && !Wet(own.Ground);
+        // how far about it a thing's ground is levelled: as far as its model reaches (MapDress.cs), a castle's further
+        float Level = thing ? MapDress.LevelOf(own.Icon) : HexTiles.Level;
         float flat = 0;
 
         // roads and rivers, wandering a little about the straight way from the middle to a side

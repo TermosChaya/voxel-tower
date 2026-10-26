@@ -155,14 +155,15 @@ public partial class HexMapView
             Dress(key, d);
             if (_dressSpent == 0) _dressSpent = 1;
         }
-        // what the land wants is dressed too, nearest first, two at a time beside the land's own work
+        // what the land wants is dressed too, nearest first, two at a time beside the land's own work (one while the land
+        // still makes its pieces: the ground comes first)
         var order = new List<int>();
         foreach (int k in _want)
             if ((!_dressed.TryGetValue(k, out var p) || p.Stale) && !_dressing.ContainsKey(k)) order.Add(k);
         order.Sort((a, b) => Far(a).CompareTo(Far(b)));
         foreach (int k in order)
         {
-            if (_dressing.Count >= 2) break;
+            if (_dressing.Count >= (_making.Count > 0 ? 1 : 2)) break;
             int tx = k % Layout.TilesX, tz = k / Layout.TilesX;
             var src = Source; var lay = Layout;
             _dressing[k] = Task.Run(() => MapDress.Dress(src, lay, tx, tz));
@@ -410,7 +411,7 @@ public partial class HexMapView
     {
         if (_farMarks != null) _farMarks.Visible = false;
         bool far = _dist > NearMost * .85f;
-        float mag = MathF.Round(Math.Clamp(_dist / 46f, 1, 3.4f) * 4) / 4;
+        float mag = MathF.Round(Math.Clamp(_dist / 52f, 1, 2f) * 4) / 4;
         foreach (var mm in _icons.Values) mm.Visible = far;
         if (!far || !_iconsDirty && mag == _iconMag) return;
         _iconsDirty = false;
@@ -422,10 +423,12 @@ public partial class HexMapView
             {
                 var l = Source.Look(c, r);
                 if (!MapDress.Shows(l) || !Source.Seen(c, r)) continue;
+                // (from far off only what one steers by: towns, mines, places; the small things that lie about are not seen)
+                if (l.Icon is HexIcon.Pile or HexIcon.Chest or HexIcon.Campfire or HexIcon.Signpost or HexIcon.Learning) continue;
                 var key = (MapDress.ModelOf(l.Icon).Value, l.Owner);
                 if (!lists.TryGetValue(key, out var list)) lists[key] = list = new List<Transform3D>();
                 var (x, z) = Layout.Center(c, r);
-                list.Add(new Transform3D(Basis.Identity.Scaled(Vector3.One * s0 * MapModels.Size(key.Item1)), new Vector3(x * V, (HexTiles.Base + l.Height * HexTiles.Step) * V, z * V)));
+                list.Add(new Transform3D(Basis.Identity.Scaled(Vector3.One * s0 * MapModels.Size(key.Item1)), new Vector3(x * V, HexTiles.LevelOf(l) * V, z * V)));
             }
         foreach (var (key, mm) in _icons) if (!lists.ContainsKey(key)) mm.Multimesh.InstanceCount = 0;
         foreach (var (key, list) in lists)
