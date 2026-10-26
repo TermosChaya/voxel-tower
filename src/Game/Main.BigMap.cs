@@ -14,6 +14,7 @@ public partial class Main
     // the way last laid out in arrows, so it is laid again only when it changes
     List<HexStep> _arrowsOf;
     int _arrowsCount = -1, _arrowsFrom = -1;
+    long _reachKey = -2;
 
     /// <summary>
     /// The big map opened (Atlas.Big): its drawing of hexes over everything, fed by the campaign — the hexes and their fog
@@ -37,7 +38,7 @@ public partial class Main
         }
         Hud.MapPane.FocusOn = p => { if (WorldMap?.Layout != null) WorldMap.FocusHex(p.Col, p.Row); };
         v.Focus(x, z);
-        _arrowsOf = null; _arrowsCount = -1;
+        _arrowsOf = null; _arrowsCount = -1; _reachKey = -2;
     }
 
     /// <summary>The figures and the arrows brought up to the campaign each frame the big map is open.</summary>
@@ -71,6 +72,21 @@ public partial class Main
             if (!c.Parties.Contains(p)) { figs.Walkers.Remove(_walkers[p]); _walkers.Remove(p); }
         var hero = Hud.MapPane?.Hero;
         figs.Chosen = hero != null && _walkers.TryGetValue(hero, out var hw) ? hw : null;
+        // the hexes the hero chosen can still get to today: their sides drawn plainly on the land, as in «Heroes»
+        long reach = hero == null || hero.Moving || hero.MovesLeft <= 0 ? -1 : ((long)hero.Row * c.Width + hero.Col) * 100000 + hero.MovesLeft;
+        if (reach != _reachKey)
+        {
+            _reachKey = reach;
+            if (reach < 0) WorldMap.ShowReach(null);
+            else
+            {
+                int stamp = MapWalk.Spread(c, c.Cell(hero.Col, hero.Row), Holder.Ours, hero.MovesLeft);
+                var buf = c.WalkBuffers(c.Width * c.Height);
+                var hexes = new List<(int, int)>();
+                for (int i = 0; i < c.Width * c.Height; i++) if (buf.Mark[i] >= stamp) hexes.Add((i % c.Width, i / c.Width));
+                WorldMap.ShowReach(hexes);
+            }
+        }
         // the way laid out: planned (green as far as today), or what is left of the way he walks
         var plan = Hud.MapPane?.Planned;
         List<HexStep> show = plan ?? (hero != null && hero.Steps.Count > 0 ? hero.Steps : null);

@@ -90,6 +90,58 @@ public partial class HexMapView
         _fogTex.Update(_fogImg);
     }
 
+    // ------------------------------------------------------------ the hexes' sides shown more plainly
+
+    Image _gridImg;
+    ImageTexture _gridTex;
+    byte[] _gridPx;
+    readonly HashSet<(int, int)> _gridPath = new(), _gridReach = new();
+    bool _gridDirty;
+
+    void GridReady()
+    {
+        var lay = Layout;
+        _gridPx = new byte[lay.FogW * lay.FogH];
+        _gridImg = Image.CreateEmpty(lay.FogW, lay.FogH, false, Image.Format.L8);
+        _gridTex = ImageTexture.CreateFromImage(_gridImg);
+        _gridPath.Clear(); _gridReach.Clear();
+        _gridDirty = true;
+    }
+
+    /// <summary>The hexes a hero can get to today: their sides drawn plainly, the ground over them a little brighter, as in «Heroes».</summary>
+    public void ShowReach(IEnumerable<(int Col, int Row)> hexes)
+    {
+        _gridReach.Clear();
+        if (hexes != null) foreach (var h in hexes) _gridReach.Add(h);
+        _gridDirty = true;
+    }
+
+    void GridPath(IReadOnlyList<(int Col, int Row, int Day)> steps)
+    {
+        _gridPath.Clear();
+        if (steps != null) foreach (var s in steps) _gridPath.Add((s.Col, s.Row));
+        _gridDirty = true;
+    }
+
+    /// <summary>The texture of how plainly each hex's sides show made again, if anything changed: the way laid out most, today's reach less.</summary>
+    void GridBake()
+    {
+        if (!_gridDirty || _gridPx == null) return;
+        _gridDirty = false;
+        var lay = Layout;
+        Array.Clear(_gridPx);
+        void Mark((int c, int r) h, byte v)
+        {
+            if (!lay.OnField(h.c, h.r)) return;
+            int j = h.r + HexMapLayout.MarginRows, i = 2 * h.c + HexMapLayout.MarginHalves + (h.r & 1);
+            for (int k = 0; k < 2; k++) if (i + k < lay.FogW) _gridPx[j * lay.FogW + i + k] = Math.Max(_gridPx[j * lay.FogW + i + k], v);
+        }
+        foreach (var h in _gridReach) Mark(h, 46);
+        foreach (var h in _gridPath) Mark(h, 255);
+        _gridImg.SetData(lay.FogW, lay.FogH, false, Image.Format.L8, _gridPx);
+        _gridTex.Update(_gridImg);
+    }
+
     // ------------------------------------------------------------ the small map
 
     Minimap _mini;

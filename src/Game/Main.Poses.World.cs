@@ -151,7 +151,7 @@ public partial class Main
     /// A new campaign on the big map of «Heroes» (--campaign --pose=bigmap --size=S|M|L|XL): --look=0 the start, our hero
     /// by the citadel, chosen; 1 his way planned to a mine (most of today's moves spent), green as far as today, red
     /// beyond, the days at the cross; 2 him on his way there, walking; 3 a mine flagged ours, him on it; 4 a chest come to, its card asking gold or
-    /// experience; 5 a pass kept by a stack; 6 the horde's realm, its town in the burnt land; 7 the strategic view.
+    /// experience; 5 a pass kept by a stack; 6 the horde's realm, its town in the burnt land; 7 the strategic view; 8 a road over a river on its bridge.
     /// </summary>
     void BigMapPose()
     {
@@ -242,6 +242,14 @@ public partial class Main
                 c.RevealAll = true;
                 Look(home, 150, 90);
                 break;
+            case 8:
+            {
+                // a road crossing a river on its bridge, the land about it seen
+                var ford = Nearest(h => h.Roads != 0 && h.Rivers != 0 && (h.Roads & h.Rivers) == 0 && h.Passable, home) ?? Nearest(h => h.Rivers != 0, home);
+                c.Reveal(ford, 4);
+                Look(ford, 22, 16);
+                break;
+            }
         }
         _poseLater = () => { var (t, d, sh) = v.Drawn(); GD.Print($"[world map] {Engine.GetFramesPerSecond()} fps; {t} k triangles in {d} draw calls, {sh} k for shadows; {v.PiecesShown} pieces; slowest frame {v.WorstFrameMs:0} ms"); };
     }

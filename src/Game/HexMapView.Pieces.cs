@@ -27,11 +27,13 @@ public partial class HexMapView
     }
 
     /// <summary>A piece made on a worker: its meshes, still the core's buffers, and how long it took.</summary>
-    readonly struct Built
+    struct Built
     {
         public readonly MeshBuffers Solid, Water, Shadow;
         public readonly double Ms;
-        public Built(MeshBuffers s, MeshBuffers w, MeshBuffers sh, double ms) { Solid = s; Water = w; Shadow = sh; Ms = ms; }
+        /// <summary>Its ground put in already, its water too (what is left goes in on the next frames).</summary>
+        public bool Begun, WaterDone;
+        public Built(MeshBuffers s, MeshBuffers w, MeshBuffers sh, double ms) { Solid = s; Water = w; Shadow = sh; Ms = ms; Begun = false; WaterDone = false; }
     }
 
     readonly Dictionary<int, Piece> _pieces = new();
@@ -85,11 +87,15 @@ public partial class HexMapView
         }
         int spent = 0;
         _clock.Restart();
+        // a piece's meshes put in one at a time, so many vertices a frame (the first always): its ground first, then
+        // its water and its shadow, a frame or two after
         while (_ready.Count > 0 && (spent == 0 || spent < VerticesAFrame))
         {
-            var (key, b) = _ready.Dequeue();
-            spent += (b.Solid?.Vertices ?? 0) + (b.Water?.Vertices ?? 0) + (b.Shadow?.Vertices ?? 0);
-            Put(key, b);
+            var (key, b) = _ready.Peek();
+            spent += PutNext(key, ref b);
+            _ready.Dequeue();
+            if (b.Begun) _ready.Enqueue((key, b));
+            if (_ready.Count > 0 && _ready.Peek().key == key) break;
         }
         WorstPutMs = Math.Max(WorstPutMs, _clock.Elapsed.TotalMilliseconds);
         // what the screen shows, and a ring about it
@@ -145,17 +151,33 @@ public partial class HexMapView
         return (cx - _look.X) * (cx - _look.X) + (cz - _look.Y) * (cz - _look.Y);
     }
 
-    void Put(int key, Built b)
+    /// <summary>The next of a piece's meshes put in (its ground, then its water, then its shadow), taken off what is left of it; the vertices that cost.</summary>
+    int PutNext(int key, ref Built b)
     {
-        PieceMs = PieceMs <= 0 ? b.Ms : PieceMs * .8 + b.Ms * .2;
-        _madeCount++;
         // a piece no longer wanted is not put in
-        if (!_want.Contains(key) && !_pieces.ContainsKey(key)) return;
+        if (!_want.Contains(key) && !_pieces.ContainsKey(key)) { b = default; return 0; }
         if (!_pieces.TryGetValue(key, out var p)) { p = new Piece(); _pieces[key] = p; }
-        p.Made = _madeCount;
-        p.Solid = Hang(p.Solid, b.Solid, _solid, GeometryInstance3D.ShadowCastingSetting.Off);
-        p.Water = Hang(p.Water, b.Water, _water, GeometryInstance3D.ShadowCastingSetting.Off);
+        if (b.Solid != null || !b.Begun)
+        {
+            PieceMs = PieceMs <= 0 ? b.Ms : PieceMs * .8 + b.Ms * .2;
+            _madeCount++;
+            p.Made = _madeCount;
+            int n = b.Solid?.Vertices ?? 0;
+            p.Solid = Hang(p.Solid, b.Solid, _solid, GeometryInstance3D.ShadowCastingSetting.Off);
+            b = new Built(null, b.Water, b.Shadow, b.Ms) { Begun = true };
+            return n;
+        }
+        if (b.Water != null || !b.WaterDone)
+        {
+            int n = b.Water?.Vertices ?? 0;
+            p.Water = Hang(p.Water, b.Water, _water, GeometryInstance3D.ShadowCastingSetting.Off);
+            b = new Built(null, null, b.Shadow, b.Ms) { Begun = true, WaterDone = true };
+            return n;
+        }
+        int m = b.Shadow?.Vertices ?? 0;
         p.Shadow = Hang(p.Shadow, b.Shadow, null, GeometryInstance3D.ShadowCastingSetting.ShadowsOnly);
+        b = default;
+        return m;
     }
 
     /// <summary>A mesh hung on a node of the land (made if there is none), the old one let go at once; no mesh, no node.</summary>
@@ -224,19 +246,37 @@ public partial class HexMapView
             for (int c = 0; c < lay.Cols; c++) _looks[r * lay.Cols + c] = Source.Look(c, r);
         _farCols = (lay.Cols + FarBlock - 1) / FarBlock; _farRows = (lay.Rows + FarBlock - 1) / FarBlock;
         for (int i = 0; i < _farCols * _farRows; i++) _farBlocks.Add(null);
+        // (the blocks' land worked out on the workers all at once, their meshes made here)
+        _farMade = new HexFar.Block[_farBlocks.Count];
+        var src = Source;
+        System.Threading.Tasks.Parallel.For(0, _farBlocks.Count, i =>
+        {
+            var (c0, r0, c1, r1) = FarRange(i);
+            _farMade[i] = HexFar.Build(src, lay, c0, r0, c1, r1);
+        });
         for (int i = 0; i < _farBlocks.Count; i++) FarBlockMade(i);
+        _farMade = null;
         _marksStale = true;
+    }
+
+    HexFar.Block[] _farMade;
+
+    /// <summary>The hexes a block of the far view covers (the blocks at the map's edge take in the margin of mountains that frames it).</summary>
+    (int c0, int r0, int c1, int r1) FarRange(int i)
+    {
+        int bc = i % _farCols, br = i / _farCols;
+        int c0 = bc * FarBlock - (bc == 0 ? 3 : 0), r0 = br * FarBlock - (br == 0 ? 3 : 0);
+        int c1 = Math.Min((bc + 1) * FarBlock, Layout.Cols) + (bc == _farCols - 1 ? 3 : 0), r1 = Math.Min((br + 1) * FarBlock, Layout.Rows) + (br == _farRows - 1 ? 3 : 0);
+        return (c0, r0, c1, r1);
     }
 
     void FarBlockMade(int i)
     {
-        int bc = i % _farCols, br = i / _farCols;
-        // (the blocks at the map's edge take in a ring of the mountains that frame it)
-        int c0 = bc * FarBlock - (bc == 0 ? 2 : 0), r0 = br * FarBlock - (br == 0 ? 2 : 0);
-        int c1 = Math.Min((bc + 1) * FarBlock, Layout.Cols) + (bc == _farCols - 1 ? 2 : 0), r1 = Math.Min((br + 1) * FarBlock, Layout.Rows) + (br == _farRows - 1 ? 2 : 0);
-        var b = HexFar.Build(Source, Layout, c0, r0, c1, r1);
+        var (c0, r0, c1, r1) = FarRange(i);
+        var b = _farMade != null && _farMade[i] != null ? _farMade[i] : HexFar.Build(Source, Layout, c0, r0, c1, r1);
+        if (_farMade != null) _farMade[i] = null;
         ArrayMesh mesh = null;
-        if (b.Vertices > 0)
+        if (b.Vertices > 0 && b.Idx.Count > 0)
         {
             mesh = new ArrayMesh();
             using var arrays = new Godot.Collections.Array();
@@ -251,6 +291,7 @@ public partial class HexMapView
             arrays[(int)Mesh.ArrayType.Vertex] = pos;
             arrays[(int)Mesh.ArrayType.Normal] = nrm;
             arrays[(int)Mesh.ArrayType.Color] = col;
+            arrays[(int)Mesh.ArrayType.Index] = b.Idx.ToArray();
             mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
         }
         var mi = _farBlocks[i];
@@ -310,10 +351,10 @@ public partial class HexMapView
                 if (l.Icon == HexIcon.None || !Source.Seen(c, r)) continue;
                 var (x, z) = Layout.Center(c, r);
                 float y = HexTiles.Base + l.Height * HexTiles.Step;
-                Color col = l.Owner == 1 ? new Color("4f7fd6") : l.Owner == 2 ? new Color("d24a33")
-                    : l.Icon is >= HexIcon.MineLogs and <= HexIcon.MineGems ? new Color("e2b84a")
-                    : l.Icon == HexIcon.Monster ? new Color("b03a2e") : new Color("e8dfc8");
-                float size = l.Icon is HexIcon.Citadel or HexIcon.HordeTown ? 14 : l.Icon == HexIcon.Monster ? 6 : 8;
+                Color col = l.Owner == 1 ? new Color("4f7fd6") : l.Owner == 2 ? new Color("c8422e")
+                    : l.Icon is >= HexIcon.MineLogs and <= HexIcon.MineGems ? new Color("d9ad42")
+                    : l.Icon == HexIcon.Monster ? new Color("9a3328") : new Color("a89a7c");
+                float size = l.Icon is HexIcon.Citadel or HexIcon.HordeTown ? 12 : l.Icon == HexIcon.Monster ? 5 : 5;
                 at.Add((new Vector3(x, y + size / 2, z) * V, col, size * V));
             }
         var mm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, UseColors = true, Mesh = new BoxMesh { Size = Vector3.One } };

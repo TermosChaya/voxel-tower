@@ -165,19 +165,116 @@ static class WorldViewBench
                 if (lx < HexTiles.Pad || lz < HexTiles.Pad || lx >= HexTiles.Pad + HexMapLayout.Tile || lz >= HexTiles.Pad + HexMapLayout.Tile) continue;
                 int top = 0;
                 for (int y = HexTiles.SY - 1; y > 0; y--) { byte m = w.Get(lx, y, lz); if (m != Mat.Air && m != Mat.Water && !Mat.IsVeg[m]) { top = y + 1; break; } }
-                if (l.Relief == HexRelief.Mountain) { peaks++; if (top < HexTiles.Base + l.Height * HexTiles.Step + 14) lowPeaks++; }
+                if (l.Relief == HexRelief.Mountain) { peaks++; if (top < HexTiles.LevelAt(l) + 14) lowPeaks++; }
                 else if (l.Ground is not (HexGround.Water or HexGround.DeepWater) && l.Relief == HexRelief.Flat && l.Icon == HexIcon.None && l.Rivers == 0 && l.Roads == 0)
                 {
-                    int want = HexTiles.Base + l.Height * HexTiles.Step;
-                    if (Math.Abs(top - want) > 1) wrongH++;
+                    // (the land's low rolls lie over the level by a voxel or two)
+                    if (Math.Abs(top - HexTiles.LevelAt(l)) > 2) wrongH++;
                 }
-                if (l.Icon == HexIcon.Citadel && top > HexTiles.Base + l.Height * HexTiles.Step + 12) citadel++;
+                if (l.Icon == HexIcon.Citadel && top > HexTiles.LevelAt(l) + 12) citadel++;
             }
         }
         check("a piece of the world map made in voxels and meshed in good time, the same each time; open hexes at their height, peaks where the mountains are, the citadel standing",
             make / pieces.Length < 150 && mesh / pieces.Length < 150 && differ == 0 && wrongH == 0 && peaks > 0 && lowPeaks == 0 && citadel == 1 && verts > 3000,
             $"made in {make / pieces.Length:0} ms, meshed in {mesh / pieces.Length:0} ms a piece of {HexMapLayout.Tile}² voxels (one thread); {verts / pieces.Length} vertices of ground and {waterVerts / pieces.Length} of water a piece; " +
             $"voxels differing made again {differ}; open hexes off their height {wrongH}; peaks {peaks}, too low {lowPeaks}; the citadel standing {citadel}");
+
+        // ---- one land and not a board: between the middles of two open hexes side by side the ground climbs or falls
+        // a voxel or two a step at most, and a ground meets the next raggedly rather than along the hexes' sides
+        {
+            int pairs = 0, cliffs = 0, worst = 0, border = 0, onSide = 0;
+            for (int r = 2; r < lm.Rows - 2; r += 2)
+                for (int c = 2; c < lm.Cols - 2; c += 3)
+                {
+                    var a = world.Look(c, r);
+                    if (!Open(a)) continue;
+                    var (nc, nr) = HexMapLayout.Neighbour(c, r, Hex.East);
+                    var b = world.Look(nc, nr);
+                    if (!Open(b)) continue;
+                    pairs++;
+                    var (ax, az) = lm.Center(c, r); var (bx, bz) = lm.Center(nc, nr);
+                    int prev = HexTiles.ColumnAt(world, lm, (int)ax, (int)az).Top;
+                    var prevMat = HexTiles.ColumnAt(world, lm, (int)ax, (int)az).Mat;
+                    for (float t = 1; t <= HexMapLayout.W; t++)
+                    {
+                        int x = (int)(ax + (bx - ax) * t / HexMapLayout.W), z = (int)(az + (bz - az) * t / HexMapLayout.W);
+                        var col = HexTiles.ColumnAt(world, lm, x, z);
+                        int step = Math.Abs(col.Top - prev);
+                        worst = Math.Max(worst, step);
+                        if (step > 2) cliffs++;
+                        prev = col.Top;
+                    }
+                    // where two grounds meet on this line, how far that is from the hexes' common side
+                    if (a.Ground != b.Ground)
+                        for (int dz = -9; dz <= 9; dz += 3)
+                        {
+                            HexGround last = a.Ground;
+                            for (float t = 0; t <= HexMapLayout.W; t++)
+                            {
+                                int x = (int)(ax + (bx - ax) * t / HexMapLayout.W), z = (int)(az + dz);
+                                var (hc, hr) = lm.HexAt(x + .5f, z + .5f);
+                                var g = GroundOf(HexTiles.ColumnAt(world, lm, x, z).Mat);
+                                if (g == null || g == last) continue;
+                                border++;
+                                var (cx, cz) = lm.Center(hc, hr);
+                                if (MathF.Abs(HexMapLayout.EdgeDistance(x + .5f - cx, z + .5f - cz)) < 1) onSide++;
+                                last = g.Value;
+                                break;
+                            }
+                        }
+                }
+            check("the world map is one land: no cliffs between the middles of open hexes side by side, the grounds meeting raggedly, not along the hexes' sides",
+                pairs > 50 && cliffs == 0 && (border == 0 || onSide * 3 < border),
+                $"{pairs} pairs of open hexes, steps over 2 voxels {cliffs} (the steepest {worst}); where grounds meet {border} times, on a hex's side {onSide}");
+        }
+        bool Open(HexLook l) => l.Relief is HexRelief.Flat or HexRelief.Forest && l.Ground is not (HexGround.Water or HexGround.DeepWater) && l.Rivers == 0 && l.Roads == 0 && l.Icon == HexIcon.None;
+        static HexGround? GroundOf(byte m) => m == Mat.Sand ? HexGround.Sand : m == Mat.Snow ? HexGround.Snow : m is Mat.Ash or Mat.Char or Mat.Basalt ? HexGround.Scorched : null;
+
+        // ---- the rivers run to where they leave: each hex of a river that reaches a lake, the sea, the edge or a gorge
+        // knows which way is downstream, and the current laid for the water's shader runs that way over its river (a
+        // river that ends in the land both ways, as many of the campaign's do at a zone's edge, runs down the heights)
+        {
+            // (the campaign's own big map, as the game draws it)
+            var xl = new CampaignHexes(Campaign.NewWorld(11, 144));
+            var lx = new HexMapLayout(144, 144);
+            var sw = Stopwatch.StartNew();
+            var dist = HexFlow.Downhill(xl);
+            var (tw, th, px) = HexFlow.Lay(xl, lx);
+            double ms = sw.Elapsed.TotalMilliseconds;
+            int rivers = 0, reached = 0, against = 0, still = 0;
+            for (int r = 0; r < 144; r++)
+                for (int c = 0; c < 144; c++)
+                {
+                    var l = xl.Look(c, r);
+                    if (l.Rivers == 0 || l.Ground is HexGround.Water or HexGround.DeepWater) continue;
+                    rivers++;
+                    int d = dist[r * 144 + c];
+                    if (d < 0) continue;
+                    reached++;
+                    var (cx, cz) = lx.Center(c, r);
+                    for (int sd = 0; sd < 6; sd++)
+                    {
+                        if ((l.Rivers & (1 << sd)) == 0) continue;
+                        var (nc, nr) = HexMapLayout.Neighbour(c, r, sd);
+                        bool off = (uint)nc >= 144u || (uint)nr >= 144u;
+                        var n = off ? default : xl.Look(nc, nr);
+                        bool leaves = off || n.Ground is HexGround.Water or HexGround.DeepWater || (n.Rivers & (1 << ((sd + 3) % 6))) == 0;
+                        bool down = leaves && d == 0 || dist[nr * 144 + nc] >= 0 && dist[nr * 144 + nc] < d;
+                        bool up = !off && dist[nr * 144 + nc] > d;
+                        if (!down && !up) continue;
+                        var (ox, oz) = HexMapLayout.Toward(sd);
+                        // the current a third of the way out along this side's reach of the river
+                        int i = (int)((cx + ox * .3f) / HexFlow.Texel), j = (int)((cz + oz * .3f) / HexFlow.Texel);
+                        float fx = px[(j * tw + i) * 2] - 128, fz = px[(j * tw + i) * 2 + 1] - 128;
+                        if (fx * fx + fz * fz < 4) { still++; continue; }
+                        float along = fx * ox + fz * oz;
+                        if (down ? along <= 0 : along >= 0) against++;
+                    }
+                }
+            check("the world map's rivers run to where they leave: a river is followed up from its mouth, its current laid downstream for the water",
+                rivers > 50 && reached * 5 >= rivers && against == 0 && still * 10 < reached && ms < 1500,
+                $"{rivers} hexes of river, {reached} followed up from a mouth; reaches against the stream {against}, still {still}; the current laid in {ms:0} ms ({tw}×{th})");
+        }
 
         // ---- the far view of the whole XL map: not too heavy
         {

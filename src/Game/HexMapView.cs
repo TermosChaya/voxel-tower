@@ -124,57 +124,74 @@ public partial class HexMapView : Node3D
         _vp.GetRenderInfo(Viewport.RenderInfoType.Visible, Viewport.RenderInfo.DrawCallsInFrame),
         _vp.GetRenderInfo(Viewport.RenderInfoType.Shadow, Viewport.RenderInfo.PrimitivesInFrame) / 1000);
 
-    /// <summary>The map's sky and light: a clear afternoon, the colours full as in «Heroes», the far land lost in haze.</summary>
+    /// <summary>
+    /// The map's sky and light: a clear afternoon with the sun low in the south-west, warm, its shadows long and soft; the
+    /// sky's cool light in the shade; the ground's folds and the feet of things darkened (screen-space shade); colours as
+    /// the valleys have them, not pressed; the far land paling into haze; lava and fires glowing.
+    /// </summary>
     void Heavens()
     {
         var sky = new ProceduralSkyMaterial
         {
-            SkyTopColor = new Color("5f86b8"), SkyHorizonColor = new Color("b9c9d6"), GroundHorizonColor = new Color("2a3038"),
-            GroundBottomColor = new Color("0b0d12"), SunAngleMax = 20,
+            SkyTopColor = new Color("5d7fae"), SkyHorizonColor = new Color("c3cdd4"), GroundHorizonColor = new Color("6f7468"),
+            GroundBottomColor = new Color("2a2c26"), SunAngleMax = 20,
         };
         _env = new Godot.Environment
         {
             BackgroundMode = Godot.Environment.BGMode.Sky,
             Sky = new Sky { SkyMaterial = sky, RadianceSize = Sky.RadianceSizeEnum.Size64 },
             AmbientLightSource = Godot.Environment.AmbientSource.Sky,
-            AmbientLightEnergy = 1.0f,
+            AmbientLightEnergy = .85f,
             ReflectedLightSource = Godot.Environment.ReflectionSource.Disabled,
             TonemapMode = Godot.Environment.ToneMapper.Aces,
-            TonemapExposure = 1.12f,
+            TonemapExposure = 1.22f,
+            TonemapWhite = 6,
             AdjustmentEnabled = true,
-            AdjustmentSaturation = 1.3f,
-            AdjustmentContrast = 1.06f,
+            AdjustmentSaturation = .96f,
+            AdjustmentContrast = 1.05f,
+            AdjustmentBrightness = 1.0f,
             GlowEnabled = true,
-            GlowIntensity = .45f,
-            GlowHdrThreshold = 1.1f,
-            GlowBlendMode = Godot.Environment.GlowBlendModeEnum.Additive,
-            // (no screen-space shade: the voxels' corners are shaded as they are meshed, and it cost a fifth of the frame)
-            SsaoEnabled = false,
-            FogEnabled = false,
+            GlowIntensity = .55f,
+            GlowBloom = .02f,
+            GlowHdrThreshold = 1.0f,
+            GlowBlendMode = Godot.Environment.GlowBlendModeEnum.Softlight,
+            SsaoEnabled = true,
+            SsaoRadius = 1.3f,
+            SsaoIntensity = 1.2f,
+            SsaoPower = 1.5f,
+            SsaoDetail = .5f,
+            SsaoHorizon = .06f,
+            SsaoSharpness = .98f,
+            SsaoLightAffect = .12f,
+            FogEnabled = true,
             FogMode = Godot.Environment.FogModeEnum.Depth,
-            FogLightColor = new Color("6d7c93"),
+            FogLightColor = new Color("a9b8c8"),
             FogDensity = .3f,
-            FogDepthBegin = 140,
-            FogDepthEnd = 360,
+            FogDepthBegin = 40,
+            FogDepthEnd = 120,
+            FogDepthCurve = 1.6f,
             FogSkyAffect = 0,
         };
         _world.AddChild(new WorldEnvironment { Environment = _env });
-        // beyond the map's land: a dark plain of mist far under it, so the eye never looks into nothing
+        // beyond the map's land: the sea it lies in, dark and still, paling into the haze far off
         _world.AddChild(new MeshInstance3D
         {
-            Mesh = new PlaneMesh { Size = new Vector2(4000, 4000) }, Position = new Vector3(0, (HexTiles.WaterTop - 6) * V, 0),
-            MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color("0d1016"), Roughness = 1 }, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            Mesh = new PlaneMesh { Size = new Vector2(4000, 4000) }, Position = new Vector3(0, (HexTiles.WaterTop - 3.2f) * V, 0),
+            MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color("142433"), Roughness = .35f, MetallicSpecular = .6f },
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         });
         _sun = new DirectionalLight3D
         {
-            LightColor = new Color("fff0d8"), LightEnergy = 1.55f, ShadowEnabled = true, ShadowBias = .03f, ShadowNormalBias = 1,
-            DirectionalShadowMode = DirectionalLight3D.ShadowMode.Orthogonal, DirectionalShadowMaxDistance = 80,
+            LightColor = new Color("ffe8c8"), LightEnergy = 1.6f, ShadowEnabled = true, ShadowBias = .03f, ShadowNormalBias = 1.2f,
+            ShadowBlur = 1.4f,
+            DirectionalShadowMode = DirectionalLight3D.ShadowMode.Orthogonal, DirectionalShadowMaxDistance = 80, DirectionalShadowFadeStart = .85f,
         };
         _world.AddChild(_sun);
-        _sun.LookAtFromPosition(new Vector3(-12, 18, 8), Vector3.Zero, Vector3.Up);
-        var fill = new DirectionalLight3D { LightColor = new Color("8fa3d8"), LightEnergy = .35f, ShadowEnabled = false };
+        // low in the south-west: the slopes that face the eye lit, the shadows falling away north-east and long
+        _sun.LookAtFromPosition(new Vector3(-15, 12, 10), Vector3.Zero, Vector3.Up);
+        var fill = new DirectionalLight3D { LightColor = new Color("9fb2d6"), LightEnergy = .22f, ShadowEnabled = false };
         _world.AddChild(fill);
-        fill.LookAtFromPosition(new Vector3(10, 8, -12), Vector3.Zero, Vector3.Up);
+        fill.LookAtFromPosition(new Vector3(12, 9, -10), Vector3.Zero, Vector3.Up);
     }
 
     // ------------------------------------------------------------ opened and closed
@@ -227,6 +244,7 @@ public partial class HexMapView : Node3D
         var atlas = new Vector4(lay.OX, lay.OZ, HexMapLayout.R, 1);
         var size = new Vector2(lay.FogW * HexMapLayout.HalfW, lay.FogH * HexMapLayout.RowStep);
         FogReady();
+        GridReady();
         foreach (var m in new[] { _solid, _water })
         {
             m.SetShaderParameter("atlas", atlas);
@@ -235,16 +253,23 @@ public partial class HexMapView : Node3D
             m.SetShaderParameter("atlas_through", .04f);
             m.SetShaderParameter("atlas_dark", new Vector3(.012f, .014f, .02f));
         }
+        _solid.SetShaderParameter("atlas_grid", _gridTex);
+        _solid.SetShaderParameter("atlas_grid_base", .045f);
+        _solid.SetShaderParameter("atlas_clouds", .2f);
+        _farMat.SetShaderParameter("atlas_clouds", .2f);
         _farMat.SetShaderParameter("atlas_dark", new Vector3(.012f, .014f, .02f));
         _farMat.SetShaderParameter("atlas_size", size);
         _farMat.SetShaderParameter("atlas_fog", _fogTex);
-        _water.SetShaderParameter("deep_color", new Vector3(.015f, .1f, .3f));
-        _water.SetShaderParameter("shallow_color", new Vector3(.07f, .3f, .48f));
-        _water.SetShaderParameter("clarity", 2.2f);
+        _water.SetShaderParameter("deep_color", new Vector3(.01f, .035f, .07f));
+        _water.SetShaderParameter("shallow_color", new Vector3(.035f, .1f, .125f));
+        _water.SetShaderParameter("foam_color", new Vector3(.55f, .6f, .6f));
+        _water.SetShaderParameter("clarity", 2.9f);
         _water.SetShaderParameter("map_size", new Vector2(lay.SX, lay.SZ));
-        var still = Image.CreateEmpty(4, 4, false, Image.Format.Rg8);
-        still.Fill(new Color(.5f, .5f, 0));
-        _water.SetShaderParameter("flow_tex", ImageTexture.CreateFromImage(still));
+        // the rivers' current, so their ripples run downstream (HexFlow.cs)
+        var (fw, fh, fpx) = HexFlow.Lay(Source, lay);
+        var flow = Image.CreateFromData(fw, fh, false, Image.Format.Rg8, fpx);
+        _water.SetShaderParameter("flow_tex", ImageTexture.CreateFromImage(flow));
+        _water.SetShaderParameter("flow_max", HexFlow.Most);
         FarLay();
         MiniLay();
         // as far off as the whole map fits on the screen, or a region of the largest
@@ -257,6 +282,7 @@ public partial class HexMapView : Node3D
     void OnChanged(int col, int row)
     {
         if (!Layout.OnField(col, row)) return;
+        HexTiles.Touch();
         _fogDirty = true;
         LookChanged(col, row);
     }
@@ -309,8 +335,11 @@ public partial class HexMapView : Node3D
         var back = new Vector3(0, MathF.Sin(Pitch), MathF.Cos(Pitch));
         Cam.Position = target + back * _dist;
         Cam.LookAt(target, Vector3.Up);
-        _sun.DirectionalShadowMaxDistance = _dist * 1.5f + 8;
+        _sun.DirectionalShadowMaxDistance = _dist * 1.7f + 10;
         _sun.Visible = true;
+        // the haze where the land goes off from the eye: none near, more toward the top of the screen
+        _env.FogDepthBegin = _dist * 1.35f;
+        _env.FogDepthEnd = _dist * 3.6f + 40;
         // the sun's shadows only where the land is made in voxels
         _sun.ShadowEnabled = _dist < NearMost && !_noShadows;
     }
@@ -400,6 +429,7 @@ public partial class HexMapView : Node3D
         Aim();
         Pieces();
         Fog(dt);
+        GridBake();
         Hover(_hoverHold ?? mouse);
         var hv = Layout.OnField(Hovered.Col, Hovered.Row) ? Layout.Center(Hovered.Col, Hovered.Row) : (-1e5f, -1e5f);
         var ch = Layout.OnField(Chosen.Col, Chosen.Row) ? Layout.Center(Chosen.Col, Chosen.Row) : (-1e5f, -1e5f);

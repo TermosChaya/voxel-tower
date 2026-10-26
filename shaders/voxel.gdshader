@@ -37,6 +37,12 @@ uniform vec4 atlas_hover = vec4(-1e5);
 uniform vec3 atlas_dark = vec3(0.035, 0.04, 0.06);
 // how much of what lies in the fog still shows through it (the big world map has it nearly black, as «Heroes»)
 uniform float atlas_through = 0.1;
+// the big world map (HexMapView.cs): how plainly the hexes' sides show everywhere, and a texture on the fog's grid of how
+// much more they show over a hex (along the way laid out, about where a hero can go today); the shadows of clouds
+// drifting over the land (0 none)
+uniform float atlas_grid_base = 0.2;
+uniform sampler2D atlas_grid : filter_nearest, repeat_disable, hint_default_black;
+uniform float atlas_clouds = 0.0;
 
 varying vec3 v_vox;
 varying vec3 v_nrm;
@@ -290,7 +296,8 @@ void fragment() {
 			if (skin == 4 || skin == 7) line *= 0.5;
 		}
 	}
-	col *= mix(1.0, 0.8, line);
+	// on the map the voxels are small and many: their bevel is lighter, or the land reads as a board of bricks
+	col *= mix(1.0, 0.8, line * (atlas.w > 0.5 ? 0.3 : 1.0));
 	if (atlas.w > 0.5) {
 		vec2 p = v_vox.xz;
 		// the cell this is in (axial, pointed north and south), its middle, how far in from its nearest side
@@ -303,16 +310,30 @@ void fragment() {
 		vec2 o = abs(p - mid);
 		float edge = min(atlas.z * 0.8660254 - o.x, (atlas.z - o.y - o.x * 0.57735) * 0.8660254);
 		float up = step(0.5, v_nrm.y), aa = max(px, 0.05);
-		col *= 1.0 - 0.2 * (1.0 - smoothstep(0.3, 0.3 + aa * 1.5, edge)) * up;
+		float more = texture(atlas_grid, p / atlas_size).r;
+		float side = (1.0 - smoothstep(0.3, 0.3 + aa * 1.5, edge)) * up;
+		col *= 1.0 - (atlas_grid_base + 0.32 * more) * side;
+		col *= 1.0 + 0.05 * more * up;
+		// the shadows of clouds going over
+		if (atlas_clouds > 0.0) {
+			vec2 q = p * 0.0126 + vec2(TIME * 0.0093, TIME * 0.0051);
+			col *= 1.0 - atlas_clouds * smoothstep(0.55, 0.8, patches(q));
+		}
 		bool hov = distance(mid, atlas_hover.xy) < 1.0, pick = distance(mid, atlas_hover.zw) < 1.0;
 		if (hov || pick) {
 			float ring = (1.0 - smoothstep(0.7, 0.7 + aa * 2.0, edge)) * up;
 			col = mix(col * (hov ? 1.07 : 1.0), pick ? vec3(1.0, 0.82, 0.38) : vec3(0.96, 0.95, 0.86), ring * 0.85);
 		}
 		float seen = texture(atlas_fog, p / atlas_size).r;
-		col = mix(atlas_dark, col, atlas_through + (1.0 - atlas_through) * seen);
+		// the unknown lies under a dark, slowly stirring murk, not a flat black
+		if (seen < 0.995) {
+			float murk = patches(p * 0.011 + vec2(TIME * 0.006, -TIME * 0.004));
+			vec3 dark = atlas_dark + vec3(0.03, 0.034, 0.042) * smoothstep(0.3, 0.8, murk);
+			col = mix(dark, col, atlas_through + (1.0 - atlas_through) * seen);
+		}
 	}
-	ALBEDO = col * v_ext.x;
+	// on the map the corners' shade is half as deep: each step of the land is a voxel, and full it lines every rise
+	ALBEDO = col * (atlas.w > 0.5 ? mix(1.0, v_ext.x, 0.55) : v_ext.x);
 	ROUGHNESS = skin == 11 ? mix(0.52, 0.3, shine) : skin == 2 ? 0.42 : skin == 1 ? 0.86 : 0.93;
 	METALLIC = skin == 11 ? 0.4 : skin == 2 ? 0.6 : 0.0;
 	SPECULAR = skin == 2 || skin == 11 ? 0.6 : 0.3;

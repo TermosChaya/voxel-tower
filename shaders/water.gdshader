@@ -68,6 +68,9 @@ void fragment() {
 	float ed = min(min(fv.x, 1.0 - fv.x), min(fv.y, 1.0 - fv.y));
 	float px = length(fwidth(v_vox));
 	float line = (1.0 - smoothstep(0.0, max(0.12, px), ed)) * (1.0 - smoothstep(0.35, 0.7, px)) * step(0.5, v_nrm.y) * voxel_lines;
+	// (the map's water is too small a voxel for its grid or a glint to each: they would speckle it)
+	float fine = atlas.w > 0.5 ? 0.0 : 1.0;
+	line *= fine;
 	col *= 1.0 - 0.18 * line;
 
 	if (v_nrm.y > 0.5) {
@@ -86,7 +89,7 @@ void fragment() {
 		vec2 cell = floor(v_vox.xz) + 0.5;
 		float s = mix(vnoise((cell - o1) * 0.3), vnoise((cell - o0) * 0.3), w0);
 		float running = clamp(speed / 2.5, 0.0, 1.0);
-		col += vec3(0.04, 0.055, 0.06) * smoothstep(0.62, 0.88, s) * running;
+		col += vec3(0.04, 0.055, 0.06) * smoothstep(0.62, 0.88, s) * running * mix(0.35, 1.0, fine);
 		// where it runs shallow it frets white
 		float fret = (1.0 - smoothstep(0.02, 0.3, k)) * running * smoothstep(0.5, 0.8, s);
 		col = mix(col, foam_color, fret * 0.45);
@@ -99,7 +102,14 @@ void fragment() {
 		col = mix(col, foam_color, 0.3 + 0.45 * smoothstep(0.35, 0.8, s));
 		alpha = max(alpha, 0.85);
 	}
-	if (atlas.w > 0.5) col = mix(atlas_dark, col, atlas_through + (1.0 - atlas_through) * texture(atlas_fog, v_vox.xz / atlas_size).r);
+	if (atlas.w > 0.5) {
+		// the map's lakes: a lap of foam along the shore, coming and going, and the shallows clear over the sand
+		float lap = 1.0 - smoothstep(0.015, 0.16, thick);
+		float wave = 0.5 + 0.5 * sin(TIME * 1.3 + vnoise(v_vox.xz * 0.35) * 6.2832);
+		col = mix(col, vec3(0.5, 0.55, 0.54), lap * (0.2 + 0.25 * wave) * step(0.5, v_nrm.y));
+		alpha = max(alpha, 0.84) * (1.0 - 0.4 * (1.0 - smoothstep(0.0, 0.05, thick)));
+		col = mix(atlas_dark, col, atlas_through + (1.0 - atlas_through) * texture(atlas_fog, v_vox.xz / atlas_size).r);
+	}
 	ALBEDO = col;
 	// the camera looks along one direction everywhere: a sharp sun glint would light a whole pond at once at some turn
 	// of the view, so the glint is broad and soft

@@ -89,6 +89,7 @@ public partial class HexMapView
     public void ShowPath(int fromCol, int fromRow, IReadOnlyList<(int Col, int Row, int Day)> steps)
     {
         if (steps == null || steps.Count == 0) { HidePath(); return; }
+        GridPath(steps);
         var mm = _arrows.Multimesh;
         mm.InstanceCount = steps.Count;
         float len = HexMapLayout.W * .5f * V, lift = 1.3f * V;
@@ -127,6 +128,7 @@ public partial class HexMapView
 
     public void HidePath()
     {
+        if (_gridPath.Count > 0) GridPath(null);
         _arrows.Visible = false;
         _cross.Visible = false;
         ArrowsShown = ArrowsToday = 0;
