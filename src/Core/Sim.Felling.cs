@@ -4,15 +4,20 @@ using System.Collections.Generic;
 namespace VoxelTower.Core;
 
 /// <summary>
-/// A place to keep out of for a moment: the lane a tree goes down along (from its foot along the way it falls, as long
-/// as it is tall, narrow at the butt and as wide as its crown at the top end), or what a dig is about to bring down (a
-/// box round it). Those of ours in it walk out of it and wait till it is over.
+/// A place to keep out of for a moment: the lane a tree goes down along (from its foot along the way it falls, over all
+/// the ground its wood comes down on, a bough's as much as the trunk's, and the strip a log lying across a slope rolls
+/// down), or what a dig is about to bring down (a box round it). Those of ours in it walk out of it and wait till it is
+/// over.
 /// </summary>
 public sealed class Danger
 {
-    /// <summary>A lane: from (PX, PZ) along (DX, DZ) Len long, HalfFoot to either side at the foot and Half at the far end.
+    /// <summary>A lane: from Back behind (PX, PZ) along (DX, DZ) to Len ahead of it, HalfFoot to either side at the foot
+    /// and Half at the far end, and RollLen more to the side its log rolls to (RollSide, +1 toward (−DZ, DX), −1 away).
     /// A box (DX = DZ = 0): Len and Half to either side of (PX, PZ) in x and z.</summary>
-    public float PX, PZ, DX, DZ, Len, Half, HalfFoot;
+    public float PX, PZ, DX, DZ, Len, Half, HalfFoot, Back, RollLen;
+    public int RollSide;
+    /// <summary>The log of its tree rolling down the slope: the lane is kept while it rolls.</summary>
+    public Flier Roller;
     /// <summary>The heights it covers, voxels (a lane covers all).</summary>
     public int Y0 = int.MinValue, Y1 = int.MaxValue;
     public double Until;
@@ -26,6 +31,16 @@ public sealed class Danger
     {
         if (y < Y0 - margin || y > Y1 + margin) return false;
         if (DX == 0 && DZ == 0) return MathF.Abs(x - PX) < Len + margin && MathF.Abs(z - PZ) < Half + margin;
+        float ax = x - PX, az = z - PZ, along = ax * DX + az * DZ, side = az * DX - ax * DZ, across = MathF.Abs(side);
+        if (along < -Back - margin || along > Len + margin) return false;
+        float half = HalfFoot + (Half - HalfFoot) * Math.Clamp(along / MathF.Max(1, Len), 0, 1);
+        return across < half + margin || RollLen > 0 && MathF.Sign(side) == RollSide && across < half + RollLen + margin;
+    }
+
+    /// <summary>In a lane ahead of its foot, as its trunk sweeps it: where its feller must not stand (it stands at the
+    /// tree's back, by the butt; what comes down behind the foot is the low wood, laid down slow).</summary>
+    public bool HasAhead(float x, float z, float margin)
+    {
         float ax = x - PX, az = z - PZ, along = ax * DX + az * DZ, across = MathF.Abs(ax * DZ - az * DX);
         if (along < -margin || along > Len + margin) return false;
         return across < HalfFoot + (Half - HalfFoot) * Math.Clamp(along / MathF.Max(1, Len), 0, 1) + margin;
@@ -46,6 +61,8 @@ public sealed class FellPlan
     public Danger Lane;
     /// <summary>Its feller was sent elsewhere by the player, or fell, before it was cut through: nobody holds its lane any more, and a feller coming to it after chooses its way afresh.</summary>
     public bool Abandoned;
+    /// <summary>The wood it was made for (packed): a bough cut off first and the trunk after are each their own tree.</summary>
+    public HashSet<int> Wood;
 }
 
 /// <summary>
@@ -210,12 +227,88 @@ public sealed partial class Sim
         return new FellBulk { CX = cx, CZ = cz, PX = bx + .5f, PZ = bz + .5f, Spread = spread, Butt = butt + 1, Base = lo, Top = hi, Count = wood.Count, Wood = wood };
     }
 
-    /// <summary>The lane a tree goes down along one of the ways: as long as it stands and its crown beyond, as wide as the crown.</summary>
-    static Danger LaneOf(float px, float pz, int baseY, int top, float spread, float butt, float dx, float dz) => new()
+    /// <summary>The lane a tree goes down along one of the ways, over its own wood (see the other <c>LaneOf</c>).</summary>
+    Danger LaneOf(in FellBulk b, float dx, float dz) => LaneOf(Unpacked(b.Wood), b.PX, b.PZ, b.Base, b.Top, b.Spread, b.Butt, dx, dz);
+
+    static IEnumerable<(int x, int y, int z)> Unpacked(HashSet<int> wood) { foreach (int p in wood) yield return WaterPlanner.Unpack(p); }
+
+    /// <summary>How much wood two trees share (packed voxels).</summary>
+    static int Overlap(HashSet<int> a, HashSet<int> b)
     {
-        PX = px, PZ = pz, DX = dx, DZ = dz, Len = top - baseY + 3 * VoxelWorld.PerMetre,
-        Half = spread + 2 * VoxelWorld.PerMetre, HalfFoot = butt + VoxelWorld.PerMetre, Why = "отошёл: валят дерево", Kept = true,
-    };
+        if (a == null || b == null) return 0;
+        if (a.Count > b.Count) (a, b) = (b, a);
+        int n = 0;
+        foreach (int p in a) if (b.Contains(p)) n++;
+        return n;
+    }
+
+    /// <summary>
+    /// The lane a tree goes down along one of the ways: all the ground its wood comes down on, and more about it — each
+    /// piece of it as far along the way as it stood high over the cut, where it lies (<see cref="Lay"/>), so that a bough
+    /// reaching out to the side or back comes down there, under where it hung, and one reaching forward past the top; as
+    /// long as it stands and its crown beyond at the least, as wide as the crown; and, if it would come to lie across a
+    /// slope steep enough to start it rolling, the strip it would roll down. What lies within half a metre of the cut
+    /// comes down slow and is left out (its feller stands there).
+    /// </summary>
+    Danger LaneOf(IEnumerable<(int x, int y, int z)> wood, float px, float pz, int baseY, int top, float spread, float butt, float dx, float dz)
+    {
+        float m = VoxelWorld.PerMetre, back = 0, ahead = 0, wide = 0;
+        var at = new List<(float a, float c)>();
+        foreach (var (x, y, z) in wood)
+        {
+            if (y - baseY < m / 2) continue;
+            float ax = x + .5f - px, az = z + .5f - pz, a = ax * dx + az * dz + (y - baseY), c = MathF.Abs(ax * dz - az * dx);
+            at.Add((a, c));
+            back = MathF.Max(back, -a); ahead = MathF.Max(ahead, a); wide = MathF.Max(wide, c);
+        }
+        float len = MathF.Max(top - baseY + 3 * m, ahead + 1.5f * m), half = MathF.Max(spread + 2 * m, wide + 1.5f * m), foot = butt + m;
+        // narrow at the foot only as far as nothing comes down outside it there
+        foreach (var (a, c) in at)
+        {
+            float t = Math.Clamp(a / len, 0, 1);
+            if (t < .9f) foot = MathF.Max(foot, (c + 1.5f * m - half * t) / (1 - t));
+        }
+        var lane = new Danger { PX = px, PZ = pz, DX = dx, DZ = dz, Len = len, Half = half, HalfFoot = foot, Back = back > 0 ? back + 1.5f * m : 0, Why = "отошёл: валят дерево", Kept = true };
+        (lane.RollSide, lane.RollLen) = RollOf(lane, top - baseY, butt);
+        return lane;
+    }
+
+    /// <summary>
+    /// Whether a tree laid down along a lane would lie across a slope steep enough to start its log rolling (as
+    /// <see cref="RollFelled"/> has it), to which side (+1 toward (−DZ, DX), −1 away) and how far: down that side from
+    /// along its length, metre by metre, till the ground is too flat to keep a log going, and a few metres more.
+    /// </summary>
+    (int side, float reach) RollOf(Danger lane, int height, float butt)
+    {
+        float nx = -lane.DZ, nz = lane.DX, off = butt + 4, rise = 0, m = VoxelWorld.PerMetre;
+        int n = 0;
+        for (float s = height * .25f; s <= height * .75f; s += m)
+        {
+            int px = (int)(lane.PX + lane.DX * s + nx * off), pz = (int)(lane.PZ + lane.DZ * s + nz * off);
+            int qx = (int)(lane.PX + lane.DX * s - nx * off), qz = (int)(lane.PZ + lane.DZ * s - nz * off);
+            if (!World.InBounds(px, 2, pz) || !World.InBounds(qx, 2, qz)) continue;
+            rise += World.SurfAt(px, pz) - World.SurfAt(qx, qz); n++;
+        }
+        if (n == 0) return (0, 0);
+        float slope = rise / n / (2 * off);
+        if (2f / 3 * MathF.Abs(slope) / (1 + slope * slope) < .14f) return (0, 0);
+        int side = -MathF.Sign(rise);
+        float reach = 0;
+        for (float s = height * .25f; s <= height * .75f + 1; s += MathF.Max(1, height * .25f))
+        {
+            float d = 0, cx = lane.PX + lane.DX * s, cz = lane.PZ + lane.DZ * s;
+            while (d < 30 * m)
+            {
+                int ax = (int)(cx + nx * side * d), az = (int)(cz + nz * side * d), bx = (int)(cx + nx * side * (d + m)), bz = (int)(cz + nz * side * (d + m));
+                if (!World.OnLand(ax, az) || !World.OnLand(bx, bz)) break;
+                float drop = (World.SurfAt(ax, az) - World.SurfAt(bx, bz)) / m;
+                if (2f / 3 * drop / (1 + drop * drop) < .12f) break;
+                d += m;
+            }
+            reach = MathF.Max(reach, d + 4 * m);
+        }
+        return (side, reach);
+    }
 
     /// <summary>
     /// What it costs to fell a tree along one way: those it would come down on (ours most, and one who cannot get out of
@@ -226,7 +319,7 @@ public sealed partial class Sim
     float FellCost(in FellBulk b, float dx, float dz, Unit feller, bool horde, out float built, bool careful = true)
     {
         built = 0;
-        var lane = LaneOf(b.PX, b.PZ, b.Base, b.Top, b.Spread, b.Butt, dx, dz);
+        var lane = LaneOf(b, dx, dz);
         float cost = 0;
         // those it would come down on
         foreach (var u in Units)
@@ -244,15 +337,15 @@ public sealed partial class Sim
         if (feller != null)
         {
             float along = (feller.X - b.PX) * dx + (feller.Z - b.PZ) * dz;
-            if (lane.Has(feller.X, feller.Y, feller.Z, feller.T.BodyR + 2)) cost += 3000;
+            if (lane.HasAhead(feller.X, feller.Z, feller.T.BodyR + 2)) cost += 3000;
             else if (along > -2) cost += 250;
         }
         // the ground it sweeps, sampled every metre: what is built in it, other trees, the edge of the land
         float nx = -dz, nz = dx;
         int height = b.Top - b.Base, trees = 0;
-        for (float s = VoxelWorld.PerMetre; s < lane.Len; s += VoxelWorld.PerMetre)
+        for (float s = VoxelWorld.PerMetre - lane.Back; s < lane.Len; s += VoxelWorld.PerMetre)
         {
-            float half = lane.HalfFoot + (lane.Half - lane.HalfFoot) * s / lane.Len;
+            float half = lane.HalfFoot + (lane.Half - lane.HalfFoot) * Math.Clamp(s / lane.Len, 0, 1);
             // the height the falling tree passes at so far from its foot
             int over = (int)MathF.Sqrt(MathF.Max(0, height * height - s * s)) + 4;
             for (float a = -half; a <= half; a += VoxelWorld.PerMetre)
@@ -282,18 +375,11 @@ public sealed partial class Sim
             if (!World.InBounds(px, 2, pz) || !World.InBounds(qx, 2, qz)) continue;
             rise += World.SurfAt(px, pz) - World.SurfAt(qx, qz); n++;
         }
+        // (those below it on the side it rolls to are in its lane, counted with those it comes down on)
         if (n > 0)
         {
             float slope = rise / n / (2 * off), push = 2f / 3 * MathF.Abs(slope) / (1 + slope * slope);
             cost += push >= .14f ? 600 : push * 500;
-            // and those below it, on the side it rolls to, as if it came down on them
-            if (push >= .14f)
-                foreach (var u in Units)
-                {
-                    if (u.Dead || u.Inside || u == feller || u.Team != (horde ? Team.Horde : Team.Player)) continue;
-                    float ax = u.X - b.PX, az = u.Z - b.PZ, along = ax * dx + az * dz, side = ax * nx + az * nz;
-                    if (along > -4 && along < lane.Len && MathF.Sign(side) == -MathF.Sign(rise) && MathF.Abs(side) < 30 * VoxelWorld.PerMetre) cost += 1500;
-                }
         }
         return cost;
     }
@@ -315,11 +401,21 @@ public sealed partial class Sim
     /// <summary>The plan for a tree about to be brought down: the one made for it already, or a new one.</summary>
     FellPlan PlanFell(in FellBulk b, Unit feller)
     {
+        // (the one made for this very wood: a bough cut off first, and the trunk it grew from after, are each their own)
         foreach (var p in _fells)
-            if (!p.Abandoned && MathF.Abs(p.PX - b.PX) < 10 && MathF.Abs(p.PZ - b.PZ) < 10 && Math.Abs(p.Base - b.Base) < 16 && Time - p.Made < 300) return p;
+            if (!p.Abandoned && Time - p.Made < 300 && Overlap(p.Wood, b.Wood) * 10 >= Math.Max(p.Wood?.Count ?? 0, b.Wood.Count) * 6) return p;
+        // one made before for much of this wood, the tree having changed under it since (a bough of it cut off, a
+        // neighbour's crown gone from it), and not cut through: done with, its lane let go
+        for (int i = _fells.Count - 1; i >= 0; i--)
+        {
+            var p = _fells[i];
+            if (p.Wood == null || Overlap(p.Wood, b.Wood) * 10 < p.Wood.Count * 3 || CutThrough(p)) continue;
+            Dangers.Remove(p.Lane);
+            _fells.RemoveAt(i);
+        }
         var (dx, dz) = FellWay(b, feller, feller?.Team == Team.Horde, out float built);
-        var plan = new FellPlan { CX = b.CX, CZ = b.CZ, PX = b.PX, PZ = b.PZ, DX = dx, DZ = dz, Base = b.Base, Top = b.Top, Made = Time, Left = built >= 1 };
-        plan.Lane = LaneOf(b.PX, b.PZ, b.Base, b.Top, b.Spread, b.Butt, dx, dz);
+        var plan = new FellPlan { CX = b.CX, CZ = b.CZ, PX = b.PX, PZ = b.PZ, DX = dx, DZ = dz, Base = b.Base, Top = b.Top, Made = Time, Left = built >= 1, Wood = b.Wood };
+        plan.Lane = LaneOf(b, dx, dz);
         plan.Lane.Until = Time + 15;
         _fells.Add(plan);
         return plan;
@@ -357,10 +453,15 @@ public sealed partial class Sim
             return true;
         }
         if (!Dangers.Contains(plan.Lane)) Dangers.Add(plan.Lane);
+        // (a tree it held before is no longer its work: its lane, kept as long as it would be, is kept from it as from
+        // anyone, so that it does not stand under that tree to cut another)
+        if (plan.Lane.By != u)
+            foreach (var p in _fells)
+                if (p != plan && p.Lane.By == u) p.Lane.By = null;
         plan.Lane.By = u;
         plan.Lane.Until = Math.Max(plan.Lane.Until, Time + 6);
         // the feller in the lane after all (it came round to the front): it leaves this side to another
-        if (plan.Lane.Has(u.X, u.Y, u.Z, u.T.BodyR))
+        if (plan.Lane.HasAhead(u.X, u.Z, u.T.BodyR))
         {
             u.Why = "не с той стороны: дерево упадёт сюда";
             u.Unreachable[u.Site] = Time + 20;
@@ -377,27 +478,24 @@ public sealed partial class Sim
         // (never while one of ours is under it: one who cannot get out of the way in half a minute is left there, and
         // the way chosen again later, round them)
         int stay = ClearLane(plan.Lane, u);
-        if (stay > 0)
+        if (stay == 0) return false;
+        u.Why = "ждёт, пока отойдут от дерева";
+        u.FellHold = true;
+        if (Time - plan.Warned > 30)
         {
-            u.Why = "ждёт, пока отойдут от дерева";
-            u.FellHold = true;
-            if (Time - plan.Warned > 30)
+            // the way chosen again, round them; after three times the tree is left
+            Dangers.Remove(plan.Lane);
+            plan.Warned = -1;
+            if (++plan.Tries >= 3) { plan.Left = true; plan.Why = "дерево некуда валить: под ним люди"; }
+            else
             {
-                // the way chosen again, round them; after three times the tree is left
-                Dangers.Remove(plan.Lane);
-                plan.Warned = -1;
-                if (++plan.Tries >= 3) { plan.Left = true; plan.Why = "дерево некуда валить: под ним люди"; }
-                else
-                {
-                    var (dx, dz) = FellWay(tree, u, u.Team == Team.Horde, out float built);
-                    plan.DX = dx; plan.DZ = dz; plan.Left = built >= 1;
-                    plan.Lane = LaneOf(tree.PX, tree.PZ, tree.Base, tree.Top, tree.Spread, tree.Butt, dx, dz);
-                    plan.Lane.Until = Time + 15;
-                }
+                var (dx, dz) = FellWay(tree, u, u.Team == Team.Horde, out float built);
+                plan.DX = dx; plan.DZ = dz; plan.Left = built >= 1;
+                plan.Lane = LaneOf(tree, dx, dz);
+                plan.Lane.Until = Time + 15;
             }
-            return true;
         }
-        return false;
+        return true;
     }
 
     double _fellLeftSaid = -99;
@@ -426,7 +524,18 @@ public sealed partial class Sim
         foreach (var o in Units)
         {
             if (o.Dead || o.Inside || o == worker || o.Team != Team.Player || o.Airborne != null) continue;
-            if (!d.Has(o.X, o.Y, o.Z, o.T.BodyR + 2)) continue;
+            if (!d.Has(o.X, o.Y, o.Z, o.T.BodyR + 2))
+            {
+                // one about to walk into it (on the way out of another's lane, or to work): it goes round, and the tree
+                // waits for it
+                if (o.Path == null || o.PathI >= o.Path.Count || o == Possessed) continue;
+                bool into = false;
+                for (int i = o.PathI; i < o.Path.Count && i < o.PathI + 4 && !into; i++) { var (px, py, pz) = Nav.Feet(o.Path[i]); into = d.Has(px, py, pz, o.T.BodyR); }
+                if (!into) continue;
+                stay++;
+                o.Path = null; o.NextSearch = 0;
+                continue;
+            }
             stay++;
             if (o == Possessed || o.Down || o.PinKg > 0 || o.Captor != null || o.Carrying != null) continue;
             if (o.Avoiding != d) { o.Avoiding = d; o.Path = null; o.NextSearch = 0; }
@@ -459,7 +568,14 @@ public sealed partial class Sim
             u.NextSearch = Time + .5;
             if (u.Site >= 0) ReleaseSite(u);
             StopCarve(u); StopBuild(u);
-            var path = Paths.Find(u.Cell, c => { var (px, py, pz) = Nav.Feet(c); return !d.Has(px, py, pz, r + 2); }, c => 0, MoverOf(u), 2500, gates: true);
+            // (out of it to where no tree's lane is, and round them on the way: in a wood felled by many, the way out of
+            // one lane is not to cross another as its tree comes down)
+            bool lanes = false;
+            foreach (var o in Dangers) if (o != d && (o.DX != 0 || o.DZ != 0)) { lanes = true; break; }
+            bool Other(int c) { var (px, py, pz) = Nav.Feet(c); foreach (var o in Dangers) if (o != d && (o.DX != 0 || o.DZ != 0) && o.Has(px, py, pz, r)) return true; return false; }
+            var path = Paths.Find(u.Cell, c => { var (px, py, pz) = Nav.Feet(c); return !d.Has(px, py, pz, r + 2) && (!lanes || !Other(c)); }, c => 0, MoverOf(u), 2500, gates: true,
+                lane: lanes ? c => Other(c) ? 12 : 0 : null);
+            path ??= Paths.Find(u.Cell, c => { var (px, py, pz) = Nav.Feet(c); return !d.Has(px, py, pz, r + 2); }, c => 0, MoverOf(u), 2500, gates: true);
             if (path == null) { u.State = UnitState.Idle; return true; }
             u.Path = path; u.PathI = 0;
         }
@@ -482,10 +598,19 @@ public sealed partial class Sim
         {
             float spread = 0;
             int top = baseY;
-            foreach (var (x, y, z, m, _) in pieces) { if (!Mat.IsTrunk(m)) continue; top = Math.Max(top, y); spread = MathF.Max(spread, MathF.Max(MathF.Abs(x - t.PX), MathF.Abs(z - t.PZ))); }
-            lane = LaneOf(t.PX, t.PZ, baseY, top, spread, 3, t.DX, t.DZ);
+            var wood = new List<(int x, int y, int z)>();
+            foreach (var (x, y, z, m, _) in pieces)
+            {
+                if (!Mat.IsTrunk(m)) continue;
+                wood.Add((x, y, z));
+                top = Math.Max(top, y); spread = MathF.Max(spread, MathF.Max(MathF.Abs(x - t.PX), MathF.Abs(z - t.PZ)));
+            }
+            lane = LaneOf(wood, t.PX, t.PZ, baseY, top, spread, 3, t.DX, t.DZ);
             lane.Kept = false;
         }
+        t.Lane = lane;
+        // (its feller's work done: it keeps out of it as all of ours do, and does not walk back in to its next work)
+        lane.By = null;
         lane.Until = t.To + 1;
         if (!Dangers.Contains(lane)) Dangers.Add(lane);
         if (ClearLane(lane, null) == 0 || plan != null) return;
@@ -514,6 +639,13 @@ public sealed partial class Sim
             if (!cut && p.Lane.By is { Dead: true } or { Hold: true }) p.Abandoned = true;
             if (cut || !p.Abandoned) p.Lane.Until = Math.Max(p.Lane.Until, Time + 1);
         }
+        // a felled tree's log rolling down a slope: its lane kept till it stops
+        foreach (var d in Dangers)
+            if (d.Roller != null)
+            {
+                if (d.Roller.Rolling && Fliers.Contains(d.Roller)) d.Until = Math.Max(d.Until, Time + 1);
+                else d.Roller = null;
+            }
         if (Dangers.Count > 0) Dangers.RemoveAll(d => Time > d.Until);
         if (_fells.Count > 0) _fells.RemoveAll(p => Time - p.Made > 300);
         // whoever of ours walks into one while it lasts is sent out again
@@ -548,9 +680,18 @@ public sealed partial class Sim
         int nf = 0;
         foreach (var (x, y, z, m, _) in pieces) if (Mat.IsTrunk(m) && y <= baseY + 2) { fx += x; fz += z; nf++; }
         if (nf > 0) { fx /= nf; fz /= nf; } else { fx = tx; fz = tz; }
-        // (its roots, if it came down with them, reach lower than the cut its plan was made at: matched by the foot and the top)
+        // the plan made for the wood that falls: most of that wood in it (its roots, if it came down with them, are more
+        // than the plan was made for), and most of the plan's wood in it (not a bough's plan for the trunk it grew on);
+        // and its lane kept clear now (not one let go, which nobody keeps out of any more)
+        int trunks = 0, most = 0;
+        foreach (var (_, _, _, m, _) in pieces) if (Mat.IsTrunk(m)) trunks++;
         foreach (var p in _fells)
-            if (MathF.Abs(p.PX - fx - .5f) < 12 && MathF.Abs(p.PZ - fz - .5f) < 12 && Math.Abs(p.Top - top) < 24) { plan = p; break; }
+        {
+            if (p.Wood == null || p.Wood.Count == 0 || !Dangers.Contains(p.Lane)) continue;
+            int n = 0;
+            foreach (var (x, y, z, m, _) in pieces) if (Mat.IsTrunk(m) && p.Wood.Contains(WaterPlanner.Pack(x, y, z))) n++;
+            if (n > most && n * 10 >= p.Wood.Count * 6 && n * 10 >= trunks * 4) { most = n; plan = p; }
+        }
         if (plan != null) { _fells.Remove(plan); return (plan.DX, plan.DZ); }
         var wood = new HashSet<int>();
         float spread = 0, bx = 0, bz = 0, butt = 0;

@@ -124,6 +124,12 @@ static class SmartworkBench
             trees.Count >= 8 && standing == 0 && safeFelling && ontoOurs == 0 && felled >= trees.Count - 2,
             $"{trees.Count} trees, {standing} still standing after {sim.Time:0} s; {fells} went over, {felled} of them felled with a warning, {ontoOurs} onto one of ours{(falls.Count > 0 ? " (" + string.Join("; ", falls.Take(4)) + ")" : "")}; {felledCost}");
         Reset();
+        // (what is left of the grove's work — logs to cut up, the scaffolding put up to reach high boughs — is not the
+        // next crews' work: taken away, so that they go to theirs)
+        sim.CancelArea(fx0 - 120, fz0 - 120, fx0 + 240, fz0 + 240);
+        foreach (var sc in sim.Scaffolds) foreach (int p in sc.Voxels) { var (x, y, z) = WaterPlanner.Unpack(p); if (w.Get(x, y, z) == Mat.Scaffold) w.Set(x, y, z, Mat.Air); }
+        sim.Scaffolds.Clear();
+        Run(.5);
 
         // ---- a ditch two metres deep along the foot of a stone wall
         int wx0 = (int)gx - 330, wz0 = (int)gz + 160;

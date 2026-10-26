@@ -11,6 +11,8 @@ public sealed class Toppling
     public double From, To;
     /// <summary>Felled as a woodcutter fells: its way chosen, the warning called, its lane cleared first (Sim.Felling.cs).</summary>
     public bool Felled;
+    /// <summary>The lane kept clear while it goes over, and while its log rolls if it comes to lie across a slope.</summary>
+    public Danger Lane;
 }
 
 /// <summary>
@@ -463,9 +465,10 @@ public sealed partial class Sim
 
     /// <summary>
     /// A felled trunk lying across a slope steep enough to start a log rolling goes rolling down it, still marked to be
-    /// cut up if it was; one lying along the slope, or on the level, stays where it lies.
+    /// cut up if it was; one lying along the slope, or on the level, stays where it lies. The lane it was felled along is
+    /// kept, wide to the side it rolls to, till it stops, and those of ours there get out of its way.
     /// </summary>
-    void RollFelled(List<(int x, int y, int z)> cells, float fx, float fz)
+    void RollFelled(List<(int x, int y, int z)> cells, float fx, float fz, Danger lane)
     {
         float nx = -fz, nz = fx;
         int lo = int.MaxValue, hi = int.MinValue;
@@ -493,7 +496,16 @@ public sealed partial class Sim
         if (push < .14f) return;
         var f = Loose(cells, 0, 0, 0, "бревно");
         if (f != null) f.Intact = true;
-        if (f != null && BakeLog(f, out float r, out float half, out float ax, out float az)) StartRoll(f, r, 0, half, ax, az);
+        if (f == null || !BakeLog(f, out float r, out float half, out float ax, out float az)) return;
+        StartRoll(f, r, 0, half, ax, az);
+        if (lane == null || lane.DX == 0 && lane.DZ == 0) return;
+        // (down the side the ground falls away to, as far as it was reckoned to go, or a good way if it was not)
+        lane.RollSide = -MathF.Sign(rise);
+        lane.RollLen = MathF.Max(lane.RollLen, 12 * VoxelWorld.PerMetre);
+        lane.Roller = f;
+        lane.Until = Math.Max(lane.Until, Time + 1);
+        if (!Dangers.Contains(lane)) Dangers.Add(lane);
+        ClearLane(lane, null);
     }
 
     /// <summary>
@@ -681,7 +693,7 @@ public sealed partial class Sim
             Toppled?.Invoke(topple);
             return;
         }
-        Lay(pieces, fx, fz, baseY, trunks, quiet);
+        Lay(pieces, fx, fz, baseY, trunks, quiet, fellPlan?.Lane);
     }
 
     /// <summary>Trees going over now, to be laid down when they get to the ground.</summary>
@@ -700,12 +712,13 @@ public sealed partial class Sim
             _toppling.RemoveAt(i);
             _settling = true;
             foreach (var (x, y, z, m, _) in pieces) Fell?.Invoke(x, y, z, m);
-            Lay(pieces, fx, fz, baseY, pieces.Count, quiet: false);
+            Lay(pieces, fx, fz, baseY, pieces.Count, quiet: false, t.Lane);
         }
     }
 
-    /// <summary>What fell, laid down where it comes to rest: a trunk along the ground as a log, the rest in a heap.</summary>
-    void Lay(List<(int x, int y, int z, byte m, byte order)> pieces, float fx, float fz, int baseY, int trunks, bool quiet)
+    /// <summary>What fell, laid down where it comes to rest: a trunk along the ground as a log, the rest in a heap; the lane
+    /// it was felled along kept while its log rolls.</summary>
+    void Lay(List<(int x, int y, int z, byte m, byte order)> pieces, float fx, float fz, int baseY, int trunks, bool quiet, Danger lane = null)
     {
         pieces.Sort((a, b) => a.y.CompareTo(b.y));
         // a felled trunk comes down swung on its stump: the farther along it, the harder (a rod falling over, v = r √(3g/L))
@@ -775,7 +788,7 @@ public sealed partial class Sim
         foreach (var (u, n) in crushed) StrikeHeap(u, blows.TryGetValue(u, out var j) ? j : new float[4], byLog.Contains(u) ? "упавшее дерево" : "обвал", 30 + Math.Min(90, n * 2));
         // a felled trunk lying across a slope steep enough to start it goes rolling down it (a bough, its stubs in the
         // ground, lies where it drops)
-        if (!quiet && logCells.Count >= 60) RollFelled(logCells, fx, fz);
+        if (!quiet && logCells.Count >= 60) RollFelled(logCells, fx, fz, lane);
         if (quiet || laid == 0) return;
         cx /= laid; cy /= laid; cz /= laid;
         Collapsed?.Invoke(laid, cx, cy, cz);

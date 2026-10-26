@@ -6220,6 +6220,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--hex") HexBench.Run(C
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--metal") MetalBench.Run(Check);
 
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--nature") NatureBench.Run(Check);
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--fellsafe") FellSafeBench.Run(Check);
 
 // the war: the bands' spirit, the warlords, engines given up, our tactics, a raid fought out and its report, two hundred at once (WarBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--war") WarBench.Run(Check);

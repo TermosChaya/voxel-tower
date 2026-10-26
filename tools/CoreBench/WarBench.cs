@@ -306,6 +306,9 @@ static class WarBench
             s.DesignateBuild(wall);
             s.CompleteAll();
             s.InstantLabour = false;
+            // (the trees the levelling cut through at its edge come down before anyone is up there: the archers are not
+            // to leave the wall for one of them)
+            Run(s, 4);
             int stone0 = Ours(s, wx, wz - 300, wx + 16, wz + 300);
             // two archers together up on it
             var archers = Enumerable.Range(0, 2).Select(i => s.Spawn(Kinds.Archer, s.NearestStand(wx + 8, wz - 4 + i * 8, 2))).ToList();
