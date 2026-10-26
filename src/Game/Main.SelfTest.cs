@@ -986,6 +986,7 @@ public partial class Main
         await SelfTestRowHouses(Check);
         await SelfTestHex(Check);
         await SelfTestCaptain(Check);
+        await SelfTestWar(Check);
         await SelfTestMetal(Check);
         // the report for the author: one file with the system, the hangs, the last events and the logs
         string report = Diag.Report(this, ProjectSettings.GlobalizePath("user://logs"));

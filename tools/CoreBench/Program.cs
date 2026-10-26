@@ -6172,6 +6172,10 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--hex") HexBench.Run(C
 // iron: ore in the valleys, the pick, the mine, the miners' building, plate and iron gates (Metal.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--metal") MetalBench.Run(Check);
 
+// the war: the bands' spirit, the warlords, engines given up, our tactics, a raid fought out and its report, two hundred at once (WarBench.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--war") WarBench.Run(Check);
+if (args.Length > 0 && args[0] == "--war-audit") WarBench.Audit();
+
 if (args.Length > 0 && args[0] == "--stress")
 {
     // not in the usual run: a long sandbox under fire, to find a step that takes too long or never ends. Every second
