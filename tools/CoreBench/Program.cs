@@ -6236,6 +6236,12 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--atlas") AtlasBench.R
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--heroes") HeroesBench.Run(Check);
 // the map's content: the big map's lairs, the treasures and their keepers, scouts, a shrine's trial (TrovesBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troves") TrovesBench.Run(Check);
+// the map of valleys as a land: made in good time, every kind of cell its kind, the ways running on, walked from the
+// castle everywhere, the same each time, a cell put on again as its holder changed (LandBench.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--atlas") LandBench.Run(Check);
+if (args.Length > 0 && args[0] == "--atlas-rivers") LandBench.Rivers();
+if (args.Length > 0 && args[0] == "--atlas-dump")
+    LandBench.Dump(args.Length > 1 ? uint.Parse(args[1]) : 11, args.Length > 2 ? int.Parse(args[2]) : 3, args.Length > 3 ? args[3] : "atlas.ppm");
 if (args.Length > 0 && args[0] == "--map-trace")
     MapBench.Trace(args.Length > 1 ? uint.Parse(args[1]) : 11, args.Length > 2 ? int.Parse(args[2]) : 30, args.Length > 3 && args[3] == "weak");
 

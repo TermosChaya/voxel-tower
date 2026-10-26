@@ -188,6 +188,13 @@ public static class Mat
     /// limewashed pale; and the bronze of a belfry's bell.
     /// </summary>
     public const byte Daub = 188, Bell = 189;
+    /// <summary>
+    /// The map of valleys' own ground (Atlas.cs), seen from high over it: snow on the peaks, sand on the shores, the ripe
+    /// wheat of the fields about the first valley, the ash of the land the horde holds, the flowers of the meadows each
+    /// voxel a clump of them, a bed of reeds, and the pale dust of the roads. None of it is in a valley.
+    /// </summary>
+    public const byte Snow = 230, Sand = 231, Wheat = 232, Ash = 233, BloomRed = 234, BloomYellow = 235, BloomWhite = 236,
+        BloomBlue = 237, Reedbed = 238, Dust = 239;
     public const int Count = 253;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
@@ -388,6 +395,12 @@ public static class Mat
         D(Tile, "Черепица", 0x8e3f2a, .18f, MatGroup.Stone, Player); D(Shingle, "Дранка", 0x6e6152, .2f, MatGroup.Wood, Player);
         D(Thatch, "Солома", 0x9a8045, .24f, MatGroup.Wood, Player); D(Slate, "Сланец", 0x3f4656, .14f, MatGroup.Stone, Player);
         D(Daub, "Обмазка", 0xb3a68a, .07f, MatGroup.Earth, Player); D(Bell, "Колокол", 0x8a6a34, .08f, MatGroup.Metal, Player);
+        // the map of valleys' ground (Atlas.cs)
+        D(Snow, "Снег", 0xe9eef2, .05f, MatGroup.Earth, Natural); D(Sand, "Песок", 0xc6ad78, .12f, MatGroup.Earth, Natural | Earthy);
+        D(Wheat, "Нива", 0xc9a23e, .2f, MatGroup.Earth, Natural | Earthy); D(Ash, "Пепел", 0x2f2a2a, .3f, MatGroup.Earth, Natural | Earthy);
+        D(BloomRed, "Цветы", 0xc8352c, .2f, MatGroup.Earth, Natural); D(BloomYellow, "Цветы", 0xe3c13a, .2f, MatGroup.Earth, Natural);
+        D(BloomWhite, "Цветы", 0xe6e2d6, .12f, MatGroup.Earth, Natural); D(BloomBlue, "Цветы", 0x4a62c4, .2f, MatGroup.Earth, Natural);
+        D(Reedbed, "Камыш", 0x7b7a3c, .26f, MatGroup.Earth, Natural); D(Dust, "Дорога", 0xb69c6e, .16f, MatGroup.Earth, Natural | Earthy);
         Emission[Brew] = .7f;
         // what grows by itself: flowers of three more colours, ferns, reeds, mushrooms and lilies drawn in blades and
         // petals; juniper, berries and a nest are leaves to everyone, an anthill is earth, a hollow is the tree's own wood
@@ -428,6 +441,8 @@ public static class Mat
         // juniper in needles; berries, a nest's twigs and the inside of a hollow plain
         Skin[Juniper] = 7;
         Skin[BerryRed] = Skin[BerryBlue] = Skin[Nest] = Skin[Hollow] = 0;
+        // the ash of the horde's land flecked as burnt turf is
+        Skin[Ash] = 8;
         // what holds the world up: loose pieces resting on these never fall
         foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Scorch, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank, Menhir, Trodden, Basalt, IronOre, OreRust, Anthill }) IsAnchor[m] = true;
 

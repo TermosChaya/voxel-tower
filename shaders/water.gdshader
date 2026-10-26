@@ -17,6 +17,11 @@ uniform vec3 deep_color = vec3(0.012, 0.035, 0.05);
 uniform vec3 shallow_color = vec3(0.07, 0.15, 0.15);
 uniform vec3 foam_color = vec3(0.30, 0.36, 0.38);
 uniform float clarity = 1.4;
+// on the map of valleys (AtlasView.cs): its size in voxels, how much of each column is seen, the dark of its fog; off (w 0) in a valley
+uniform vec4 atlas = vec4(0.0);
+uniform vec2 atlas_size = vec2(1.0);
+uniform sampler2D atlas_fog : filter_linear, repeat_disable;
+uniform vec3 atlas_dark = vec3(0.035, 0.04, 0.06);
 
 varying vec3 v_vox;
 varying vec3 v_nrm;
@@ -93,6 +98,7 @@ void fragment() {
 		col = mix(col, foam_color, 0.3 + 0.45 * smoothstep(0.35, 0.8, s));
 		alpha = max(alpha, 0.85);
 	}
+	if (atlas.w > 0.5) col = mix(atlas_dark, col, 0.1 + 0.9 * texture(atlas_fog, v_vox.xz / atlas_size).r);
 	ALBEDO = col;
 	// the camera looks along one direction everywhere: a sharp sun glint would light a whole pond at once at some turn
 	// of the view, so the glint is broad and soft

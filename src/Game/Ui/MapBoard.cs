@@ -467,7 +467,7 @@ public partial class MapBoard : Control
     }
 
     /// <summary>«6 скелетов», «2 пещерных медведя и 4 волка».</summary>
-    static string Keepers(List<Traveller> keep)
+    internal static string Keepers(List<Traveller> keep)
     {
         var counts = new List<(UnitType t, int n)>();
         foreach (var m in keep)
@@ -488,7 +488,7 @@ public partial class MapBoard : Control
         : t.Name.ToLowerInvariant();
 
     /// <summary>How a party stands against a treasure's keepers: «стража слабее», «силы равны», «стража сильнее».</summary>
-    static string Against(List<Traveller> side, MapCell cell)
+    internal static string Against(List<Traveller> side, MapCell cell)
     {
         var keep = cell.Sum.Holders();
         if (keep.Count == 0) return "";

@@ -75,7 +75,12 @@ public partial class WorldView : Node3D
     /// <summary>The tufts, the flowers and the sward, drawn in blades over the chunks.</summary>
     public GrassView Grass { get; private set; }
 
-    public void Init(VoxelWorld w)
+    /// <summary>The materials the ground and the water are drawn with (the map of valleys sets its own on them).</summary>
+    public ShaderMaterial SolidMaterial => _mat;
+    public ShaderMaterial WaterMaterial => _waterMat;
+
+    /// <summary>The field meshed and shown; with its coarse level for the far view, or without one (the map of valleys, never far enough off for it).</summary>
+    public void Init(VoxelWorld w, bool coarse = true)
     {
         _w = w;
         Position = new Vector3(w.OriginX, 0, w.OriginZ);
@@ -113,6 +118,8 @@ public partial class WorldView : Node3D
         _rx = (w.CX + 1) / 2; _ry = (w.CY + 1) / 2; _rz = (w.CZ + 1) / 2;
         _far = new MeshInstance3D[_rx * _ry * _rz];
         _farShade = new MeshInstance3D[_far.Length];
+        _noFar = !coarse;
+        if (_noFar) { LastFullMeshMs = sw.Elapsed.TotalMilliseconds; return; }
         // the coarse level is wanted only from far off: meshed off the main thread, made Godot's a few dozen blocks a
         // frame as the blocks come, never many of them waiting at once (the whole valley's, waiting together, held
         // some 380 MB of buffers on the larger valley)
@@ -186,7 +193,8 @@ public partial class WorldView : Node3D
     BlockingCollection<(int ri, MeshBuffers solid, MeshBuffers shadow)> _farQueue;
     CancellationTokenSource _farStop;
     const int FarWaitingMost = 192;
-    bool FarReady => _farMade == null;
+    bool FarReady => _farMade == null && !_noFar;
+    bool _noFar;
 
     // the batches being meshed on the workers in play, and what they are of
     Task<Built[]> _making;

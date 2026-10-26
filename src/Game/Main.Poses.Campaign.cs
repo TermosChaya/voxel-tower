@@ -160,6 +160,7 @@ public partial class Main
         }
         switch (_pose)
         {
+            case "land": LandPose(); break;
             case "march":
             {
                 var p = Walk(ore, .45);

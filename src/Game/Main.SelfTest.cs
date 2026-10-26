@@ -75,6 +75,14 @@ public partial class Main
         }
         // SELFTEST_ONLY=board: only the campaign's part
         if (System.Environment.GetEnvironmentVariable("SELFTEST_ONLY") == "board" && await SelfTestBoard(Check, () => fails)) return;
+        // SELFTEST_ONLY=land: only the map of valleys as a land
+        if (System.Environment.GetEnvironmentVariable("SELFTEST_ONLY") == "land")
+        {
+            await SelfTestLand(Check);
+            GD.Print($"[selftest] {(fails == 0 ? "all passed" : fails + " failed")}");
+            GetTree().Quit(fails == 0 ? 0 : 1);
+            return;
+        }
         await Frames(5);
         int kx = Site.KeepX, kz = Site.KeepZ;
         // the places below were set out round the citadel where it stood at 819,512 on the old valley: they go with it
@@ -1008,6 +1016,7 @@ public partial class Main
         await SelfTestWarlords(Check);
         await SelfTestMetal(Check);
         await SelfTestCampaign(Check);
+        await SelfTestLand(Check);
         // the report for the author: one file with the system, the hangs, the last events and the logs
         string report = Diag.Report(this, ProjectSettings.GlobalizePath("user://logs"));
         string body = System.IO.File.Exists(report) ? System.IO.File.ReadAllText(report) : "";

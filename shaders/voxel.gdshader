@@ -26,6 +26,15 @@ global uniform float wind;
 // grown by w; the turf under it is the shade between its blades
 global uniform vec4 sward_at;
 global uniform vec2 sward_reach;
+// The map of valleys (AtlasView.cs) draws its ground with this too: the middle of its first cell and a cell's radius,
+// voxels, and whether it is the map (w 1; 0 everywhere else, and none of this is worked out); its size; how much of each
+// column is seen (1) or lies in the fog (0); the middle of the cell pointed at (xy) and of the one chosen (zw); the dark
+// of the fog. A cell's sides are a faint line on the ground, brighter about the cell pointed at, gold about the one chosen.
+uniform vec4 atlas = vec4(0.0);
+uniform vec2 atlas_size = vec2(1.0);
+uniform sampler2D atlas_fog : filter_linear, repeat_disable;
+uniform vec4 atlas_hover = vec4(-1e5);
+uniform vec3 atlas_dark = vec3(0.035, 0.04, 0.06);
 
 varying vec3 v_vox;
 varying vec3 v_nrm;
@@ -280,6 +289,27 @@ void fragment() {
 		}
 	}
 	col *= mix(1.0, 0.8, line);
+	if (atlas.w > 0.5) {
+		vec2 p = v_vox.xz;
+		// the cell this is in (axial, pointed north and south), its middle, how far in from its nearest side
+		vec2 rel = (p - atlas.xy) / atlas.z;
+		vec3 f = vec3(0.57735 * rel.x - rel.y / 3.0, 2.0 / 3.0 * rel.y, 0.0);
+		f.z = -f.x - f.y;
+		vec3 rc = round(f), dd = abs(rc - f);
+		if (dd.x > dd.y && dd.x > dd.z) rc.x = -rc.y - rc.z; else if (dd.y > dd.z) rc.y = -rc.x - rc.z;
+		vec2 mid = atlas.xy + atlas.z * vec2(1.7320508 * (rc.x + rc.y * 0.5), 1.5 * rc.y);
+		vec2 o = abs(p - mid);
+		float edge = min(atlas.z * 0.8660254 - o.x, (atlas.z - o.y - o.x * 0.57735) * 0.8660254);
+		float up = step(0.5, v_nrm.y), aa = max(px, 0.05);
+		col *= 1.0 - 0.2 * (1.0 - smoothstep(0.3, 0.3 + aa * 1.5, edge)) * up;
+		bool hov = distance(mid, atlas_hover.xy) < 1.0, pick = distance(mid, atlas_hover.zw) < 1.0;
+		if (hov || pick) {
+			float ring = (1.0 - smoothstep(0.7, 0.7 + aa * 2.0, edge)) * up;
+			col = mix(col * (hov ? 1.07 : 1.0), pick ? vec3(1.0, 0.82, 0.38) : vec3(0.96, 0.95, 0.86), ring * 0.85);
+		}
+		float seen = texture(atlas_fog, p / atlas_size).r;
+		col = mix(atlas_dark, col, 0.1 + 0.9 * seen);
+	}
 	ALBEDO = col * v_ext.x;
 	ROUGHNESS = skin == 11 ? mix(0.52, 0.3, shine) : skin == 2 ? 0.42 : skin == 1 ? 0.86 : 0.93;
 	METALLIC = skin == 11 ? 0.4 : skin == 2 ? 0.6 : 0.0;

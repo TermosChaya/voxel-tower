@@ -65,6 +65,36 @@ static class AtlasBench
         double openTime = openA == null ? -1 : c.WaySeconds(hero, new List<(float X, float Z)> { openA.Value, openB.Value });
         double roadTime = roadA == null ? -1 : c.WaySeconds(hero, new List<(float X, float Z)> { roadA.Value, roadB.Value });
         double openLen = openA == null ? 0 : Dist(openA.Value, openB.Value), roadLen = roadA == null ? 0 : Dist(roadA.Value, roadB.Value);
+        // (the land's roads bend: no straight line from a cell's middle need keep to one; then a stretch of a road's own line)
+        if (roadA == null)
+            foreach (var cell in c.Cells)
+            {
+                foreach (var line in land.RoadsOf(cell))
+                {
+                    var pts = new List<(float X, float Z)>();
+                    float along = 0;
+                    for (int i = 0; i < line.Length; i++)
+                    {
+                        if (i > 0) along += Dist((line[i - 1].x, line[i - 1].z), (line[i].x, line[i].z));
+                        if (along >= sp * .1f && along <= sp * .4f) pts.Add((line[i].x, line[i].z));
+                    }
+                    if (pts.Count < 3) continue;
+                    bool all = true;
+                    for (int i = 1; i < pts.Count && all; i++)
+                        for (int k = 0; k <= 10; k++)
+                        {
+                            float t = k / 10f;
+                            int x = (int)(pts[i - 1].X + (pts[i].X - pts[i - 1].X) * t), z = (int)(pts[i - 1].Z + (pts[i].Z - pts[i - 1].Z) * t);
+                            if (!land.Walkable(x, z) || Math.Abs(land.Cost(x, z) - MapPath.RoadShare) > 1e-4) { all = false; break; }
+                        }
+                    if (!all) continue;
+                    roadTime = c.WaySeconds(hero, pts);
+                    roadLen = 0;
+                    for (int i = 1; i < pts.Count; i++) roadLen += Dist(pts[i - 1], pts[i]);
+                    break;
+                }
+                if (roadTime > 0) break;
+            }
         check("a walk takes the hours the cells say: open ground as wide as a cell is a cell's eight hours; along a road, its share of them",
             Math.Abs(cellHours - 8 * MapPath.Pace(hero)) < .01 && openTime > 0 && Math.Abs(openTime / openLen - per) < per * .01 && roadTime > 0 && Math.Abs(roadTime / roadLen - per * MapPath.RoadShare) < per * .01,
             $"a cell's width {cellHours:0.00} h; open {openTime / Math.Max(1, openLen) / per:0.000} of open, road {roadTime / Math.Max(1, roadLen) / per:0.000} of open ({openLen:0} and {roadLen:0} voxels)");
