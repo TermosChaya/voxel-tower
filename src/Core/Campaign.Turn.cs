@@ -103,6 +103,9 @@ public sealed partial class Campaign
     {
         double seconds0 = seconds;
         Ready();
+        // the open valley's rare resources are the realm's (spent on its buildings there)
+        if (Live != null && InValley) Array.Copy(Live.Rare, Rare, Rare.Length);
+        _held = null;
         while (seconds > 1e-9)
         {
             double dt = Math.Min(Chunk, seconds);
@@ -183,9 +186,20 @@ public sealed partial class Campaign
     public bool Send(MapParty p, MapCell to)
     {
         var from = At(p.Q, p.R);
-        var way = MapPath.Find(this, from, to, p.Owner);
+        var way = Big ? MapWalk.Find(this, from, to, p.Owner) : MapPath.Find(this, from, to, p.Owner);
         if (way == null) return false;
-        p.Path = way; p.Progress = 0; p.Waits = false;
+        // on the big map a step half walked (and paid) is walked on to its end first
+        if (Big && p.Moving && p.StepCost > 0)
+        {
+            var on = p.Path[0];
+            var rest = on == to ? new List<MapCell>() : MapWalk.Find(this, on, to, p.Owner);
+            if (rest == null) return false;
+            rest.Insert(0, on);
+            way = rest;
+        }
+        else { p.Progress = 0; p.StepCost = 0; }
+        p.Path = way; p.Waits = false;
+        if (Big) p.Steps = MapWalk.StepsOf(this, p);
         p.GoalQ = to.Q; p.GoalR = to.R;
         return true;
     }
@@ -199,6 +213,17 @@ public sealed partial class Campaign
             if (p.Trail != null) { if (Land != null) WalkTrail(p, dt); continue; }
             if (!p.Moving) continue;
             var from = At(p.Q, p.R); var to = p.Path[0];
+            // on the big map a step is paid in moves as it is set out on; with too few left, the dawn is waited for
+            if (Big && p.Progress <= 0 && p.StepCost == 0)
+            {
+                int cost = MapWalk.Cost(from, to, MapPath.Side(from, to));
+                if (cost == int.MaxValue) { p.Path.Clear(); p.Steps.Clear(); continue; }
+                if (p.MovesMax == 0) { p.MovesMax = MapWalk.MaxMoves(p, Week); p.MovesLeft = p.MovesMax; }
+                if (cost > p.MovesLeft && p.MovesLeft < p.MovesMax) { p.Tired = true; continue; }
+                p.Tired = false;
+                p.MovesLeft = Math.Max(0, p.MovesLeft - cost);
+                p.StepCost = cost;
+            }
             p.Progress += dt;
             double need = MapPath.StepSeconds(p, from, to);
             if (p.Progress < need) continue;
@@ -207,6 +232,13 @@ public sealed partial class Campaign
             p.Q = to.Q; p.R = to.R;
             p.Path.RemoveAt(0);
             if (!p.Moving) p.Progress = 0;
+            if (Big)
+            {
+                p.StepCost = 0;
+                if (p.Progress > 0 && p.Moving) p.Progress = 0;
+                if (p.Owner == Owner.Ours) Reveal(to, SightOf(p));
+                p.Steps = MapWalk.StepsOf(this, p);
+            }
             // (on the land, at the middle of the cell it stepped into)
             if (Land != null) (p.AtX, p.AtZ) = Land.Center(to);
             if (p.Owner == Owner.Horde) HordeReach(p, to); else OursReach(p, to);
@@ -234,6 +266,7 @@ public sealed partial class Campaign
             Tell(NewsKind.Arrived, $"Отряд дошёл до {Names(cell).gen}. Там врагов: {foes}. Войдите в долину или посчитайте бой сразу.", cell, p);
             return;
         }
+        if (Big) { Visit(p, cell); if (!p.Moving && cell.Thing == null) Tell(NewsKind.Arrived, $"Герой пришёл {Names(cell).prep}.", cell, p); return; }
         if (!p.Moving) Tell(NewsKind.Arrived, $"Отряд пришёл {Names(cell).prep}.", cell, p);
     }
 
@@ -337,6 +370,7 @@ public sealed partial class Campaign
     internal void Fall(MapCell cell)
     {
         cell.Owner = Owner.Horde;
+        _held = null;
         cell.Sum.TownGold = 0;
         cell.Sum.Walls *= .5f;
         cell.Sum.Raised = 0;
@@ -346,7 +380,9 @@ public sealed partial class Campaign
     /// <summary>The horde holds a cell: some of the party stay as its garrison, the rest go home.</summary>
     void Occupy(MapParty p, MapCell cell, bool said = true)
     {
-        if (cell.Owner != Owner.Horde) cell.Owner = Owner.Horde;
+        if (cell.Owner != Owner.Horde) { cell.Owner = Owner.Horde; _held = null; }
+        // a mine of the big map flagged red
+        if (cell.Thing is { Kind: ThingKind.Mine or ThingKind.Dwelling } thing) { thing.Owner = Owner.Horde; HexChanged(cell); }
         var men = p.Party.Members;
         int stay = Math.Clamp(men.Count / 3, Math.Min(3, men.Count), 8);
         // those fit to hold it stay: not the engines, nor those who only come raiding
@@ -451,6 +487,8 @@ public sealed partial class Campaign
             cell.Sum.Keep.Clear();
             if (cell.Owner == Owner.Horde) { Retake(cell, lair, ours); PartyGlory(ours, cell); }
             else if (Untaken(cell)) TakeTrove(cell, ours);
+            // what the keepers kept is had now
+            if (Big) Visit(ours, cell);
         }
         if (ours.Party.Members.Count == 0) Parties.Remove(ours);
         return last;
@@ -460,6 +498,7 @@ public sealed partial class Campaign
     void Retake(MapCell cell, bool lair, MapParty ours)
     {
         cell.Owner = cell.Home ? Owner.Ours : Owner.None;
+        _held = null;
         cell.Sum.Raised = 0;
         if (cell.Home) { HomeFell = -1; Tell(NewsKind.Taken, "Первая долина снова наша.", cell, ours); }
         if (lair && Lair == null && !Won)
@@ -477,10 +516,20 @@ public sealed partial class Campaign
     // ------------------------------------------------------------ the valleys we are not in
 
     /// <summary>The gold of the valleys we hold and are not in: their towns' and their mines' a minute, a little each step.</summary>
+    /// <summary>The cells held by us, gathered once a call of the turn (the big map has twenty thousand to look through).</summary>
+    List<MapCell> _held;
+
+    /// <summary>Seconds of the map's clock to the next dawn.</summary>
+    public double SecondsToDawn => DayClock.Cycle - Clock.At;
+
+    /// <summary>«До рассвета»: the map's clock run on to the next dawn at once, the valleys we are not in living through it by their summaries.</summary>
+    public void SkipToDawn() => Advance(SecondsToDawn + 1e-6);
+
     void Earn(double dt)
     {
         double g = Blessed(Blessing.Plenty) ? PlentyGold / 60 * dt : 0;
-        foreach (var c in Cells)
+        _held ??= Cells.FindAll(c => c.Owner == Owner.Ours);
+        foreach (var c in _held)
         {
             if (c.Owner != Owner.Ours || InValley && c == Here) continue;
             g += (c.Sum.TownGold + ValleySummary.MineGold(c.Kind) * ValleySummary.MineShare) / 60 * dt;
@@ -508,6 +557,7 @@ public sealed partial class Campaign
             if (c.Sum.Raised < 1) continue;
             c.Sum.Raised = 1;
             c.Owner = Owner.Ours;
+            _held = null;
             for (int i = p.Party.Members.Count - 1; i >= 0; i--)
                 if (p.Party.Members[i].Kind == Kinds.Worker) { c.Sum.Keep.Add(p.Party.Members[i]); p.Party.Members.RemoveAt(i); }
             if (p.Party.Members.Count == 0) Parties.Remove(p);
@@ -541,7 +591,8 @@ public sealed partial class Campaign
             float share = PartyMend(p, !p.Moving && At(p.Q, p.R) is { Owner: Owner.Ours }) * (mend / Mend);
             if (share > 0) foreach (var m in p.Party.Members) Heal(m, share);
         }
-        HordeDawn();
+        WorldDawn();
+        HordeDawnCached();
     }
 
     static void Heal(Traveller m, float share) => m.Hp = Math.Min(m.MaxHp, m.Hp + m.MaxHp * share);
@@ -657,9 +708,13 @@ public sealed partial class Campaign
     }
 
     /// <summary>A party's way and what it is out to do, after the party itself.</summary>
+    /// <summary>A hex of the big map whose summary is kept: one with a thing (and so its keepers), held by someone, or gone into.</summary>
+    static bool Touched(MapCell c) => c.Thing != null || c.Owner != Owner.None || c.Visited || c.Sum.Keep.Count > 0 || c.Sum.Known || c.Sum.Raised > 0;
+
     void WriteWay(BinaryWriter w, MapParty p)
     {
         w.Write((byte)p.Owner); w.Write(p.Id);
+        w.Write(p.MovesLeft); w.Write(p.MovesMax); w.Write(p.StablesWeek); w.Write(p.Tired); w.Write(p.StepCost);
         w.Write(p.Path?.Count ?? 0);
         if (p.Path != null) foreach (var c in p.Path) { w.Write(c.Q); w.Write(c.R); }
         w.Write(p.Progress);
@@ -674,6 +729,7 @@ public sealed partial class Campaign
     void ReadWay(BinaryReader r, MapParty p)
     {
         p.Owner = (Owner)r.ReadByte(); p.Id = r.ReadInt32();
+        p.MovesLeft = r.ReadInt32(); p.MovesMax = r.ReadInt32(); p.StablesWeek = r.ReadInt32(); p.Tired = r.ReadBoolean(); p.StepCost = r.ReadInt32();
         int n = r.ReadInt32();
         p.Path = new List<MapCell>();
         for (int i = 0; i < n; i++) { var c = At(r.ReadInt32(), r.ReadInt32()); if (c != null) p.Path.Add(c); }
@@ -699,7 +755,13 @@ public sealed partial class Campaign
             w.Write(list.Count);
             foreach (var p in list) { w.Write(p.Q); w.Write(p.R); p.Party.Write(w); WriteWay(w, p); }
         }
-        foreach (var c in Cells) c.Sum.Write(w);
+        if (Big)
+        {
+            var touched = Cells.FindAll(Touched);
+            w.Write(touched.Count);
+            foreach (var c in touched) { w.Write(IndexOf(c)); c.Sum.Write(w); }
+        }
+        else foreach (var c in Cells) c.Sum.Write(w);
         Realm.Write(w);
     }
 
@@ -714,7 +776,8 @@ public sealed partial class Campaign
                 ReadWay(r, p);
                 list.Add(p);
             }
-        foreach (var c in Cells) c.Sum.Read(r);
+        if (Big) for (int n = r.ReadInt32(); n > 0; n--) Cells[r.ReadInt32()].Sum.Read(r);
+        else foreach (var c in Cells) c.Sum.Read(r);
         Realm.Read(r);
     }
 }

@@ -6233,6 +6233,10 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--campaign") CampaignB
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--map") MapBench.Run(Check);
 // the heroes walking the map's land: their time, their ways, the cells they cross, the enemy met (AtlasBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--atlas") AtlasBench.Run(Check);
+// the big map as in «Heroes»: its sizes, zones and passes, its things, the moves of a day, the horde on it, its save (WorldBench.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--world") WorldBench.Run(Check);
+if (args.Length > 2 && args[0] == "--world-debug") WorldDebug.Run(uint.Parse(args[1]), int.Parse(args[2]));
+if (args.Length > 3 && args[0] == "--world-dump") WorldDump.Run(uint.Parse(args[1]), int.Parse(args[2]), args[3]);
 // the commanders as heroes: experience, levels, skills, the fallen, the saves (Heroes.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--heroes") HeroesBench.Run(Check);
 // the map's content: the big map's lairs, the treasures and their keepers, scouts, a shrine's trial (TrovesBench.cs)

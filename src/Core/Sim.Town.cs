@@ -343,7 +343,8 @@ public sealed partial class Sim
         if (b.Level + 1 >= 3 && !Sandbox && Standing < k.Rank3) return $"сначала поселение должно стать «{StandingNames[k.Rank3]}»";
         if (!Sandbox && Stock.Gold < gold) return $"нужно {gold} золота";
         if (metal > 0 && !HasMetal(metal)) return $"нужно {metal:0.##} м³ металла";
-        return null;
+        // in a campaign some top storeys ask for the realm's rare resources too (Sim.Rare.cs)
+        return RareShort(k.Key, b.Level + 1);
     }
 
     /// <summary>A building raised a level: the masters paid, and a storey more put up on it (Sim.Storeys.cs). Why not, or null.</summary>
@@ -359,6 +360,7 @@ public sealed partial class Sim
         var (gold, metal) = b.K.UpCost(level);
         if (!Sandbox) Stock.Gold -= gold;
         TakeMetal(metal);
+        SpendRare(b.K.Key, level);
         b.Target = level;
         TownVersion++;
         Say($"{b.K.Name}: рабочие поднимают {TownKind.Storey(level)} этаж. Когда его обставят, здание станет лучше.", 1, b.CX, b.CZ);

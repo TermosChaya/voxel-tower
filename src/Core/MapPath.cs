@@ -56,6 +56,8 @@ public static class MapPath
     public static double StepSeconds(MapParty p, MapCell a, MapCell b)
     {
         int side = Side(a, b);
+        // on the big map by the moves the step costs (MapWalk.cs)
+        if (b.Zone >= 0) return MapWalk.Seconds(MapWalk.Cost(a, b, side));
         return (side < 0 ? Hours(b) : StepHours(a, b, side)) * Pace(p) * HourSeconds;
     }
 

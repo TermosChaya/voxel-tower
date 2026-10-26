@@ -303,6 +303,8 @@ public partial class Main
             case "atlas-home":
             case "atlas-ore":
                 return await SelfTestAtlasGo(stage, check, fails);
+            case "world":
+                return await SelfTestWorldGo(check);
         }
         return true;
     }

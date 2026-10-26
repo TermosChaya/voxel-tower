@@ -148,6 +148,7 @@ public partial class Main
     {
         if (Atlas == null || _campaignOver || Sim == null) return;
         var here = Atlas.Here;
+        RushTick();
         Atlas.Advance(dt);
         // one clock: the valley's is the map's while we are in it (a raid holding the night holds the map's too)
         Atlas.Clock = Sim.Clock.Now;
@@ -425,12 +426,15 @@ public partial class Main
         GetTree().ReloadCurrentScene();
     }
 
-    /// <summary>A new campaign in a slot (whatever was in it gone), begun on its first valley; its map of 3 rings (37 valleys) or 2 (19).</summary>
-    public static void NewCampaign(SceneTree tree, string slot, uint seed, int rings = 3)
+    /// <summary>
+    /// A new campaign in a slot (whatever was in it gone), begun on the map by its first valley: a big map of so many hexes a
+    /// side (S 36, M 72, L 108, XL 144), or, with <paramref name="side"/> 0, the small test map of 3 rings (37 valleys) or 2 (19).
+    /// </summary>
+    public static void NewCampaign(SceneTree tree, string slot, uint seed, int rings = 3, int side = 0)
     {
         string dir = Saves.CampaignDir(slot);
         if (Directory.Exists(dir)) Directory.Delete(dir, true);
-        Atlas = Campaign.New(seed, rings);
+        Atlas = side > 0 ? Campaign.NewWorld(seed, side) : Campaign.New(seed, rings);
         // the first hero by the first valley's citadel, the campaign opening on the map
         Atlas.AddHero();
         CampSlot = slot;

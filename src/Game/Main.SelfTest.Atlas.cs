@@ -142,7 +142,8 @@ public partial class Main
                 string folder = Saves.CampaignDir(CampSlot);
                 LeaveCampaign();
                 if (Directory.Exists(folder)) Directory.Delete(folder, true);
-                return true;
+                // the big map as a new campaign is played (Main.SelfTest.World.cs)
+                return SelfTestWorld(fails);
             }
         }
         return true;

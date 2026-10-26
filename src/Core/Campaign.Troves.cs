@@ -143,7 +143,7 @@ public sealed partial class Campaign
     public static string RewardText(MapCell c)
     {
         if (c.Trove == TroveKind.Shrine) return $"благословение: {BlessingText(c.Blessing)}";
-        var (g, m) = RewardOf(c.Trove, Distance(0, 0, c.Q, c.R));
+        var (g, m) = RewardOf(c.Trove, RingOf(c));
         return m > 0 ? $"{g:0} золота и {m:0.#} м³ металла" : $"{g:0} золота";
     }
 
@@ -161,7 +161,7 @@ public sealed partial class Campaign
         foreach (var c in Cells)
         {
             if (!Untaken(c) || c.Sum.Keep.Count > 0) continue;
-            foreach (var t in KeepersOf(c.Trove, Distance(0, 0, c.Q, c.R))) c.Sum.Keep.Add(Raider(t));
+            foreach (var t in KeepersOf(c.Trove, RingOf(c))) c.Sum.Keep.Add(Raider(t));
         }
     }
 
@@ -177,7 +177,7 @@ public sealed partial class Campaign
         if (!Untaken(c)) return null;
         c.TroveTaken = true;
         c.TrialOn = false;
-        int ring = Distance(0, 0, c.Q, c.R);
+        int ring = RingOf(c);
         string said;
         if (c.Trove == TroveKind.Shrine)
         {
@@ -321,6 +321,8 @@ public sealed partial class Campaign
     /// </summary>
     public bool Seen(MapCell c)
     {
+        // on the big map what was once seen stays seen, as in «Heroes» (MapThing.cs)
+        if (Big) return RevealAll || Explored(c);
         if (RevealAll || Scouted(c)) return true;
         foreach (var o in Cells)
         {

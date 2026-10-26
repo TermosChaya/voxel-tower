@@ -42,7 +42,12 @@ public partial class AtlasHud : Control
     public const float Side = 340;
     /// <summary>The cell chosen on the map (with no hero chosen, what the right side tells of).</summary>
     public MapCell Cell { get; private set; }
-    public MapParty Hero => _figs?.Chosen;
+    public MapParty Hero => _figs != null ? _figs.Chosen : _pick;
+    /// <summary>The hero chosen on the big map, while its own drawing of hexes is not yet there to keep him (no land figures).</summary>
+    MapParty _pick;
+    /// <summary>The way the hero chosen would walk on the big map, as planned and shown (MapWalk.Plan).</summary>
+    public List<HexStep> Planned { get; private set; }
+    (int col, int row) _plannedTo = (-1, -1);
     public bool IsOpen => _frame?.Visible == true;
     public bool CardShown => _card?.Visible == true;
     public MapParty CardParty => _arrived.Count > 0 ? _arrived[0] : null;
@@ -54,10 +59,14 @@ public partial class AtlasHud : Control
     {
         _m = m;
         _view = view;
-        _figs = new AtlasFigures();
-        view.Figures.AddChild(_figs);
-        _figs.Init(view);
-        view.Clicked += OnClicked;
+        // (the big map is drawn by its own view of hexes: no land, no figures of the land here)
+        if (view != null)
+        {
+            _figs = new AtlasFigures();
+            view.Figures.AddChild(_figs);
+            _figs.Init(view);
+            view.Clicked += OnClicked;
+        }
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Ignore;
         _frame = new Control { MouseFilter = MouseFilterEnum.Ignore, Visible = false };
@@ -97,6 +106,7 @@ public partial class AtlasHud : Control
             row.AddChild(b);
             _speeds.Add(b);
         }
+        row.AddChild(Small("До рассвета", "Время до следующего рассвета: на карте сразу, долины проживут его сами. Ход героев на рассвете снова полный.", () => _m.ToDawn()));
         row.AddChild(Small("В долину", "Вернуться в долину, где вы сейчас ({Board}).", () => _m.CloseAtlas()));
 
         // the right: our heroes, and the hero or the valley chosen
@@ -186,7 +196,7 @@ public partial class AtlasHud : Control
         {
             var first = C.Parties.Find(p => p.Owner == Holder.Ours && p.Party.Commander != null) ?? C.Parties.Find(p => p.Owner == Holder.Ours);
             Choose(first, focus: true);
-            if (first == null) { Cell = C.Here; var (x, z) = _view.Atlas.Center(C.Here); _view.Focus(x, z); }
+            if (first == null && _view != null) { Cell = C.Here; var (x, z) = _view.Atlas.Center(C.Here); _view.Focus(x, z); }
         }
         else Focus(Hero);
         Refresh();
@@ -206,8 +216,12 @@ public partial class AtlasHud : Control
     /// <summary>A hero of ours chosen (or none), the camera to him.</summary>
     public void Choose(MapParty p, bool focus = false)
     {
-        if (_figs.Chosen != p) _figs.Hide();
-        _figs.Chosen = p;
+        if (_figs != null)
+        {
+            if (_figs.Chosen != p) _figs.Hide();
+            _figs.Chosen = p;
+        }
+        else { if (_pick != p) Planned = null; _pick = p; }
         if (p != null) Cell = C.CellOf(p);
         if (p != null && focus) Focus(p);
         Refresh();
@@ -215,6 +229,7 @@ public partial class AtlasHud : Control
 
     void Focus(MapParty p)
     {
+        if (_figs == null || _view == null) return;
         var (x, z, _) = _figs.Spot(p);
         _view.Focus(x, z);
     }
@@ -270,12 +285,45 @@ public partial class AtlasHud : Control
         return true;
     }
 
+    /// <summary>
+    /// The big map: the way the hero chosen would walk to a hex, planned with its days (green today, the rest after: the
+    /// drawing of hexes shows <see cref="Planned"/>); false if there is none. Planned again on the same hex, he goes.
+    /// </summary>
+    public bool PlanTo(int col, int row)
+    {
+        if (Hero == null || !C.Big) return false;
+        if (Planned != null && _plannedTo == (col, row)) return GoTo(col, row);
+        var steps = MapWalk.Plan(C, Hero, col, row);
+        if (steps == null || steps.Count == 0) { _m.Hud.Float("туда не пройти", Ornament.Blood); Planned = null; return false; }
+        Planned = steps; _plannedTo = (col, row);
+        Cell = C.Cell(col, row) ?? Cell;
+        Refresh();
+        return true;
+    }
+
+    /// <summary>The big map: the hero chosen sent to a hex; false if he cannot go there.</summary>
+    public bool GoTo(int col, int row)
+    {
+        if (Hero == null || !C.Big || C.Cell(col, row) is not { } to) return false;
+        if (!C.Send(Hero, to)) { _m.Hud.Float("туда не пройти", Ornament.Blood); return false; }
+        Planned = null; _plannedTo = (-1, -1);
+        Sound.Ui("tick");
+        _arrived.Remove(Hero);
+        Refresh();
+        return true;
+    }
+
     /// <summary>The hero chosen stops where he is.</summary>
     void Halt()
     {
         if (Hero == null) return;
-        Hero.Trail = null; Hero.Path?.Clear(); Hero.Progress = 0;
-        _figs.Hide();
+        Hero.Trail = null;
+        // (on the big map a step paid for is walked to its end)
+        if (C.Big && Hero.StepCost > 0 && Hero.Path is { Count: > 1 }) Hero.Path.RemoveRange(1, Hero.Path.Count - 1);
+        else { Hero.Path?.Clear(); Hero.Progress = 0; }
+        Hero.Steps = MapWalk.StepsOf(C, Hero);
+        Planned = null;
+        _figs?.Hide();
         Refresh();
     }
 
@@ -332,9 +380,9 @@ public partial class AtlasHud : Control
     {
         if (!IsOpen) return false;
         if (Bindings.Is(k, Act.EnterCell)) { if (CardParty is { } p) _m.EnterHero(p); else EnterChosen(); return true; }
-        if (k.PhysicalKeycode == global::Godot.Key.Escape && (Hero != null || _figs.Shown != null))
+        if (k.PhysicalKeycode == global::Godot.Key.Escape && (Hero != null || _figs?.Shown != null || Planned != null))
         {
-            if (_figs.Shown != null) _figs.Hide(); else Choose(null);
+            if (_figs?.Shown != null) _figs.Hide(); else if (Planned != null) Planned = null; else Choose(null);
             return true;
         }
         return false;
@@ -348,7 +396,7 @@ public partial class AtlasHud : Control
         var vp = GetViewportRect().Size;
         _arrived.RemoveAll(p => !C.Parties.Contains(p));
         if (_warning != null && (!C.Parties.Contains(_warning) || !_warning.Moving && !_warning.Walking)) _warning = null;
-        bool card = (CardParty != null || _warning != null) && !_m.Hud.MenuOpen;
+        bool card = (CardParty != null || _warning != null || C.Chests.Count > 0 || DwellingDue != null) && !_m.Hud.MenuOpen;
         if (card != _card.Visible) { _card.Visible = card; Card(); }
         // under the map's bar in the middle of the land; in the valley, under its beam
         if (_card.Visible) _card.Position = IsOpen ? new Vector2(MathF.Round((vp.X - Side - _card.Size.X) / 2), 64) : new Vector2(MathF.Round((vp.X - _card.Size.X) / 2), Hud.TopBand + 10);
@@ -379,7 +427,9 @@ public partial class AtlasHud : Control
     {
         var t = C.Clock;
         _when.Text = $"День {t.Day} · {MapBoard.Hour(t.At)}{(t.At >= DayClock.DayLength ? " · ночь" : "")}";
-        _gold.Text = $"Золото {Fmt.Int(C.Gold)}";
+        _gold.Text = C.Big
+            ? $"Золото {Fmt.Int(C.StockOf(Res.Gold))} · ртуть {C.Rare[0]:0} · сера {C.Rare[1]:0} · кристаллы {C.Rare[2]:0} · самоцветы {C.Rare[3]:0}"
+            : $"Золото {Fmt.Int(C.Gold)}";
         for (int i = 0; i < _speeds.Count; i++)
         {
             bool on = i == 0 ? _m.Paused : !_m.Paused && _m.Speed == i;
@@ -418,6 +468,8 @@ public partial class AtlasHud : Control
         if (p.Walking || p.Moving)
         {
             var goal = C.At(p.GoalQ, p.GoalR) ?? C.CellOf(p);
+            // (on the big map by the days its moves give)
+            if (C.Big && p.Steps.Count > 0) return $"идёт: {Campaign.Names(goal).nom}, {(p.Steps[^1].Day == 0 ? "сегодня" : $"дней {p.Steps[^1].Day + 1}")}{(p.Tired ? ", ждёт рассвета" : "")}";
             return $"идёт: {Campaign.Names(goal).nom}, {AtlasFigures.Hours(C.WalkLeft(p))}";
         }
         return p.Waits ? $"у врага: {Campaign.Names(C.CellOf(p)).nom}" : $"стоит: {Campaign.Names(C.CellOf(p)).nom}";
@@ -449,6 +501,11 @@ public partial class AtlasHud : Control
             if (hero != null) _about.AddChild(Line($"Уровень {hero.Level}. Умения: {Heroes.Skills(hero)}.", Ornament.Parchment));
             _about.AddChild(Line($"Армия: {Army(h)}. Её видно, когда герой войдёт в долину.", Ornament.Aged));
             _about.AddChild(Line(Upper(Status(h)) + ".", Ornament.Parchment));
+            if (C.Big)
+            {
+                _about.AddChild(Line($"Ход: {h.MovesLeft} из {h.MovesMax}." + (h.Tired ? " Ждёт рассвета: на следующий шаг не хватает." : "")
+                    + (Planned is { Count: > 0 } pl ? $" Путь: {pl.Count} кл., дней {pl[^1].Day + 1}. Щёлкните ещё раз — идти." : ""), h.Tired ? Ornament.Aged : Ornament.Moss));
+            }
             var cell = C.CellOf(h);
             CellLines(cell);
             if (h.Walking || h.Moving) _about.AddChild(Big("Стоять", "Герой остановится там, где он сейчас.", Halt));
@@ -500,14 +557,70 @@ public partial class AtlasHud : Control
             _about.AddChild(Line(cell.Owner == Holder.Horde ? $"Гарнизон орды: {foes}." : $"Долину стерегут звери: {foes}.", Ornament.Blood));
         if (Campaign.Untaken(cell))
             _about.AddChild(Line($"{Troves.Name(cell.Trove)}. Награда: {Campaign.RewardText(cell)}.", Ornament.EmberGlow));
+        if (cell.Thing is { } t && C.Big) _about.AddChild(Line(ThingLine(cell, t), t.Owner == Holder.Ours ? Ornament.Moss : Ornament.EmberGlow));
         double gold = Campaign.AwayGold(cell);
         if (gold > 0 && cell != C.Here) _about.AddChild(Line($"Без вас платит {Fmt.Int(gold)} золота в минуту.", Ornament.Moss));
     }
 
+    /// <summary>A dwelling a hero of ours stands at with someone to hire, the player not yet done with it.</summary>
+    (MapParty p, MapCell cell)? DwellingDue
+    {
+        get
+        {
+            foreach (var d in C.Dwellings)
+                if (C.Parties.Contains(d.p) && d.p.Q == d.cell.Q && d.p.R == d.cell.R && d.cell.Thing is { Stock: > 0 } && !_doneWith.Contains(d.cell)) return d;
+            return null;
+        }
+    }
+    readonly HashSet<MapCell> _doneWith = new();
+
+    /// <summary>What a thing of the big map is and gives, in a line.</summary>
+    string ThingLine(MapCell cell, MapThing t) => t.Kind switch
+    {
+        ThingKind.Mine => $"{t.Name}: {MapThing.Amount_(t.Res, t.Amount)} в день. {(t.Owner == Holder.Ours ? "Наш." : t.Owner == Holder.Horde ? "Под флагом орды." : "Ничей: войдите героем, чтобы поднять флаг.")}",
+        ThingKind.Pile => t.Taken ? "Здесь ничего не осталось." : $"Куча: {MapThing.Amount_(t.Res, t.Amount)}. Подберёт герой.",
+        ThingKind.Chest => t.Taken ? "Сундук открыт." : $"Сундук: {Campaign.ChestOf(t).gold} золота или {Campaign.ChestOf(t).xp} опыта.",
+        ThingKind.Campfire => t.Taken ? "Костёр погас." : "Костёр: у него оставлены золото и припасы.",
+        ThingKind.Windmill => t.Week == C.Week ? "Мельница: на этой неделе уже взято." : $"Мельница: раз в неделю {MapThing.NameOf(t.Res)}.",
+        ThingKind.WaterWheel => t.Week == C.Week ? "Водяное колесо: на этой неделе уже взято." : "Водяное колесо: раз в неделю 75 золота.",
+        ThingKind.Learning => $"Камень знаний: +{Campaign.LearningXp} опыта каждому герою один раз.",
+        ThingKind.Stables => $"Конюшни: +{Campaign.StablesMoves} хода до конца недели.",
+        ThingKind.Observatory => $"Обсерватория: туман рассеется на {Campaign.ObservatoryReach} клеток вокруг.",
+        ThingKind.Signpost => t.Text ?? "Указатель.",
+        ThingKind.Shrine => t.Taken ? "Святыня: благословение уже получено." : $"Святыня: {Campaign.BlessingText(t.Blessing)}.",
+        ThingKind.Dwelling => $"Жилище: {t.Breed.Name.ToLowerInvariant()}, готовы наняться {t.Stock}, по {Campaign.HireCost(t.Breed)} зол.",
+        ThingKind.Monster => cell.Sum.Keep.Count > 0 ? $"Стража: {cell.Sum.Keep.Count}." : "Путь свободен.",
+        _ => t.Name,
+    };
+
     void Card()
     {
         foreach (var c in _cardButtons.GetChildren()) c.QueueFree();
-        if (CardParty is { } p)
+        _doneWith.RemoveWhere(c => !C.Dwellings.Exists(d => d.cell == c));
+        if (C.Chests.Count > 0)
+        {
+            var (_, cell) = C.Chests[0];
+            var (gold, xp) = Campaign.ChestOf(cell.Thing);
+            _cardTitle.Text = "Сундук";
+            _cardText.Text = $"В сундуке {gold} золота. Можно отдать его в казну или раздать знания: герой получит {xp} опыта.";
+            var g = Small($"{gold} золота", "Золото в казну.", () => { _m.Hud.Log(C.OpenChest(cell, gold: true), Hud.Kind.Ok); Refresh(); });
+            g.AddThemeFontOverride("font", Ornament.SerifBold);
+            _cardButtons.AddChild(g);
+            _cardButtons.AddChild(Small($"{xp} опыта", "Опыт герою, открывшему сундук.", () => { _m.Hud.Log(C.OpenChest(cell, gold: false), Hud.Kind.Ok); Refresh(); }));
+        }
+        else if (DwellingDue is { } dw)
+        {
+            var t = dw.cell.Thing;
+            int cost = Campaign.HireCost(t.Breed);
+            _cardTitle.Text = $"Жилище: {t.Breed.Name.ToLowerInvariant()}";
+            _cardText.Text = $"Готовы наняться: {t.Stock}, по {cost} золота. Нанятые пойдут с героем.";
+            var all = Small($"Нанять всех ({t.Stock * cost} зол.)", "Нанять всех, на сколько хватит золота.", () => { C.Hire(dw.cell, t.Stock); _m.TellMap(); Refresh(); });
+            all.AddThemeFontOverride("font", Ornament.SerifBold);
+            _cardButtons.AddChild(all);
+            _cardButtons.AddChild(Small("Одного", $"Нанять одного за {cost} золота.", () => { C.Hire(dw.cell, 1); _m.TellMap(); Refresh(); }));
+            _cardButtons.AddChild(Small("Позже", "Вернуться к жилищу можно в любой день. Новые готовы наняться каждую неделю.", () => { _doneWith.Add(dw.cell); Refresh(); }));
+        }
+        else if (CardParty is { } p)
         {
             var cell = C.CellOf(p);
             int foes = C.Foes(cell);

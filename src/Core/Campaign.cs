@@ -150,7 +150,7 @@ public sealed partial class MapParty
 /// </summary>
 public sealed partial class Campaign
 {
-    public const int Version = 7;
+    public const int Version = 8;
     public const string FileName = "campaign.dat";
     static readonly byte[] Magic = { (byte)'V', (byte)'T', (byte)'C', (byte)'M' };
 
@@ -171,7 +171,24 @@ public sealed partial class Campaign
     /// <summary>How many days the realm has to take another valley once the first one fell.</summary>
     public const int DaysToRetake = 3;
 
-    public MapCell At(int q, int r) => Cells.Find(c => c.Q == q && c.R == r);
+    /// <summary>A cell by its axial place: on the big map from its grid, on the small one from an index of the rings.</summary>
+    public MapCell At(int q, int r)
+    {
+        if (_grid != null) { var (col, row) = Offset(q, r); return Cell(col, row); }
+        if (_ringIndex == null || _ringCount != Cells.Count)
+        {
+            _ringIndex = new Dictionary<long, MapCell>();
+            foreach (var c in Cells) _ringIndex[(long)c.Q << 32 | (uint)c.R] = c;
+            _ringCount = Cells.Count;
+        }
+        return _ringIndex.TryGetValue((long)q << 32 | (uint)r, out var cell) ? cell : null;
+    }
+
+    Dictionary<long, MapCell> _ringIndex;
+    int _ringCount;
+
+    /// <summary>The big map's grid of cells, made by the maker (Campaign.World.cs).</summary>
+    internal void UseGrid(MapCell[] grid) => _grid = grid;
     public MapCell Here => At(HereQ, HereR);
     public MapCell Home => Cells.Find(c => c.Home);
     public MapCell Neighbour(MapCell c, int side) => At(c.Q + Step[side].dq, c.R + Step[side].dr);
@@ -419,6 +436,8 @@ public sealed partial class Campaign
         return best;
     }
 
+    internal static uint CellSeedOf(uint seed, int q, int r) => CellSeed(seed, q, r);
+
     static uint CellSeed(uint seed, int q, int r) => (uint)(seed * 73856093u ^ (uint)(q + 4096) * 19349663u ^ (uint)(r + 4096) * 83492791u) | 1;
 
     /// <summary>The seed of the side between two cells: the same read from either.</summary>
@@ -485,6 +504,7 @@ public sealed partial class Campaign
         cell ??= Here;
         sim.SetClock(Clock);
         sim.Stock.Gold = Gold;
+        Array.Copy(Rare, sim.Rare, Rare.Length);
         sim.CellKey = KeyOf(cell);
         Live = sim; InValley = true;
         _hallLook = 0;
@@ -500,6 +520,7 @@ public sealed partial class Campaign
     {
         Clock = sim.Clock.Now;
         Gold = sim.Stock.Gold;
+        Array.Copy(sim.Rare, Rare, Rare.Length);
         foreach (var p in sim.TakeDeparted())
         {
             foreach (var m in p.Members) if (m.Billet < 0) m.Billet = KeyOf(cell);
@@ -535,8 +556,10 @@ public sealed partial class Campaign
             w.Write(Magic); w.Write(Version); w.Write(Sim.SaveVersion);
             w.Write(Seed); w.Write(Clock.Day); w.Write(Clock.At); w.Write(Gold); w.Write(HereQ); w.Write(HereR); w.Write(HomeFell);
             w.Write(Rings); w.Write(Blessings.Count); foreach (var b in Blessings) w.Write((byte)b);
-            w.Write(Cells.Count);
-            foreach (var c in Cells)
+            // the big map is made again from its seed, and only what changed of it is written (WriteWorld)
+            w.Write(Width); w.Write(Height);
+            w.Write(Big ? 0 : Cells.Count);
+            foreach (var c in Big ? new List<MapCell>() : Cells)
             {
                 w.Write(c.Q); w.Write(c.R); w.Write(c.Seed); w.Write((byte)c.Kind); w.Write((byte)c.Holding); w.Write((byte)c.Owner);
                 w.Write((byte)c.EntrySide); w.Write(c.Home); w.Write(c.Visited);
@@ -547,6 +570,7 @@ public sealed partial class Campaign
             w.Write(Parties.Count);
             foreach (var p in Parties) { w.Write(p.Q); w.Write(p.R); p.Party.Write(w); WriteWay(w, p); }
             WriteTurn(w);
+            WriteWorld(w);
         }
         System.IO.File.Move(tmp, path, overwrite: true);
     }
@@ -562,11 +586,16 @@ public sealed partial class Campaign
             throw new InvalidDataException("not a campaign");
         int version = r.ReadInt32(), saves = r.ReadInt32();
         if (version != Version || saves != Sim.SaveVersion) throw new InvalidDataException($"a campaign of version {version}/{saves}, not {Version}/{Sim.SaveVersion}");
-        var c = new Campaign { Seed = r.ReadUInt32() };
-        c.Clock = new ClockTime(r.ReadInt32(), r.ReadDouble());
-        c.Gold = r.ReadDouble(); c.HereQ = r.ReadInt32(); c.HereR = r.ReadInt32(); c.HomeFell = r.ReadInt32();
-        c.Rings = r.ReadInt32();
-        for (int n = r.ReadInt32(); n > 0; n--) c.Blessings.Add((Blessing)r.ReadByte());
+        uint seed = r.ReadUInt32();
+        var clock = new ClockTime(r.ReadInt32(), r.ReadDouble());
+        double gold = r.ReadDouble(); int hq = r.ReadInt32(), hr = r.ReadInt32(), fell = r.ReadInt32(), rings = r.ReadInt32();
+        var blessings = new List<Blessing>();
+        for (int n = r.ReadInt32(); n > 0; n--) blessings.Add((Blessing)r.ReadByte());
+        int width = r.ReadInt32(), height = r.ReadInt32();
+        // the big map made again from its seed, the small one read cell by cell
+        var c = width > 0 ? NewWorld(seed, width) : new Campaign { Seed = seed };
+        c.Clock = clock; c.Gold = gold; c.HereQ = hq; c.HereR = hr; c.HomeFell = fell; c.Rings = rings;
+        c.Blessings.AddRange(blessings);
         for (int n = r.ReadInt32(); n > 0; n--)
         {
             var cell = new MapCell
@@ -586,6 +615,7 @@ public sealed partial class Campaign
             c.Parties.Add(p);
         }
         c.ReadTurn(r);
+        c.ReadWorld(r);
         return c;
     }
 }

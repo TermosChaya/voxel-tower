@@ -98,6 +98,8 @@ public sealed partial class Campaign
             // its palisade
             lair.Sum.Walls = .5f;
         }
+        // (the big map's keepers were laid with it: its treasures', its mines', its passes')
+        if (Big) { if (Realm.Lords.Count == 0) Realm.Lords.Add(NewLord(1)); return; }
         KeepTroves();
         foreach (var c in Cells)
         {
@@ -151,6 +153,7 @@ public sealed partial class Campaign
     /// </summary>
     void Decide(MapCell lair)
     {
+        if (Big) { DecideWide(lair); return; }
         // ours at the door: all home
         bool threat = false;
         foreach (var p in Parties) if (p.Owner == Owner.Ours && Distance(p.Q, p.R, lair.Q, lair.R) <= 1) threat = true;
@@ -296,7 +299,12 @@ public sealed partial class Campaign
         Parties.Add(p);
         Realm.Sent++;
         Send(p, t.Cell);
-        if (p.Aim == PartyAim.Strike)
+        if (p.Aim == PartyAim.Strike && Big)
+        {
+            int days = p.Steps.Count > 0 ? p.Steps[^1].Day : 0;
+            Tell(NewsKind.RaidComing, $"Войско орды идёт на {Names(t.Cell).acc}: {Raiders(p.Party.Members.Count)}{Led(p)}. Будет через {(days == 0 ? "день" : $"{days + 1} дн.")}", t.Cell, p);
+        }
+        else if (p.Aim == PartyAim.Strike)
         {
             double minutes = MapPath.WayHours(lair, p.Path) * MapPath.Pace(p) * MapPath.HourSeconds / 60;
             Tell(NewsKind.RaidComing, $"Войско орды идёт на {Names(t.Cell).acc}: {Raiders(p.Party.Members.Count)}{Led(p)}. Будет через {Math.Max(1, (int)Math.Round(minutes))} мин.", t.Cell, p);

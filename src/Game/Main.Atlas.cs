@@ -31,6 +31,13 @@ public partial class Main
     /// <summary>The land made (or kept) for the campaign, the parties put on it, its view under the valley.</summary>
     void AtlasStart()
     {
+        // the big map is drawn by its own view of hexes (its source CampaignHexes); the land of the small maps is not made for it
+        if (Atlas.Big)
+        {
+            _land = null;
+            Hud.InitAtlas(this, null);
+            return;
+        }
         if (_land?.Campaign != Atlas) _land = Land.Build(Atlas);
         Atlas.Attach(_land);
         AtlasLand = new AtlasView();
@@ -46,10 +53,10 @@ public partial class Main
     /// <summary>The map over the valley: the valley's camera and frame put by, the map's land and its own frame up.</summary>
     public void OpenAtlas()
     {
-        if (Atlas == null || AtlasLand == null || AtlasOpen) return;
+        if (Atlas == null || AtlasLand == null && !Atlas.Big || AtlasOpen) return;
         if (FP.On) FP.Exit();
         Tools.SetTool(Tool.None);
-        AtlasLand.Open(Atlas);
+        AtlasLand?.Open(Atlas);
         AtlasOpen = true;
         Rig.Held = true;
         Hud.ShowAtlas(true);
@@ -60,7 +67,7 @@ public partial class Main
     public void CloseAtlas()
     {
         if (!AtlasOpen) return;
-        AtlasLand.Close();
+        AtlasLand?.Close();
         AtlasOpen = false;
         Rig.Held = FP.On;
         Rig.Cam.Current = true;
@@ -162,6 +169,43 @@ public partial class Main
         if (_land == null || cell == null) return;
         _land.Refresh(cell);
         AtlasWalk.Forget();
+    }
+
+    /// <summary>The valley's day sped up, in the valley, till its dawn («До рассвета»): so many times as fast.</summary>
+    public const int RushSpeed = 8;
+    int _rushFrom = -1, _rushSpeed;
+
+    /// <summary>
+    /// «До рассвета»: the clock on to the next dawn. On the map at once, the valley we are in living through it by its
+    /// summary as the others do (left and gone into again); in the valley, its day run eight times as fast till the dawn.
+    /// </summary>
+    public void ToDawn()
+    {
+        if (Atlas == null || Sim == null) return;
+        if (AtlasOpen || !Atlas.InValley)
+        {
+            var here = Atlas.Here;
+            Atlas.Leave(Sim, here);
+            Atlas.InValley = false; Atlas.Live = null;
+            Atlas.SkipToDawn();
+            Atlas.Enter(Sim, here);
+            Paused = false;
+            Tell();
+            Hud.MapPane?.Refresh();
+            return;
+        }
+        if (_rushFrom >= 0) return;
+        _rushFrom = Sim.Clock.Now.Day;
+        _rushSpeed = Speed;
+        Speed = RushSpeed; Paused = false;
+        Hud.Log("До рассвета: время идёт в 8 раз быстрее.", Hud.Kind.Ok, toast: false);
+    }
+
+    /// <summary>The rush to the dawn over once the day came (or the map opened).</summary>
+    void RushTick()
+    {
+        if (_rushFrom < 0) return;
+        if (Sim.Clock.Now.Day > _rushFrom || AtlasOpen || Sim.Alarm) { Speed = Math.Clamp(_rushSpeed, 1, 3); _rushFrom = -1; }
     }
 
     /// <summary>The map's news told now (after a fight decided on the map's card).</summary>

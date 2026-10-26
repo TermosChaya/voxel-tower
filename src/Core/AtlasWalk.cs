@@ -271,6 +271,8 @@ public sealed partial class Campaign
         foreach (var t in HeroArmy) p.Party.Members.Add(new Traveller { Kind = t, Look = look++ % Bodies.Looks(t), Hp = t.Hp, MaxHp = t.Hp, Billet = key });
         Parties.Add(p);
         if (Land != null) PlaceIn(p, home);
+        // on the big map: a day's moves, and the fog lifted round him
+        if (Big) { p.MovesMax = p.MovesLeft = MapWalk.MaxMoves(p, Week); Reveal(home, SightOf(p) + 2); }
         return p;
     }
 

@@ -17,10 +17,10 @@ public sealed partial class Campaign
     public MapCell CellOf(MapParty p) => At(p.Q, p.R);
 
     /// <summary>A cell as those of ours keep the valley whose places they hold (<see cref="Unit.Billet"/>, <see cref="Traveller.Billet"/>).</summary>
-    public static int KeyOf(MapCell c) => (c.Q + 64) * 128 + (c.R + 64);
+    public static int KeyOf(MapCell c) => (c.Q + 512) * 1024 + (c.R + 512);
 
     /// <summary>The cell of a key, or null.</summary>
-    public MapCell CellOfKey(int key) => key < 0 ? null : At(key / 128 - 64, key % 128 - 64);
+    public MapCell CellOfKey(int key) => key < 0 ? null : At(key / 1024 - 512, key % 1024 - 512);
 
     /// <summary>
     /// What the rest of the realm keeps for the valley open now (<paramref name="cell"/>'s): the places held by its own who

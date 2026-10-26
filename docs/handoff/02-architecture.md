@@ -787,6 +787,24 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   от клетки, откуда пришёл), `StepShare` (доля шага 0…1, для доски), `WalkLeft` (секунды пути), `OutpostStands(клетка)`
   (застава в долине встала: клетка наша, `Sum.Raised` = 1, весть), `AwayGold` (доход без нас), `Coming` (войска
   орды, идущие ударить по нашей долине, ближние первыми). У `MapCell` ещё `Outpost` — застава размечена в долине.
+- Большая карта, как в «Героях» (13-world-map.md, «Большая карта»; договор с её рисованием — `HexLook.cs`):
+  - `Campaign.World.cs` — `Width`, `Height`, `Big`, `Sides` (36, 72, 108, 144), `Zones` (`MapZone`: вид `ZoneKind`,
+    ярус, земля, середина, связи), сетка `Cell(col, row)`, `Axial`/`Offset` (нечётные ряды сдвинуты), `IndexOf`,
+    `NewWorld(зерно, сторона)`, `KindOfHex`, `RingOf` (ярус + 1 на большой, кольцо на малой), рёбра долины клетки из её
+    дорог и рек (`EdgesOfHex`); у `MapCell` — `Ground`, `Relief`, `Height`, `Roads`, `Rivers` (биты сторон), `Zone`,
+    `Tier`, `Thing`, `Pass`, `Col`/`Row`, `Passable`. Делает её `WorldMaker`: зоны (Пуассон, шум границ, связность),
+    роли (наша у угла, державы орды), стены и перевалы со стражей (`MakePass`, `Seal`, `Inward`), земля, озёра,
+    прорубка к отрезанным перевалам (`Carve`), реки, дороги, вещи.
+  - `MapThing.cs` — `ThingKind`, `Res` (наши + ртуть, сера, кристаллы, самоцветы), `MapThing` (владелец, взято, неделя,
+    текст, жилище: вид и запас, святыня, кто учился у камня); `Campaign.Rare`, `Give`, `StockOf`, `Visit` (правила
+    вещей), `Chests`/`OpenChest`, `Dwellings`/`Hire`, `WorldDawn` (рудники платят, ход полный, недельный прирост),
+    `Mines()`, туман (`Explored`, `Reveal`, `SightOf`, `HexChangedAt`), запись изменённого (`WriteWorld`/`ReadWorld`).
+  - `MapWalk.cs` — `HexStep` (клетка и день), у `MapParty` — `MovesLeft`, `MovesMax`, `StablesWeek`, `Steps`, `Tired`,
+    `StepCost`, `Col`/`Row`; цена клетки (`Ground`, `Cost`), дневной запас (`MaxMoves`), путь (`Find`, A* на общих
+    буферах), план с днями (`Plan`, `Days`, `StepsOf`), один поиск на все цели (`Spread`/`SpreadWay`).
+  - `MapAI.World.cs` — орда на большой карте (`DecideWide`, `WorthWide`), `CampaignHexes.cs` — `IHexSource` над
+    кампанией (значок вещи, флаг, `Variant`: бит 0 — взято/потрачено, бит 1 — под стражей), `Sim.Rare.cs` — редкие
+    ресурсы в долине и их цена у верхних этажей.
 - `Campaign.Troves.cs` — содержимое карты (13-world-map.md, этап 2): `Rings` (2 малая, 3 большая), `Blessings`;
   у `MapCell` `Trove`, `TroveTaken`, `Blessing`, ход испытания (`TrialOn`, `TrialHeld`, `TrialAway`, `TrialWave`);
   `LayTroves` (при `New`: треть ничьих клеток дальше 1-го кольца, вид по долине), `KeepersOf(вид, кольцо)`,
