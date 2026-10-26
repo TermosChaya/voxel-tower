@@ -163,6 +163,7 @@ public partial class Hints : Control
             case Tool.Building:
                 o.Add((Lmb, "поставить здание"));
                 o.Add((L(Act.Rotate), "повернуть"));
+                o.Add((L(Act.Form), "другой вид"));
                 o.Add((Rmb, "убрать"));
                 return;
             case Tool.Yard when t.Opt.YardPick < BuildTools.WayCount:

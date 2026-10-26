@@ -95,7 +95,7 @@ public partial class BuildTools : Node3D
         (Tool.Unmark, _) => "Рамка снимает всю разметку и делянки внутри. Щелчок снимает разметку рядом и делянку под курсором.",
         (Tool.Capture, _) => "Обведите постройку рамкой, чтобы сохранить чертёж.",
         (Tool.Paste, _) => "Щелчок ставит копию. R поворачивает, Esc отменяет.",
-        (Tool.Building, _) => "Щелчок ставит здание: рабочие построят стены, крышу и дверь и обставят его. {Rotate} поворачивает, Esc отменяет.",
+        (Tool.Building, _) => "Щелчок ставит здание: рабочие построят стены, крышу и дверь и обставят его. {Rotate} поворачивает, {Form} меняет вид здания, Esc отменяет.",
         (Tool.Wand, true) => "Наведите на постройку: подсветится всё прилегающее из того же материала. Щелчок: рабочие это снесут.",
         (Tool.Wand, false) => "Наведите на постройку: подсветится всё прилегающее из того же материала. Щелчок: переложат из выбранного материала.",
         (Tool.Yard, _) => "Внизу выберите дорожку или вещь ({Form} — следующая). Дорожку протяните по земле, вещь поставьте щелчком, {Rotate} поворачивает.",
@@ -348,6 +348,8 @@ public partial class BuildTools : Node3D
         else if (Tool == Tool.Yard) { StepYard(1); return; }
         // the templates: on to the next of the library
         else if (Tool == Tool.Template) { StepTemplate(1); return; }
+        // a town building: on to the next of its looks
+        else if (Tool == Tool.Building) { StepLook(); Changed(); return; }
         else Opt.Hollow = !Opt.Hollow;
         Changed();
     }

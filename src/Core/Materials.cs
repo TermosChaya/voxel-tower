@@ -183,6 +183,11 @@ public static class Mat
     /// roof do and are as strong; thatch and shingles burn (thatch at a spark), tile and slate do not.
     /// </summary>
     public const byte Tile = 156, Shingle = 157, Thatch = 158, Slate = 174;
+    /// <summary>
+    /// The town's buildings' looks (Looks.cs): daub, clay and straw packed between the timbers of a framed wall and
+    /// limewashed pale; and the bronze of a belfry's bell.
+    /// </summary>
+    public const byte Daub = 188, Bell = 189;
     public const int Count = 253;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
@@ -382,6 +387,7 @@ public static class Mat
         // the town's roofs (Sim.Town.cs): fired clay, split oak, straw, slate
         D(Tile, "Черепица", 0x8e3f2a, .18f, MatGroup.Stone, Player); D(Shingle, "Дранка", 0x6e6152, .2f, MatGroup.Wood, Player);
         D(Thatch, "Солома", 0x9a8045, .24f, MatGroup.Wood, Player); D(Slate, "Сланец", 0x3f4656, .14f, MatGroup.Stone, Player);
+        D(Daub, "Обмазка", 0xb3a68a, .07f, MatGroup.Earth, Player); D(Bell, "Колокол", 0x8a6a34, .08f, MatGroup.Metal, Player);
         Emission[Brew] = .7f;
         // what grows by itself: flowers of three more colours, ferns, reeds, mushrooms and lilies drawn in blades and
         // petals; juniper, berries and a nest are leaves to everyone, an anthill is earth, a hollow is the tree's own wood

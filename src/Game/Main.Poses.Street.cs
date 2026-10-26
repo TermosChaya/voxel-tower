@@ -147,7 +147,7 @@ public partial class Main
             Advance(2);
             for (int t = 0; t < 6; t++) { sim.Waves.Countdown = 8; Advance(1); }
         }
-        if (look == 7) { Rig.SetAt(w.WX(kx), w.WY(ground[0]), w.WZ(kz), .5f, 1.2f, .3f); Hud.Refresh(); return; }
+        if (look == 7) { Rig.SetAt(w.WX(kx), w.WY(ground[0]), w.WZ(kz), .5f, 1.2f, .3f); Hud.Refresh(); if (_bare) Hud.Visible = false; return; }
         int group = look >= 8 ? 0 : look % 6, row = group / 2;
         var three = new List<Building>();
         foreach (var b in put) if (Array.IndexOf(rows[row], b.Kind) is int i && i >= 0 && i / 3 == group % 2) three.Add(b);
@@ -159,5 +159,6 @@ public partial class Main
         var (sx, sz) = sides[row];
         Rig.SetAt(w.WX(mx - sx * 30), w.WY(ground[row] + 10), w.WZ(mz - sz * 30), MathF.Atan2(-sx, -sz) + .4f, look == 9 ? .45f : .55f, look == 8 ? .8f : 1.05f);
         Hud.Refresh();
+        if (_bare) Hud.Visible = false;
     }
 }

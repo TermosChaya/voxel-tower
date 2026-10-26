@@ -19,6 +19,8 @@ public struct Stroke
     public bool Dig;
     /// <summary>A house's roof: what its slopes are covered with (0, logs; a town building's tiles, shingles, thatch or slate).</summary>
     public byte Roof;
+    /// <summary>A town building's look (Looks.cs): how its walls are laid and its roof formed; null for a plain house.</summary>
+    public Look Look;
 }
 
 /// <summary>
@@ -361,7 +363,7 @@ public static class Shapes
                 {
                     int last = Underfoot(w, x, z);
                     for (int y = Math.Max(1, last); y < top && y < w.SY; y++)
-                        if (Brushes.Free(w.Get(x, y, z))) { L.Add(x, y, z, Lay(wall.Mat, x, y, z)); last = y + 1; }
+                        if (Brushes.Free(w.Get(x, y, z))) { L.Add(x, y, z, Looks.Wall(st.Look, wall.Mat, x, y, z, x0, z0, x1, z1, ground + 1, false)); last = y + 1; }
                     Brushes.ClearVegAbove(w, L, x, z, last);
                     continue;
                 }
@@ -386,7 +388,8 @@ public static class Shapes
             why = doorSide >= 0 ? $"дверь {SideWords[doorSide]} упрётся в стену, дом или обрыв: {{Rotate}} — другая сторона" : "двери некуда открыться: со всех сторон стена, дом, вода или обрыв";
             return null;
         }
-        Roof(w, site, L, arched, x0, z0, x1, z1, top, st.Mat, shared, st.Roof);
+        if (st.Look != null) Looks.Roof(w, site, L, arched, x0, z0, x1, z1, top, st.Mat, shared, st.Roof, st.Look);
+        else Roof(w, site, L, arched, x0, z0, x1, z1, top, st.Mat, shared, st.Roof);
         // the lintel: three courses of logs over where the doorway will be, a metre beyond it either side (the gateway
         // snaps to the cells, half a metre either way), standing as an arch
         var lintel = new HashSet<long>();
@@ -430,7 +433,7 @@ public static class Shapes
         int from = l - (l0 + HouseWall + 6);
         if (from < 0 || l > l1 - HouseWall - 6 || from % 16 > 2) return m;
         // the dark of the room between two shutters, a board over them
-        bool glass = from % 16 == 1 && above < 15, stone = Mat.IsMasonry(m) || m == Mat.Rammed;
+        bool glass = from % 16 == 1 && above < 15, stone = Mat.IsMasonry(m) || m is Mat.Rammed or Mat.Daub;
         if (!stone && m != Mat.Wood) return m;
         return glass ? (stone ? Mat.Window : Mat.WindowLog) : stone ? Mat.Shutter : Mat.ShutterLog;
     }
@@ -511,7 +514,7 @@ public static class Shapes
         var L = new VoxelList();
         for (int z = z0 - Eaves; z <= z1 + Eaves; z++)
             for (int x = x0 - Eaves; x <= x1 + Eaves; x++)
-                for (int y = top; y < Math.Min(w.SY - 1, top + HouseHeight + 4); y++)
+                for (int y = top; y < Math.Min(w.SY - 1, top + Looks.HighestRoof); y++)
                 {
                     // the eaves outside the walls are left, a ledge between the storeys
                     if (y == top && (x < x0 || x > x1 || z < z0 || z > z1)) continue;
@@ -533,7 +536,7 @@ public static class Shapes
         => Storey(w, site, x0, z0, x1, z1, lowerTop, wallMat, 0, 0, out arched, out ladder, out newTop);
 
     /// <summary>A storey as above, its ladder against a long wall with no door in it (<paramref name="doors"/>, a bit for each side), and no eaves over the <paramref name="shared"/> sides.</summary>
-    public static VoxelList Storey(VoxelWorld w, Site site, int x0, int z0, int x1, int z1, int lowerTop, byte wallMat, int doors, int shared, out VoxelList arched, out VoxelList ladder, out int newTop, byte covering = 0)
+    public static VoxelList Storey(VoxelWorld w, Site site, int x0, int z0, int x1, int z1, int lowerTop, byte wallMat, int doors, int shared, out VoxelList arched, out VoxelList ladder, out int newTop, byte covering = 0, Look look = null)
     {
         const int t = HouseWall;
         var L = new VoxelList();
@@ -559,14 +562,15 @@ public static class Shapes
                 bool room = x - x0 >= t && x1 - x >= t && z - z0 >= t && z1 - z >= t;
                 if (!room)
                 {
-                    for (int y = lowerTop; y < newTop && y < w.SY - 1; y++) if (Brushes.Free(w.Get(x, y, z))) L.Add(x, y, z, Lay(wallMat, x, y, z));
+                    for (int y = lowerTop; y < newTop && y < w.SY - 1; y++) if (Brushes.Free(w.Get(x, y, z))) L.Add(x, y, z, Looks.Wall(look, wallMat, x, y, z, x0, z0, x1, z1, lowerTop, true));
                     continue;
                 }
                 if (hatch.Contains((z >> 3) * 4096 + (x >> 3))) continue;
                 for (int y = lowerTop - 2; y < lowerTop; y++)
                     if (Brushes.Free(w.Get(x, y, z))) { L.Add(x, y, z, Mat.Wood); arched.Add(x, y, z, Mat.Wood); }
             }
-        Roof(w, site, L, arched, x0, z0, x1, z1, newTop, wallMat, shared, covering);
+        if (look != null) Looks.Roof(w, site, L, arched, x0, z0, x1, z1, newTop, wallMat, shared, covering, look);
+        else Roof(w, site, L, arched, x0, z0, x1, z1, newTop, wallMat, shared, covering);
         return L;
     }
 

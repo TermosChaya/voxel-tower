@@ -251,11 +251,14 @@ static class TownBench
         for (int x = 0; x < 6; x++) for (int z = 0; z < 6; z++) { if (w.Get(px + x, pg + 4, pz + z) == Mat.Thatch && !sim.IsBurning(px + x, pg + 4, pz + z)) thatchLeft++; if (w.Get(px + 9 + x, pg + 4, pz + z) == Mat.Tile) tileLeft++; }
         check("a thatched roof catches at a spark and burns through, a tiled one takes no fire",
             sparkThatch && !sparkTile && thatchLeft < 30 && tileLeft == 36, $"spark on thatch {sparkThatch}, on tiles {sparkTile}; 18 s on, unburnt thatch {thatchLeft} of 36, tiles {tileLeft} of 36");
-        check("each town building's roof is covered as its trade has it: tiles on the hall and the market, slate on the barracks, a house's of logs; thatch and shingles burn, tiles and slate do not",
-            Covered(hall, Mat.Tile) > 400 && Covered(mk, Mat.Tile) > 400 && Covered(b, Mat.Slate) > 400 && Covered(b, Mat.Tile) == 0 && houseRoof == 0 && house != null
+        // (a look may cover it otherwise: Sim.Looks.cs)
+        byte Cover(Building x) => x?.Look is { Covering: > 0 } l ? l.Covering : x?.K.Roof ?? 0;
+        check("each town building's roof is covered as its trade (or its look) has it: tiles on the hall and the market, slate on the barracks, a house's of logs; thatch and shingles burn, tiles and slate do not",
+            Covered(hall, Cover(hall)) > 400 && Covered(mk, Cover(mk)) > 400 && Covered(b, Cover(b)) > 400 && Covered(b, Mat.Thatch) == 0 && houseRoof == 0 && house != null
+            && Sim.TownKindOf("hall").Roof == Mat.Tile && Sim.TownKindOf("market").Roof == Mat.Tile && Sim.TownKindOf("barracks").Roof == Mat.Slate
             && Sim.TownKinds.All(k => Mat.IsRoofing(k.Roof)) && Sim.TownKinds.Select(k => k.Roof).Distinct().Count() == 4
             && Mat.Burns(Mat.Thatch) && Mat.Burns(Mat.Shingle) && !Mat.Burns(Mat.Tile) && !Mat.Burns(Mat.Slate) && Mat.Catch[Mat.Thatch] > 4 * Mat.Catch[Mat.Wood],
-            $"tiles on the hall {Covered(hall, Mat.Tile)}, on the market {Covered(mk, Mat.Tile)}; slate on the barracks {Covered(b, Mat.Slate)}, tiles there {Covered(b, Mat.Tile)}; the house's covering {houseRoof}");
+            $"the hall «{hall?.Look?.Name}» {Mat.NameOf(Cover(hall))} {Covered(hall, Cover(hall))}, the market «{mk?.Look?.Name}» {Mat.NameOf(Cover(mk))} {Covered(mk, Cover(mk))}, the barracks «{b?.Look?.Name}» {Mat.NameOf(Cover(b))} {Covered(b, Cover(b))}; the house's covering {houseRoof}");
 
         // the street by day: idle workers go to the market's stalls to keep them and to choose, to the hall's board, and
         // stand there facing them; the alarm, the dusk and work each send them off at once

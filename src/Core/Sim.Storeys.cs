@@ -72,9 +72,11 @@ public sealed partial class Sim
             if (zone == null) { Storeys.RemoveAt(i); continue; }
             if (Shapes.OverHouse(World, s.X0, s.Z0, s.X1, s.Z1, s.Top).Count > 0) continue;
             // its ladder against a long wall with no door in it, no eaves out over a house beside it (Sim.Houses.cs)
-            // (a town building's roof goes back up covered as its trade has it)
-            var plan = Shapes.Storey(World, Site, s.X0, s.Z0, s.X1, s.Z1, s.Top, s.Mat, DoorSidesOf(zone), SharedSidesOf(zone), out var arched, out var ladder, out int newTop,
-                BuildingOn(zone)?.K.Roof ?? 0);
+            // (a town building's walls go on up and its roof goes back up as its look has them)
+            var b = BuildingOn(zone);
+            var look = b?.Look;
+            byte covering = look != null && look.Covering != 0 ? look.Covering : b?.K.Roof ?? 0;
+            var plan = Shapes.Storey(World, Site, s.X0, s.Z0, s.X1, s.Z1, s.Top, s.Mat, DoorSidesOf(zone), SharedSidesOf(zone), out var arched, out var ladder, out int newTop, covering, look);
             // what of the roof came down into the room as it was taken apart is carried off
             var debris = new VoxelList();
             for (int z = s.Z0; z <= s.Z1; z++)

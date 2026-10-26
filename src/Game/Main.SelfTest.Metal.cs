@@ -109,7 +109,7 @@ public partial class Main
         Tools.SetTool(Tool.None);
         await Frames(2);
         check("the «Рудокопня» taken from the «Город» tab marks the outcrops of ore, is refused on bare ground and priced on an outcrop, and its marks go when it is put away",
-            put != null && inHand && marks > 0 && bare != null && bare.Contains("рудный выход") && onOre != null && onOre.StartsWith(kind.Name + " ·") && Tools.OutcropMarks == 0,
+            put != null && inHand && marks > 0 && bare != null && bare.Contains("рудный выход") && onOre != null && onOre.StartsWith(kind.Name) && onOre.Contains("золота мастерам") && Tools.OutcropMarks == 0,
             $"the button {(put == null ? "not found" : $"«{put.Text}»")}; in hand {inHand}; {marks} outcrops marked; on bare ground «{bare}»; on an outcrop «{onOre}»; marks after {Tools.OutcropMarks}");
         Hud.ClosePanel();
         sim.Learnt.Remove(kind.Lore);

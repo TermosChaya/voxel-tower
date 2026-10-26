@@ -6152,6 +6152,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--ourengines") OurEngi
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--wand") WandBench.Run(Check);
 // the town: buildings the lore opens, put up by the workers, hiring and raised a storey (Town.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--town") TownBench.Run(Check);
+// the looks of the town's buildings: each kind its own, each look built by the workers, one raised a storey (Looks.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--looks") LooksBench.Run(Check);
 // what brings the raids apart from the raid, the night, the threat and the rewards (RaidsBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--raids") RaidsBench.Run(Check);
 // the easier building: the pace of the usual works (Casual.cs)

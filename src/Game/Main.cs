@@ -174,6 +174,8 @@ public partial class Main : Node3D
     Holding _holding = Holding.Citadel;
     HexEdge[] _edges;
     string _pose = "";
+    /// <summary>The staged scenes without the interface over them (--bare), for pictures of the world alone.</summary>
+    bool _bare;
     /// <summary>How long the staged siege runs before the screenshot (--at=seconds).</summary>
     double _poseSeconds = 14;
     /// <summary>--ui-scale=S: the interface drawn at this size for this run, whatever the player set.</summary>
@@ -239,6 +241,7 @@ public partial class Main : Node3D
             else if (a.StartsWith("--at=") && double.TryParse(a["--at=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double at)) _poseSeconds = at;
             else if (a.StartsWith("--ui-scale=") && float.TryParse(a["--ui-scale=".Length..], System.Globalization.CultureInfo.InvariantCulture, out float us)) _uiScale = us;
             else if (a == "--lines") _lines = true;
+            else if (a == "--bare") _bare = true;
             else TrailerArg(a);
         }
         // scripted runs draw the interface at its usual size, unless told otherwise, and leave the player's settings be

@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace VoxelTower.Core;
 
 /// <summary>What stands inside a town building and makes it that building: a forge and an anvil, targets, stalls…</summary>
-public enum Prop : byte { Anvil, Forge, Rack, Target, Stall, Workbench, Counter, Desk, Bunk, Still, Hay, Casks, Crates, Kennel, Seat, Blocks, Ingots }
+public enum Prop : byte { Anvil, Forge, Rack, Target, Stall, Workbench, Counter, Desk, Bunk, Still, Hay, Casks, Crates, Kennel, Seat, Blocks, Ingots, Logs, Sawhorse, Hides, Dummy }
 
 /// <summary>
 /// A kind of town building (docs/handoff/08-town.md): what it is called and what it is for, the lore that opens it and
@@ -65,10 +65,14 @@ public sealed class Building
     public int X0, Z0, X1, Z1;
     /// <summary>The level it works at (0 while it first goes up), and the one it is being raised to.</summary>
     public int Level, Target = 1;
+    /// <summary>Which of its kind's looks it is put up in (Sim.Looks.cs).</summary>
+    public int Variant;
     public bool Ready;
     public int Top0;
     public readonly Dictionary<string, float> Stock = new();
     public TownKind K => Sim.TownKindOf(Kind);
+    /// <summary>Its look, or null for a kind with none.</summary>
+    public Look Look => Sim.LookOf(K, Variant);
     public float CX => (X0 + X1) / 2f;
     public float CZ => (Z0 + Z1) / 2f;
 }
@@ -226,23 +230,27 @@ public sealed partial class Sim
     /// <summary>Whether a building of a kind stands working at a level or higher.</summary>
     public bool Stands(string kind, int level = 1) => Buildings.Exists(b => b.Kind == kind && b.Ready && b.Level >= level);
 
+    /// <summary>More than one of a kind may be put up, and without the buildings it needs: for the scenes staged and the tests, a kind's looks side by side.</summary>
+    public bool ManyOfAKind;
+
     /// <summary>Why a kind of building cannot be put up now, or null.</summary>
     public string CantBuild(TownKind k)
     {
         if (Over) return "осада окончена";
         if (!Sandbox && !Knows(k.Lore)) return $"сначала изучите «{k.Name}» во вкладке «Знания»";
-        if (BuildingOf(k.Key) != null) return "такое здание уже есть";
+        if (!ManyOfAKind && BuildingOf(k.Key) != null) return "такое здание уже есть";
         foreach (var (key, level) in k.Needs)
-            if (!Stands(key, level)) return $"сначала нужна {(level > 1 ? "улучшенная " : "")}«{TownKindOf(key)?.Name}»";
+            if (!ManyOfAKind && !Stands(key, level)) return $"сначала нужна {(level > 1 ? "улучшенная " : "")}«{TownKindOf(key)?.Name}»";
         if (!Sandbox && Stock.Gold < k.Gold) return $"нужно {k.Gold} золота";
         if (k.MetalCost > 0 && !HasMetal(k.MetalCost)) return $"нужно {k.MetalCost:0.##} м³ металла";
         return null;
     }
 
-    /// <summary>The rectangle a building of this kind put up round a column would stand on: along x unless turned.</summary>
-    public static (int x0, int z0, int x1, int z1) BuildingRect(TownKind k, int cx, int cz, bool turned)
+    /// <summary>The rectangle a building of this kind put up round a column would stand on: along x unless turned; its look may make it longer or shorter.</summary>
+    public static (int x0, int z0, int x1, int z1) BuildingRect(TownKind k, int cx, int cz, bool turned, Look look = null)
     {
-        int sx = turned ? k.D : k.W, sz = turned ? k.W : k.D;
+        int len = k.D + (look?.DD ?? 0), wide = k.W + (look?.DW ?? 0);
+        int sx = turned ? len : wide, sz = turned ? wide : len;
         int x0 = cx - sx / 2, z0 = cz - sz / 2;
         return (x0, z0, x0 + sx - 1, z0 + sz - 1);
     }
@@ -252,19 +260,25 @@ public sealed partial class Sim
     /// (null with why not).
     /// </summary>
     public VoxelList BuildingPlan(TownKind k, int cx, int cz, bool turned, out Shapes.HouseDoor door, out string why, out VoxelList arched)
-        => BuildingPlan(k, cx, cz, turned, out door, out why, out arched, out _);
+        => BuildingPlan(k, cx, cz, turned, -1, out door, out why, out arched, out _, out _, out _);
 
     /// <summary>
     /// As above, with the rectangle it takes: put up against a house or a building, it shares its wall (Sim.Houses.cs),
     /// and its door goes to a side that opens onto free ground.
     /// </summary>
     public VoxelList BuildingPlan(TownKind k, int cx, int cz, bool turned, out Shapes.HouseDoor door, out string why, out VoxelList arched, out (int x0, int z0, int x1, int z1) rect)
-        => BuildingPlan(k, cx, cz, turned, out door, out why, out arched, out rect, out _);
+        => BuildingPlan(k, cx, cz, turned, -1, out door, out why, out arched, out rect, out _, out _);
 
-    public VoxelList BuildingPlan(TownKind k, int cx, int cz, bool turned, out Shapes.HouseDoor door, out string why, out VoxelList arched, out (int x0, int z0, int x1, int z1) rect, out List<DoorMove> moves)
+    /// <summary>
+    /// As above, in one of the kind's looks (<paramref name="variant"/>; −1, the one it has by where it stands): its
+    /// house laid as the look has it and the parts built on to it where they have room; what has none is left out,
+    /// and <paramref name="note"/> says what (null when nothing is).
+    /// </summary>
+    public VoxelList BuildingPlan(TownKind k, int cx, int cz, bool turned, int variant, out Shapes.HouseDoor door, out string why, out VoxelList arched, out (int x0, int z0, int x1, int z1) rect, out List<DoorMove> moves, out string note)
     {
-        moves = null;
-        var (x0, z0, x1, z1) = BuildingRect(k, cx, cz, turned);
+        moves = null; note = null;
+        var look = LookOf(k, variant < 0 ? DefaultLook(k, cx, cz) : variant);
+        var (x0, z0, x1, z1) = BuildingRect(k, cx, cz, turned, look);
         rect = (x0, z0, x1, z1);
         door = default; arched = null;
         // (the land convex, its four corners on it are the whole of it)
@@ -272,10 +286,16 @@ public sealed partial class Sim
             || !World.OnLand(x0, z0) || !World.OnLand(x1, z0) || !World.OnLand(x0, z1) || !World.OnLand(x1, z1)) { why = "здесь край долины"; return null; }
         // the miners' building stands on an outcrop of ore (Sim.Metal.cs)
         if (k.OnOre && OutcropUnder(x0, z0, x1, z1) < 0) { why = "ставится на рудный выход: ржавая скала, где жила выходит наружу"; return null; }
-        var st = new Stroke { Mat = k.Wall, Width = Shapes.HouseWall, Height = Shapes.HouseHeight + 4, Level = true, Roof = k.Roof };
+        byte covering = look != null && look.Covering != 0 ? look.Covering : k.Roof;
+        var st = new Stroke { Mat = k.Wall, Width = Shapes.HouseWall, Height = Shapes.HouseHeight + 4, Level = true, Roof = covering, Look = look };
         // (a building goes where its kind must, on rough ground too: its door wants only nothing built before it)
-        var plan = PlanHouseAt(x0, z0, x1, z1, st, -1, out door, out why, out arched, out rect, out _, out var over, out moves, lax: true);
+        var plan = PlanHouseAt(x0, z0, x1, z1, st, -1, out door, out why, out arched, out rect, out int shared, out var over, out moves, lax: true);
         if (over != null) { why = "здесь уже стоит дом"; return null; }
+        if (plan == null) return null;
+        // what is built on to it outside its walls, where it has room
+        var left = new List<string>();
+        Annexes(look, covering, k.Wall, rect, door, shared, plan, arched, left);
+        if (left.Count > 0) note = "без " + string.Join(", ", left);
         return plan;
     }
 
@@ -283,18 +303,20 @@ public sealed partial class Sim
     /// A building of this kind put up round a column: the masters paid, its house marked for the workers (its roof to
     /// stand as an arch), its door to be cut once the wall stands, its floor a room to furnish as the building. Why not, or null.
     /// </summary>
-    public string PutUp(TownKind k, int cx, int cz, bool turned, out Building b)
+    public string PutUp(TownKind k, int cx, int cz, bool turned, out Building b, int variant = -1)
     {
         b = null;
         string no = CantBuild(k);
         if (no != null) return no;
-        var plan = BuildingPlan(k, cx, cz, turned, out var door, out string why, out var arched, out var rect, out var moves);
+        if (variant < 0) variant = DefaultLook(k, cx, cz);
+        var plan = BuildingPlan(k, cx, cz, turned, variant, out var door, out string why, out var arched, out var rect, out var moves, out _);
         if (plan == null) return why;
         var (x0, z0, x1, z1) = rect;
         if (PutHouse(plan, arched, door, rect, moves) == 0) return "здесь нечего класть";
         if (!Sandbox) Stock.Gold -= k.Gold;
         TakeMetal(k.MetalCost);
-        b = new Building { Kind = k.Key, X0 = x0, Z0 = z0, X1 = x1, Z1 = z1, Top0 = door.Top };
+        int n = LooksOf(k).Length;
+        b = new Building { Kind = k.Key, X0 = x0, Z0 = z0, X1 = x1, Z1 = z1, Top0 = door.Top, Variant = n == 0 ? 0 : variant % n };
         Buildings.Add(b);
         if (ZoneOf(b) is { } zone) zone.Title = k.Name;
         TownVersion++;
@@ -583,7 +605,7 @@ public sealed partial class Sim
         int g = World.GroundTop((int)b.CX, (int)b.CZ);
         for (int z = b.Z0 - Shapes.Eaves; z <= b.Z1 + Shapes.Eaves; z += 1)
             for (int x = b.X0 - Shapes.Eaves; x <= b.X1 + Shapes.Eaves; x += 1)
-                for (int y = Math.Max(1, g - 4); y < Math.Min(World.SY - 1, g + 3 * Shapes.HouseHeight + 24); y++)
+                for (int y = Math.Max(1, g - 4); y < Math.Min(World.SY - 1, g + 3 * Shapes.HouseHeight + Looks.HighestRoof); y++)
                 {
                     byte o = Orders.At(x, y, z);
                     if (o != 0 && !Orders.IsRemove(o)) return true;
@@ -697,7 +719,7 @@ public sealed partial class Sim
         Prop.Anvil => (4, 3), Prop.Forge => (7, 6), Prop.Rack => (8, 3), Prop.Target => (7, 3), Prop.Stall => (10, 14),
         Prop.Workbench => (10, 5), Prop.Counter => (12, 4), Prop.Desk => (8, 5), Prop.Bunk => (8, 16), Prop.Still => (8, 5),
         Prop.Hay => (5, 5), Prop.Casks => (6, 3), Prop.Crates => (6, 3), Prop.Kennel => (7, 6), Prop.Seat => (9, 7), Prop.Blocks => (6, 4),
-        Prop.Ingots => (6, 4),
+        Prop.Ingots => (6, 4), Prop.Logs => (14, 6), Prop.Sawhorse => (12, 4), Prop.Hides => (10, 2), Prop.Dummy => (5, 3),
         _ => (4, 4),
     };
 
@@ -732,8 +754,9 @@ public sealed partial class Sim
                 for (int i = 1; i < w - 1; i += 2) { Box(x + i, y, z + 1, x + i + 1, y + 11, z + 2, Mat.Rack); L.Add(x + i, y + 11, z + 1, Mat.Anvil); }
                 break;
             case Prop.Target:
-                // a butt of straw on two legs, a red ring painted on it
-                Post(x + 1, z + 1, 4, Mat.Rack); Post(x + w - 2, z + 1, 4, Mat.Rack);
+                // a butt of straw on two legs behind it, a red ring painted on it (the legs reach up its back, so that it
+                // has something to be laid against)
+                Post(x + 2, z, 8, Mat.Rack); Post(x + w - 3, z, 8, Mat.Rack);
                 for (int dy = 0; dy < 7; dy++)
                     for (int dx = 0; dx < w; dx++)
                     {
@@ -813,6 +836,63 @@ public sealed partial class Sim
                         if (k % 2 == 0) Box(x + i, y + 1 + k, z, x + i + 1, y + 2 + k, z + d, Mat.Anvil);
                         else Box(x, y + 1 + k, z + i, x + w, y + 2 + k, z + i + 1, Mat.Anvil);
                 break;
+            case Prop.Logs:
+                // timber stacked along, three logs, two over them, one on top, their ends paler
+                bool alongX = w >= d;
+                int len = alongX ? w : d, across = alongX ? d : w;
+                for (int course = 0; course < 3; course++)
+                    for (int i = 0; i < 3 - course && i * 2 < across; i++)
+                        for (int a = 0; a < len; a++)
+                        {
+                            int c = course + i * 2;
+                            byte m = a == 0 || a == len - 1 ? Mat.Goods : Mat.Rack;
+                            if (alongX) { L.Add(x + a, y + course * 2, z + c, m); L.Add(x + a, y + course * 2 + 1, z + c, m); }
+                            else { L.Add(x + c, y + course * 2, z + a, m); L.Add(x + c, y + course * 2 + 1, z + a, m); }
+                        }
+                break;
+            case Prop.Sawhorse:
+                // two trestles and a log across them, ready for the saw
+                bool horseX = w >= d;
+                int hl = horseX ? w : d;
+                foreach (int a in new[] { 2, hl - 3 })
+                    for (int k = 0; k < 6; k++)
+                    {
+                        if (horseX) { L.Add(x + a, y + k, z, Mat.Rack); L.Add(x + a, y + k, z + d - 1, Mat.Rack); }
+                        else { L.Add(x, y + k, z + a, Mat.Rack); L.Add(x + w - 1, y + k, z + a, Mat.Rack); }
+                    }
+                for (int a = 0; a < hl; a++)
+                    for (int c = 1; c < (horseX ? d : w) - 1; c++)
+                    {
+                        if (horseX) { L.Add(x + a, y + 5, z + c, Mat.Barrel); L.Add(x + a, y + 6, z + c, Mat.Barrel); }
+                        else { L.Add(x + c, y + 5, z + a, Mat.Barrel); L.Add(x + c, y + 6, z + a, Mat.Barrel); }
+                    }
+                break;
+            case Prop.Hides:
+                // a frame of poles, a hide stretched in it drying
+                bool hideX = w >= d;
+                int hw = hideX ? w : d;
+                for (int k = 0; k < 11; k++)
+                    foreach (int a in new[] { 0, hw - 1 })
+                    {
+                        if (hideX) L.Add(x + a, y + k, z, Mat.Rack); else L.Add(x, y + k, z + a, Mat.Rack);
+                    }
+                for (int a = 0; a < hw; a++)
+                    for (int k = 2; k <= 10; k++)
+                    {
+                        byte m = k == 10 || k == 2 ? Mat.Rack : a > 0 && a < hw - 1 && (a + k) % 7 != 0 ? Mat.Goods : Mat.Hay;
+                        if (a == 0 || a == hw - 1) continue;
+                        if (hideX) L.Add(x + a, y + k, z, m); else L.Add(x, y + k, z + a, m);
+                    }
+                break;
+            case Prop.Dummy:
+                // a man of straw bound round a post, his arms a pole through him, to strike at
+                Post(cx, cz, 15, Mat.Rack);
+                for (int k = 5; k <= 13; k++)
+                    for (int dz = -1; dz <= 1; dz++)
+                        for (int dx = -1; dx <= 1; dx++)
+                            if ((dx != 0 || dz != 0) && k != 11) L.Add(cx + dx, y + k, cz + dz, Mat.Hay);
+                foreach (int a in new[] { -2, 2 }) { if (w >= d) L.Add(cx + a, y + 10, cz, Mat.Rack); else L.Add(cx, y + 10, cz + a, Mat.Rack); }
+                break;
             case Prop.Blocks:
                 Box(x, y, z, x + 3, y + 3, z + 3, Mat.Block);
                 Box(x + 3, y, z, x + 6, y + 2, z + 3, Mat.Block);
@@ -829,7 +909,7 @@ public sealed partial class Sim
         foreach (var b in Buildings)
         {
             w.Write(b.Kind); w.Write(b.X0); w.Write(b.Z0); w.Write(b.X1); w.Write(b.Z1);
-            w.Write(b.Level); w.Write(b.Target); w.Write(b.Ready); w.Write(b.Top0);
+            w.Write(b.Level); w.Write(b.Target); w.Write(b.Ready); w.Write(b.Top0); w.Write((byte)b.Variant);
             w.Write(b.Stock.Count);
             foreach (var (k, n) in b.Stock) { w.Write(k); w.Write(n); }
         }
@@ -841,7 +921,7 @@ public sealed partial class Sim
         for (int i = r.ReadInt32(); i > 0; i--)
         {
             var b = new Building { Kind = r.ReadString(), X0 = r.ReadInt32(), Z0 = r.ReadInt32(), X1 = r.ReadInt32(), Z1 = r.ReadInt32() };
-            b.Level = r.ReadInt32(); b.Target = r.ReadInt32(); b.Ready = r.ReadBoolean(); b.Top0 = r.ReadInt32();
+            b.Level = r.ReadInt32(); b.Target = r.ReadInt32(); b.Ready = r.ReadBoolean(); b.Top0 = r.ReadInt32(); b.Variant = r.ReadByte();
             for (int n = r.ReadInt32(); n > 0; n--) b.Stock[r.ReadString()] = r.ReadSingle();
             if (TownKindOf(b.Kind) == null) continue;
             Buildings.Add(b);

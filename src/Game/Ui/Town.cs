@@ -118,7 +118,7 @@ public partial class TownPanel : VBoxContainer
             string no = sim.CantBuild(k);
             string iron = k.MetalCost > 0 ? $" · {k.MetalCost:0.##} м³ мет." : "";
             string where = k.OnOre ? " Ставится только на рудный выход: ржавую скалу, где жила выходит наружу. Пока план в руке, выходы отмечены." : "";
-            var put = Button($"Поставить · {k.Gold} зол.{iron}", no == null ? $"Взять план здания: щелчок по земле ставит его, {Bindings.Label(Act.Rotate)} поворачивает.{where}" : $"Нельзя: {no}.");
+            var put = Button($"Поставить · {k.Gold} зол.{iron}", no == null ? $"Взять план здания: щелчок по земле ставит его, {Bindings.Label(Act.Rotate)} поворачивает, {Bindings.Label(Act.Form)} меняет вид.{where}" : $"Нельзя: {no}.");
             put.Disabled = no != null && !no.StartsWith("нужно");
             put.Pressed += () =>
             {

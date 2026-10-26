@@ -68,6 +68,13 @@ public partial class Main
         Tools._UnhandledInput(new InputEventMouseMotion { Position = Screen(hx, hz) });
         await Frames(4);
         string planned = Tools.PlanText;
+        // {Form} steps to the kind's next look: the plan says which, and it goes up in it
+        var looks = Sim.LooksOf(kind);
+        int byPlace = Sim.DefaultLook(kind, hx, hz);
+        Tools.ToggleForm();
+        await Frames(4);
+        string stepped = Tools.PlanText;
+        int picked = Tools.PickedLook;
         var at = Screen(hx, hz);
         Button(at, true);
         await Frames(1);
@@ -78,6 +85,10 @@ public partial class Main
         check("the barracks is put up from the «Город» tab: «Поставить» takes up its plan, the plan follows the cursor with its price, a click sets it down for the workers and puts the plan away",
             put != null && inHand && planned != null && planned.StartsWith(kind.Name) && b != null && putAway,
             $"the button {(put == null ? "not found" : $"«{putText}»")}; in hand {inHand}; the plan «{planned}»; put up {b != null}; put away {putAway}");
+        check("{Form} with a building in hand steps to its next look: the plan names it, and the building goes up in it",
+            looks.Length >= 2 && planned != null && planned.Contains($"«{looks[byPlace].Name}»") && picked == (byPlace + 1) % looks.Length
+            && stepped != null && stepped.Contains($"«{looks[picked].Name}»") && b?.Variant == picked,
+            $"{looks.Length} looks; by its place «{looks[byPlace].Name}», the plan «{planned}»; after {{Form}} picked {picked}, the plan «{stepped}»; put up in {b?.Variant}");
         if (b == null) { Hud.ClosePanel(); return; }
 
         // the walls, floor and roof laid at once, as by many hands; the door cut and hung by the household, then the

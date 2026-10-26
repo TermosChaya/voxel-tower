@@ -5,16 +5,18 @@ namespace VoxelTower.Game;
 
 /// <summary>
 /// The town's buildings put up from their ready plans (Sim.Town.cs): taken from the «Город» tab, the building follows
-/// the cursor as a ghost of its house — walls, floor, roof, door — R turns it, a click puts it up for the workers,
-/// Esc or the right button puts it away. The plan is the same house the rectangle's «дом» draws, of the kind's size
-/// and walls; what makes it that building is furnished inside once it stands. While the miners' building is in hand a
-/// pillar of rusty light stands over every outcrop of ore it may go on.
+/// the cursor as a ghost of its house — walls, floor, roof, door and what is built on to it — R turns it, {Form} steps
+/// through its kind's looks (Sim.Looks.cs; till then the one it has by where it stands), a click puts it up for the
+/// workers, Esc or the right button puts it away. What makes it that building is furnished inside once it stands. While
+/// the miners' building is in hand a pillar of rusty light stands over every outcrop of ore it may go on.
 /// </summary>
 public partial class BuildTools
 {
     /// <summary>The kind of building being put up, while the building tool is in hand.</summary>
     public TownKind Placing { get; private set; }
     bool _turned;
+    /// <summary>The look picked for the building in hand, or −1 for the one it has by where it stands.</summary>
+    int _look = -1;
     string _placeWhy;
     MultiMeshInstance3D _outcrops;
     /// <summary>The outcrops marked now for the building in hand.</summary>
@@ -25,6 +27,7 @@ public partial class BuildTools
     {
         Placing = k;
         _turned = false;
+        _look = -1;
         Tool = Tool.Building;
         WandDrop();
         PasteBp = null;
@@ -74,17 +77,21 @@ public partial class BuildTools
         var k = Placing;
         if (k == null || !_hasHover) { _ghost.Visible = false; PlanText = null; return; }
         var g = HoverGround();
-        string key = $"T|{k.Key}|{g.x >> 1}|{g.z >> 1}|{_turned}|{_rev}|{(int)_m.Sim.Stock.Gold}";
+        string key = $"T|{k.Key}|{g.x >> 1}|{g.z >> 1}|{_turned}|{_look}|{_rev}|{(int)_m.Sim.Stock.Gold}";
         if (key == _planKey) return;
         _planKey = key; _planClock = _clock;
-        var plan = _m.Sim.BuildingPlan(k, g.x, g.z, _turned, out _, out string why, out _);
+        int variant = LookAt(k, g.x, g.z);
+        var plan = _m.Sim.BuildingPlan(k, g.x, g.z, _turned, variant, out _, out string why, out _, out _, out _, out string note);
         string no = _m.Sim.CantBuild(k);
         _placeWhy = plan == null ? why : no;
         if (plan == null) { _ghost.Visible = false; PlanText = $"{k.Name}: {why}"; PlanAffordable = false; return; }
         GhostFor(plan, false);
         _ghost.Visible = _ghost.Mesh != null;
         double sec = Labour.Estimate(_m.World, plan, false, _est);
-        PlanText = $"{k.Name} · {k.Gold} золота мастерам{(k.MetalCost > 0 ? $" · {k.MetalCost:0.##} м³ металла" : "")} · {Summary(_est, false, sec)}" + (no != null ? $" — {no}" : "");
+        var looks = Sim.LooksOf(k);
+        string look = looks.Length > 1 ? $" «{looks[variant].Name}» ({variant + 1} из {looks.Length}, {{Form}} — другой вид)" : "";
+        PlanText = Bindings.Fill($"{k.Name}{look} · {k.Gold} золота мастерам{(k.MetalCost > 0 ? $" · {k.MetalCost:0.##} м³ металла" : "")} · {Summary(_est, false, sec)}")
+            + (note != null ? $" · {note}" : "") + (no != null ? $" — {no}" : "");
         PlanAffordable = no == null;
         PlanIsDig = false;
     }
@@ -95,7 +102,7 @@ public partial class BuildTools
         var k = Placing;
         if (k == null || !_hasHover) return;
         var g = HoverGround();
-        string no = _m.Sim.PutUp(k, g.x, g.z, _turned, out _);
+        string no = _m.Sim.PutUp(k, g.x, g.z, _turned, out _, LookAt(k, g.x, g.z));
         if (no != null) { Refuse(no); return; }
         _markName = k.Name;
         Sound.Ui("mark");
@@ -106,4 +113,22 @@ public partial class BuildTools
 
     /// <summary>Turns the building in hand a quarter round.</summary>
     void TurnBuilding() { _turned = !_turned; _planKey = "~"; }
+
+    /// <summary>The look the building in hand goes up in here: the one picked, else the one it has by where it stands.</summary>
+    int LookAt(TownKind k, int x, int z) => _look >= 0 ? _look : Sim.DefaultLook(k, x, z);
+
+    /// <summary>On to the next of the building's looks (from the one it would have where the cursor points).</summary>
+    public void StepLook()
+    {
+        var k = Placing;
+        int n = Sim.LooksOf(k).Length;
+        if (k == null || n < 2) return;
+        (int x, int y, int z) g = _hasHover ? HoverGround() : (0, 0, 0);
+        _look = (LookAt(k, g.x, g.z) + 1) % n;
+        _planKey = "~";
+        _m.Hud.Float($"{k.Name}: «{Sim.LooksOf(k)[_look].Name}»", Ornament.BronzeLight);
+    }
+
+    /// <summary>The look picked for the building in hand (for the tests), −1 for the one by where it stands.</summary>
+    public int PickedLook => _look;
 }

@@ -28,6 +28,7 @@ public partial class Main
         if (_pose == "house") { HousePose(); return; }
         if (_pose == "town") { TownPose(); return; }
         if (_pose == "street") { StreetPose(); return; }
+        if (_pose == "looks") { LooksPose(); return; }
         if (_pose == "metal") { MetalPose(); return; }
         if (_pose == "traps") { Trapped(); return; }
         if (_pose == "drawbridge") { Drawn(); return; }

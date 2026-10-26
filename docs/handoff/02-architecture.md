@@ -351,6 +351,20 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `Shingle`, `Thatch`, `Slate` (156–158, 174), `Mat.IsRoofing`/`LikeLogs`; `Stroke.Roof`, `Shapes.Roof(covering)`,
   `Shapes.Storey(covering)`, `TownKind.Roof`. Капитолий: `TownKind.MaxLevel = 3`, `Up3Gold`, `Up3Metal`, `Income3`,
   `Level3`, `Props3`, `Rank3`, `UpCost(level)`, `Gives(level)`, `Storey(level)`; `PlanStorey(storeys)`.
+- `Looks.cs` — вид здания: `WallStyle` (Plain, StoneBase, Frame, Plaster, Rough), `RoofForm` (Gable, Hip, HalfHip,
+  Steep), `RidgeTop` (None, Belfry, Louvre, Spire), `AnnexKind` (Canopy, Shed, Porch, Yard, Tower), `Flank` (сторона
+  от двери: Front, Back, Left, Right), `Annex`, `Look` (Walls, Roof, Covering, Crown, DD, DW, Annexes);
+  `Looks.Wall` (воксель стены по виду: фахверк — столбы через 16, ригель на 10, обвязка, раскосы; из `Shapes.House`
+  и `Shapes.Storey`), `Looks.Roof` (скат: курс над столбцом = min(до карниза поперёк, до торца + уклон × kh) / уклон;
+  конёк и первый курс — брёвна; фронтоны и стены под скатом до него — арка; `CrownOn` — звонница, продух, шпиль, всё
+  аркой), `HighestRoof` (что снимает `OverHouse`). `Stroke.Look`.
+- `Sim.Looks.cs` — виды каждого рода (`_looks`, по 2–3; помощники `CanopyOn`, `ShedOn`, `PorchOn`, `YardOn`,
+  `TowerOn`, `Styled`), `LooksOf`, `LookOf`, `DefaultLook`; `Annexes` (пристройки по сторонам от двери, каждая со
+  своей проверкой места, иначе в `left` «что: почему») и `Annex` (геометрия: столбы 2 × 2 через 20, балки, двускатный
+  навес коньком от стены или односкатный из-под карниза, доски сарая, крыльцо, изгородь с воротами, башня с горлом к
+  стене и шатром), `Holds` (вещи дела под навесом и во дворе через `Draw`). `BuildingPlan(…, variant, …, out note)`,
+  `PutUp(…, variant)`, `Building.Variant`/`Look`, `BuildingRect(…, look)`, `ManyOfAKind`. Новые `Prop`: Logs,
+  Sawhorse, Hides, Dummy. Материалы `Mat.Daub` (188), `Mat.Bell` (189). Сохранение 60 (вид здания).
 - `Sim.Dues.cs` — подать: `Comfort` (флаги `Water`, `Fire`, `Rest`, `Paving`), `LivedIn` (жилой дом не здание),
   `Comforts` (готовые вещи `Yards` в `ComfortReach` = 96 от стен; мощение кроме `Trodden` в `PavingReach` = 24, от 24
   столбцов), `CountDues` (из `TickTown` раз в 2 с: `_comfort`, `_dues`), `DuesOf` (`Beds` × `DuesPerBunk` 0,1 ×
