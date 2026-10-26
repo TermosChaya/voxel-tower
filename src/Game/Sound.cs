@@ -289,6 +289,7 @@ public partial class Sound : Node
         _fire.VolumeDb = burning == 0 ? -80 : Mathf.LinearToDb(Math.Clamp(burning / 120f, .12f, .8f));
         _rain.VolumeDb = sim.Weather == Weather.Rain ? -9 : -80;
         AcidLoop(sim);
+        TownLoop(sim);
     }
 
     // ---------------------------------------------------------------- making the sounds
@@ -324,6 +325,7 @@ public partial class Sound : Node
         Add("mark", Chalk());
         Add("nope", Nope());
         Add("done", Bell());
+        Add("anvil", Anvil());
         MakeAcid();
         MakeTunnel();
         MakeCollapse();

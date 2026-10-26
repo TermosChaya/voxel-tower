@@ -13,7 +13,7 @@ public partial class Main
     /// its «Поставить» pressed, its plan following the cursor and a click setting it down; built at once and furnished
     /// by the workers, it is called «Казарма», its plate stands over it, and the tab hires a spearman out of its door,
     /// which the citadel will not; its sign, torch, chimney and racks go up before it (Sim.Frontage.cs), and the edge of
-    /// its room no longer lies along its roof.
+    /// its room no longer lies along its roof; a smithy put up beside it rings with its hammer by day.
     /// </summary>
     async Task SelfTestTown(Action<string, bool, string> check)
     {
@@ -120,5 +120,24 @@ public partial class Main
         check("working, the barracks shows its trade outside: a sign by its door, a torch, a chimney and its racks; the edge of its room shows only while the areas' brush is in hand",
             Of(FixtureKind.Sign) == 1 && Of(FixtureKind.Torch) >= 1 && Of(FixtureKind.Chimney) == 1 && Of(FixtureKind.Trade) == 2 && hidden && shown,
             $"{string.Join(", ", front.ConvertAll(f => f.Kind.ToString()))}; the edge hidden {hidden}, with the brush {shown}");
+
+        // a smithy beside it, put up at once: by day its hammer is heard on the anvil where the view is
+        var smith = Sim.TownKindOf("smithy");
+        Sim.Learnt.Add(smith.Lore);
+        Sim.Stock[Stockpile.Metal] += 2.0 * VoxelWorld.PerM3;
+        var (sx, sz) = Nearest(hx, hz + 110, 160, Level);
+        ClearTrees(sx - 50, sz - 50, sx + 50, sz + 50);
+        Sim.InstantLabour = true;
+        Sim.PutUp(smith, sx, sz, false, out var forge);
+        for (int i = 0; i < 60 && forge is { Ready: false }; i++) { Sim.CompleteAll(); Advance(1); if (Sim.ZoneOf(forge) is { } fz) Sim.LookOver(fz); }
+        Sim.InstantLabour = false;
+        Rig.Focus(World.WX(sx), World.WZ(sz));
+        Sound.Heard.Remove("anvil");
+        bool dark = Sim.Clock.Darkness > .5f;
+        for (int i = 0; i < 180 && !Sound.Heard.Contains("anvil"); i++) await Frames(1);
+        check("by day the smith's hammer is heard on the anvil where the view is", forge is { Ready: true } && (dark || Sound.Heard.Contains("anvil")),
+            $"the smithy {(forge == null ? "not put up" : forge.Ready ? "ready" : "not ready")}; night {dark}; heard {Sound.Heard.Contains("anvil")}");
+        // (and let go again, so that what it gives does not change the tests after)
+        if (forge != null) { Sim.RemoveZones(forge.X0, forge.Z0, forge.X1, forge.Z1); Advance(3); }
     }
 }
