@@ -173,6 +173,9 @@ public partial class Main : Node3D
     /// <summary>What stands in the middle of the valley (--holding=citadel|outpost|horde), and its sides as a save keeps them.</summary>
     Holding _holding = Holding.Citadel;
     HexEdge[] _edges;
+    /// <summary>The treasure of a valley of the campaign (Troves.cs), and whether it was taken (then its chest is gone).</summary>
+    TroveKind _trove;
+    bool _troveTaken;
     string _pose = "";
     /// <summary>The staged scenes without the interface over them (--bare), for pictures of the world alone.</summary>
     bool _bare;
@@ -270,7 +273,8 @@ public partial class Main : Node3D
         // every body sculpted while the valley is made, off the main thread: a body first wanted held up its frame
         Task.Run(() => Bodies.Warm(Kinds.All()));
         var sw = Stopwatch.StartNew();
-        var mp = new MapParams { Seed = _seed, Kind = _valley, Classic = _classic, Hexagon = _hexagon, EntrySide = _entry, Holding = _holding, Edges = _edges };
+        var mp = new MapParams { Seed = _seed, Kind = _valley, Classic = _classic, Hexagon = _hexagon, EntrySide = _entry, Holding = _holding, Edges = _edges,
+            Trove = _trove, TroveTaken = _troveTaken };
         // (--perf-without=details: the valley made without its small things, to weigh what they cost)
         mp.Details = Array.IndexOf(_perfWithout, "details") < 0;
         // the game's valley: a hexagon in a box a half again as wide as the bench's (192 m from point to point)

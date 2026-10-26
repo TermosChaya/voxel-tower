@@ -21,8 +21,9 @@ public partial class Main
     /// and three men chosen and sent to the ore valley go out over the edge onto the map and walk there, and the card asks
     /// to go in; gone in, they come into the ore valley by the side facing the first one; its outpost marked and built,
     /// the valley is ours. A party put at the horde's lair goes in, its garrison falls, the lair is taken and the campaign
-    /// won; ours sent out of it are on the map, and the game goes back to the first valley with the board open. The
-    /// campaign written and read back is the same. Returns true when the scene is begun again to go on.
+    /// won; ours sent out of it are on the map. A party put at a treasure goes in, its keepers at their spots fall, and
+    /// one of ours at the chest takes it; the game goes back to the first valley with the board open. The campaign
+    /// written and read back is the same. Returns true when the scene is begun again to go on.
     /// </summary>
     async Task<bool> SelfTestBoard(Action<string, bool, string> check, Func<int> fails)
     {
@@ -235,6 +236,42 @@ public partial class Main
                 check("all of ours sent out of it are on the map, walking to the first valley, the town left empty of ours",
                     why == null && back != null && back.Moving && back.Path[^1] == c.Home && !Sim.Units.Exists(u => !u.Dead && u.Team == Team.Player),
                     $"refused «{why}», on the map {back != null}, walking {back?.Moving}");
+                // a party put at a treasure with a chest, as if it had walked there
+                var trove = c.Cells.Find(x => Campaign.Untaken(x) && x.Trove != TroveKind.Shrine);
+                if (trove == null) { Again("back", fails); GoHome(); return false; }
+                var tp = new MapParty { Q = trove.Q, R = trove.R, Owner = Holder.Ours, Party = new Party() };
+                var tb = c.Neighbour(trove, Campaign.SideToward(trove, 0, 0));
+                tp.CameQ = tb.Q; tp.CameR = tb.R;
+                foreach (var k in new[] { Kinds.Captain, Kinds.Swordsman, Kinds.Swordsman, Kinds.Archer })
+                    tp.Party.Members.Add(new Traveller { Kind = k, Look = 5, Hp = k.Hp, MaxHp = k.Hp });
+                c.Parties.Add(tp);
+                Again("trove", fails);
+                EnterCell(tp);
+                return false;
+            }
+            case "trove":
+            {
+                var cell = c.Here;
+                var keepers = Sim.Units.FindAll(u => !u.Dead && u.Guard && u.Team == Team.Wild);
+                check("a party goes into a treasure's valley: the treasure laid in it and named among its places, its keepers of the map at their spots",
+                    Campaign.Untaken(cell) && Site.Trove == cell.Trove && keepers.Count == cell.Sum.Keep.Count && keepers.Count > 0 && Site.Landmarks.Exists(l => l.Kind == LandmarkKind.Trove),
+                    $"{cell.Trove} at {cell.Q},{cell.R}: laid {Site.Trove}, keepers {keepers.Count} of {cell.Sum.Keep.Count}");
+                // the keepers struck down at once, one of ours led to the chest
+                foreach (var u in keepers) Sim.Hurt(u, null, 1e6f);
+                double gold0 = Sim.Stock.Gold;
+                var taker = Sim.Units.Find(u => !u.Dead && u.Team == Team.Player);
+                int at = Sim.StandNear(Site.TroveX, Site.TroveY, Site.TroveZ, 2);
+                if (taker != null && at >= 0) { taker.Cell = at; (taker.X, taker.Y, taker.Z) = Sim.Nav.Feet(at); taker.Path = null; taker.Hold = true; }
+                Run(2);
+                var (gold, _) = Campaign.RewardOf(cell.Trove, Campaign.Distance(0, 0, cell.Q, cell.R));
+                int crates = 0;
+                for (int y = Site.TroveY; y < Site.TroveY + 5; y++)
+                    for (int z = Site.TroveZ - 4; z <= Site.TroveZ + 4; z++)
+                        for (int x = Site.TroveX - 4; x <= Site.TroveX + 4; x++)
+                            if (World.Get(x, y, z) == Mat.Crate) crates++;
+                check("its keepers down, one of ours at the chest takes it: its gold into the realm's, the chest carried off, the chronicle says so",
+                    cell.TroveTaken && Math.Abs(Sim.Stock.Gold - gold0 - gold) < 1 && crates == 0 && Hud.Lines.Any(l => l.text.Contains("сундук наш")),
+                    $"taken {cell.TroveTaken}, +{Sim.Stock.Gold - gold0:0} gold of {gold}, crates left {crates}");
                 Again("back", fails);
                 GoHome();
                 return false;

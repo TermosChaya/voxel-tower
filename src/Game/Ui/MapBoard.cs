@@ -99,7 +99,8 @@ public partial class MapBoard : Control
         var body = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
         body.AddThemeConstantOverride("separation", 16);
         col.AddChild(body);
-        _field = new Field { B = this, SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Stop };
+        _field = new Field { B = this, SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Stop,
+            TooltipText = " " };
         body.AddChild(_field);
         var scroll = new ScrollContainer { CustomMinimumSize = new Vector2(Side, 0), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
         body.AddChild(scroll);
@@ -167,6 +168,16 @@ public partial class MapBoard : Control
         if (Settings.Meet("board"))
             _first.Show("Карта долин\nВыберите в долине командира и бойцов, щёлкните на карте другую долину и нажмите «Отправить выбранных сюда». " +
                 "Отряд уйдёт за край долины и пойдёт по карте. Когда он дойдёт, войдите в долину или решите бой сразу. {Board} — закрыть карту.");
+        else TroveHint();
+    }
+
+    /// <summary>The first treasure seen on the board: what treasures are and how they are taken, once.</summary>
+    void TroveHint()
+    {
+        if (!C.Cells.Exists(c => Campaign.Untaken(c) && C.Seen(c)) || !Settings.Meet("trove")) return;
+        _first.Show("Сокровища\nВ ничьих долинах лежат сокровища: заброшенный рудник, старые руины, логово зверей, святилище испытаний. " +
+            "Их стерегут скелеты, волки и медведи. Перебейте стражу и подойдите к сундуку. В святилище держите людей у алтаря 3 минуты. " +
+            "Наведите мышь на долину, чтобы увидеть награду и силу стражи.");
     }
 
     public void Close()
@@ -272,11 +283,12 @@ public partial class MapBoard : Control
         return $"{hh}:{mm:00}";
     }
 
-    /// <summary>«Командир и 5 человек».</summary>
+    /// <summary>«Командир и 5 человек», «Разведка: 2 человека».</summary>
     public static string Who(MapParty p)
     {
         int n = p.Party.Members.Count, rest = n - (p.Party.Commander != null ? 1 : 0);
         if (p.Owner != Holder.Ours) return $"Войско орды: {n}";
+        if (p.Scouting) return $"Разведка: {n} {Sim.Plural(n, "человек", "человека", "человек")}";
         return p.Party.Commander != null ? rest > 0 ? $"Командир и {rest} {Sim.Plural(rest, "человек", "человека", "человек")}" : "Командир" : $"{n} {Sim.Plural(n, "человек", "человека", "человек")}";
     }
 
@@ -369,8 +381,10 @@ public partial class MapBoard : Control
             };
             _about.AddChild(Line($"{owner} {holds}", Ornament.Parchment));
             int foes = C.Foes(cell);
-            if (foes > 0 && cell.Owner != Holder.Ours)
+            bool trove = Campaign.Untaken(cell);
+            if (foes > 0 && cell.Owner != Holder.Ours && !trove)
                 _about.AddChild(Line(cell.Owner == Holder.Horde ? $"Гарнизон орды: {foes}." : $"Долину стерегут звери: {foes}. Застава встанет, только когда их не будет.", Ornament.Blood));
+            foreach (var (text, color) in TroveLines(cell)) _about.AddChild(Line(text, color));
             double gold = Campaign.AwayGold(cell), mines = ValleySummary.MineGold(cell.Kind);
             if (gold > 0 && cell != C.Here) _about.AddChild(Line($"Без вас платит {Fmt.Int(gold)} золота в минуту.", Ornament.Moss));
             else if (mines > 0 && cell.Owner != Holder.Ours) _about.AddChild(Line($"Рудники. Занятая, долина без вас платит {Fmt.Int(mines * ValleySummary.MineShare)} золота в минуту.", Ornament.Aged));
@@ -384,19 +398,24 @@ public partial class MapBoard : Control
         acts.AddThemeConstantOverride("separation", 6);
         _about.AddChild(acts);
         int chosen = 0; bool captain = false;
-        foreach (var u in _m.Selected) if (!u.Dead && u.Team == Team.Player) { chosen++; captain |= u.T == Kinds.Captain; }
+        var group = new List<Unit>();
+        foreach (var u in _m.Selected) if (!u.Dead && u.Team == Team.Player) { chosen++; captain |= u.T == Kinds.Captain; group.Add(u); }
         // the chosen party's hero: his card
         if (Party != null && Party.Owner == Holder.Ours && C.Parties.Contains(Party) && Party.Party.Commander?.Hero is { } hero)
         {
             var pp = Party;
             acts.AddChild(Big($"Командир {hero.Name} · ур. {hero.Level}{(hero.Pending ? " · выберите умение" : "")}", "Карточка героя: опыт, умения, выбор умения на новом уровне.", () => _m.Hud.HeroPane.Show(pp)));
         }
+        bool scouts = !captain && Main.Scouts(group);
         if (cell != C.Here)
         {
-            var send = Big($"Отправить выбранных сюда ({chosen})", "Выбранные в долине уйдут за её край в сторону этой долины и пойдут по карте. В отряде нужен командир.", () => SendHere());
-            send.Disabled = chosen == 0 || !captain;
+            var send = Big(scouts ? $"Отправить разведку сюда ({chosen})" : $"Отправить выбранных сюда ({chosen})",
+                $"Выбранные в долине уйдут за её край в сторону этой долины и пойдут по карте. В отряде нужен командир. До {Campaign.ScoutMost} лёгких бойцов " +
+                "без командира идут в разведку: быстрее и видят на 2 долины вокруг.", () => SendHere());
+            send.Disabled = chosen == 0 || !captain && !scouts;
             acts.AddChild(send);
-            if (chosen == 0 || !captain) acts.AddChild(Line(chosen == 0 ? "Выберите в долине командира и бойцов рамкой." : "Среди выбранных нет командира.", Ornament.Aged));
+            if (chosen == 0 || !captain && !scouts)
+                acts.AddChild(Line(chosen == 0 ? "Выберите в долине командира и бойцов рамкой." : $"Среди выбранных нет командира. Без него идут только до {Campaign.ScoutMost} лучников, пращников, всадников или псов, в разведку.", Ornament.Aged));
         }
         if (Party != null && Party.Owner == Holder.Ours && C.Parties.Contains(Party) && C.CellOf(Party) != cell)
             acts.AddChild(Big("Вести отряд сюда", "Выбранный на карте отряд пойдёт в эту долину. То же делает правая кнопка мыши.", () => Lead()));
@@ -406,7 +425,8 @@ public partial class MapBoard : Control
             if (cell == C.Here) continue;
             acts.AddChild(Big($"Войти: {Who(p).ToLowerInvariant()}", "Отряд войдёт в долину, и вы будете играть в ней. Долина, где вы сейчас, сохранится.", () => EnterWith(pp)));
             if (C.Foes(cell) > 0)
-                acts.AddChild(Big("Бой сразу", "Бой решится сразу, по силе отрядов: вдвое сильнее побеждает 9 раз из 10, но теряет людей.", () => FightWith(pp)));
+                acts.AddChild(Big(Campaign.Untaken(cell) && cell.Trove == TroveKind.Shrine ? "Испытание сразу" : "Бой сразу",
+                    "Бой решится сразу, по силе отрядов: вдвое сильнее побеждает 9 раз из 10, но теряет людей.", () => FightWith(pp)));
         }
         if (cell == C.Here && cell.Owner == Holder.None && !cell.Outpost)
             acts.AddChild(Big("Поставить заставу", "Рабочие построят каменную башню у камня заставы. Когда она встанет, долина ваша.", () =>
@@ -414,6 +434,67 @@ public partial class MapBoard : Control
                 string why = _m.RaiseOutpost();
                 _m.Hud.Float(why ?? "застава размечена", why == null ? Ornament.Moss : Ornament.Blood);
             }));
+    }
+
+    /// <summary>What is said of a cell's treasure on the board: what it is, who keeps it, what it gives, against the party chosen.</summary>
+    List<(string, Color)> TroveLines(MapCell cell)
+    {
+        var lines = new List<(string, Color)>();
+        if (cell.Trove == TroveKind.None) return lines;
+        if (cell.TroveTaken)
+        {
+            lines.Add((cell.Trove == TroveKind.Shrine ? $"{Troves.Name(cell.Trove)}: испытание пройдено." : $"{Troves.Name(cell.Trove)}: сундук уже взят.", Ornament.Aged));
+            return lines;
+        }
+        var keep = cell.Sum.Holders();
+        if (cell.Trove == TroveKind.Shrine)
+            lines.Add(($"{Troves.Name(cell.Trove)}. Удержите людей у алтаря {Campaign.TrialLength / 60:0} минуты: мертвецы придут {Campaign.TrialWaves} раза, всего {keep.Count}.", Ornament.EmberGlow));
+        else
+            lines.Add(($"{Troves.Name(cell.Trove)}. Стерегут: {Keepers(keep)}. Перебейте их и подойдите к сундуку.", Ornament.EmberGlow));
+        lines.Add(($"Награда: {Campaign.RewardText(cell)}.", Ornament.Moss));
+        // against the party chosen on the map, or those chosen in the valley
+        var side = Party is { Owner: Holder.Ours } && C.Parties.Contains(Party) ? Party.Party.Members : Picked();
+        if (side.Count > 0) lines.Add((Against(side, cell), Ornament.Parchment));
+        return lines;
+    }
+
+    /// <summary>Those chosen in the valley, as they would go out.</summary>
+    List<Traveller> Picked()
+    {
+        var list = new List<Traveller>();
+        foreach (var u in _m.Selected) if (!u.Dead && u.Team == Team.Player) list.Add(Traveller.Of(u));
+        return list;
+    }
+
+    /// <summary>«6 скелетов», «2 пещерных медведя и 4 волка».</summary>
+    static string Keepers(List<Traveller> keep)
+    {
+        var counts = new List<(UnitType t, int n)>();
+        foreach (var m in keep)
+        {
+            int i = counts.FindIndex(c => c.t == m.Kind);
+            if (i < 0) counts.Add((m.Kind, 1)); else counts[i] = (m.Kind, counts[i].n + 1);
+        }
+        var parts = new List<string>();
+        foreach (var (t, n) in counts) parts.Add($"{n} {Kind(t, n)}");
+        return parts.Count == 0 ? "никто" : string.Join(" и ", parts);
+    }
+
+    static string Kind(UnitType t, int n) =>
+        t == Kinds.Skeleton ? Sim.Plural(n, "скелет", "скелета", "скелетов")
+        : t == Kinds.Wolf ? Sim.Plural(n, "волк", "волка", "волков")
+        : t == Kinds.Bear ? Sim.Plural(n, "медведь", "медведя", "медведей")
+        : t == Kinds.Boar ? Sim.Plural(n, "кабан", "кабана", "кабанов")
+        : t.Name.ToLowerInvariant();
+
+    /// <summary>How a party stands against a treasure's keepers: «стража слабее», «силы равны», «стража сильнее».</summary>
+    static string Against(List<Traveller> side, MapCell cell)
+    {
+        var keep = cell.Sum.Holders();
+        if (keep.Count == 0) return "";
+        float odds = QuickBattle.Chance(side, null, keep, null, 0, cell.Kind);
+        string word = odds >= .65f ? "стража слабее" : odds <= .35f ? "стража сильнее" : "силы равны";
+        return $"Против выбранного отряда: {word} (победа {Math.Round(odds * 100)} из 100).";
     }
 
     static Button Big(string text, string tip, Action act)
@@ -435,11 +516,13 @@ public partial class MapBoard : Control
         int foes = C.Foes(cell);
         bool hands = p.Party.Members.Exists(m => m.Kind == Kinds.Worker);
         _cardTitle.Text = $"Отряд дошёл: {Campaign.Names(cell).nom}";
-        _cardText.Text = $"{Who(p)}." + (foes > 0 ? $" Там врагов: {foes}." : cell.Owner == Holder.None ? hands ? " Долина ничья. С рабочими отряд сам поставит заставу: 3 рабочих за день." : " Долина ничья." : "");
+        bool trove = Campaign.Untaken(cell), shrine = trove && cell.Trove == TroveKind.Shrine;
+        _cardText.Text = $"{Who(p)}." + (trove ? $" {Troves.Name(cell.Trove)}: {(shrine ? "удержите алтарь против мертвецов" : $"стража {foes}")}, награда {Campaign.RewardText(cell)}. {Against(p.Party.Members, cell)}"
+            : foes > 0 ? $" Там врагов: {foes}." : cell.Owner == Holder.None ? hands ? " Долина ничья. С рабочими отряд сам поставит заставу: 3 рабочих за день." : " Долина ничья." : "");
         var enter = Small("Войти", "Отряд войдёт в долину, и вы будете играть в ней.", () => EnterWith(p));
         enter.AddThemeFontOverride("font", Ornament.SerifBold);
         _cardButtons.AddChild(enter);
-        if (foes > 0) _cardButtons.AddChild(Small("Бой сразу", "Бой решится сразу, по силе отрядов.", () => FightWith(p)));
+        if (foes > 0) _cardButtons.AddChild(Small(shrine ? "Испытание сразу" : "Бой сразу", "Бой решится сразу, по силе отрядов.", () => FightWith(p)));
         _cardButtons.AddChild(Small("На карту", "Открыть карту долин.", () => { Later(p); Open(); }));
         _cardButtons.AddChild(Small("Позже", "Отряд подождёт в долине. Войти можно с карты.", () => Later(p)));
         _card.Size = Vector2.Zero;
@@ -471,6 +554,24 @@ public partial class MapBoard : Control
             ValleyKind.Ore => new Color("80644d"), ValleyKind.Sacred => new Color("8c8a5c"), ValleyKind.Forest => new Color("3f6340"),
             ValleyKind.Marsh => new Color("4b7672"), ValleyKind.Mountain => new Color("76727c"), _ => new Color("6c8648"),
         };
+
+        static string TroveIcon(TroveKind k) => k switch
+        {
+            TroveKind.DeadMine => "raise-skeleton", TroveKind.Ruins => "jeweled-chalice", TroveKind.Den => "jawbone", TroveKind.Shrine => "sword-altar", _ => null,
+        };
+
+        /// <summary>What the cell under the mouse is, said when it rests there: its name, whose, its treasure and what it gives.</summary>
+        public override string _GetTooltip(Vector2 at)
+        {
+            if (C == null || CellAt(at) is not { } c) return "";
+            if (!C.Seen(c)) return "Долина в тумане. Подведите отряд или разведку ближе.";
+            string owner = c.Owner switch { Holder.Ours => "наша", Holder.Horde => "во власти орды", _ => "ничья" };
+            string text = $"{NameOf(c)}, {owner}";
+            if (c.Holding == Holding.HordeTown && c.Owner == Holder.Horde) text += $"\nЛогово орды: гарнизон {c.Sum.Holders().Count}";
+            if (c.Trove != TroveKind.None)
+                text += c.TroveTaken ? $"\n{Troves.Name(c.Trove)}: взято" : $"\n{Troves.Name(c.Trove)}: стража {c.Sum.Holders().Count}, награда {Campaign.RewardText(c)}";
+            return text;
+        }
 
         static string KindIcon(ValleyKind k) => k switch
         {
@@ -572,6 +673,10 @@ public partial class MapBoard : Control
                 int keep = c.Owner != Holder.Ours ? c.Sum.Holders().Count : 0;
                 if (keep > 0)
                     Ornament.Lettering(this, Ornament.SerifBold, ctr + new Vector2(_s * .32f, -_s * .02f), keep.ToString(), fs, c.Owner == Holder.Horde ? Theirs : Ornament.Aged);
+                // its treasure, in the corner: dim once taken
+                if (TroveIcon(c.Trove) is { } ti)
+                    Icons.Glyph(this, new Rect2(ctr + new Vector2(_s * .36f, -_s * .62f), new Vector2(_s * .26f, _s * .26f)),
+                        c.TroveTaken ? Ornament.Fade(Ornament.Aged, .5f) : Ornament.BronzeLight, ti);
                 double gold = c == C.Here ? 0 : Campaign.AwayGold(c);
                 if (gold > 0) Ornament.Lettering(this, Ornament.SerifBold, ctr + new Vector2(-_s, -_s * .62f), $"+{Fmt.Int(gold)}", fs, Ornament.BronzeLight, HorizontalAlignment.Center, _s * 2);
                 if (c == C.Here)

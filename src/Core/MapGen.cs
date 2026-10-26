@@ -39,6 +39,9 @@ public sealed class MapParams
     /// of an outpost, or the horde's town (a cell of the map of valleys, <see cref="Campaign"/>). The box always has the citadel.
     /// </summary>
     public Holding Holding = Holding.Citadel;
+    /// <summary>The treasure a valley of the map nobody holds keeps (Troves.cs), and whether it was taken already (then its chest is gone).</summary>
+    public TroveKind Trove;
+    public bool TroveTaken;
 }
 
 /// <summary>

@@ -262,7 +262,10 @@ public partial class GameMenu : Control
         _page.AddChild(Big("Выйти из игры", "Несохранённый прогресс пропадёт. Автосохранение делается после каждой волны.", () => _m.GetTree().Quit()));
     }
 
-    const string CampaignTip = "Карта из 19 долин. Командиры водят отряды из долины в долину, занимают рудники и идут на логово орды.";
+    const string CampaignTip = "Карта из 37 или 19 долин. Командиры водят отряды из долины в долину, берут сокровища, занимают рудники и идут на логова орды.";
+
+    /// <summary>How big a new campaign's map is: 3 rings (37 valleys, the game's) or 2 (19, the small one). Kept while the game runs.</summary>
+    static int _rings = 3;
 
     /// <summary>The campaigns' slots: a new campaign in one (what was in it gone), or one read back where it was left.</summary>
     void Campaign_()
@@ -272,8 +275,22 @@ public partial class GameMenu : Control
         PageName = "campaign";
         Fit(W, 450);
         _page.AddChild(Hud.CapsLabel("Кампания", 10));
-        _page.AddChild(Para("Карта из 19 долин вокруг вашей. В одной из дальних логово орды. Командир ведёт отряд из долины в долину, " +
+        _page.AddChild(Para("Карта долин вокруг вашей. В дальних логова орды, в ничьих сокровища под стражей. Командир ведёт отряд из долины в долину, " +
             "занятая рудная долина платит золото. Карта открывается клавишей {Board}.", Ornament.Parchment));
+        // the size of a new campaign's map
+        var size = new HBoxContainer();
+        size.AddThemeConstantOverride("separation", 8);
+        size.AddChild(Hud.Text("Новая карта:", Ornament.Serif, 13, Ornament.Aged));
+        foreach (var (rings, name, tip) in new[] { (3, "Большая · 37 долин", "2 или 3 логова орды, 9 сокровищ."), (2, "Малая · 19 долин", "1 логово орды, 3 сокровища. Короче.") })
+        {
+            int r = rings;
+            var b = new Button { Text = name, FocusMode = FocusModeEnum.None, ToggleMode = true, ButtonPressed = _rings == r, TooltipText = tip,
+                MouseDefaultCursorShape = CursorShape.PointingHand, CustomMinimumSize = new Vector2(150, 30) };
+            b.AddThemeFontSizeOverride("font_size", 13);
+            b.Pressed += () => { _rings = r; Campaign_(); };
+            size.AddChild(b);
+        }
+        _page.AddChild(size);
         foreach (string slot in Saves.CampaignSlots)
         {
             string s = slot;
@@ -295,7 +312,7 @@ public partial class GameMenu : Control
                 return b;
             }
             row.AddChild(Act("Новая", peek != null ? "Новая кампания в этой ячейке. Прежняя пропадёт." : "Новая кампания в этой ячейке.",
-                () => Main.NewCampaign(_m.GetTree(), s, (uint)Random.Shared.Next(1, int.MaxValue)), true));
+                () => Main.NewCampaign(_m.GetTree(), s, (uint)Random.Shared.Next(1, int.MaxValue), _rings), true));
             row.AddChild(Act("Продолжить", "С того места, где кампания сохранена.", () =>
             {
                 if (!Main.LoadCampaign(_m.GetTree(), s)) _m.Hud.Float("эту кампанию не прочесть", Ornament.Blood);

@@ -131,11 +131,14 @@ public sealed partial class Sim
         }
     }
 
-    /// <summary>A bear goes for whoever comes near it, ours or the horde's; true while it is set on someone.</summary>
+    /// <summary>
+    /// A bear, or a guardian of a treasure of the map (a skeleton, a wolf), goes for whoever comes near it, ours or the
+    /// horde's; true while it is set on someone.
+    /// </summary>
     bool BearTick(Unit u)
     {
-        if (u.T != Kinds.Bear || u.Target is { Dead: false }) return false;
-        Unit near = null; float nd = 9 * VoxelWorld.PerMetre;
+        if (u.T.Aggro <= 0 || u.Target is { Dead: false }) return false;
+        Unit near = null; float nd = u.T.Aggro;
         foreach (var o in Units)
         {
             if (o.Dead || o.Inside || o.Team == Team.Wild || o.Envoy || Kinds.IsEngine(o.T)) continue;

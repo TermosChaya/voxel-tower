@@ -58,8 +58,12 @@ public sealed partial class Campaign
     /// <summary>What a day's way takes off a target's worth.</summary>
     const double DayCost = 1.5;
 
-    /// <summary>The horde's lair, while it holds it.</summary>
+    /// <summary>The horde's lair, while it holds one (the first of them on the big map).</summary>
     public MapCell Lair => Cells.Find(c => c.Holding == Holding.HordeTown && c.Owner == Owner.Horde);
+    /// <summary>The horde's lairs it still holds: one on the small map, two or three on the big one.</summary>
+    public List<MapCell> Lairs => Cells.FindAll(c => c.Holding == Holding.HordeTown && c.Owner == Owner.Horde);
+    /// <summary>The most warlords the realm has at once: three, and one more for every lair past the first.</summary>
+    int LordsMost => MostLords + Math.Max(0, Lairs.Count - 1);
 
     /// <summary>
     /// How strong the lair's musters come, as the siege's nights count it: from 1, by a quarter a day and three tenths
@@ -79,26 +83,32 @@ public sealed partial class Campaign
     internal static Traveller Raider(UnitType t) => new() { Kind = t, Hp = t.Hp, MaxHp = t.Hp, Commands = false };
 
     /// <summary>
-    /// The map made ready for its turn, once: the lair's garrison as the horde's town has it behind its palisade, and beasts keeping each
-    /// cell of the outer ring nobody holds — two bears and two boars — to be beaten before it is anybody's.
+    /// The map made ready for its turn, once: each lair's garrison as the horde's town has it behind its palisade, the
+    /// keepers of the treasures (Campaign.Troves.cs), and beasts keeping each other cell nobody holds past the first ring —
+    /// two bears and two boars — to be beaten before it is anybody's.
     /// </summary>
     void Ready()
     {
         if (Realm.Ready) return;
         Realm.Ready = true;
-        if (Lair is { } lair && lair.Sum.Keep.Count == 0)
+        foreach (var lair in Lairs)
         {
+            if (lair.Sum.Keep.Count > 0) continue;
             foreach (var t in Sim.Roster(LairThreat, 1)) lair.Sum.Keep.Add(Raider(t));
             // its palisade
             lair.Sum.Walls = .5f;
         }
+        KeepTroves();
         foreach (var c in Cells)
         {
-            if (c.Owner != Owner.None || Distance(0, 0, c.Q, c.R) < 2 || c.Sum.Keep.Count > 0) continue;
+            if (c.Owner != Owner.None || Distance(0, 0, c.Q, c.R) < 2 || c.Sum.Keep.Count > 0 || c.Trove != TroveKind.None) continue;
             foreach (var t in new[] { Kinds.Bear, Kinds.Bear, Kinds.Boar, Kinds.Boar }) c.Sum.Keep.Add(Raider(t));
         }
         if (Realm.Lords.Count == 0) Realm.Lords.Add(NewLord(1));
     }
+
+    /// <summary>The map made ready for its turn now, if it was not (a valley gone into before the map first ran: its keepers given).</summary>
+    public void Prepare() => Ready();
 
     /// <summary>A new warlord of the horde's realm: an orc, a troll from the third level.</summary>
     Warlord NewLord(int level)
@@ -110,22 +120,28 @@ public sealed partial class Campaign
         return new Warlord { Id = id, Name = name, Of = of, Level = level, Kind = level >= 3 ? Kinds.Troll : Kinds.Orc };
     }
 
-    /// <summary>The horde's dawn: the lair musters, a warlord may come, and it decides.</summary>
+    /// <summary>
+    /// The horde's dawn: each lair musters (the cells the horde holds shared out among its lairs), a warlord may come to
+    /// the realm, and each lair decides.
+    /// </summary>
     void HordeDawn()
     {
-        var lair = Lair;
-        if (lair == null) return;
+        var lairs = Lairs;
+        if (lairs.Count == 0) return;
         int cells = 0;
         foreach (var c in Cells) if (c.Owner == Owner.Horde) cells++;
-        int n = Math.Min(MusterBase + MusterPerCell * cells, Math.Max(0, LairMost - lair.Sum.Keep.Count));
         var kinds = Sim.Roster(Tier, 1);
-        for (int i = 0; i < n; i++) lair.Sum.Keep.Add(Raider(kinds[(int)(Roll() * kinds.Count)]));
-        Realm.Mustered += n;
+        foreach (var lair in lairs)
+        {
+            int n = Math.Min(MusterBase + MusterPerCell * Math.Max(1, cells / lairs.Count), Math.Max(0, LairMost - lair.Sum.Keep.Count));
+            for (int i = 0; i < n; i++) lair.Sum.Keep.Add(Raider(kinds[(int)(Roll() * kinds.Count)]));
+            Realm.Mustered += n;
+            if (n > 0) Tell(NewsKind.Grew, $"Логово орды набрало {Raiders(n)}, в нём {lair.Sum.Keep.Count}.", lair, null);
+        }
         int lords = Realm.Lords.Count;
         foreach (var p in Parties) if (p.Lord != null) lords++;
-        if (Clock.Day % LordEvery == 0 && lords < MostLords) Realm.Lords.Add(NewLord(1 + Clock.Day / 10));
-        if (n > 0) Tell(NewsKind.Grew, $"Логово орды набрало {Raiders(n)}, в нём {lair.Sum.Keep.Count}.", lair, null);
-        Decide(lair);
+        if (Clock.Day % LordEvery == 0 && lords < LordsMost) Realm.Lords.Add(NewLord(1 + Clock.Day / 10));
+        foreach (var lair in lairs) Decide(lair);
     }
 
     /// <summary>
@@ -138,16 +154,18 @@ public sealed partial class Campaign
         // ours at the door: all home
         bool threat = false;
         foreach (var p in Parties) if (p.Owner == Owner.Ours && Distance(p.Q, p.R, lair.Q, lair.R) <= 1) threat = true;
+        int key = KeyOf(lair);
         if (threat)
         {
             foreach (var p in Parties.ToArray())
-                if (p.Owner == Owner.Horde && p.Aim != PartyAim.Return && Distance(p.Q, p.R, lair.Q, lair.R) <= 2) GoHome(p);
+                if (p.Owner == Owner.Horde && p.Aim != PartyAim.Return && Distance(p.Q, p.R, lair.Q, lair.R) <= 2) { p.Den = key; GoHome(p); }
             return;
         }
-        int cells = 0, abroad = 0;
+        // (the cells the horde holds shared out among its lairs: so many parties out of each)
+        int cells = 0, abroad = 0, lairs = Math.Max(1, Lairs.Count);
         foreach (var c in Cells) if (c.Owner == Owner.Horde) cells++;
-        foreach (var p in Parties) if (p.Owner == Owner.Horde && p.Aim is PartyAim.Take or PartyAim.Strike) abroad++;
-        if (abroad >= 1 + cells / 2) return;
+        foreach (var p in Parties) if (p.Owner == Owner.Horde && p.Aim is PartyAim.Take or PartyAim.Strike && (p.Den == key || lairs == 1)) abroad++;
+        if (abroad >= 1 + cells / lairs / 2) return;
         // what it can spare: all over the garrison it keeps, engines and all
         var pool = new List<Traveller>(lair.Sum.Keep);
         int spare = pool.Count - LairKeep;
@@ -156,7 +174,8 @@ public sealed partial class Campaign
         Target best = null, most = null;
         foreach (var c in Cells)
         {
-            if (c == lair || c.Owner == Owner.Horde) continue;
+            // (the treasures of the map it leaves be: it neither loots them nor fights their keepers for nothing)
+            if (c == lair || c.Owner == Owner.Horde || Untaken(c)) continue;
             if (Parties.Exists(p => p.Owner == Owner.Horde && p.GoalQ == c.Q && p.GoalR == c.R && p.Aim is PartyAim.Take or PartyAim.Strike)) continue;
             var way = MapPath.Find(this, lair, c, Owner.Horde);
             if (way == null) continue;
@@ -268,7 +287,7 @@ public sealed partial class Campaign
         var p = new MapParty
         {
             Id = _nextParty++, Owner = Owner.Horde, Party = new Party(), Q = lair.Q, R = lair.R, CameQ = lair.Q, CameR = lair.R,
-            Aim = t.Cell.Owner == Owner.Ours ? PartyAim.Strike : PartyAim.Take,
+            Aim = t.Cell.Owner == Owner.Ours ? PartyAim.Strike : PartyAim.Take, Den = KeyOf(lair),
         };
         foreach (var m in t.Party) { lair.Sum.Keep.Remove(m); p.Party.Members.Add(m); }
         // a warlord leads a strike, or a party of eight and more

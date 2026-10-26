@@ -150,7 +150,7 @@ public sealed partial class MapParty
 /// </summary>
 public sealed partial class Campaign
 {
-    public const int Version = 5;
+    public const int Version = 6;
     public const string FileName = "campaign.dat";
     static readonly byte[] Magic = { (byte)'V', (byte)'T', (byte)'C', (byte)'M' };
 
@@ -190,15 +190,17 @@ public sealed partial class Campaign
     public bool Defeated => HomeFell >= 0 && Clock.Day - HomeFell >= DaysToRetake && !Cells.Exists(c => !c.Home && c.Owner == Owner.Ours);
 
     /// <summary>
-    /// A new map of so many rings round the first valley (2: nineteen cells). The first valley in the middle, without the
-    /// old set of places, its citadel ours; round it the other kinds, an ore valley and a holy one among the six nearest,
-    /// nobody's, each with a place for an outpost; the horde's lair in a cell of the outer ring. Every two cells side by
-    /// side share the seed of their side, so their valleys meet without a step; each valley's enemy comes by the side
-    /// toward the lair, the lair's toward the first valley.
+    /// A new map of so many rings round the first valley (2: nineteen cells, the small map; 3: thirty-seven, the game's).
+    /// The first valley in the middle, without the old set of places, its citadel ours; round it the other kinds, an ore
+    /// valley and a holy one among the six nearest, nobody's, each with a place for an outpost; the horde's lairs in cells
+    /// of the outer ring, one on the small map, two or three on the big one, as far apart as can be; the treasures in the
+    /// cells nobody holds further out (Campaign.Troves.cs). Every two cells side by side share the seed of their side, so
+    /// their valleys meet without a step; each valley's enemy comes by the side toward the nearest lair, a lair's toward
+    /// the first valley.
     /// </summary>
     public static Campaign New(uint seed, int rings = 2)
     {
-        var c = new Campaign { Seed = seed };
+        var c = new Campaign { Seed = seed, Rings = rings };
         var rnd = new Mulberry32(seed * 2654435761u + 41);
         var near = new List<ValleyKind> { ValleyKind.Ore, ValleyKind.Sacred, ValleyKind.Forest, ValleyKind.Marsh, ValleyKind.Mountain, ValleyKind.Forest };
         var far = new[] { ValleyKind.Ore, ValleyKind.Sacred, ValleyKind.Forest, ValleyKind.Marsh, ValleyKind.Mountain };
@@ -215,14 +217,35 @@ public sealed partial class Campaign
                 else cell.Kind = far[(int)(rnd.Next() * far.Length)];
                 c.Cells.Add(cell);
             }
-        // the lair: a cell of the outer ring, by the seed
+        // the lairs: cells of the outer ring, the first by the seed, each next as far from those laid as can be
         var outer = c.Cells.FindAll(x => Distance(0, 0, x.Q, x.R) == rings);
-        if (rings > 0)
+        int lairs = rings <= 0 ? 0 : rings >= 3 ? 2 + (int)(rnd.Next() * 2) : 1;
+        var dens = new List<MapCell>();
+        for (int k = 0; k < lairs && outer.Count > 0; k++)
         {
-            var lair = outer[(int)(rnd.Next() * outer.Count)];
-            lair.Holding = Holding.HordeTown; lair.Owner = Owner.Horde;
+            MapCell pick = null;
+            if (k == 0) pick = outer[(int)(rnd.Next() * outer.Count)];
+            else
+            {
+                int apart = -1;
+                foreach (var o in outer)
+                {
+                    if (dens.Contains(o)) continue;
+                    int least = int.MaxValue;
+                    foreach (var d in dens) least = Math.Min(least, Distance(o.Q, o.R, d.Q, d.R));
+                    if (least > apart) { apart = least; pick = o; }
+                }
+            }
+            if (pick == null) break;
+            pick.Holding = Holding.HordeTown; pick.Owner = Owner.Horde;
+            dens.Add(pick);
         }
-        var den = c.Cells.Find(x => x.Holding == Holding.HordeTown);
+        MapCell NearestDen(MapCell cell)
+        {
+            MapCell best = null; int bd = int.MaxValue;
+            foreach (var d in dens) { int dd = Distance(cell.Q, cell.R, d.Q, d.R); if (dd < bd) { bd = dd; best = d; } }
+            return best;
+        }
         foreach (var cell in c.Cells)
         {
             // the sides, shared with the neighbour across each
@@ -231,10 +254,11 @@ public sealed partial class Campaign
                 int nq = cell.Q + Step[s].dq, nr = cell.R + Step[s].dr;
                 cell.Edges[s] = new HexEdge { Seed = EdgeSeed(seed, cell.Q, cell.R, nq, nr) };
             }
-            // the enemy comes by the side toward the lair; the lair's own, toward the first valley
-            if (den != null) cell.EntrySide = cell == den ? SideToward(cell, 0, 0) : SideToward(cell, den.Q, den.R);
+            // the enemy comes by the side toward the nearest lair; a lair's own, toward the first valley
+            if (NearestDen(cell) is { } den) cell.EntrySide = dens.Contains(cell) ? SideToward(cell, 0, 0) : SideToward(cell, den.Q, den.R);
         }
         c.LayWays(new Mulberry32(seed * 2246822519u + 77));
+        c.LayTroves(new Mulberry32(seed * 3266489917u + 101));
         return c;
     }
 
@@ -408,7 +432,7 @@ public sealed partial class Campaign
     public MapParams ParamsOf(MapCell c) => new()
     {
         Seed = c.Seed, Kind = c.Kind, Classic = false, Hexagon = true, SizeX = MapParams.GameSize, SizeZ = MapParams.GameSize,
-        Edges = c.Edges, EntrySide = c.EntrySide, Holding = c.Holding,
+        Edges = c.Edges, EntrySide = c.EntrySide, Holding = c.Holding, Trove = c.Trove, TroveTaken = c.TroveTaken,
     };
 
     // ------------------------------------------------------------ going in and out of a valley
@@ -427,6 +451,7 @@ public sealed partial class Campaign
         w.Compact();
         string path = Path.Combine(dir, cell.File);
         SaveReader save = cell.Visited && System.IO.File.Exists(path) ? new SaveReader(System.IO.File.OpenRead(path)) : null;
+        Ready();
         try
         {
             save?.Valley(w, site);
@@ -462,6 +487,8 @@ public sealed partial class Campaign
         sim.Stock.Gold = Gold;
         sim.CellKey = KeyOf(cell);
         Live = sim; InValley = true;
+        _hallLook = 0;
+        Bless(sim);
         Reckon(sim, cell);
     }
 
@@ -507,6 +534,7 @@ public sealed partial class Campaign
         {
             w.Write(Magic); w.Write(Version); w.Write(Sim.SaveVersion);
             w.Write(Seed); w.Write(Clock.Day); w.Write(Clock.At); w.Write(Gold); w.Write(HereQ); w.Write(HereR); w.Write(HomeFell);
+            w.Write(Rings); w.Write(Blessings.Count); foreach (var b in Blessings) w.Write((byte)b);
             w.Write(Cells.Count);
             foreach (var c in Cells)
             {
@@ -514,6 +542,7 @@ public sealed partial class Campaign
                 w.Write((byte)c.EntrySide); w.Write(c.Home); w.Write(c.Visited);
                 foreach (var e in c.Edges) { w.Write(e.Seed); w.Write(e.River); w.Write(e.Road); }
                 w.Write(c.Outpost);
+                w.Write((byte)c.Trove); w.Write(c.TroveTaken); w.Write((byte)c.Blessing);
             }
             w.Write(Parties.Count);
             foreach (var p in Parties) { w.Write(p.Q); w.Write(p.R); p.Party.Write(w); WriteWay(w, p); }
@@ -536,6 +565,8 @@ public sealed partial class Campaign
         var c = new Campaign { Seed = r.ReadUInt32() };
         c.Clock = new ClockTime(r.ReadInt32(), r.ReadDouble());
         c.Gold = r.ReadDouble(); c.HereQ = r.ReadInt32(); c.HereR = r.ReadInt32(); c.HomeFell = r.ReadInt32();
+        c.Rings = r.ReadInt32();
+        for (int n = r.ReadInt32(); n > 0; n--) c.Blessings.Add((Blessing)r.ReadByte());
         for (int n = r.ReadInt32(); n > 0; n--)
         {
             var cell = new MapCell
@@ -545,6 +576,7 @@ public sealed partial class Campaign
             };
             for (int s = 0; s < 6; s++) cell.Edges[s] = new HexEdge { Seed = r.ReadUInt32(), River = r.ReadSingle(), Road = r.ReadSingle() };
             cell.Outpost = r.ReadBoolean();
+            cell.Trove = (TroveKind)r.ReadByte(); cell.TroveTaken = r.ReadBoolean(); cell.Blessing = (Blessing)r.ReadByte();
             c.Cells.Add(cell);
         }
         for (int n = r.ReadInt32(); n > 0; n--)

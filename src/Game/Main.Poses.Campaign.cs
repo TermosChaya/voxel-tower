@@ -55,6 +55,62 @@ public partial class Main
         Rig.SetAt(w.WX(cx), w.WY(w.SurfAt((int)cx, (int)cz)), w.WZ(cz), MathF.Atan2(-ix, -iz) + .5f, .55f, 2f);
     }
 
+    /// <summary>The treasure staged by --look: 0 the abandoned mine, 1 the ruins, 2 the den, 3 the shrine's trial.</summary>
+    TroveKind PoseTrove => _look switch { 1 => TroveKind.Ruins, 2 => TroveKind.Den, 3 => TroveKind.Shrine, _ => TroveKind.DeadMine };
+
+    /// <summary>
+    /// --campaign --pose=trove --look=0…3: the scene opens on a treasure's valley of the big map, a party of ours of twelve
+    /// come in by the side facing the first valley (set before the valley is made).
+    /// </summary>
+    void TrovePoseBefore()
+    {
+        var cell = Atlas.Cells.Find(c => c.Trove == PoseTrove) ?? Atlas.Cells.Find(c => c.Trove != TroveKind.None);
+        Atlas.HereQ = cell.Q; Atlas.HereR = cell.R;
+        var back = Atlas.Neighbour(cell, Campaign.SideToward(cell, 0, 0));
+        var p = new MapParty { Q = cell.Q, R = cell.R, Owner = Holder.Ours, CameQ = back.Q, CameR = back.R,
+            Party = PartyOf(Kinds.Captain, Kinds.Swordsman, Kinds.Swordsman, Kinds.Swordsman, Kinds.Spearman, Kinds.Spearman, Kinds.Shieldbearer,
+                Kinds.Archer, Kinds.Archer, Kinds.Archer, Kinds.Swordsman, Kinds.Spearman) };
+        Atlas.Parties.Add(p);
+        _entering = p;
+    }
+
+    /// <summary>
+    /// A treasure's valley (--pose=trove): the abandoned mine, the ruins or the den with their keepers at their spots,
+    /// seen from before the mouth or the doorway, ours come near (--look=0…2); the shrine's trial going on, ours at the
+    /// altar and the dead come for it (--look=3, --at= seconds, 40 by itself).
+    /// </summary>
+    void TrovePose()
+    {
+        var s = Site; var w = World;
+        Sim.WildTarget = 0;
+        // (in the light of the late morning, nobody chosen)
+        Sim.SetClock(new ClockTime(Atlas.Clock.Day, DayClock.DayLength * .35));
+        Atlas.Clock = Sim.Clock.Now;
+        Selected.Clear();
+        Hud.OnSelectionChanged();
+        var ours = Sim.Units.FindAll(u => !u.Dead && u.Team == Team.Player);
+        int chest = Sim.StandNear(s.TroveX, s.TroveY, s.TroveZ, 2);
+        float dx = s.KeepX - s.TroveX, dz = s.KeepZ - s.TroveZ, dl = MathF.Max(1, MathF.Sqrt(dx * dx + dz * dz));
+        dx /= dl; dz /= dl;
+        if (s.Trove == TroveKind.Shrine)
+        {
+            // ours at the altar, and the trial going on
+            Sim.Command(ours, chest, stay: true);
+            for (double t = 0; t < (_poseSeconds == 14 ? 40 : _poseSeconds); t += .5) { Advance(.5); CampaignTick(.5); }
+            Rig.SetAt(w.WX(s.TroveX + dx * 30), w.WY(s.TroveY), w.WZ(s.TroveZ + dz * 30), MathF.Atan2(dx, dz) + .6f, .6f, 1.25f);
+            return;
+        }
+        // the way in faces the valley's middle along x or z (Troves.Facing): the mouth or the doorway so far out from the chest
+        float ax = MathF.Abs(dx) >= MathF.Abs(dz) ? MathF.Sign(dx) : 0, az = ax == 0 ? MathF.Sign(dz) : 0;
+        float mouth = s.Trove switch { TroveKind.DeadMine => 56, TroveKind.Den => 48, _ => 36 };
+        // ours where they came in, the keepers at their spots (--at= seconds: ours led up to them and the fight on)
+        if (_poseSeconds != 14) Sim.Command(ours, Sim.NearestStand((int)(s.TroveX + ax * (mouth + 20)), (int)(s.TroveZ + az * (mouth + 20)), 2), stay: true);
+        Advance(_poseSeconds == 14 ? 4 : _poseSeconds);
+        // seen from outside, looking in at the mouth, a little from aside
+        float mx = s.TroveX + ax * mouth, mz = s.TroveZ + az * mouth;
+        Rig.SetAt(w.WX(mx), w.WY(w.SurfAt((int)mx, (int)mz)), w.WZ(mz), MathF.Atan2(ax, az) + .45f, .62f, s.Trove == TroveKind.Ruins ? 1.25f : 1.45f);
+    }
+
     /// <summary>A party of ours as the map keeps it: a commander and these kinds, a look each.</summary>
     static Party PartyOf(params UnitType[] kinds)
     {
@@ -69,6 +125,7 @@ public partial class Main
     /// </summary>
     void CampaignPoseBefore()
     {
+        if (_pose == "trove" && Atlas != null) { TrovePoseBefore(); return; }
         if (_pose != "lairfight" || Atlas == null) return;
         var lair = Atlas.Cells.Find(c => c.Holding == Holding.HordeTown);
         Atlas.HereQ = lair.Q; Atlas.HereR = lair.R;
@@ -207,6 +264,24 @@ public partial class Main
                 Advance(1);
                 FP.Enter(four[0]);
                 FP.Face(MathF.Atan2(-iz, -ix) + .35f, -.05f);
+                break;
+            }
+            case "troves":
+            {
+                // the big map with its fog lifted: the lairs, the treasures and their keepers, a party of ours chosen
+                Atlas.RevealAll = true;
+                var mine = Atlas.Cells.Find(c => c.Trove == TroveKind.DeadMine);
+                var p = Walk(Atlas.Cells.Find(c => Campaign.Distance(0, 0, c.Q, c.R) == 1 && Campaign.Distance(c.Q, c.R, mine.Q, mine.R) <= 2) ?? ore, .3);
+                Atlas.Advance(0);
+                Atlas.News.Clear();
+                Hud.Board?.Open();
+                Hud.Board?.ChooseParty(p);
+                Hud.Board?.Choose(mine);
+                break;
+            }
+            case "trove":
+            {
+                TrovePose();
                 break;
             }
             case "lairfight":

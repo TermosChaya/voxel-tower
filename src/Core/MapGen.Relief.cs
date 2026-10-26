@@ -746,6 +746,14 @@ public static partial class MapGen
             Landmarks.DeadSpring(w, site, spring.x, spring.z, "Мёртвый родник", seed + 12);
         }
 
+        // the treasure of a valley of the map nobody holds (Troves.cs): behind the middle, on the side away from the enemy's
+        if (p.Trove != TroveKind.None)
+        {
+            var (tx, tz) = AtAngle(toEntry + Math.PI, Math.Min(rpMax + 110, hex.HalfW - Troves.Room(p.Trove) - 40));
+            var spot = Free(tx, tz, Troves.Room(p.Trove));
+            Troves.Lay(w, site, p.Trove, spot.x, spot.z, p.TroveTaken, seed + 13);
+        }
+
         bool Clear(int x, int z)
         {
             // (a tree's crown kept off the land's edge, and the horde's side kept open)

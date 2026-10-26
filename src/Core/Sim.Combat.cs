@@ -223,7 +223,9 @@ public sealed partial class Sim
         if (u.Champion > 0) ChampionFell(u);
         else if (u.Team == Team.Wild)
         {
-            if (by?.Team == Team.Player)
+            // a keeper of the map's treasures struck down: no quarry
+            if (by?.Team == Team.Player && u.T.Bounty == 0) Say($"{u.T.Name} повержен.", 1, u);
+            else if (by?.Team == Team.Player)
             {
                 Stock.Gold += u.T.Bounty; Hunted++;
                 // and its carcass, for the old powers if the priests ask

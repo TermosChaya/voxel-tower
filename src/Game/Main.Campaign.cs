@@ -42,14 +42,15 @@ public partial class Main
     {
         if (Atlas == null && _campaignArg)
         {
-            Atlas = Campaign.New(_seed);
+            // (the map's content staged on the big map)
+            Atlas = Campaign.New(_seed, _pose is "troves" or "trove" ? 3 : 2);
             CampSlot = Saves.CampaignSlots[2];
         }
         CampaignPoseBefore();
         if (Atlas?.Here is not { } cell) return false;
         var mp = Atlas.ParamsOf(cell);
         _seed = mp.Seed; _valley = mp.Kind; _classic = false; _hexagon = true; _size = 0;
-        _entry = mp.EntrySide; _holding = mp.Holding; _edges = mp.Edges;
+        _entry = mp.EntrySide; _holding = mp.Holding; _edges = mp.Edges; _trove = mp.Trove; _troveTaken = mp.TroveTaken;
         string file = Path.Combine(Saves.CampaignDir(CampSlot), cell.File);
         if (cell.Visited && File.Exists(file)) PendingLoad = file;
         return true;
@@ -81,17 +82,28 @@ public partial class Main
         }
         _repelledSeen = Sim.Raids.Repelled;
         Hud.Unfold.OpenAll();
+        // (the keepers of the map given before its first turn, if this is the first valley it ever opened on)
+        Atlas.Prepare();
         Atlas.Enter(Sim);
         Atlas.Settle(cell, Sim);
-        // the beasts that keep a valley nobody holds are the map's: they stand at its middle when we first come
-        if (fresh && cell.Owner == Holder.None)
+        // the beasts that keep a valley nobody holds are the map's: they stand at its middle when we first come; the keepers
+        // of its treasure at the treasure (the dead of a shrine come only when its altar is held)
+        if (fresh && cell.Owner == Holder.None && !(Campaign.Untaken(cell) && cell.Trove == TroveKind.Shrine))
+        {
+            bool trove = Campaign.Untaken(cell) && Site.TrovePosts.Count > 0;
+            int k = 0;
             foreach (var m in cell.Sum.Keep)
             {
-                int at = Sim.NearestStand(Site.KeepX + Sim.Rng.Next(-60, 61), Site.KeepZ + Sim.Rng.Next(-60, 61), m.Kind.Move.Height);
+                var (px, py, pz) = trove ? Site.TrovePosts[k++ % Site.TrovePosts.Count] : (Site.KeepX, -1, Site.KeepZ);
+                int spread = trove ? 4 : 60, ox = px + Sim.Rng.Next(-spread, spread + 1), oz = pz + Sim.Rng.Next(-spread, spread + 1);
+                int at = py >= 0 ? Sim.StandNear(ox, py, oz, m.Kind.Move.Height) : Sim.NearestStand(ox, oz, m.Kind.Move.Height);
                 if (at < 0) continue;
                 var u = Sim.Spawn(m.Kind, at);
                 u.Guard = true; u.Home = at;
+                // (hurt as a battle counted on the map left them)
+                u.Hp = Math.Min(u.MaxHp, m.Hp);
             }
+        }
         if (_entering != null)
         {
             var p = _entering;
@@ -159,6 +171,8 @@ public partial class Main
             _raiding.Clear();
         }
         while (Atlas.TakeArrival(out var ours, out int from)) Come(ours.Party, from, select: false);
+        // the valley's treasure: a chest taken, a shrine's trial going on
+        if (Atlas.TroveTick(Sim, here, dt)) Hud.Board?.Refresh();
         bool told = Tell();
         Hold(here, dt);
         if (Sim.Lost && here.Owner == Holder.Ours)
@@ -239,11 +253,15 @@ public partial class Main
         }
     }
 
-    /// <summary>What the map keeps of a valley nobody holds as we leave it: the beasts that keep it still standing.</summary>
+    /// <summary>
+    /// What the map keeps of a valley nobody holds as we leave it: the beasts and the keepers of its treasure still
+    /// standing; a shrine's trial left unfinished is lost, its dead crumble, and the dead it sends stay the map's.
+    /// </summary>
     void KeepersLeft()
     {
         var here = Atlas.Here;
         if (here.Owner != Holder.None) return;
+        if (Campaign.Untaken(here) && here.Trove == TroveKind.Shrine) { Atlas.TrialReset(Sim, here); return; }
         here.Sum.Keep.Clear();
         foreach (var u in Sim.Units) if (!u.Dead && u.Team == Team.Wild && u.Guard) here.Sum.Keep.Add(Traveller.Of(u));
     }
@@ -261,13 +279,17 @@ public partial class Main
         var group = new List<Unit>();
         foreach (var u in Selected) if (!u.Dead && u.Team == Team.Player && u.T != Kinds.Risen) group.Add(u);
         if (group.Count == 0) return "выберите в долине командира и бойцов";
-        if (!group.Exists(u => u.T == Kinds.Captain)) return "в отряде нужен командир";
+        if (!group.Exists(u => u.T == Kinds.Captain) && !Scouts(group)) return $"в отряде нужен командир, или до {Campaign.ScoutMost} лёгких бойцов в разведку";
         int side = Campaign.SideToward(Atlas.Here, to.Q, to.R);
         int n = Sim.Depart(group, side);
         if (n == 0) return "отряду не дойти до края долины";
         _outbound[side] = to;
         return null;
     }
+
+    /// <summary>A scouting party, chosen in the valley: no commander, up to three light men (archers, slingers, riders, horse archers, hounds).</summary>
+    public static bool Scouts(List<Unit> group) =>
+        group.Count is > 0 and <= Campaign.ScoutMost && group.TrueForAll(u => u.T != Kinds.Captain && Campaign.Light(u.T));
 
     /// <summary>How near a side the one gone into must stand to be offered the map (the horde's strip and 2 m more), and how far about him those go who go with him (20 m, as far as «За мной!» calls).</summary>
     const float EdgeNear = Site.StripDepth + 2 * VoxelWorld.PerMetre, WithHim = 20 * VoxelWorld.PerMetre;
@@ -383,12 +405,12 @@ public partial class Main
         GetTree().ReloadCurrentScene();
     }
 
-    /// <summary>A new campaign in a slot (whatever was in it gone), begun on its first valley.</summary>
-    public static void NewCampaign(SceneTree tree, string slot, uint seed)
+    /// <summary>A new campaign in a slot (whatever was in it gone), begun on its first valley; its map of 3 rings (37 valleys) or 2 (19).</summary>
+    public static void NewCampaign(SceneTree tree, string slot, uint seed, int rings = 3)
     {
         string dir = Saves.CampaignDir(slot);
         if (Directory.Exists(dir)) Directory.Delete(dir, true);
-        Atlas = Campaign.New(seed);
+        Atlas = Campaign.New(seed, rings);
         CampSlot = slot;
         Atlas.Write(dir);
         _entering = null; _boardAtStart = false;

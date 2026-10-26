@@ -48,6 +48,8 @@ public sealed class UnitType
     public int Crew;
     /// <summary>Metal it is armed or built of, cubic metres from the stores besides the gold (plate, iron fittings, an engine's bands).</summary>
     public float Metal;
+    /// <summary>A beast or a guardian that goes for whoever comes so near it (voxels), ours or the horde's; 0 for one that does not.</summary>
+    public float Aggro;
 }
 
 public static class Kinds
@@ -367,10 +369,32 @@ public static class Kinds
         Key = "bear", Name = "Пещерный медведь", Team = Team.Wild,
         Move = new Mover { Height = 2, Climb = 2, Drop = 3, Speed = 3.4f },
         // a long reach: a bear is a big beast, and it strikes from its bulk, not from a man's arm
-        Hp = 380, Damage = 24, AttackTime = 1.4f, Bounty = 80, BodyH = 15, BodyR = 4.5f, Reach = 17, FleeDist = 0,
+        Hp = 380, Damage = 24, AttackTime = 1.4f, Bounty = 80, BodyH = 15, BodyR = 4.5f, Reach = 17, FleeDist = 0, Aggro = 9 * VoxelWorld.PerMetre,
     };
 
     public static readonly UnitType[] WildKinds = { Deer, Boar, Hare, WhiteStag, Bear };
+
+    // what keeps the treasures of the map of valleys (Troves.cs): the dead of an abandoned mine and the wolves of the old
+    // ruins and the dens; they go for whoever comes near and go back to their spot after
+
+    /// <summary>
+    /// A skeleton: one of the dead of an abandoned mine or a shrine of trial, bones and a rusted blade, green fire in its
+    /// eyes. It keeps its spot, goes for whoever comes near, and never runs.
+    /// </summary>
+    public static readonly UnitType Skeleton = new()
+    {
+        Key = "skeleton", Name = "Скелет", Team = Team.Wild,
+        Move = new Mover { Height = 2, Climb = 1, Drop = 5, Speed = 2.4f },
+        Hp = 75, Damage = 11, AttackTime = 1.1f, Bounty = 0, BodyH = 15, BodyR = 2, Reach = 10, Tool = "sword", FleeDist = 0, Aggro = 11 * VoxelWorld.PerMetre,
+    };
+    /// <summary>A grey wolf of a pack that has made its den in ruins or in the rocks: quick, it goes for whoever comes near.</summary>
+    public static readonly UnitType Wolf = new()
+    {
+        Key = "wolf", Name = "Волк", Team = Team.Wild,
+        Move = new Mover { Height = 1, Climb = 1, Drop = 3, Speed = 4.6f, Ladders = false },
+        Hp = 70, Damage = 10, AttackTime = .8f, Bounty = 8, BodyH = 8, BodyR = 2, Reach = 9, Tool = "bite", FleeDist = 0, Aggro = 13 * VoxelWorld.PerMetre,
+    };
+    public static readonly UnitType[] Guardians = { Skeleton, Wolf };
 
     /// <summary>The dead raised by a spell: bones and a rusted blade, fighting for us a minute, then falling apart.</summary>
     public static readonly UnitType Risen = new()
@@ -442,7 +466,7 @@ public static class Kinds
     /// <summary>Every kind there is, ours, the horde's, the beasts', the risen and the engines (bodies sculpted ahead, saves read back).</summary>
     public static IEnumerable<UnitType> All()
     {
-        foreach (var arr in new[] { PlayerKinds, HordeKinds, WildKinds, Engines, Summoned, Casters, Throwers, Crews })
+        foreach (var arr in new[] { PlayerKinds, HordeKinds, WildKinds, Guardians, Engines, Summoned, Casters, Throwers, Crews })
             foreach (var t in arr) yield return t;
     }
 }

@@ -6232,6 +6232,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--campaign") CampaignB
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--map") MapBench.Run(Check);
 // the commanders as heroes: experience, levels, skills, the fallen, the saves (Heroes.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--heroes") HeroesBench.Run(Check);
+// the map's content: the big map's lairs, the treasures and their keepers, scouts, a shrine's trial (TrovesBench.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troves") TrovesBench.Run(Check);
 if (args.Length > 0 && args[0] == "--map-trace")
     MapBench.Trace(args.Length > 1 ? uint.Parse(args[1]) : 11, args.Length > 2 ? int.Parse(args[2]) : 30, args.Length > 3 && args[3] == "weak");
 

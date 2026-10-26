@@ -49,7 +49,7 @@ public static class MapPath
             if (Kinds.IsEngine(m.Kind) || m.Kind == Kinds.Giant || m.Kind == Kinds.HillGiant || m.Kind == Kinds.TameTroll) slow = true;
         }
         // and a hero at its head with Поход quicker
-        return (slow ? 1.25 : riders ? .75 : 1) * Heroes.March(p.Party.Commander?.Hero);
+        return (slow ? 1.25 : p.Scouting ? Campaign.ScoutPace : riders ? .75 : 1) * Heroes.March(p.Party.Commander?.Hero);
     }
 
     /// <summary>Seconds of the map's time the party takes from one cell into the next.</summary>
@@ -114,7 +114,11 @@ public static class MapPath
         return h;
     }
 
-    /// <summary>A cell the other side holds, for a party of this side; the valley we play in is the horde's to keep clear of on its way elsewhere.</summary>
+    /// <summary>
+    /// A cell the other side holds, for a party of this side; the valley we play in is the horde's to keep clear of on its
+    /// way elsewhere, and so are the keepers of the map's treasures (Campaign.Troves.cs).
+    /// </summary>
     static bool Hostile(Campaign c, MapCell b, Owner side) =>
-        side == Owner.Ours ? b.Owner == Owner.Horde : side == Owner.Horde && (b.Owner == Owner.Ours || c.InValley && b == c.Here);
+        side == Owner.Ours ? b.Owner == Owner.Horde
+            : side == Owner.Horde && (b.Owner == Owner.Ours || c.InValley && b == c.Here || Campaign.Untaken(b) && b.Sum.Keep.Count > 0);
 }

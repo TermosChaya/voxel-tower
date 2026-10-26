@@ -159,6 +159,14 @@ public partial class Minimap : Control
     {
         foreach (var l in _m.Site.Landmarks)
         {
+            // a treasure of the map: a diamond in bronze while its chest is there
+            if (l.Kind == LandmarkKind.Trove)
+            {
+                var t = ToMap(l.X, l.Z);
+                Ornament.Diamond(this, t, 5.4f, Rim);
+                Ornament.Diamond(this, t, 4f, Main.Atlas?.Here is { } h && Campaign.Untaken(h) ? Ornament.BronzeLight : RuinGrey);
+                continue;
+            }
             if (l.Kind != LandmarkKind.Ruin) continue;
             var p = ToMap(l.X, l.Z);
             Ornament.Diamond(this, p, 4.6f, Rim);

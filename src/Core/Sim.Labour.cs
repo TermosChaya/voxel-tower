@@ -103,6 +103,7 @@ public sealed partial class Sim
         if (!fighter && Flee(u, dt)) { Busy(u); return; }
         // the alarm is up: to shelter (one the player sent somewhere goes where it was sent)
         if (!fighter && Alarm && !u.Hold && TakeShelter(u, dt)) { Busy(u); return; }
+        if (fighter && u.Prey == null && Beset(u)) u.NextSearch = 0;
         if (u.Prey != null && HuntTick(u, dt)) { Busy(u); return; }
         // a priest prays by day and shelters by night, and does nothing else (unless the player sent it somewhere)
         if (u.T.Prays && !u.Hold) { PriestTick(u, dt); return; }

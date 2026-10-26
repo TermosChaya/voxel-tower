@@ -83,6 +83,37 @@ public sealed partial class Sim
         return false;
     }
 
+    /// <summary>A guardian drawn too far from the spot it keeps (30 m): it lets its foe go and goes back.</summary>
+    bool Leashed(Unit u)
+    {
+        if (!u.Guard || u.Home < 0) return false;
+        var (hx, _, hz) = Nav.Feet(u.Home);
+        float dx = u.X - hx, dz = u.Z - hz;
+        return dx * dx + dz * dz > GuardLeash * GuardLeash;
+    }
+
+    const float GuardLeash = 30 * VoxelWorld.PerMetre;
+
+    /// <summary>
+    /// A fighter of ours turns on a beast that goes for whoever comes near (a bear, a guardian of a treasure): one that
+    /// struck him a moment ago, or, if nobody sent him anywhere, one set on one of ours within 12 m of him. True if he did.
+    /// </summary>
+    bool Beset(Unit u)
+    {
+        if (u.HurtBy is { Dead: false, Team: Team.Wild } by && by.T.Aggro > 0 && Time - u.LastHurt < 3) { u.Prey = by; u.Path = null; return true; }
+        if (u.Hold) return false;
+        Unit best = null; float bd = 12 * VoxelWorld.PerMetre;
+        foreach (var o in Units)
+        {
+            if (o.Dead || o.Team != Team.Wild || o.T.Aggro <= 0 || o.Target is not { Dead: false, Team: Team.Player }) continue;
+            float d = Dist(u, o);
+            if (d < bd) { bd = d; best = o; }
+        }
+        if (best == null) return false;
+        u.Prey = best; u.Path = null;
+        return true;
+    }
+
     /// <summary>Living beasts in the valley.</summary>
     public int WildAlive()
     {
@@ -108,7 +139,7 @@ public sealed partial class Sim
         BearTick(u);
         // a wounded boar goes for whoever wounded it, for a while
         var foe = u.Target;
-        if (foe != null && (foe.Dead || Time - u.LastHurt > 8 || Dist(u, foe) > 24 * 16)) { u.Target = foe = null; u.Path = null; }
+        if (foe != null && (foe.Dead || Time - u.LastHurt > 8 || Dist(u, foe) > 24 * 16 || Leashed(u))) { u.Target = foe = null; u.Path = null; }
         if (foe != null)
         {
             u.State = UnitState.Fight;
@@ -163,7 +194,14 @@ public sealed partial class Sim
         if (Time < u.NextSearch) return;
         u.NextSearch = Time + 5 + Rng.NextDouble() * 10;
         int home = u.Home >= 0 ? u.Home : u.Cell;
-        var (hx, _, hz) = Nav.Feet(home);
+        var (hx, hy, hz) = Nav.Feet(home);
+        // a keeper keeps to its spot, a step or two about it, under the roof of its mine or its den too
+        if (u.Guard)
+        {
+            int at = StandNear((int)hx + Rng.Next(-12, 13), (int)hy, (int)hz + Rng.Next(-12, 13), u.T.Move.Height);
+            if (at >= 0 && at != u.Cell && !GoTo(u, at, budget: 1500)) u.Path = null;
+            return;
+        }
         float ox = (float)(Rng.NextDouble() - .5) * 2 * 10 * 16, oz = (float)(Rng.NextDouble() - .5) * 2 * 10 * 16;
         // somewhere near home, and never out against the land's edge
         var (gx, gz) = Site.Hex != null ? Site.PullIn(hx + ox, hz + oz, EdgeRoom) : (hx + ox, hz + oz);

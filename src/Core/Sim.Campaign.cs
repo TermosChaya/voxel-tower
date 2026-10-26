@@ -34,6 +34,8 @@ public sealed partial class Sim
     /// the other valleys of ours (each gives a commander more, <see cref="CaptainCap"/>).
     /// </summary>
     public int AwayPlaces, CaptainsAway, HallsAway;
+    /// <summary>How much hardier ours come into being than their kind: a shrine of the map's blessing (Campaign.Troves.cs).</summary>
+    public float OursHardy = 1;
     double _nextDepartLook;
 
     /// <summary>How far in from its side a party come into the valley stands (30 m), and how far apart its file walks in (1½ m).</summary>

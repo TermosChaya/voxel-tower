@@ -33,6 +33,8 @@ public sealed partial class MapParty
     public float SetOut;
     /// <summary>A party of ours stopped where the enemy is, for the player to go in and fight or have it counted.</summary>
     public bool Waits;
+    /// <summary>The lair a party of the horde came out of and goes home to (its cell's key), −1 for none.</summary>
+    public int Den = -1;
 
     public bool Moving => Path is { Count: > 0 };
 
@@ -99,6 +101,7 @@ public sealed partial class Campaign
     /// </summary>
     public void Advance(double seconds)
     {
+        double seconds0 = seconds;
         Ready();
         while (seconds > 1e-9)
         {
@@ -116,6 +119,7 @@ public sealed partial class Campaign
         Dawns();
         Judge();
         if (Live != null && InValley && Here != null) Reckon(Live, Here);
+        LookAtHall(Math.Max(seconds0, .02));
     }
 
     void Dawns()
@@ -255,7 +259,8 @@ public sealed partial class Campaign
             if (!Battle(p, ours.Party.Members, null, cell.Owner == Owner.Ours ? cell.Sum.Walls : 0, cell, ours)) return;
         }
         if (cell.Owner == Owner.Ours) { Assault(p, cell); return; }
-        if (cell.Owner == Owner.None && cell.Sum.Keep.Count > 0)
+        // (the keepers of a treasure keep to it: the horde goes by them, and they let it)
+        if (cell.Owner == Owner.None && cell.Sum.Keep.Count > 0 && !Untaken(cell))
         {
             if (!Battle(p, cell.Sum.Keep, null, 0, cell, null)) return;
         }
@@ -365,11 +370,20 @@ public sealed partial class Campaign
         GoHome(p);
     }
 
-    /// <summary>A party of the horde sets off home to the lair; with no lair left, it keeps where it is.</summary>
+    /// <summary>
+    /// A party of the horde sets off home: to the lair it came out of while the horde holds it, else to the nearest; with
+    /// no lair left, it keeps where it is.
+    /// </summary>
     void GoHome(MapParty p)
     {
-        var lair = Lair;
         var here = At(p.Q, p.R);
+        var lair = CellOfKey(p.Den) is { Holding: Holding.HordeTown, Owner: Owner.Horde } own ? own : null;
+        if (lair == null && here != null)
+        {
+            int best = int.MaxValue;
+            foreach (var l in Lairs) if (Distance(l.Q, l.R, here.Q, here.R) < best) { best = Distance(l.Q, l.R, here.Q, here.R); lair = l; }
+            if (lair != null) p.Den = KeyOf(lair);
+        }
         if (lair == null || here == null) { p.Aim = PartyAim.Hold; p.Path = null; return; }
         if (here == lair) { BackHome(p, lair); return; }
         p.Aim = PartyAim.Return;
@@ -414,7 +428,7 @@ public sealed partial class Campaign
         if (cell.Owner != Owner.Ours && cell.Sum.Keep.Count > 0)
         {
             bool lair = cell.Holding == Holding.HordeTown && cell.Owner == Owner.Horde;
-            var keepers = cell.Owner == Owner.Horde ? "гарнизон" : "зверей";
+            var keepers = cell.Owner == Owner.Horde ? "гарнизон" : Untaken(cell) ? cell.Trove == TroveKind.Shrine ? "мертвецов святилища" : "стражу сокровища" : "зверей";
             // those met in the valley fight: the raiders who only come raiding are not in its garrison
             var holders = cell.Sum.Holders();
             last = holders.Count == 0 ? new QuickResult { AttackerWon = true, Odds = 1 }
@@ -430,6 +444,7 @@ public sealed partial class Campaign
             Tell(NewsKind.Fought, $"Бой {Names(cell).prep}: отряд разбил {keepers}. Пало врагов {last.DefenderFell.Count}, наших {last.AttackerFell.Count}.", cell, ours);
             cell.Sum.Keep.Clear();
             if (cell.Owner == Owner.Horde) { Retake(cell, lair, ours); PartyGlory(ours, cell); }
+            else if (Untaken(cell)) TakeTrove(cell, ours);
         }
         if (ours.Party.Members.Count == 0) Parties.Remove(ours);
         return last;
@@ -446,6 +461,11 @@ public sealed partial class Campaign
             Won = true;
             Tell(NewsKind.Taken, "Логово орды взято. Победа.", cell, ours);
         }
+        else if (lair && Lair != null)
+        {
+            int left = Lairs.Count;
+            Tell(NewsKind.Taken, $"Логово орды взято. Осталось логов: {left}.", cell, ours);
+        }
     }
 
     // ------------------------------------------------------------ the valleys we are not in
@@ -453,7 +473,7 @@ public sealed partial class Campaign
     /// <summary>The gold of the valleys we hold and are not in: their towns' and their mines' a minute, a little each step.</summary>
     void Earn(double dt)
     {
-        double g = 0;
+        double g = Blessed(Blessing.Plenty) ? PlentyGold / 60 * dt : 0;
         foreach (var c in Cells)
         {
             if (c.Owner != Owner.Ours || InValley && c == Here) continue;
@@ -496,6 +516,7 @@ public sealed partial class Campaign
     /// </summary>
     void Dawn()
     {
+        float mend = Blessed(Blessing.Mending) ? Mend * 2 : Mend;
         foreach (var c in Cells)
         {
             if (c.Owner == Owner.Ours && !(InValley && c == Here))
@@ -503,7 +524,7 @@ public sealed partial class Campaign
                 var (stone, logs, metal) = ValleySummary.Yield(c.Kind);
                 int hands = Math.Min(c.Sum.Workers, ValleySummary.YieldHands);
                 c.Sum.Stone += stone * hands; c.Sum.Logs += logs * hands; c.Sum.Metal += metal * hands;
-                foreach (var m in c.Sum.Keep) Heal(m, Mend);
+                foreach (var m in c.Sum.Keep) Heal(m, mend);
             }
             if (c.Holding == Holding.HordeTown && c.Owner == Owner.Horde) foreach (var m in c.Sum.Keep) Heal(m, LairMend);
         }
@@ -511,7 +532,7 @@ public sealed partial class Campaign
         foreach (var p in Parties)
         {
             if (p.Owner != Owner.Ours) continue;
-            float share = PartyMend(p, !p.Moving && At(p.Q, p.R) is { Owner: Owner.Ours });
+            float share = PartyMend(p, !p.Moving && At(p.Q, p.R) is { Owner: Owner.Ours }) * (mend / Mend);
             if (share > 0) foreach (var m in p.Party.Members) Heal(m, share);
         }
         HordeDawn();
@@ -637,7 +658,7 @@ public sealed partial class Campaign
         if (p.Path != null) foreach (var c in p.Path) { w.Write(c.Q); w.Write(c.R); }
         w.Write(p.Progress);
         WriteLord(w, p.Lord);
-        w.Write((byte)p.Aim); w.Write(p.GoalQ); w.Write(p.GoalR); w.Write(p.CameQ); w.Write(p.CameR); w.Write(p.SetOut); w.Write(p.Waits);
+        w.Write((byte)p.Aim); w.Write(p.GoalQ); w.Write(p.GoalR); w.Write(p.CameQ); w.Write(p.CameR); w.Write(p.SetOut); w.Write(p.Waits); w.Write(p.Den);
     }
 
     void ReadWay(BinaryReader r, MapParty p)
@@ -649,7 +670,7 @@ public sealed partial class Campaign
         p.Progress = r.ReadDouble();
         p.Lord = ReadLord(r);
         p.Aim = (PartyAim)r.ReadByte(); p.GoalQ = r.ReadInt32(); p.GoalR = r.ReadInt32(); p.CameQ = r.ReadInt32(); p.CameR = r.ReadInt32();
-        p.SetOut = r.ReadSingle(); p.Waits = r.ReadBoolean();
+        p.SetOut = r.ReadSingle(); p.Waits = r.ReadBoolean(); p.Den = r.ReadInt32();
     }
 
     /// <summary>The turn's own state, after the parties: the dawns seen, the luck, the parties off the map into the valley, what each cell keeps, the horde's realm.</summary>

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace VoxelTower.Core;
 
-public enum LandmarkKind : byte { Mine, Ruin, Power, Lair }
+public enum LandmarkKind : byte { Mine, Ruin, Power, Lair, Trove }
 
 /// <summary>
 /// A named place of the valley: a mine (what it pays a minute while it is ours, whether the horde camps at it), a ruin, a
@@ -42,6 +42,13 @@ public sealed partial class Site
     public bool HasKeep => Holding == Holding.Citadel;
     /// <summary>Where the garrison of a horde's town keeps: before its huts' doors, at its fire and at its gate (voxels).</summary>
     public readonly List<(int X, int Z)> HordePosts = new();
+    /// <summary>
+    /// The treasure of a valley of the map nobody holds (Troves.cs), if it has one: what it is, the spot of its chest (or
+    /// of its altar, a shrine's), and where its guardians keep (the floor they stand on, −1 for the ground there).
+    /// </summary>
+    public TroveKind Trove;
+    public int TroveX, TroveY, TroveZ;
+    public readonly List<(int X, int Y, int Z)> TrovePosts = new();
 
     /// <summary>A row of the western edge to come in by, as near a wanted one as the hexagon's straight side allows.</summary>
     public int EntryZ(int z) => Hex == null ? z : Math.Clamp(z, WestZ0, WestZ1);

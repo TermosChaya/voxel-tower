@@ -812,6 +812,14 @@ public partial class Hud : CanvasLayer
     {
         if (l.Kind == LandmarkKind.Ruin) return (l.Name, "старая кладка: починить ({ToolRepair}) или разобрать на камень ({ToolGather}, {MatStone})", Ornament.Aged);
         if (l.Kind == LandmarkKind.Lair) return (l.Name, "город орды: гарнизон бьёт всех, кто подойдёт", Ornament.Blood);
+        if (l.Kind == LandmarkKind.Trove)
+        {
+            var cell = Main.Atlas?.Here;
+            if (cell == null || !Campaign.Untaken(cell)) return (l.Name, cell?.Trove == TroveKind.Shrine ? "испытание пройдено" : "сундук взят", Ornament.Aged);
+            return cell.Trove == TroveKind.Shrine
+                ? ($"{l.Name} · {Campaign.RewardText(cell)}", cell.TrialOn ? $"держите людей у алтаря: {Math.Round(cell.TrialHeld)} из {Campaign.TrialLength:0} с" : "встаньте у алтаря и держите его 3 минуты против мертвецов", Ornament.EmberGlow)
+                : ($"{l.Name} · {Campaign.RewardText(cell)}", "перебейте стражу и подойдите к сундуку", Ornament.EmberGlow);
+        }
         var m = _m.Sim.Mines.Find(x => x.Place == l);
         if (m == null) return (l.Name, "", Ornament.Aged);
         if (m.Power)
