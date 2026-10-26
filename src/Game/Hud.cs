@@ -92,6 +92,8 @@ public partial class Hud : CanvasLayer
     Medallion _help, _menuButton, _boardButton, _heroButton;
     /// <summary>The map of valleys, in a campaign (Ui/MapBoard.cs); null outside one.</summary>
     public MapBoard Board { get; private set; }
+    /// <summary>The map of valleys as it is played, over its land (Ui/AtlasHud.cs); null outside a campaign.</summary>
+    public AtlasHud MapPane { get; private set; }
     /// <summary>A commander's card as a hero's (Ui/HeroCard.cs).</summary>
     public HeroCard HeroPane { get; private set; }
     /// <summary>The medallion of a hero with a skill to choose is up (for the self-test).</summary>
@@ -334,7 +336,7 @@ public partial class Hud : CanvasLayer
             Board = new MapBoard();
             root.AddChild(Board);
             Board.Init(m);
-            _boardButton.Clicked += () => Board.Toggle();
+            _boardButton.Clicked += () => m.ToggleAtlas();
         }
         // a hero with a skill to choose: his medallion beside the others; and the heroes' card, over the map of valleys
         _heroButton = new Medallion(Icons.Of("black-knight-helm"), "Новый уровень командира\nВыберите ему умение. Щелчок откроет его карточку.") { Size = new Vector2(38, 38), Visible = false, Lit = true };
@@ -579,13 +581,13 @@ public partial class Hud : CanvasLayer
         // the beam's furniture: the tabs at the left, the clock hanging at the right, the stores between
         // a hero waiting for his skill: his medallion before the others, the clock moved along for it
         var (risenHere, risenAway) = RisenHero();
-        bool rising = (risenHere != null || risenAway != null) && Board?.IsOpen != true;
+        bool rising = (risenHere != null || risenAway != null) && Board?.IsOpen != true && HeroPane?.IsOpen != true;
         _heroButton.Visible = rising;
         _heroButton.Position = new Vector2(vp.X - (_boardButton != null ? 176 : 134), 1);
         _clockPanel.Position = new Vector2(vp.X - WaveClock.W - (_boardButton != null ? 140 : 98) - (rising ? 42 : 0), 0);
         _help.Position = new Vector2(vp.X - 50, 1);
         _menuButton.Position = new Vector2(vp.X - 92, 1);
-        if (_boardButton != null) { _boardButton.Position = new Vector2(vp.X - 134, 1); _boardButton.Lit = Board.IsOpen; }
+        if (_boardButton != null) { _boardButton.Position = new Vector2(vp.X - 134, 1); _boardButton.Lit = _m.AtlasOpen; }
         _envoy.Position = new Vector2(vp.X - EnvoyCard.W - 14, WaveClock.H + 10);
         // the dawn's gifts under the beam in the middle, and the dusk's card under them if the gifts still wait
         _dawn.Position = new Vector2(MathF.Round((vp.X - DawnCard.W) / 2), TopBand + 10);
@@ -631,7 +633,7 @@ public partial class Hud : CanvasLayer
         if (_refreshAt <= 0) { _refreshAt = .2; Refresh(); }
         var t = _m.Tools;
         bool overUi = GetViewport().GuiGetHoveredControl() != null;
-        if (overUi) _tag.Visible = false;
+        if (overUi || _m.AtlasOpen) _tag.Visible = false;
         else if (t.Tool != Tool.None) _tag.Show(t.PlanText, t.PlanAffordable ? Ornament.EmberGlow : Ornament.Blood, t.HoverText);
         else
         {
@@ -1002,6 +1004,27 @@ public partial class Hud : CanvasLayer
     {
         TitleOpen = false;
         Bare(false);
+    }
+
+    /// <summary>The map of valleys made for the campaign: its frame over its land, under the medallions and the hero's card.</summary>
+    public void InitAtlas(Main m, AtlasView view)
+    {
+        MapPane = new AtlasHud();
+        _root.AddChild(MapPane);
+        // over the valley's frame (put by while it is up), under the medallions, the toasts, the cards and the hero's card
+        _root.MoveChild(MapPane, _overlay.GetIndex() + 1);
+        MapPane.Init(m, view);
+    }
+
+    /// <summary>The valley's frame put by while the map of valleys is up (the menu, the help, the map's and the hero's medallions, the toasts kept); and back.</summary>
+    public void ShowAtlas(bool on)
+    {
+        // (the hints and the advice go with the console; the dawn's and the dusk's cards stay, as what they say is the realm's)
+        foreach (CanvasItem c in new CanvasItem[] { _overlay, _console, _drop, _beam, _tag, _lordBar }) c.Visible = !on;
+        _clockPanel.Visible = !on && !_hidden.Contains(Part.Clock);
+        _colonists.Visible = !on && !_hidden.Contains(Part.Faces);
+        _envoy.Visible = !on;
+        if (on) _drop.Close();
     }
 
     void Bare(bool on)

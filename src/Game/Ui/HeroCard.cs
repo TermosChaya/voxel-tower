@@ -19,6 +19,7 @@ public partial class HeroCard : Control
     VBoxContainer _col;
     TextureRect _face;
     Label _name, _level, _deeds, _party, _offerHead;
+    Button _out;
     XpBar _bar;
     GridContainer _skills;
     HBoxContainer _offer;
@@ -102,6 +103,20 @@ public partial class HeroCard : Control
         _party = Hud.Text("", Ornament.Serif, 13, Ornament.Aged, wrap: true);
         _party.CustomMinimumSize = new Vector2(W - 40, 0);
         _col.AddChild(_party);
+
+        // in a campaign, a commander of the valley takes his party out onto the map at once
+        _out = new Button { Text = "Вывести на карту", FocusMode = FocusModeEnum.None, MouseDefaultCursorShape = CursorShape.PointingHand, SizeFlagsHorizontal = SizeFlags.ShrinkEnd,
+            TooltipText = "Вывести на карту\nКомандир с выбранными (или с теми, кто в 20 м от него) сразу выйдет на карту долин у ближнего края." };
+        _out.AddThemeFontOverride("font", Ornament.SerifBold);
+        _out.Pressed += () =>
+        {
+            var u = _unit;
+            if (u == null) return;
+            Close();
+            string why = _m.LeaveToMap(_m.PartyOf(u));
+            if (why != null) _m.Hud.Float(why, Ornament.Blood);
+        };
+        _col.AddChild(_out);
     }
 
     /// <summary>The card of a commander of the valley.</summary>
@@ -140,6 +155,7 @@ public partial class HeroCard : Control
             Sound.Ui("tick");
             _m.Hud.Float($"{h.Name}: {Heroes.NameOf(s)} {Sim.Roman(h[s])}", Ornament.Moss);
             _m.Hud.Board?.Refresh();
+            _m.Hud.MapPane?.Refresh();
         }
         _shown = "";
         Refresh();
@@ -173,6 +189,7 @@ public partial class HeroCard : Control
         _bar.QueueRedraw();
         _deeds.Text = $"Сразил сам: {h.Kills}. Умения: {Heroes.Skills(h)}.";
         _party.Text = party;
+        _out.Visible = _unit != null && Main.Atlas != null && _m.AtlasLand != null;
         foreach (var c in _skills.GetChildren()) ((Control)c).QueueRedraw();
         foreach (var c in _offer.GetChildren()) c.QueueFree();
         _offerHead.Visible = _offer.Visible = h.Pending;

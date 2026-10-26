@@ -6230,6 +6230,8 @@ if (args.Length > 0 && args[0] == "--war-audit") WarBench.Audit();
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--campaign") CampaignBench.Run(Check);
 // the map's own life: the ways, the horde's realm, quick battles, the valleys we are not in, the campaign lost (MapBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--map") MapBench.Run(Check);
+// the heroes walking the map's land: their time, their ways, the cells they cross, the enemy met (AtlasBench.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--atlas") AtlasBench.Run(Check);
 // the commanders as heroes: experience, levels, skills, the fallen, the saves (Heroes.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--heroes") HeroesBench.Run(Check);
 // the map's content: the big map's lairs, the treasures and their keepers, scouts, a shrine's trial (TrovesBench.cs)

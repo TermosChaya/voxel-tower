@@ -413,6 +413,8 @@ public partial class BuildTools : Node3D
 
     public override void _UnhandledInput(InputEvent e)
     {
+        // over the map of valleys the valley's tools wait (its keys go to the map's frame, in Key)
+        if (_m.AtlasOpen && e is not InputEventKey) return;
         switch (e)
         {
             case InputEventMouseMotion mm:
@@ -433,7 +435,8 @@ public partial class BuildTools : Node3D
                 GetViewport().SetInputAsHandled();
                 break;
             case InputEventKey k when k.Pressed && !k.CtrlPressed && !k.MetaPressed:
-                if (Key(k)) GetViewport().SetInputAsHandled();
+                // (a key that took the game into another valley has the scene going: nothing left to mark handled)
+                if (Key(k) && IsInsideTree()) GetViewport().SetInputAsHandled();
                 break;
         }
     }
@@ -445,6 +448,13 @@ public partial class BuildTools : Node3D
         if (_m.Hud.MenuOpen && code != global::Godot.Key.Escape) return false;
         // a hero's card shut by Esc first
         if (_m.Hud.HeroPane?.IsOpen == true && !_m.Hud.MenuOpen && code == global::Godot.Key.Escape) { _m.Hud.HeroPane.Close(); return true; }
+        // the map of valleys up: its own keys, and only the time's, the help's and the menu's besides
+        if (_m.AtlasOpen && !_m.Hud.MenuOpen)
+        {
+            if (_m.Hud.MapPane.Key(k)) return true;
+            if (code == global::Godot.Key.Escape) { _m.Hud.OpenMenu(); return true; }
+            return false;
+        }
         if (_m.Hud.Board?.IsOpen == true && !_m.Hud.MenuOpen)
         {
             if (code != global::Godot.Key.Escape) return false;

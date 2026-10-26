@@ -92,9 +92,11 @@ public partial class Main
                 var key = new InputEventKey { PhysicalKeycode = Bindings.KeyOf(Act.Board), Keycode = Bindings.KeyOf(Act.Board), Pressed = true };
                 Command._UnhandledInput(key);
                 await Frames(3);
-                check("the board opens with its key: nineteen cells drawn, twelve of them in the fog (only round the first valley seen)",
-                    Hud.Board.IsOpen && Hud.Board.Drawn == 19 && Hud.Board.Fogged == 12, $"open {Hud.Board.IsOpen}, drawn {Hud.Board.Drawn}, in the fog {Hud.Board.Fogged}");
-                Hud.Board.Close();
+                int fogged = c.Cells.Count(x => !c.Seen(x));
+                check("the map opens with its key over its land: nineteen cells, twelve of them in the fog (only round the first valley seen); the valley's frame put by",
+                    AtlasOpen && c.Cells.Count == 19 && fogged == 12 && AtlasLand.Visible && Hud.MapPane.IsOpen, $"open {AtlasOpen}, cells {c.Cells.Count}, in the fog {fogged}");
+                Command._UnhandledInput(key);
+                await Frames(2);
                 // two commanders; a town hall standing, a third, hired at the citadel
                 int cap0 = Sim.CaptainCap;
                 string refused = Sim.CantEnlist(Kinds.Captain);
@@ -140,13 +142,15 @@ public partial class Main
                     Sim.AwayPlaces == 4 && shown == $"{Sim.Household()}/{Sim.Places}" && Sim.Household() == Sim.Units.Count(u => !u.Dead && u.Team == Team.Player) + 4
                     && Hud.PlacesNote(Sim, "") == "4 в походе",
                     $"away {Sim.AwayPlaces}, the beam «{shown}», household {Sim.Household()} of {Sim.Places}, «{Hud.PlacesNote(Sim, "")}»");
-                for (int i = 0; i < 400 && party.Moving; i++) CampaignTick(5);
+                for (int i = 0; i < 400 && (party.Moving || party.Walking); i++) CampaignTick(5);
+                OpenAtlas();
+                Hud.MapPane.Choose(party, focus: true);
                 await Frames(4);
-                check("walked there, it stands in the ore valley and the card asks to go in",
-                    !party.Moving && c.CellOf(party) == ore && Hud.Board.CardShown && Hud.Board.CardParty == party,
-                    $"walking {party.Moving}, at {c.CellOf(party).Kind}, card {Hud.Board.CardShown}");
+                check("walked there over the map's land, it stands in the ore valley, «Войти в клетку» offered",
+                    !party.Moving && !party.Walking && c.CellOf(party) == ore && Hud.MapPane.EnterShown,
+                    $"walking {party.Moving || party.Walking}, at {c.CellOf(party).Kind}, the button {Hud.MapPane.EnterShown}");
                 Again("ore", fails);
-                Hud.Board.EnterWith(party);
+                EnterHero(party);
                 return false;
             }
             case "ore":
@@ -194,11 +198,11 @@ public partial class Main
                 MapParty walked = null;
                 for (int i = 0; i < 120 && walked == null; i++) { Run(1); walked = c.Parties.Find(x => x.Owner == Holder.Ours && x.Party.Members.Count == 4 && c.CellOf(x) == ore); }
                 await Frames(2);
-                check("in first person at the valley's edge the commander is offered the map; on its key he and those about him go over the edge onto the map toward the cell beyond, and the board opens on them",
-                    inside && offer.StartsWith("Край долины") && !FP.On && walked != null && walked.Moving && walked.Path[^1] == beyond && Hud.Board.IsOpen && Hud.Board.Party == walked
+                check("in first person at the valley's edge the commander is offered the map; on its key he and those about him go over the edge onto the map toward the cell beyond, and the map opens on them",
+                    inside && offer.StartsWith("Край долины") && !FP.On && walked != null && walked.Moving && walked.Path[^1] == beyond && AtlasOpen && Hud.MapPane.Hero == walked
                     && walked.Party.Members.All(m => m.Billet == Campaign.KeyOf(c.Home)),
-                    $"in him {inside}, offered «{offer}», still in him {FP.On}; on the map {walked != null}, walking {walked?.Moving} to {walked?.Path.LastOrDefault()?.Kind}; board {Hud.Board.IsOpen}, chosen {Hud.Board.Party == walked}");
-                Hud.Board.Close();
+                    $"in him {inside}, offered «{offer}», still in him {FP.On}; on the map {walked != null}, walking {walked?.Moving} to {walked?.Path.LastOrDefault()?.Kind}; the map {AtlasOpen}, chosen {Hud.MapPane.Hero == walked}");
+                CloseAtlas();
                 // a strong party put at the horde's town, as if it had walked there
                 var p = new MapParty { Q = lair.Q, R = lair.R, Owner = Holder.Ours, Party = new Party() };
                 var before = c.Neighbour(lair, Campaign.SideToward(lair, 0, 0));
@@ -278,9 +282,9 @@ public partial class Main
             }
             case "back":
             {
-                check("the last of ours gone out, the game goes back to the first valley read from its file, the board open on it",
-                    c.Here.Home && _loaded && Hud.Board.IsOpen && lair.Owner == Holder.None && ore.Owner == Holder.Ours && ore.Outpost,
-                    $"home {c.Here.Home}, read back {_loaded}, board {Hud.Board.IsOpen}, the town {lair.Owner}, the ore valley {ore.Owner}");
+                check("the last of ours gone out, the game goes back to the first valley read from its file, the map open on it",
+                    c.Here.Home && _loaded && AtlasOpen && lair.Owner == Holder.None && ore.Owner == Holder.Ours && ore.Outpost,
+                    $"home {c.Here.Home}, read back {_loaded}, the map {AtlasOpen}, the town {lair.Owner}, the ore valley {ore.Owner}");
                 c.Gold = Sim.Stock.Gold = 777;
                 bool wrote = SaveCampaign();
                 var read = Campaign.Read(Saves.CampaignDir(CampSlot));
@@ -289,12 +293,16 @@ public partial class Main
                     && Math.Abs(read.Gold - 777) < .01 && read.Clock.Day == c.Clock.Day && read.HereQ == c.HereQ && read.HereR == c.HereR;
                 check("the campaign written and read back is the same: the cells, whose they are, the outposts, the parties walking, the gold, the day", wrote && same,
                     $"written {wrote}, the same {same}; {read.Parties.Count} parties, gold {read.Gold:0}");
-                Hud.Board.Close();
+                CloseAtlas();
                 string folder = Saves.CampaignDir(CampSlot);
                 LeaveCampaign();
                 if (Directory.Exists(folder)) Directory.Delete(folder, true);
-                return true;
+                // the campaign as a new one is played, on the map's land with its first hero
+                return SelfTestAtlas(fails);
             }
+            case "atlas-home":
+            case "atlas-ore":
+                return await SelfTestAtlasGo(stage, check, fails);
         }
         return true;
     }

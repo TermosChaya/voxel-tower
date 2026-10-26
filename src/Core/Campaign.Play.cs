@@ -66,7 +66,13 @@ public sealed partial class Campaign
         foreach (var m in party.Members) if (m.Billet < 0) m.Billet = KeyOf(Here);
         var p = new MapParty { Id = _nextParty++, Q = HereQ, R = HereR, CameQ = HereQ, CameR = HereR, Party = party, Owner = Owner.Ours };
         Parties.Add(p);
-        if (to != null && to != Here) Send(p, to);
+        // on the land of the map by the side it went out over, and led on from there over the land
+        PlaceIn(p, Here, party.Side);
+        if (to != null && to != Here)
+        {
+            var (tx, tz) = Land != null ? Land.Center(to) : (0, 0);
+            if (Land == null || !Lead(p, tx, tz)) Send(p, to);
+        }
         return p;
     }
 
@@ -80,6 +86,7 @@ public sealed partial class Campaign
     /// <summary>Seconds of the map's clock a party has still to walk; 0 standing.</summary>
     public double WalkLeft(MapParty p)
     {
+        if (p.Trail != null) return TrailLeft(p);
         if (!p.Moving) return 0;
         double left = -p.Progress;
         var at = CellOf(p);

@@ -284,6 +284,11 @@ public partial class Main
                 TrovePose();
                 break;
             }
+            case "atlas":
+            {
+                AtlasPose();
+                break;
+            }
             case "lairfight":
             {
                 // ours led in on the fire, as a player would send them

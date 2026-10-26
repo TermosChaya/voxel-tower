@@ -22,9 +22,8 @@ public partial class Main
     /// <summary>The campaign in play, null outside one; and its slot. Kept while the scene begins again.</summary>
     public static Campaign Atlas;
     public static string CampSlot;
-    /// <summary>A party of the map to come into the valley the scene opens on, and whether the board opens with it.</summary>
+    /// <summary>A party of the map to come into the valley the scene opens on.</summary>
     static MapParty _entering;
-    static bool _boardAtStart;
     /// <summary>--campaign[=seed]: a new campaign at once, in the third slot (screenshots, tests).</summary>
     bool _campaignArg;
 
@@ -44,6 +43,8 @@ public partial class Main
         {
             // (the map's content staged on the big map)
             Atlas = Campaign.New(_seed, _pose is "troves" or "trove" ? 3 : 2);
+            // (the first hero on the map, as a new campaign has him; not in the scenes staged before the map was walked)
+            if (_pose is null or "atlas") Atlas.AddHero();
             CampSlot = Saves.CampaignSlots[2];
         }
         CampaignPoseBefore();
@@ -75,8 +76,11 @@ public partial class Main
             Sim.Bands.RemoveAll(b => b.State == BandState.Coming);
             if (cell.Home)
             {
-                foreach (var t in new[] { Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Archer, Kinds.Swordsman }) Sim.Spawn(t, Sim.Gate);
-                for (int i = 0; i < Campaign.StartCommanders; i++) Sim.Spawn(Kinds.Captain, Sim.Gate);
+                // with the first hero out on the map his army is the valley's soldiers, and he one of its commanders
+                bool hero = Atlas.Parties.Exists(p => p.Owner == Holder.Ours && p.Party.Commander?.Hero != null);
+                foreach (var t in hero ? new[] { Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Worker } : new[] { Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Worker, Kinds.Archer, Kinds.Swordsman })
+                    Sim.Spawn(t, Sim.Gate);
+                for (int i = 0; i < Campaign.StartCommanders - (hero ? 1 : 0); i++) Sim.Spawn(Kinds.Captain, Sim.Gate);
             }
             Sim.SeedWildlife();
         }
@@ -109,14 +113,19 @@ public partial class Main
             var p = _entering;
             _entering = null;
             Atlas.Parties.Remove(p);
-            Come(p.Party, Atlas.EntrySideOf(p), select: true);
+            Come(p.Party, _enteringSide >= 0 ? _enteringSide : Atlas.EntrySideOf(p), select: true);
+            _enteringSide = -1;
         }
         string where = cell.Home ? "первая долина" : Campaign.Names(cell).nom;
         Hud.Log($"Кампания, день {Atlas.Clock.Day}: {where}. {{Board}} — карта долин.", Hud.Kind.Ok);
         if (cell.Owner == Holder.Horde) Hud.Log(cell.Holding == Holding.HordeTown ? "Логово орды. Перебейте гарнизон." : "Долина во власти орды. Перебейте её гарнизон.", Hud.Kind.Warn);
         else if (cell.Owner == Holder.None) Hud.Log("Долина ничья. Поставьте заставу: {Board}, «Поставить заставу». Когда башня встанет, долина ваша.", Hud.Kind.Ok);
-        if (_boardAtStart) { _boardAtStart = false; Hud.Board?.Open(); }
+        AtlasStart();
+        if (_atlasAtStart) { _atlasAtStart = false; OpenAtlas(); }
     }
+
+    /// <summary>The map shown anew, the land's and the board's.</summary>
+    void MapsChanged() { Hud.Board?.Refresh(); Hud.MapPane?.Refresh(); }
 
     /// <summary>A party of ours walks into the valley by a side; chosen, the camera goes to it.</summary>
     void Come(Party party, int side, bool select)
@@ -153,7 +162,7 @@ public partial class Main
             _outbound[p.Side] = null; _boardOnOut[p.Side] = false;
             var mp = Atlas.Out(p, to);
             Hud.Log(to != null && mp.Moving ? $"Отряд идёт по карте: {Campaign.Names(to).nom}, {Fmt.Clock(Atlas.WalkLeft(mp))}." : "Отряд вышел на карту.", Hud.Kind.Ok);
-            if (open && Hud.Board != null) { Hud.Board.Open(); Hud.Board.ChooseParty(mp); }
+            if (open) { OpenAtlas(); Hud.MapPane?.Choose(mp, focus: true); }
         }
         while (Atlas.TakeRaid(out var enemy, out int side))
         {
@@ -172,7 +181,7 @@ public partial class Main
         }
         while (Atlas.TakeArrival(out var ours, out int from)) Come(ours.Party, from, select: false);
         // the valley's treasure: a chest taken, a shrine's trial going on
-        if (Atlas.TroveTick(Sim, here, dt)) Hud.Board?.Refresh();
+        if (Atlas.TroveTick(Sim, here, dt)) { RefreshLand(here); MapsChanged(); }
         bool told = Tell();
         Hold(here, dt);
         if (Sim.Lost && here.Owner == Holder.Ours)
@@ -187,7 +196,7 @@ public partial class Main
             if (Atlas.Won) Hud.Finale("Победа", $"Логово орды взято на {Atlas.Clock.Day}-й день.", true);
             else Hud.Finale("Кампания проиграна", $"Первая долина пала, другой за {Campaign.DaysToRetake} дня не занято. День {Atlas.Clock.Day}.", false);
         }
-        if (told) Hud.Board?.Refresh();
+        if (told) MapsChanged();
         // the last of ours gone out of a valley not the first: back to the first, the board open
         bool any = Sim.Units.Exists(u => !u.Dead && u.Team == Team.Player && u.T != Kinds.Risen);
         _emptyFor = !here.Home && !any && Sim.Departed.Count == 0 ? _emptyFor + Math.Max(dt, .02) : 0;
@@ -209,8 +218,15 @@ public partial class Main
                 _ => Hud.Kind.Plain,
             };
             Hud.Log(n.Text, kind, toast: n.Kind != NewsKind.Grew);
-            if (n.Kind == NewsKind.Arrived && n.Party is { Owner: Holder.Ours } p && Atlas.Parties.Contains(p) && !p.Moving) Hud.Board?.Arrived(p);
-            if (n.Kind == NewsKind.RaidComing) Hud.Float("войско орды идёт на нашу долину", Ornament.Blood);
+            // a hero come up against the enemy or a treasure: the map's card asks what to do
+            if (n.Kind == NewsKind.Arrived && n.Party is { Owner: Holder.Ours } p && Atlas.Parties.Contains(p) && !p.Moving && (p.Waits || Campaign.Untaken(Atlas.CellOf(p))))
+                Hud.MapPane?.Arrived(p);
+            if (n.Kind == NewsKind.RaidComing)
+            {
+                Hud.Float("войско орды идёт на нашу долину", Ornament.Blood);
+                if (n.Party is { Owner: Holder.Horde } e && Atlas.Parties.Contains(e) && Atlas.At(e.GoalQ, e.GoalR) is { Owner: Holder.Ours }) Hud.MapPane?.Warn(e);
+            }
+            if (n.Cell != null) RefreshLand(n.Cell);
         }
         Atlas.News.Clear();
         return true;
@@ -236,7 +252,8 @@ public partial class Main
                 if (here.Owner != Holder.Horde) Sim.GloryAll(Heroes.TakeXp, "долина взята");
                 if (here.Owner != Holder.Horde)
                     Hud.Log(here.Owner == Holder.Ours ? "Первая долина снова наша." : "Гарнизон разбит. Долина ничья: поставьте заставу, {Board}, «Поставить заставу».", Hud.Kind.Ok);
-                Hud.Board?.Refresh();
+                RefreshLand(here);
+                MapsChanged();
             }
         }
         if (here.Owner == Holder.None && here.Outpost && (_outpostLook -= dt) <= 0)
@@ -248,7 +265,8 @@ public partial class Main
                 Atlas.OutpostStands(here);
                 Sim.GloryAll(Heroes.TakeXp, "застава встала");
                 Tell();
-                Hud.Board?.Refresh();
+                RefreshLand(here);
+                MapsChanged();
             }
         }
     }
@@ -372,7 +390,8 @@ public partial class Main
     {
         var r = Atlas.FightHere(p);
         Tell();
-        Hud.Board?.Refresh();
+        RefreshLand(Atlas.CellOf(p));
+        MapsChanged();
         return r;
     }
 
@@ -388,7 +407,8 @@ public partial class Main
         _outpostLook = 0;
         bool hands = Sim.Units.Exists(u => !u.Dead && u.Team == Team.Player && u.T == Kinds.Worker);
         Hud.Log(hands ? "Застава размечена: каменная башня у камня. Когда рабочие её построят, долина ваша." : "Застава размечена. Строить некому: приведите рабочих с отрядом.", hands ? Hud.Kind.Ok : Hud.Kind.Warn);
-        Hud.Board?.Refresh();
+        RefreshLand(here);
+        MapsChanged();
         return null;
     }
 
@@ -401,7 +421,7 @@ public partial class Main
         var home = Atlas.Home;
         Atlas.HereQ = home.Q; Atlas.HereR = home.R;
         Atlas.Write(Saves.CampaignDir(CampSlot));
-        _boardAtStart = true;
+        _atlasAtStart = true;
         GetTree().ReloadCurrentScene();
     }
 
@@ -411,9 +431,11 @@ public partial class Main
         string dir = Saves.CampaignDir(slot);
         if (Directory.Exists(dir)) Directory.Delete(dir, true);
         Atlas = Campaign.New(seed, rings);
+        // the first hero by the first valley's citadel, the campaign opening on the map
+        Atlas.AddHero();
         CampSlot = slot;
         Atlas.Write(dir);
-        _entering = null; _boardAtStart = false;
+        _entering = null; _atlasAtStart = true;
         PendingStart = null; PendingLoad = null;
         tree.ReloadCurrentScene();
     }
@@ -424,7 +446,7 @@ public partial class Main
         try { Atlas = Campaign.Read(Saves.CampaignDir(slot)); }
         catch (Exception e) { GD.PrintErr($"[voxel-tower] could not read the campaign {slot}: {e.Message}"); return false; }
         CampSlot = slot;
-        _entering = null; _boardAtStart = false;
+        _entering = null; _atlasAtStart = true;
         PendingStart = null; PendingLoad = null;
         tree.ReloadCurrentScene();
         return true;
@@ -439,5 +461,5 @@ public partial class Main
     }
 
     /// <summary>Out of the campaign: a siege, the sandbox, the tutorial or a single valley's save is begun instead.</summary>
-    public static void LeaveCampaign() { Atlas = null; CampSlot = null; _entering = null; _boardAtStart = false; }
+    public static void LeaveCampaign() { Atlas = null; CampSlot = null; _entering = null; _atlasAtStart = false; _land = null; }
 }

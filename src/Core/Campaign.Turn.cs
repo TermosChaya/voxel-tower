@@ -194,7 +194,10 @@ public sealed partial class Campaign
     {
         foreach (var p in Parties.ToArray())
         {
-            if (!p.Moving || !Parties.Contains(p)) continue;
+            if (!Parties.Contains(p)) continue;
+            // a party walking the land of the map (AtlasWalk.cs) goes by its feet, the cells it crosses its steps
+            if (p.Trail != null) { if (Land != null) WalkTrail(p, dt); continue; }
+            if (!p.Moving) continue;
             var from = At(p.Q, p.R); var to = p.Path[0];
             p.Progress += dt;
             double need = MapPath.StepSeconds(p, from, to);
@@ -204,17 +207,20 @@ public sealed partial class Campaign
             p.Q = to.Q; p.R = to.R;
             p.Path.RemoveAt(0);
             if (!p.Moving) p.Progress = 0;
+            // (on the land, at the middle of the cell it stepped into)
+            if (Land != null) (p.AtX, p.AtZ) = Land.Center(to);
             if (p.Owner == Owner.Horde) HordeReach(p, to); else OursReach(p, to);
         }
     }
 
     /// <summary>
-    /// A party of ours comes into a cell: into the valley we play in, it walks in; where the enemy stands, it stops for
-    /// the player to choose; at the end of its way, it is said.
+    /// A party of ours comes into a cell: into the valley we play in, it walks in if it was sent into it (else it stands
+    /// on the map by it, to be led in with «Войти в клетку»); where the enemy stands, it stops for the player to choose;
+    /// at the end of its way, it is said.
     /// </summary>
     void OursReach(MapParty p, MapCell cell)
     {
-        if (InValley && cell == Here)
+        if (InValley && cell == Here && p.WalkIn)
         {
             Parties.Remove(p);
             _arrivals.Add(p);
@@ -659,6 +665,10 @@ public sealed partial class Campaign
         w.Write(p.Progress);
         WriteLord(w, p.Lord);
         w.Write((byte)p.Aim); w.Write(p.GoalQ); w.Write(p.GoalR); w.Write(p.CameQ); w.Write(p.CameR); w.Write(p.SetOut); w.Write(p.Waits); w.Write(p.Den);
+        // where it stands on the land and the way it walks over it
+        w.Write(p.AtX); w.Write(p.AtZ); w.Write(p.Facing); w.Write(p.WalkIn);
+        w.Write(p.Trail?.Count ?? -1);
+        if (p.Trail != null) foreach (var (x, z) in p.Trail) { w.Write(x); w.Write(z); }
     }
 
     void ReadWay(BinaryReader r, MapParty p)
@@ -671,6 +681,13 @@ public sealed partial class Campaign
         p.Lord = ReadLord(r);
         p.Aim = (PartyAim)r.ReadByte(); p.GoalQ = r.ReadInt32(); p.GoalR = r.ReadInt32(); p.CameQ = r.ReadInt32(); p.CameR = r.ReadInt32();
         p.SetOut = r.ReadSingle(); p.Waits = r.ReadBoolean(); p.Den = r.ReadInt32();
+        p.AtX = r.ReadSingle(); p.AtZ = r.ReadSingle(); p.Facing = r.ReadSingle(); p.WalkIn = r.ReadBoolean();
+        int trail = r.ReadInt32();
+        if (trail >= 0)
+        {
+            p.Trail = new List<(float X, float Z)>(trail);
+            for (int i = 0; i < trail; i++) p.Trail.Add((r.ReadSingle(), r.ReadSingle()));
+        }
     }
 
     /// <summary>The turn's own state, after the parties: the dawns seen, the luck, the parties off the map into the valley, what each cell keeps, the horde's realm.</summary>

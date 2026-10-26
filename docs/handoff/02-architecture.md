@@ -1001,7 +1001,20 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   наши в 20 м), `EdgeOffer` (строка в глазах, `FirstPerson.EdgeLine`), `LeaveInPerson` (по `Act.FpLeave` = Enter:
   глаза отпускают, `Depart`, `_outbound`; `_boardOnOut` — карта открывается на этом отряде, когда он на ней).
   Места: `Hud.PlacesNote` («3 в гостях, 4 в походе») — у цитадели и в панели набора; шкала «8/10 +3».
-- `Ui/MapBoard.cs` — доска карты долин в `Hud` (только в кампании; медальон `tied-scroll` у меню, `Act.Board` = F2):
+- Карта как в «Героях» (`13-world-map.md`, раздел развилки atlashero). Ядро: `Atlas.cs` — земля карты (до слияния
+  «atlasland» — заглушка по договору: ровное поле, скала, пруд, река, дороги, брод); `AtlasWalk.cs` — путь по земле
+  (`Find`: A* по сетке `Spacing/24`, шаги проверены каждые полвокселя, `Straighten`; `LineCost`, `SecondsPer`,
+  `CellsOf`; кэш земли `Grid`, сброс `Forget`), у `MapParty` — `AtX/AtZ`, `Trail`, `Facing`, `WalkIn`, `Walking`,
+  `Placed`; у `Campaign` — `Land`, `Attach`, `HeroArmy`, `AddHero`, `PlaceIn`, `Lead`, `WayTo`, `WaySeconds`,
+  `TrailLeft`, `WalkTrail` (из `Walk`: ноги в другой клетке — шаг клетки, `OursReach`/`HordeReach`);
+  `Campaign.Defend.cs` — `DefendNow` (быстрый бой у стен против войска, идущего на нашу долину);
+  `Sim.MapLeave.cs` — `Withdraw` (отряд снят с долины сразу); `Bodies.MapHero.cs` — `HeroRider` (командир в седле).
+  Игра: `AtlasView.cs` (заглушка по договору: поле, туман, вещи, камера, `Clicked`), `AtlasFigures.cs` (фигуры
+  отрядов, кольцо выбранного, метки пути, флажок с часами), `Ui/AtlasHud.cs` (`Hud.MapPane`: верх, «Герои», герой
+  или долина, «Войти в клетку», карточки «Герой дошёл» и «Орда идёт», `Key`), `Main.Atlas.cs` (`_land`,
+  `AtlasStart`, `OpenAtlas`/`CloseAtlas`, `SideNear`, `EnterHero`, `GoToValley`, `LeaveToMap`, `PartyOf`,
+  `RefreshLand`, `TellMap`); `Hud.InitAtlas`, `Hud.ShowAtlas`; `Act.EnterCell` = Enter.
+- `Ui/MapBoard.cs` — доска карты долин в `Hud` (только в кампании; игроку больше не открывается — F2 и медальон открывают карту по земле; остаётся для самотеста и как возможная мини-карта):
   `Field` рисует шестиугольники (острым верхом, север сверху: x = √3(q + r/2), y = 1,5r), туман, хозяев, «вы здесь»,
   пути и отряды (лица командиров `Portraits`); правая колонка — выбранная долина с действиями («Отправить выбранных
   сюда», «Вести отряд сюда», «Войти», «Бой сразу», «Поставить заставу»), «Орда идёт», «Отряды», «Долины»; карточка пришедшего

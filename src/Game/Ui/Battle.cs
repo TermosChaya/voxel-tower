@@ -54,7 +54,7 @@ public partial class LordBar : Control
     {
         if (_m?.Sim == null) return;
         var lord = Find();
-        bool due = lord != null && !_m.Hud.InFirstPerson;
+        bool due = lord != null && !_m.Hud.InFirstPerson && !_m.AtlasOpen;
         if (due != Visible) { Visible = due; if (due) Juice.Appear(this); }
         _lord = lord;
         if (!due) return;

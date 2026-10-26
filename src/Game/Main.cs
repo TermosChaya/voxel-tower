@@ -466,7 +466,7 @@ public partial class Main : Node3D
             CampaignStart(extra);
             CampaignPose();
             GD.Print($"[voxel-tower] world {genMs:0} ms, navigation {navMs:0} ms, mesh {View.LastFullMeshMs:0} ms, {View.Triangles()} triangles; campaign, cell {Atlas.HereQ},{Atlas.HereR}");
-            if (_boardArg) Hud.Board?.Open();
+            if (_boardArg) OpenAtlas();
             if (_selfTest) SelfTest();
             if (_perf > 0) Perf(_perf);
             int drawn = Engine.GetFramesDrawn();

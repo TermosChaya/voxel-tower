@@ -489,10 +489,10 @@ public partial class Commander : Node
         // the map of valleys, in a campaign; while it is open only the time and the map's own key mean anything
         if (Bindings.Is(k, Act.Board) && !k.CtrlPressed && !k.MetaPressed)
         {
-            if (_m.Hud.Board != null) _m.Hud.Board.Toggle(); else _m.Hud.Float("карта долин есть только в кампании", Ornament.Aged);
+            if (_m.AtlasLand != null) _m.ToggleAtlas(); else _m.Hud.Float("карта долин есть только в кампании", Ornament.Aged);
             GetViewport().SetInputAsHandled(); return;
         }
-        if (_m.Hud.Board?.IsOpen == true && Bindings.Find(k.PhysicalKeycode, Bindings.Scope.Field) is not (Act.Pause or Act.Speed or Act.Help)) return;
+        if ((_m.Hud.Board?.IsOpen == true || _m.AtlasOpen) && Bindings.Find(k.PhysicalKeycode, Bindings.Scope.Field) is not (Act.Pause or Act.Speed or Act.Help)) return;
         // the sandbox: a band of the horde called up where the pointer is, a heavy one with Shift
         if (_m.Sim.Waves.OnCall && Bindings.Is(k, Act.Summon) && !k.CtrlPressed && !k.MetaPressed) { Summon(k.ShiftPressed); GetViewport().SetInputAsHandled(); return; }
         // and with Ctrl an army with a warlord at its head, by the side of the valley nearest the pointer
