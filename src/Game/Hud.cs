@@ -89,7 +89,9 @@ public partial class Hud : CanvasLayer
     MysteryPanel _mysteries;
     Stores _stores;
     WaveClock _clockPanel;
-    Medallion _help, _menuButton;
+    Medallion _help, _menuButton, _boardButton;
+    /// <summary>The map of valleys, in a campaign (Ui/MapBoard.cs); null outside one.</summary>
+    public MapBoard Board { get; private set; }
     GameMenu _menu;
     EnvoyCard _envoy;
     DuskCard _dusk;
@@ -319,6 +321,17 @@ public partial class Hud : CanvasLayer
         _dawn = new DawnCard();
         root.AddChild(_dawn);
         _dawn.Init(m);
+        // in a campaign the map of valleys over the valley, and its medallion beside the menu's
+        if (Main.Atlas != null)
+        {
+            _boardButton = new Medallion(Icons.Of("tied-scroll"), "Карта долин ({Board})\nВсе долины кампании, отряды на карте, походы.") { Size = new Vector2(38, 38) };
+            root.AddChild(_boardButton);
+            KeyTags.Tag(_boardButton, Act.Board);
+            Board = new MapBoard();
+            root.AddChild(Board);
+            Board.Init(m);
+            _boardButton.Clicked += () => Board.Toggle();
+        }
         // the menu over everything
         _menu = new GameMenu();
         root.AddChild(_menu);
@@ -520,9 +533,10 @@ public partial class Hud : CanvasLayer
             return;
         }
         // the beam's furniture: the tabs at the left, the clock hanging at the right, the stores between
-        _clockPanel.Position = new Vector2(vp.X - WaveClock.W - 98, 0);
+        _clockPanel.Position = new Vector2(vp.X - WaveClock.W - (_boardButton != null ? 140 : 98), 0);
         _help.Position = new Vector2(vp.X - 50, 1);
         _menuButton.Position = new Vector2(vp.X - 92, 1);
+        if (_boardButton != null) { _boardButton.Position = new Vector2(vp.X - 134, 1); _boardButton.Lit = Board.IsOpen; }
         _envoy.Position = new Vector2(vp.X - EnvoyCard.W - 14, WaveClock.H + 10);
         // the dawn's gifts under the beam in the middle, and the dusk's card under them if the gifts still wait
         _dawn.Position = new Vector2(MathF.Round((vp.X - DawnCard.W) / 2), TopBand + 10);

@@ -15,6 +15,7 @@ public enum Act
     CallWave, Summon, Pause, Speed, Trails, QuickSave, QuickLoad, Help,
     FpForward, FpBack, FpLeft, FpRight, FpRun, FpUp, FpDown, FpFire, FpStone, FpWood, FpEarth,
     FpKick, FpSwitch, FpLadder, FpOrder, FpFourth,
+    Board,
 }
 
 /// <summary>
@@ -97,6 +98,7 @@ public static class Bindings
         D(Act.QuickSave, Game, "Быстрое сохранение", "", Key.F5),
         D(Act.QuickLoad, Game, "Быстрая загрузка", "", Key.F9),
         D(Act.Help, Game, "Управление", "Открыть этот список.", Key.F1),
+        D(Act.Board, Game, "Карта долин", "В кампании: все долины, отряды на карте, походы.", Key.F2),
 
         D(Act.FpForward, Eyes, "Идти вперёд", "", Key.W, Key.Up),
         D(Act.FpBack, Eyes, "Назад", "", Key.S, Key.Down),

@@ -475,9 +475,24 @@ public partial class Commander : Node
     public override void _UnhandledInput(InputEvent e)
     {
         if (e is not InputEventKey k || !k.Pressed || k.Echo || _m.Hud.MenuOpen) return;
-        // the quick save, and reading it back
-        if (Bindings.Is(k, Act.QuickSave) && !k.CtrlPressed && !k.MetaPressed) { if (Saves.Write(_m, Saves.Quick)) _m.Hud.Float("быстрое сохранение", Ornament.Moss); GetViewport().SetInputAsHandled(); return; }
-        if (Bindings.Is(k, Act.QuickLoad) && !k.CtrlPressed && !k.MetaPressed) { Saves.Read(_m, Saves.Quick); GetViewport().SetInputAsHandled(); return; }
+        // the quick save, and reading it back; in a campaign, the campaign's own slot
+        if (Bindings.Is(k, Act.QuickSave) && !k.CtrlPressed && !k.MetaPressed)
+        {
+            if (Main.Atlas != null ? _m.SaveCampaign() : Saves.Write(_m, Saves.Quick)) _m.Hud.Float(Main.Atlas != null ? "кампания сохранена" : "быстрое сохранение", Ornament.Moss);
+            GetViewport().SetInputAsHandled(); return;
+        }
+        if (Bindings.Is(k, Act.QuickLoad) && !k.CtrlPressed && !k.MetaPressed)
+        {
+            if (Main.Atlas != null) Main.LoadCampaign(GetTree(), Main.CampSlot); else Saves.Read(_m, Saves.Quick);
+            GetViewport().SetInputAsHandled(); return;
+        }
+        // the map of valleys, in a campaign; while it is open only the time and the map's own key mean anything
+        if (Bindings.Is(k, Act.Board) && !k.CtrlPressed && !k.MetaPressed)
+        {
+            if (_m.Hud.Board != null) _m.Hud.Board.Toggle(); else _m.Hud.Float("карта долин есть только в кампании", Ornament.Aged);
+            GetViewport().SetInputAsHandled(); return;
+        }
+        if (_m.Hud.Board?.IsOpen == true && Bindings.Find(k.PhysicalKeycode, Bindings.Scope.Field) is not (Act.Pause or Act.Speed or Act.Help)) return;
         // the sandbox: a band of the horde called up where the pointer is, a heavy one with Shift
         if (_m.Sim.Waves.OnCall && Bindings.Is(k, Act.Summon) && !k.CtrlPressed && !k.MetaPressed) { Summon(k.ShiftPressed); GetViewport().SetInputAsHandled(); return; }
         // and with Ctrl an army with a warlord at its head, by the side of the valley nearest the pointer

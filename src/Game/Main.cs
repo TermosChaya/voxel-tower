@@ -121,6 +121,8 @@ public partial class Main : Node3D
     bool _sandbox;
     /// <summary>--captain: a commander with the household in a scripted run too (a game of one's own has one by the setting).</summary>
     bool _captainArg;
+    /// <summary>--board: the map of valleys open at the start of a campaign (screenshots).</summary>
+    bool _boardArg;
     /// <summary>The seed the valley was made from: what a save keeps of it.</summary>
     public uint Seed => _seed;
     bool _loaded;
@@ -224,6 +226,9 @@ public partial class Main : Node3D
             else if (a == "--title") _titleArg = true;
             else if (a == "--sandbox") _sandbox = true;
             else if (a == "--captain") _captainArg = true;
+            else if (a == "--campaign") _campaignArg = true;
+            else if (a.StartsWith("--campaign=") && uint.TryParse(a["--campaign=".Length..], out uint cs)) { _campaignArg = true; _seed = cs; }
+            else if (a == "--board") _boardArg = true;
             else if (a == "--tutorial-check") { _tutCheck = true; _tutorialAt = 0; }
             else if (a == "--menu" || a.StartsWith("--menu=")) _menu = a.Length > 7 ? a[7..] : "";
             else if (a.StartsWith("--pose=")) _pose = a["--pose=".Length..];
@@ -247,6 +252,8 @@ public partial class Main : Node3D
         if (_lines) Settings.ScriptLines(true);
         else Settings.ApplyLines();
 
+        // a campaign's valley: the cell's, read back from the campaign's folder if we were in it (Main.Campaign.cs)
+        bool campaign = CampaignValley();
         // a saved game: its valley is made again from its seed, and what play changed of it laid over
         SaveReader save = null;
         if (PendingLoad != null)
@@ -255,7 +262,7 @@ public partial class Main : Node3D
             try { save = new SaveReader(System.IO.File.OpenRead(PendingLoad)); _seed = save.Seed; _valley = save.Kind; _classic = save.Classic; _hexagon = save.Hexagon; _size = save.SizeX; _entry = save.EntrySide; _holding = save.Holding; _edges = save.Edges; }
             catch (Exception e) { GD.PrintErr($"[voxel-tower] could not read {PendingLoad}: {e.Message}"); save?.Dispose(); save = null; }
             PendingLoad = null;
-            _demo = _selfTest = false;
+            if (!campaign) _demo = _selfTest = false;
         }
         // every body sculpted while the valley is made, off the main thread: a body first wanted held up its frame
         Task.Run(() => Bodies.Warm(Kinds.All()));
@@ -446,6 +453,23 @@ public partial class Main : Node3D
         Sim.Worked += (x, y, z, m, dig) => { if (m != Mat.Air) Debris.Spawn(m, x, y, z, dig ? 2 + Random.Shared.Next(2) : 1, dig ? 1.4f : .5f, dig ? .8f : .6f); };
         Sim.Splashed = (x, y, z, n) => { Debris.Spawn(Mat.Blood, (int)x, (int)y, (int)z, Math.Clamp(n / 3, 1, 6), 1.1f, .4f); Blood?.Splash(x, y, z, n); };
 
+        if (campaign)
+        {
+            CampaignStart(extra);
+            CampaignPose();
+            GD.Print($"[voxel-tower] world {genMs:0} ms, navigation {navMs:0} ms, mesh {View.LastFullMeshMs:0} ms, {View.Triangles()} triangles; campaign, cell {Atlas.HereQ},{Atlas.HereR}");
+            if (_boardArg) Hud.Board?.Open();
+            if (_selfTest) SelfTest();
+            if (_perf > 0) Perf(_perf);
+            int drawn = Engine.GetFramesDrawn();
+            if (_shot != null || _selfTest) GetTree().CreateTimer(120).Timeout += () =>
+            {
+                if (_selfTest && Engine.GetFramesDrawn() > drawn + 10) return;
+                GD.PrintErr("[voxel-tower] gave up waiting for a frame"); GetTree().Quit(2);
+            };
+            Diag.Start(Sim, Scripted || _trailer >= 0);
+            return;
+        }
         if (_loaded)
         {
             // a game read back: the screen as it was, and the chronicle up to where it was saved
@@ -697,6 +721,7 @@ public partial class Main : Node3D
     /// <summary>A new siege (or the tutorial) from the menu: the scene begins again, without the title.</summary>
     public void NewGame(bool tutorial = false)
     {
+        LeaveCampaign();
         PendingStart = tutorial ? "tutorial" : "game";
         GetTree().ReloadCurrentScene();
     }
@@ -704,6 +729,7 @@ public partial class Main : Node3D
     /// <summary>The sandbox begun from the menu in play: the scene begins again for it.</summary>
     public void NewSandbox(bool open)
     {
+        LeaveCampaign();
         PendingStart = open ? "sandbox" : "sandbox-own";
         GetTree().ReloadCurrentScene();
     }
@@ -720,9 +746,10 @@ public partial class Main : Node3D
         if (_trailer >= 0) Roll();
         // under the title the valley turns slowly round the citadel
         if (Hud.TitleOpen) { var a = Rig.Aim; Rig.Set(a.x, a.z, a.yaw + (float)delta * .045f, a.pitch, a.zoom, snap: false); }
+        double ran = 0;
         if (!Paused && !_selfTest)
         {
-            double dt = Math.Min(delta, .1) * Speed * Slow * Pace;
+            double dt = ran = Math.Min(delta, .1) * Speed * Slow * Pace;
             long t0 = Stopwatch.GetTimestamp();
             using (Prof.Time("Sim"))
                 while (dt > 1e-6)
@@ -733,10 +760,13 @@ public partial class Main : Node3D
                 }
             _simTicks += Stopwatch.GetTimestamp() - t0;
         }
+        // the map runs with the valley (Main.Campaign.cs)
+        if (Atlas != null && !_selfTest) CampaignTick(ran);
         // a wave beaten back is written down by itself
         if (_shot == null && !_selfTest && !_demo)
         {
-            if (Sim.Raids.Repelled > _repelledSeen && !Sim.Over && Tutor is not { Over: false } && Saves.Write(this, Saves.Auto)) Hud.Log("Автосохранение: волна отбита.", Hud.Kind.Ok, toast: false);
+            if (Sim.Raids.Repelled > _repelledSeen && !Sim.Over && Tutor is not { Over: false } && (Atlas != null ? SaveCampaign() : Saves.Write(this, Saves.Auto)))
+                Hud.Log(Atlas != null ? "Кампания сохранена: набег отбит." : "Автосохранение: волна отбита.", Hud.Kind.Ok, toast: false);
             _repelledSeen = Sim.Raids.Repelled;
         }
         Command.Prune();

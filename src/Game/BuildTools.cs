@@ -439,8 +439,14 @@ public partial class BuildTools : Node3D
     bool Key(InputEventKey k)
     {
         var code = k.PhysicalKeycode;
-        // with the menu open only Esc means anything
+        // with the menu open only Esc means anything; with the map of valleys open, Esc shuts it
         if (_m.Hud.MenuOpen && code != global::Godot.Key.Escape) return false;
+        if (_m.Hud.Board?.IsOpen == true && !_m.Hud.MenuOpen)
+        {
+            if (code != global::Godot.Key.Escape) return false;
+            _m.Hud.Board.Close();
+            return true;
+        }
         // Shift and a digit calls up a squad, it is no tool
         if (k.ShiftPressed && code is >= global::Godot.Key.Key0 and <= global::Godot.Key.Key9) return false;
         var act = Bindings.Find(code, Bindings.Scope.Field);

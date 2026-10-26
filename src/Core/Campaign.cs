@@ -115,6 +115,8 @@ public sealed partial class MapCell
 
     /// <summary>Its valley's file in the campaign's folder.</summary>
     public string File => $"valley_{Q}_{R}.sav";
+    /// <summary>An outpost's tower was marked for the workers in its valley (Sim.Outpost.cs); standing, the cell is ours.</summary>
+    public bool Outpost;
 }
 
 /// <summary>
@@ -289,6 +291,8 @@ public sealed partial class Campaign
             else
             {
                 sim.SetSource(new MapRaids());
+                // the siege's first raid, drawn up as the valley was made, is not the map's
+                sim.Bands.RemoveAll(b => b.State == BandState.Coming);
                 if (cell.Holding == Holding.HordeTown) sim.Garrison(Sim.Roster(LairThreat, 1));
             }
             sim.Campaign = true;
@@ -354,6 +358,7 @@ public sealed partial class Campaign
                 w.Write(c.Q); w.Write(c.R); w.Write(c.Seed); w.Write((byte)c.Kind); w.Write((byte)c.Holding); w.Write((byte)c.Owner);
                 w.Write((byte)c.EntrySide); w.Write(c.Home); w.Write(c.Visited);
                 foreach (var e in c.Edges) { w.Write(e.Seed); w.Write(e.River); w.Write(e.Road); }
+                w.Write(c.Outpost);
             }
             w.Write(Parties.Count);
             foreach (var p in Parties) { w.Write(p.Q); w.Write(p.R); p.Party.Write(w); WriteWay(w, p); }
@@ -384,6 +389,7 @@ public sealed partial class Campaign
                 Owner = (Owner)r.ReadByte(), EntrySide = r.ReadByte(), Home = r.ReadBoolean(), Visited = r.ReadBoolean(),
             };
             for (int s = 0; s < 6; s++) cell.Edges[s] = new HexEdge { Seed = r.ReadUInt32(), River = r.ReadSingle(), Road = r.ReadSingle() };
+            cell.Outpost = r.ReadBoolean();
             c.Cells.Add(cell);
         }
         for (int n = r.ReadInt32(); n > 0; n--)

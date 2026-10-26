@@ -229,12 +229,67 @@ static class CampaignBench
         check("ours come into the horde's valley and stand; where they came in is their camp (the wounded are carried back there); the garrison stays at home",
             ours.Count == 6 && ours.All(u => !u.Dead) && camp0 < Site.StripDepth + 8 && lsim.Units.Count(u => u.Team == Team.Horde && !u.Dead) == expected,
             $"{ours.Count(u => !u.Dead)} of {ours.Count} standing; the camp {camp0 / VoxelWorld.PerMetre:0.0} m in from their side; garrison {lsim.Units.Count(u => u.Team == Team.Horde && !u.Dead)}");
+        // what the map remembers of a valley left: the horde standing in it; and the outpost of a valley taken, marked and built
+        camp.Leave(lsim, lair);
+        int remembered = lair.Sum.Keep.Count;
+        // (the garrison beaten first, as it must be before an outpost goes up in its yard: nobody stands in the workers' way)
+        foreach (var u in lsim.Units.ToArray()) if (!u.Dead && u.Team == Team.Horde) lsim.Hurt(u, null, 1e6f);
+        Step(lsim, 2);
+        int marked0 = lsim.Orders.BuildTotal;
+        bool standsBefore = lsim.OutpostStands();
+        string why = lsim.RaiseOutpost();
+        int marked = lsim.Orders.BuildTotal - marked0;
+        var (ox, oz) = lsim.OutpostSpot();
+        lsim.InstantLabour = true;
+        for (int i = 0; i < 4; i++) { lsim.CompleteAll(); Step(lsim, 1); }
+        lsim.InstantLabour = false;
+        bool standsAfter = lsim.OutpostStands();
+        string inFirst = hsim.RaiseOutpost();
+        check("a valley left, the map remembers the horde standing in it; an outpost is a stone tower marked for the workers in the yard, standing once they have laid it, and none in the first valley",
+            remembered == expected && why == null && marked > 2000 && Brushes.Dist(ox - ls.KeepX, oz - ls.KeepZ) < Holdings.PalisadeR && !standsBefore && standsAfter && inFirst != null,
+            $"remembered {remembered} of {expected}; outpost «{why}», {marked} voxels marked at {Brushes.Dist(ox - ls.KeepX, oz - ls.KeepZ) / VoxelWorld.PerMetre:0.0} m from the middle, standing before {standsBefore}, after {standsAfter} ({lsim.OutpostLaid():P0} laid); in the first valley «{inFirst}»");
         camp.SaveValley(dir, lair, lsim, "Логово");
         var files = Directory.GetFiles(dir).Select(Path.GetFileName).OrderBy(f => f).ToList();
         check("the campaign's folder holds the map's file and a file for each valley visited",
             files.Contains(Campaign.FileName) && files.Contains(home.File) && files.Contains(ore.File) && files.Contains(lair.File) && files.Count == 4,
             string.Join(", ", files));
         Directory.Delete(dir, true);
+
+        // ---- the map as the player plays it: ours gone out put on the map and sent on, seen as they go, come in by the side before
+        var play = Campaign.New(23);
+        var plair = play.Cells.Single(c => c.Holding == Holding.HordeTown);
+        var nextTo = play.Neighbour(play.Home, Campaign.SideToward(play.Home, plair.Q, plair.R));
+        int seen0 = play.Cells.Count(play.Seen);
+        bool lairHidden = !play.Seen(plair);
+        var mp = play.Out(Band(), nextTo);
+        double left0 = play.WalkLeft(mp), expectLeft = MapPath.WayHours(play.Home, mp.Path) * MapPath.Pace(mp) * MapPath.HourSeconds;
+        bool seenHalf = false;
+        for (int i = 0; i < 4000 && mp.Moving; i++) { play.Advance(2); if (play.StepShare(mp) > .55) seenHalf |= play.Cells.Count(play.Seen) > seen0; }
+        var come = play.News.Find(n => n.Kind == NewsKind.Arrived && n.Party == mp);
+        check("ours gone out of the valley are put on the map and sent on: they walk as long as the way takes, are told come, come into the valley by the side facing the cell before; the fog lifts round them from halfway (seven cells at first, the lair hidden)",
+            play.CellOf(mp) == nextTo && Math.Abs(left0 - expectLeft) < 1 && come != null && play.Neighbour(nextTo, play.EntrySideOf(mp)) == play.Home && seen0 == 7 && lairHidden && seenHalf,
+            $"at {play.CellOf(mp).Kind}; time {left0:0} s of {expectLeft:0}; told {come != null}; comes in by side {play.EntrySideOf(mp)}; seen at first {seen0}, the lair hidden {lairHidden}, more seen from halfway {seenHalf}");
+
+        // ---- an outpost raised in the valley we play in makes it ours; the horde's armies on their way to us are known
+        var raise = Campaign.New(29);
+        var spot = raise.Cells.First(c => c.Owner == Owner.None && Campaign.Distance(0, 0, c.Q, c.R) == 1);
+        spot.Outpost = true;
+        raise.OutpostStands(spot);
+        var foe = new MapParty { Q = plair.Q, R = plair.R, CameQ = plair.Q, CameR = plair.R, Owner = Owner.Horde, Aim = PartyAim.Strike, Party = new Party() };
+        foreach (var t in new[] { Kinds.Goblin, Kinds.Goblin, Kinds.Orc }) foe.Party.Members.Add(new Traveller { Kind = t, Hp = t.Hp, MaxHp = t.Hp });
+        var flair = raise.Cells.Single(c => c.Holding == Holding.HordeTown);
+        foe.Q = flair.Q; foe.R = flair.R; foe.CameQ = flair.Q; foe.CameR = flair.R;
+        raise.Parties.Add(foe);
+        bool sent = raise.Send(foe, raise.Home);
+        var coming = raise.Coming();
+        string dir2 = Path.Combine(Path.GetTempPath(), $"vt-campaign-play-{Environment.ProcessId}");
+        raise.Write(dir2);
+        var rb = Campaign.Read(dir2);
+        Directory.Delete(dir2, true);
+        check("an outpost standing in a valley nobody holds makes it ours, said; an army of the horde sent at the first valley is known to be coming; the map's file keeps the outpost",
+            spot.Owner == Owner.Ours && spot.Sum.Raised >= 1 && raise.News.Exists(n => n.Kind == NewsKind.Taken && n.Cell == spot) && sent && coming.Count == 1 && coming[0] == foe
+            && rb.At(spot.Q, spot.R) is { Owner: Owner.Ours, Outpost: true },
+            $"owner {spot.Owner}, raised {spot.Sum.Raised}; sent {sent}, coming {coming.Count}; read back {rb.At(spot.Q, spot.R).Owner} outpost {rb.At(spot.Q, spot.R).Outpost}");
     }
 
     /// <summary>Every voxel of a world summed up into one number.</summary>

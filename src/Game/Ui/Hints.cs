@@ -87,6 +87,7 @@ public partial class Hints : Control
                 o.Add(($"{Rmb} и тянуть", "сдвинуть вид"));
                 o.Add(("Колесо", "приблизить"));
                 o.Add((L(Act.Help), "все клавиши"));
+                if (Main.Atlas != null) o.Add((L(Act.Board), "карта долин"));
                 o.Add(("Alt", "клавиши на кнопках"));
                 return;
             case Tool.Brush:

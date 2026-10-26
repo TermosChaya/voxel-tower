@@ -64,6 +64,17 @@ public partial class Main
         }
         int Removals() => Sim.Orders.Total - Sim.Orders.BuildTotal;
 
+        // the campaign's part of the test, on a valley the scene was begun again on for it (Main.SelfTest.Board.cs)
+        if (_boardStage != null)
+        {
+            fails = _boardFails;
+            if (!await SelfTestBoardGo(Check, () => fails)) return;
+            GD.Print($"[selftest] {(fails == 0 ? "all passed" : fails + " failed")}");
+            if (_shot == null) GetTree().Quit(fails == 0 ? 0 : 1);
+            return;
+        }
+        // SELFTEST_ONLY=board: only the campaign's part
+        if (System.Environment.GetEnvironmentVariable("SELFTEST_ONLY") == "board" && await SelfTestBoard(Check, () => fails)) return;
         await Frames(5);
         int kx = Site.KeepX, kz = Site.KeepZ;
         // the places below were set out round the citadel where it stood at 819,512 on the old valley: they go with it
@@ -1004,6 +1015,8 @@ public partial class Main
             body.Contains("Видеокарта:") && body.Contains("===== Зависания") && body.Contains("===== Последние события") && body.Contains("===== Лог "),
             $"{body.Length} characters in {System.IO.Path.GetFileName(report)}");
         await SelfTestStrain(Check, Frames);
+        // the campaign goes on in valleys of its own, the scene begun again for each
+        if (await SelfTestBoard(Check, () => fails)) return;
         GD.Print($"[selftest] {(fails == 0 ? "all passed" : fails + " failed")}");
         if (_shot == null) GetTree().Quit(fails == 0 ? 0 : 1);
     }

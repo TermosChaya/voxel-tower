@@ -204,7 +204,7 @@ public sealed partial class Sim
         Say($"Изучено: «{l.Name}». {l.About}", 1);
     }
 
-    static string Plural(int n, string one, string few, string many)
+    public static string Plural(int n, string one, string few, string many)
     {
         int m10 = n % 10, m100 = n % 100;
         return m10 == 1 && m100 != 11 ? one : m10 is >= 2 and <= 4 && m100 is < 12 or > 14 ? few : many;

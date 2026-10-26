@@ -141,6 +141,7 @@ public static class Saves
     public static void Read(Main m, string slot)
     {
         if (!File.Exists(PathOf(slot))) { m.Hud.Float("здесь ничего не сохранено", Ornament.Blood); return; }
+        Main.LeaveCampaign();
         Main.PendingLoad = PathOf(slot);
         m.GetTree().ReloadCurrentScene();
     }
