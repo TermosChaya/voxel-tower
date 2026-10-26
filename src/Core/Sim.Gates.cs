@@ -82,6 +82,15 @@ public sealed class GatePlan
 {
     public bool AlongX, Iron;
     public int In, U0, P, Y;
+    /// <summary>The wall's faces the gateway goes through between, across it.</summary>
+    int _a0, _a1;
+
+    /// <summary>
+    /// How much wall a gate keeps standing beside its gateway on either side, at the least, where the wall goes on over
+    /// it: the course over the gateway bears on both ends then. With less, it hangs off one side alone, and the end of a
+    /// wall cut so comes down on whoever stands by it.
+    /// </summary>
+    public const int Jamb = 6;
     /// <summary>The wall to cut out of the gateway, and the leaves to lay in their shut place.</summary>
     public readonly VoxelList Cut = new(), Leaves = new();
     /// <summary>
@@ -148,6 +157,7 @@ public sealed class GatePlan
         plan.Y = y0;
         // the gateway: through the wall from face to face
         int aFrom = Math.Min(outerWall, innerWall), aTo = Math.Max(outerWall, innerWall);
+        (plan._a0, plan._a1) = (aFrom, aTo);
         for (int a = aFrom; a <= aTo; a++)
             for (int u = u0; u < u0 + Gateway.Width; u++)
             {
@@ -177,6 +187,63 @@ public sealed class GatePlan
                 if (w.InBounds(x, y, z) && w.Get(x, y, z) == Mat.Air) plan.Seal.Add(x, y, z, Mat.Mortar);
             }
         return plan;
+    }
+
+    /// <summary>
+    /// A gate the gate tool sets in a wall (<see cref="At(VoxelWorld, Site, VoxelHit, int, bool, bool)"/>), kept off the
+    /// wall's end: clicked too near it, the gateway goes along the wall a cell or two to where the wall over it bears on
+    /// both ends (<see cref="Jamb"/>); where it can't, none, and <paramref name="why"/> says so.
+    /// </summary>
+    public static GatePlan At(VoxelWorld w, Site site, VoxelHit hit, out string why, bool iron = false)
+    {
+        why = "ворота ставят в стену толщиной до 4 м";
+        var plan = At(w, site, hit, iron: iron);
+        if (plan == null) return null;
+        why = "";
+        if (plan.Bears(w)) return plan;
+        foreach (int s in new[] { 8, -8, 16, -16 })
+        {
+            var moved = hit;
+            if (plan.AlongX) moved.X += s; else moved.Z += s;
+            if (!OnFace(w, ref moved)) continue;
+            var p = At(w, site, moved, iron: iron);
+            if (p != null && p.Bears(w)) return p;
+        }
+        why = AtWallEnd;
+        return null;
+    }
+
+    /// <summary>
+    /// A point moved along a wall brought out (or back) to the wall's face there, the face standing out or back from
+    /// where it was clicked (a rough face, a rounded end); false where there is no wall within a metre of it.
+    /// </summary>
+    static bool OnFace(VoxelWorld w, ref VoxelHit h)
+    {
+        for (int k = 0; k < 8 && Blocking(w.Get(h.X + h.NX, h.Y, h.Z + h.NZ)); k++) { h.X += h.NX; h.Z += h.NZ; }
+        for (int k = 0; k < 8 && !Blocking(w.Get(h.X, h.Y, h.Z)); k++) { h.X -= h.NX; h.Z -= h.NZ; }
+        h.M = w.Get(h.X, h.Y, h.Z);
+        return Blocking(h.M);
+    }
+
+    /// <summary>What the gate tool says where a gate would leave the wall over it hanging off one side.</summary>
+    public const string AtWallEnd = "у края стены перемычке над проёмом не на что опереться. Ставьте ворота дальше от края";
+
+    /// <summary>
+    /// Whether the wall over the gateway bears on both its ends: wall standing beside the gateway on either side, the
+    /// height of it and <see cref="Jamb"/> deep along the wall, through the wall's middle. A wall no higher than the
+    /// gateway has nothing over it to bear.
+    /// </summary>
+    public bool Bears(VoxelWorld w)
+    {
+        int a = (_a0 + _a1) / 2, top = Y + Gateway.Height;
+        byte Get(int u, int y) => AlongX ? w.Get(u, y, a) : w.Get(a, y, u);
+        bool over = false;
+        for (int u = U0; u < U0 + Gateway.Width && !over; u++) over = Blocking(Get(u, top));
+        if (!over) return true;
+        for (int k = 1; k <= Jamb; k++)
+            foreach (int y in new[] { Y + 2, Y + Gateway.Height / 2, top - 1 })
+                if (!Blocking(Get(U0 - k, y)) || !Blocking(Get(U0 + Gateway.Width - 1 + k, y))) return false;
+        return true;
     }
 
     internal Gateway Make() => new() { AlongX = AlongX, Iron = Iron, In = In, U0 = U0, P = P, Y = Y };

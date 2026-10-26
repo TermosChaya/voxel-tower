@@ -22,11 +22,61 @@ public partial class Main
         for (ulong from = Time.GetTicksMsec(); n < 3 || Time.GetTicksMsec() - from < 180; n++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
     }
 
+    /// <summary>The checks failed so far, for when the self-test breaks off before it can say so itself.</summary>
+    int _selfFails;
+    /// <summary>Set (from any thread) when the game throws on and on during the self-test: it stops on the next frame.</summary>
+    volatile string _selfBroke;
+    readonly Queue<ulong> _selfThrows = new();
+    int _selfThread;
+
+    /// <summary>
+    /// The self-test, broken off with a failure rather than left hanging: a check that throws (a pawn it needs gone,
+    /// say) ends it there, and so does the game throwing many times a second while it runs (<see cref="SelfTestBroke"/>).
+    /// </summary>
+    async void SelfTest()
+    {
+        _selfThread = System.Environment.CurrentManagedThreadId;
+        AppDomain.CurrentDomain.FirstChanceException += OnSelfTestThrow;
+        try { await SelfTestAll(); }
+        catch (Exception e) { SelfTestStop($"the self-test broke off: {e.GetType().Name}: {e.Message}\n{e.StackTrace}"); }
+        finally { AppDomain.CurrentDomain.FirstChanceException -= OnSelfTestThrow; }
+    }
+
+    /// <summary>
+    /// Counts what the game throws on its own thread while the self-test runs (the work on other threads may throw and
+    /// catch as it likes): 100 in 5 s, and the self-test is broken off.
+    /// </summary>
+    void OnSelfTestThrow(object _, System.Runtime.ExceptionServices.FirstChanceExceptionEventArgs e)
+    {
+        if (System.Environment.CurrentManagedThreadId != _selfThread) return;
+        ulong now = Time.GetTicksMsec();
+        lock (_selfThrows)
+        {
+            _selfThrows.Enqueue(now);
+            while (_selfThrows.Count > 0 && now - _selfThrows.Peek() > 5000) _selfThrows.Dequeue();
+            if (_selfThrows.Count >= 100 && _selfBroke == null) _selfBroke = $"the game threw {_selfThrows.Count} times in 5 s, the last {e.Exception.GetType().Name}: {e.Exception.Message}";
+        }
+    }
+
+    /// <summary>On every frame: the self-test broken off if the game has been throwing on and on (see <see cref="OnSelfTestThrow"/>).</summary>
+    void SelfTestBroke()
+    {
+        if (_selfBroke != null) { string why = _selfBroke; _selfBroke = null; SelfTestStop(why); }
+    }
+
+    void SelfTestStop(string why)
+    {
+        AppDomain.CurrentDomain.FirstChanceException -= OnSelfTestThrow;
+        GD.Print($"[selftest] FAIL {why}");
+        GD.Print($"[selftest] {_selfFails + 1} failed");
+        GetTree().Quit(1);
+    }
+
     /// <summary>
     /// Drives the tools and the commands through their input handlers with synthetic clicks and drags, lets the pawns
     /// work through what was marked, checks the results and quits.
     /// </summary>
-    async void SelfTest()
+    async Task SelfTestAll()
     {
         int fails = 0;
         // each check says how long the way to it took, when it was more than a second
@@ -36,8 +86,12 @@ public partial class Main
             double took = since.Elapsed.TotalSeconds;
             since.Restart();
             GD.Print($"[selftest] {(ok ? "ok  " : "FAIL")} {what} {detail}{(took >= 1 ? $" [{took:0.0} s]" : "")}");
-            if (!ok) fails++;
+            if (!ok) _selfFails = ++fails;
         }
+        // one of ours a check needs: with none left (fallen to something before it) the self-test stops there, failed,
+        // rather than going on with nobody
+        Unit Need(UnitType kind, string check) =>
+            Sim.Units.Find(u => !u.Dead && u.T == kind) ?? throw new InvalidOperationException($"{check}: no {kind.Name} left in the valley");
         async Task Frames(int n) { for (int i = 0; i < n; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         Vector2 Screen(int x, int z) => Rig.Cam.UnprojectPosition(new Vector3(World.WX(x + .5f), World.WY(World.SurfAt(x, z)), World.WZ(z + .5f)));
         Vector2 ScreenAt(float x, float y, float z) => Rig.Cam.UnprojectPosition(new Vector3(World.WX(x), World.WY(y), World.WZ(z)));
@@ -67,7 +121,7 @@ public partial class Main
         // the campaign's part of the test, on a valley the scene was begun again on for it (Main.SelfTest.Board.cs)
         if (_boardStage != null)
         {
-            fails = _boardFails;
+            _selfFails = fails = _boardFails;
             if (!await SelfTestBoardGo(Check, () => fails)) return;
             GD.Print($"[selftest] {(fails == 0 ? "all passed" : fails + " failed")}");
             if (_shot == null) GetTree().Quit(fails == 0 ? 0 : 1);
@@ -130,11 +184,14 @@ public partial class Main
 
 
         // a stone wall is marked, not built
-        await Look(740 + ox, 470 + oz);
+        await Look(740 + ox, 472 + oz);
         KeyPress(Key.Key2); KeyPress(Key.Z);
         Check("2 picks the line, Z the stone", Tools.Tool == Tool.Line && Tools.Opt.Material == Mat.Stone && !Tools.Opt.Dig);
         int lx = 750 + ox, ground = World.SurfAt(lx, 460 + oz), b0 = Sim.Orders.BuildTotal;
-        await Drag((lx, 440 + oz), (lx, 480 + oz));
+        // (long enough that the gate below goes in with wall standing on both sides of it, clear of the ladder and the hole;
+        // more stone than the household starts with)
+        Sim.Stock[Stockpile.Stone] += 8 * VoxelWorld.PerM3;
+        await Drag((lx, 440 + oz), (lx, 504 + oz));
         Check("the line marks a wall for the workers", Sim.Orders.BuildTotal > b0 + 1500 && World.SurfAt(lx, 460 + oz) == ground,
             $"{Sim.Orders.BuildTotal - b0} voxels marked, ground still at {World.SurfAt(lx, 460 + oz)}");
 
@@ -168,7 +225,7 @@ public partial class Main
         double earth0 = Sim.Stock[Stockpile.Earth], stone0 = Sim.Stock[Stockpile.Stone], wood0 = Sim.Stock[Stockpile.Wood];
         int left0 = Sim.Orders.Total;
         var sw = Stopwatch.StartNew();
-        Advance(150);
+        Advance(190);
         long ms = sw.ElapsedMilliseconds;
         await Frames(3);
         int dugCols = 0;
@@ -185,7 +242,7 @@ public partial class Main
                 for (int y = g; y < g + 100 && y < World.SY; y++)
                     if (Mat.IsTrunk(World.Get(x, y, z)) && Orders.IsRemove(Sim.Orders.At(x, y, z))) { woodLeft++; woodLow = Math.Min(woodLow, y - g); }
             }
-        Check("…and fell the tree for wood", Sim.Stock[Stockpile.Wood] > wood0 + 100, $"wood +{Fmt.M3(Sim.Stock[Stockpile.Wood] - wood0)} m³, {Sim.Orders.Total} of {left0} voxels left, {woodLeft} of the tree's wood still marked, the lowest {(woodLeft > 0 ? woodLow : 0)} over the ground; 150 s in {ms} ms");
+        Check("…and fell the tree for wood", Sim.Stock[Stockpile.Wood] > wood0 + 100, $"wood +{Fmt.M3(Sim.Stock[Stockpile.Wood] - wood0)} m³, {Sim.Orders.Total} of {left0} voxels left, {woodLeft} of the tree's wood still marked, the lowest {(woodLeft > 0 ? woodLow : 0)} over the ground; 190 s in {ms} ms");
         foreach (var u in Sim.Units) if (u.Why != "") GD.Print($"[selftest]      {u.T.Name} #{u.Id}: {u.Why}");
 
         // a ladder against the new wall, from the side the camera sees
@@ -205,7 +262,7 @@ public partial class Main
         // a gate through the same wall, further along it
         KeyPress(Key.Key9);
         Check("9 picks up the gate", Tools.Tool == Tool.Gate);
-        int gz = 472 + oz, gface = lx;
+        int gz = 488 + oz, gface = lx;
         while (World.Get(gface - 1, fy, gz) != Mat.Air) gface--;
         int gates0 = Sim.Gates.Count;
         await ClickAt(ScreenAt(gface - .02f, fy + .5f, gz + .5f));
@@ -282,8 +339,7 @@ public partial class Main
 
         // taken alive: «Живьём» for the swordsman, a goblin beaten down and bound, a worker leading it into the citadel,
         // and the plaque in «Таинства» that has the priest give it to the old powers
-        Unit swordsman = null;
-        foreach (var u in Sim.Units) if (!u.Dead && u.T == Kinds.Swordsman) { swordsman = u; break; }
+        var swordsman = Need(Kinds.Swordsman, "«Живьём»");
         Selected.Clear(); Selected.Add(swordsman);
         Hud.OnSelectionChanged();
         Command.TakeAliveSelected();

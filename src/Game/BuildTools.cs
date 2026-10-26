@@ -648,8 +648,8 @@ public partial class BuildTools : Node3D
                 _planKey = "~";
                 return;
             }
-            var gp = GatePlan.At(w, _m.Site, _hover, iron: IronGate);
-            if (gp == null) { Refuse("ворота ставят в стену толщиной до 4 м"); return; }
+            var gp = GatePlan.At(w, _m.Site, _hover, out string gateNo, iron: IronGate);
+            if (gp == null) { Refuse(gateNo); return; }
             _markName = "Ворота";
             _m.Sim.AddGate(gp);
             _m.Hud.Log("Ворота: " + GateSummary(gp));
@@ -1640,7 +1640,13 @@ public partial class BuildTools : Node3D
                 _plan = _gatePlan?.Leaves;
                 name = $"Дверь дома {Shapes.SideWords[side]}";
             }
-            else { _gatePlan = GatePlan.At(w, site, _hover, iron: IronGate); _plan = _gatePlan?.Leaves; name = "Ворота"; }
+            else
+            {
+                _gatePlan = GatePlan.At(w, site, _hover, out string gateNo, iron: IronGate);
+                _plan = _gatePlan?.Leaves; name = "Ворота";
+                // (clicked too near a wall's end: what the ghost would not show, said)
+                if (_gatePlan == null && gateNo == GatePlan.AtWallEnd) { _ghost.Visible = false; PlanText = $"Ворота: {gateNo}"; PlanAffordable = false; return; }
+            }
         }
         else if (Tool == Tool.Paste) { _plan = PlanPasteAtHover(_pasteGhost); name = PasteBp.Name; dig = false; }
         if (key[0] == 'T') dig = true;

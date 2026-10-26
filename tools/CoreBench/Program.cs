@@ -675,6 +675,46 @@ if (args.Length == 0 || args[0] == "--sim")
             $"pit at {pit}: {sim.Flooded - ran0} voxels of water moved in {took:0} s of game ({waited.ElapsedMilliseconds} ms), {water0:0.0} → {water2:0.0} in the valley");
     }
 
+    // a gate clicked by a wall's end goes along it to where the wall over the gateway bears on both sides; on a wall too
+    // short for that none goes, and the tool says why; a house's door (the plain plan) is not kept so
+    {
+        // (south of where the walled yard below goes)
+        int ex0 = site4.KeepX + 96, ez = site4.KeepZ - 220;
+        var st = new Stroke { Mat = Mat.Stone, Width = 4, Height = 32, Level = true };
+        int etop = Shapes.LevelTop(w4, ex0 + 24, ez, 32);
+        VoxelList longWall = Shapes.Line(w4, site4, ex0, ez, ex0 + 47, ez, st, etop), shortWall = Shapes.Line(w4, site4, ex0 + 80, ez, ex0 + 97, ez, st, etop);
+        sim.InstantLabour = true;
+        sim.DesignateBuild(longWall);
+        sim.DesignateBuild(shortWall);
+        sim.InstantLabour = false;
+        Run(1);
+        int ey = etop - 26;
+        (int from, int to, VoxelHit hit) WallAt(int x)
+        {
+            int z = ez;
+            while (w4.Get(x, ey, z + 1) != Mat.Air) z++;
+            int a = x, b = x;
+            while (w4.Get(a - 1, ey, ez) != Mat.Air) a--;
+            while (w4.Get(b + 1, ey, ez) != Mat.Air) b++;
+            return (a, b, new VoxelHit { X = x, Y = ey, Z = z, NZ = 1, M = w4.Get(x, ey, z) });
+        }
+        var (lx0, lx1, _) = WallAt(ex0 + 24);
+        var byEnd = GatePlan.At(w4, site4, WallAt(lx1 - 2).hit, out string endNo);
+        var plain = GatePlan.At(w4, site4, WallAt(lx1 - 2).hit);
+        var mid = GatePlan.At(w4, site4, WallAt(ex0 + 24).hit, out _);
+        var midPlain = GatePlan.At(w4, site4, WallAt(ex0 + 24).hit);
+        var (sx0, sx1, shortHit) = WallAt(ex0 + 88);
+        var none = GatePlan.At(w4, site4, shortHit, out string shortNo);
+        Check("a gate clicked by a wall's end goes along it to where the wall over it bears on both sides; on a short wall none, and why",
+            byEnd != null && byEnd.U0 - lx0 >= GatePlan.Jamb && lx1 - (byEnd.U0 + Gateway.Width - 1) >= GatePlan.Jamb && byEnd.Bears(w4) && endNo == ""
+                && plain != null && !plain.Bears(w4) && mid != null && midPlain != null && mid.U0 == midPlain.U0 && none == null && shortNo == GatePlan.AtWallEnd,
+            $"wall {lx0}…{lx1}: by its end {(byEnd == null ? "none «" + endNo + "»" : $"{byEnd.U0}…{byEnd.U0 + Gateway.Width - 1}")}, the plain plan {(plain == null ? "none" : $"{plain.U0}, bears {plain.Bears(w4)}")}; " +
+            $"in the middle {mid?.U0} as plain {midPlain?.U0}; the short wall {sx0}…{sx1}: {(none == null ? "none «" + shortNo + "»" : $"a gate at {none.U0}")}");
+        for (int i = 0; i < longWall.Count; i++) w4.Set(longWall.X(i), longWall.Y(i), longWall.Z(i), Mat.Air);
+        for (int i = 0; i < shortWall.Count; i++) w4.Set(shortWall.X(i), shortWall.Y(i), shortWall.Z(i), Mat.Air);
+        Run(1);
+    }
+
     // a gate in a walled yard: our worker knocks, it opens and shuts behind him; barred, there is no way through;
     // an brute shut in the yard gets no help from it and hacks his way out
     {

@@ -280,7 +280,7 @@ public partial class Commander : Node
     /// <summary>Drops the fallen from the chosen, and stops looking at one gone from the valley.</summary>
     public void Prune()
     {
-        if (_m.Selected.RemoveWhere(u => u.Dead) > 0) _m.Hud.OnSelectionChanged();
+        if (_m.Selected.RemoveWhere(u => u == null || u.Dead) > 0) _m.Hud.OnSelectionChanged();
         if (_m.Inspected != null && (_m.Selected.Count > 0 || !_m.Sim.Units.Contains(_m.Inspected))) { _m.Inspected = null; _m.Hud.OnSelectionChanged(); }
         if (_m.KeepChosen && _m.Selected.Count > 0) { _m.KeepChosen = false; _m.Hud.OnSelectionChanged(); }
     }

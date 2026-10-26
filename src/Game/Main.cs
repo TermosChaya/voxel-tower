@@ -749,6 +749,7 @@ public partial class Main : Node3D
     public override void _Process(double delta)
     {
         Diag.Beat(GetWindow().HasFocus());
+        if (_selfTest) SelfTestBroke();
         Hitches.Frame(Sim);
         if (_frames > 5) _slowest = Math.Max(_slowest, delta);
         if (_trailer >= 0) Roll();
