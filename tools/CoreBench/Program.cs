@@ -6240,6 +6240,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troves") TrovesBench
 // castle everywhere, the same each time, a cell put on again as its holder changed (LandBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--atlas") LandBench.Run(Check);
 if (args.Length > 0 && args[0] == "--atlas-rivers") LandBench.Rivers();
+if (args.Length > 0 && args[0] == "--atlas-walkdump") LandBench.WalkDump(uint.Parse(args[1]), int.Parse(args[2]), args[3]);
 if (args.Length > 0 && args[0] == "--atlas-dump")
     LandBench.Dump(args.Length > 1 ? uint.Parse(args[1]) : 11, args.Length > 2 ? int.Parse(args[2]) : 3, args.Length > 3 ? args[3] : "atlas.ppm");
 if (args.Length > 0 && args[0] == "--map-trace")

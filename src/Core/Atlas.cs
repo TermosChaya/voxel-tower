@@ -264,7 +264,9 @@ public sealed partial class Atlas
             int nx = x + (d == 0 ? 1 : d == 1 ? -1 : 0), nz = z + (d == 2 ? 1 : d == 3 ? -1 : 0);
             if ((uint)nx < (uint)SX && (uint)nz < (uint)SZ && Math.Abs(_h[nz * SX + nx] - h) > 2) return No;
         }
-        if ((lie & Lie.Road) != 0) return (float)MapPath.RoadShare;
+        // (a road is walked along a band a little wider than its dust, so that a walk over a grid of a few voxels sees
+        // it unbroken)
+        if ((lie & Lie.Road) != 0 || _dMain[i] < 2.7f || _dRoad[i] < 2.5f) return (float)MapPath.RoadShare;
         return (float)(MapPath.Hours(cell) / 8);
     }
 

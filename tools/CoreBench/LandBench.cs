@@ -216,6 +216,24 @@ static class LandBench
         Console.WriteLine($"\nrivers laid on {laid} of {n} big maps ({sw.ElapsedMilliseconds} ms)");
     }
 
+    /// <summary>Where one may walk, a picture (--atlas-walkdump seed rings file): black no, yellow a road, cyan a ford, green by the cell's hours.</summary>
+    public static void WalkDump(uint seed, int rings, string file)
+    {
+        var a = Atlas.Build(Campaign.New(seed, rings));
+        using var f = File.Create(file);
+        f.Write(System.Text.Encoding.ASCII.GetBytes($"P6\n{a.SX} {a.SZ}\n255\n"));
+        var px = new byte[a.SX * a.SZ * 3];
+        for (int z = 0; z < a.SZ; z++)
+            for (int x = 0; x < a.SX; x++)
+            {
+                float c = a.Cost(x, z);
+                (byte r, byte g, byte b) col = float.IsInfinity(c) ? ((byte)0, (byte)0, (byte)0) : c < .7f ? ((byte)230, (byte)200, (byte)90) : c > 3 ? ((byte)60, (byte)220, (byte)230) : ((byte)40, (byte)(200 - (c - 1) * 160), (byte)60);
+                int i = (z * a.SX + x) * 3;
+                px[i] = col.r; px[i + 1] = col.g; px[i + 2] = col.b;
+            }
+        f.Write(px);
+    }
+
     /// <summary>The map seen from straight above, each column the colour of what is highest on it, lit from the north-west; a PPM picture.</summary>
     public static void Dump(uint seed, int rings, string file)
     {

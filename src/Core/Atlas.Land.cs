@@ -145,10 +145,13 @@ public sealed partial class Atlas
                 if (n == null) { if (!mine) continue; mx -= ix * 14; mz -= iz * 14; }
                 // out of the middle at a slant of its own, into the side square to it, so that it runs on smoothly
                 // into the next cell's
-                float l = Dist(cx, cz, mx, mz), turn = ((float)Hash.H3((int)mx, (int)mz, 977) - .5f) * 1.5f;
-                float ox = (mx - cx) / l, oz = (mz - cz) / l, co = MathF.Cos(turn), si = MathF.Sin(turn);
-                float ax = cx + (ox * co - oz * si) * l * .45f, az = cz + (ox * si + oz * co) * l * .45f;
-                var line = Cubic(cx, cz, ax, az, mx + ix * l * .4f, mz + iz * l * .4f, mx, mz, 18);
+                // (the first valley's roads leave from under its castle's walls, each on its own side, not from within)
+                float sx = cx, sz = cz;
+                if (c.Home) { float d0 = Dist(cx, cz, mx, mz); sx += (mx - cx) / d0 * 17; sz += (mz - cz) / d0 * 17; }
+                float l = Dist(sx, sz, mx, mz), turn = ((float)Hash.H3((int)mx, (int)mz, 977) - .5f) * (c.Home ? .6f : 1.5f);
+                float ox = (mx - sx) / l, oz = (mz - sz) / l, co = MathF.Cos(turn), si = MathF.Sin(turn);
+                float ax = sx + (ox * co - oz * si) * l * .45f, az = sz + (ox * si + oz * co) * l * .45f;
+                var line = Cubic(sx, sz, ax, az, mx + ix * l * .4f, mz + iz * l * .4f, mx, mz, 18);
                 list.Add(line);
                 if (mine) main.Add(line);
             }
@@ -177,8 +180,9 @@ public sealed partial class Atlas
         float mx = (ax + bx) / 2, mz = (az + bz) / 2;
         float kx = mx + (cx - mx) * .45f, kz = mz + (cz - mz) * .45f;
         var pts = Curve(ax, az, kx, kz, bx, bz, 26);
-        // clear of the middle, where the castle, the outpost or the lair stands
-        for (int tries = 0; tries < 8 && Nearest(pts, cx, cz) < 22; tries++)
+        // clear of the middle, where the castle, the outpost or the lair stands, with room to walk round it
+        float clear = c.Home ? 36 : c.Holding == Holding.HordeTown ? 30 : 22;
+        for (int tries = 0; tries < 12 && Nearest(pts, cx, cz) < clear; tries++)
         {
             kx += (kx - cx) * .35f + (kx == cx ? 4 : 0); kz += (kz - cz) * .35f;
             pts = Curve(ax, az, kx, kz, bx, bz, 26);

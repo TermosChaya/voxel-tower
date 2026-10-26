@@ -13,7 +13,8 @@ public partial class Main
     /// valley's citadel, chosen; 1 the way to a valley two cells off laid out before him, green as far as he gets by
     /// nightfall; 2 him on his way to the ore valley, a third of it walked; 3 him come into the ore valley, «Войти в
     /// клетку» under the middle; 4 him gone into the first valley from the map, his army walking in by its side; 5 an
-    /// army of the horde on its way to the first valley, seen, and its card.
+    /// army of the horde on its way to the first valley, seen, and its card; 6 him come up to a treasure two cells off,
+    /// its card asking him in; 7 an army of the horde by its lair in the ash, the fog lifted; 8 all the map from far off.
     /// </summary>
     void AtlasPose()
     {
@@ -67,6 +68,30 @@ public partial class Main
                 AtlasLand.Focus((hx + fx2) / 2, (hz + fz2) / 2);
                 break;
             }
+            case 6:
+            {
+                var trove = Atlas.Cells.Where(c => Campaign.Untaken(c)).OrderBy(c => Campaign.Distance(0, 0, c.Q, c.R)).First();
+                var (tx, tz) = _land.Center(trove);
+                pane.Go(new Vector2(tx, tz));
+                Atlas.Advance(Atlas.TrailLeft(hero) + 1);
+                CampaignTick(0);
+                pane.Choose(hero, focus: true);
+                break;
+            }
+            case 7:
+            {
+                Atlas.RevealAll = true;
+                var lair = Atlas.Cells.Find(c => c.Holding == Holding.HordeTown && c.Owner == Holder.Horde);
+                var foe = new MapParty { Q = lair.Q, R = lair.R, CameQ = lair.Q, CameR = lair.R, Owner = Holder.Horde, Aim = PartyAim.Hold, Party = new Party() };
+                foreach (var k in new[] { Kinds.Orc, Kinds.Orc, Kinds.Goblin, Kinds.Goblin, Kinds.Troll, Kinds.Goblin })
+                    foe.Party.Members.Add(new Traveller { Kind = k, Hp = k.Hp, MaxHp = k.Hp });
+                foe.Lord = new Warlord { Name = "Угрюм", Kind = Kinds.Troll, Level = 2 };
+                Atlas.Parties.Add(foe);
+                Atlas.PlaceIn(foe, lair, Campaign.SideToward(lair, 0, 0));
+                AtlasLand.Snap(foe.AtX, foe.AtZ + 4, 10);
+                break;
+            }
+            case 8: AtlasLand.Snap(_land.SX / 2f, _land.SZ / 2f + 20, 999); break;
             case 4:
             {
                 EnterHero(hero);
