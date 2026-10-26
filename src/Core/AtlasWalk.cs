@@ -265,7 +265,10 @@ public sealed partial class Campaign
         var p = new MapParty { Id = _nextParty++, Q = home.Q, R = home.R, CameQ = home.Q, CameR = home.R, Owner = Owner.Ours, Party = new Party() };
         int key = KeyOf(home);
         var captain = new Traveller { Kind = Kinds.Captain, Look = (int)(Seed % 3), Hp = Kinds.Captain.Hp, MaxHp = Kinds.Captain.Hp, Billet = key };
-        captain.Hero = Heroes.Fresh((int)(Seed * 7 + 11));
+        // (a name of his own: another hero of ours already on the map draws by another number, and not his name)
+        var taken = new List<string>();
+        foreach (var o in Parties) if (o.Owner == Owner.Ours && o.Party.Commander?.Hero is { } oh) taken.Add(oh.Name);
+        captain.Hero = Heroes.Fresh((int)(Seed * 7 + 11) + 131 * taken.Count, taken);
         p.Party.Members.Add(captain);
         int look = 0;
         foreach (var t in HeroArmy) p.Party.Members.Add(new Traveller { Kind = t, Look = look++ % Bodies.Looks(t), Hp = t.Hp, MaxHp = t.Hp, Billet = key });

@@ -88,6 +88,8 @@ public sealed partial class Campaign
         side = Math.Clamp(side, 24, 160);
         var c = new Campaign { Seed = seed, Width = side, Height = side };
         new WorldMaker(c, seed).Make();
+        // we are in the first valley (on the small maps it lies at 0,0 and this was so by itself)
+        if (c.Home is { } home) { c.HereQ = home.Q; c.HereR = home.R; }
         return c;
     }
 

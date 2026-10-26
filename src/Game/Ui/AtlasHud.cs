@@ -42,7 +42,8 @@ public partial class AtlasHud : Control
     public const float Side = 340;
     /// <summary>The cell chosen on the map (with no hero chosen, what the right side tells of).</summary>
     public MapCell Cell { get; private set; }
-    public MapParty Hero => _figs != null ? _figs.Chosen : _pick;
+    // (a hero fallen or gone off the map is chosen no more)
+    public MapParty Hero => (_figs != null ? _figs.Chosen : _pick) is { } h && C != null && C.Parties.Contains(h) ? h : null;
     /// <summary>The hero chosen on the big map, while its own drawing of hexes is not yet there to keep him (no land figures).</summary>
     MapParty _pick;
     /// <summary>The way the hero chosen would walk on the big map, as planned and shown (MapWalk.Plan).</summary>

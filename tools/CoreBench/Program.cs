@@ -6277,6 +6277,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--atlas") AtlasBench.R
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--world") WorldBench.Run(Check);
 if (args.Length > 2 && args[0] == "--world-debug") WorldDebug.Run(uint.Parse(args[1]), int.Parse(args[2]));
 if (args.Length > 3 && args[0] == "--world-dump") WorldDump.Run(uint.Parse(args[1]), int.Parse(args[2]), args[3]);
+// not in the usual run: a campaign on the big map played by itself, a picture a day and a film (AutoPlayBench.cs)
+if (args.Length > 3 && args[0] == "--autoplay") AutoPlayBench.Run(uint.Parse(args[1]), args[2], int.Parse(args[3]), args.Length > 4 ? args[4] : null);
 // the commanders as heroes: experience, levels, skills, the fallen, the saves (Heroes.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--heroes") HeroesBench.Run(Check);
 // the map's content: the big map's lairs, the treasures and their keepers, scouts, a shrine's trial (TrovesBench.cs)

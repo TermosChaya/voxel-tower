@@ -337,6 +337,7 @@ public sealed partial class Campaign
         {
             p.MovesMax = MapWalk.MaxMoves(p, Week);
             p.MovesLeft = p.MovesMax;
+            p.Tired = false;
             p.Steps = MapWalk.StepsOf(this, p);
         }
         if (week && Clock.Day > 1) Tell(NewsKind.Grew, $"Неделя {Week + 1}. Жилища пополнились.", Home, null);

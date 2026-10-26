@@ -99,7 +99,7 @@ public partial class Main : Node3D
     /// <summary>The great moments made to be felt: the view shaken, the screen flashed, the time slowed a moment.</summary>
     public Spectacle Spectacle;
     /// <summary>A run driven by a script (a test, a staged scene, a screenshot), not by a hand on the mouse.</summary>
-    public bool Scripted => _selfTest || _demo || _shot != null || _tutCheck;
+    public bool Scripted => _selfTest || _demo || _shot != null || _tutCheck || _pose == "autoplay";
 
     const string BlueprintFile = "user://blueprints.json";
 
@@ -248,11 +248,11 @@ public partial class Main : Node3D
             else TrailerArg(a);
         }
         // scripted runs draw the interface at its usual size, unless told otherwise, and leave the player's settings be
-        if (_selfTest || _demo || _shot != null || _tutCheck || _uiScale > 0) Settings.Scripted(_uiScale);
+        if (_selfTest || _demo || _shot != null || _tutCheck || _uiScale > 0 || _pose == "autoplay") Settings.Scripted(_uiScale);
         else Settings.Load();
         if (_quality >= 0) Settings.ScriptQuality(_quality);
         // the self-test and the screenshots play out of the player's sight (--show keeps the window up)
-        if ((_selfTest || _shot != null || _trailer >= 0 || _tutCheck) && !OS.GetCmdlineUserArgs().Contains("--show")) Backstage.Withdraw(this);
+        if ((_selfTest || _shot != null || _trailer >= 0 || _tutCheck || _pose == "autoplay") && !OS.GetCmdlineUserArgs().Contains("--show")) Backstage.Withdraw(this);
         Settings.Apply(GetTree().Root);
         Settings.ApplyVolume();
         if (_lines) Settings.ScriptLines(true);
@@ -750,6 +750,8 @@ public partial class Main : Node3D
     {
         Diag.Beat(GetWindow().HasFocus());
         if (_selfTest) SelfTestBroke();
+        // the big map playing by itself (Main.AutoPlay.cs): the valley's own frame not run
+        if (AutoPlayFrame(delta)) return;
         Hitches.Frame(Sim);
         if (_frames > 5) _slowest = Math.Max(_slowest, delta);
         if (_trailer >= 0) Roll();

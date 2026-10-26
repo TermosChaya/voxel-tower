@@ -198,7 +198,8 @@ public sealed partial class Campaign
             way = rest;
         }
         else { p.Progress = 0; p.StepCost = 0; }
-        p.Path = way; p.Waits = false;
+        // (a new way: whether the next step waits for the dawn is found anew as it is set out on)
+        p.Path = way; p.Waits = false; p.Tired = false;
         if (Big) p.Steps = MapWalk.StepsOf(this, p);
         p.GoalQ = to.Q; p.GoalR = to.R;
         return true;
@@ -668,6 +669,8 @@ public sealed partial class Campaign
     public static (string nom, string prep, string acc, string gen) Names(MapCell c)
     {
         if (c.Holding == Holding.HordeTown) return ("логово орды", "в логове орды", "логово орды", "логова орды");
+        // (on the big map the plain hexes are made as the first valley is, but only the first is the first)
+        if (c.Kind == ValleyKind.First && !c.Home) return ("равнинная долина", "в равнинной долине", "равнинную долину", "равнинной долины");
         return c.Kind switch
         {
             ValleyKind.First => ("первая долина", "в первой долине", "первую долину", "первой долины"),

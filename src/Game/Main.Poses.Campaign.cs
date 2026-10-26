@@ -162,6 +162,7 @@ public partial class Main
         {
             case "land": LandPose(); break;
             case "bigmap": BigMapPose(); break;
+            case "autoplay": AutoPlayStart(); break;
             case "march":
             {
                 var p = Walk(ore, .45);

@@ -42,7 +42,7 @@ public partial class Main
         if (Atlas == null && _campaignArg)
         {
             // (the map's content staged on the big map; --pose=bigmap a big map of «Heroes», --size=S…XL)
-            if (_pose == "bigmap")
+            if (_pose is "bigmap" or "autoplay")
             {
                 string size = "S";
                 foreach (var a in OS.GetCmdlineUserArgs()) if (a.StartsWith("--size=") && !int.TryParse(a["--size=".Length..], out _)) size = a["--size=".Length..];
@@ -50,7 +50,7 @@ public partial class Main
             }
             else Atlas = Campaign.New(_seed, _pose is "troves" or "trove" or "atlas" or "land" ? 3 : 2);
             // (the first hero on the map, as a new campaign has him; not in the scenes staged before the map was walked)
-            if (_pose is null or "atlas" or "bigmap") Atlas.AddHero();
+            if (_pose is null or "atlas" or "bigmap" or "autoplay") Atlas.AddHero();
             CampSlot = Saves.CampaignSlots[2];
         }
         CampaignPoseBefore();
