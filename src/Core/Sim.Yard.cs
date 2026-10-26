@@ -206,12 +206,13 @@ public sealed partial class Sim
         u.SeatH = seat.High;
     }
 
-    /// <summary>Gets up from its seat, if it sat on one.</summary>
+    /// <summary>Gets up from its seat, if it sat on one, and leaves its place in the street, if it had one.</summary>
     void StandUp(Unit u)
     {
         if (u.SeatAt != null && u.SeatAt.By == u) u.SeatAt.By = null;
         u.SeatAt = null;
         u.SeatH = 0;
+        LeaveSpot(u);
     }
 
     /// <summary>The fires people warm themselves at besides the citadel's braziers: our campfires and braziers that burn.</summary>

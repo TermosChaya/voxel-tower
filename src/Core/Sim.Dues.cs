@@ -19,6 +19,8 @@ public sealed partial class Sim
 {
     /// <summary>A bunk's dues a minute, and the share more each comfort about its house adds.</summary>
     public const float DuesPerBunk = .1f, ComfortShare = .5f;
+    /// <summary>How much more the houses pay a Capitol (the town hall's third storey).</summary>
+    public const float CapitolDues = 1.5f;
     /// <summary>How near a thing set out must stand to a house's walls to count for it, in voxels (12 m); and how near its paving.</summary>
     const int ComfortReach = 96, PavingReach = 24;
 
@@ -40,7 +42,8 @@ public sealed partial class Sim
         if (!LivedIn(z) || !Stands("hall")) return 0;
         int n = 0;
         for (var c = ComfortOf(z); c != 0; c &= c - 1) n++;
-        return z.Beds * DuesPerBunk * (1 + ComfortShare * n);
+        // (the Capitol, the hall's third storey, takes half as much again)
+        return z.Beds * DuesPerBunk * (1 + ComfortShare * n) * (Stands("hall", 3) ? CapitolDues : 1);
     }
 
     /// <summary>The houses' comforts and dues counted again.</summary>

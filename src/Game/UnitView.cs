@@ -571,7 +571,8 @@ public partial class UnitView : Node3D
                     {
                         if (u.State == UnitState.Idle) Leisure(u, f, seed, ref main, ref off, ref legR, ref legL, ref lean, ref bob);
                         // standing at ease: the weight on one leg, the other knee easy, shifted now and then
-                        if (u.State != UnitState.Idle || u.Pastime is Pastime.None or Pastime.Talk or Pastime.Watch or Pastime.Warm or Pastime.Pray)
+                        if (u.State != UnitState.Idle || u.Pastime is Pastime.None or Pastime.Talk or Pastime.Watch or Pastime.Warm or Pastime.Pray
+                            or Pastime.Shop or Pastime.Sell or Pastime.Read)
                         {
                             float shift = MathF.Sin((float)_t * .23f + seed * 4);
                             kneeR = .06f + .16f * MathF.Max(0, shift);
@@ -596,6 +597,12 @@ public partial class UnitView : Node3D
                         }
                         else if (u.Pastime == Pastime.Warm) { elbowR = elbowL = -.9f; }
                         else if (u.Pastime == Pastime.Talk) { elbowR = -.9f; }
+                        // at the street's work (Sim.Streets.cs): the knees set for the blow, the saw, the rope
+                        else if (u.Pastime is Pastime.Hammer or Pastime.Spar) { elbowR = -.25f; elbowL = -.8f; kneeR = kneeL = .2f; }
+                        else if (u.Pastime == Pastime.Saw) { elbowR = -.6f - MathF.Sin((float)_t * 5.2f + seed * 3) * .45f; elbowL = -.5f; kneeR = .3f; kneeL = .12f; }
+                        else if (u.Pastime == Pastime.Fetch) { elbowR = elbowL = -.7f; kneeR = kneeL = .15f; }
+                        else if (u.Pastime == Pastime.Sell) { elbowR = elbowL = -.5f; }
+                        else if (u.Pastime == Pastime.Read) { elbowR = elbowL = -1.4f; }
                     }
                     break;
             }
@@ -1267,6 +1274,46 @@ public partial class UnitView : Node3D
                 legR = 1.32f; legL = 1.38f;
                 main = .62f; off = .62f;
                 lean = .28f;
+                break;
+            case Pastime.Shop:
+                // looking over the goods, now and then pointing at something on the counter
+                float point = MathF.Max(0, MathF.Sin(t * .9f + seed * 4));
+                main = -.25f - 1.05f * point * point;
+                off = -.1f;
+                lean = .06f;
+                break;
+            case Pastime.Sell:
+                // the hands on the counter, leaning on it, now and then showing a thing off
+                float show = MathF.Max(0, MathF.Sin(t * .7f + seed * 2));
+                main = -.95f - .7f * show * show;
+                off = -.95f;
+                lean = .14f;
+                break;
+            case Pastime.Hammer:
+            case Pastime.Spar:
+                // the hammer on the anvil (the chisel on the stone), two blows and a rest; the blade at the dummy, slower
+                Chop(u.Pastime == Pastime.Spar ? 1.15f : .8f, t + seed * 3, out main, out lean);
+                off = -.75f;
+                lean += .08f;
+                break;
+            case Pastime.Saw:
+                // the saw drawn through the log and pushed back, the other hand holding it down
+                float stroke = MathF.Sin(t * 5.2f + seed * 3);
+                main = -1.05f + stroke * .3f;
+                off = -.85f;
+                lean = .24f + stroke * .05f;
+                break;
+            case Pastime.Read:
+                // the hands behind the back, reading what is pinned up
+                main = off = .45f;
+                lean = -.04f;
+                break;
+            case Pastime.Fetch:
+                // hauling the bucket up hand over hand
+                float haul = MathF.Sin(t * 3.1f + seed);
+                main = -1.75f + haul * .45f;
+                off = -1.75f - haul * .45f;
+                lean = .12f;
                 break;
             case Pastime.Pray:
                 // the staff planted, the other hand raised to the sky, swaying a little as it chants

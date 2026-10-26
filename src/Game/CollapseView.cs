@@ -122,7 +122,7 @@ public partial class CollapseView : Node3D
         _creak = .9f + (float)_rnd.NextDouble() * 1.2f;
         var (cx, cy, cz) = WaterPlanner.Unpack(list[_rnd.Next(list.Count)]);
         byte cm = w.Get(cx, cy, cz);
-        _m.Sound?.Strain(cx + .5f, cy, cz + .5f, !Mat.IsTrunk(cm) && cm is not (Mat.Wood or Mat.Deck), Math.Clamp(.3f + list.Count / 300f, .3f, .9f));
+        _m.Sound?.Strain(cx + .5f, cy, cz + .5f, !Mat.IsTrunk(cm) && cm is not (Mat.Wood or Mat.Deck or Mat.Shingle or Mat.Thatch), Math.Clamp(.3f + list.Count / 300f, .3f, .9f));
     }
 
     /// <summary>A voxel crumbled out under its load or cracked through by a blow: chips of it.</summary>

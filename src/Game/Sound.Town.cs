@@ -10,7 +10,7 @@ public partial class Sound
     /// <summary>
     /// The town at work by day, heard near where the view is (Sim.Town.cs): the smith's hammer on the anvil, two blows
     /// and a rest; the carpenter's adze and the workshop's mallet on timber; the masons' picks on stone. Quiet at night,
-    /// and from a building that does not work.
+    /// and from a building that does not work. Where one of ours works outside it (Sim.Streets.cs), it is heard there.
     /// </summary>
     void TownLoop(Sim sim)
     {
@@ -21,17 +21,20 @@ public partial class Sound
         {
             if (!b.Ready) continue;
             float y = _m.World.SurfAt((int)b.CX, (int)b.CZ) + 8;
+            var (cx, cz) = (b.CX, b.CZ);
+            foreach (var s in sim.Street)
+                if (s.Of == b && s.By is { Dead: false } at && at.Spot == s && at.Pastime is Pastime.Hammer or Pastime.Saw) { (cx, y, cz) = (s.X, s.Y + 6, s.Z); break; }
             switch (b.Kind)
             {
                 case "smithy":
                     // (now and then he lets the iron rest in the fire)
-                    if (_rnd.NextDouble() < .8) Play("anvil", b.CX, y, b.CZ, .3, .55f, pitch: _rnd.NextDouble() < .5 ? 1 : 1.06f);
+                    if (_rnd.NextDouble() < .8) Play("anvil", cx, y, cz, .3, .55f, pitch: _rnd.NextDouble() < .5 ? 1 : 1.06f);
                     break;
                 case "carpentry" or "workshop":
-                    if (_rnd.NextDouble() < .45) Play("chop", b.CX, y, b.CZ, .3, .35f, pitch: b.Kind == "workshop" ? .85f : 1.2f);
+                    if (_rnd.NextDouble() < .45) Play("chop", cx, y, cz, .3, .35f, pitch: b.Kind == "workshop" ? .85f : 1.2f);
                     break;
                 case "masons":
-                    if (_rnd.NextDouble() < .45) Play("pick", b.CX, y, b.CZ, .3, .35f, pitch: 1.1f);
+                    if (_rnd.NextDouble() < .45) Play("pick", cx, y, cz, .3, .35f, pitch: 1.1f);
                     break;
             }
         }

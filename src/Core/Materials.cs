@@ -176,6 +176,13 @@ public static class Mat
     /// </summary>
     public const byte FlowerRed = 252, FlowerWhite = 251, FlowerBlue = 250, Fern = 249, Reed = 248, Mushroom = 247, Lily = 246,
         Juniper = 245, BerryRed = 244, BerryBlue = 243, Nest = 242, Anthill = 241, Hollow = 240;
+    /// <summary>
+    /// The roofs of the town's buildings, each as its trade would have it (Sim.Town.cs): red tiles of fired clay on the
+    /// hall, the market and the infirmary, grey shingles split from oak on the workshops, golden thatch on the kennel and
+    /// the stables, blue-grey slate on the barracks and over the forges. They stand on the walls as the logs of a house's
+    /// roof do and are as strong; thatch and shingles burn (thatch at a spark), tile and slate do not.
+    /// </summary>
+    public const byte Tile = 156, Shingle = 157, Thatch = 158, Slate = 174;
     public const int Count = 253;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
@@ -372,6 +379,9 @@ public static class Mat
         D(OreHeap, "Руда", 0x7d4a33, .3f, MatGroup.Stone, Decor); D(Brew, "Зелье", 0x6fcf6a, .1f, MatGroup.Hard, Decor);
         D(BonePile, "Кости", 0xd6ccb2, .1f, MatGroup.Hard, Decor);
         foreach (var m in new[] { Signboard, Paint, Canvas, Brew, BonePile }) Passable[m] = true;
+        // the town's roofs (Sim.Town.cs): fired clay, split oak, straw, slate
+        D(Tile, "Черепица", 0x8e3f2a, .18f, MatGroup.Stone, Player); D(Shingle, "Дранка", 0x6e6152, .2f, MatGroup.Wood, Player);
+        D(Thatch, "Солома", 0x9a8045, .24f, MatGroup.Wood, Player); D(Slate, "Сланец", 0x3f4656, .14f, MatGroup.Stone, Player);
         Emission[Brew] = .7f;
         // what grows by itself: flowers of three more colours, ferns, reeds, mushrooms and lilies drawn in blades and
         // petals; juniper, berries and a nest are leaves to everyone, an anthill is earth, a hollow is the tree's own wood
@@ -439,6 +449,9 @@ public static class Mat
         F(.06f, 20, .3f, Bunk, Table, Bench);
         F(.3f, 6, 0, Bedding);
         F(.05f, 25, .35f, Stakes);
+        // a thatched roof takes from a spark and is gone in a blaze; shingles catch as timber does
+        F(.25f, 10, 0, Thatch);
+        F(.05f, 25, .3f, Shingle);
         F(.06f, 18, .3f, TrapDeck);
         F(.03f, 40, .35f, DrawDeck);
         F(3, 50, 0, Pitch);
@@ -496,6 +509,12 @@ public static class Mat
 
     /// <summary>Laid metal or an iron gate's leaf: what the forge made.</summary>
     public static bool IsMetalWork(byte m) => m is Plate or IronGate or IronGateShut or IronGateOpen;
+
+    /// <summary>The covering of a town building's roof (tile, shingle, thatch or slate): it stands and bears as the logs of a house's roof.</summary>
+    public static bool IsRoofing(byte m) => m is Tile or Shingle or Thatch or Slate;
+
+    /// <summary>Logs laid by the workers, or a roof's covering standing in their stead: what holds and bears as timber does.</summary>
+    public static bool LikeLogs(byte m) => m == Wood || IsRoofing(m);
 
     /// <summary>A leaf of an iron gate.</summary>
     public static bool IsIronLeaf(byte m) => m is IronGate or IronGateShut or IronGateOpen;

@@ -8,7 +8,7 @@ public enum Team : byte { Player, Horde, Wild }
 public enum UnitState : byte { Idle, Walk, Work, Fight, Carve, Siege, Flee, Dead }
 
 /// <summary>What a pawn with nothing to do passes the time with: for its pose and for the panel.</summary>
-public enum Pastime : byte { None, Stroll, Look, Sit, Talk, Stretch, Warm, Watch, Pray, Bound }
+public enum Pastime : byte { None, Stroll, Look, Sit, Talk, Stretch, Warm, Watch, Pray, Bound, Shop, Sell, Hammer, Saw, Read, Fetch, Spar }
 
 /// <summary>A kind of pawn or attacker: how it moves, works, fights, and what it looks like.</summary>
 public sealed class UnitType
@@ -715,6 +715,9 @@ public sealed class Unit
     public Unit Mate;
     /// <summary>The way it looks while at it: at a fire, out over the wall.</summary>
     public float Gaze;
+    /// <summary>Its place in the street (Sim.Streets.cs), and when it may look for one again.</summary>
+    public StreetSpot Spot;
+    public double StreetAgain;
 
     // fire
     /// <summary>Seconds it will go on burning (its clothes alight, or standing in the flames), and how hot.</summary>

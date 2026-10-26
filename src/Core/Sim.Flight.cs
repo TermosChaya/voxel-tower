@@ -624,7 +624,7 @@ public sealed partial class Sim
         if (f.Heap) { LayHeap(f, cells, ix, iy, iz); return true; }
         // timber floats: a piece of it rests on water as on ground; stone sinks through it
         int wood = 0;
-        foreach (var c in cells) if (c.m is Mat.Lumber or Mat.Wood or Mat.Char || Mat.IsTrunk(c.m)) wood++;
+        foreach (var c in cells) if (c.m is Mat.Lumber or Mat.Wood or Mat.Char or Mat.Shingle or Mat.Thatch || Mat.IsTrunk(c.m)) wood++;
         bool floats = wood * 2 > cells.Count;
         bool Clash(int ax, int ay, int az)
         {

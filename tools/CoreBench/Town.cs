@@ -217,6 +217,125 @@ static class TownBench
                 $"comforts {(home == null ? "-" : sim.ComfortOf(home).ToString())}; all dues {sim.Dues():0.##}, the town {town:0.##} a minute";
         }
         check("houses lived in pay dues to the town hall by their bunks, half as much again for a well and again for paving; a house only drawn counts nothing toward the rank", duesOk, dues);
+        var house = houseAt == null ? null : sim.Zones.Find(z => z.Kind == Zone.Dwelling && sim.LivedIn(z));
+
+        // each building's roof covered as its trade has it: tiles on the hall and the market, slate on the barracks; a
+        // house's of logs; thatch and shingles burn, tiles and slate do not, and a thatched roof catches at a spark
+        int Covered(Building x, byte m)
+        {
+            int n = 0;
+            if (x == null) return 0;
+            for (int z = x.Z0 - Shapes.Eaves; z <= x.Z1 + Shapes.Eaves; z++)
+                for (int xx = x.X0 - Shapes.Eaves; xx <= x.X1 + Shapes.Eaves; xx++)
+                    for (int y = x.Top0; y < Math.Min(w.SY, x.Top0 + 3 * Shapes.HouseHeight + 24); y++) if (w.Get(xx, y, z) == m) n++;
+            return n;
+        }
+        int houseRoof = 0;
+        if (house != null)
+            for (int z = house.Z0 - 2; z <= house.Z1 + 2; z++)
+                for (int x = house.X0 - 2; x <= house.X1 + 2; x++)
+                    for (int y = house.Depth; y < house.Depth + 24; y++) if (Mat.IsRoofing(w.Get(x, y, z))) houseRoof++;
+        // a patch of thatch and one of tiles on a stone plinth out in the field, a spark put to each
+        var (px, pz) = spots.Count > 3 ? spots[3] : (kx - 300, kz + 40);
+        int pg = w.SurfAt(px, pz);
+        for (int x = px - 2; x <= px + 16; x++)
+            for (int z = pz - 2; z <= pz + 8; z++)
+            {
+                for (int y = pg - 2; y < pg + 4; y++) w.Set(x, y, z, Mat.Stone);
+                for (int y = pg + 4; y < pg + 12; y++) w.Set(x, y, z, Mat.Air);
+            }
+        for (int x = 0; x < 6; x++) for (int z = 0; z < 6; z++) { w.Set(px + x, pg + 4, pz + z, Mat.Thatch); w.Set(px + 9 + x, pg + 4, pz + z, Mat.Tile); }
+        bool sparkThatch = sim.Ignite(px, pg + 4, pz), sparkTile = sim.Ignite(px + 9, pg + 4, pz);
+        Run(18);
+        int thatchLeft = 0, tileLeft = 0;
+        for (int x = 0; x < 6; x++) for (int z = 0; z < 6; z++) { if (w.Get(px + x, pg + 4, pz + z) == Mat.Thatch && !sim.IsBurning(px + x, pg + 4, pz + z)) thatchLeft++; if (w.Get(px + 9 + x, pg + 4, pz + z) == Mat.Tile) tileLeft++; }
+        check("a thatched roof catches at a spark and burns through, a tiled one takes no fire",
+            sparkThatch && !sparkTile && thatchLeft < 30 && tileLeft == 36, $"spark on thatch {sparkThatch}, on tiles {sparkTile}; 18 s on, unburnt thatch {thatchLeft} of 36, tiles {tileLeft} of 36");
+        check("each town building's roof is covered as its trade has it: tiles on the hall and the market, slate on the barracks, a house's of logs; thatch and shingles burn, tiles and slate do not",
+            Covered(hall, Mat.Tile) > 400 && Covered(mk, Mat.Tile) > 400 && Covered(b, Mat.Slate) > 400 && Covered(b, Mat.Tile) == 0 && houseRoof == 0 && house != null
+            && Sim.TownKinds.All(k => Mat.IsRoofing(k.Roof)) && Sim.TownKinds.Select(k => k.Roof).Distinct().Count() == 4
+            && Mat.Burns(Mat.Thatch) && Mat.Burns(Mat.Shingle) && !Mat.Burns(Mat.Tile) && !Mat.Burns(Mat.Slate) && Mat.Catch[Mat.Thatch] > 4 * Mat.Catch[Mat.Wood],
+            $"tiles on the hall {Covered(hall, Mat.Tile)}, on the market {Covered(mk, Mat.Tile)}; slate on the barracks {Covered(b, Mat.Slate)}, tiles there {Covered(b, Mat.Tile)}; the house's covering {houseRoof}");
+
+        // the street by day: idle workers go to the market's stalls to keep them and to choose, to the hall's board, and
+        // stand there facing them; the alarm, the dusk and work each send them off at once
+        sim.Clock.Night = false; sim.Clock.DawnLeft = 0; sim.Clock.Left = DayClock.DayLength;
+        if (sim.Alarm) sim.StandDown();
+        Run(6);
+        var places = sim.Street.GroupBy(s => s.Does).ToDictionary(g => g.Key, g => g.Count());
+        var idle = sim.Units.Where(u => !u.Dead && u.T == Kinds.Worker).ToList();
+        int atStreet = 0, facing = 0;
+        var doing = new HashSet<Pastime>();
+        for (int i = 0; i < 160 && atStreet < 3; i++)
+        {
+            Run(1);
+            atStreet = facing = 0;
+            foreach (var u in idle)
+            {
+                if (u.Spot == null || u.Pastime != u.Spot.Does) continue;
+                atStreet++; doing.Add(u.Pastime);
+                if (MathF.Abs(u.X - u.Spot.X) < .01f && MathF.Abs(u.Z - u.Spot.Z) < .01f && MathF.Abs(MathF.IEEERemainder(u.Facing - u.Spot.Facing, MathF.Tau)) < .5f) facing++;
+            }
+        }
+        double streetAt = sim.Time;
+        sim.RaiseAlarm();
+        Run(1.5);
+        int afterAlarm = idle.Count(u => u.Spot != null);
+        sim.StandDown();
+        for (int i = 0; i < 160 && idle.Count(u => u.Spot != null && u.Pastime == u.Spot.Does) < 2; i++) Run(1);
+        int back = idle.Count(u => u.Spot != null && u.Pastime == u.Spot.Does);
+        sim.Clock.Left = DayClock.Dusk * .5;
+        Run(1.5);
+        int atDusk = idle.Count(u => u.Spot != null);
+        sim.Clock.Left = DayClock.DayLength;
+        for (int i = 0; i < 160 && idle.Count(u => u.Spot != null && u.Pastime == u.Spot.Does) < 2; i++) Run(1);
+        var keepers = idle.Where(u => u.Spot != null && u.Pastime == u.Spot.Does).ToList();
+        // work for everyone: a long trench dug by the citadel
+        var trench = new VoxelList();
+        int tg = w.SurfAt(kx + 200, kz - 60);
+        for (int x = kx + 160; x < kx + 240; x++) for (int z = kz - 64; z < kz - 56; z++) for (int y = w.SurfAt(x, z) - 4; y < w.SurfAt(x, z); y++) trench.Add(x, y, z, Mat.Air);
+        sim.DesignateRemove(trench);
+        Run(4);
+        int stayed = keepers.Count(u => u.Spot != null);
+        sim.CancelArea(kx + 150, kz - 70, kx + 250, kz - 50);
+        check("by day idle workers go to the town's street, to keep the market's stalls, to choose at them, to read the hall's board, and stand at their places facing them; the alarm, the dusk and work send them off",
+            places.GetValueOrDefault(Pastime.Sell) == 2 && places.GetValueOrDefault(Pastime.Shop) == 4 && places.GetValueOrDefault(Pastime.Read) == 1
+            && atStreet >= 3 && facing == atStreet && afterAlarm == 0 && back >= 2 && atDusk == 0 && keepers.Count >= 2 && stayed == 0,
+            $"places {string.Join(", ", places.Select(p => $"{p.Key} {p.Value}"))}; at them {atStreet} ({string.Join(", ", doing)}), {facing} standing on theirs facing it, by {streetAt:0} s; " +
+            $"after the alarm {afterAlarm}, back {back}; at dusk {atDusk}; given work {stayed} of {keepers.Count} stayed");
+
+        // the Capitol: the hall's third storey waits for the settlement to be a «Посад»; raised by the workers it pays more
+        // and the houses pay it half as much again; its third floor is walked up to from its door
+        sim.InstantLabour = true;
+        string capWait = hall == null ? "no hall" : sim.Raise(hall);
+        for (int i = 0; i < 120 && hall != null && hall.Level < 2; i++) { Run(.5); sim.CompleteAll(); }
+        int standing0 = sim.Standing;
+        string early = hall == null ? "no hall" : sim.CantRaise(hall);
+        sim.Standing = 3;
+        float income2 = sim.TownIncome(), dues2 = house == null ? 0 : sim.DuesOf(house);
+        string capRaise = hall == null ? "no hall" : sim.Raise(hall);
+        for (int i = 0; i < 160 && hall != null && hall.Level < 3; i++) { Run(.5); sim.CompleteAll(); }
+        sim.InstantLabour = false;
+        Run(3);
+        var hz0 = hall == null ? null : sim.ZoneOf(hall);
+        int high = hz0 == null ? 0 : hz0.Depth - w.GroundTop((int)hall.CX, (int)hall.CZ);
+        float income3 = sim.TownIncome(), dues3 = house == null ? 0 : sim.DuesOf(house);
+        // up to the third floor from the door: a cell standing in the room two storeys over the first
+        bool upstairs = false;
+        if (hall != null && hz0 != null && sim.DoorOf(hall) is { } hdoor)
+        {
+            var (dx, dy, dz) = hdoor.Middle;
+            int from = sim.StandNear((int)dx + (int)MathF.Sign(dx - hall.CX) * 10, (int)dy, (int)dz + (int)MathF.Sign(dz - hall.CZ) * 10, 2);
+            int floor3 = hall.Top0 + Shapes.HouseHeight;
+            var path = sim.Paths.Find(from, c => sim.Nav.Y(c) * 8 >= floor3 - 4 && sim.Nav.I(c) * 8 > hall.X0 && sim.Nav.I(c) * 8 < hall.X1 && sim.Nav.K(c) * 8 > hall.Z0 && sim.Nav.K(c) * 8 < hall.Z1,
+                c => 0, Kinds.Worker.Move, 60000, gates: true);
+            upstairs = path != null;
+        }
+        check("the Capitol, the hall's third storey, waits for a «Посад», is raised by the workers three storeys high, pays more, the houses half as much again, and its top floor is walked up to",
+            capWait == null && hall?.Level >= 2 && early != null && early.Contains("Посад") && capRaise == null && hall?.Level == 3 && hall.Ready
+            && high > 3 * Shapes.HouseHeight - 4 && income3 >= income2 + 6 && MathF.Abs(dues3 - dues2 * Sim.CapitolDues) < .01f && dues2 > 0 && upstairs,
+            $"second storey «{capWait}», the third at level 2 «{early}» (rank {standing0}); raised «{capRaise}», level {hall?.Level}, ready {hall?.Ready}, {high} voxels high; " +
+            $"income {income2:0.#} → {income3:0.#}; a house's dues {dues2:0.##} → {dues3:0.##}; up to the third floor {upstairs}");
 
         // all of it read back
         var buf = new System.IO.MemoryStream();

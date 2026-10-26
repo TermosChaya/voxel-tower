@@ -103,7 +103,7 @@ public partial class TownPanel : VBoxContainer
         row.AddChild(col);
         string state = b == null ? (open ? "" : " · изучите в «Знаниях»")
             : !b.Ready ? (b.Level == 0 ? " · строится" : " · закрыта, не работает")
-            : b.Target > b.Level ? $" · ур. {b.Level}, поднимают второй этаж" : $" · ур. {b.Level}";
+            : b.Target > b.Level ? $" · ур. {b.Level}, поднимают {TownKind.Storey(b.Target)} этаж" : $" · ур. {b.Level}";
         var name = Hud.Text(k.Name + state, Ornament.SerifBold, 14, open ? Ornament.BronzeLight : Ornament.Faded);
         name.TooltipText = Tip(k, b);
         name.MouseFilter = MouseFilterEnum.Pass;
@@ -148,7 +148,10 @@ public partial class TownPanel : VBoxContainer
         if (b.Level < k.MaxLevel && b.Target <= b.Level)
         {
             string no = sim.CantRaise(b);
-            var up = Button($"Второй этаж · {k.UpGold} зол.{(k.UpMetal > 0 ? $" · {k.UpMetal:0.##} м³ мет." : "")}", $"Рабочие снимут крышу и поднимут второй этаж. Тогда: {k.Level2}" + (no != null ? $"\nНельзя: {no}." : ""));
+            int level = b.Level + 1;
+            var (gold, metal) = k.UpCost(level);
+            string storey = TownKind.Storey(level);
+            var up = Button($"{char.ToUpper(storey[0])}{storey[1..]} этаж · {gold} зол.{(metal > 0 ? $" · {metal:0.##} м³ мет." : "")}", $"Рабочие снимут крышу и поднимут {storey} этаж. Тогда: {k.Gives(level)}" + (no != null ? $"\nНельзя: {no}." : ""));
             up.Disabled = no != null;
             up.Pressed += () => { string why = sim.Raise(b); if (why != null) _m.Hud.Float(why, Ornament.Blood); else Sound.Ui("mark"); _key = ""; };
             buttons.AddChild(up);
@@ -170,7 +173,7 @@ public partial class TownPanel : VBoxContainer
     static string Tip(TownKind k, Building b)
     {
         string needs = k.Needs.Length == 0 ? "" : "\nНужно: " + string.Join(", ", Array.ConvertAll(k.Needs, n => (n.level > 1 ? "улучшенная " : "") + "«" + Sim.TownKindOf(n.key)?.Name + "»"));
-        string up = k.MaxLevel > 1 ? $"\nВторой этаж: {k.Level2}" : "";
+        string up = (k.MaxLevel > 1 ? $"\nВторой этаж: {k.Level2}" : "") + (k.MaxLevel > 2 ? $"\nТретий этаж, когда поселение станет «{Sim.StandingNames[k.Rank3]}»: {k.Level3}" : "");
         string where = k.OnOre ? "\nСтавится только на рудный выход." : "";
         string iron = k.MetalCost > 0 ? $"\nМеталл: {k.MetalCost:0.##} м³" + (k.UpMetal > 0 ? $", этаж {k.UpMetal:0.##} м³." : ".") : "";
         return $"{k.Name}\n{k.About}{up}{where}{iron}{needs}";
@@ -239,7 +242,7 @@ public partial class TownPlates : CanvasLayer
             var at = new Vector3(_m.World.WX(b.CX), _m.World.WY(top), _m.World.WZ(b.CZ));
             tag.Visible = !hidden && !cam.IsPositionBehind(at);
             if (!tag.Visible) continue;
-            tag.Text = b.Ready ? (b.Target > b.Level ? $"{b.K.Name} · ур. {b.Level} · второй этаж строится" : $"{b.K.Name} · ур. {b.Level}") : b.Level == 0 ? $"{b.K.Name} · строится" : $"{b.K.Name} · не работает";
+            tag.Text = b.Ready ? (b.Target > b.Level ? $"{b.K.Name} · ур. {b.Level} · {TownKind.Storey(b.Target)} этаж строится" : $"{b.K.Name} · ур. {b.Level}") : b.Level == 0 ? $"{b.K.Name} · строится" : $"{b.K.Name} · не работает";
             tag.Modulate = b.Ready ? Colors.White : new Color(1, 1, 1, .75f);
             tag.ResetSize();
             tag.Position = cam.UnprojectPosition(at) - new Vector2(tag.Size.X / 2, tag.Size.Y);

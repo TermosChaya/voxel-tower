@@ -31,9 +31,10 @@ public sealed partial class Sim
 
     /// <summary>
     /// A storey over the house a rectangle was drawn on, if one can go up there: its roof marked to be taken down, the
-    /// storey waiting for that. Null if so, else why not.
+    /// storey waiting for that. Null if so, else why not. A house has two storeys at most; the town hall raised to the
+    /// Capitol has three (<paramref name="storeys"/>, Sim.Town.cs).
     /// </summary>
-    public string PlanStorey(Zone house, int x0, int z0, int x1, int z1, byte mat)
+    public string PlanStorey(Zone house, int x0, int z0, int x1, int z1, byte mat, int storeys = 2)
     {
         if (x1 < x0) (x0, x1) = (x1, x0);
         if (z1 < z0) (z0, z1) = (z1, z0);
@@ -43,7 +44,7 @@ public sealed partial class Sim
         int top = house.Depth;
         int ground = World.GroundTop((house.X0 + house.X1) / 2, (house.Z0 + house.Z1) / 2);
         if (top <= 1 || top - ground < Shapes.HouseHeight - 4) return "надстроить можно дом, нарисованный прямоугольником";
-        if (top - ground > Shapes.HouseHeight + 8) return "выше двух этажей не строят";
+        if (top - ground > (storeys - 1) * Shapes.HouseHeight + 8) return storeys > 2 ? "выше трёх этажей не строят" : "выше двух этажей не строят";
         foreach (var s in Storeys) if (s.X0 == house.X0 && s.Z0 == house.Z0) return "второй этаж здесь уже размечен";
         // what is still marked to be laid up there is let go: it is coming down
         for (int z = house.Z0 - Shapes.Eaves; z <= house.Z1 + Shapes.Eaves; z++)
@@ -71,7 +72,9 @@ public sealed partial class Sim
             if (zone == null) { Storeys.RemoveAt(i); continue; }
             if (Shapes.OverHouse(World, s.X0, s.Z0, s.X1, s.Z1, s.Top).Count > 0) continue;
             // its ladder against a long wall with no door in it, no eaves out over a house beside it (Sim.Houses.cs)
-            var plan = Shapes.Storey(World, Site, s.X0, s.Z0, s.X1, s.Z1, s.Top, s.Mat, DoorSidesOf(zone), SharedSidesOf(zone), out var arched, out var ladder, out int newTop);
+            // (a town building's roof goes back up covered as its trade has it)
+            var plan = Shapes.Storey(World, Site, s.X0, s.Z0, s.X1, s.Z1, s.Top, s.Mat, DoorSidesOf(zone), SharedSidesOf(zone), out var arched, out var ladder, out int newTop,
+                BuildingOn(zone)?.K.Roof ?? 0);
             // what of the roof came down into the room as it was taken apart is carried off
             var debris = new VoxelList();
             for (int z = s.Z0; z <= s.Z1; z++)

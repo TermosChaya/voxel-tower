@@ -187,12 +187,18 @@ public static class Retinue
             case UnitState.Flee: return u.Refuge >= 0 && u.Refuge != sim.Gate ? "бежит в убежище" : "бежит в цитадель";
             case UnitState.Walk:
                 return u.Site >= 0 ? "идёт к работе" : u.Hold ? "идёт по приказу"
-                    : u.Pastime == Pastime.Stroll ? (u.After == Pastime.Warm ? "идёт погреться к огню" : "прогуливается") : "идёт";
+                    : u.Pastime == Pastime.Stroll ? u.After switch
+                    {
+                        Pastime.Warm => "идёт погреться к огню", Pastime.Shop or Pastime.Sell => "идёт на рынок", Pastime.Fetch => "идёт к колодцу",
+                        Pastime.Hammer or Pastime.Saw => "идёт поработать на улице", Pastime.Read => "идёт к ратуше", Pastime.Spar => "идёт на плац", _ => "прогуливается",
+                    } : "идёт";
         }
         string leisure = u.Pastime switch
         {
             Pastime.Look => "осматривается", Pastime.Sit => "отдыхает", Pastime.Talk => "беседует", Pastime.Stretch => "потягивается",
-            Pastime.Warm => "греется у огня", Pastime.Watch => "смотрит на запад", Pastime.Pray => "молится", _ => "",
+            Pastime.Warm => "греется у огня", Pastime.Watch => "смотрит на запад", Pastime.Pray => "молится",
+            Pastime.Shop => "выбирает товар", Pastime.Sell => "торгует за прилавком", Pastime.Saw => "пилит бревно", Pastime.Read => "читает объявления",
+            Pastime.Fetch => "набирает воду", Pastime.Spar => "бьёт чучело", Pastime.Hammer => u.Spot?.Of?.Kind == "masons" ? "тешет камень" : "куёт у наковальни", _ => "",
         };
         if (u.Hold) return leisure == "" ? "стоит по приказу" : "стоит по приказу, " + leisure;
         if (u.Why != "") return Bindings.Fill(u.Why);

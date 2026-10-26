@@ -59,7 +59,7 @@ public sealed partial class Sim
     static float WeightOf(byte m) =>
         Mat.IsMasonry(m) || m is Mat.Ruin or Mat.DropStone ? 1
         : m is Mat.Rammed or Mat.Soil ? .8f : m == Mat.Rubble ? .9f
-        : m is Mat.Wood or Mat.Deck or Mat.TrapDeck or Mat.Lumber or Mat.DropLog or Mat.Stakes or Mat.Char ? .3f
+        : Mat.LikeLogs(m) || m is Mat.Deck or Mat.TrapDeck or Mat.Lumber or Mat.DropLog or Mat.Stakes or Mat.Char ? .3f
         : Mat.IsTrunk(m) || Mat.IsLeaf(m) ? .35f
         // iron is near thrice as heavy as stone
         : Mat.IsMetalWork(m) ? 2.8f : .5f;
@@ -67,11 +67,11 @@ public sealed partial class Sim
     /// <summary>How much a voxel of this carries standing on what is under it before it cracks, as voxels of stone: stone a
     /// great deal (a column a good deal higher than the valley is deep), logs less, rammed earth least; 0 for what does not
     /// crack — rubble, old ruins, trees, what is not built.</summary>
-    static float BearsDown(byte m) => Mat.IsMasonry(m) ? 250 : m == Mat.Plate ? 900 : m == Mat.Wood ? 160 : m == Mat.Rammed ? 130 : m == Mat.Deck ? 60 : 0;
+    static float BearsDown(byte m) => Mat.IsMasonry(m) ? 250 : m == Mat.Plate ? 900 : Mat.LikeLogs(m) ? 160 : m == Mat.Rammed ? 130 : m == Mat.Deck ? 60 : 0;
 
     /// <summary>How much a voxel of this held out over the air passes on aside before it cracks, a course with nothing on
     /// it (one under a deep wall bears the more): timber better than stone, rammed earth hardly at all.</summary>
-    static float BearsAside(byte m) => Mat.IsMasonry(m) ? 40 : m == Mat.Plate ? 400 : m == Mat.Wood ? 150 : m == Mat.Rammed ? 12 : m == Mat.Deck ? 30 : 0;
+    static float BearsAside(byte m) => Mat.IsMasonry(m) ? 40 : m == Mat.Plate ? 400 : Mat.LikeLogs(m) ? 150 : m == Mat.Rammed ? 12 : m == Mat.Deck ? 30 : 0;
 
     /// <summary>What a crack leaves of what a voxel bears: cracked through, two fifths.</summary>
     static float Unbroken(float crack) => 1 - .6f * crack;
@@ -732,7 +732,7 @@ public sealed partial class Sim
     {
         cells.Sort((a, b) => a.oy.CompareTo(b.oy));
         int wood = 0;
-        foreach (var c in cells) if (c.m is Mat.Lumber or Mat.Wood or Mat.Char || Mat.IsTrunk(c.m)) wood++;
+        foreach (var c in cells) if (c.m is Mat.Lumber or Mat.Wood or Mat.Char or Mat.Shingle or Mat.Thatch || Mat.IsTrunk(c.m)) wood++;
         bool floats = wood * 2 > cells.Count;
         var marked = f.Marked ? new VoxelList() : null;
         _settling = true;

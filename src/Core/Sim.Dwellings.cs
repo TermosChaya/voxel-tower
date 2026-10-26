@@ -40,8 +40,9 @@ public sealed partial class Sim
     const int MostBunks = 12;
     /// <summary>A man's headroom over the floor, in voxels.</summary>
     const int Headroom = 16;
-    /// <summary>How far out of the frame and how high over the floor the room is looked for before it counts as open.</summary>
-    const int RoomReach = 24, RoomHigh = 88, RoomSpan = 160;
+    /// <summary>How far out of the frame and how high over the floor the room is looked for before it counts as open (three
+    /// storeys and their roof: the Capitol's, Sim.Town.cs).</summary>
+    const int RoomReach = 24, RoomHigh = 3 * Shapes.HouseHeight + 16, RoomSpan = 160;
 
     readonly Dictionary<int, Furnishing> _furnishing = new();
     double _nextDwellings;

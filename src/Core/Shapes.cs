@@ -17,6 +17,8 @@ public struct Stroke
     public bool Hollow;
     /// <summary>Dig instead of lay: Height becomes the depth, and a levelled stroke digs to one flat floor.</summary>
     public bool Dig;
+    /// <summary>A house's roof: what its slopes are covered with (0, logs; a town building's tiles, shingles, thatch or slate).</summary>
+    public byte Roof;
 }
 
 /// <summary>
@@ -384,7 +386,7 @@ public static class Shapes
             why = doorSide >= 0 ? $"дверь {SideWords[doorSide]} упрётся в стену, дом или обрыв: {{Rotate}} — другая сторона" : "двери некуда открыться: со всех сторон стена, дом, вода или обрыв";
             return null;
         }
-        Roof(w, site, L, arched, x0, z0, x1, z1, top, st.Mat, shared);
+        Roof(w, site, L, arched, x0, z0, x1, z1, top, st.Mat, shared, st.Roof);
         // the lintel: three courses of logs over where the doorway will be, a metre beyond it either side (the gateway
         // snaps to the cells, half a metre either way), standing as an arch
         var lintel = new HashSet<long>();
@@ -448,9 +450,11 @@ public static class Shapes
     /// The roof of a house over the rectangle of its walls, standing on them at <paramref name="top"/>: two slopes of
     /// logs, a voxel thick, from eaves a quarter of a metre out over the long walls up to a ridge along the middle, a
     /// voxel up for every two in (as the members of an arch, they hold at their corners); the end walls go on up under it
-    /// as gables of their own material. Into the plan, and the slopes into <paramref name="arched"/>.
+    /// as gables of their own material. Into the plan, and the slopes into <paramref name="arched"/>. A town building's
+    /// slopes are covered with what its trade has (<paramref name="covering"/>: tiles, shingles, thatch or slate), its
+    /// ridge and its eaves still of logs.
     /// </summary>
-    public static void Roof(VoxelWorld w, Site site, VoxelList L, VoxelList arched, int x0, int z0, int x1, int z1, int top, byte wallMat, int shared = 0)
+    public static void Roof(VoxelWorld w, Site site, VoxelList L, VoxelList arched, int x0, int z0, int x1, int z1, int top, byte wallMat, int shared = 0, byte covering = 0)
     {
         const int t = HouseWall, e = Eaves;
         bool alongX = x1 - x0 >= z1 - z0;
@@ -477,7 +481,8 @@ public static class Shapes
                     if (gable && l - l0 >= t && l1 - l >= t) continue;
                     int x = alongX ? l : c, z = alongX ? c : l;
                     if (!w.InBounds(x, y, z) || site.Forbidden(x, z) || !Brushes.Free(w.Get(x, y, z))) continue;
-                    byte m = slope ? Mat.Wood : Lay(wallMat, x, y, z);
+                    // (the ridge, the last course, and the eaves, the first, are the logs it is laid on)
+                    byte m = !slope ? Lay(wallMat, x, y, z) : covering == 0 || k == 0 || 2 * k + 1 >= dmax ? Mat.Wood : covering;
                     L.Add(x, y, z, m);
                     if (slope) arched.Add(x, y, z, m);
                 }
@@ -528,7 +533,7 @@ public static class Shapes
         => Storey(w, site, x0, z0, x1, z1, lowerTop, wallMat, 0, 0, out arched, out ladder, out newTop);
 
     /// <summary>A storey as above, its ladder against a long wall with no door in it (<paramref name="doors"/>, a bit for each side), and no eaves over the <paramref name="shared"/> sides.</summary>
-    public static VoxelList Storey(VoxelWorld w, Site site, int x0, int z0, int x1, int z1, int lowerTop, byte wallMat, int doors, int shared, out VoxelList arched, out VoxelList ladder, out int newTop)
+    public static VoxelList Storey(VoxelWorld w, Site site, int x0, int z0, int x1, int z1, int lowerTop, byte wallMat, int doors, int shared, out VoxelList arched, out VoxelList ladder, out int newTop, byte covering = 0)
     {
         const int t = HouseWall;
         var L = new VoxelList();
@@ -561,7 +566,7 @@ public static class Shapes
                 for (int y = lowerTop - 2; y < lowerTop; y++)
                     if (Brushes.Free(w.Get(x, y, z))) { L.Add(x, y, z, Mat.Wood); arched.Add(x, y, z, Mat.Wood); }
             }
-        Roof(w, site, L, arched, x0, z0, x1, z1, newTop, wallMat, shared);
+        Roof(w, site, L, arched, x0, z0, x1, z1, newTop, wallMat, shared, covering);
         return L;
     }
 

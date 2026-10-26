@@ -69,6 +69,8 @@ public sealed partial class Sim
         if (Mat.IsTrunk(m)) return 30;
         // iron plate holds out furthest of what is built: three metres from where it rests
         if (m == Mat.Plate) return 24;
+        // a roof's covering holds out as the logs it stands in for
+        if (Mat.IsRoofing(m)) return 16;
         return m switch { Mat.Wood or Mat.Deck or Mat.TrapDeck => 16, Mat.Rammed => 4, Mat.Char or Mat.Rubble or Mat.DropStone or Mat.DropLog => 2, Mat.Lumber => 4, Mat.Pitch => 1, Mat.Ruin => Free, _ => 8 };
     }
 
@@ -100,7 +102,7 @@ public sealed partial class Sim
     /// Timber floats: what is of wood and lies on water is held by it as by the ground (it came to rest there so, see
     /// <see cref="Landing"/>); else splinters come down on a moat, are found held by nothing, come down on it again, for ever.
     /// </summary>
-    static bool Floats(byte m) => Mat.IsTrunk(m) || m is Mat.Wood or Mat.Deck or Mat.Char or Mat.Lumber or Mat.DropLog;
+    static bool Floats(byte m) => Mat.IsTrunk(m) || m is Mat.Wood or Mat.Deck or Mat.Char or Mat.Lumber or Mat.DropLog or Mat.Shingle or Mat.Thatch;
 
     /// <summary>What holds things up from below: the ground itself, the citadel, a solid floor.</summary>
     static bool Ground(byte m) => Grounds[m] != 0;
@@ -727,14 +729,14 @@ public sealed partial class Sim
             bool log = Mat.IsTrunk(m);
             int sx = log ? x + (int)MathF.Round(fx * (y - baseY)) : x, sz = log ? z + (int)MathF.Round(fz * (y - baseY)) : z, sy = log ? baseY + 6 : y;
             if (!World.InBounds(sx, sy, sz)) continue;
-            var (lx, ly, lz) = Landing(sx, sy, sz, log || m is Mat.Wood or Mat.Deck or Mat.Char || Mat.IsLeaf(m), runs: !log, log: log ? logLaid : null);
+            var (lx, ly, lz) = Landing(sx, sy, sz, log || m is Mat.Wood or Mat.Deck or Mat.Char or Mat.Shingle or Mat.Thatch || Mat.IsLeaf(m), runs: !log, log: log ? logLaid : null);
             if (ly < 0) continue;
             World.Set(lx, ly, lz, Broken(m));
             if (Orders.At(lx, ly, lz) != 0) Orders.Clear(lx, ly, lz);
             if (Orders.IsRemove(order)) marked.Add(lx, ly, lz, Mat.Air);
             if (log) { logCells.Add((lx, ly, lz)); logLaid.Add(WaterPlanner.Pack(lx, ly, lz)); }
             cx += lx; cy += ly; cz += lz; laid++;
-            if (Mat.IsMasonry(m) || m == Mat.Ruin) stone++; else if (m is Mat.Wood or Mat.Deck || Mat.IsTrunk(m)) wood++;
+            if (Mat.IsMasonry(m) || m is Mat.Ruin or Mat.Tile or Mat.Slate) stone++; else if (m is Mat.Wood or Mat.Deck or Mat.Shingle or Mat.Thatch || Mat.IsTrunk(m)) wood++;
             // a falling tree comes down away from those beside it (Sim.Felling.cs); whoever is under it after all is struck
             if (quiet || log && trunks < 60) continue;
             foreach (var u in under)
@@ -834,7 +836,7 @@ public sealed partial class Sim
         foreach (var (x, y, z) in list)
         {
             byte m = World.Get(x, y, z);
-            if (Mat.IsMasonry(m) || m == Mat.Ruin) stone++; else if (m is Mat.Wood or Mat.Deck) wood++;
+            if (Mat.IsMasonry(m) || m is Mat.Ruin or Mat.Tile or Mat.Slate) stone++; else if (m is Mat.Wood or Mat.Deck or Mat.Shingle or Mat.Thatch) wood++;
             cx += x; cy += y; cz += z; laid++;
             // for the chips and dust at its broken edges
             Fell?.Invoke(x, y, z, m);
@@ -860,11 +862,12 @@ public sealed partial class Sim
     }
 
     /// <summary>What a voxel is once it has fallen: masonry broken stone, timber broken timber, rammed earth loose earth;
-    /// trees lie as logs, iron leaves as loose plates, and the rest as it was.</summary>
+    /// trees lie as logs, iron leaves as loose plates, a roof's tiles and slates as broken stone, its shingles and thatch
+    /// as broken timber, and the rest as it was.</summary>
     static byte Broken(byte m) =>
-        Mat.IsMasonry(m) || m is Mat.Ruin or Mat.Keep or Mat.DropStone ? Mat.Rubble
+        Mat.IsMasonry(m) || m is Mat.Ruin or Mat.Keep or Mat.DropStone or Mat.Tile or Mat.Slate ? Mat.Rubble
         : Mat.IsIronLeaf(m) ? Mat.Plate
-        : m is Mat.Wood or Mat.Deck or Mat.Plank or Mat.TrapDeck or Mat.Stakes or Mat.DropLog || Mat.Swings(m) ? Mat.Lumber
+        : m is Mat.Wood or Mat.Deck or Mat.Plank or Mat.TrapDeck or Mat.Stakes or Mat.DropLog or Mat.Shingle or Mat.Thatch || Mat.Swings(m) ? Mat.Lumber
         : m == Mat.Rammed ? Mat.Soil : m;
 
     /// <summary>Where a falling voxel comes to rest: down its column onto whatever is solid, then off its heap down to a

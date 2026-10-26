@@ -11,7 +11,9 @@ public partial class Main
     /// Every kind of town building at once (--pose=street, Sim.Frontage.cs): on a field evened out by the citadel, three
     /// rows of them put up as by many hands, the doors to the citadel, each with its sign, its chimney if it has a hearth
     /// and the things of its trade before it (the miners' building, which wants an outcrop of ore, is in --pose=metal).
-    /// --look=0…5 three of them at a time from before their doors, 6 the first three at night, 7 all of it from above.
+    /// --look=0…5 three of them at a time from before their doors, 6 the first three at night, 7 all of it from above;
+    /// 8 the first three by day with the household at their street (Sim.Streets.cs), keeping the stalls, choosing, at the
+    /// anvil and the board; 9 the town hall raised to the Capitol, its third storey (Sim.Town.cs).
     /// </summary>
     void StreetPose()
     {
@@ -35,7 +37,7 @@ public partial class Main
         sim.Stock[Stockpile.Wood] += 3000.0 * VoxelWorld.PerM3;
         sim.Stock[Stockpile.Stone] += 3000.0 * VoxelWorld.PerM3;
         sim.Stock[Stockpile.Metal] += 40.0 * VoxelWorld.PerM3;
-        for (int i = 0; i < 6; i++) sim.Spawn(Kinds.Worker, sim.Gate);
+        for (int i = 0; i < (_look >= 8 ? 14 : 6); i++) sim.Spawn(Kinds.Worker, sim.Gate);
         if (sim.Alarm) sim.StandDown();
         var put = new List<Building>();
         var ground = new int[rows.Length];
@@ -103,6 +105,42 @@ public partial class Main
         Advance(2);
         GD.Print($"[pose] street: " + string.Join(", ", put.ConvertAll(b => $"{b.Kind} {(b.Ready ? "ready" : $"not ready ({sim.ZoneOf(b)?.Why})")} {sim.FrontageOf(b).Count}")));
         int look = Math.Max(0, _look);
+        if (look == 9)
+        {
+            // the hall up two storeys more, as by many hands
+            var hall = sim.BuildingOf("hall");
+            sim.Standing = 3;
+            sim.InstantLabour = true;
+            for (int lv = 2; lv <= 3 && hall is { Ready: true }; lv++)
+            {
+                if (sim.Raise(hall) is { } no) { GD.Print($"[pose] capitol: {no}"); break; }
+                for (int t = 0; t < 40 && hall.Level < lv; t++) { sim.CompleteAll(); Advance(1); if (sim.ZoneOf(hall) is { } z) sim.LookOver(z); }
+            }
+            sim.InstantLabour = false;
+            Advance(3);
+            sim.DressTown();
+            Advance(2);
+            GD.Print($"[pose] capitol: level {hall?.Level}, ready {hall?.Ready}");
+        }
+        if (look >= 8)
+        {
+            // the household let go, and each place in the first row's street taken by one of them
+            foreach (var u in sim.Units) if (!u.Dead && u.Team == Team.Player) { u.Hold = false; u.Dest = -1; }
+            Advance(5);
+            var free = sim.Units.FindAll(u => !u.Dead && u.Team == Team.Player && u.T == Kinds.Worker);
+            int taken = 0;
+            foreach (var spot in sim.Street)
+            {
+                if (spot.Of == null || Array.IndexOf(rows[0], spot.Of.Kind) is < 0 or > 2 || free.Count == 0) continue;
+                var u = free[^1];
+                free.RemoveAt(free.Count - 1);
+                u.Spot = spot; spot.By = u;
+                sim.AtStreet(u);
+                taken++;
+            }
+            Advance(1);
+            GD.Print($"[pose] street: {taken} at their places of {sim.Street.Count}");
+        }
         if (look == 6)
         {
             sim.Waves.Countdown = Waves.Dusk + 1;
@@ -110,7 +148,7 @@ public partial class Main
             for (int t = 0; t < 6; t++) { sim.Waves.Countdown = 8; Advance(1); }
         }
         if (look == 7) { Rig.SetAt(w.WX(kx), w.WY(ground[0]), w.WZ(kz), .5f, 1.2f, .3f); Hud.Refresh(); return; }
-        int group = look % 6, row = group / 2;
+        int group = look >= 8 ? 0 : look % 6, row = group / 2;
         var three = new List<Building>();
         foreach (var b in put) if (Array.IndexOf(rows[row], b.Kind) is int i && i >= 0 && i / 3 == group % 2) three.Add(b);
         if (three.Count == 0) return;
@@ -119,7 +157,7 @@ public partial class Main
         mx /= three.Count; mz /= three.Count;
         // from before the doors, which look to the citadel
         var (sx, sz) = sides[row];
-        Rig.SetAt(w.WX(mx - sx * 30), w.WY(ground[row] + 10), w.WZ(mz - sz * 30), MathF.Atan2(-sx, -sz) + .4f, .55f, 1.05f);
+        Rig.SetAt(w.WX(mx - sx * 30), w.WY(ground[row] + 10), w.WZ(mz - sz * 30), MathF.Atan2(-sx, -sz) + .4f, look == 9 ? .45f : .55f, look == 8 ? .8f : 1.05f);
         Hud.Refresh();
     }
 }

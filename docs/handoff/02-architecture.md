@@ -342,6 +342,15 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   на 5, грудь до стены, выше нового конька после этажа; `HangFront`. Виды: `FixtureKind.Sign/Chimney/Trade` (и `Torch`
   для фонаря у двери), материалы 146–149, 159, 170–173. `FrontageOf(b)` — стоящее по якорям в рамке здания.
   `DecorateChunk` у зданий города не ставит бочки и стяги стен (`BuildingAt`).
+- `Sim.Streets.cs` — улица: `StreetSpot` (что делают, здание или колодец, где стоят, куда смотрят, кто там),
+  `Street` (раз в 4 с `TickStreet`: места из стоящих кусков фасада `StandsOf` по `Kit.Stands` и у колодцев; прежние
+  места сохраняются с теми, кто на них), `TryStreet` (из `Choose`: днём, без тревоги и орды, одно из трёх ближайших
+  свободных в 50 м, путь до 8000 шагов, раз в 12 с), `TakeSpot` (встаёт точно на место, лицом куда надо),
+  `OffStreet` (из `Idle`: сумерки, тревога, орда, место пропало), `LeaveSpot` (из `StandUp`), `Suits` (кто что
+  делает), `ToStreet`/`AtStreet` для сцен. Позы — `UnitView.Leisure`, слова — `Panels`. Кровля — `Mat.Tile`,
+  `Shingle`, `Thatch`, `Slate` (156–158, 174), `Mat.IsRoofing`/`LikeLogs`; `Stroke.Roof`, `Shapes.Roof(covering)`,
+  `Shapes.Storey(covering)`, `TownKind.Roof`. Капитолий: `TownKind.MaxLevel = 3`, `Up3Gold`, `Up3Metal`, `Income3`,
+  `Level3`, `Props3`, `Rank3`, `UpCost(level)`, `Gives(level)`, `Storey(level)`; `PlanStorey(storeys)`.
 - `Sim.Dues.cs` — подать: `Comfort` (флаги `Water`, `Fire`, `Rest`, `Paving`), `LivedIn` (жилой дом не здание),
   `Comforts` (готовые вещи `Yards` в `ComfortReach` = 96 от стен; мощение кроме `Trodden` в `PavingReach` = 24, от 24
   столбцов), `CountDues` (из `TickTown` раз в 2 с: `_comfort`, `_dues`), `DuesOf` (`Beds` × `DuesPerBunk` 0,1 ×

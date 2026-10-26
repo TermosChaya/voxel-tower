@@ -85,7 +85,13 @@ public static class Labour
         // a house's window comes out with the wall it is in, its shutters as a few boards (a door cut where one was)
         D(Mat.Window, 2.5f, Stockpile.Stone, .75f); D(Mat.WindowLog, 2, Stockpile.Wood, .75f);
         D(Mat.Shutter, .5f, Stockpile.Wood, .3f); D(Mat.ShutterLog, .5f, Stockpile.Wood, .3f);
+        // a roof's covering comes off course by course as what it was laid of: tiles as clay, slates as stone, shingles
+        // and thatch as a little timber (Sim.Town.cs)
+        D(Mat.Tile, 1.5f, Stockpile.Earth, .5f); D(Mat.Slate, 2, Stockpile.Stone, .75f);
+        D(Mat.Shingle, 1.5f, Stockpile.Wood, .5f); D(Mat.Thatch, .75f, Stockpile.Wood, .25f);
         LayCost[Mat.Rammed] = 1; LayCost[Mat.Wood] = 1.5f;
+        // a roof is covered about as quickly as it is laid of logs; thatch is bound on a little quicker
+        LayCost[Mat.Tile] = LayCost[Mat.Slate] = LayCost[Mat.Shingle] = 1.5f; LayCost[Mat.Thatch] = 1.2f;
         foreach (var m in new[] { Mat.Stone, Mat.Mortar, Mat.StoneDark, Mat.StoneLight, Mat.StoneWarm, Mat.StoneCool }) LayCost[m] = 2;
         // a ladder is joinery: rails and rungs take longer than the logs they are made of; a gate more so
         LayCost[Mat.Ladder] = 6;
@@ -120,7 +126,9 @@ public static class Labour
         Mat.Stone or Mat.Mortar or Mat.StoneDark or Mat.StoneLight or Mat.StoneWarm or Mat.StoneCool or Mat.DropStone => Stockpile.Stone,
         Mat.Wood or Mat.Ladder or Mat.Gate or Mat.GateShut or Mat.GateOpen or Mat.Pitch or Mat.Stakes or Mat.TrapDeck or Mat.DrawDeck or Mat.DropLog
             or Mat.Bunk or Mat.Bedding or Mat.Table or Mat.Bench => Stockpile.Wood,
-        Mat.Rammed or Mat.Powder or Mat.DirtPath => Stockpile.Earth,
+        Mat.Rammed or Mat.Powder or Mat.DirtPath or Mat.Tile => Stockpile.Earth,
+        Mat.Slate => Stockpile.Stone,
+        Mat.Shingle or Mat.Thatch => Stockpile.Wood,
         Mat.Gravel or Mat.Cobble or Mat.Flag => Stockpile.Stone,
         Mat.Boardwalk => Stockpile.Wood,
         Mat.Plate or Mat.IronGate or Mat.IronGateShut or Mat.IronGateOpen => Stockpile.Metal,

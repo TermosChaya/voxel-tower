@@ -19,7 +19,7 @@ public sealed partial class Sim
     /// <summary>How much a voxel of timber over a gap bears, as voxels of what comes down at a walk: a trap floor of
     /// poles next to nothing, the horde's decks little, our floors and roofs of logs a good deal; 0 for what does not
     /// give way.</summary>
-    static float Bears(byte m) => m switch { Mat.TrapDeck => 2, Mat.Deck => 6, Mat.Wood => 60, _ => 0 };
+    static float Bears(byte m) => m switch { Mat.TrapDeck => 2, Mat.Deck => 6, Mat.Wood or Mat.Tile or Mat.Shingle or Mat.Thatch or Mat.Slate => 60, _ => 0 };
 
     /// <summary>How thick the timber is at a voxel, down to the open air or water under it (three at most); 0 if it rests
     /// on something firm, or is a wall of it rather than a floor.</summary>

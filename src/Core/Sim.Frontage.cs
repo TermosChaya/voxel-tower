@@ -295,6 +295,11 @@ public sealed partial class Sim
         public Kit Else;
         /// <summary>Where its flame burns, for a lamp.</summary>
         public (int u, int y, int t)? Light;
+        /// <summary>
+        /// The places by it where one of ours passes the time at its trade (Sim.Streets.cs): where one stands, the way
+        /// one faces from there (along u and out t), and what one does.
+        /// </summary>
+        public readonly List<(float u, float t, float du, float dt, Pastime does)> Stands = new();
         public readonly Dictionary<(int u, int y, int t), byte> V = new();
         public void Box(int u0, int y0, int t0, int u1, int y1, int t1, byte m)
         {
@@ -317,6 +322,7 @@ public sealed partial class Sim
         {
             var k = new Kit { Kind = Kind, Hung = Hung, AU = -AU, AY = AY };
             foreach (var ((u, y, t), m) in V) k.V[(-u, y, t)] = m;
+            foreach (var (u, t, du, dt, does) in Stands) k.Stands.Add((-u, t, -du, dt, does));
             return k;
         }
     }
@@ -483,6 +489,8 @@ public sealed partial class Sim
                 k.Post(-27, 6, 14, Mat.CrateEdge); k.Post(-21, 6, 14, Mat.CrateEdge);
                 k.Box(-26, 6, 6, -22, 13, 6, Mat.Signboard);
                 k.Box(-25, 10, 6, -24, 12, 6, Mat.Canvas); k.Box(-23, 7, 6, -22, 9, 6, Mat.Canvas); k.Dot(-26, 8, 6, Mat.Canvas);
+                // one reading what is pinned up
+                k.Stands.Add((-23.5f, 10.5f, 0, -1, Pastime.Read));
                 yield return k;
                 break;
             case "market":
@@ -495,8 +503,12 @@ public sealed partial class Sim
                 for (int t = 3; t <= 11; t++)
                     for (int u = -25; u <= -14; u++) k.Dot(u, 17 - (t - 3) / 2, t, (u + 25) / 2 % 2 == 0 ? Mat.Paint : Mat.Canvas);
                 for (int u = -25; u <= -14; u += 2) k.Dot(u, 12, 11, (u + 25) / 2 % 2 == 0 ? Mat.Paint : Mat.Canvas);
+                // the stallholder behind the counter, two buying before it
+                k.Stands.Add((-19.5f, 6, 0, 1, Pastime.Sell));
+                k.Stands.Add((-22, 14.5f, .3f, -1, Pastime.Shop)); k.Stands.Add((-17, 14.5f, -.3f, -1, Pastime.Shop));
                 var other = new Kit();
                 foreach (var (p, m) in k.V) other.V[p] = m;
+                other.Stands.AddRange(k.Stands);
                 k.Box(-23, 7, 8, -21, 8, 9, Mat.Crate); k.Box(-20, 7, 8, -19, 9, 9, Mat.Sack); k.Box(-18, 7, 9, -17, 8, 9, Mat.Paint);
                 yield return k;
                 // the other stall, its goods cloth and brass
@@ -510,6 +522,8 @@ public sealed partial class Sim
                 k.Box(15, 3, 7, 17, 3, 7, Mat.Hoop);
                 k.Box(14, 4, 6, 18, 5, 8, Mat.Hoop);
                 k.Dot(13, 5, 7, Mat.Hoop);
+                // the smith at it, hammering
+                k.Stands.Add((16.5f, 11, 0, -1, Pastime.Hammer));
                 yield return k;
                 k = new Kit();
                 Barrel(k, 21, 5, 4, tub: true);
@@ -528,6 +542,8 @@ public sealed partial class Sim
                 foreach (int u in new[] { 15, 23 }) { k.Box(u, 0, 6, u, 4, 6, Mat.CrateEdge); k.Box(u, 0, 9, u, 4, 9, Mat.CrateEdge); k.Box(u, 5, 6, u, 5, 9, Mat.CrateEdge); }
                 k.Box(13, 6, 7, 25, 7, 8, Mat.Cask);
                 k.Box(13, 6, 7, 13, 7, 8, Mat.Crate); k.Box(25, 6, 7, 25, 7, 8, Mat.Crate);
+                // a sawyer at the log
+                k.Stands.Add((19.5f, 11.5f, 0, -1, Pastime.Saw));
                 yield return k;
                 k = new Kit();
                 for (int y = 0; y <= 4; y++) k.Box(-26, y, 3, -15, y, 7, y % 2 == 0 ? Mat.Signboard : Mat.Crate);
@@ -551,6 +567,8 @@ public sealed partial class Sim
                 k.Box(-26, 5, 5, -15, 5, 9, Mat.Signboard);
                 k.Box(-23, 6, 6, -19, 9, 8, Mat.Hewn);
                 k.Box(-17, 6, 7, -17, 6, 9, Mat.CrateEdge); k.Box(-18, 6, 9, -16, 7, 9, Mat.CrateEdge);
+                // a mason dressing the block on the banker
+                k.Stands.Add((-20.5f, 12.5f, 0, -1, Pastime.Hammer));
                 yield return k;
                 k = new Kit();
                 k.Box(-27, 0, 12, -22, 0, 15, Mat.Hewn); k.Box(-26, 1, 13, -23, 1, 14, Mat.Hewn);
@@ -565,6 +583,8 @@ public sealed partial class Sim
                     k.Box(u - 3, 10, t, u + 3, 10, t, Mat.CrateEdge);
                     k.Box(u - 1, 4, t - 1, u + 1, 9, t + 1, Mat.Sack);
                     k.Box(u - 1, 11, t - 1, u + 1, 13, t + 1, Mat.Sack);
+                    // a soldier striking at it
+                    k.Stands.Add((u + .5f, t + 5, 0, -1, Pastime.Spar));
                     yield return k;
                 }
                 yield return SpearRack(-26, -15);
