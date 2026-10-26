@@ -195,7 +195,7 @@ public sealed partial class Campaign
                 if (InValley && Live != null && Here == Home) Live.Stock[Stockpile.Metal] += metal * VoxelWorld.PerM3;
                 else if (Home != null) Home.Sum.Metal += metal;
             }
-            said = $"{Troves.Name(c.Trove)} {Names(c).prep}: сундук наш, {RewardText(c)}.";
+            said = $"{Troves.Name(c.Trove)} {Names(c).prep}: сундук наш, {RewardText(c)}." + TroveArtifact(c, ring, by);
         }
         Tell(NewsKind.Taken, said, c, by);
         return said;

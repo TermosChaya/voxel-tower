@@ -332,13 +332,25 @@ public sealed partial class Sim
         return null;
     }
 
+    /// <summary>
+    /// The masters' gold for raising a building a level: in a campaign, where the realm's gold of many valleys pays for
+    /// it, as dear as in «Heroes» — a second storey three times its price, the third four times (the first, the house
+    /// itself, as ever, so a town can be begun on little).
+    /// </summary>
+    public int UpGold(TownKind k, int level)
+    {
+        var (gold, _) = k.UpCost(level);
+        return Campaign ? gold * (level >= 3 ? 4 : 3) : gold;
+    }
+
     /// <summary>Why a building cannot be raised a level now, or null.</summary>
     public string CantRaise(Building b)
     {
         var k = b.K;
         if (b.Level >= k.MaxLevel || b.Target > b.Level) return b.Target > b.Level ? "уже строится" : "выше некуда";
         if (!b.Ready) return "здание ещё не готово";
-        var (gold, metal) = k.UpCost(b.Level + 1);
+        var (_, metal) = k.UpCost(b.Level + 1);
+        int gold = UpGold(k, b.Level + 1);
         // the Capitol waits for a town to be governed: the settlement a «Посад» first
         if (b.Level + 1 >= 3 && !Sandbox && Standing < k.Rank3) return $"сначала поселение должно стать «{StandingNames[k.Rank3]}»";
         if (!Sandbox && Stock.Gold < gold) return $"нужно {gold} золота";
@@ -357,8 +369,8 @@ public sealed partial class Sim
         int level = b.Level + 1;
         no = PlanStorey(zone, b.X0, b.Z0, b.X1, b.Z1, b.K.Wall, storeys: level);
         if (no != null) return no;
-        var (gold, metal) = b.K.UpCost(level);
-        if (!Sandbox) Stock.Gold -= gold;
+        var (_, metal) = b.K.UpCost(level);
+        if (!Sandbox) Stock.Gold -= UpGold(b.K, level);
         TakeMetal(metal);
         SpendRare(b.K.Key, level);
         b.Target = level;

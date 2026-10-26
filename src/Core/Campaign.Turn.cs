@@ -116,6 +116,7 @@ public sealed partial class Campaign
             Clock = new ClockTime(day, at);
             Earn(dt);
             Walk(dt);
+            Haul();
             Raise(dt);
             Dawns();
         }
@@ -219,7 +220,7 @@ public sealed partial class Campaign
             {
                 int cost = MapWalk.Cost(from, to, MapPath.Side(from, to));
                 if (cost == int.MaxValue) { p.Path.Clear(); p.Steps.Clear(); continue; }
-                if (p.MovesMax == 0) { p.MovesMax = MapWalk.MaxMoves(p, Week); p.MovesLeft = p.MovesMax; }
+                if (p.MovesMax == 0) { p.MovesMax = MovesOf(p); p.MovesLeft = p.MovesMax; }
                 if (cost > p.MovesLeft && p.MovesLeft < p.MovesMax) { p.Tired = true; continue; }
                 p.Tired = false;
                 p.MovesLeft = Math.Max(0, p.MovesLeft - cost);
@@ -593,6 +594,7 @@ public sealed partial class Campaign
             if (share > 0) foreach (var m in p.Party.Members) Heal(m, share);
         }
         WorldDawn();
+        ArtifactDawn();
         HordeDawnCached();
     }
 

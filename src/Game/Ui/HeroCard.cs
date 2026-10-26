@@ -99,6 +99,9 @@ public partial class HeroCard : Control
         _col.AddChild(_skills);
         for (int i = 0; i < Heroes.Count; i++) _skills.AddChild(new SkillTile(this, (Skill)i) { CustomMinimumSize = new Vector2((W - 40 - 24) / 4, 46) });
 
+        // the things he wears and carries (HeroCard.Artifacts.cs)
+        ArtifactsInit();
+
         // those he leads
         _party = Hud.Text("", Ornament.Serif, 13, Ornament.Aged, wrap: true);
         _party.CustomMinimumSize = new Vector2(W - 40, 0);
@@ -179,7 +182,7 @@ public partial class HeroCard : Control
         int look = _unit?.Look ?? _away.Party.Commander.Look;
         string party = _unit != null ? $"Под его словом сейчас: {_m.Sim.Heeding(_unit)} {Sim.Plural(_m.Sim.Heeding(_unit), "боец", "бойца", "бойцов")} в {Math.Round(40 * Sim.WordFar(_unit))} м."
             : $"Его отряд на карте: {MapBoard.Who(_away).ToLowerInvariant()}.";
-        string key = $"{h.Name}|{h.Level}|{h.Xp}|{h.Unspent}|{string.Join(",", h.Grade)}|{string.Join(",", h.Offer)}|{h.Kills}|{party}";
+        string key = $"{h.Name}|{h.Level}|{h.Xp}|{h.Unspent}|{string.Join(",", h.Grade)}|{string.Join(",", h.Offer)}|{h.Kills}|{party}|{ArtifactsKey(h)}";
         if (key == _shown) return;
         _shown = key;
         _face.Texture = _unit != null ? Portraits.Of(_unit, 96) : Portraits.Of(Kinds.Captain, look, 96);
@@ -188,6 +191,7 @@ public partial class HeroCard : Control
         _bar.Share = h.Level >= Heroes.MaxLevel ? 1 : Math.Clamp((h.Xp - h.From) / (float)Math.Max(1, h.Next - h.From), 0, 1);
         _bar.QueueRedraw();
         _deeds.Text = $"Сразил сам: {h.Kills}. Умения: {Heroes.Skills(h)}.";
+        ArtifactsRefresh(h);
         _party.Text = party;
         _out.Visible = _unit != null && Main.Atlas != null && _m.AtlasLand != null;
         foreach (var c in _skills.GetChildren()) ((Control)c).QueueRedraw();

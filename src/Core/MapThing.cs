@@ -151,7 +151,7 @@ public sealed partial class Campaign
     double StoreOf(MapCell c, Res r)
     {
         if (c == null) return 0;
-        if (InValley && Live != null && c == Here) return Live.Stock[StoreIndex(r)];
+        if (InValley && Live != null && c == Here) return Live.Stock[StoreIndex(r)] / VoxelWorld.PerM3;
         return r switch { Res.Logs => c.Sum.Logs, Res.Stone => c.Sum.Stone, Res.Metal => c.Sum.Metal, _ => 0 };
     }
 
@@ -169,7 +169,7 @@ public sealed partial class Campaign
         if (r >= Res.Mercury) { Rare[r - Res.Mercury] += n; if (Live != null) Live.Rare[r - Res.Mercury] = Rare[r - Res.Mercury]; return; }
         var to = NearestOurs(near) ?? Home;
         if (to == null) return;
-        if (InValley && Live != null && to == Here) { Live.Stock[StoreIndex(r)] += n; return; }
+        if (InValley && Live != null && to == Here) { Live.Stock[StoreIndex(r)] += n * VoxelWorld.PerM3; return; }
         switch (r)
         {
             case Res.Logs: to.Sum.Logs += n; break;
@@ -207,7 +207,8 @@ public sealed partial class Campaign
     /// </summary>
     public void Visit(MapParty p, MapCell cell)
     {
-        if (cell?.Thing is not { } t || p.Owner != Owner.Ours) return;
+        // (a convoy's carters take nothing on their way: only a hero has what he walks into)
+        if (cell?.Thing is not { } t || p.Owner != Owner.Ours || p.Convoy) return;
         var hero = p.Party.Commander?.Hero;
         switch (t.Kind)
         {
@@ -246,7 +247,7 @@ public sealed partial class Campaign
                 break;
             case ThingKind.Stables when p.StablesWeek != Week:
                 p.StablesWeek = Week;
-                p.MovesMax = MapWalk.MaxMoves(p, Week);
+                p.MovesMax = MovesOf(p);
                 p.MovesLeft += StablesMoves;
                 Tell(NewsKind.Taken, $"Конюшни: +{StablesMoves} хода до конца недели.", cell, p);
                 break;
@@ -291,6 +292,7 @@ public sealed partial class Campaign
             int rose = Heroes.Gain(hero, xp);
             said = $"Из сундука: {hero.Name} +{xp} опыта" + (rose > 0 ? $", уровень {hero.Level}." : ".");
         }
+        said += ChestArtifact(t, p, cell);
         Tell(NewsKind.Taken, said, cell, p);
         HexChanged(cell);
         return said;
@@ -335,7 +337,7 @@ public sealed partial class Campaign
         }
         foreach (var p in Parties)
         {
-            p.MovesMax = MapWalk.MaxMoves(p, Week);
+            p.MovesMax = MovesOf(p);
             p.MovesLeft = p.MovesMax;
             p.Tired = false;
             p.Steps = MapWalk.StepsOf(this, p);
@@ -383,7 +385,7 @@ public sealed partial class Campaign
     }
 
     /// <summary>How far a hero of ours sees on the big map: four hexes, more with Разведка; a scouting party six.</summary>
-    public static int SightOf(MapParty p) => p.Scouting ? 6 : 4 + GradeOf(p, Skill.Scouting);
+    public static int SightOf(MapParty p) => (p.Scouting ? 6 : 4 + GradeOf(p, Skill.Scouting)) + (p.Party.Commander?.Hero?.ArtSight ?? 0);
 
     void WriteWorld(BinaryWriter w)
     {

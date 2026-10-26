@@ -146,6 +146,7 @@ public partial class AtlasHud : Control
         cc.AddChild(_cardButtons);
         _card.AddChild(cc);
         AddChild(_card);
+        EconomyInit();
     }
 
     VBoxContainer Section(VBoxContainer into, string caption)
@@ -210,6 +211,7 @@ public partial class AtlasHud : Control
     {
         _frame.Visible = false;
         _first.Visible = false;
+        CloseShop();
     }
 
     // ------------------------------------------------------------ choosing and leading
@@ -430,6 +432,7 @@ public partial class AtlasHud : Control
         // under the map's bar in the middle of the land; in the valley, under its beam
         if (_card.Visible) _card.Position = IsOpen ? new Vector2(MathF.Round((vp.X - Side - _card.Size.X) / 2), 64) : new Vector2(MathF.Round((vp.X - _card.Size.X) / 2), Hud.TopBand + 10);
         if (!IsOpen) return;
+        EconomyProcess(vp);
         _first.Position = new Vector2(16, vp.Y - _first.Size.Y - 16);
         // «Войти в клетку» under the middle while the hero chosen stands in a cell
         var h = Hero;
@@ -476,7 +479,7 @@ public partial class AtlasHud : Control
             if (p.Owner != Holder.Ours) continue;
             shown++;
             var hero = p.Party.Commander?.Hero;
-            string name = hero != null ? $"{hero.Name} · ур. {hero.Level}{(hero.Pending ? " · новый уровень" : "")}" : MapBoard.Who(p);
+            string name = hero != null ? $"{hero.Name} · ур. {hero.Level}{(hero.Pending ? " · новый уровень" : "")}" : p.Convoy ? $"Обоз · {p.Cargo[(int)Res.Logs] + p.Cargo[(int)Res.Stone] + p.Cargo[(int)Res.Metal]:0.#} м³" : MapBoard.Who(p);
             var pp = p;
             var b = Small($"{name}\n{Status(p)}", "Выбрать героя. Ещё раз — его карточка.", () =>
             {
@@ -545,12 +548,14 @@ public partial class AtlasHud : Control
                     _about.AddChild(Big(Campaign.Untaken(cell) && cell.Trove == TroveKind.Shrine ? "Испытание сразу" : "Бой сразу",
                         "Бой решится сразу, по силе отрядов: вдвое сильнее побеждает 9 раз из 10, но теряет людей.", () => FightWith(h)));
             }
-            if (hero != null) _about.AddChild(Big("Карточка героя", "Опыт, умения, выбор умения на новом уровне.", () => _m.Hud.HeroPane.Show(h)));
+            if (hero != null) _about.AddChild(Big("Карточка героя", "Опыт, умения, артефакты, выбор умения на новом уровне.", () => _m.Hud.HeroPane.Show(h)));
+            EconomyHero(h);
             return;
         }
         var c0 = Cell ?? C.Here;
         _about.AddChild(Hud.Text(MapBoard.NameOf(c0) + (c0 == C.Here ? " · вы здесь" : ""), Ornament.SerifBold, 17, Ornament.BronzeLight));
         CellLines(c0);
+        EconomyCell(c0);
         // our own valleys are gone into without a hero, as a town in «Heroes»
         if (c0.Owner == Holder.Ours)
             _about.AddChild(Big(c0 == C.Here ? "В долину" : "Войти в долину", "Открыть эту долину: её город, её стены, её людей.", () => _m.GoToValley(c0)));

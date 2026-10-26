@@ -53,6 +53,8 @@ public partial class Main
             {
                 w = new MapWalker { Owner = (byte)(p.Owner == Holder.Ours ? 1 : 2) };
                 if (p.Owner == Holder.Ours && p.Party.Commander is { } cm) w.Body = Bodies.HeroRider(cm.Look);
+                // (a convoy's carters on foot, Campaign.Economy.cs)
+                else if (p.Convoy) w.Body = Bodies.Plan(Kinds.Worker, 0);
                 else if (p.Owner == Holder.Ours)
                 {
                     var rider = p.Party.Members.Find(m => m.Kind.Mounted);

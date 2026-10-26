@@ -32,8 +32,15 @@ public sealed class Hero
     public int Kills;
     /// <summary>What his offers are drawn by: the same hero is offered the same skills at the same level.</summary>
     public int Seed;
+    /// <summary>The artifacts he wears, a key for each place (<see cref="ArtSlot"/>) or null, and those he carries (Artifacts.cs).</summary>
+    public readonly string[] Worn = new string[Artifacts.Slots];
+    public readonly List<string> Bag = new();
+    /// <summary>What he has of what he wears: grades over his skills, moves a day, hexes seen further (<see cref="Artifacts.Recount"/>).</summary>
+    internal readonly byte[] Bonus = new byte[Heroes.Count];
+    public int ArtMoves, ArtSight;
 
-    public byte this[Skill s] => Grade[(int)s];
+    /// <summary>A skill's grade as it works: what he learnt and what he wears, as far as <see cref="Artifacts.MostGrade"/>.</summary>
+    public byte this[Skill s] => (byte)Math.Min(Grade[(int)s] + Bonus[(int)s], Math.Max((int)Grade[(int)s], Artifacts.MostGrade));
     public bool Pending => Unspent > 0 && Offer.Count > 0;
     /// <summary>The experience his level began at, and the next level's (the last level's twice over when there is none).</summary>
     public int From => Heroes.XpFor(Level);
@@ -206,6 +213,7 @@ public static class Heroes
         w.Write(h.Name); w.Write(h.Level); w.Write(h.Xp); w.Write(h.Grade); w.Write(h.Unspent); w.Write(h.Kills); w.Write(h.Seed);
         w.Write((byte)h.Offer.Count);
         foreach (var s in h.Offer) w.Write((byte)s);
+        Artifacts.Write(w, h);
     }
 
     public static Hero Read(BinaryReader r)
@@ -215,6 +223,7 @@ public static class Heroes
         r.ReadBytes(Count).CopyTo(h.Grade, 0);
         h.Unspent = r.ReadInt32(); h.Kills = r.ReadInt32(); h.Seed = r.ReadInt32();
         for (int n = r.ReadByte(); n > 0; n--) h.Offer.Add((Skill)r.ReadByte());
+        Artifacts.Read(r, h);
         return h;
     }
 }

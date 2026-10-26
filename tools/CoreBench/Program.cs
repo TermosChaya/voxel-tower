@@ -6281,6 +6281,8 @@ if (args.Length > 3 && args[0] == "--world-dump") WorldDump.Run(uint.Parse(args[
 if (args.Length > 3 && args[0] == "--autoplay") AutoPlayBench.Run(uint.Parse(args[1]), args[2], int.Parse(args[3]), args.Length > 4 ? args[4] : null);
 // the commanders as heroes: experience, levels, skills, the fallen, the saves (Heroes.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--heroes") HeroesBench.Run(Check);
+// what the realm's gold goes on: the tavern, artifacts and the merchant, convoys, the dear storeys (Campaign.Economy.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--economy") EconomyBench.Run(Check);
 // the map's content: the big map's lairs, the treasures and their keepers, scouts, a shrine's trial (TrovesBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troves") TrovesBench.Run(Check);
 // the map of valleys as a land: made in good time, every kind of cell its kind, the ways running on, walked from the

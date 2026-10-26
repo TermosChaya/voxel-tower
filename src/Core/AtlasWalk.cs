@@ -275,7 +275,7 @@ public sealed partial class Campaign
         Parties.Add(p);
         if (Land != null) PlaceIn(p, home);
         // on the big map: a day's moves, and the fog lifted round him
-        if (Big) { p.MovesMax = p.MovesLeft = MapWalk.MaxMoves(p, Week); Reveal(home, SightOf(p) + 2); }
+        if (Big) { p.MovesMax = p.MovesLeft = MovesOf(p); Reveal(home, SightOf(p) + 2); }
         return p;
     }
 

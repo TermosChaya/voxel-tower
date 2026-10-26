@@ -23,7 +23,7 @@ static class AutoPlayBench
         if (Directory.Exists(dir)) Directory.Delete(dir, true);
         Directory.CreateDirectory(Path.Combine(dir, "frames"));
         var c = Campaign.NewWorld(seed, side);
-        c.AddHero();
+        c.StartHeroes();
         var ap = new AutoPlayer(c);
         ap.Begin();
         Console.WriteLine($"autoplay: seed {seed}, {Campaign.SizeName(side)} {side}×{side}, {days} days, {c.Zones.Count} zones, {c.Lairs.Count} towns and lairs of the horde → {dir}");

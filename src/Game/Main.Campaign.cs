@@ -42,7 +42,7 @@ public partial class Main
         if (Atlas == null && _campaignArg)
         {
             // (the map's content staged on the big map; --pose=bigmap a big map of «Heroes», --size=S…XL)
-            if (_pose is "bigmap" or "autoplay")
+            if (_pose is "bigmap" or "autoplay" or "economy")
             {
                 string size = "S";
                 foreach (var a in OS.GetCmdlineUserArgs()) if (a.StartsWith("--size=") && !int.TryParse(a["--size=".Length..], out _)) size = a["--size=".Length..];
@@ -50,7 +50,7 @@ public partial class Main
             }
             else Atlas = Campaign.New(_seed, _pose is "troves" or "trove" or "atlas" or "land" ? 3 : 2);
             // (the first hero on the map, as a new campaign has him; not in the scenes staged before the map was walked)
-            if (_pose is null or "atlas" or "bigmap" or "autoplay") Atlas.AddHero();
+            if (_pose is null or "atlas" or "bigmap" or "autoplay" or "economy") Atlas.StartHeroes();
             CampSlot = Saves.CampaignSlots[2];
         }
         CampaignPoseBefore();
@@ -441,8 +441,8 @@ public partial class Main
         string dir = Saves.CampaignDir(slot);
         if (Directory.Exists(dir)) Directory.Delete(dir, true);
         Atlas = side > 0 ? Campaign.NewWorld(seed, side) : Campaign.New(seed, rings);
-        // the first hero by the first valley's citadel, the campaign opening on the map
-        Atlas.AddHero();
+        // the first heroes by the first valley's citadel (more on the bigger maps), the campaign opening on the map
+        Atlas.StartHeroes();
         CampSlot = slot;
         Atlas.Write(dir);
         _entering = null; _atlasAtStart = true;

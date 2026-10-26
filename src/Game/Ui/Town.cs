@@ -159,9 +159,13 @@ public partial class TownPanel : VBoxContainer
         {
             string no = sim.CantRaise(b);
             int level = b.Level + 1;
-            var (gold, metal) = k.UpCost(level);
+            var (_, metal) = k.UpCost(level);
+            int gold = sim.UpGold(k, level);
+            // (and in a campaign the rare resources a top storey asks for, Sim.Rare.cs)
+            string rare = "";
+            foreach (var (ri, rn) in sim.RareCost(k.Key, level)) rare += $" · {rn} {MapThing.NameOf((Res)((int)Res.Mercury + ri))}";
             string storey = TownKind.Storey(level);
-            var up = Button($"{char.ToUpper(storey[0])}{storey[1..]} этаж · {gold} зол.{(metal > 0 ? $" · {metal:0.##} м³ мет." : "")}", $"Рабочие снимут крышу и поднимут {storey} этаж. Тогда: {k.Gives(level)}" + (no != null ? $"\nНельзя: {no}." : ""));
+            var up = Button($"{char.ToUpper(storey[0])}{storey[1..]} этаж · {gold} зол.{(metal > 0 ? $" · {metal:0.##} м³ мет." : "")}{rare}", $"Рабочие снимут крышу и поднимут {storey} этаж. Тогда: {k.Gives(level)}" + (no != null ? $"\nНельзя: {no}." : ""));
             up.Disabled = no != null;
             up.Pressed += () => { string why = sim.Raise(b); if (why != null) _m.Hud.Float(why, Ornament.Blood); else Sound.Ui("mark"); _key = ""; };
             buttons.AddChild(up);

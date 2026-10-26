@@ -4,9 +4,10 @@ namespace VoxelTower.Core;
 
 /// <summary>
 /// The realm's rare resources as a valley of a campaign sees them (MapThing.cs): mercury, sulfur, crystals, gems, kept
-/// by the realm and set on the valley as it is gone into, as its gold is. A few of the top steps of the town ask for
-/// some in a campaign — the alchemists' second storey mercury and sulfur, the Capitol crystals and gems; out of a
-/// campaign (the siege, the sandbox) nothing asks for them.
+/// by the realm and set on the valley as it is gone into, as its gold is. The top steps of the dear buildings ask for
+/// some in a campaign, as the dwellings of «Heroes» do — the alchemists' second storey mercury and sulfur, the Capitol
+/// crystals and gems, the giants', the trolls', the workshop's, the stables' and the market's second storeys theirs (<see
+/// cref="RareCost"/>); out of a campaign (the siege, the sandbox) nothing asks for them.
 /// </summary>
 public sealed partial class Sim
 {
@@ -16,10 +17,17 @@ public sealed partial class Sim
     public (int res, int n)[] RareCost(string key, int level)
     {
         if (!Campaign) return Array.Empty<(int, int)>();
+        // (the dear dwellings of «Heroes» ask for the rare ones: the alchemists mercury and sulfur, the giants and the
+        // capitol crystals and gems, the engines sulfur and mercury, the knights' horses and the trolls' den crystals and sulfur)
         return (key, level) switch
         {
             ("lab", 2) => new[] { (0, 3), (1, 3) },
             ("hall", 3) => new[] { (2, 5), (3, 3) },
+            ("market", 2) => new[] { (3, 2) },
+            ("giants", 2) => new[] { (2, 3), (3, 2) },
+            ("trolls", 2) => new[] { (1, 3) },
+            ("workshop", 2) => new[] { (0, 2), (1, 2) },
+            ("stables", 2) => new[] { (2, 2) },
             _ => Array.Empty<(int, int)>(),
         };
     }

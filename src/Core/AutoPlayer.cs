@@ -31,6 +31,8 @@ public sealed class AutoPlayer
     /// <summary>The first valley's steps of building, as the summary has them; what the first and each next costs.</summary>
     public int Built;
     public const int BuildFrom = 150, BuildStep = 60, BuildMost = 20;
+    /// <summary>From this step on a step is a dear top storey: it asks for two of a rare resource too, as the town's do in a campaign.</summary>
+    public const int BuildRareFrom = 8;
     /// <summary>
     /// The places in the army the first valley has, as the summary builds its houses: the citadel's and five a step. All
     /// of ours, its keep and the heroes' armies, hold them; none is hired over them.
@@ -48,7 +50,7 @@ public sealed class AutoPlayer
     /// <summary>Odds a hero fights at, a town of the horde at, and below which he goes home from where he stands.</summary>
     public const float Bold = .75f, TownBold = .85f, Stand = .6f;
     /// <summary>The gold kept back for the citadel's men, and what another hero costs (one by the third day, a third later).</summary>
-    public const int Reserve = 120, HeroCost = 600;
+    public const int Reserve = 120, HeroCost = Campaign.HeroPrice;
 
     /// <summary>What it did, a line each (the day and the hour first): the harness's story.</summary>
     public readonly List<string> Said = new();
@@ -122,7 +124,7 @@ public sealed class AutoPlayer
         // a party of ours whose hero fell: home, into the keep
         foreach (var p in _c.Parties.ToArray())
         {
-            if (p.Owner != Owner.Ours || p.Party.Commander?.Hero != null || p.Moving || p.Waits || _c.Home == null) continue;
+            if (p.Owner != Owner.Ours || p.Party.Commander?.Hero != null || p.Convoy || p.Moving || p.Waits || _c.Home == null) continue;
             if (p.Q == _c.Home.Q && p.R == _c.Home.R) { _c.Home.Sum.Keep.AddRange(p.Party.Members); _c.Parties.Remove(p); Say($"Отряд без героя вошёл в гарнизон: {p.Party.Members.Count}."); }
             else _c.Send(p, _c.Home);
         }
@@ -156,12 +158,21 @@ public sealed class AutoPlayer
         home.Sum.Walls = Math.Min(WallsMost + Built * .01f, home.Sum.Walls + WallsStep);
         Ready = Math.Min(ReadyMost + Built, Ready + ReadyStep + Built / 3);
         // a step of building while the gold allows: the town pays a gold more a minute, the citadel hires more and better
+        // the rare resources over what the dear steps want sold to the merchant for gold (the marketplace of «Heroes»)
+        for (int i = 0; i < _c.Rare.Length; i++)
+            if (_c.Rare[i] > 20) { int sold = _c.SellRare(i, (int)_c.Rare[i] - 20); if (sold > 0) Say($"Продано торговцу: {sold} ({MapThing.NameOf((Res)((int)Res.Mercury + i))}), {sold * Campaign.RareSells} зол."); }
         int cost = BuildFrom + BuildStep * Built;
-        if (Built < BuildMost && _c.Gold >= cost + Reserve)
+        int rare = 0;
+        for (int i = 1; i < _c.Rare.Length; i++) if (_c.Rare[i] > _c.Rare[rare]) rare = i;
+        bool dear = Built >= BuildRareFrom;
+        if (Built < BuildMost && _c.Gold >= cost + Reserve && (!dear || _c.Rare[rare] >= 2))
         {
             _c.Gold -= cost; Built++;
+            if (dear) _c.Rare[rare] -= 2;
             home.Sum.TownGold += 1;
-            Say($"Город: построено ({Built}-й шаг, {cost} зол.), доход города {home.Sum.TownGold:0} зол. в минуту.");
+            // (the town hall's levels as the steps go: the realm has room for more heroes)
+            home.Sum.Hall = Built >= 12 ? 3 : Built >= 6 ? 2 : Built >= 2 ? 1 : 0;
+            Say($"Город: построено ({Built}-й шаг, {cost} зол.{(dear ? $", 2 ({MapThing.NameOf((Res)((int)Res.Mercury + rare))})" : "")}), доход города {home.Sum.TownGold:0} зол. в минуту.");
         }
         int key = Campaign.KeyOf(home);
         // the keep: six and a third of the days gone, at the least
@@ -175,14 +186,28 @@ public sealed class AutoPlayer
         if (hired > 0) Say($"Цитадель: в гарнизон нанято {hired}, в нём {home.Sum.Keep.Count}.");
         int heroes = 0;
         foreach (var _ in OurHeroes()) heroes++;
-        // another hero; with none left, one at once for half the price
-        if (heroes == 0 && _c.Gold >= HeroCost / 2 || heroes < 2 && _c.Clock.Day >= 3 && _c.Gold >= HeroCost + Reserve || heroes < 3 && _c.Clock.Day >= 20 && _c.Gold >= 2 * HeroCost + Reserve)
+        // another hero from the tavern while the realm has room for him: with none left at once, else from the third
+        // day while the gold lasts over the reserve, a little more kept back for each hero more
+        var tavern = _c.TavernNow();
+        // (only while the places leave room for his men besides: the armies first)
+        if (tavern.Count > 0 && (heroes == 0 ? _c.Gold >= HeroCost : _c.Clock.Day >= 3 && (Men() + 4 <= Places || heroes <= _c.StartHeroCount) && _c.Gold >= HeroCost + Reserve + 300 * (heroes - 1)))
         {
-            _c.Gold -= heroes == 0 ? HeroCost / 2 : HeroCost;
-            var p = _c.AddHero();
-            Say($"Нанят герой {p.Party.Commander.Hero.Name} с отрядом из {p.Party.Members.Count - 1}.");
+            int pick = 0;
+            for (int i = 1; i < tavern.Count; i++) if (Army(tavern[i]) > Army(tavern[pick])) pick = i;
+            string calling = tavern[pick].Calling;
+            var p = _c.HireHero(pick);
+            if (p != null) Say($"Нанят герой {p.Party.Commander.Hero.Name} ({calling}) с отрядом из {p.Party.Members.Count - 1}.");
         }
         foreach (var p in OurHeroes()) if (p.Q == home.Q && p.R == home.R && !p.Moving) HireInto(p);
+        // the stores of an outpost taken home by a convoy, every third day
+        if (_c.Clock.Day % 3 == 0)
+            foreach (var c in new List<MapCell>(_c.Strongholds))
+            {
+                if (c == home) continue;
+                var load = new[] { _c.StoreIn(c, Res.Logs), _c.StoreIn(c, Res.Stone), _c.StoreIn(c, Res.Metal) };
+                if (load[0] + load[1] + load[2] < 15 || _c.Gold < Campaign.ConvoyCost(load[0] + load[1] + load[2]) + Reserve) continue;
+                if (_c.SendConvoy(c, home, load, out _) != null) Say($"Обоз {Where(c)} → домой: {Campaign.Load(new[] { 0, load[0], load[1], 0, load[2], 0, 0, 0, 0.0 })}.");
+            }
     }
 
     /// <summary>The men the first valley's keep should have: six and a third of the days gone, twenty-four at most.</summary>
@@ -207,7 +232,40 @@ public sealed class AutoPlayer
             p.Party.Members.Add(Man(t, Campaign.KeyOf(_c.Home)));
         }
         if (got > 0) Say($"{p.Party.Commander.Hero.Name} нанял в цитадели {got}, в армии {p.Party.Members.Count}.");
+        Equip(p);
     }
+
+    /// <summary>The strength a tavern's hero comes with.</summary>
+    static float Army(TavernHero t)
+    {
+        var men = new List<Traveller>();
+        foreach (var k in t.Army) men.Add(Man(k, -1));
+        return QuickBattle.Strength(men, null);
+    }
+
+    /// <summary>
+    /// A hero standing by the citadel: what the treasury keeps for him, then — once his army cannot grow now, the
+    /// citadel having nobody ready or the places none — the merchant's best for a place he has nothing in (or something
+    /// rarer than he wears there), while the gold lasts well over the reserve: the men first, the things after.
+    /// </summary>
+    void Equip(MapParty p)
+    {
+        var h = p.Party.Commander.Hero;
+        foreach (var key in _c.Vault.ToArray())
+            if (Artifacts.Of(key) is { } a && Better(h, a) && _c.TakeFromVault(p, key)) Say($"{h.Name} взял из сокровищницы «{a.Name}».");
+        if (Ready > 0 && Men() < Places) return;
+        for (bool bought = true; bought;)
+        {
+            bought = false;
+            Artifact best = null;
+            foreach (var key in _c.MarketNow())
+                if (Artifacts.Of(key) is { } a && Better(h, a) && _c.CantBuy(p, key) == null && _c.Gold - a.Gold >= Reserve + 400 && (best == null || a.Tier > best.Tier || a.Tier == best.Tier && a.Gold > best.Gold)) best = a;
+            if (best != null && _c.Buy(p, best.Key)) { bought = true; Say($"{h.Name} купил «{best.Name}» ({best.Price()})."); }
+        }
+    }
+
+    /// <summary>Whether a thing is worth putting on: its place empty, or what is there of a lower tier.</summary>
+    static bool Better(Hero h, Artifact a) => h.Worn[(int)a.Slot] is not { } w || Artifacts.Of(w) is not { } now || a.Tier > now.Tier;
 
     /// <summary>The man the citadel hires next for a hero's army, the better the more the town is built: swordsmen, spearmen, archers; halberdiers and crossbowmen; knights.</summary>
     UnitType Best(int n) => (n % 4, Built) switch
@@ -353,7 +411,7 @@ public sealed class AutoPlayer
             if (_threat <= Near) { Aims[p.Id] = "дома: орда близко"; return; }
         }
         if (here.Thing is { Kind: ThingKind.Observatory }) _looked.Add(here);
-        int max = Math.Max(1, p.MovesMax > 0 ? p.MovesMax : MapWalk.MaxMoves(p, _c.Week));
+        int max = Math.Max(1, p.MovesMax > 0 ? p.MovesMax : _c.MovesOf(p));
         MapCell best = null;
         double bestScore = 0, bestDays = 0;
         bool bestFight = false;

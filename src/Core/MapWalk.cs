@@ -72,9 +72,13 @@ public static class MapWalk
             if (!m.Kind.Mounted) riders = false;
             if (Kinds.IsEngine(m.Kind) || m.Kind == Kinds.Giant || m.Kind == Kinds.HillGiant || m.Kind == Kinds.TameTroll) slow = true;
         }
+        // (a convoy's carts as slow as engines)
+        if (p.Convoy) slow = true;
         int n = slow ? SlowMoves : p.Scouting ? ScoutMoves : riders ? RiderMoves : Moves;
         n = (int)Math.Round(n / Heroes.March(p.Party.Commander?.Hero));
         if (p.StablesWeek == week) n += Campaign.StablesMoves;
+        // and what he wears (Artifacts.cs)
+        n += p.Party.Commander?.Hero?.ArtMoves ?? 0;
         return n;
     }
 

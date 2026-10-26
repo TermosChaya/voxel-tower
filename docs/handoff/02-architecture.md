@@ -480,6 +480,16 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `WallUntil` (`Walled` в `Hurt`), `Volley` (стрелы как у `ShotOf`), рог (`Pain`, `Mending`, `RallyUntil` →
   `Heartened`). `Aimed`, `LookOrder`, `Heeding` — для первого лица. `Unit.Commands/Goal/NextOrders/Ready/Ward/Follows/
   SentBack/FollowUntil/WallUntil/RallyUntil`; сохраняются в `WriteCaptains`/`ReadCaptains`.
+- `Artifacts.cs` — артефакты (13-world-map.md, 2.18): `ArtSlot` (8 мест), `ArtTier`, `Artifact` (ступени умений,
+  ход, обзор, доход на рассвете, цена у торговца), список `All` из 30; `Recount` складывает надетое в `Hero.Bonus`,
+  `ArtMoves`, `ArtSight`; `Give`, `PutOn`, `TakeOff`, `Dailies`; запись внутри `Heroes.Write/Read`. Ступень умения
+  героя `hero[skill]` — выученная плюс надетое, не выше `MostGrade` (4): все места, где действует умение, видят вещи.
+- `Campaign.Economy.cs` — на что идёт золото: таверна (`TavernNow`, `HireHero`, `HeroCount`, `HeroCap`,
+  `StartHeroes`), темп наших на больших картах (`PaceScale`, `MovesOf` — дневной ход через неё везде, где он
+  считается), торговец и сокровищница (`MarketNow`, `AtCitadel`, `Buy`, `Vault`, `TakeFromVault`), обмен редкого
+  (`SellRare`, `BuyRare`), артефакты в сундуке и сокровище (`ChestArtifact` из `OpenChest`, `TroveArtifact` из
+  `TakeTrove`), подарки надетого на рассвете (`ArtifactDawn` из `Dawn`), обозы (`MapParty.Cargo`, `SendConvoy`,
+  `Haul` в шаге карты после `Walk`); `WriteEconomy`/`ReadEconomy` после `WriteWorld`/`ReadWorld`.
 - `Heroes.cs` — командиры как герои «Героев» без долины: `Hero` (имя, уровень 1–10, опыт, ступени восьми умений
   `Skill`, уровни без выбранного умения `Unspent` и предложенные умения `Offer`, убитые им самим), `Heroes` — таблица
   опыта `XpFor`, имена (`Fresh` — имя и прозвище по числу, мимо занятых), что даёт каждая ступень (константы и `About`

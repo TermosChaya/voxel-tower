@@ -150,7 +150,7 @@ public sealed partial class MapParty
 /// </summary>
 public sealed partial class Campaign
 {
-    public const int Version = 8;
+    public const int Version = 12;
     public const string FileName = "campaign.dat";
     static readonly byte[] Magic = { (byte)'V', (byte)'T', (byte)'C', (byte)'M' };
 
@@ -571,6 +571,7 @@ public sealed partial class Campaign
             foreach (var p in Parties) { w.Write(p.Q); w.Write(p.R); p.Party.Write(w); WriteWay(w, p); }
             WriteTurn(w);
             WriteWorld(w);
+            WriteEconomy(w);
         }
         System.IO.File.Move(tmp, path, overwrite: true);
     }
@@ -616,6 +617,7 @@ public sealed partial class Campaign
         }
         c.ReadTurn(r);
         c.ReadWorld(r);
+        c.ReadEconomy(r);
         return c;
     }
 }

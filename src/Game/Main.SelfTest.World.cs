@@ -130,6 +130,61 @@ public partial class Main
             asked && Math.Abs(got - Campaign.ChestOf(spot.Thing).gold) < 1 && spot.Thing.Taken && c.OpenChest(spot, true) == null,
             $"asked {asked}, «{said}», +{got:0} gold");
 
+        // what the realm's gold goes on (Campaign.Economy.cs): a hero hired at the tavern, an artifact bought of the
+        // merchant for him and put on, a convoy sent from an outpost home — through the map's plates
+        {
+            c.Give(Res.Gold, 3000);
+            int ours0 = c.Parties.Count(p => p.Owner == Holder.Ours && p.Party.Commander?.Hero != null);
+            Hud.MapPane.ShowTavern();
+            await Frames(2);
+            bool tavern = Hud.MapPane.ShopShown == AtlasHud.Shop.Tavern && Hud.MapPane.ShopButtons.TryGetValue($"Нанять · {Campaign.HeroPrice} зол.", out var hire) && !hire.Disabled;
+            Hud.MapPane.ShopButtons[$"Нанять · {Campaign.HeroPrice} зол."].EmitSignal(BaseButton.SignalName.Pressed);
+            await Frames(2);
+            var hired = c.Parties.LastOrDefault(p => p.Owner == Holder.Ours && p.Party.Commander?.Hero != null);
+            bool came = c.Parties.Count(p => p.Owner == Holder.Ours && p.Party.Commander?.Hero != null) == ours0 + 1 && hired != null && c.AtCitadel(hired);
+            check("the tavern's plate hires a hero for 600 gold: he and his men stand by the citadel on the map", tavern && came,
+                $"the plate {tavern}, heroes {ours0} → {c.Parties.Count(p => p.Owner == Holder.Ours && p.Party.Commander?.Hero != null)}, by the citadel {hired != null && c.AtCitadel(hired)}");
+
+            // the merchant: a minor thing bought for him, worn; his card shows it
+            Hud.MapPane.ShowMerchant(hired);
+            await Frames(2);
+            var minor = c.MarketNow().Select(Artifacts.Of).FirstOrDefault(a => a.Tier == ArtTier.Minor);
+            bool bought = false;
+            if (minor != null && Hud.MapPane.ShopButtons.TryGetValue(minor.Price(), out var buy) && !buy.Disabled)
+            {
+                buy.EmitSignal(BaseButton.SignalName.Pressed);
+                await Frames(2);
+                bought = hired.Party.Commander.Hero.Worn.Concat(hired.Party.Commander.Hero.Bag).Any(k => k != null && Artifacts.Of(k).Price() == minor.Price());
+            }
+            Hud.HeroPane.Show(hired);
+            await Frames(3);
+            bool card = Hud.HeroPane.IsOpen;
+            Hud.HeroPane.Close();
+            check("the merchant's plate sells the hero standing by the citadel an artifact, which he wears, and his card opens with it",
+                bought && card, $"«{minor?.Name}» for {minor?.Price()} bought {bought}; the card {card}");
+
+            // a convoy: an outpost of ours with stone, its plate sends all of it home
+            var post = c.Cells.Where(x => x.Passable && x.Thing == null && x.Sum.Keep.Count == 0 && !x.Pass && x.Zone == home.Zone)
+                .Select(x => (x, d: Campaign.Distance(x.Q, x.R, home.Q, home.R))).Where(t => t.d >= 3 && t.d <= 6).OrderBy(t => t.d).First().x;
+            post.Owner = Holder.Ours; post.Outpost = true; post.Holding = Holding.Outpost; post.Sum.Raised = 1; post.Sum.Stone = 10;
+            Hud.MapPane.ShowConvoy(post);
+            await Frames(2);
+            Hud.MapPane.ShopButtons[$"Всё {MapThing.NameOf(Res.Stone)}"].EmitSignal(BaseButton.SignalName.Pressed);
+            await Frames(2);
+            double stone0 = c.StoreIn(home, Res.Stone);
+            var send = Hud.MapPane.ShopButtons.FirstOrDefault(kv => kv.Key.StartsWith("Отправить")).Value;
+            bool can = send is { Disabled: false };
+            send?.EmitSignal(BaseButton.SignalName.Pressed);
+            await Frames(2);
+            var cart = c.Parties.Find(p => p.Convoy);
+            for (int i = 0; i < 4000 && cart != null && c.Parties.Contains(cart); i++) Run(1);
+            double stone1 = c.StoreIn(home, Res.Stone);
+            check("the convoy's plate sends an outpost's stone home: the carts walk the map and unload it into the first valley's stores",
+                can && cart != null && !c.Parties.Contains(cart) && Math.Abs(stone1 - stone0 - 10) < .05,
+                $"sent {can && cart != null}, arrived {cart != null && !c.Parties.Contains(cart)}, stone at home {stone0:0.#} → {stone1:0.#} m³");
+            Hud.MapPane.CloseShop();
+        }
+
         // written and read back: the hero where he stands, his moves, the mine ours, the chest taken
         bool wrote = SaveCampaign();
         var read = Campaign.Read(Saves.CampaignDir(CampSlot));
