@@ -83,6 +83,7 @@ public partial class Main
         if (_pose == "square") { SquarePose(); return; }
         if (_pose == "templates") { TemplatesPose(); return; }
         if (_pose == "commander") { CommanderPose(); return; }
+        if (_pose == "warlord") { WarlordPose(); return; }
         if (_pose == "edge") { EdgePose(); return; }
         if (_pose == "rowhouses") { RowHousesPose(); return; }
         if (_pose == "sigils")

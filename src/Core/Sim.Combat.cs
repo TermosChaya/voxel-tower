@@ -46,7 +46,7 @@ public sealed partial class Sim
     /// A raider still in the raid: living, not keeping a camp, not bound, led off or shut up in the citadel (the raid is
     /// over when none is left, and none of these is any more in it).
     /// </summary>
-    static bool InRaid(Unit u) => !u.Dead && u.Team == Team.Horde && !u.Guard && !u.Bound && u.Captor == null && !u.Inside;
+    static bool InRaid(Unit u) => !u.Dead && u.Team == Team.Horde && !u.Guard && !u.Bound && u.Captor == null && !u.Inside && !u.Abandoned;
 
     public bool AnyRaider()
     {
@@ -88,6 +88,26 @@ public sealed partial class Sim
             // one down is out of the fight: it is passed over while any of its side still stand near
             if (o.Down) { if (d < dd) { dd = d; down = o; } continue; }
             if (d < bd) { bd = d; best = o; }
+        }
+        return best ?? down;
+    }
+
+    /// <summary>
+    /// The raider one of ours on foot goes for within a distance (voxels): the nearest, but a sapper with a charge on
+    /// its back, an engine battering our building, one hacking at it and the warlord count as nearer than they are,
+    /// so the line turns on what breaks the walls. One down is passed over while any of the horde still stand near.
+    /// </summary>
+    Unit MeleeFoe(Unit u, float maxDist)
+    {
+        Unit best = null, down = null; float bd = maxDist, dd = maxDist;
+        foreach (var o in Units)
+        {
+            if (o.Dead || o.Inside || o.Captor != null || o.Bound || o.Envoy || o.Team != Team.Horde || o.Abandoned) continue;
+            float d = Dist(u, o);
+            if (d >= maxDist) continue;
+            if (o.Down) { if (d < dd) { dd = d; down = o; } continue; }
+            float k = d - (o.Charge ? 5 : Kinds.IsEngine(o.T) && o.State is UnitState.Siege or UnitState.Carve ? 4 : o.State == UnitState.Carve ? 3 : o.Lord != null && !o.Routed ? 2 : 0) * VoxelWorld.PerMetre;
+            if (k < bd) { bd = k; best = o; }
         }
         return best ?? down;
     }
@@ -140,7 +160,7 @@ public sealed partial class Sim
         a.NextStroke = Choose(a, b);
         a.StrokeFor = b;
         float dmg = a.T.Damage * (.8f + (float)Rng.NextDouble() * .4f) * share * Oath(a) * SergeantArm(a) * TroopArm(a, b, out bool charge) * ShieldWall(b) * Grip(a) * Heartened(a)
-            * (a.Team == Team.Horde ? HordeHarm * ChampionArm(a) : 1);
+            * (a.Team == Team.Horde ? HordeHarm * ChampionArm(a) * LordArm(a) : 1);
         // told to take them alive: the blow that would bring a raider down to a quarter of itself (three fifths in
         // chains), or kill it, fells it instead, to be bound where it lies
         if (a.TakeAlive && !b.Dead && Takeable(b) && b.Hp - dmg <= TakeAt(b))
@@ -176,9 +196,14 @@ public sealed partial class Sim
         // what dies of its wounds dies by the hand that dealt them
         by ??= u.HurtBy;
         NightFell(u, by);
+        BattleFell(u);
         u.Dead = true; u.DiedAt = Time; u.State = UnitState.Dead; u.Hp = 0;
         u.KilledBy = cause ?? by?.T.Name ?? "";
         if (u.Team == Team.Horde && u.T != Kinds.Thrall) Kills++;
+        // the horde's bands lose heart for it, or take heart at one of ours fallen (Sim.Spirit.cs)
+        if (u.Team == Team.Horde && !Kinds.IsEngine(u.T)) BandLoss(u, by);
+        else if (u.Team == Team.Player) BandBlood(by);
+        if (u.Lord != null) LordLost(u, LordFate.Fell);
         KillDeed(u);
         // the reaping: a raider the spells killed gives intervention back
         if (u.Team == Team.Horde && cause != null && SpellCauses.Contains(cause) && Knows("reap")) GainFavour(2);
@@ -306,9 +331,9 @@ public sealed partial class Sim
             if (u.Cooldown <= 0) { Shoot(u, t); u.Cooldown = u.T.AttackTime * ShotPace(u) * (u.FireArrows ? Knows("soaked") ? 1.1f : 1.35f : 1) * (.9f + (float)Rng.NextDouble() * .2f) / Drum; }
             return !marching;
         }
-        // swordsmen hold the ground round themselves or their post
+        // swordsmen hold the ground round themselves or their post, going first for what breaks the walls
         float leash = 6 * 16;
-        var foe = Nearest(u, Team.Horde, leash);
+        var foe = MeleeFoe(u, leash);
         if (foe == null && u.Post >= 0)
         {
             var (px, py, pz) = Nav.Feet(u.Post);
@@ -428,8 +453,10 @@ public sealed partial class Sim
             // an engine: hardly worth a plain arrow, the first mark for a fire arrow; a sorcerer before anyone
             // (a pot of powder breaks an engine up as well as fire does)
             float engine = Kinds.IsEngine(o.T) ? (u.FireArrows || u.T.Tool == "bombard" ? -96 : 96) : Kinds.IsCaster(o.T) || o.T == Kinds.Alchemist ? -110 : 0;
+            // a warlord on his feet: kill him and his army runs
+            float lord = o.Lord != null && !o.Routed ? -72 : 0;
             // with fire arrows, those standing on a deck, a ladder or pitch: one arrow sets it all alight under them
-            float pri = d - (making ? 96 : charged ? 80 : hurting ? 64 : busy ? 48 : 0) - (u.FireArrows && OnTinder(o) ? 40 : 0) + engine;
+            float pri = d - (making ? 96 : charged ? 80 : hurting ? 64 : busy ? 48 : 0) - (u.FireArrows && OnTinder(o) ? 40 : 0) + engine + lord;
             if (pri >= bd || !Sight(u, o)) continue;
             bd = pri; best = o;
         }

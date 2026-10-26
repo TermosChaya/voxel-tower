@@ -95,6 +95,7 @@ public partial class Hud : CanvasLayer
     DuskCard _dusk;
     DawnCard _dawn;
     ColonistBar _colonists;
+    LordBar _lordBar;
     BottomConsole _console;
     MapRing _ring;
     PortraitFrame _portrait;
@@ -300,6 +301,9 @@ public partial class Hud : CanvasLayer
         _colonists = new ColonistBar();
         root.AddChild(_colonists);
         _colonists.Init(m);
+        _lordBar = new LordBar();
+        root.AddChild(_lordBar);
+        _lordBar.Init(m);
 
         _floats = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
         _floats.SetAnchorsPreset(Control.LayoutPreset.FullRect);
@@ -539,6 +543,8 @@ public partial class Hud : CanvasLayer
             _colonists.To = vp.X - 14;
             _colonists.Top = _clockPanel.Position.Y + _clockPanel.Size.Y + 6;
         }
+        // a warlord in the valley: his bar under the faces in the middle
+        _lordBar.Position = new Vector2(MathF.Round((vp.X - LordBar.W) / 2), _colonists.Top + 52);
         // the hints just over the console between the map and the tools, the toasts over them
         Unfold.Tick();
         _hints.Visible = Settings.Hints && _console.Visible;
@@ -642,6 +648,11 @@ public partial class Hud : CanvasLayer
     public int ErrandsShown { get { int n = 0; foreach (var l in _errandLines) if (l.Visible) n++; return n; } }
     public bool DuskShown => _dusk.Visible;
     public bool DawnShown => _dawn.Visible;
+    /// <summary>What the card after a raid says now; the warlord's bar, and whose (for the self-test).</summary>
+    public string DawnSaid => _dawn.Visible ? _dawn.Said : "";
+    public string HordeSaid => _horde.Said;
+    public void CloseDawn() => _dawn.Close();
+    public string LordShown => _lordBar.Visible ? _lordBar.Who : null;
     VBoxContainer _errands;
     Label _errandsHead, _goalsHead;
 

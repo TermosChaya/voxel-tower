@@ -64,7 +64,8 @@ public sealed partial class Sim
         if (!Raids.Active) return;
         if (u.Team == Team.Player && u.T != Kinds.Risen) _nightLost++;
         if (u.Team != Team.Horde || u.T == Kinds.Thrall) return;
-        if (u.Leader) { _nightLeadersKilled++; if (u.Band != null) _slainBands.Add(u.Band.Id); }
+        // (a band's leader counted once, however many took its place and fell after)
+        if (u.Leader) { if (u.Band is not { LostLeader: true }) _nightLeadersKilled++; if (u.Band != null) _slainBands.Add(u.Band.Id); }
         if (by is { Team: Team.Player }) _nightFelled[by.Id] = _nightFelled.GetValueOrDefault(by.Id) + 1;
     }
 
@@ -73,7 +74,7 @@ public sealed partial class Sim
     {
         var r = new NightReport
         {
-            Number = night, Killed = Kills - _night0Kills, Lost = _nightLost, Leaders = _nightLeaders, LeadersKilled = _nightLeadersKilled,
+            Number = night, Killed = Kills - _night0Kills, Lost = _nightLost, Leaders = _nightLeaders, LeadersKilled = Math.Min(_nightLeaders, _nightLeadersKilled),
             KeepLost = Math.Clamp((_nightKeep0 - KeepHp) / Math.Max(1, KeepMax), 0, 1),
         };
         r.Unharmed = r.KeepLost < .02f;

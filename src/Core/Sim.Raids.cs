@@ -226,6 +226,7 @@ public sealed class Raids
     /// <summary>The present raid came at nightfall: the night lasts as long as it does.</summary>
     public bool AtNight;
     internal readonly Queue<(UnitType kind, Warband band, Survivor back)> _queue = new();
+    double _giveUpAt;
     internal Warband _lastBand;
     internal double _spawnT;
 
@@ -253,6 +254,7 @@ public sealed class Raids
         }
         s.Escaped.Clear();
         s.NightBegins(bands.Count);
+        s.BattleBegins(Count, Threat, bands);
         // timber for ladders and bridges, earth for fills, brought along: the more, the stronger the raid
         s.HordeStock[Stockpile.Wood] += (2.4 + 1 * Threat) * VoxelWorld.PerM3;
         s.HordeStock[Stockpile.Earth] += (3.2 + 2 * Threat) * VoxelWorld.PerM3;
@@ -285,10 +287,13 @@ public sealed class Raids
             bool sameBand = _queue.Count > 0 && _queue.Peek().band == band;
             _spawnT = sameBand ? .35 + s.Rng.NextDouble() * .2 : 4 + s.Rng.NextDouble() * 3;
         }
+        // none of the raid left but its engines: they are given up and burn (Sim.Engines.cs)
+        if (_queue.Count == 0 && s.Time >= _giveUpAt) { _giveUpAt = s.Time + 1; s.GiveUpEngines(); }
         if (_queue.Count == 0 && !s.AnyRaider())
         {
             Active = false;
             Repelled++;
+            s.CloseBattle(held: true);
             s.Bands.RemoveAll(b => b.State != BandState.Coming);
             s.RaidRepelled();
         }
@@ -416,19 +421,33 @@ public sealed partial class Sim
     /// <summary>
     /// A raid from outside the siege's clock — one day the enemy's army walking into the valley's cell: these kinds
     /// come in by that side of the land (0 the side from the northern point round by the east, <see cref="WestEdge"/> the
-    /// western), knowing so much of the defences. It comes at whatever hour it is; with a raid in the valley already,
-    /// they join it.
+    /// western), knowing so much of the defences, led by a warlord if it has one (he comes at the head of a band of his
+    /// own guard, in the middle of the side; every band is his army). It comes at whatever hour it is; with a raid in the
+    /// valley already, they join it.
     /// </summary>
-    public void Raid(IReadOnlyList<UnitType> roster, int edge, double intel = .5)
+    public void Raid(IReadOnlyList<UnitType> roster, int edge, double intel = .5, Warlord lord = null)
     {
         var list = new List<UnitType>(roster);
-        if (list.Count == 0) return;
-        var bands = DrawBands(list, edge, Raids.Count + 1);
+        if (list.Count == 0 && lord == null) return;
+        var bands = list.Count > 0 ? DrawBands(list, edge, Raids.Count + 1) : new List<Warband>();
+        if (lord != null)
+        {
+            var own = new Warband { Id = _nextBand++, State = BandState.Coming, Name = $"Дружина {lord.Of}", LordsOwn = true };
+            own.Roster.Add(lord.Kind);
+            own.Roster.AddRange(LordGuard(lord));
+            var (ex, ez) = EdgePoint(edge, .5);
+            own.Entry = NearestStand(ex, ez, 3);
+            bands.Insert(0, own);
+            foreach (var b in bands) b.Lord = lord;
+            Rested(lord);
+            lord.Fate = LordFate.Coming;
+        }
         foreach (var b in bands) b.Edge = edge;
         if (Raids.Active)
         {
             Bands.AddRange(bands);
             Raids.Join(bands);
+            _nightLeaders += bands.Count;
             return;
         }
         // what the source had drawn up for its own raid waits for it
@@ -436,7 +455,7 @@ public sealed partial class Sim
         Bands.RemoveAll(b => b.State == BandState.Coming);
         Bands.AddRange(bands);
         float planned = PlannedThreat;
-        PlannedThreat = ThreatOf(list);
+        PlannedThreat = ThreatOf(list) + (lord?.Level ?? 0);
         Raids.Begin(this, intel, atNight: Clock.Night);
         PlannedThreat = planned;
         Bands.AddRange(waiting);

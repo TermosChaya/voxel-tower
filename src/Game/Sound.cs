@@ -126,6 +126,9 @@ public partial class Sound : Node
         sim.RiteDone += (x, y, z) => Play("gong", x, y, z, .5, 1, far: true);
         // a commander's call: its horn, a short note for the three, the long one for «Рог»; and a shout of steel for the volley
         sim.Called += (u, n) => { Play("horn", u.X, u.Y + u.T.BodyH, u.Z, .5, n == 3 ? 1.1f : .55f, far: true, pitch: n == 3 ? 0 : 1.25f); if (n == 2) Play("swish", u.X, u.Y, u.Z, .1, .9f, pitch: .8f); };
+        // a warlord's cry, a horn lower and longer than ours; his blow to the ground, a thud and what it shakes loose
+        sim.LordCried += u => Play("horn", u.X, u.Y + u.T.BodyH, u.Z, .5, 1.2f, far: true, pitch: .62f);
+        sim.LordSlammed += u => { Play("stomp", u.X, u.Y, u.Z, .1, 1.2f, pitch: .7f); Play("crash", u.X, u.Y, u.Z, .1, .6f, pitch: .8f); };
         sim.Healed += (x, y, z) => Play("hex", x, y, z, .6, .5f);
         sim.Hexed += (x, y, z) => Play("hex", x, y, z, .6, 1);
         sim.Darkened += (x, y, z) => Play("hex", x, y, z, .6, .9f);

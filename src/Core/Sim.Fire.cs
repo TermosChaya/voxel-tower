@@ -212,6 +212,8 @@ public sealed partial class Sim
             }
             if (u.Burn <= 0) continue;
             u.Burn -= step * (Weather == Weather.Rain ? 2 : 1);
+            // one of a band burning: the band loses heart
+            if (u.Team == Team.Horde && u.Band != null) Dismay(u.Band, .012f * step);
             Hurt(u, null, BurnDamage * u.BurnHeat * step * (Kinds.IsEngine(u.T) ? 3 : 1), "огонь");
             if (u.Burn <= 0) { u.Burn = 0; u.BurnHeat = 1; }
         }

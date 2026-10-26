@@ -45,6 +45,8 @@ public partial class FireView : Node3D
         // what falls throws up chips, and a fall throws up dust
         m.Sim.Fell += (x, y, z, mat) => { if (_rnd.NextDouble() < .03) m.Debris.Spawn(mat, x, y, z, 1, 1.6f); };
         m.Sim.Collapsed += (n, x, y, z) => Dust(x, y, z, n);
+        // a warlord's blow to the ground raises the dust about him
+        m.Sim.LordSlammed += u => Dust(u.X, u.Y, u.Z, 160);
         // an engine of ours loosing kicks up the dust about its feet
         m.Sim.EngineLoosed += u => Kick(u.X, u.Y, u.Z, u.T == Kinds.Trebuchet ? 8 : u.T == Kinds.Mangonel ? 5 : 3, u.T.BodyR + 2);
     }

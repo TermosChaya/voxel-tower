@@ -139,6 +139,7 @@ public sealed partial class Sim
         // sappers with a charge of powder in the stronger raids, more of them in the strongest
         u.Charge = t == Kinds.Sapper && Raids.Threat >= 5 && Hash.H3(u.Id, 23, 5) < (Raids.Threat >= 9 ? .5f : .3f);
         Units.Add(u);
+        BattleCame(u);
         return u;
     }
 
@@ -236,7 +237,7 @@ public sealed partial class Sim
         Stage = "NavFlush"; if (Nav.PendingEdits > 0) Nav.Flush();
         Stage = "UpdateFields"; UpdateFields();
         Stage = "Raids"; TickRaids(dt);
-        Stage = "TickBands"; TickBands();
+        Stage = "TickBands"; TickBands(); TickWarlords(); TickSpirit();
         Stage = "TickTrails"; TickTrails();
         Stage = "TendWildlife"; TendWildlife();
         Stage = "TendTurf"; TendTurf();
@@ -282,7 +283,7 @@ public sealed partial class Sim
         Stage = "TickScaffolds"; TickScaffolds();
         Units.RemoveAll(u => u.Dead && Time - u.DiedAt > 30);
         Stage = "";
-        if (KeepHp <= 0 && !Over) { Over = true; Say("Цитадель пала.", 3); }
+        if (KeepHp <= 0 && !Over) { Over = true; CloseBattle(held: false); Say("Цитадель пала.", 3); }
     }
 
     /// <summary>Marks the cells bodies stand in, so nothing gets built into anyone.</summary>

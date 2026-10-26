@@ -168,7 +168,9 @@ public partial class TrailView : Node3D
         };
         int n = b.State == BandState.Coming ? b.Size : b.Strength;
         bool going = b.State is BandState.Coming or BandState.Forming or BandState.March && b.TrailSeconds > 0;
-        d.Tag.Text = $"{b.Name} · {n} · {what}" + (going ? $" · {Fmt.Clock(b.TrailSeconds)} до цитадели" : "");
+        // its spirit, once it has come in and lost some of it (Sim.Spirit.cs)
+        string spirit = b.Broken ? " · бежит" : b.State != BandState.Coming && b.Spirit < .95f ? $" · дух {b.Spirit * 100:0} %" : "";
+        d.Tag.Text = $"{b.Name} · {n} · {what}" + (going ? $" · {Fmt.Clock(b.TrailSeconds)} до цитадели" : "") + spirit;
     }
 
     void Rebuild(Warband b, Drawn d)

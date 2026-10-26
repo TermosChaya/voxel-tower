@@ -195,7 +195,7 @@ public partial class WaveClock : Control
     DayDial _dial;
     const string CallTip = "Позвать орду сейчас ({CallWave})\nНаграды за это нет, но орда хуже знает вашу оборону: процент — сколько она успела разведать. Сразу наступит ночь.";
     const string CallTipOnCall = "Позвать орду ({CallWave})\nВ песочнице орда сама не приходит. Сразу наступит ночь, после волны снова день. " +
-        "{Summon} вызывает ватагу под курсором, Shift+{Summon} — тяжёлую.";
+        "{Summon} вызывает ватагу под курсором, Shift+{Summon} — тяжёлую, Ctrl+{Summon} — войско с военачальником.";
     public const float W = 470, H = 70;
 
     public void Init(Main m)

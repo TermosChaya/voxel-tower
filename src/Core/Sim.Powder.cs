@@ -318,6 +318,8 @@ public sealed partial class Sim
     public int Detonate(float fx, float fy, float fz, float r, float harm, string cause, bool always = false)
     {
         int x = (int)fx, y = (int)fy, z = (int)fz, ri = (int)MathF.Ceiling(r);
+        // the bands of the horde that see it go up lose heart (Sim.Spirit.cs)
+        DismayAbout(fx, fz, r * 3 + 4 * VoxelWorld.PerMetre, .12f);
         // powder near it is not blown about: its fire reaches half again as far as the blast breaks, and that goes up itself, a moment after
         int pr = (int)(r * 1.5f) + VoxelWorld.PerMetre;
         for (int dy = -pr; dy <= pr; dy++)

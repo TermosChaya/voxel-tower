@@ -640,6 +640,7 @@ public sealed partial class Sim
             int ours = 0;
             foreach (var (x, y, z) in broke) if (Mat.IsPlayer[World.Get(x, y, z)]) ours++;
             GiantBroke += ours;
+            BattleBroke(ours, u);
             var (hx, hy, hz) = broke[0];
             Hacked?.Invoke(hx, hy, hz, World.Get(hx, hy, hz));
             float dx = wx - u.X, dz = wz - u.Z, d = MathF.Max(1, MathF.Sqrt(dx * dx + dz * dz));

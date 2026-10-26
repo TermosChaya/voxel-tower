@@ -212,6 +212,8 @@ public sealed partial class Sim
         if (h > .1f) { f.AX = -vz / h; f.AZ = vx / h; } else { f.AX = MathF.Cos(u.Facing); f.AZ = MathF.Sin(u.Facing); }
         u.Airborne = f;
         Fliers.Add(f);
+        // one of a band thrown through the air before its eyes, or lifted off its feet by the hand: the band loses heart (Sim.Spirit.cs)
+        if (u.Team == Team.Horde && u.Band != null) Dismay(u.Band, .03f);
         return f;
     }
 

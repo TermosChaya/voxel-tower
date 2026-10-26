@@ -33,6 +33,8 @@ public sealed class Warband
     public readonly List<Unit> Members = new();
     public Unit Leader;
     public int Spawned;
+    /// <summary>How many of it were taken alive (they leave its members).</summary>
+    public int Taken;
     /// <summary>Sent to take a mine of ours rather than for the citadel.</summary>
     public Mine Target;
     /// <summary>The way it will go from where its leader is (or from where it comes in), cell by cell, and where on it
@@ -48,6 +50,18 @@ public sealed class Warband
     internal double HeadingAt = -1;
     /// <summary>Its first leader has fallen; and it has broken and runs.</summary>
     public bool LostLeader, Broken;
+    /// <summary>
+    /// Its spirit, 1 whole to 0 (Sim.Spirit.cs): what it has lost and seen lowers it, its warlord's cry raises it; low,
+    /// its raiders break the sooner, and at the bottom the band breaks.
+    /// </summary>
+    public float Spirit = 1;
+    /// <summary>Its spirit has once fallen to half (said once).</summary>
+    public bool Wavered;
+    /// <summary>The warlord whose army it is, or null; and whether he leads this band of it himself.</summary>
+    public Warlord Lord;
+    public bool LordsOwn;
+    /// <summary>When its spirit was last shaken.</summary>
+    internal double ShakenAt = -99;
     /// <summary>
     /// The side of the citadel the chief sent it against (0 east, then round by south: 2 south, 4 west, 6 north; −1 for
     /// none), where it gathers on that side before the storm, and why that side.
@@ -401,11 +415,22 @@ public sealed partial class Sim
         u.Band = b;
         u.Raid = b.Target;
         b.Members.Add(u);
+        // a champion come back leads his band's army as he did his own
+        if (u.Lord != null && b.Lord == null) { b.Lord = u.Lord; b.LordsOwn = true; }
         if (b.Spawned++ == 0)
         {
             MakeLeader(b, u);
             if (b.Champion > 0 && u.Champion == 0) Crown(u, b.Champion, b.Title);
+            else if (b.LordsOwn && b.Lord != null && u.Lord == null) Ennoble(u, b.Lord);
             Enter(b, BandState.Forming);
+        }
+        // a warlord who got away comes back at the head of the band he comes with, as he went
+        if (back?.Lord is { } lord && u.Lord == null && !lord.Champion)
+        {
+            b.Lord = lord; b.LordsOwn = true;
+            if (b.Leader is { } was && was != u) was.Leader = false;
+            MakeLeader(b, u);
+            Ennoble(u, lord);
         }
         return u;
     }
@@ -437,7 +462,7 @@ public sealed partial class Sim
                     if (!u.Dead && Armed(u) && (next == null || Rank(u.T) > Rank(next.T) || Rank(u.T) == Rank(next.T) && u.Hp > next.Hp)) next = u;
                 if (next == null)
                 {
-                    if (b.Spawned >= b.Size) Bands.RemoveAt(i);
+                    if (b.Spawned >= b.Size) { BattleBand(b); if (b.Lord != null) BattleLord(b.Lord); Bands.RemoveAt(i); }
                     continue;
                 }
                 bool fell = b.Leader != null;
@@ -446,12 +471,7 @@ public sealed partial class Sim
                 if (fell && b.Alive > 1) Say($"{b.Name}: вожак пал, ватагу ведёт {next.T.Name.ToLowerInvariant()}.", 1, next);
             }
             // its leader fallen and two in three of it gone: the rest have had enough
-            if (!b.Broken && b.LostLeader && b.Spawned >= b.Size && b.Alive * 3 <= b.Size && b.Target == null)
-            {
-                b.Broken = true;
-                foreach (var m in b.Members) if (!m.Dead) m.Routed = true;
-                Say($"{b.Name} бежит: {(b.Alive == 1 ? "уцелел один" : $"уцелело {b.Alive}")}.", 1, b.Leader ?? b.Members.Find(m => !m.Dead));
-            }
+            if (!b.Broken && b.LostLeader && b.Spawned >= b.Size && b.Alive * 3 <= b.Size && b.Target == null) BreakBand(b);
             var l = b.Leader;
             if (b.State is BandState.March or BandState.Rally && Time >= b.HeadingAt) { b.HeadingAt = Time + .5; Heading(b); }
             switch (b.State)

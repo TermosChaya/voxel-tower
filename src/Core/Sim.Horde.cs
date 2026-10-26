@@ -116,12 +116,14 @@ public sealed partial class Sim
         if (u.T == Kinds.Shaman && !u.Routed) ShamanTick(u);
         else if (u.T == Kinds.Witch && !u.Routed) WitchTick(u);
         else if (u.T == Kinds.Necromancer && !u.Routed) NecromancerTick(u, dt);
+        // a warlord: off the field when badly hurt, his cry, his blow to the ground (Sim.Warlords.cs)
+        if (u.Lord != null) LordTick(u);
         // an alchemist stops out of reach and throws its flasks while it has a mark and flasks to throw
         if (u.T == Kinds.Alchemist && !u.Routed && AlchemistTick(u, dt)) return;
         // hurt to a quarter of itself, a raider has had enough (a leader leads to the end, a guard keeps its camp)
         if (!u.Routed && !u.Leader && !u.Guard && u.Hp < u.MaxHp * .25f) u.Routed = true;
         // or hurt past bearing: it breaks (a leader holds on longer)
-        if (!u.Routed && !u.Guard && u.Champion == 0 && u.Pain >= (u.Leader ? LeaderBreak : BreakPain) * FearOfUs) u.Routed = true;
+        if (!u.Routed && !u.Guard && u.Champion == 0 && u.Lord == null && u.Pain >= (u.Leader ? LeaderBreak : BreakPain) * FearOfUs * Nerve(u)) u.Routed = true;
         // a hill giant tears up a boulder and hurls it, or is at it (Sim.Giants.cs)
         if (u.T == Kinds.HillGiant && !u.Routed && GiantTick(u, dt)) return;
         // or a leg broken under it: it limps back west (Sim.Trauma.cs)
@@ -274,13 +276,15 @@ public sealed partial class Sim
     /// <summary>Gone out of the valley: one still fit to fight comes back with the next raid.</summary>
     void OutOfValley(Unit u)
     {
+        BattleFled(u);
         if (u.T == Kinds.Thief) ThiefGone(u);
         if (u.Envoy) { u.Dead = true; u.DiedAt = -999; u.State = UnitState.Dead; return; }
         if (Armed(u) && !u.Guard)
         {
             if (u.Wounds != null) { u.Wounds.Bleed = 0; u.Wounds.Arrows.Clear(); }
-            Escaped.Add(new Survivor { Kind = u.T, Look = u.Look, Hp = u.Hp, Wounds = u.Wounds, Champion = u.Champion, Title = u.Title });
-            Say($"{u.T.Name} сбежал и вернётся со следующей волной.", 2, u);
+            Escaped.Add(new Survivor { Kind = u.T, Look = u.Look, Hp = u.Hp, Wounds = u.Wounds, Champion = u.Champion, Title = u.Title, Lord = u.Lord });
+            if (u.Lord != null) LordAway(u);
+            else Say($"{u.T.Name} сбежал и вернётся со следующей волной.", 2, u);
         }
         u.Dead = true; u.DiedAt = -999; u.State = UnitState.Dead;
     }
@@ -373,6 +377,7 @@ public sealed partial class Sim
             u.CarveI++;
             World.Set(x, y, z, Mat.Air);
             if (Orders.IsRemove(Orders.At(x, y, z))) Orders.Clear(x, y, z);
+            if (Mat.IsPlayer[m]) BattleBroke(1, u);
             // half of what is hacked out is fit to build with
             int kind = Labour.YieldKind(m);
             if (kind != Stockpile.None) HordeStock[kind] += Labour.YieldShare(m) * .5;
@@ -527,4 +532,6 @@ public sealed class Survivor
     public BodyState Wounds;
     public byte Champion;
     public string Title;
+    /// <summary>The warlord this was, gone off with his wounds (Sim.Warlords.cs).</summary>
+    public Warlord Lord;
 }

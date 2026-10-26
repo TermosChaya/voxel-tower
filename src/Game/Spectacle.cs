@@ -34,6 +34,7 @@ public partial class Spectacle : Node
             else Felt(x, z, Math.Clamp(k, .35f, 1.3f), flash: true);
         };
         sim.Collapsed += (n, x, y, z) => { if (n >= 200) Felt(x, z, Math.Clamp(n / 2500f, .08f, 1f), flash: false); };
+        sim.LordSlammed += u => Felt(u.X, u.Z, .12f, flash: false);
         sim.Landed += (x, y, z, n, speed) =>
         {
             // the heavier and the harder it comes down, the more it shakes the ground

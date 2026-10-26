@@ -648,6 +648,8 @@ public sealed class Unit
     public Unit Captive, Captor;
     /// <summary>The engine a raider guards, keeping by it; and for a catapult, where it throws at (packed voxel, −1 none).</summary>
     public Unit Escort;
+    /// <summary>An engine of the horde given up and set alight by its keepers, out of the raid (Sim.Engines.cs).</summary>
+    public bool Abandoned;
     public int AimAt = -1;
     /// <summary>An alchemist: the flasks it has thrown of those it came with.</summary>
     public int Thrown;
@@ -768,8 +770,12 @@ public sealed class Unit
 
     /// <summary>"Орк-рубака", or "Вожак — орк-рубака" for the one who leads a warband.</summary>
     public string Name => Champion == 4 ? $"{Title}, вождь орды" : Champion > 0 ? $"{Title}, вожак главы {Sim.Roman(Champion)} ({T.Name.ToLowerInvariant()})"
-        : Leader ? "Вожак — " + T.Name.ToLowerInvariant() : T.Name;
+        : Lord != null ? $"{Lord.Name}, военачальник ({T.Name.ToLowerInvariant()})" : Leader ? "Вожак — " + T.Name.ToLowerInvariant() : T.Name;
     /// <summary>A chapter's champion (1–3) or the horde's chief (4), and his name; 0 for the rest.</summary>
     public byte Champion;
     public string Title;
+    /// <summary>The warlord this is, at the head of his army (Sim.Warlords.cs); null for the rest.</summary>
+    public Warlord Lord;
+    /// <summary>When a warlord's cry and his blow are ready again.</summary>
+    public double CryReady, SlamReady;
 }

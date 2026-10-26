@@ -648,7 +648,7 @@ public partial class Main : Node3D
             if (!Scripted) { Sim.BeginErrands(); GiveCaptain(); }
             Hud.Log("Песочница своими силами: всё как в осаде, только орда не придёт, пока её не позовёте.", Hud.Kind.Ok);
         }
-        Hud.Log("{CallWave} — позвать волну. {Summon} — ватага орды под курсором, Shift+{Summon} — тяжёлая ватага.", Hud.Kind.Ok);
+        Hud.Log("{CallWave} — позвать волну. {Summon} — ватага орды под курсором, Shift+{Summon} — тяжёлая ватага, Ctrl+{Summon} — войско с военачальником.", Hud.Kind.Ok);
         Hud.Refresh();
     }
 

@@ -16,7 +16,7 @@ namespace VoxelTower.Core;
 public sealed partial class Sim
 {
     /// <summary>20: the bodies sculpted finer, their half-voxels (and so a wounded body's) not what they were.</summary>
-    public const int SaveVersion = 58;
+    public const int SaveVersion = 59;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -97,6 +97,8 @@ public sealed partial class Sim
         foreach (int p in _relay) w.Write(p);
 
         var living = Units.FindAll(u => !u.Dead);
+        // the warlords first: the units, the bands and those who got away point at them (version 59)
+        WriteLords(w, living);
         w.Write(living.Count);
         foreach (var u in living) WriteUnit(w, u);
         w.Write(Bands.Count);
@@ -152,6 +154,7 @@ public sealed partial class Sim
         foreach (var wh in Whirls) { w.Write(wh.X); w.Write(wh.Z); w.Write(wh.VX); w.Write(wh.VZ); w.Write(wh.R); w.Write(wh.Until); w.Write(wh.Next); }
         WriteProgress(w);
         WriteDawn(w);
+        WriteBattles(w);
         WriteChapters(w);
         WriteHouseDoors(w);
         w.Write(Sandbox); w.Write(Source is OnCallRaids);
@@ -217,6 +220,7 @@ public sealed partial class Sim
         w.Write(u.TakeAlive); w.Write(u.Bound); w.Write(u.BoundAt); w.Write(u.Unguarded); w.Write(u.ChainedUntil); w.Write(u.CrumbleAt);
         w.Write(u.PlagueUntil); w.Write(u.OathUntil); w.Write(u.NextHeal); w.Write(u.NextCurse); w.Write(u.Charge);
         w.Write(u.Champion); w.Write(u.Title ?? "");
+        w.Write(u.Lord?.Id ?? -1); w.Write(u.CryReady); w.Write(u.SlamReady); w.Write(u.Abandoned);
         // a sacrifice under way
         w.Write(u.Rite != null);
         if (u.Rite is { } rite)
@@ -231,7 +235,7 @@ public sealed partial class Sim
     {
         w.Write(s != null);
         if (s == null) return;
-        w.Write(s.Kind.Key); w.Write(s.Look); w.Write(s.Hp); w.Write(s.Champion); w.Write(s.Title ?? "");
+        w.Write(s.Kind.Key); w.Write(s.Look); w.Write(s.Hp); w.Write(s.Champion); w.Write(s.Title ?? ""); w.Write(s.Lord?.Id ?? -1);
         WriteBody(w, s.Wounds);
     }
 
@@ -269,7 +273,43 @@ public sealed partial class Sim
         w.Write(b.Hunch?.Length ?? -1); if (b.Hunch != null) foreach (float h in b.Hunch) w.Write(h);
         w.Write(b.LostLeader); w.Write(b.Broken); w.Write(b.HX); w.Write(b.HZ);
         w.Write(b.History.Count); foreach (var s in b.History) w.Write((byte)s);
+        w.Write(b.Lord?.Id ?? -1); w.Write(b.LordsOwn); w.Write(b.Spirit); w.Write(b.Wavered); w.Write(b.Taken);
     }
+
+    /// <summary>Every warlord anything in the valley points at: in it, at the head of a band, still to come, got away.</summary>
+    void WriteLords(BinaryWriter w, List<Unit> living)
+    {
+        var lords = new List<Warlord>();
+        void Add(Warlord l) { if (l != null && !lords.Contains(l)) lords.Add(l); }
+        foreach (var u in living) Add(u.Lord);
+        foreach (var b in Bands) { Add(b.Lord); foreach (var v in b.Veterans) Add(v.Lord); }
+        foreach (var (_, _, back) in Raids._queue) Add(back?.Lord);
+        foreach (var s in Escaped) Add(s.Lord);
+        w.Write(_nextLord);
+        w.Write(lords.Count);
+        foreach (var l in lords)
+        {
+            w.Write(l.Id); w.Write(l.Name); w.Write(l.Of); w.Write(l.Kind.Key); w.Write(l.Level); w.Write(l.Xp); w.Write(l.Health);
+            w.Write((byte)l.Fate); w.Write(l.Champion); w.Write(l.Slew); w.Write(l.Broke);
+        }
+    }
+
+    void ReadLords(BinaryReader r)
+    {
+        _lordById.Clear();
+        _nextLord = r.ReadInt32();
+        for (int n = r.ReadInt32(); n > 0; n--)
+        {
+            var l = new Warlord { Id = r.ReadInt32(), Name = r.ReadString(), Of = r.ReadString() };
+            l.Kind = KindOf(r.ReadString()) ?? Kinds.Orc;
+            l.Level = r.ReadInt32(); l.Xp = r.ReadSingle(); l.Health = r.ReadSingle(); l.Fate = (LordFate)r.ReadByte(); l.Champion = r.ReadBoolean();
+            l.Slew = r.ReadInt32(); l.Broke = r.ReadInt32();
+            _lordById[l.Id] = l;
+        }
+    }
+
+    readonly Dictionary<int, Warlord> _lordById = new();
+    Warlord LordById(int id) => id >= 0 ? _lordById.GetValueOrDefault(id) : null;
 
     /// <summary>Reads the siege back, after the valley (<see cref="SaveReader.Valley"/>) and a new sim on it; returns what
     /// the screen kept.</summary>
@@ -345,6 +385,7 @@ public sealed partial class Sim
         int nr = r.ReadInt32();
         for (int i = 0; i < nr; i++) _relay.Add(r.ReadInt32());
 
+        ReadLords(r);
         Units.Clear();
         var byId = new Dictionary<int, Unit>();
         var bandOf = new Dictionary<Unit, int>();
@@ -441,6 +482,7 @@ public sealed partial class Sim
             Whirls.Add(new Whirl { X = r.ReadSingle(), Z = r.ReadSingle(), VX = r.ReadSingle(), VZ = r.ReadSingle(), R = r.ReadSingle(), Until = r.ReadDouble(), Next = r.ReadDouble() });
         ReadProgress(r);
         ReadDawn(r);
+        ReadBattles(r);
         ReadChapters(r);
         ReadHouseDoors(r);
         Sandbox = r.ReadBoolean(); SetSource(r.ReadBoolean() ? new OnCallRaids() : new SiegeScenario());
@@ -505,6 +547,7 @@ public sealed partial class Sim
         u.TakeAlive = r.ReadBoolean(); u.Bound = r.ReadBoolean(); u.BoundAt = r.ReadDouble(); u.Unguarded = r.ReadDouble(); u.ChainedUntil = r.ReadDouble(); u.CrumbleAt = r.ReadDouble();
         u.PlagueUntil = r.ReadDouble(); u.OathUntil = r.ReadDouble(); u.NextHeal = r.ReadDouble(); u.NextCurse = r.ReadDouble(); u.Charge = r.ReadBoolean();
         u.Champion = r.ReadByte(); u.Title = r.ReadString(); if (u.Title.Length == 0) u.Title = null;
+        u.Lord = LordById(r.ReadInt32()); u.CryReady = r.ReadDouble(); u.SlamReady = r.ReadDouble(); u.Abandoned = r.ReadBoolean();
         if (r.ReadBoolean())
         {
             var rite = new Rite { Kind = (RiteKind)r.ReadByte() };
@@ -524,13 +567,13 @@ public sealed partial class Sim
         return u;
     }
 
-    static Survivor ReadSurvivor(BinaryReader r)
+    Survivor ReadSurvivor(BinaryReader r)
     {
         if (!r.ReadBoolean()) return null;
         var t = KindOf(r.ReadString());
-        int look = r.ReadInt32(); float hp = r.ReadSingle(); byte champion = r.ReadByte(); string title = r.ReadString();
+        int look = r.ReadInt32(); float hp = r.ReadSingle(); byte champion = r.ReadByte(); string title = r.ReadString(); var lord = LordById(r.ReadInt32());
         var body = ReadBody(r, t, look);
-        return t == null ? null : new Survivor { Kind = t, Look = look, Hp = hp, Wounds = body, Champion = champion, Title = title.Length > 0 ? title : null };
+        return t == null ? null : new Survivor { Kind = t, Look = look, Hp = hp, Wounds = body, Champion = champion, Title = title.Length > 0 ? title : null, Lord = lord };
     }
 
     static BodyState ReadBody(BinaryReader r, UnitType t, int look)
@@ -596,6 +639,7 @@ public sealed partial class Sim
         b.History.Clear();
         n = r.ReadInt32();
         for (int i = 0; i < n; i++) b.History.Add((BandState)r.ReadByte());
+        b.Lord = LordById(r.ReadInt32()); b.LordsOwn = r.ReadBoolean(); b.Spirit = r.ReadSingle(); b.Wavered = r.ReadBoolean(); b.Taken = r.ReadInt32();
         b.TrailRev = -1;
         return b;
     }

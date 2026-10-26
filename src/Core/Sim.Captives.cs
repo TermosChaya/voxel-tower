@@ -52,6 +52,9 @@ public sealed partial class Sim
     {
         if (u.T == Kinds.Thief) ThiefFell(u);
         if (u.Captive != null) { u.Captive.Captor = null; u.Captive = null; }
+        // a warlord taken alive: his army breaks as if he had fallen
+        if (u.Lord != null) LordLost(u, LordFate.Taken);
+        BattleTaken(u);
         u.Bound = true; u.BoundAt = Time;
         u.State = UnitState.Idle; u.Path = null; u.Target = null; u.Prey = null; u.Torch = false; u.Raid = null; u.Routed = false;
         u.Guard = false; u.Escort = null;

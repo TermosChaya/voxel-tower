@@ -460,6 +460,17 @@ public partial class Commander : Node
         _m.Hud.Float(!ok ? "здесь некуда встать" : heavy ? "тяжёлая ватага" : "ватага", ok ? Ornament.EmberGlow : Ornament.Blood);
     }
 
+    void SummonArmy()
+    {
+        var (o, d) = _m.Rig.Ray(GetViewport().GetMousePosition());
+        var w = _m.World;
+        if (!Raycast.Cast(w, (o.X - w.OriginX) / VoxelWorld.Vox, o.Y / VoxelWorld.Vox, (o.Z - w.OriginZ) / VoxelWorld.Vox, d.X, d.Y, d.Z, out var hit, skipVeg: true)) return;
+        var g = hit.Ground(w);
+        var lord = _m.Sim.SummonArmy(g.x, g.z);
+        Diag.Note($"песочница: войско военачальника {lord.Name} у {g.x},{g.z}");
+        _m.Hud.Float($"войско военачальника {lord.Name}", Ornament.EmberGlow);
+    }
+
     public override void _UnhandledInput(InputEvent e)
     {
         if (e is not InputEventKey k || !k.Pressed || k.Echo || _m.Hud.MenuOpen) return;
@@ -468,6 +479,8 @@ public partial class Commander : Node
         if (Bindings.Is(k, Act.QuickLoad) && !k.CtrlPressed && !k.MetaPressed) { Saves.Read(_m, Saves.Quick); GetViewport().SetInputAsHandled(); return; }
         // the sandbox: a band of the horde called up where the pointer is, a heavy one with Shift
         if (_m.Sim.Waves.OnCall && Bindings.Is(k, Act.Summon) && !k.CtrlPressed && !k.MetaPressed) { Summon(k.ShiftPressed); GetViewport().SetInputAsHandled(); return; }
+        // and with Ctrl an army with a warlord at its head, by the side of the valley nearest the pointer
+        if (_m.Sim.Waves.OnCall && k.PhysicalKeycode == Bindings.KeyOf(Act.Summon) && (k.CtrlPressed || k.MetaPressed)) { SummonArmy(); GetViewport().SetInputAsHandled(); return; }
         // squads: Ctrl and a digit remembers the chosen, Shift and the digit calls them up
         if (k.PhysicalKeycode is >= Key.Key1 and <= Key.Key5 && (k.CtrlPressed || k.MetaPressed || k.ShiftPressed))
         {

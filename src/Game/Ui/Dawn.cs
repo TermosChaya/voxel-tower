@@ -6,9 +6,11 @@ using VoxelTower.Core;
 namespace VoxelTower.Game;
 
 /// <summary>
-/// The dawn after a night held, under the beam in the middle: what the night was, its stars, and the gifts to choose
-/// one of — each a plate with its sign, what it is and why it came. A click takes it. It can be folded into a strip
-/// that waits; what is not taken by the next horn is gone.
+/// The end of a raid, under the beam in the middle: its report (Ui/Battle.cs) — what came of the horde and what became
+/// of it, our fallen, the warlord's fate, the bands that broke, what was broken — the night's stars, and at a dawn the
+/// gifts to choose one of, each a plate with its sign, what it is and why it came. A click takes it. It can be folded
+/// into a strip that waits; what is not taken by the next horn is gone. With no gifts the report is closed with its
+/// button, or goes by itself a minute after.
 /// </summary>
 public partial class DawnCard : Control
 {
@@ -22,7 +24,16 @@ public partial class DawnCard : Control
     string _dealt = "";
     double _takenAt = -99;
     string _taken = "";
+    /// <summary>The report the player closed.</summary>
+    BattleReport _closed;
+    /// <summary>How long a report with no gifts stays, seconds of the game.</summary>
+    const double ReportStays = 60;
     public const float W = 660;
+    /// <summary>The report closed, as its button does when no gifts wait.</summary>
+    public void Close() { if (_m.Sim.Gifts.Count == 0) { _closed = _m.Sim.LastBattle; Refresh(); } }
+
+    /// <summary>The card's lines as they read now.</summary>
+    public string Said => _head.Text + "\n" + _night.Text;
 
     public void Init(Main m)
     {
@@ -48,7 +59,12 @@ public partial class DawnCard : Control
         top.AddChild(gap);
         _fold = new Button { Text = "–", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(24, 22), MouseDefaultCursorShape = CursorShape.PointingHand };
         _fold.AddThemeFontSizeOverride("font_size", 14);
-        _fold.Pressed += () => { _folded = !_folded; Refresh(); };
+        _fold.Pressed += () =>
+        {
+            // with no gifts waiting the button closes the report
+            if (_m.Sim.Gifts.Count == 0) { _closed = _m.Sim.LastBattle; Refresh(); return; }
+            _folded = !_folded; Refresh();
+        };
         top.AddChild(_fold);
         _col.AddChild(top);
         _night = Hud.Text("", Ornament.Serif, 13, Ornament.Parchment, wrap: true);
@@ -83,20 +99,30 @@ public partial class DawnCard : Control
     public void Refresh()
     {
         var sim = _m.Sim;
-        bool taking = sim.Gifts.Count > 0, justTaken = sim.Time - _takenAt < 2.5;
-        bool due = (taking || justTaken) && sim.LastNight != null && _m.Tutor == null && !_m.FP.On && !sim.NoErrands;
+        bool taking = sim.Gifts.Count > 0 && !sim.NoErrands && sim.LastNight != null, justTaken = sim.Time - _takenAt < 2.5;
+        var b = sim.LastBattle;
+        bool report = b != null && b != _closed && !sim.Raids.Active && sim.Time - b.Ended < ReportStays;
+        bool due = (taking || justTaken || report) && _m.Tutor == null && !_m.FP.On;
         if (due != Visible) { Visible = due; if (due) Juice.Appear(this); }
         if (!due) return;
         var r = sim.LastNight;
+        // the stars are the night's, when this raid was that night
+        bool starred = r != null && b != null && r.Number == b.Number;
         bool legend = sim.Gifts.Exists(g => g.Kind == GiftKind.Relic);
-        _head.Text = (legend ? $"Рассвет после ночи {r.Number} · трофеи вожака главы" : $"Рассвет после ночи {r.Number}").ToUpperInvariant();
-        _stars.Lit = r.Stars;
+        string head = taking && r != null ? $"Рассвет после ночи {r.Number}" : b == null ? "" : !b.Held ? "Цитадель пала" : $"Набег {b.Number} отбит";
+        _head.Text = (legend ? head + " · трофеи вожака главы" : head).ToUpperInvariant();
+        _stars.Visible = starred;
+        _stars.Lit = starred ? r.Stars : 0;
         _stars.QueueRedraw();
-        _fold.Text = _folded ? "+" : "–";
-        _fold.TooltipText = _folded ? "Развернуть" : "Свернуть. Дары ждут до следующей волны.";
+        _fold.Text = !taking ? "×" : _folded ? "+" : "–";
+        _fold.TooltipText = !taking ? "Закрыть" : _folded ? "Развернуть" : "Свернуть. Дары ждут до следующей волны.";
         if (!taking)
         {
-            _night.Text = $"Принято: {_taken}.";
+            var said = new List<string>();
+            if (justTaken) said.Add($"Принято: {_taken}.");
+            if (report) said.AddRange(BattleLines.Of(b));
+            if (report && starred && r.Best.Count > 0) said.Add("Отличились: " + string.Join(", ", r.Best.ConvertAll(x => $"{x.who.ToLowerInvariant()} ({x.felled})")));
+            _night.Text = string.Join("\n", said);
             _cards.Visible = false;
             return;
         }
@@ -106,11 +132,12 @@ public partial class DawnCard : Control
             _cards.Visible = false;
             return;
         }
-        var lines = new List<string>
+        var lines = b != null && b.Number == r.Number ? BattleLines.Of(b) : new List<string>
         {
-            $"Пало налётчиков: {r.Killed} · наших: {r.Lost} · цитадель потеряла {r.KeepLost * 100:0} % · вожаков убито: {r.LeadersKilled} из {r.Leaders}",
+            $"Пало налётчиков: {r.Killed} · наших: {r.Lost} · цитадель потеряла {r.KeepLost * 100:0} %",
         };
-        if (r.Best.Count > 0) lines.Add("Отличились: " + string.Join(", ", r.Best.ConvertAll(b => $"{b.who.ToLowerInvariant()} ({b.felled})")));
+        lines.Add($"Вожаков убито: {r.LeadersKilled} из {r.Leaders}.");
+        if (r.Best.Count > 0) lines.Add("Отличились: " + string.Join(", ", r.Best.ConvertAll(x => $"{x.who.ToLowerInvariant()} ({x.felled})")));
         lines.Add(legend ? "Выберите один трофей, он действует до конца осады:" : "Выберите один дар:");
         _night.Text = string.Join("\n", lines);
         _cards.Visible = true;

@@ -27,6 +27,7 @@ public sealed partial class Sim
     void EngineTick(Unit u, float dt)
     {
         u.Target = null;
+        if (u.Abandoned) { u.State = UnitState.Idle; u.Path = null; return; }
         if (u.T == Kinds.Catapult) { CatapultTick(u, dt); return; }
         if (u.T == Kinds.Mantlet) { MantletTick(u, dt); return; }
         if (u.T == Kinds.SiegeTower) { TowerTick(u, dt); return; }
@@ -306,7 +307,7 @@ public sealed partial class Sim
         int x = (int)(f.X + f.VX / s * f.R * .8f), y = (int)(f.Y + f.VY / s * f.R * .8f), z = (int)(f.Z + f.VZ / s * f.R * .8f);
         if (!World.InBounds(x, y, z)) return 0;
         // dressed stone gives up less to it
-        int broken = 0, r = Knows("granite") ? Math.Max(2, f.Smash - 1) : f.Smash;
+        int broken = 0, ours = 0, r = Knows("granite") ? Math.Max(2, f.Smash - 1) : f.Smash;
         for (int dy = -r; dy <= r; dy++)
             for (int dz = -r; dz <= r; dz++)
                 for (int dx = -r; dx <= r; dx++)
@@ -320,12 +321,14 @@ public sealed partial class Sim
                     bool built = Mat.IsPlayer[m] || m is Mat.Rubble or Mat.Lumber or Mat.Ruin || Mat.Swings(m) || Mat.IsDecor[m];
                     bool ground = Mat.IsEarthy[m] && r2 <= 6;
                     if (!built && !ground) continue;
+                    if (Mat.IsPlayer[m]) ours++;
                     World.Set(px, py, pz, Mat.Air);
                     if (Orders.IsRemove(Orders.At(px, py, pz))) Orders.Clear(px, py, pz);
                     Burning.Remove(WaterPlanner.Pack(px, py, pz));
                     if (Rng.NextDouble() < .12) Fell?.Invoke(px, py, pz, m);
                     broken++;
                 }
+        BattleBroke(ours, f.By);
         // the citadel takes it on its own stone
         float kd = MathF.Sqrt((x - Site.KeepX) * (x - Site.KeepX) + (z - Site.KeepZ) * (z - Site.KeepZ));
         if (kd < Site.KeepR + 6) KeepHp -= 10 * KeepGuard * KeepHurt;
@@ -348,6 +351,39 @@ public sealed partial class Sim
             Say("Камнемёт бьёт по стенам. Сожгите его огненными стрелами или разбейте вылазкой.", 3, x, z);
         }
         return broken;
+    }
+
+    /// <summary>
+    /// The raid's raiders all fallen, gone or taken but for its engines and those keeping them: the engines are given up.
+    /// The keepers set them alight and go, and they burn down where they stand, out of the raid, so that a raid always
+    /// ends though nobody of ours goes out to the catapult beyond bowshot. True when they were.
+    /// </summary>
+    internal bool GiveUpEngines()
+    {
+        bool engines = false;
+        foreach (var u in Units)
+        {
+            if (!InRaid(u)) continue;
+            if (!Kinds.IsEngine(u.T)) return false;
+            engines = true;
+        }
+        if (!engines) return false;
+        Unit first = null;
+        foreach (var u in Units)
+        {
+            if (u.Dead || u.Team != Team.Horde) continue;
+            if (Kinds.IsEngine(u.T) && !u.Abandoned && !u.Inside)
+            {
+                u.Abandoned = true;
+                u.Burn = Math.Max(u.Burn, 40); u.BurnHeat = Math.Max(u.BurnHeat, 1.5f);
+                Ignite((int)u.X, (int)MathF.Floor(u.Y) - 1, (int)u.Z);
+                first ??= u;
+            }
+            // its keepers go with the rest
+            if (u.Escort != null) { u.Escort = null; u.Guard = false; u.Home = -1; u.Routed = true; }
+        }
+        if (first != null) Say("Орда бросила свои машины и подожгла их.", 2, first);
+        return true;
     }
 
     /// <summary>A raider keeping by an engine: by it, and at whoever of ours comes near it; with the engine gone, a raider like any.</summary>

@@ -74,6 +74,10 @@ public sealed partial class Sim
         u.MaxHp *= k;
         u.Hp = u.MaxHp;
         u.Leader = true;
+        // he leads as a warlord does, with his cry and his blow, but as hard to kill as a champion is (Sim.Warlords.cs)
+        var lord = u.Lord ?? new Warlord { Id = _nextLord++, Name = title, Of = title, Kind = u.T, Level = chapter == 4 ? Warlord.MaxLevel : chapter + 1, Champion = true };
+        if (u.Band != null) { u.Band.Lord = lord; u.Band.LordsOwn = true; }
+        Ennoble(u, lord);
     }
 
     /// <summary>A champion's blow: a third (Garm's half) again as hard.</summary>
