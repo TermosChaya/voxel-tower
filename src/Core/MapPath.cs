@@ -48,7 +48,8 @@ public static class MapPath
             if (!m.Kind.Mounted) riders = false;
             if (Kinds.IsEngine(m.Kind) || m.Kind == Kinds.Giant || m.Kind == Kinds.HillGiant || m.Kind == Kinds.TameTroll) slow = true;
         }
-        return slow ? 1.25 : riders ? .75 : 1;
+        // and a hero at its head with Поход quicker
+        return (slow ? 1.25 : riders ? .75 : 1) * Heroes.March(p.Party.Commander?.Hero);
     }
 
     /// <summary>Seconds of the map's time the party takes from one cell into the next.</summary>

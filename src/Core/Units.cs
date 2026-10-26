@@ -777,11 +777,15 @@ public sealed class Unit
     public Unit Ward, Follows;
     public bool SentBack;
     public double FollowUntil, WallUntil, RallyUntil;
+    /// <summary>A commander of ours as a hero: his name, level and skills (Sim.Heroes.cs); null for the rest.</summary>
+    public Hero Hero;
+    /// <summary>Its commander fell: it strikes weaker till then.</summary>
+    public double GriefUntil;
 
     public float Alive => Dead ? 0 : Hp / MaxHp;
 
-    /// <summary>"Орк-рубака", or "Вожак — орк-рубака" for the one who leads a warband.</summary>
-    public string Name => Champion == 4 ? $"{Title}, вождь орды" : Champion > 0 ? $"{Title}, вожак главы {Sim.Roman(Champion)} ({T.Name.ToLowerInvariant()})"
+    /// <summary>"Орк-рубака", or "Вожак — орк-рубака" for the one who leads a warband, "Командир Ратибор Седой" for a hero of ours.</summary>
+    public string Name => Hero != null && T == Kinds.Captain ? $"Командир {Hero.Name}" : Champion == 4 ? $"{Title}, вождь орды" : Champion > 0 ? $"{Title}, вожак главы {Sim.Roman(Champion)} ({T.Name.ToLowerInvariant()})"
         : Lord != null ? $"{Lord.Name}, {Lord.Title}" : Leader ? "Вожак — " + T.Name.ToLowerInvariant() : T.Name;
     /// <summary>A chapter's champion (1–3) or the horde's chief (4), and his name; 0 for the rest.</summary>
     public byte Champion;

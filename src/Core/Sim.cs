@@ -148,6 +148,8 @@ public sealed partial class Sim
         // from the fifth wave some of the sappers come with a charge of powder on their backs, half of them from the ninth
         // sappers with a charge of powder in the stronger raids, more of them in the strongest
         u.Charge = t == Kinds.Sapper && Raids.Threat >= 5 && Hash.H3(u.Id, 23, 5) < (Raids.Threat >= 9 ? .5f : .3f);
+        // a commander of ours is a hero, with a name of his own
+        if (t == Kinds.Captain) u.Hero = NewHero(u);
         Units.Add(u);
         BattleCame(u);
         return u;

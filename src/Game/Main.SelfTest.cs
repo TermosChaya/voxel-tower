@@ -1003,6 +1003,7 @@ public partial class Main
         await SelfTestRowHouses(Check);
         await SelfTestHex(Check);
         await SelfTestCaptain(Check);
+        await SelfTestHeroes(Check);
         await SelfTestWar(Check);
         await SelfTestWarlords(Check);
         await SelfTestMetal(Check);

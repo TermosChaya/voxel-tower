@@ -229,7 +229,8 @@ public sealed partial class Sim
         {
             u.Why = "в цитадели: отлёживается";
             if (!MendedEnough(u)) { if (Disabled(u)) u.Why = "в цитадели: срастается кость"; return; }
-            u.Mending = false;
+            // mended: sent back by its commander no longer, or it would go straight back in
+            u.Mending = false; u.SentBack = false;
             Leave(u);
             if (u.Post >= 0) GoTo(u, u.Post);
             return;

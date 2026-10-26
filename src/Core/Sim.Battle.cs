@@ -61,6 +61,7 @@ public sealed partial class Sim
     internal void BattleBegins(int number, float threat, List<Warband> bands)
     {
         _battle = new BattleReport { Number = number, Began = Time, Threat = threat, Keep0 = KeepHp, Edge = bands.Count > 0 ? bands[0].Edge : -1 };
+        _heroFought.Clear();
     }
 
     /// <summary>One of the horde came into the valley in the raid.</summary>
@@ -126,6 +127,7 @@ public sealed partial class Sim
         r.KeepLost = Math.Clamp((r.Keep0 - KeepHp) / Math.Max(1, KeepMax), 0, 1);
         LastBattle = r;
         Battles.Add(r);
+        HeroesHeld(r);
         BattleClosed?.Invoke(r);
     }
 

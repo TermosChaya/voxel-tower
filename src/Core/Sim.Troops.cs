@@ -57,11 +57,11 @@ public sealed partial class Sim
     public float ReachOf(Unit a) => a.T.Reach * (a.Team == Team.Player && Polearm(a.T) && Knows("longshafts") ? 1.25f : 1);
 
     /// <summary>How far a shot of ours carries by day: a bow by the lore of bows, a crossbow, a sling or a pot by its own.</summary>
-    public float ShotRange(Unit a) => Bow(a.T) ? BowRange(a) : a.T.Range;
+    public float ShotRange(Unit a) => (Bow(a.T) ? BowRange(a) : a.T.Range) * HeroBow(a);
     /// <summary>How much of its reach and aim the dark takes, as for a bow; only a bow's eye is the owl's.</summary>
     float ShotDark(Unit a) => Bow(a.T) ? DarkCost(a) : 1;
     /// <summary>How long between shots, as a share: only bows loose faster for the volleys.</summary>
-    float ShotPace(Unit a) => Bow(a.T) ? VolleyPace(a) : 1;
+    float ShotPace(Unit a) => (Bow(a.T) ? VolleyPace(a) : 1) * HeroPace(a);
     /// <summary>How much harder our shafts strike with faceted heads: arrows and bolts, not stones.</summary>
     float ShotHarm(Unit a) => a.Team == Team.Player && a.T.Tool is "bow" or "crossbow" ? ArrowHarm : 1;
 

@@ -12,6 +12,9 @@ public sealed class QuickResult
     public float Attack, Defence;
     public readonly List<UnitType> AttackerFell = new(), DefenderFell = new();
     public bool AttackerLordFell, DefenderLordFell;
+    /// <summary>Heroes of ours who fell in it (their names), and those who rose a level by it.</summary>
+    public readonly List<string> HeroesFell = new();
+    public readonly List<Hero> HeroesRose = new();
 }
 
 /// <summary>
@@ -20,8 +23,9 @@ public sealed class QuickResult
 /// counting by the health they have left; bows and the casters' spells count the more, engines not at all in the field
 /// — the horde's batter the defenders' walls down instead. The defenders' walls add to their health and to their
 /// shooters, the mountains to the defenders, the marsh takes from the attackers; a warlord fights as his level makes
-/// him and steadies his side, a commander of ours steadies ours. Twice the strength wins 9 times in 10, the same
-/// strength half the time. The winners lose the fewer the stronger they were; of the beaten most fall and the rest run.
+/// him and steadies his side, a commander of ours steadies ours, the more for his level and his fighting skills (Heroes.cs).
+/// Twice the strength wins 9 times in 10, the same strength half the time. The winners lose the fewer the stronger
+/// they were; of the beaten most fall and the rest run. A hero of ours gains by it as a raid beaten off gains him.
 /// </summary>
 public static class QuickBattle
 {
@@ -54,19 +58,20 @@ public static class QuickBattle
     public static float Strength(IReadOnlyList<Traveller> side, Warlord lord, float walls = 0, int rams = 0)
     {
         double hp = 0, dps = 0;
-        bool commander = false;
-        float wall = Math.Max(0, walls * (1 - .15f * rams));
+        bool commander = false, archers = false;
+        float wall = Math.Max(0, walls * (1 - .15f * rams)), hero = 0;
+        foreach (var m in side) archers |= m.Kind.Ranged && m.Kind != Kinds.Captain;
         foreach (var m in side)
         {
             var (h, d) = Worth(m.Kind, m.Hp);
             hp += h * (1 + wall);
             dps += m.Kind.Ranged ? d * (1 + wall) : d;
-            if (m.Kind == Kinds.Captain && m.Commands) commander = true;
+            if (m.Kind == Kinds.Captain && m.Commands) { commander = true; hero = Math.Max(hero, Heroes.Steady(m.Hero, archers)); }
             if (Kinds.IsOurEngine(m.Kind)) wall += .1f;
         }
         if (lord != null) { var (h, d) = LordWorth(lord); hp += h; dps += d; }
         double s = Math.Sqrt(hp * dps);
-        if (commander) s *= 1 + CommanderSteady;
+        if (commander) s *= 1 + CommanderSteady + hero;
         if (lord != null) s *= 1 + LordSteady * lord.Level;
         return (float)s;
     }
@@ -118,12 +123,15 @@ public static class QuickBattle
         double r = Math.Min(.95, win > 0 ? lose / win : .95), keep = Math.Sqrt(1 - r * r);
         var (winners, losers) = res.AttackerWon ? (att, def) : (def, att);
         var (winFell, loseFell) = res.AttackerWon ? (res.AttackerFell, res.DefenderFell) : (res.DefenderFell, res.AttackerFell);
-        Fall(winners, 1 - keep, roll, winFell, false);
+        Fall(winners, 1 - keep, roll, winFell, false, res.HeroesFell);
         Hurt(winners, keep, roll);
         // of the beaten most fall, the rest run; defenders shut in behind their walls the more
         double killed = .55 + .35 * roll() + (!res.AttackerWon ? 0 : walls > 0 ? .15 : 0);
-        Fall(losers, Math.Min(1, killed), roll, loseFell, true);
+        Fall(losers, Math.Min(1, killed), roll, loseFell, true, res.HeroesFell);
         Hurt(losers, .3, roll);
+        // the heroes who came through it: the winners' by what the beaten lost, the beaten's a little
+        Glory(winners, Heroes.WonXp + Heroes.FoeXp * loseFell.Count, res.HeroesRose);
+        Glory(losers, 2 * winFell.Count, res.HeroesRose);
         var (winLord, loseLord) = res.AttackerWon ? (attLord, defLord) : (defLord, attLord);
         if (loseLord != null)
         {
@@ -142,7 +150,7 @@ public static class QuickBattle
     }
 
     /// <summary>So many of a side fall, the hurt and the weak first, with luck in it; the beaten lose their engines.</summary>
-    static void Fall(List<Traveller> side, double share, Func<double> roll, List<UnitType> fell, bool beaten)
+    static void Fall(List<Traveller> side, double share, Func<double> roll, List<UnitType> fell, bool beaten, List<string> heroes)
     {
         if (beaten)
             for (int i = side.Count - 1; i >= 0; i--)
@@ -152,7 +160,17 @@ public static class QuickBattle
         var order = new List<(double key, Traveller m)>();
         foreach (var m in side) order.Add((m.Hp / Math.Max(1, m.MaxHp) + roll() * .6 + (m.Kind == Kinds.Captain ? .5 : 0), m));
         order.Sort((x, y) => x.key.CompareTo(y.key));
-        for (int i = 0; i < Math.Min(n, order.Count); i++) { fell.Add(order[i].m.Kind); side.Remove(order[i].m); }
+        for (int i = 0; i < Math.Min(n, order.Count); i++)
+        {
+            fell.Add(order[i].m.Kind); side.Remove(order[i].m);
+            if (order[i].m.Hero is { } h) heroes.Add(h.Name);
+        }
+    }
+
+    /// <summary>Experience for the heroes of a side come through a battle; those who rose a level by it.</summary>
+    static void Glory(List<Traveller> side, int xp, List<Hero> rose)
+    {
+        foreach (var m in side) if (m.Hero != null && Heroes.Gain(m.Hero, xp) > 0) rose.Add(m.Hero);
     }
 
     /// <summary>The living of a side hurt: each keeping between so much of his health and all of it, by luck.</summary>

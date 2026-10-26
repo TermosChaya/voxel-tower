@@ -60,6 +60,12 @@ public partial class Advisor : VBoxContainer
         var sim = _m.Sim;
         var list = new List<Advice>();
         if (sim.Over) return list;
+        // a commander risen a level with no skill chosen him
+        var (risen, risenAway) = _m.Hud.RisenHero();
+        if ((risen?.Hero ?? risenAway?.Party.Commander?.Hero) is { } rh)
+            list.Add(new Advice("hero", Icons.Of("black-knight-helm"), $"Командир {rh.Name}: новый уровень, выберите умение",
+                Bindings.Fill("Новый уровень командира\nКаждый уровень даёт одно умение на выбор. Щелчок откроет его карточку. Её открывает и {Rmb} по его лицу в ряду наверху."),
+                () => _m.Hud.OpenRisenHero()));
         // in a campaign, the map of valleys till it has been opened once
         if (Main.Atlas != null && !Settings.Met("board") && _m.Hud.Board != null)
             list.Add(new Advice("board", Icons.Of("tied-scroll"), Bindings.Fill("Карта долин: {Board}. По ней отряды ходят в другие долины"),

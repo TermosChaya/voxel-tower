@@ -443,6 +443,8 @@ public partial class BuildTools : Node3D
         var code = k.PhysicalKeycode;
         // with the menu open only Esc means anything; with the map of valleys open, Esc shuts it
         if (_m.Hud.MenuOpen && code != global::Godot.Key.Escape) return false;
+        // a hero's card shut by Esc first
+        if (_m.Hud.HeroPane?.IsOpen == true && !_m.Hud.MenuOpen && code == global::Godot.Key.Escape) { _m.Hud.HeroPane.Close(); return true; }
         if (_m.Hud.Board?.IsOpen == true && !_m.Hud.MenuOpen)
         {
             if (code != global::Godot.Key.Escape) return false;

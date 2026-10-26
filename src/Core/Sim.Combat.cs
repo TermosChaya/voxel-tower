@@ -180,7 +180,7 @@ public sealed partial class Sim
     public void Hurt(Unit b, Unit by, float dmg, string cause = null)
     {
         if (b.Dead) return;
-        dmg *= MailGuard(b) * Walled(b, Time);
+        dmg *= MailGuard(b) * Walled(b, Time) * Steadied(b);
         Hurting?.Invoke(b, dmg, cause ?? by?.T.Name ?? "");
         b.Hp -= dmg;
         b.LastHurt = Time;
@@ -204,6 +204,7 @@ public sealed partial class Sim
         if (u.Team == Team.Horde && !Kinds.IsEngine(u.T)) BandLoss(u, by);
         else if (u.Team == Team.Player) BandBlood(by);
         if (u.Lord != null) LordLost(u, LordFate.Fell);
+        HeroDeed(u, by);
         KillDeed(u);
         // the reaping: a raider the spells killed gives intervention back
         if (u.Team == Team.Horde && cause != null && SpellCauses.Contains(cause) && Knows("reap")) GainFavour(2);
@@ -230,7 +231,8 @@ public sealed partial class Sim
                 Say($"Добыт {u.T.Name.ToLowerInvariant()}: +{u.T.Bounty} золота.", 1, u);
             }
         }
-        else if (cause != GivenToPowers && u.T != Kinds.Risen) Say($"{u.T.Name} пал.", 3, u);
+        // (a hero's fall is told with his name and what went with him: Sim.Heroes.cs)
+        else if (cause != GivenToPowers && u.T != Kinds.Risen && u.Hero == null) Say($"{u.T.Name} пал.", 3, u);
     }
 
     /// <summary>Beasts taken by the pawns since the start.</summary>

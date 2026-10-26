@@ -274,6 +274,7 @@ public sealed partial class Campaign
     {
         var r = QuickBattle.Fight(p.Party.Members, p.Lord, them, theirs, walls, cell.Kind, Roll);
         if (r.AttackerLordFell) p.Lord = null;
+        if (ours != null) HeroNews(r, cell, ours);
         if (ours != null && them.Count == 0) Parties.Remove(ours);
         string they = ours != null ? "наших" : "зверей";
         if (r.AttackerWon)
@@ -298,6 +299,7 @@ public sealed partial class Campaign
         int ours = keep.Count;
         var r = QuickBattle.Fight(p.Party.Members, p.Lord, keep, null, cell.Sum.Walls, cell.Kind, Roll);
         if (r.AttackerLordFell) p.Lord = null;
+        HeroNews(r, cell, null);
         if (!r.AttackerWon)
         {
             Tell(NewsKind.Fought, $"Орда напала на {Names(cell).acc} и отбита. Пало налётчиков {r.AttackerFell.Count}, наших {r.DefenderFell.Count}.", cell, p);
@@ -399,6 +401,7 @@ public sealed partial class Campaign
             if (h.Owner != Owner.Horde || h.Q != cell.Q || h.R != cell.R) continue;
             last = QuickBattle.Fight(ours.Party.Members, null, h.Party.Members, h.Lord, 0, cell.Kind, Roll);
             if (last.DefenderLordFell) h.Lord = null;
+            HeroNews(last, cell, ours);
             if (!last.AttackerWon)
             {
                 Tell(NewsKind.Fought, $"Бой {Names(cell).prep}: отряд разбит. Пало наших {last.AttackerFell.Count}, налётчиков {last.DefenderFell.Count}.", cell, ours);
@@ -416,6 +419,7 @@ public sealed partial class Campaign
             var holders = cell.Sum.Holders();
             last = holders.Count == 0 ? new QuickResult { AttackerWon = true, Odds = 1 }
                 : QuickBattle.Fight(ours.Party.Members, null, holders, null, cell.Owner == Owner.Horde ? cell.Sum.Walls : 0, cell.Kind, Roll);
+            HeroNews(last, cell, ours);
             cell.Sum.Keep.RemoveAll(m => Sim.Holds(m.Kind) && !holders.Contains(m));
             if (!last.AttackerWon)
             {
@@ -425,7 +429,7 @@ public sealed partial class Campaign
             }
             Tell(NewsKind.Fought, $"Бой {Names(cell).prep}: отряд разбил {keepers}. Пало врагов {last.DefenderFell.Count}, наших {last.AttackerFell.Count}.", cell, ours);
             cell.Sum.Keep.Clear();
-            if (cell.Owner == Owner.Horde) Retake(cell, lair, ours);
+            if (cell.Owner == Owner.Horde) { Retake(cell, lair, ours); PartyGlory(ours, cell); }
         }
         if (ours.Party.Members.Count == 0) Parties.Remove(ours);
         return last;
@@ -474,7 +478,7 @@ public sealed partial class Campaign
             int hands = 0;
             foreach (var m in p.Party.Members) if (m.Kind == Kinds.Worker) hands++;
             if (hands == 0) continue;
-            c.Sum.Raised += (float)(hands / OutpostWork * dt / DayClock.Cycle);
+            c.Sum.Raised += (float)(hands * OutpostHands(p) / OutpostWork * dt / DayClock.Cycle);
             if (c.Sum.Raised < 1) continue;
             c.Sum.Raised = 1;
             c.Owner = Owner.Ours;
@@ -482,6 +486,7 @@ public sealed partial class Campaign
                 if (p.Party.Members[i].Kind == Kinds.Worker) { c.Sum.Keep.Add(p.Party.Members[i]); p.Party.Members.RemoveAt(i); }
             if (p.Party.Members.Count == 0) Parties.Remove(p);
             Tell(NewsKind.Taken, $"Застава {Names(c).prep} готова: долина наша.", c, p);
+            PartyGlory(p, c);
         }
     }
 
@@ -502,8 +507,13 @@ public sealed partial class Campaign
             }
             if (c.Holding == Holding.HordeTown && c.Owner == Owner.Horde) foreach (var m in c.Sum.Keep) Heal(m, LairMend);
         }
+        // our parties: standing in a valley of ours as it mends (its hero's Лекарь the more), elsewhere only by him
         foreach (var p in Parties)
-            if (p.Owner == Owner.Ours && !p.Moving && At(p.Q, p.R) is { Owner: Owner.Ours }) foreach (var m in p.Party.Members) Heal(m, Mend);
+        {
+            if (p.Owner != Owner.Ours) continue;
+            float share = PartyMend(p, !p.Moving && At(p.Q, p.R) is { Owner: Owner.Ours });
+            if (share > 0) foreach (var m in p.Party.Members) Heal(m, share);
+        }
         HordeDawn();
     }
 

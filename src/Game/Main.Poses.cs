@@ -92,6 +92,7 @@ public partial class Main
         if (_pose == "holding") { HoldingPose(); return; }
         if (_pose == "arrive") { ArrivePose(); return; }
         if (_pose == "nature") { NaturePose(); return; }
+        if (_pose == "heroes") { HeroesPose(); return; }
         if (_pose == "sigils")
         {
             var layer = new CanvasLayer { Layer = 100 };

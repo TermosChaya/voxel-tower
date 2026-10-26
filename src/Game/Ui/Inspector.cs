@@ -660,6 +660,12 @@ public partial class Inspector : Control
             commands = new Glyph(Icons.Helm, "Командует сам\nКомандир строит бойцов в 40 м у стены, к которой идёт орда, ставит стрелков на стену, отводит раненых, " +
                 "после боя зовёт рабочих чинить. {Rmb} по земле — место, которое он держит. Ещё раз — ждёт ваших приказов.", () => _m.Command.CommandsSelected(), toggle: true);
             row.AddChild(commands);
+            if (chosen.Count == 1 && chosen[0].Hero is { } hero)
+            {
+                var one = chosen[0];
+                row.AddChild(new Glyph(Icons.Of("black-knight-helm"), $"Карточка героя · уровень {hero.Level}\nОпыт, умения, отряд. На новом уровне здесь выбирают умение. То же — {{Rmb}} по его лицу в ряду наверху.",
+                    () => _m.Hud.HeroPane.Show(one)));
+            }
         }
         if (archers)
         {

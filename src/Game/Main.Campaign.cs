@@ -218,6 +218,8 @@ public partial class Main
                 _clearFor = 0;
                 Atlas.Summarise(here, Sim);
                 Tell();
+                // the garrison beaten: to the credit of the heroes who took the valley
+                if (here.Owner != Holder.Horde) Sim.GloryAll(Heroes.TakeXp, "долина взята");
                 if (here.Owner != Holder.Horde)
                     Hud.Log(here.Owner == Holder.Ours ? "Первая долина снова наша." : "Гарнизон разбит. Долина ничья: поставьте заставу, {Board}, «Поставить заставу».", Hud.Kind.Ok);
                 Hud.Board?.Refresh();
@@ -230,6 +232,7 @@ public partial class Main
             if (!horde && !beasts && Sim.OutpostStands())
             {
                 Atlas.OutpostStands(here);
+                Sim.GloryAll(Heroes.TakeXp, "застава встала");
                 Tell();
                 Hud.Board?.Refresh();
             }

@@ -59,7 +59,7 @@ public partial class Main
     static Party PartyOf(params UnitType[] kinds)
     {
         var party = new Party();
-        foreach (var k in kinds) party.Members.Add(new Traveller { Kind = k, Look = 7 + party.Members.Count * 11, Hp = k.Hp, MaxHp = k.Hp });
+        foreach (var k in kinds) party.Members.Add(new Traveller { Kind = k, Look = 7 + party.Members.Count * 11, Hp = k.Hp, MaxHp = k.Hp, Hero = k == Kinds.Captain ? Heroes.Fresh(5 + party.Members.Count * 31) : null });
         return party;
     }
 
@@ -86,7 +86,8 @@ public partial class Main
     /// the first valley; «lairfight» ours fighting in the horde's town (--at= seconds, 26 by itself); «places» the first
     /// valley's places with three of its own out on the map and three guests of the ore valley come in, its town hall
     /// standing (the town tab and the citadel's muster open); «edge» a commander gone into at the side toward the ore
-    /// valley, his men about him, the offer to go out to the map in his eyes.
+    /// valley, his men about him, the offer to go out to the map in his eyes; «heroboard» a party on its way, its hero risen
+    /// a level with a skill to choose, his card opened from the board.
     /// </summary>
     void CampaignPose()
     {
@@ -116,6 +117,19 @@ public partial class Main
                 Atlas.Advance(Atlas.WalkLeft(p) + 1);
                 Atlas.Clock = Sim.Clock.Now;
                 CampaignTick(0);
+                break;
+            }
+            case "heroboard":
+            {
+                // a party on its way, its hero risen to level 3 with a skill to choose; chosen twice on the board, his card
+                var p = Walk(ore, .45);
+                var h = p.Party.Commander.Hero;
+                Heroes.Gain(h, Heroes.XpFor(2));
+                Heroes.Choose(h, h.Offer[0]);
+                Heroes.Gain(h, Heroes.XpFor(3) + 40 - h.Xp);
+                Hud.Board?.Open();
+                Hud.Board?.ChooseParty(p);
+                Hud.Board?.ChooseParty(p);
                 break;
             }
             case "taken":

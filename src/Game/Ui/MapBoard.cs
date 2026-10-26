@@ -187,7 +187,15 @@ public partial class MapBoard : Control
 
     public void Choose(MapCell c) { Chosen = c; Refresh(); }
 
-    public void ChooseParty(MapParty p) { Party = p; if (p != null) Chosen = p.Moving ? p.Path[^1] : C.CellOf(p); Refresh(); }
+    /// <summary>A party of ours chosen; chosen again, its hero's card opened.</summary>
+    public void ChooseParty(MapParty p)
+    {
+        bool again = p != null && p == Party;
+        Party = p;
+        if (p != null) Chosen = p.Moving ? p.Path[^1] : C.CellOf(p);
+        Refresh();
+        if (again && p.Party.Commander?.Hero != null) _m.Hud.HeroPane.Show(p);
+    }
 
     // ------------------------------------------------------------ what can be done
 
@@ -307,7 +315,9 @@ public partial class MapBoard : Control
         {
             if (p.Owner != Holder.Ours) continue;
             shown++;
-            var b = Small($"{Who(p)}\n{Status(p)}", "Выбрать отряд на карте.", () => ChooseParty(p));
+            var hero = p.Party.Commander?.Hero;
+            string rank = hero == null ? "" : $" · ур. {hero.Level}{(hero.Pending ? " · новый уровень" : "")}";
+            var b = Small($"{Who(p)}{rank}\n{Status(p)}", "Выбрать отряд на карте. Ещё раз — карточка его командира.", () => ChooseParty(p));
             b.Alignment = HorizontalAlignment.Left;
             b.CustomMinimumSize = new Vector2(Side - 40, 52);
             if (p.Party.Commander is { } cm) { b.Icon = Portraits.Of(cm.Kind, cm.Look, 40); b.ExpandIcon = false; }
@@ -375,6 +385,12 @@ public partial class MapBoard : Control
         _about.AddChild(acts);
         int chosen = 0; bool captain = false;
         foreach (var u in _m.Selected) if (!u.Dead && u.Team == Team.Player) { chosen++; captain |= u.T == Kinds.Captain; }
+        // the chosen party's hero: his card
+        if (Party != null && Party.Owner == Holder.Ours && C.Parties.Contains(Party) && Party.Party.Commander?.Hero is { } hero)
+        {
+            var pp = Party;
+            acts.AddChild(Big($"Командир {hero.Name} · ур. {hero.Level}{(hero.Pending ? " · выберите умение" : "")}", "Карточка героя: опыт, умения, выбор умения на новом уровне.", () => _m.Hud.HeroPane.Show(pp)));
+        }
         if (cell != C.Here)
         {
             var send = Big($"Отправить выбранных сюда ({chosen})", "Выбранные в долине уйдут за её край в сторону этой долины и пойдут по карте. В отряде нужен командир.", () => SendHere());
@@ -594,7 +610,12 @@ public partial class MapBoard : Control
                 var box = new Rect2(at - new Vector2(t / 2, t / 2), new Vector2(t, t));
                 DrawRect(box.Grow(3), p.Owner == Holder.Ours ? (p == B.Party ? Ornament.EmberGlow : Ours) : Theirs);
                 DrawRect(box, Ornament.Iron);
-                if (p.Owner == Holder.Ours && p.Party.Commander is { } cm) DrawTextureRect(Portraits.Of(cm.Kind, cm.Look, 64), box, false);
+                if (p.Owner == Holder.Ours && p.Party.Commander is { } cm)
+                {
+                    DrawTextureRect(Portraits.Of(cm.Kind, cm.Look, 64), box, false);
+                    // a skill to choose: a star over the face
+                    if (cm.Hero is { Pending: true }) Icons.Glyph(this, new Rect2(box.Position + new Vector2(t * .55f, -t * .3f), new Vector2(t * .55f, t * .55f)), Ornament.EmberGlow, "black-knight-helm");
+                }
                 else Icons.Glyph(this, box.Grow(-3), Theirs, "goblin-head");
                 Ornament.Lettering(this, Ornament.SerifBold, at + new Vector2(t / 2 + 3, t / 2), p.Party.Members.Count.ToString(), fs - 1, Ornament.Parchment);
             }

@@ -480,6 +480,20 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `WallUntil` (`Walled` в `Hurt`), `Volley` (стрелы как у `ShotOf`), рог (`Pain`, `Mending`, `RallyUntil` →
   `Heartened`). `Aimed`, `LookOrder`, `Heeding` — для первого лица. `Unit.Commands/Goal/NextOrders/Ready/Ward/Follows/
   SentBack/FollowUntil/WallUntil/RallyUntil`; сохраняются в `WriteCaptains`/`ReadCaptains`.
+- `Heroes.cs` — командиры как герои «Героев» без долины: `Hero` (имя, уровень 1–10, опыт, ступени восьми умений
+  `Skill`, уровни без выбранного умения `Unspent` и предложенные умения `Offer`, убитые им самим), `Heroes` — таблица
+  опыта `XpFor`, имена (`Fresh` — имя и прозвище по числу, мимо занятых), что даёт каждая ступень (константы и `About`
+  для подсказок), `Gain` (опыт → уровни), `MakeOffer` (три умения: ступень известного и новые, по `Seed` и уровню),
+  `Choose`, доля героя в быстром бою `Steady`, шаг по карте `March`, запись `Write`/`Read`.
+- `Sim.Heroes.cs` — герои в долине: `Spawn` даёт каждому командиру героя (`NewHero`), `HeroesHere` — живые командиры
+  долины, собранные раз за шаг (их читают на каждом ударе, выстреле и ударе кирки), `GradeAt` — лучшая ступень умения
+  у героев, чьё слово достаёт до места. Где умения действуют: `Hurt` × `Steadied` (Строй), `ShotRange` × `HeroBow` и
+  `ShotPace` × `HeroPace` (Стрелки), заживление в `TickBleeding` × `Medic` (Лекарь), `Heartened` + `Spoken` и × `Grief`
+  (Слово, Тактика «За мной!», горе), `Volley(…, VolleyHarmOf)` (Тактика), дальность слова и призывов × `WordFar`
+  (Слово), труд в `PawnTick` × `Builders` (Зодчий), `AmbushTick` → `Scout`/`Spotted` (Разведка). Опыт: `HeroDeed` из
+  `Kill` (`KillXp`, вдвое своей рукой, военачальник +120/+40), `HeroesHeld` из `CloseBattle` (кто ставил строй —
+  `_heroFought` из `Front`), `Glory`/`GloryAll` (долина взята, застава встала — из `Main.Campaign`). `ChooseSkill`,
+  `HeroFell` (летопись с умениями, горе бойцам `Unit.GriefUntil`). Герой — `Unit.Hero`, в `WriteCaptains`.
 - `Sim.Possess.cs` — вселение: `Possessed`, намерения игрока `WishX/WishZ` (вектор в вокселях), `WishRun`,
   `LookYaw/LookPitch`, `WishStrike` (ЛКМ держится), `WishLay`, `WishClimb` (±1), `LayMat`; `CanPossess`, `Possess` (снимает
   с работы, цели, обезвреживания; `Why` = «в нём игрок»), `Unpossess(why)` + событие `Unpossessed` (солдату пост — где
@@ -740,6 +754,10 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   сам (здоровье ×(2 + ½ уровня)) и +5 % за уровень. Шанс = 1/(1 + (D/A)^3,17) — вдвое сильнее побеждает 9 из 10.
   Победитель теряет 1 − √(1 − (слабее/сильнее)²), побеждённый 55–90 % (за стенами +15 %), раненые сначала; машины
   побеждённого потеряны; военачальник побеждённых гибнет 1 раз из 3; `Fight`, `Chance`, `Strength`, `Odds`.
+- `Campaign.Heroes.cs` — герои на карте: вести быстрого боя о павших и поднявшихся героях (`HeroNews`, `QuickResult.HeroesFell`
+  и `HeroesRose`; опыт даёт сам `QuickBattle.Fight`), опыт за взятую долину и поднятую заставу (`PartyGlory`),
+  `Scouted` (Разведка, из `Seen`), заживление отряда `PartyMend` (Лекарь) и `OutpostHands` (Зодчий). Герой отряда —
+  `Traveller.Hero`, в файле кампании (версия 5).
 - `ValleySummary.cs` — что карта знает о долине без неё (`MapCell.Sum`): `Keep` (защитники: наши, гарнизон орды или
   звери ничьей клетки), `Walls` (кладка и брёвна над голой землёй в 40 м от твердыни: 400 м³ — 1, до 1,5),
   `TownGold` (`Sim.TownIncome`), `Raised` (застава, которую поднимает отряд: 3 человеко-дня), добытое за кадром
@@ -970,6 +988,13 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   сюда», «Вести отряд сюда», «Войти», «Бой сразу», «Поставить заставу»), «Орда идёт», «Отряды», «Долины»; карточка пришедшего
   отряда под балкой; `FirstLook` при первом открытии (`Settings.Meet("board")`). Esc и F2 закрывают; при открытой доске
   кисти не берутся.
+- `Ui/HeroCard.cs` — карточка командира как героя (`Hud.HeroPane`): лицо, имя, уровень, полоса опыта, «Сразил сам»,
+  восемь умений знаками со ступенями и подсказкой «сейчас/дальше», на новом уровне три кнопки выбора (`Take`), кто под
+  словом или его отряд на карте. Открывают: {Rmb} по лицу командира в `ColonistBar` (левой — если ждёт выбор; на лице
+  число уровня и звезда), знак «Карточка героя» в карточке внизу (`Inspector`), второй щелчок по отряду на доске и
+  кнопка над долиной (`MapBoard.ChooseParty`), медальон со шлемом (`Hud.RisenHero`/`OpenRisenHero`, виден, пока
+  кто-то ждёт выбора, кроме открытой доски) и совет `Advisor` «новый уровень, выберите умение». Esc закрывает
+  (`BuildTools.Key`).
 - `Saves.cs` — ячейки в `user://saves` (`slot1..3`, `quick`, `auto`, `selftest`): `Write` (сим + JSON экрана: камера
   `CameraRig.Aim`, скорость, отряды, летопись `Hud.Lines`; через `.part` и переименование), `Peek` (заголовок для
   списка), `Read` (ставит `Main.PendingLoad` и перезапускает сцену), `Apply` (экран после загрузки). `Main._Ready`

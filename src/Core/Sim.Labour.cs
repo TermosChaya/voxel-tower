@@ -207,7 +207,7 @@ public sealed partial class Sim
         }
         u.State = UnitState.Work;
         // mourning one of their own given to the old powers, they work a quarter slower
-        u.Effort += (float)(Labour.WorkPerSecond * u.T.Work * u.Pace * dt) * (Time < MournUntil ? .75f : 1) * Hands(u);
+        u.Effort += (float)(Labour.WorkPerSecond * u.T.Work * u.Pace * dt) * (Time < MournUntil ? .75f : 1) * Hands(u) * Builders(u);
         // the tool comes down in blows, one every so long by the body (a heavy one slower): at each it does as much as
         // the effort since the last affords — a stone may take two or three blows to come away, loose earth comes a few
         // spadefuls to the blow — and between them the arm draws back to come down on the very voxel it works next

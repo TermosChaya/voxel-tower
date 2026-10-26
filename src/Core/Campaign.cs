@@ -42,12 +42,14 @@ public sealed class Traveller
     public string Title;
     /// <summary>The valley whose places he holds (its cell's key, <see cref="Campaign.KeyOf"/>); -1 for the valley he walked out of.</summary>
     public int Billet = -1;
+    /// <summary>A commander's hero: his name, level and skills (Heroes.cs).</summary>
+    public Hero Hero;
 
     /// <summary>A pawn of the valley taken off as he walks out of it; one of the valley's own holds the places of the valley <paramref name="here"/>.</summary>
     public static Traveller Of(Unit u, int here = -1) => new()
     {
         Kind = u.T, Look = u.Look, Hp = u.Hp, MaxHp = u.MaxHp, Wounds = u.Wounds, Priority = (byte[])u.Priority.Clone(),
-        Militia = u.Militia, Commands = u.Commands, Title = u.Title, Billet = u.Billet >= 0 ? u.Billet : here,
+        Militia = u.Militia, Commands = u.Commands, Title = u.Title, Billet = u.Billet >= 0 ? u.Billet : here, Hero = u.Hero,
     };
 
     /// <summary>He as he was, onto one come into a valley: a guest there unless it is the valley whose places he holds (<paramref name="here"/>).</summary>
@@ -57,6 +59,7 @@ public sealed class Traveller
         if (Priority != null) Array.Copy(Priority, u.Priority, Math.Min(Priority.Length, u.Priority.Length));
         u.Militia = Militia; u.Commands = Commands; u.Title = Title;
         u.Billet = Billet < 0 || Billet == here ? -1 : Billet;
+        if (Hero != null) u.Hero = Hero;
     }
 
     internal void Write(BinaryWriter w)
@@ -64,6 +67,7 @@ public sealed class Traveller
         w.Write(Kind.Key); w.Write(Look); w.Write(Hp); w.Write(MaxHp);
         w.Write((byte)(Priority?.Length ?? 0)); if (Priority != null) w.Write(Priority);
         w.Write(Militia); w.Write(Commands); w.Write(Title ?? ""); w.Write(Billet);
+        Heroes.Write(w, Hero);
         Sim.WriteBody(w, Wounds);
     }
 
@@ -73,6 +77,7 @@ public sealed class Traveller
         var t = new Traveller { Kind = kind, Look = r.ReadInt32(), Hp = r.ReadSingle(), MaxHp = r.ReadSingle() };
         t.Priority = r.ReadBytes(r.ReadByte());
         t.Militia = r.ReadBoolean(); t.Commands = r.ReadBoolean(); t.Title = r.ReadString(); t.Billet = r.ReadInt32();
+        t.Hero = Heroes.Read(r);
         if (t.Title.Length == 0) t.Title = null;
         t.Wounds = Sim.ReadBody(r, kind, t.Look);
         return kind == null ? null : t;
@@ -145,7 +150,7 @@ public sealed partial class MapParty
 /// </summary>
 public sealed partial class Campaign
 {
-    public const int Version = 3;
+    public const int Version = 5;
     public const string FileName = "campaign.dat";
     static readonly byte[] Magic = { (byte)'V', (byte)'T', (byte)'C', (byte)'M' };
 

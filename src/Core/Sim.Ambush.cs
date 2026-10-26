@@ -112,6 +112,8 @@ public sealed partial class Sim
                     if (b.Members.TrueForAll(o => !o.Lurking)) { AmbushesLaid++; Say($"{b.Name} скрылась из виду. Где-то засада.", 2, u); }
                     u.Lurking = true; u.Path = null;
                 }
+        // a commander with Разведка about sees it lying there: it rises with nobody caught off guard
+        if (b.Members.Exists(u => u.Lurking && !u.Dead) && Scout(b) is { } eye) { Spotted(b, eye); return; }
         Unit near = null, by = null;
         bool hurt = false;
         foreach (var u in b.Members)

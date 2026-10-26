@@ -132,6 +132,7 @@ public partial class Main
                     why == null && going == 4 && party != null && party.Moving && party.Path[^1] == ore && party.Party.Members.Count == 4 && party.Party.Commander != null,
                     $"refused «{why}», {going} going, on the map {party != null}{(party != null ? $", {party.Party.Members.Count} of them walking {party.Moving} to {party.Path.LastOrDefault()?.Kind}" : "")}");
                 if (party == null) return true;
+                await SelfTestHeroBoard(check, party);
                 Hud.Refresh();
                 string shown = Hud.StoreShown(Stockpile.Kinds + 1);
                 check("the valley keeps the places of those gone out on the map: the beam counts them, the citadel's line says how many are away",

@@ -8,7 +8,8 @@ namespace VoxelTower.Game;
 /// <summary>
 /// The household along the top of the screen, as colonists are in RimWorld: a card for each of our pawns with its face,
 /// how much of it is left, and marks for what is the matter — bleeding, in a fight, idle with a reason, standing where
-/// it was sent. A click picks one (a second click takes the camera to it), Shift adds it to the chosen or drops it.
+/// it was sent; a commander's level, and a star when he has a skill to choose. A click picks one (a second click takes
+/// the camera to it), Shift adds it to the chosen or drops it; the right button on a commander opens his card as a hero.
 /// </summary>
 public partial class ColonistBar : Control
 {
@@ -55,6 +56,13 @@ public partial class ColonistBar : Control
         QueueRedraw();
     }
 
+    /// <summary>The middle of one's card in the row, in the row's own frame (for the self-test); null if it has none.</summary>
+    public Vector2? FaceOf(Unit u)
+    {
+        int i = _pawns.IndexOf(u);
+        return i < 0 ? null : new Vector2(_x[i] + _card / 2, _card / 2);
+    }
+
     int At(Vector2 p)
     {
         for (int i = 0; i < _x.Count; i++) if (p.X >= _x[i] && p.X < _x[i] + _card) return i;
@@ -69,11 +77,14 @@ public partial class ColonistBar : Control
             if (h != _hover) { _hover = h; QueueRedraw(); }
             return;
         }
-        if (e is not InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true } mb) return;
+        if (e is not InputEventMouseButton { Pressed: true } mb || mb.ButtonIndex is not (MouseButton.Left or MouseButton.Right)) return;
         int i = At(mb.Position);
         AcceptEvent();
         if (i < 0) return;
         var u = _pawns[i];
+        // a commander's card as a hero: the right button, or the left on one with a skill to choose
+        if (u.Hero != null && (mb.ButtonIndex == MouseButton.Right || u.Hero.Pending)) { _m.Hud.HeroPane.Show(u); if (mb.ButtonIndex == MouseButton.Right) return; }
+        if (mb.ButtonIndex != MouseButton.Left) return;
         if (mb.ShiftPressed)
         {
             if (!_m.Selected.Remove(u)) _m.Selected.Add(u);
@@ -87,7 +98,8 @@ public partial class ColonistBar : Control
         int i = At(at);
         if (i < 0) return "";
         var u = _pawns[i];
-        return $"{u.Name} №{u.Id} · {Math.Ceiling(Math.Max(0, u.Hp))} из {Math.Ceiling(u.MaxHp)}\n{Retinue.Doing(u, _m.Sim)}.\nЩелчок — выбрать, ещё раз — показать; Shift — добавить к выбранным.";
+        return $"{u.Name} №{u.Id} · {Math.Ceiling(Math.Max(0, u.Hp))} из {Math.Ceiling(u.MaxHp)}\n{Retinue.Doing(u, _m.Sim)}.\nЩелчок — выбрать, ещё раз — показать; Shift — добавить к выбранным."
+            + (u.Hero != null ? $"\nУровень {u.Hero.Level}. {{Rmb}} — карточка героя{(u.Hero.Pending ? ": новый уровень, выберите умение" : "")}." : "");
     }
 
     public override GodotObject _MakeCustomTooltip(string forText) => Tooltip.Make(forText);
@@ -114,6 +126,26 @@ public partial class ColonistBar : Control
         if (chosen) for (int k = 3; k >= 1; k--) DrawRect(r.Grow(k * 1.4f), new Color(Ornament.Ember, .07f * (4 - k)), false, 1.4f);
         DrawRect(r, edge, false, chosen ? 1.8f : 1.1f);
         Marks(u, face);
+        if (u.Hero != null) Rank(u.Hero, face);
+    }
+
+    /// <summary>A commander's level, small at the lower left of his face, and a star over it when he has a skill to choose.</summary>
+    void Rank(Hero h, Rect2 face)
+    {
+        float s = Math.Max(7, face.Size.X * .22f);
+        var c = new Vector2(face.Position.X + s * .75f, face.End.Y - s * .7f);
+        DrawCircle(c, s * .72f, new Color(0, 0, 0, .75f), true, -1, true);
+        DrawArc(c, s * .72f, 0, MathF.Tau, 16, Craft.BrassLight, 1, true);
+        DrawString(Ornament.SerifBold, c + new Vector2(-s, s * .35f), h.Level.ToString(), HorizontalAlignment.Center, s * 2, (int)Math.Max(8, s * .95f), Ornament.BronzeLight);
+        if (!h.Pending) return;
+        var t = new Vector2(face.Position.X + face.Size.X / 2, face.Position.Y + s * .55f);
+        var pts = new Vector2[10];
+        for (int k = 0; k < 10; k++)
+        {
+            float a = -MathF.PI / 2 + k * MathF.PI / 5, rr = k % 2 == 0 ? s * .62f : s * .26f;
+            pts[k] = t + new Vector2(MathF.Cos(a), MathF.Sin(a)) * rr;
+        }
+        DrawColoredPolygon(pts, Ornament.EmberGlow);
     }
 
     /// <summary>What is the matter with it, in small marks on the corners of its face.</summary>

@@ -89,9 +89,13 @@ public partial class Hud : CanvasLayer
     MysteryPanel _mysteries;
     Stores _stores;
     WaveClock _clockPanel;
-    Medallion _help, _menuButton, _boardButton;
+    Medallion _help, _menuButton, _boardButton, _heroButton;
     /// <summary>The map of valleys, in a campaign (Ui/MapBoard.cs); null outside one.</summary>
     public MapBoard Board { get; private set; }
+    /// <summary>A commander's card as a hero's (Ui/HeroCard.cs).</summary>
+    public HeroCard HeroPane { get; private set; }
+    /// <summary>The medallion of a hero with a skill to choose is up (for the self-test).</summary>
+    public bool HeroMedallionShown => _heroButton?.Visible == true;
     GameMenu _menu;
     EnvoyCard _envoy;
     DuskCard _dusk;
@@ -332,6 +336,13 @@ public partial class Hud : CanvasLayer
             Board.Init(m);
             _boardButton.Clicked += () => Board.Toggle();
         }
+        // a hero with a skill to choose: his medallion beside the others; and the heroes' card, over the map of valleys
+        _heroButton = new Medallion(Icons.Of("black-knight-helm"), "Новый уровень командира\nВыберите ему умение. Щелчок откроет его карточку.") { Size = new Vector2(38, 38), Visible = false, Lit = true };
+        root.AddChild(_heroButton);
+        _heroButton.Clicked += OpenRisenHero;
+        HeroPane = new HeroCard();
+        root.AddChild(HeroPane);
+        HeroPane.Init(m);
         // the menu over everything
         _menu = new GameMenu();
         root.AddChild(_menu);
@@ -514,6 +525,24 @@ public partial class Hud : CanvasLayer
     public bool MaterialsLocked => _matsLocked;
     public bool PickLocked => _pickLocked;
 
+    /// <summary>A hero with a skill to choose: one of the valley's commanders first, else the head of a party of ours on the map.</summary>
+    public (Unit here, MapParty away) RisenHero()
+    {
+        foreach (var u in _m.Sim.HeroesHere()) if (u.Hero.Pending) return (u, null);
+        if (Main.Atlas != null)
+            foreach (var p in Main.Atlas.Parties)
+                if (p.Owner == Core.Owner.Ours && p.Party.Commander?.Hero is { Pending: true }) return (null, p);
+        return (null, null);
+    }
+
+    /// <summary>The card of a hero with a skill to choose, if there is one.</summary>
+    public void OpenRisenHero()
+    {
+        var (here, away) = RisenHero();
+        if (here != null) HeroPane.Show(here);
+        else if (away != null) HeroPane.Show(away);
+    }
+
     /// <summary>What the tutorial points at: a tool's slot, a material's, the pick's, a tab, the faces, the map and its buttons…</summary>
     public Control Target(string key) => key switch
     {
@@ -548,7 +577,12 @@ public partial class Hud : CanvasLayer
             return;
         }
         // the beam's furniture: the tabs at the left, the clock hanging at the right, the stores between
-        _clockPanel.Position = new Vector2(vp.X - WaveClock.W - (_boardButton != null ? 140 : 98), 0);
+        // a hero waiting for his skill: his medallion before the others, the clock moved along for it
+        var (risenHere, risenAway) = RisenHero();
+        bool rising = (risenHere != null || risenAway != null) && Board?.IsOpen != true;
+        _heroButton.Visible = rising;
+        _heroButton.Position = new Vector2(vp.X - (_boardButton != null ? 176 : 134), 1);
+        _clockPanel.Position = new Vector2(vp.X - WaveClock.W - (_boardButton != null ? 140 : 98) - (rising ? 42 : 0), 0);
         _help.Position = new Vector2(vp.X - 50, 1);
         _menuButton.Position = new Vector2(vp.X - 92, 1);
         if (_boardButton != null) { _boardButton.Position = new Vector2(vp.X - 134, 1); _boardButton.Lit = Board.IsOpen; }

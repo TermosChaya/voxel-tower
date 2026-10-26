@@ -93,7 +93,7 @@ public sealed partial class Sim
     {
         if (!cap.Commands || cap == Possessed || Time < cap.NextOrders) return;
         cap.NextOrders = Time + 2.5 + cap.Id % 5 * .1;
-        var men = Under(cap, CaptainReach);
+        var men = Under(cap, CaptainReach * WordFar(cap));
         var (cx, cz) = CaptainHome(cap);
         // the horde: the nearest of it to what the commander keeps, within 110 m, and the knot about that one
         Unit lead = null;
@@ -129,6 +129,8 @@ public sealed partial class Sim
     /// <summary>The horde is coming: the line formed inside the wall it comes at, the shooters up on it, the hurt sent back.</summary>
     void Front(Unit cap, List<Unit> men, Unit lead, float cx, float cz)
     {
+        // it stands its people against the raid: the raid beaten off is to its credit
+        if (_battle != null) _heroFought.Add(cap.Id);
         // the knot of the horde about the nearest of it
         float tx = 0, tz = 0; int n = 0;
         foreach (var o in Units)
@@ -208,7 +210,7 @@ public sealed partial class Sim
             }
         // its people wavering: the horn; the horde on them: the shield wall
         int shaken = 0, pressed = 0;
-        foreach (var u in Under(cap, CaptainReach))
+        foreach (var u in Under(cap, CaptainReach * WordFar(cap)))
         {
             if (u.Pain > .55f) shaken++;
             if (Nearest(u, Team.Horde, 6 * VoxelWorld.PerMetre) != null) pressed++;
@@ -443,12 +445,14 @@ public sealed partial class Sim
         if (cap == null || cap.Dead || cap.T != Kinds.Captain) return "это не командир";
         if (!CallReady(cap, n)) return $"«{CallNames[n]}» будет готов через {cap.Ready[n] - Time:0} с";
         int done = 0;
+        // a hero's word carries the further with Слово
+        float far = WordFar(cap);
         switch (n)
         {
             case 0:
                 foreach (var u in Units)
                 {
-                    if (!Soldierly(u, cap) || Dist(u, cap) > 20 * VoxelWorld.PerMetre) continue;
+                    if (!Soldierly(u, cap) || Dist(u, cap) > 20 * VoxelWorld.PerMetre * far) continue;
                     u.Follows = cap; u.FollowUntil = Time + 25; u.RallyUntil = Math.Max(u.RallyUntil, Time + 25);
                     u.Ward = cap; u.Path = null; u.NextSearch = 0;
                     done++;
@@ -458,7 +462,7 @@ public sealed partial class Sim
             case 1:
                 foreach (var u in Units)
                 {
-                    if (!Soldierly(u, cap) || Dist(u, cap) > 15 * VoxelWorld.PerMetre) continue;
+                    if (!Soldierly(u, cap) || Dist(u, cap) > 15 * VoxelWorld.PerMetre * far) continue;
                     u.Follows = null;
                     Command(new[] { u }, u.Cell);
                     u.Ward = cap; u.WallUntil = Time + 20;
@@ -471,7 +475,7 @@ public sealed partial class Sim
                 // no archers about: nothing to loose, whether the horde is in sight or not
                 bool archers = false;
                 foreach (var u in Units)
-                    if (Soldierly(u, cap) && u.T.Ranged && Dist(u, cap) <= 50 * VoxelWorld.PerMetre) { archers = true; break; }
+                    if (Soldierly(u, cap) && u.T.Ranged && Dist(u, cap) <= 50 * VoxelWorld.PerMetre * far) { archers = true; break; }
                 if (!archers) return "рядом нет стрелков";
                 if (float.IsNaN(ax))
                 {
@@ -482,9 +486,9 @@ public sealed partial class Sim
                 int shooters = 0;
                 foreach (var u in Units)
                 {
-                    if (!Soldierly(u, cap) || !u.T.Ranged || Dist(u, cap) > 50 * VoxelWorld.PerMetre) continue;
+                    if (!Soldierly(u, cap) || !u.T.Ranged || Dist(u, cap) > 50 * VoxelWorld.PerMetre * far) continue;
                     shooters++;
-                    if (Volley(u, ax, ay, az)) done++;
+                    if (Volley(u, ax, ay, az, VolleyHarmOf(cap))) done++;
                 }
                 if (done == 0) return shooters == 0 ? "рядом нет стрелков" : "стрелкам туда не достать";
                 break;
@@ -492,7 +496,7 @@ public sealed partial class Sim
             case 3:
                 foreach (var u in Units)
                 {
-                    if (u.Dead || u.Inside || u.Team != Team.Player || Kinds.IsEngine(u.T) || Dist(u, cap) > 40 * VoxelWorld.PerMetre) continue;
+                    if (u.Dead || u.Inside || u.Team != Team.Player || Kinds.IsEngine(u.T) || Dist(u, cap) > 40 * VoxelWorld.PerMetre * far) continue;
                     u.Pain = 0;
                     // the hurt who can stand come back to the line
                     if ((u.Mending || u.SentBack) && u.Hp > u.MaxHp * .5f && !Disabled(u)) { u.Mending = false; u.SentBack = false; u.Why = ""; if (u.Post >= 0) GoTo(u, u.Post); }
@@ -535,7 +539,7 @@ public sealed partial class Sim
         cell = -1;
         if (!Aimed(cap, out float x, out float y, out float z, out foe)) return 0;
         var men = new List<Unit>();
-        foreach (var u in Units) if (Soldierly(u, cap) && Dist(u, cap) <= CaptainReach) men.Add(u);
+        foreach (var u in Units) if (Soldierly(u, cap) && Dist(u, cap) <= CaptainReach * WordFar(cap)) men.Add(u);
         if (men.Count == 0) return 0;
         int n;
         if (foe != null) n = Hunt(men, foe);
@@ -553,7 +557,7 @@ public sealed partial class Sim
     public int Heeding(Unit cap)
     {
         int n = 0;
-        foreach (var u in Units) if (Soldierly(u, cap) && Dist(u, cap) <= CaptainReach) n++;
+        foreach (var u in Units) if (Soldierly(u, cap) && Dist(u, cap) <= CaptainReach * WordFar(cap)) n++;
         return n;
     }
 
@@ -561,8 +565,8 @@ public sealed partial class Sim
     bool Soldierly(Unit u, Unit cap) => u != cap && !u.Dead && !u.Inside && u.Team == Team.Player && u.Captor == null && u.Airborne == null && u != Possessed
         && (u.T.Work < 1 || u.Militia) && !Kinds.IsEngine(u.T) && u.T != Kinds.Crewman && u.T != Kinds.Captain && !u.T.Prays && Armed(u) && !u.Mending;
 
-    /// <summary>One shooter's part in a volley: a shot at the point, falling about it, at one of the horde near it if any.</summary>
-    bool Volley(Unit u, float ax, float ay, float az)
+    /// <summary>One shooter's part in a volley: a shot at the point, falling about it, at one of the horde near it if any; so much harder for the commander's Тактика.</summary>
+    bool Volley(Unit u, float ax, float ay, float az, float harm = 1)
     {
         if (u.T == Kinds.OurAlchemist) return false;
         float dx = ax - u.X, dz = az - u.Z, d = MathF.Sqrt(dx * dx + dz * dz);
@@ -590,7 +594,7 @@ public sealed partial class Sim
         {
             X0 = ox, Y0 = oy, Z0 = oz, X1 = ex, Y1 = ey, Z1 = ez, Dur = Math.Max(.06f, len / SpeedOf(kind)),
             Target = mark, From = u, Hits = mark != null && Rng.NextDouble() < .75 * WeatherAim,
-            Damage = u.T.Damage * (.9f + (float)Rng.NextDouble() * .4f) * ShotHarm(u) * Heartened(u), Fire = u.FireArrows && Kindles(u.T),
+            Damage = u.T.Damage * (.9f + (float)Rng.NextDouble() * .4f) * ShotHarm(u) * Heartened(u) * harm, Fire = u.FireArrows && Kindles(u.T),
             Kind = kind, Arc = ArcOf(kind),
         });
         return true;
@@ -626,8 +630,11 @@ public sealed partial class Sim
         return true;
     }
 
-    /// <summary>How much harder one of ours strikes for its commander's word (and the one gone into, for a blow held back).</summary>
-    float Heartened(Unit a) => (a.RallyUntil > Time ? 1.2f : 1) * (a == Possessed ? PossessedArm : 1);
+    /// <summary>
+    /// How much harder one of ours strikes for its commander's word (the more for a hero's Слово and Тактика), weaker
+    /// for its commander fallen; and the one gone into, for a blow held back.
+    /// </summary>
+    float Heartened(Unit a) => (a.RallyUntil > Time ? 1.2f + Spoken(a) : 1) * (a == Possessed ? PossessedArm : 1) * Grief(a);
 
     /// <summary>How much of a blow one of ours in its commander's shield wall takes.</summary>
     static float Walled(Unit b, double now) => b.WallUntil > now ? .65f : 1;
@@ -642,6 +649,7 @@ public sealed partial class Sim
         {
             w.Write(c.Id); w.Write(c.Commands); w.Write(c.Goal);
             for (int i = 0; i < 4; i++) w.Write(c.Ready[i] - Time);
+            Heroes.Write(w, c.Hero);
         }
     }
 
@@ -654,10 +662,12 @@ public sealed partial class Sim
             int goal = r.ReadInt32();
             var ready = new double[4];
             for (int i = 0; i < 4; i++) ready[i] = r.ReadDouble();
+            var hero = Heroes.Read(r);
             var c = Units.Find(u => u.Id == id);
             if (c == null) continue;
             c.Commands = commands; c.Goal = goal;
             for (int i = 0; i < 4; i++) c.Ready[i] = Time + ready[i];
+            c.Hero = hero ?? c.Hero;
         }
     }
 }

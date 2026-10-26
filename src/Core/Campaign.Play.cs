@@ -89,10 +89,11 @@ public sealed partial class Campaign
 
     /// <summary>
     /// What of the map we see: the cells of ours, the one we are in, those our parties stand in or are halfway into, and
-    /// every cell next to one of them; the rest lies in the fog.
+    /// every cell next to one of them (further about a party whose hero has Разведка); the rest lies in the fog.
     /// </summary>
     public bool Seen(MapCell c)
     {
+        if (Scouted(c)) return true;
         foreach (var o in Cells)
         {
             bool ours = o.Owner == Owner.Ours || o == Here || Parties.Exists(p => p.Owner == Owner.Ours && (p.Q == o.Q && p.R == o.R || p.Moving && p.Path[0] == o && StepShare(p) >= .5));
