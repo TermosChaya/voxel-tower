@@ -6289,6 +6289,9 @@ if (args.Length > 0 && args[0] == "--atlas-rivers") LandBench.Rivers();
 // the far view (WorldViewBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--worldview") WorldViewBench.Run(Check);
 if (args.Length > 0 && args[0] == "--worldview-probe") WorldViewBench.Probe();
+// what stands on the big world map (MapModelsBench.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--mapmodels") MapModelsBench.Run(Check);
+if (args.Length > 0 && args[0] == "--mapmodels-probe") MapModelsBench.Probe();
 if (args.Length > 0 && args[0] == "--worldview-dump")
     WorldViewBench.Dump(args.Length > 1 ? args[1] : "S", args.Length > 2 ? uint.Parse(args[2]) : 11, args.Length > 3 ? args[3] : "world.ppm");
 if (args.Length > 0 && args[0] == "--atlas-walkdump") LandBench.WalkDump(uint.Parse(args[1]), int.Parse(args[2]), args[3]);

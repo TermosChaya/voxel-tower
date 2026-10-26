@@ -56,6 +56,12 @@ public partial class Main
             WorldMap is { IsOpen: true } && WorldMap.Settled && WorldMap.PiecesShown >= 4 && WorldFigures.OursDrawn >= 1
             && WorldMap.Seen(home.Col, home.Row) && !WorldMap.Seen(far.Col, far.Row),
             $"open {WorldMap?.IsOpen}, settled after {settle} frames, {WorldMap?.PiecesShown} pieces, {WorldFigures?.OursDrawn} of ours drawn");
+        // what stands on it (MapDress.cs, HexMapView.Dress.cs): the pieces about the hero dressed, the citadel among them
+        int dressedAfter = 0;
+        for (; dressedAfter < 600 && !WorldMap.DressSettled; dressedAfter++) await Frames(1);
+        check("what stands on the big map is drawn about the hero: every piece the land shows dressed, the citadel's model among them",
+            WorldMap.DressSettled && WorldMap.DressedPieces >= WorldMap.PiecesShown / 2 && WorldMap.ThingsShown > 0,
+            $"settled after {dressedAfter} frames, {WorldMap.DressedPieces} pieces dressed of {WorldMap.PiecesShown}, {WorldMap.ThingsShown} meshes of things shown");
 
         // a hex of open ground a few steps off in our zone, nothing on it and nothing kept: planned, planned again, walked
         MapCell Open(MapCell from, int least, int most) => c.Cells

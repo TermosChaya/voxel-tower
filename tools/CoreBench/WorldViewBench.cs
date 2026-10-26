@@ -171,8 +171,9 @@ static class WorldViewBench
                     // (the land's low rolls lie over the level by a voxel or two)
                     if (Math.Abs(top - HexTiles.LevelAt(l)) > 2) wrongH++;
                 }
-                if (l.Icon == HexIcon.Citadel && top > HexTiles.LevelAt(l) + 12) citadel++;
             }
+            // the citadel stands on its piece: its model placed over its hex (MapDress.cs; the land under it is only levelled)
+            foreach (var p in MapDress.Dress(world, lm, tx, tz).Placed) if (p.Model == MapModel.Citadel) citadel++;
         }
         check("a piece of the world map made in voxels and meshed in good time, the same each time; open hexes at their height, peaks where the mountains are, the citadel standing",
             make / pieces.Length < 150 && mesh / pieces.Length < 150 && differ == 0 && wrongH == 0 && peaks > 0 && lowPeaks == 0 && citadel == 1 && verts > 3000,

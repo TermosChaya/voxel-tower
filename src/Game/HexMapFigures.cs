@@ -44,8 +44,8 @@ public partial class HexMapFigures : Node3D
     double _keepersAt;
     /// <summary>Figures drawn on the last frame: ours, the horde's, the monsters (the self-test reads them).</summary>
     public int OursDrawn, TheirsDrawn, MonstersDrawn;
-    /// <summary>How tall a hero in the saddle stands, in the map's voxels.</summary>
-    const float HeroTall = 19;
+    /// <summary>How tall a hero in the saddle stands, in the map's voxels: as in «Heroes», plain to the eye beside a castle.</summary>
+    const float HeroTall = 24;
     static readonly UnitType[] Keepers = { Kinds.Wolf, Kinds.Skeleton, Kinds.Bear, Kinds.Orc, Kinds.Troll, Kinds.Goblin, Kinds.Boar, Kinds.Shaman };
     static readonly Color Ours = new("3f68b0"), Theirs = new("a8321f"), Gold = new("d9b25a");
     float _scale = .05f;
@@ -55,8 +55,8 @@ public partial class HexMapFigures : Node3D
         _view = view;
         _ring = new MeshInstance3D
         {
-            Mesh = new TorusMesh { InnerRadius = .8f, OuterRadius = 1f, Rings = 24, RingSegments = 6 }, Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-            MaterialOverride = new StandardMaterial3D { AlbedoColor = Gold, EmissionEnabled = true, Emission = Gold, EmissionEnergyMultiplier = .6f, ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded },
+            Mesh = new PlaneMesh { Size = new Vector2(2, 2), Orientation = PlaneMesh.OrientationEnum.Y }, Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            MaterialOverride = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/map_ring.gdshader") },
         };
         AddChild(_ring);
         view.MiniDots = Dots;
@@ -89,9 +89,10 @@ public partial class HexMapFigures : Node3D
     Vector3 Stand(int col, int row)
     {
         var l = _view.Source.Look(col, row);
-        if (l.Icon is HexIcon.None or HexIcon.Monster or HexIcon.Pile or HexIcon.Chest or HexIcon.Campfire or HexIcon.Signpost) return _view.HexToScene(col, row);
+        float off = _view.Source.Seen(col, row) && MapDress.Shows(l) ? MapDress.StandOff(l.Icon) : 0;
+        if (off <= 0) return _view.HexToScene(col, row);
         var (x, z) = _view.Layout.Center(col, row);
-        return _view.ToScene(x, z + 12);
+        return _view.ToScene(x, z + off);
     }
 
     /// <summary>The walker of ours whose figure is nearest a point of the map (its voxels), within reach of a click; null if none.</summary>
@@ -130,6 +131,8 @@ public partial class HexMapFigures : Node3D
             t.Count.Text = w.Count > 1 ? w.Count.ToString() : "";
             // (the number keeps its size on the screen whatever the figure's scale)
             t.Count.Scale = Vector3.One / s;
+            t.Plate.Visible = t.Count.Text != "";
+            t.Plate.Scale = Vector3.One / s;
             if (w.Owner == 1) OursDrawn++; else TheirsDrawn++;
         }
         foreach (var (w, t) in new List<KeyValuePair<MapWalker, Token>>(_tokens))
@@ -138,9 +141,9 @@ public partial class HexMapFigures : Node3D
         _ring.Visible = Chosen != null && _tokens.ContainsKey(Chosen);
         if (_ring.Visible)
         {
-            _ring.Position = _tokens[Chosen].Position + Vector3.Up * .02f;
-            float r = HexMapLayout.R * .55f * VoxelWorld.Vox;
-            _ring.Scale = new Vector3(r, r * .35f, r);
+            _ring.Position = _tokens[Chosen].Position + Vector3.Up * .03f;
+            float r = HexMapLayout.R * .62f * VoxelWorld.Vox;
+            _ring.Scale = new Vector3(r, 1, r);
         }
         if ((_keepersAt -= delta) <= 0) { _keepersAt = .4; KeepersUp(near); }
     }
@@ -169,6 +172,7 @@ public partial class HexMapFigures : Node3D
                 var t = Make(Bodies.Plan(kind, vr), 0, banner: false);
                 int n = CountOf?.Invoke(c, r) ?? 4 + vr % 23;
                 t.Count.Text = n > 1 ? n.ToString() : "";
+                t.Plate.Visible = n > 1;
                 var at = _view.HexToScene(c, r);
                 // (one keeping a thing stands by it, toward the south-east, the thing whole to the eye)
                 if (keeping) { var (hx, hz) = lay.Center(c, r); at = _view.ToScene(hx + 9, hz + 8); }
@@ -176,6 +180,7 @@ public partial class HexMapFigures : Node3D
                 float s = _scale * 1.15f;
                 t.Basis = new Basis(Vector3.Up, MathF.PI / 2 + (float)(vr % 6) * .6f + 2.1f).Scaled(Vector3.One * s);
                 t.Count.Scale = Vector3.One / s;
+                t.Plate.Scale = Vector3.One / s;
                 t.Pose(false, 0);
                 AddChild(t);
                 _keepers[(c, r)] = t;
@@ -231,22 +236,57 @@ public partial class HexMapFigures : Node3D
         {
             Billboard = BaseMaterial3D.BillboardModeEnum.Enabled, FontSize = 26, OutlineSize = 8, PixelSize = .0006f, FixedSize = true,
             Modulate = owner == 1 ? new Color("e9eefc") : owner == 2 ? new Color("ffd2c8") : new Color("f3e6c4"), OutlineModulate = new Color(0, 0, 0, .85f),
-            NoDepthTest = true, Font = Ornament.SerifBold, Position = new Vector3(0, h + 4, 0),
+            NoDepthTest = true, Font = Ornament.SerifBold, Position = new Vector3(0, h + 4, 0), RenderPriority = 2, OutlineRenderPriority = 1,
         };
         t.AddChild(t.Count);
+        // the number on a plate of dark iron with a bronze rim, as the game's own plates are
+        t.Plate = new Sprite3D
+        {
+            Texture = Plate(owner), Billboard = BaseMaterial3D.BillboardModeEnum.Enabled, FixedSize = true, PixelSize = .0006f * 1.25f,
+            NoDepthTest = true, Position = new Vector3(0, h + 4, 0), RenderPriority = 0, Visible = false, Shaded = false,
+        };
+        t.AddChild(t.Plate);
         return t;
     }
 
-    /// <summary>A banner on its pole: the pole a unit tall (scaled), the cloth at its top, a gold stripe along its hem.</summary>
+    static readonly Dictionary<byte, Texture2D> _plates = new();
+
+    /// <summary>A small plate to set a number on: dark iron, its corners cut, a rim of bronze (of red for the horde's).</summary>
+    static Texture2D Plate(byte owner)
+    {
+        if (_plates.TryGetValue(owner, out var have)) return have;
+        const int W = 64, H = 34;
+        var img = Image.CreateEmpty(W, H, false, Image.Format.Rgba8);
+        var rim = owner == 2 ? new Color("a8432c") : owner == 1 ? new Color("6f92d8") : Ornament.Bronze;
+        for (int y = 0; y < H; y++)
+            for (int x = 0; x < W; x++)
+            {
+                int dx = Math.Min(x, W - 1 - x), dy = Math.Min(y, H - 1 - y);
+                if (dx + dy < 4) continue;
+                bool edge = dx < 2 || dy < 2 || dx + dy < 6;
+                img.SetPixel(x, y, edge ? rim : Ornament.Fade(Ornament.Iron, .92f));
+            }
+        var tex = ImageTexture.CreateFromImage(img);
+        _plates[owner] = tex;
+        return tex;
+    }
+
+    /// <summary>A banner on its pole: the pole a unit tall (scaled), the cloth at its top stirring in the wind, its hem and its round gilt, a gilt knob atop.</summary>
     static Node3D Banner(Color cloth, float height)
     {
         var n = new Node3D();
         var wood = new StandardMaterial3D { AlbedoColor = new Color("4a3424"), Roughness = .9f };
         n.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(.05f, height, .05f), Material = wood }, Position = new Vector3(0, height / 2, 0) });
-        var flag = new StandardMaterial3D { AlbedoColor = cloth, Roughness = .85f, CullMode = BaseMaterial3D.CullModeEnum.Disabled };
-        n.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(.02f, height * .32f, .42f), Material = flag }, Position = new Vector3(0, height * .8f, -.23f) });
+        var flag = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/map_banner.gdshader") };
+        flag.SetShaderParameter("cloth", cloth);
+        flag.SetShaderParameter("hem", Gold);
+        flag.SetShaderParameter("half_w", .23f);
+        flag.SetShaderParameter("half_h", height * .18f);
+        flag.SetShaderParameter("phase", (float)GD.RandRange(0, 6.3));
+        var cloth3 = new PlaneMesh { Size = new Vector2(.46f, height * .36f), Orientation = PlaneMesh.OrientationEnum.X, SubdivideWidth = 10, SubdivideDepth = 3, Material = flag };
+        n.AddChild(new MeshInstance3D { Mesh = cloth3, Position = new Vector3(0, height * .8f, -.25f) });
         var hem = new StandardMaterial3D { AlbedoColor = Gold, Roughness = .5f, Metallic = .4f };
-        n.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(.025f, height * .05f, .42f), Material = hem }, Position = new Vector3(0, height * .63f, -.23f) });
+        n.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(.03f, .03f, .5f), Material = wood }, Position = new Vector3(0, height * .98f, -.24f) });
         n.AddChild(new MeshInstance3D { Mesh = new SphereMesh { Radius = .045f, Height = .09f, Material = hem }, Position = new Vector3(0, height + .03f, 0) });
         return n;
     }
@@ -257,6 +297,7 @@ public partial class HexMapFigures : Node3D
         public Figure Fig;
         public readonly MeshInstance3D[] Parts = new MeshInstance3D[Figure.Parts];
         public Label3D Count;
+        public Sprite3D Plate;
         public bool Seen;
         public float Face, Phase, Walk;
 

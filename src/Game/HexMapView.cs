@@ -114,6 +114,7 @@ public partial class HexMapView : Node3D
                 case "shadows": _noShadows = true; break;
                 case "ssao": _env.SsaoEnabled = false; break;
                 case "glow": _env.GlowEnabled = false; break;
+                case "things": _noThings = true; break;
             }
     }
     bool _noShadows;
@@ -435,6 +436,7 @@ public partial class HexMapView : Node3D
         var ch = Layout.OnField(Chosen.Col, Chosen.Row) ? Layout.Center(Chosen.Col, Chosen.Row) : (-1e5f, -1e5f);
         _solid.SetShaderParameter("atlas_hover", new Vector4(hv.Item1, hv.Item2, ch.Item1, ch.Item2));
         FarShow();
+        Dressed(delta);
         _mini.QueueRedraw();
         if (Engine.GetFramesDrawn() > 10)
         {

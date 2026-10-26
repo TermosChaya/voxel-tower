@@ -19,6 +19,7 @@ public partial class Main
     void Demo()
     {
         if (_pose == "world") { WorldPose(); return; }
+        if (_pose == "mapthings") { MapThingsPose(); return; }
         if (_pose == "sky") { Skies(); return; }
         if (_trailer >= 0) { Trailer(); return; }
         if (_pose == "battle") { Siege(); return; }

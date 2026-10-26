@@ -200,6 +200,11 @@ public static class Mat
     /// pool of quicksilver, crystals that glow, gems. None of it is in a valley.
     /// </summary>
     public const byte Nugget = 190, Sulphur = 191, Quicksilver = 192, Crystal = 193, Gem = 194;
+    /// <summary>
+    /// The world map's own (MapModels.cs), from the top of the free numbers: the cloth of its flags, that stirs in the
+    /// wind as leaves do — blue ours, red the horde's — and crystals red as blood. None of it is in a valley.
+    /// </summary>
+    public const byte MapFlagBlue = 229, MapFlagRed = 228, CrystalRed = 227;
     public const int Count = 253;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
@@ -410,6 +415,8 @@ public static class Mat
         D(Nugget, "Золото", 0xe8b83a, .14f, MatGroup.Metal, Natural); D(Sulphur, "Сера", 0xd9cc3a, .16f, MatGroup.Earth, Natural);
         D(Quicksilver, "Ртуть", 0xb9c2cc, .06f, MatGroup.Metal, Natural); D(Crystal, "Кристаллы", 0x7fe3f0, .12f, MatGroup.Hard, Natural | Glows);
         D(Gem, "Самоцветы", 0xd2357a, .2f, MatGroup.Hard, Natural | Glows);
+        D(MapFlagBlue, "Знамя", 0x2f5cb4, .12f, MatGroup.Hard, 0); D(MapFlagRed, "Знамя", 0xb02a20, .12f, MatGroup.Hard, 0);
+        D(CrystalRed, "Кристаллы", 0xe0384a, .14f, MatGroup.Hard, Natural | Glows);
         Emission[Brew] = .7f;
         // what grows by itself: flowers of three more colours, ferns, reeds, mushrooms and lilies drawn in blades and
         // petals; juniper, berries and a nest are leaves to everyone, an anthill is earth, a hollow is the tree's own wood
@@ -437,7 +444,7 @@ public static class Mat
             FlowerRed, FlowerWhite, FlowerBlue, Fern, Reed, Mushroom, Lily, Juniper, BerryRed, BerryBlue, Nest }) Passable[m] = true;
         IsLadder[Ladder] = IsLadder[SiegeLadder] = IsLadder[TowerLadder] = IsLadder[Scaffold] = true;
         foreach (var m in new[] { Tuft, Flower, Bloom, FlowerRed, FlowerWhite, FlowerBlue, Fern, Reed, Mushroom, Lily }) SwayKind[m] = 1;
-        foreach (var m in new[] { Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold, Juniper, BerryRed, BerryBlue, Nest }) SwayKind[m] = 2;
+        foreach (var m in new[] { Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold, Juniper, BerryRed, BerryBlue, Nest, MapFlagBlue, MapFlagRed }) SwayKind[m] = 2;
         foreach (var m in new[] { Stone, StoneDark, StoneLight, StoneWarm, StoneCool, Mortar, Keep, KeepShade, KeepDark, Cobble, Flag }) Smooth[m] = true;
         foreach (var m in new[] { Steel, Mail, Brass, Pitch, SteelEdge, SteelDark, Nugget, Quicksilver }) Metal[m] = true;
         for (int m = 0; m < Count; m++)
