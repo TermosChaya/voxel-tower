@@ -16,7 +16,7 @@ namespace VoxelTower.Core;
 public sealed partial class Sim
 {
     /// <summary>20: the bodies sculpted finer, their half-voxels (and so a wounded body's) not what they were.</summary>
-    public const int SaveVersion = 59;
+    public const int SaveVersion = 60;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -46,6 +46,10 @@ public sealed partial class Sim
         // comes by (version 45)
         w.Write((byte)Site.Kind); w.Write(Site.Classic); w.Write(Site.Hex != null);
         w.Write(World.SX); w.Write(World.SZ); w.Write((byte)Site.EntrySide);
+        // what holds it, and its sides as the map of valleys gave them (version 60)
+        w.Write((byte)Site.Holding);
+        w.Write((byte)(Site.Edges?.Length ?? 0));
+        if (Site.Edges != null) foreach (var e in Site.Edges) { w.Write(e?.Seed ?? 0); w.Write(e?.River ?? -1); w.Write(e?.Road ?? -1); }
         w.Write(label ?? ""); w.Write(Time);
         // the valley as play changed it, what is meant of it and its arches
         WriteChunks(w, World, edited: true);
@@ -172,6 +176,7 @@ public sealed partial class Sim
         WriteStanding(w);
         WriteRaids(w);
         WriteCaptains(w);
+        WriteCampaign(w);
         w.Write(OreStruck); w.Write(MetalMined);
         w.Write(extra ?? "");
     }
@@ -239,7 +244,7 @@ public sealed partial class Sim
         WriteBody(w, s.Wounds);
     }
 
-    static void WriteBody(BinaryWriter w, BodyState b)
+    internal static void WriteBody(BinaryWriter w, BodyState b)
     {
         w.Write(b != null);
         if (b == null) return;
@@ -511,6 +516,7 @@ public sealed partial class Sim
         ReadStanding(r);
         ReadRaids(r);
         ReadCaptains(r);
+        ReadCampaign(r);
         OreStruck = r.ReadBoolean(); MetalMined = r.ReadDouble();
         string extra = r.ReadString();
         // the ways of the horde are worked out again for the valley as it now is, and the stones to throw down found again
@@ -576,7 +582,7 @@ public sealed partial class Sim
         return t == null ? null : new Survivor { Kind = t, Look = look, Hp = hp, Wounds = body, Champion = champion, Title = title.Length > 0 ? title : null, Lord = lord };
     }
 
-    static BodyState ReadBody(BinaryReader r, UnitType t, int look)
+    internal static BodyState ReadBody(BinaryReader r, UnitType t, int look)
     {
         if (!r.ReadBoolean()) return null;
         var b = t == null ? null : new BodyState(Bodies.Plan(t, look));
@@ -660,6 +666,9 @@ public sealed class SaveReader : IDisposable
     public readonly bool Classic, Hexagon;
     /// <summary>The box the valley was made in, across, and the side the horde comes by.</summary>
     public readonly int SizeX, SizeZ, EntrySide;
+    /// <summary>What holds the valley, and its sides as the map of valleys gave them (null when it was made by itself).</summary>
+    public readonly Holding Holding;
+    public readonly HexEdge[] Edges;
     public readonly string Label;
     public readonly double Time;
 
@@ -675,6 +684,13 @@ public sealed class SaveReader : IDisposable
         Seed = R.ReadUInt32();
         Kind = (ValleyKind)R.ReadByte(); Classic = R.ReadBoolean(); Hexagon = R.ReadBoolean();
         SizeX = R.ReadInt32(); SizeZ = R.ReadInt32(); EntrySide = R.ReadByte();
+        Holding = (Holding)R.ReadByte();
+        int edges = R.ReadByte();
+        if (edges > 0)
+        {
+            Edges = new HexEdge[edges];
+            for (int i = 0; i < edges; i++) Edges[i] = new HexEdge { Seed = R.ReadUInt32(), River = R.ReadSingle(), Road = R.ReadSingle() };
+        }
         Label = R.ReadString(); Time = R.ReadDouble();
     }
 

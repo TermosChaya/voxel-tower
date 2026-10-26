@@ -33,6 +33,7 @@ public sealed partial class Sim
     public string CantEnlist(UnitType t)
     {
         if (Over) return "осада окончена";
+        if (!Site.HasKeep) return "в этой долине нет цитадели";
         // the household's own at the citadel; the rest in their buildings (Sim.Town.cs), save in the open sandbox
         if (!CitadelHires(t) && !Sandbox) return HiredWhere(t);
         if (t == Kinds.Captain && Count(Kinds.Captain) >= MaxCaptains) return $"командиров не больше {MaxCaptains}";

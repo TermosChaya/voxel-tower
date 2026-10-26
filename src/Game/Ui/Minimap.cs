@@ -144,9 +144,10 @@ public partial class Minimap : Control
         DrawCreatures();
         DrawPolyline(poly, new Color(0, 0, 0, .6f), 3f, true);
         DrawPolyline(poly, Ornament.BronzeLight, 1.4f, true);
+        // the citadel; the place of an outpost, dim; the horde's town in its colour
         var keep = ToMap(_m.Site.KeepX, _m.Site.KeepZ);
         Ornament.Diamond(this, keep, 6.5f, new Color(0, 0, 0, .7f));
-        Ornament.Diamond(this, keep, 5f, Ornament.EmberGlow);
+        Ornament.Diamond(this, keep, 5f, _m.Site.Holding switch { Holding.Outpost => RuinGrey, Holding.HordeTown => Horde, _ => Ornament.EmberGlow });
     }
 
     static readonly Color Ours = new(.62f, .86f, 1f), Horde = new(1f, .3f, .22f), Beast = new(.66f, .47f, .28f), Rim = new(0, 0, 0, .75f);

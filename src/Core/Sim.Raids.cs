@@ -14,6 +14,8 @@ namespace VoxelTower.Core;
 public sealed class DayClock
 {
     public const double DayLength = 600, Dusk = 60, DawnLength = 30, NightLength = 150;
+    /// <summary>A day and the night after it, as the map counts them (a raid may hold a valley's night longer).</summary>
+    public const double Cycle = DayLength + NightLength;
     /// <summary>The day it is, the first one 1: what grows by the day (the town's stocks) grows at each daybreak.</summary>
     public int Day = 1;
     /// <summary>Seconds of daylight left; set far on to keep the sun up (the tests and the staged scenes), or on by a truce.</summary>
@@ -67,6 +69,24 @@ public sealed class DayClock
         Left = DayLength; DawnLeft = DawnLength;
         Day++;
         s.NewDay();
+    }
+
+    /// <summary>The time as the map reads it off the valley: the day, and how far into it (the night's after the daylight).</summary>
+    public ClockTime Now => new(Day, Night ? DayLength + Math.Min(NightT, NightLength) : Math.Clamp(DayLength - Left, 0, DayLength));
+
+    /// <summary>
+    /// The valley set to the map's time, as it is entered: the sun where it stands then, or the night so far on, without a
+    /// nightfall or a daybreak said for it (a raid comes by the map, not by the valley's clock).
+    /// </summary>
+    public void Set(ClockTime t)
+    {
+        Day = Math.Max(1, t.Day);
+        double at = Math.Clamp(t.At, 0, Cycle);
+        Night = at >= DayLength;
+        NightT = Night ? at - DayLength : 0;
+        Left = Night ? 0 : DayLength - at;
+        DawnLeft = Night ? 0 : Math.Max(0, DawnLength - at);
+        Stood = 0;
     }
 
     internal void Write(BinaryWriter w) { w.Write(Day); w.Write(Left); w.Write(Night); w.Write(NightT); w.Write(DawnLeft); w.Write(StandAtNoon); w.Write(Stood); }

@@ -32,6 +32,11 @@ public sealed class MapParams
     public HexEdge[] Edges;
     /// <summary>The side of the hexagon the horde comes in by (<see cref="Hex.West"/> and the others).</summary>
     public int EntrySide = Hex.West;
+    /// <summary>
+    /// What stands in the middle of a hexagon: the citadel (the first valley, and every valley made by itself), the place
+    /// of an outpost, or the horde's town (a cell of the map of valleys, <see cref="Campaign"/>). The box always has the citadel.
+    /// </summary>
+    public Holding Holding = Holding.Citadel;
 }
 
 /// <summary>

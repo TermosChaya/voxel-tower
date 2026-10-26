@@ -27,8 +27,11 @@ public sealed partial class Sim
     public bool Over, Won;
     /// <summary>Tests: orders are done the moment they are given.</summary>
     public bool InstantLabour;
-    /// <summary>A cell before the citadel's door: hired pawns appear here and flee here.</summary>
-    public readonly int Gate;
+    /// <summary>
+    /// A cell before the citadel's door: hired pawns appear here and flee here. Where there is no citadel, the spot by the
+    /// stone of an outpost's place; in the horde's valley, where our army camped as it came in (<see cref="Arrive"/>).
+    /// </summary>
+    public int Gate { get; private set; }
 
     int _nextId = 1;
     readonly int[] _bodies;
@@ -51,7 +54,14 @@ public sealed partial class Sim
         _bodies = new int[Nav.Count];
         _claims = new int[Nav.NX * Nav.NZ];
         Goals = FlowField.Goals(Nav);
-        Gate = NearestStand(s.KeepX - s.KeepR - 12, s.KeepZ, 4);
+        // (in the horde's valley, till an army of ours comes in, the middle of the side it would come by)
+        var (ex, ez) = EdgePoint(s.EntrySide, .5);
+        Gate = s.Holding switch
+        {
+            Holding.Outpost => NearestStand(s.KeepX - 16, s.KeepZ, 4),
+            Holding.HordeTown => NearestStand(ex, ez, 4),
+            _ => NearestStand(s.KeepX - s.KeepR - 12, s.KeepZ, 4),
+        };
         FindMines();
         PlanWave(1);
         Stock[Stockpile.Stone] = 16 * VoxelWorld.PerM3;
@@ -282,9 +292,15 @@ public sealed partial class Sim
         Stage = "TickBleeding"; TickBleeding(dt);
         Stage = "TickTrauma"; TickTrauma(dt);
         Stage = "TickScaffolds"; TickScaffolds();
+        Stage = "TickDepartures"; TickDepartures();
         Units.RemoveAll(u => u.Dead && Time - u.DiedAt > 30);
         Stage = "";
-        if (KeepHp <= 0 && !Over) { Over = true; CloseBattle(held: false); Say("Цитадель пала.", 3); }
+        // the citadel down: the end of the game; in a valley of the map, the end of the valley's holding (Sim.Campaign.cs)
+        if (KeepHp <= 0 && !Over && !Lost)
+        {
+            if (Campaign) ValleyLost();
+            else { Over = true; CloseBattle(held: false); Say("Цитадель пала.", 3); }
+        }
     }
 
     /// <summary>Marks the cells bodies stand in, so nothing gets built into anyone.</summary>
@@ -524,6 +540,8 @@ public sealed partial class Sim
     {
         var group = new List<Unit>();
         foreach (var u in units) if (!u.Dead && u.Team == Team.Player) group.Add(u);
+        // a new word takes back one to go out of the valley
+        foreach (var u in group) u.LeaveBy = -1;
         var (spots, lanes) = Formation(group, target);
         int ok = 0;
         for (int n = 0; n < group.Count; n++)
@@ -655,7 +673,7 @@ public sealed partial class Sim
     /// <summary>Lets pawns go back to work by themselves.</summary>
     public void ReleaseHold(IEnumerable<Unit> units)
     {
-        foreach (var u in units) { u.Hold = false; u.Back = false; u.Dest = -1; u.Prey = null; u.NextSearch = 0; Busy(u); }
+        foreach (var u in units) { u.Hold = false; u.Back = false; u.Dest = -1; u.Prey = null; u.NextSearch = 0; u.LeaveBy = -1; Busy(u); }
     }
 
     /// <summary>The horn: soldiers drop the hunt and whatever else they were at and hurry to their posts.</summary>

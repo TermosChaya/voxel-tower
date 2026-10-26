@@ -168,6 +168,9 @@ public partial class Main : Node3D
     int _size;
     /// <summary>The side of the hexagon the horde comes by (--entry=0…5: north-east, east, south-east, south-west, west, north-west).</summary>
     int _entry = Hex.West;
+    /// <summary>What stands in the middle of the valley (--holding=citadel|outpost|horde), and its sides as a save keeps them.</summary>
+    Holding _holding = Holding.Citadel;
+    HexEdge[] _edges;
     string _pose = "";
     /// <summary>How long the staged siege runs before the screenshot (--at=seconds).</summary>
     double _poseSeconds = 14;
@@ -194,6 +197,7 @@ public partial class Main : Node3D
             else if (a == "--square") _hexagon = false;
             else if (a.StartsWith("--size=") && int.TryParse(a["--size=".Length..], out int sz) && sz >= 256) _size = sz / 32 * 32;
             else if (a.StartsWith("--entry=") && int.TryParse(a["--entry=".Length..], out int es) && es is >= 0 and < 6) _entry = es;
+            else if (a.StartsWith("--holding=")) _holding = a["--holding=".Length..] switch { "outpost" => Holding.Outpost, "horde" => Holding.HordeTown, _ => Holding.Citadel };
             else if (a.StartsWith("--look=") && int.TryParse(a["--look=".Length..], out int lk)) _look = lk;
             else if (a.StartsWith("--wave=") && double.TryParse(a["--wave=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double wa)) _waveAt = wa;
             else if (a.StartsWith("--day=") && double.TryParse(a["--day=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double da)) _dayAt = da;
@@ -248,7 +252,7 @@ public partial class Main : Node3D
         if (PendingLoad != null)
         {
             _loadedFrom = PendingLoad;
-            try { save = new SaveReader(System.IO.File.OpenRead(PendingLoad)); _seed = save.Seed; _valley = save.Kind; _classic = save.Classic; _hexagon = save.Hexagon; _size = save.SizeX; _entry = save.EntrySide; }
+            try { save = new SaveReader(System.IO.File.OpenRead(PendingLoad)); _seed = save.Seed; _valley = save.Kind; _classic = save.Classic; _hexagon = save.Hexagon; _size = save.SizeX; _entry = save.EntrySide; _holding = save.Holding; _edges = save.Edges; }
             catch (Exception e) { GD.PrintErr($"[voxel-tower] could not read {PendingLoad}: {e.Message}"); save?.Dispose(); save = null; }
             PendingLoad = null;
             _demo = _selfTest = false;
@@ -256,7 +260,7 @@ public partial class Main : Node3D
         // every body sculpted while the valley is made, off the main thread: a body first wanted held up its frame
         Task.Run(() => Bodies.Warm(Kinds.All()));
         var sw = Stopwatch.StartNew();
-        var mp = new MapParams { Seed = _seed, Kind = _valley, Classic = _classic, Hexagon = _hexagon, EntrySide = _entry };
+        var mp = new MapParams { Seed = _seed, Kind = _valley, Classic = _classic, Hexagon = _hexagon, EntrySide = _entry, Holding = _holding, Edges = _edges };
         // the game's valley: a hexagon in a box a half again as wide as the bench's (192 m from point to point)
         if (_hexagon) mp.SizeX = mp.SizeZ = MapParams.GameSize;
         if (_size > 0) mp.SizeX = mp.SizeZ = _size;
@@ -290,7 +294,9 @@ public partial class Main : Node3D
             catch (Exception e) { GD.PrintErr($"[voxel-tower] the save is broken: {e}"); }
             save.Dispose();
         }
-        else if (!_selfTest && !_demo) StartingFort.Raise(Sim);
+        else if (!_selfTest && !_demo && Site.HasKeep) StartingFort.Raise(Sim);
+        // the horde's town has its garrison from the start
+        if (save == null && Site.Holding == Holding.HordeTown) Sim.Garrison(Sim.Roster(Campaign.LairThreat, 1));
         double navMs = sw.Elapsed.TotalMilliseconds;
 
         var atmo = Atmos = new Atmosphere();

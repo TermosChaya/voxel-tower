@@ -186,9 +186,15 @@ public sealed partial class Sim
         return best;
     }
 
-    /// <summary>Into the citadel: out of the world till it comes out again.</summary>
+    /// <summary>Into the citadel: out of the world till it comes out again. Where there is no citadel it waits at the spot.</summary>
     void Enter(Unit u)
     {
+        if (!Site.HasKeep)
+        {
+            u.Refuge = Gate; u.Path = null; u.State = UnitState.Idle;
+            u.Why = (Site.Holding == Holding.Outpost ? "у места заставы: " : "у лагеря: ") + (u.Mending ? "отлёживается" : "пережидает");
+            return;
+        }
         // a prisoner it was leading goes in with it
         if (u.Captive is { Team: Team.Horde, Dead: false } c && c.Captor == u) { Imprison(c); u.Captive = null; }
         ReleaseSite(u);

@@ -83,7 +83,7 @@ public static partial class MapGen
         var site = new Site
         {
             HTop = new int[N], KeepR = 24, KeepX = (int)hex.CX, KeepZ = (int)hex.CZ, Design = new VoxelWorld(SX, w.SY, SZ),
-            SX = SX, SZ = SZ, Hex = hex, Kind = p.Kind, Classic = p.Classic, EntrySide = entry,
+            SX = SX, SZ = SZ, Hex = hex, Kind = p.Kind, Classic = p.Classic, EntrySide = entry, Edges = p.Edges,
         };
         if (entry == Hex.West)
         {
@@ -784,6 +784,11 @@ public static partial class MapGen
                 : Flora.Birch(w, x, z, 46 + (int)(size * 26));
         }
 
+        // what stands in the middle: the citadel with its braziers at the door; or, in a valley of the map, the place of an
+        // outpost or the horde's town (Holdings.cs)
+        site.Holding = p.Holding;
+        if (p.Holding == Holding.Outpost) { site.KeepBase = Holdings.OutpostPlace(w, site); return site; }
+        if (p.Holding == Holding.HordeTown) { site.KeepBase = Holdings.HordeTown(w, site, seed); return site; }
         site.KeepBase = WorldGen.Keep(w, site);
         int gx2 = site.KeepX - site.KeepR - 7;
         foreach (int dz in new[] { -10, 10 }) WorldGen.Brazier(w, site, gx2, w.SurfAt(gx2, site.KeepZ + dz), site.KeepZ + dz, post: 4);

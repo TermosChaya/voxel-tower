@@ -489,6 +489,8 @@ public sealed class Unit
     public int Dest = -1;
     /// <summary>Where a soldier goes when the horn sounds; -1 for none.</summary>
     public int Post = -1;
+    /// <summary>The side of the valley it was sent out by, to the map (Sim.Campaign.cs); -1 for none.</summary>
+    public int LeaveBy = -1;
 
     // labour
     public int Site = -1;

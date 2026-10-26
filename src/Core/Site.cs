@@ -3,11 +3,11 @@ using System.Collections.Generic;
 
 namespace VoxelTower.Core;
 
-public enum LandmarkKind : byte { Mine, Ruin, Power }
+public enum LandmarkKind : byte { Mine, Ruin, Power, Lair }
 
 /// <summary>
-/// A named place of the valley: a mine (what it pays a minute while it is ours, whether the horde camps at it), a ruin, or
-/// a place of power, where prayer is heard better than anywhere else.
+/// A named place of the valley: a mine (what it pays a minute while it is ours, whether the horde camps at it), a ruin, a
+/// place of power, where prayer is heard better than anywhere else, or the horde's lair in a valley of the enemy's.
 /// </summary>
 public sealed class Landmark
 {
@@ -34,6 +34,14 @@ public sealed class Site
     /// <summary>What kind of valley this is, and whether the first valley keeps every place it always had.</summary>
     public ValleyKind Kind;
     public bool Classic = true;
+    /// <summary>What stands in the middle: the citadel, the place of an outpost, or the horde's town (<see cref="MapParams.Holding"/>).</summary>
+    public Holding Holding;
+    /// <summary>The sides as the map of valleys gave them (<see cref="MapParams.Edges"/>), for a save to make the valley again; null when made by itself.</summary>
+    public HexEdge[] Edges;
+    /// <summary>The citadel stands in the middle: ours go into it to shelter and mend, and come out of its door.</summary>
+    public bool HasKeep => Holding == Holding.Citadel;
+    /// <summary>Where the garrison of a horde's town keeps: before its huts' doors, at its fire and at its gate (voxels).</summary>
+    public readonly List<(int X, int Z)> HordePosts = new();
 
     /// <summary>A row of the western edge to come in by, as near a wanted one as the hexagon's straight side allows.</summary>
     public int EntryZ(int z) => Hex == null ? z : Math.Clamp(z, WestZ0, WestZ1);
@@ -175,6 +183,7 @@ public sealed class Site
     {
         if (InStrip(x + .5f, z + .5f)) return true;
         if (Hex != null && Hex.Edge(x + .5f, z + .5f) < 0) return true;
+        if (!HasKeep) return false;
         if (Math.Sqrt((double)(x - KeepX) * (x - KeepX) + (double)(z - KeepZ) * (z - KeepZ)) < KeepR + 3) return true;
         if (x >= KeepX - KeepR - 16 && x < KeepX - KeepR && Math.Abs(z - KeepZ) < 8) return true;
         return false;

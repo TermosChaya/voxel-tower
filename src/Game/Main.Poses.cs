@@ -87,6 +87,8 @@ public partial class Main
         if (_pose == "warlord") { WarlordPose(); return; }
         if (_pose == "edge") { EdgePose(); return; }
         if (_pose == "rowhouses") { RowHousesPose(); return; }
+        if (_pose == "holding") { HoldingPose(); return; }
+        if (_pose == "arrive") { ArrivePose(); return; }
         if (_pose == "sigils")
         {
             var layer = new CanvasLayer { Layer = 100 };

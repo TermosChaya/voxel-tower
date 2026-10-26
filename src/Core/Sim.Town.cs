@@ -446,7 +446,7 @@ public sealed partial class Sim
     }
 
     /// <summary>A new day: each building's stock of those it hires grows by its growth, up to twice that, as a week in the Heroes.</summary>
-    internal void TownDay()
+    internal void TownDay(bool say = true)
     {
         int grew = 0;
         foreach (var b in Buildings)
@@ -461,7 +461,7 @@ public sealed partial class Sim
                 b.Stock[kind.Key] = now;
             }
         }
-        if (grew > 0) { TownVersion++; Say("Новый день: в зданиях города прибавилось желающих наняться.", 0); }
+        if (grew > 0) { TownVersion++; if (say) Say("Новый день: в зданиях города прибавилось желающих наняться.", 0); }
     }
 
     /// <summary>The town looked over now and then: its stocks growing, its income paid; a building gone is let go.</summary>

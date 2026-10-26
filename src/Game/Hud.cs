@@ -743,10 +743,11 @@ public partial class Hud : CanvasLayer
     /// <summary>The tabs in the order they give up their names when the beam is crowded.</summary>
     readonly List<TabPlaque> _squeeze = new();
 
-    /// <summary>What the tag says over a mine, a ruin or a place of power.</summary>
+    /// <summary>What the tag says over a mine, a ruin, a place of power or the horde's lair.</summary>
     (string head, string sub, Color color) PlaceTag(Landmark l)
     {
         if (l.Kind == LandmarkKind.Ruin) return (l.Name, "старая кладка: починить ({ToolRepair}) или разобрать на камень ({ToolGather}, {MatStone})", Ornament.Aged);
+        if (l.Kind == LandmarkKind.Lair) return (l.Name, "город орды: гарнизон бьёт всех, кто подойдёт", Ornament.Blood);
         var m = _m.Sim.Mines.Find(x => x.Place == l);
         if (m == null) return (l.Name, "", Ornament.Aged);
         if (m.Power)

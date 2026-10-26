@@ -6176,6 +6176,10 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--metal") MetalBench.R
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--war") WarBench.Run(Check);
 if (args.Length > 0 && args[0] == "--war-audit") WarBench.Audit();
 
+// the map of valleys' ground: the campaign, its one clock, parties coming in and going out over the sides, a valley's
+// fall its own, the outpost's place and the horde's town, the campaign's folder (CampaignBench.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--campaign") CampaignBench.Run(Check);
+
 if (args.Length > 0 && args[0] == "--stress")
 {
     // not in the usual run: a long sandbox under fire, to find a step that takes too long or never ends. Every second
