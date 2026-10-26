@@ -56,6 +56,9 @@ public partial class Main
         Rig.Focus(World.WX(hx), World.WZ(hz));
         Hud.OpenPanel("town");
         await Frames(30);
+        // with no town hall yet, the tab says to put one up first
+        string advice = Hud.Town.Advice;
+        check("the «Город» tab says what to build next: with no town hall, the hall", advice != null && advice.Contains("ратуш"), $"«{advice}»");
         // (the tab is laid out again as things change: what a button said is read before it is pressed)
         var put = Buttons(kind.Name).Find(b => b.Text.StartsWith("Поставить"));
         string putText = put?.Text;

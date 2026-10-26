@@ -325,6 +325,12 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   на 5, грудь до стены, выше нового конька после этажа; `HangFront`. Виды: `FixtureKind.Sign/Chimney/Trade` (и `Torch`
   для фонаря у двери), материалы 146–149, 159, 170–173. `FrontageOf(b)` — стоящее по якорям в рамке здания.
   `DecorateChunk` у зданий города не ставит бочки и стяги стен (`BuildingAt`).
+- `Sim.Dues.cs` — подать: `Comfort` (флаги `Water`, `Fire`, `Rest`, `Paving`), `LivedIn` (жилой дом не здание),
+  `Comforts` (готовые вещи `Yards` в `ComfortReach` = 96 от стен; мощение кроме `Trodden` в `PavingReach` = 24, от 24
+  столбцов), `CountDues` (из `TickTown` раз в 2 с: `_comfort`, `_dues`), `DuesOf` (`Beds` × `DuesPerBunk` 0,1 ×
+  (1 + `ComfortShare` 0,5 × удобств), только при работающей ратуше), `Dues`, `DuesLine` (строка подсказки над домом),
+  `DuesTip`. `TownIncome` прибавляет `_dues`; `SettlementPoints` считает только `LivedIn`. `Sim.TownNext` (в
+  `Sim.Town.cs`) — строка «Дальше…» для вкладки.
 - `Sim.Metal.cs` — железо: `OreSpan` (до какой руды в пределах глубины уходит столбец), `MineFloor` (дно рудника —
   `Zone.Floor`: открытый карьер до руды, склоны воксель на воксель, расстояние двумя проходами), `OreDutyZone` (рудник
   для работы «Добыча» с металлом), `StruckOre` (счёт `MetalMined`, строка летописи, флаг `OreStruck`),

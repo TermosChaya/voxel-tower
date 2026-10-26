@@ -418,11 +418,11 @@ public sealed partial class Sim
     /// <summary>The settlement rose a rank: the rank, the gold it paid, and the templates it opened.</summary>
     public event Action<int, int, Template[]> StandingRose;
 
-    /// <summary>What the settlement is worth: houses, the town's buildings by their level, the things set out about the place, the masonry laid.</summary>
+    /// <summary>What the settlement is worth: houses lived in (not one only drawn), the town's buildings by their level, the things set out about the place, the masonry laid.</summary>
     public int SettlementPoints()
     {
         int p = 0;
-        foreach (var z in Zones) if (z.Kind == Zone.Dwelling) p += 10;
+        foreach (var z in Zones) if (LivedIn(z)) p += 10;
         foreach (var b in Buildings) if (b.Ready) p += 15 * Math.Max(1, b.Level);
         foreach (var y in Yards) if (y.Ready) p += 2;
         p += (int)(BuiltVoxels / 2000);

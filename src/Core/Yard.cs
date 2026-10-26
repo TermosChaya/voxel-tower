@@ -27,17 +27,17 @@ public static class Yard
     /// <summary>What it is for, for its tooltip.</summary>
     public static string About(DecorKind k) => k switch
     {
-        DecorKind.Campfire => "Кольцо камней, поленья и огонь. Светит ночью, дымит. Вечером у костра греются и сидят.",
-        DecorKind.Bench => "На скамье отдыхают свободные люди.",
-        DecorKind.Torch => "Высокий факел на земле. Светит ночью.",
-        DecorKind.Brazier => "Жаровня на каменной тумбе. Светит ночью, у неё греются.",
-        DecorKind.Well => "Каменный сруб с крышей и ведром.",
+        DecorKind.Campfire => "Кольцо камней, поленья и огонь. Светит ночью, дымит. Вечером у костра греются и сидят. Дома рядом платят больше подати.",
+        DecorKind.Bench => "На скамье отдыхают свободные люди. Дома рядом платят больше подати.",
+        DecorKind.Torch => "Высокий факел на земле. Светит ночью. Дома рядом платят больше подати.",
+        DecorKind.Brazier => "Жаровня на каменной тумбе. Светит ночью, у неё греются. Дома рядом платят больше подати.",
+        DecorKind.Well => "Каменный сруб с крышей и ведром. Дома рядом платят больше подати.",
         DecorKind.Woodpile => "Сложенные поленья.",
         DecorKind.Cart => "Телега с мешками.",
         DecorKind.Barrels => "Две бочки и ящик.",
         DecorKind.Fence => "Звено изгороди, 2 м.",
         DecorKind.Signpost => "Столб с указателями.",
-        _ => "Грядка цветов в каменном бордюре.",
+        _ => "Грядка цветов в каменном бордюре. Дома рядом платят больше подати.",
     };
 
     static readonly Dictionary<DecorKind, List<(int dx, int dy, int dz, byte m)>> _shapes = new();

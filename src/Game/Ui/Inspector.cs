@@ -299,7 +299,7 @@ public partial class Inspector : Control
         return row;
     }
 
-    public const string StandingTip = "Уровень поселения\nРастёт с тем, что построено: жилые дома, здания города по их уровню, вещи «Обустройства» и вся кладка рабочих. " +
+    public const string StandingTip = "Уровень поселения\nРастёт с тем, что построено: жилые дома с лежанками, здания города по их уровню, вещи «Обустройства» и вся кладка рабочих. " +
         "Каждый новый уровень даёт золото, некоторые открывают шаблоны.";
 
     /// <summary>The blueprints taken so far, a button each: a click takes up a copy to place, the cross throws the blueprint away.</summary>

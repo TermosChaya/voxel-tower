@@ -1213,6 +1213,8 @@ public partial class BuildTools : Node3D
         else if (order != 0) text += $" · размечено: {Mat.NameOf(order).ToLowerInvariant()}";
         var zone = _m.Sim.ZoneAt(_hover.X, _hover.Z);
         if (zone != null) text += $" · {zone.Name.ToLowerInvariant()}";
+        // a house lived in: what it pays and what would make it pay more (Sim.Dues.cs)
+        if (zone != null && _m.Sim.DuesLine(zone) is { Length: > 0 } dues) text += $" · {dues}";
         HoverText = text;
     }
 

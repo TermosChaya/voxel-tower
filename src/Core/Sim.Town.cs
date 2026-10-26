@@ -84,7 +84,7 @@ public sealed partial class Sim
     public static readonly TownKind[] TownKinds =
     {
         new() { Key = "hall", Name = "Ратуша", Lore = "b_hall", Gold = 60, UpGold = 120, Income1 = 3, Income2 = 6,
-            About = "Платит золото: 3 в минуту и по 1 за каждые 2 здания города.", Level2 = "6 золота в минуту и по 1 за каждое здание.",
+            About = "Платит золото: 3 в минуту и по 1 за каждые 2 здания города. Собирает подать с жилых домов.", Level2 = "6 золота в минуту и по 1 за каждое здание.",
             Props1 = new[] { Prop.Desk, Prop.Crates }, Props2 = new[] { Prop.Desk, Prop.Casks } },
         new() { Key = "market", Name = "Рынок", Lore = "b_market", Gold = 50, UpGold = 100, Income2 = 2, Wall = Mat.Wood,
             About = "Меняет запасы на золото и обратно: 1 м³ камня или брёвен продаётся за 3, покупается за 9.", Level2 = "Продаёт по 4, покупает по 7, даёт 2 золота в минуту.",
@@ -389,7 +389,7 @@ public sealed partial class Sim
         return null;
     }
 
-    /// <summary>The gold the town pays a minute now: the town hall's by the settlement's size, and the market's.</summary>
+    /// <summary>The gold the town pays a minute now: the town hall's by the settlement's size, the market's, and the houses' dues (Sim.Dues.cs).</summary>
     public float TownIncome()
     {
         float g = 0;
@@ -402,7 +402,34 @@ public sealed partial class Sim
             if (k.Key == "hall") g += b.Level >= 2 ? k.Income2 + built : k.Income1 + built / 2;
             else g += b.Level >= 2 ? k.Income2 : k.Income1;
         }
-        return g;
+        return g + _dues;
+    }
+
+    /// <summary>
+    /// What the town would do best to have next, for the «Город» tab: a town hall first; then houses lived in; then the
+    /// cheapest building the lore has opened and the gold will pay for, else a second storey the gold will pay for;
+    /// then what would make the houses pay more dues; else what to learn. Null when there is nothing to say.
+    /// </summary>
+    public string TownNext()
+    {
+        var hall = TownKindOf("hall");
+        if (BuildingOf("hall") == null)
+            return CantBuild(hall) is { } no && no.StartsWith("сначала изучите") ? "Дальше: изучите «Ратуша» во «Знаниях». Она платит золото и собирает подать с домов."
+                : "Дальше: поставьте ратушу. Она платит золото и собирает подать с домов.";
+        if (!Zones.Exists(LivedIn))
+            return "Дальше: постройте жилой дом (прямоугольник, «дом»). Каждая лежанка даёт место в войске и подать.";
+        TownKind cheapest = null;
+        foreach (var k in TownKinds)
+            if (CantBuild(k) == null && (cheapest == null || k.Gold < cheapest.Gold)) cheapest = k;
+        if (cheapest != null) return $"Дальше можно: «{cheapest.Name}», {cheapest.Gold} зол. {cheapest.About}";
+        foreach (var b in Buildings)
+            if (CantRaise(b) == null) return $"Дальше можно: второй этаж «{b.K.Name}», {b.K.UpGold} зол. {b.K.Level2}";
+        foreach (var z in Zones)
+            if (LivedIn(z) && ComfortOf(z) != (Comfort.Water | Comfort.Fire | Comfort.Rest | Comfort.Paving))
+                return "Дальше: обустройте посёлок. Колодец, костёр, скамья или клумба и дорожка у дома прибавляют подать.";
+        foreach (var k in TownKinds)
+            if (BuildingOf(k.Key) == null && !Knows(k.Lore)) return $"Дальше: откройте новое здание во «Знаниях», например «{k.Name}».";
+        return null;
     }
 
     /// <summary>What the standing buildings give, gathered again (a level reached or lost, a game read back).</summary>
@@ -448,6 +475,7 @@ public sealed partial class Sim
         TickMetal(dt);
         if (Time < _nextTown) return;
         _nextTown = Time + 2;
+        CountDues();
         for (int i = Buildings.Count - 1; i >= 0; i--)
         {
             var b = Buildings[i];

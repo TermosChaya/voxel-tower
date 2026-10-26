@@ -31,7 +31,7 @@ public partial class BuildTools
             WayKind.Cobble => "Булыжник из камня. По нему ходят быстрее всего.",
             WayKind.Flags => "Плиты из камня, для площадей.",
             _ => "Дощатые мостки из брёвен, для сырых мест.",
-        }) + " Протяните по земле: рабочие снимут дёрн и выложат дорожку вровень с землёй."
+        }) + " Протяните по земле: рабочие снимут дёрн и выложат дорожку вровень с землёй. Дом у дорожки платит больше подати."
         : Yard.About(Yard.All[pick - WayCount]) + " Ставится щелчком, {Rotate} поворачивает.";
 
     public void StepYard(int dir) { Opt.YardPick = (Opt.YardPick + dir + YardCount) % YardCount; Changed(); }

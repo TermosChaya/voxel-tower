@@ -155,6 +155,69 @@ static class TownBench
             && Of(b, FixtureKind.Sign) == 1 && Of(b, FixtureKind.Chimney) == 1 && Of(b, FixtureKind.Trade) >= 1 && !inSwing && outOfDoor != null,
             $"the hall: {Front(hall)}; the market: {Front(mk)}; the barracks: {Front(b)}; in the door's swing {inSwing}; one hired {(outOfDoor != null ? "out of the door" : "not")}");
 
+        // the houses pay dues to the town hall by their bunks, and more for each comfort about them: a well, then paving
+        // at the door; a house only drawn counts nothing toward the settlement's rank
+        string dues = "no level ground for a house";
+        bool duesOk = false;
+        // level ground near the hall, clear of the buildings and their fronts
+        (int x, int z)? houseAt = null;
+        for (int r = 90; r < 360 && houseAt == null && hall != null; r += 8)
+            for (int a = 0; a < 32 && houseAt == null; a++)
+            {
+                int x = (int)(hall.CX + MathF.Cos(a * MathF.Tau / 32) * r), z = (int)(hall.CZ + MathF.Sin(a * MathF.Tau / 32) * r);
+                int lo = int.MaxValue, hi = 0;
+                bool clear = true;
+                for (int dx = -40; dx <= 40 && clear; dx += 4)
+                    for (int dz = -44; dz <= 44 && clear; dz += 4)
+                    {
+                        int h = w.SurfAt(x + dx, z + dz);
+                        lo = Math.Min(lo, h); hi = Math.Max(hi, h);
+                        clear = !site.Forbidden(x + dx, z + dz) && sim.BuildingAt(x + dx, z + dz) == null && sim.ZoneAt(x + dx, z + dz) == null
+                            && !Mat.IsTrunk(w.Get(x + dx, h + 2, z + dz)) && w.Get(x + dx, h - 1, z + dz) != Mat.Water;
+                    }
+                if (clear && hi - lo <= 2) houseAt = (x, z);
+            }
+        if (houseAt is var (hx, hz))
+        {
+            var st = new Stroke { Mat = Mat.Stone, Width = Shapes.HouseWall, Height = Shapes.HouseHeight, Level = true };
+            int points0 = sim.SettlementPoints();
+            var plan = sim.PlanHouseAt(hx - 18, hz - 22, hx + 18, hz + 22, st, -1, out var hd, out string hwhy, out var harched, out var hrect, out _, out _, out var hmoves);
+            int drawn = plan == null ? 0 : sim.PutHouse(plan, harched, hd, hrect, hmoves);
+            Run(3);
+            int pointsDrawn = sim.SettlementPoints();
+            sim.InstantLabour = true;
+            sim.CompleteAll();
+            var home = sim.Zones.Find(z => z.Kind == Zone.Dwelling && z.X0 == hrect.x0 && z.Z0 == hrect.z0);
+            for (int i = 0; i < 60 && home != null && !sim.LivedIn(home); i++) { Run(1); sim.CompleteAll(); sim.LookOver(home); }
+            sim.InstantLabour = false;
+            Run(3);
+            float bare = home == null ? 0 : sim.DuesOf(home);
+            int pointsLived = sim.SettlementPoints();
+            // a well beside it
+            sim.InstantLabour = true;
+            string well = "";
+            foreach (var (wx, wz) in new[] { (hrect.x1 + 24, (hrect.z0 + hrect.z1) / 2), (hrect.x0 - 24, (hrect.z0 + hrect.z1) / 2), ((hrect.x0 + hrect.x1) / 2, hrect.z0 - 24) })
+                if ((well = sim.PlaceDecor(DecorKind.Well, wx, wz, 0)) == null) break;
+            sim.InstantLabour = false;
+            Run(3);
+            float watered = home == null ? 0 : sim.DuesOf(home);
+            // a cobbled way along it
+            sim.InstantLabour = true;
+            sim.Pave(Sim.WayPlan(w, site, hrect.x0 - 8, hrect.z1 + 10, hrect.x1 + 8, hrect.z1 + 10, 12, WayKind.Cobble));
+            sim.CompleteAll();
+            sim.InstantLabour = false;
+            Run(3);
+            float paved = home == null ? 0 : sim.DuesOf(home);
+            float town = sim.TownIncome();
+            int beds = home?.Beds ?? 0;
+            duesOk = drawn > 0 && home != null && beds > 0 && pointsDrawn == points0 && pointsLived == points0 + 10 && well == null
+                && MathF.Abs(bare - beds * Sim.DuesPerBunk) < .01f && MathF.Abs(watered - bare * 1.5f) < .01f && MathF.Abs(paved - bare * 2) < .01f
+                && sim.Dues() >= paved - .01f && town >= sim.Dues() + 3;
+            dues = $"house «{hwhy}», {beds} bunks; points {points0} → drawn {pointsDrawn} → lived {pointsLived}; dues bare {bare:0.##}, with a well «{well}» {watered:0.##}, paved {paved:0.##}; " +
+                $"comforts {(home == null ? "-" : sim.ComfortOf(home).ToString())}; all dues {sim.Dues():0.##}, the town {town:0.##} a minute";
+        }
+        check("houses lived in pay dues to the town hall by their bunks, half as much again for a well and again for paving; a house only drawn counts nothing toward the rank", duesOk, dues);
+
         // all of it read back
         var buf = new System.IO.MemoryStream();
         sim.Save(buf, mp.Seed, "town", "");
