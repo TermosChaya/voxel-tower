@@ -90,6 +90,7 @@ public partial class Main
         if (_pose == "rowhouses") { RowHousesPose(); return; }
         if (_pose == "holding") { HoldingPose(); return; }
         if (_pose == "arrive") { ArrivePose(); return; }
+        if (_pose == "nature") { NaturePose(); return; }
         if (_pose == "sigils")
         {
             var layer = new CanvasLayer { Layer = 100 };
@@ -1652,7 +1653,7 @@ public partial class Main
             {
                 int h = 7 - Math.Max(Math.Abs(x - ux), Math.Abs(z - uz));
                 // the tufts and flowers it comes down on buried with the rest, lest the rubble over them stand on nothing
-                for (int y = uy; y < uy + h; y++) if (w.Get(x, y, z) is Mat.Air or Mat.Tuft or Mat.Flower or Mat.Bloom) w.Set(x, y, z, Mat.Rubble);
+                for (int y = uy; y < uy + h; y++) if (w.Get(x, y, z) == Mat.Air || Mat.IsSprig(w.Get(x, y, z))) w.Set(x, y, z, Mat.Rubble);
             }
         // whatever of it stands on nothing settles at once, quietly, as a new game's ruins do: the heap a fall leaves
         Sim.Subside(ux - 8, uz - 8, ux + 8, uz + 8);
@@ -1743,7 +1744,7 @@ public partial class Main
                 for (int y = w.SurfAt(x, z); y < w.SY; y++)
                 {
                     byte m = w.Get(x, y, z);
-                    if (Mat.IsTrunk(m) || Mat.IsLeafy(m) || bare && m is Mat.Tuft or Mat.Flower or Mat.Bloom) w.SetRaw(x, y, z, Mat.Air);
+                    if (Mat.IsTrunk(m) || Mat.IsLeafy(m) || bare && Mat.IsSprig(m)) w.SetRaw(x, y, z, Mat.Air);
                 }
     }
 }

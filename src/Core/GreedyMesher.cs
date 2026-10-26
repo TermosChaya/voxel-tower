@@ -169,7 +169,8 @@ public sealed class GreedyMesher
             for (int i = 0; i < pad.Length; i++)
             {
                 byte m = pad[i];
-                wet[i] = m == Mat.Water ? Mat.Water : m == 0 ? (byte)0 : Blocker;
+                // (a lily on the water or a reed standing in it hides nothing of the water's face)
+                wet[i] = m == Mat.Water ? Mat.Water : m is 0 or Mat.Lily or Mat.Reed ? (byte)0 : Blocker;
                 if (m == Mat.Water) pad[i] = 0;
             }
             var wm = Mesh(wet, VoxelWorld.CS, VoxelWorld.CS, VoxelWorld.CS, ox, oy, oz, Blocker);
@@ -250,6 +251,16 @@ public sealed class GreedyMesher
         return mb;
     }
 
+    /// <summary>Every material drawn in blades and petals (<see cref="Mat.IsSprig"/>), to find any of them in a block at once.</summary>
+    static readonly System.Buffers.SearchValues<byte> SprigMats = System.Buffers.SearchValues.Create(Sprigs());
+
+    static byte[] Sprigs()
+    {
+        var l = new System.Collections.Generic.List<byte>();
+        for (int m = 1; m < Mat.Count; m++) if (Mat.IsSprig((byte)m)) l.Add((byte)m);
+        return l.ToArray();
+    }
+
     /// <summary>
     /// Finds the tufts and flowers of a padded chunk and the turf open above (water over turf is not open), and says
     /// whether there are tufts or flowers anywhere in the block, its padding too.
@@ -257,8 +268,8 @@ public sealed class GreedyMesher
     Sward Gather(byte[] pad, out bool sprigs)
     {
         const int P = VoxelWorld.CS + 2, Row = P * P;
-        sprigs = Array.IndexOf(pad, Mat.Tuft) >= 0 || Array.IndexOf(pad, Mat.Flower) >= 0 || Array.IndexOf(pad, Mat.Bloom) >= 0;
-        if (!sprigs && Array.IndexOf(pad, Mat.Grass) < 0 && Array.IndexOf(pad, Mat.GrassDry) < 0 && Array.IndexOf(pad, Mat.GrassLush) < 0)
+        sprigs = pad.AsSpan().IndexOfAny(SprigMats) >= 0;
+        if (!sprigs && pad.AsSpan().IndexOfAny(Mat.Grass, Mat.GrassDry, Mat.GrassLush) < 0)
             return null;
         _sprigs.Clear();
         _turf.Clear();

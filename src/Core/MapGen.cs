@@ -13,6 +13,8 @@ public sealed class MapParams
     public uint Seed = 7;
     /// <summary>Knobs for the look against the triangle count.</summary>
     public double TreeDensity = .7, TuftChance = .015, Roughness = 2.5;
+    /// <summary>The small things a hexagon grows by itself (MapGen.Nature.cs); off, its valley as it was without them.</summary>
+    public bool Details = true;
     /// <summary>What kind of valley it is: its ground and its places (<see cref="Valleys"/>).</summary>
     public ValleyKind Kind = ValleyKind.First;
     /// <summary>

@@ -13,6 +13,8 @@ namespace VoxelTower.Game;
 /// them out of the chunk meshes and hands their places over (<see cref="Sward"/>), and this draws them, a MultiMesh for
 /// each patch of the valley. Every blade bends in the wind (harder in a storm), away from whoever walks through it, before
 /// a blast's wave and round a whirlwind: see shaders/grass.gdshader.
+/// The valley's other small plants are drawn the same way (MapGen.Nature.cs lays them): ferns arching over the forest floor,
+/// reeds with a cattail's head or two, mushrooms, water lilies lying on the lakes; flowers come in five colours.
 /// A child of the <see cref="WorldView"/>, so its instances stand in voxels as the chunks do.
 /// </summary>
 public partial class GrassView : Node3D
@@ -43,6 +45,11 @@ public partial class GrassView : Node3D
         public float Dist;
     }
     Patch[] _tufts, _flowers, _sward, _edges;
+    /// <summary>Ferns, reeds, mushrooms and lilies: a patch of each kind where there are any, each kind its own mesh.</summary>
+    static readonly byte[] WildMats = { Mat.Fern, Mat.Reed, Mat.Mushroom, Mat.Lily };
+    Patch[][] _wild;
+    ArrayMesh[] _wildMesh;
+    readonly int[] _nWild = new int[4];
     int _pw, _ph, _tw, _th;
     readonly List<int> _want = new();
     float[] _buf = Array.Empty<float>();
@@ -64,6 +71,8 @@ public partial class GrassView : Node3D
         _flowers = NewPatches(_pw * _ph);
         _sward = NewPatches(_tw * _th);
         _edges = NewPatches(_tw * _th);
+        _wild = new Patch[WildMats.Length][];
+        for (int k = 0; k < WildMats.Length; k++) _wild[k] = NewPatches(_pw * _ph);
         _mat = new ShaderMaterial { Shader = GD.Load<Shader>("res://shaders/grass.gdshader") };
         _mat.SetShaderParameter("vox", VoxelWorld.Vox);
         _mat.SetShaderParameter("origin", new Vector3(w.OriginX, 0, w.OriginZ));
@@ -71,6 +80,7 @@ public partial class GrassView : Node3D
         _flower = Flowers();
         _blades = Blades();
         _fringe = Fringe();
+        _wildMesh = new[] { Fern(), Reed(), Mushroom(), Lily() };
     }
 
     static Patch[] NewPatches(int n)
@@ -138,15 +148,28 @@ public partial class GrassView : Node3D
 
     // ------------------------------------------------------------------ tufts and flowers
 
-    /// <summary>Lays out the tufts and the flowers of one patch afresh.</summary>
+    /// <summary>Which of the other small plants it is (an index of <see cref="WildMats"/>); -1 for a tuft or a flower.</summary>
+    static int Wild(byte m) => m switch { Mat.Fern => 0, Mat.Reed => 1, Mat.Mushroom => 2, Mat.Lily => 3, _ => -1 };
+
+    /// <summary>A flower's colour as the shader has it: buttercup, bellflower, poppy, daisy, cornflower.</summary>
+    static int Petals(byte m) => m switch { Mat.Bloom => 1, Mat.FlowerRed => 2, Mat.FlowerWhite => 3, Mat.FlowerBlue => 4, _ => 0 };
+
+    /// <summary>Lays out the tufts, the flowers and the other small plants of one patch afresh.</summary>
     void Sprigs(int p)
     {
         int px = p % _pw, pz = p / _pw;
         int nT = 0, nF = 0;
+        Array.Clear(_nWild);
         ForChunks(px, pz, PatchChunks, ci =>
         {
             if (_sprigs[ci] == null) return;
-            foreach (int e in _sprigs[ci]) if (Sward.Mat(e) == Mat.Tuft) nT++; else nF++;
+            foreach (int e in _sprigs[ci])
+            {
+                byte m = Sward.Mat(e);
+                if (m == Mat.Tuft) nT++;
+                else if (Wild(m) is var k && k >= 0) _nWild[k]++;
+                else nF++;
+            }
         });
         Fill(_tufts[p], _tuft, nT, px, pz, PatchChunks, (buf, aabb) =>
         {
@@ -165,7 +188,7 @@ public partial class GrassView : Node3D
                     // a tuft of the meadow stands a foot and more, knee-high where it grows two voxels of it
                     float tall = Sward.Tall(e) * (1.6f + (float)h2 * .5f);
                     Put(buf, n++, x + .5f + (float)(h - .5) * .3f, y, z + .5f + (float)(h2 - .5) * .3f, (float)(h * Math.Tau), .9f + (float)h * .25f, tall,
-                        Mat.Tuft, dry, 0, (float)h2);
+                        Mat.Tuft, dry, 0, (float)h2, 0);
                     aabb.Add(y);
                 }
             });
@@ -181,16 +204,64 @@ public partial class GrassView : Node3D
                 foreach (int e in _sprigs[ci])
                 {
                     byte m = Sward.Mat(e);
-                    if (m == Mat.Tuft) continue;
+                    if (m == Mat.Tuft || Wild(m) >= 0) continue;
                     int x = cx * VoxelWorld.CS + Sward.X(e), y = cy * VoxelWorld.CS + Sward.Y(e), z = cz * VoxelWorld.CS + Sward.Z(e);
                     double h = Hash.H3(x, y, z + 3), h2 = Hash.H3(z, x + 5, y);
                     float tall = (1.25f + (float)h2 * .45f) * Math.Max(1, Sward.Tall(e));
-                    Put(buf, n++, x + .5f, y, z + .5f, (float)(h * Math.Tau), .9f + (float)h * .3f, tall, Mat.Tuft, .1f, m == Mat.Flower ? 1 : 2, (float)h2);
+                    Put(buf, n++, x + .5f, y, z + .5f, (float)(h * Math.Tau), .9f + (float)h * .3f, tall, Mat.Tuft, .1f, 1, (float)h2, Petals(m));
                     aabb.Add(y);
                 }
             });
             return n;
         });
+        for (int k = 0; k < WildMats.Length; k++)
+        {
+            byte want = WildMats[k];
+            Fill(_wild[k][p], _wildMesh[k], _nWild[k], px, pz, PatchChunks, (buf, aabb) =>
+            {
+                int n = 0;
+                ForChunks(px, pz, PatchChunks, ci =>
+                {
+                    if (_sprigs[ci] == null) return;
+                    _w.ChunkCoords(ci, out int cx, out int cy, out int cz);
+                    foreach (int e in _sprigs[ci])
+                        if (Sward.Mat(e) == want)
+                        {
+                            int x = cx * VoxelWorld.CS + Sward.X(e), y = cy * VoxelWorld.CS + Sward.Y(e), z = cz * VoxelWorld.CS + Sward.Z(e);
+                            Wilds(buf, n++, want, x, y, z, Sward.Tall(e));
+                            aabb.Add(y + (want == Mat.Reed ? 14 : want == Mat.Fern ? 3 : 0));
+                        }
+                });
+                return n;
+            });
+        }
+    }
+
+    /// <summary>
+    /// One fern, stand of reeds, cluster of mushrooms or lily as its kind is drawn: a fern spread wide and knee high, the
+    /// taller for two voxels of it; reeds a man's chest high on three; mushrooms a hand high, one cluster in three of fly
+    /// agarics; lilies flat on the water, one in four in flower.
+    /// </summary>
+    static void Wilds(float[] buf, int n, byte m, int x, int y, int z, int tall)
+    {
+        double h = Hash.H3(x, y, z + 7), h2 = Hash.H3(z + 2, x, y + 9);
+        float yaw = (float)(h * Math.Tau), jx = (float)(h - .5) * .4f, jz = (float)(h2 - .5) * .4f;
+        switch (m)
+        {
+            case Mat.Fern:
+                Put(buf, n, x + .5f + jx, y, z + .5f + jz, yaw, 2.5f + (float)h2 * .9f, (2.1f + (float)h * .8f) * Math.Max(1, tall) * .8f, m, 0, 4, (float)h2, 0);
+                break;
+            case Mat.Reed:
+                Put(buf, n, x + .5f + jx, y, z + .5f + jz, yaw, 1.1f + (float)h2 * .4f, Math.Max(1, tall) * (3.3f + (float)h * .9f), m, .15f, 5, (float)h2, 0);
+                break;
+            case Mat.Mushroom:
+                float size = .9f + (float)h2 * .6f;
+                Put(buf, n, x + .5f + jx, y, z + .5f + jz, yaw, size, size, m, 0, 6, (float)h2, h < .3 ? 0 : h < .75 ? 1 : 2);
+                break;
+            default:
+                Put(buf, n, x + .5f, y, z + .5f, yaw, 1.8f + (float)h2 * .8f, 1, m, 0, 7, (float)h2, h < .18 ? 0 : h < .26 ? 1 : 2);
+                break;
+        }
     }
 
     // ------------------------------------------------------------------ the sward
@@ -337,7 +408,7 @@ public partial class GrassView : Node3D
                     double h = Hash.H3(x, y + 11, z), h2 = Hash.H3(z + 13, x, y);
                     float dry = m == Mat.GrassDry ? .75f : m == Mat.GrassLush ? .05f : .3f;
                     float tall = (m == Mat.GrassLush ? 1.2f : m == Mat.GrassDry ? .75f : .95f) * (.8f + (float)h2 * .4f);
-                    Put(buf, n++, x + .5f, y + 1, z + .5f, (float)(h * Math.Tau), 1, tall, m, dry, 3, (float)h);
+                    Put(buf, n++, x + .5f, y + 1, z + .5f, (float)(h * Math.Tau), 1, tall, m, dry, 3, (float)h, 0);
                     aabb.Add(y + 1);
                 }
             });
@@ -366,7 +437,7 @@ public partial class GrassView : Node3D
                         // +x, -x, +z, -z: the fringe's mesh hangs toward +z, turned to face the open side
                         float yaw = k switch { 0 => MathF.PI / 2, 1 => -MathF.PI / 2, 2 => 0, _ => MathF.PI };
                         double h = Hash.H3(x + k * 7, y, z);
-                        Put(buf, n++, x + .5f, y + 1, z + .5f, yaw, 1, .85f + (float)h * .4f, m, dry, 3, (float)h);
+                        Put(buf, n++, x + .5f, y + 1, z + .5f, yaw, 1, .85f + (float)h * .4f, m, dry, 3, (float)h, 0);
                         aabb.Add(y - 2);
                     }
                 }
@@ -418,8 +489,9 @@ public partial class GrassView : Node3D
         p.Mi.CustomAabb = new Aabb(new Vector3(px * side - 2, ys.Lo - 1, pz * side - 2), new Vector3(side + 4, ys.Hi - ys.Lo + 6, side + 4));
     }
 
-    /// <summary>One instance: where it stands, its turn and size, the colour of what it is, how dry, its kind and its own random.</summary>
-    static void Put(float[] b, int i, float x, float y, float z, float yaw, float wide, float tall, byte colourOf, float dry, int kind, float own)
+    /// <summary>One instance: where it stands, its turn and size, the colour of what it is, how dry, its kind, its own random
+    /// and which of its kind's colours.</summary>
+    static void Put(float[] b, int i, float x, float y, float z, float yaw, float wide, float tall, byte colourOf, float dry, int kind, float own, int pal)
     {
         int o = i * Stride;
         float c = MathF.Cos(yaw) * wide, s = MathF.Sin(yaw) * wide;
@@ -427,7 +499,7 @@ public partial class GrassView : Node3D
         b[o + 4] = 0; b[o + 5] = tall; b[o + 6] = 0; b[o + 7] = y;
         b[o + 8] = -s; b[o + 9] = 0; b[o + 10] = c; b[o + 11] = z;
         b[o + 12] = Mat.Lin[colourOf * 3]; b[o + 13] = Mat.Lin[colourOf * 3 + 1]; b[o + 14] = Mat.Lin[colourOf * 3 + 2]; b[o + 15] = dry;
-        b[o + 16] = kind; b[o + 17] = own; b[o + 18] = 0; b[o + 19] = 0;
+        b[o + 16] = kind; b[o + 17] = own; b[o + 18] = pal; b[o + 19] = 0;
     }
 
     // ------------------------------------------------------------------ what bends the grass
@@ -531,7 +603,7 @@ public partial class GrassView : Node3D
         /// A blade from its root leaning out along the way it faces (az), curving over as it rises: <paramref name="len"/>
         /// long, <paramref name="half"/> wide either side at the root and narrowing to a point. Returns where its tip is.
         /// </summary>
-        public Vector3 Blade(Vector3 root, float az, float lean, float len, float half, int segs, float id, float curl = 1)
+        public Vector3 Blade(Vector3 root, float az, float lean, float len, float half, int segs, float id, float curl = 1, float belly = 0)
         {
             _id = id;
             _root = root;
@@ -547,7 +619,8 @@ public partial class GrassView : Node3D
                 var n = along.Cross(across).Normalized();
                 if (s < segs)
                 {
-                    float w = half * (1 - .75f * t);
+                    // narrowing to its tip; a frond broadest at its middle
+                    float w = half * ((1 - .75f * t) * (1 - belly) + belly * MathF.Sin(MathF.PI * (.14f + .8f * t)));
                     Vert(p, -across * w, n, t, 0);
                     Vert(p, across * w, n, t, 0);
                 }
@@ -595,6 +668,110 @@ public partial class GrassView : Node3D
                 Vert(at, new Vector3(MathF.Cos(a) * r * .28f, r * .05f, MathF.Sin(a) * r * .28f), Vector3.Up, 1, 2);
             }
             for (int k = 0; k < 4; k++) { _i.Add(h); _i.Add(h + 1 + k); _i.Add(h + 1 + (k + 1) % 4); }
+        }
+
+        /// <summary>A cattail's head: a brown spike from a to b up its stem, r thick, swaying as the stem does there.</summary>
+        public void Spike(Vector3 a, Vector3 b, float r, float upA, float upB, float id)
+        {
+            _id = id;
+            int b0 = _v.Count;
+            for (int k = 0; k < 2; k++)
+                for (int q = 0; q < 4; q++)
+                {
+                    float an = q * MathF.Tau / 4;
+                    var off = new Vector3(MathF.Cos(an) * r, 0, MathF.Sin(an) * r);
+                    Vert(k == 0 ? a : b, off, off.Normalized(), k == 0 ? upA : upB, 2);
+                }
+            for (int q = 0; q < 4; q++)
+            {
+                int q1 = (q + 1) % 4;
+                _i.Add(b0 + q); _i.Add(b0 + 4 + q); _i.Add(b0 + 4 + q1);
+                _i.Add(b0 + q); _i.Add(b0 + 4 + q1); _i.Add(b0 + q1);
+            }
+            int top = _v.Count;
+            Vert(b + new Vector3(0, r, 0), Vector3.Zero, Vector3.Up, upB, 2);
+            for (int q = 0; q < 4; q++) { _i.Add(top); _i.Add(b0 + 4 + q); _i.Add(b0 + 4 + (q + 1) % 4); }
+        }
+
+        /// <summary>
+        /// A mushroom at <paramref name="at"/>, s its size: a stem, a domed cap over it with the gills under it, and flecks
+        /// on its top (white on a fly agaric, of the cap's own colour on the others). Barely swaying.
+        /// </summary>
+        public void Cap(Vector3 at, float s, float tilt, float id)
+        {
+            _id = id;
+            _root = at;
+            const float up = .04f;
+            const int sides = 5;
+            float stemR = .065f * s, stemTop = .42f * s, capR = .25f * s;
+            // the stem
+            int b0 = _v.Count;
+            for (int k = 0; k < 2; k++)
+                for (int q = 0; q < sides; q++)
+                {
+                    float an = q * MathF.Tau / sides;
+                    var off = new Vector3(MathF.Cos(an) * stemR * (k == 0 ? 1.15f : 1), 0, MathF.Sin(an) * stemR * (k == 0 ? 1.15f : 1));
+                    Vert(at + new Vector3(0, k * stemTop, 0), off, off.Normalized(), up, 3);
+                }
+            for (int q = 0; q < sides; q++)
+            {
+                int q1 = (q + 1) % sides;
+                _i.Add(b0 + q); _i.Add(b0 + sides + q); _i.Add(b0 + sides + q1);
+                _i.Add(b0 + q); _i.Add(b0 + sides + q1); _i.Add(b0 + q1);
+            }
+            // the cap: a rim, a shoulder, the crown; the gills under it
+            var lean = new Vector3(MathF.Cos(tilt), 0, MathF.Sin(tilt)) * .04f * s;
+            var c0 = at + new Vector3(0, stemTop - .02f * s, 0) + lean;
+            int rim = _v.Count;
+            for (int q = 0; q < sides * 2; q++)
+            {
+                float an = q * MathF.Tau / (sides * 2);
+                var d = new Vector3(MathF.Cos(an), 0, MathF.Sin(an));
+                Vert(c0, d * capR, (d - Vector3.Up * .3f).Normalized(), up, 1);
+                Vert(c0 + new Vector3(0, .12f * s, 0), d * capR * .78f, (d + Vector3.Up).Normalized(), up, 1);
+            }
+            int crown = _v.Count;
+            Vert(c0 + new Vector3(0, .19f * s, 0), Vector3.Zero, Vector3.Up, up, 1);
+            int under = _v.Count;
+            Vert(c0, Vector3.Zero, Vector3.Down, up, 3);
+            for (int q = 0; q < sides * 2; q++)
+            {
+                int a = rim + q * 2, b = rim + (q + 1) % (sides * 2) * 2;
+                _i.Add(a); _i.Add(a + 1); _i.Add(b + 1);
+                _i.Add(a); _i.Add(b + 1); _i.Add(b);
+                _i.Add(a + 1); _i.Add(crown); _i.Add(b + 1);
+                _i.Add(a); _i.Add(b); _i.Add(under);
+            }
+            // flecks on the crown
+            for (int k = 0; k < 4; k++)
+            {
+                float an = k * 2.1f + tilt, dd = capR * (k == 0 ? 0 : .55f);
+                var p = c0 + new Vector3(MathF.Cos(an) * dd, (k == 0 ? .2f : .15f) * s, MathF.Sin(an) * dd);
+                int f = _v.Count;
+                for (int q = 0; q < 3; q++)
+                {
+                    float fa = q * MathF.Tau / 3 + an;
+                    Vert(p, new Vector3(MathF.Cos(fa), 0, MathF.Sin(fa)) * .035f * s, Vector3.Up, up, 4);
+                }
+                _i.Add(f); _i.Add(f + 1); _i.Add(f + 2);
+            }
+        }
+
+        /// <summary>A lily's pad lying flat at c, r across, the notch of it facing the way <paramref name="notch"/>.</summary>
+        public void Pad(Vector3 c, float r, float notch, float id)
+        {
+            _id = id;
+            _root = c;
+            const int n = 12;
+            int mid = _v.Count;
+            Vert(c, Vector3.Zero, Vector3.Up, 0, 0);
+            for (int q = 0; q <= n; q++)
+            {
+                // a wedge left out for the notch, from the middle to the rim
+                float an = notch + .45f + q * (MathF.Tau - .9f) / n;
+                Vert(c, new Vector3(MathF.Cos(an), 0, MathF.Sin(an)) * r, Vector3.Up, 0, 0);
+            }
+            for (int q = 0; q < n; q++) { _i.Add(mid); _i.Add(mid + 1 + q); _i.Add(mid + 2 + q); }
         }
 
         public ArrayMesh Mesh()
@@ -653,6 +830,69 @@ public partial class GrassView : Node3D
         return c.Mesh();
     }
 
+    /// <summary>A fern: six fronds arching out from the middle and over, broadest halfway out, a voxel tall before its instance stretches it.</summary>
+    static ArrayMesh Fern()
+    {
+        var c = new Clump();
+        var r = new Random(249);
+        const int n = 6;
+        for (int k = 0; k < n; k++)
+        {
+            float az = k * MathF.Tau / n + (float)r.NextDouble() * .6f;
+            float lean = .5f + (float)r.NextDouble() * .45f, len = .8f + (float)r.NextDouble() * .3f;
+            c.Blade(new Vector3(MathF.Cos(az) * .03f, 0, MathF.Sin(az) * .03f), az, lean, len, .13f, 4, (k + .5f) / n, 1.7f, 1);
+        }
+        return c.Mesh();
+    }
+
+    /// <summary>Reeds: long narrow leaves standing nearly straight up, two stems among them with a cattail's brown head.</summary>
+    static ArrayMesh Reed()
+    {
+        var c = new Clump();
+        var r = new Random(248);
+        const int n = 10;
+        for (int k = 0; k < 8; k++)
+        {
+            float az = k * 2.39996f + (float)r.NextDouble() * .5f, out1 = (float)r.NextDouble() * .2f;
+            c.Blade(new Vector3(MathF.Cos(az) * out1, 0, MathF.Sin(az) * out1), az, .05f + (float)r.NextDouble() * .25f, .7f + (float)r.NextDouble() * .3f, .035f, 4,
+                (k + .5f) / n, .8f);
+        }
+        for (int k = 0; k < 2; k++)
+        {
+            float az = k * 3.1f + .7f, len = .95f + k * .07f;
+            var root = new Vector3(MathF.Cos(az) * .07f, 0, MathF.Sin(az) * .07f);
+            var tip = c.Blade(root, az, .04f, len, .012f, 4, (8 + k + .5f) / n, .5f);
+            // its head below the bare tip, on the straight of the stem
+            var stem = (tip - root).Normalized();
+            c.Spike(tip - stem * len * .3f, tip - stem * len * .1f, .038f, .7f, .9f, (8 + k + .5f) / n);
+        }
+        return c.Mesh();
+    }
+
+    /// <summary>Mushrooms: three in a cluster, a stout one and two smaller, a voxel across before the instance sizes them.</summary>
+    static ArrayMesh Mushroom()
+    {
+        var c = new Clump();
+        c.Cap(new Vector3(0, 0, 0), 1, .4f, .2f);
+        c.Cap(new Vector3(.24f, 0, .14f), .68f, 2.1f, .5f);
+        c.Cap(new Vector3(-.16f, 0, .24f), .5f, 4.2f, .8f);
+        return c.Mesh();
+    }
+
+    /// <summary>Water lilies: four round pads lying flat on the water each with its notch, and a flower among them.</summary>
+    static ArrayMesh Lily()
+    {
+        var c = new Clump();
+        var r = new Random(246);
+        for (int k = 0; k < 4; k++)
+        {
+            float a = k * 1.7f + (float)r.NextDouble(), d = k == 0 ? 0 : .2f + (float)r.NextDouble() * .14f;
+            c.Pad(new Vector3(MathF.Cos(a) * d, .02f + k * .002f, MathF.Sin(a) * d), .16f + (float)r.NextDouble() * .07f, (float)r.NextDouble() * 6.28f, (k + .5f) / 5);
+        }
+        c.Head(new Vector3(.06f, .06f, .03f), .13f, .3f, .9f);
+        return c.Mesh();
+    }
+
     /// <summary>
     /// The sward on a voxel of turf: a dozen blades, ten to twenty-five centimetres, a meadow's and not a lawn's, rooted
     /// all over its top in a jittered grid so none bunch up, leaning every way.
@@ -689,6 +929,14 @@ public partial class GrassView : Node3D
             c.Blade(root, az, lean, len, .04f, 3, (k * 3 % n + .5f) / n, 1.5f);
         }
         return c.Mesh();
+    }
+
+    /// <summary>Ferns, reeds, mushrooms and lilies drawn now, for the self-test.</summary>
+    public int WildDrawn()
+    {
+        int n = 0;
+        foreach (var kind in _wild) foreach (var p in kind) n += p.Mi?.Multimesh.InstanceCount ?? 0;
+        return n;
     }
 
     /// <summary>Tufts, flowers and sward instances drawn now, for the self-test and the shots.</summary>

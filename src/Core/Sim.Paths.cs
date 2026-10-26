@@ -81,7 +81,7 @@ public sealed partial class Sim
             for (int yy = y + 1; yy < y + 4 && World.InBounds(x, yy, z); yy++)
             {
                 byte above = World.Get(x, yy, z);
-                if (above is Mat.Tuft or Mat.Flower or Mat.Bloom) World.Set(x, yy, z, Mat.Air);
+                if (Mat.IsSprig(above)) World.Set(x, yy, z, Mat.Air);
                 else break;
             }
         }
@@ -154,7 +154,7 @@ public sealed partial class Sim
         for (int yy = top + 1; yy < top + 4 && World.InBounds(x, yy, z); yy++)
         {
             byte above = World.Get(x, yy, z);
-            if (above is Mat.Tuft or Mat.Flower or Mat.Bloom) World.Set(x, yy, z, Mat.Air);
+            if (Mat.IsSprig(above)) World.Set(x, yy, z, Mat.Air);
             else break;
         }
         _worn.Add(key);

@@ -913,7 +913,12 @@ public sealed partial class Sim
                 World.Set(x, y, z, Liquids[k].Mat);
                 if (k == LiquidWater) { MarkArrival(x, z); Flooded++; }
             }
-            else if (shown != 0 && (k != shown || m < Liquids[shown].ShowOff)) World.Set(x, y, z, Mat.Air);
+            else if (shown != 0 && (k != shown || m < Liquids[shown].ShowOff))
+            {
+                World.Set(x, y, z, Mat.Air);
+                // a lily that lay on it or the reeds that stood in it go with the water, rather than hang over nothing
+                for (int up = y + 1; up < World.SY && World.Get(x, up, z) is Mat.Lily or Mat.Reed; up++) World.Set(x, up, z, Mat.Air);
+            }
         }
         finally { _liquidWriting = was; }
     }

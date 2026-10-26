@@ -22,7 +22,8 @@ public static class Wand
         if (Mat.IsGrass(m)) return Mat.Soil;
         return m switch
         {
-            Mat.Soil or Mat.Path or Mat.Tuft or Mat.Flower or Mat.Bloom => Mat.Soil,
+            Mat.Soil or Mat.Path => Mat.Soil,
+            _ when Mat.IsSprig(m) => Mat.Soil,
             Mat.Moss => Mat.Rock,
             Mat.GateShut or Mat.GateOpen => Mat.Gate,
             Mat.IronGateShut or Mat.IronGateOpen => Mat.IronGate,

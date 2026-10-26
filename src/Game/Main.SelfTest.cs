@@ -681,6 +681,12 @@ public partial class Main
         Check("tufts and flowers are drawn in blades; the turf grows a sward of them when the view comes close, and loses it going back",
             tufts > 1000 && flowers > 100 && swardFar == 0 && swardNear > 2000 && swardBack == 0,
             $"{tufts} tufts, {flowers} flowers; sward {swardFar} from afar, {swardNear} close, {swardBack} back again");
+        // the valley's other small plants drawn the same way, and its bushes, fallen trees and the rest laid out
+        int Of(Detail k) { int n = 0; foreach (var d in Site.Details) if (d.Kind == k) n++; return n; }
+        int wild = View.Grass.WildDrawn(), fallen = Of(Detail.FallenTree);
+        Check("ferns, reeds, mushrooms and lilies are drawn with the grass; the valley has its bushes and fallen trees",
+            wild > 1000 && fallen > 0 && Of(Detail.Hazel) + Of(Detail.BerryBush) > 5,
+            $"{wild} ferns, reeds, mushrooms and lilies drawn; {Site.Details.Count} small things, {fallen} of them fallen trees");
         // the lines round the voxels: off unless the player turns them on in the settings, and seen at once when they are:
         // they darken the picture, where the wind in the grass from one frame to the next only stirs it
         // not so close that the sward is still growing in over the turf, which darkens it by itself

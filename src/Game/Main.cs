@@ -261,6 +261,8 @@ public partial class Main : Node3D
         Task.Run(() => Bodies.Warm(Kinds.All()));
         var sw = Stopwatch.StartNew();
         var mp = new MapParams { Seed = _seed, Kind = _valley, Classic = _classic, Hexagon = _hexagon, EntrySide = _entry, Holding = _holding, Edges = _edges };
+        // (--perf-without=details: the valley made without its small things, to weigh what they cost)
+        mp.Details = Array.IndexOf(_perfWithout, "details") < 0;
         // the game's valley: a hexagon in a box a half again as wide as the bench's (192 m from point to point)
         if (_hexagon) mp.SizeX = mp.SizeZ = MapParams.GameSize;
         if (_size > 0) mp.SizeX = mp.SizeZ = _size;

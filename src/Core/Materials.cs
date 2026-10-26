@@ -168,7 +168,15 @@ public static class Mat
     /// alchemist's green glass. Dressing like the rest: whatever is built or laid where it stands takes its place.
     /// </summary>
     public const byte Signboard = 146, Paint = 147, Canvas = 148, Flue = 149, Hewn = 159, Bale = 170, OreHeap = 171, Brew = 172, BonePile = 173;
-    public const int Count = 190;
+    /// <summary>
+    /// The small things the valley grows by itself (MapGen.Nature.cs), from the far end of the numbers: what the game draws
+    /// finer than its voxels as the tufts are — poppies, daisies and cornflowers, ferns, reeds, mushrooms, water lilies —
+    /// and what stands as voxels: juniper, berries on the bushes, a bird's nest, an anthill, the dark inside of a hollow tree.
+    /// (253 and up are the marked work's, <see cref="Orders.Remove"/>.)
+    /// </summary>
+    public const byte FlowerRed = 252, FlowerWhite = 251, FlowerBlue = 250, Fern = 249, Reed = 248, Mushroom = 247, Lily = 246,
+        Juniper = 245, BerryRed = 244, BerryBlue = 243, Nest = 242, Anthill = 241, Hollow = 240;
+    public const int Count = 253;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
     public static readonly bool[] IsVeg = new bool[Count], IsPlayer = new bool[Count], IsEarthy = new bool[Count],
@@ -365,16 +373,33 @@ public static class Mat
         D(BonePile, "Кости", 0xd6ccb2, .1f, MatGroup.Hard, Decor);
         foreach (var m in new[] { Signboard, Paint, Canvas, Brew, BonePile }) Passable[m] = true;
         Emission[Brew] = .7f;
+        // what grows by itself: flowers of three more colours, ferns, reeds, mushrooms and lilies drawn in blades and
+        // petals; juniper, berries and a nest are leaves to everyone, an anthill is earth, a hollow is the tree's own wood
+        D(FlowerRed, "Цветы", 0x9a2a1e, .30f, MatGroup.Earth, Natural | Earthy);
+        D(FlowerWhite, "Цветы", 0xb8b2a2, .30f, MatGroup.Earth, Natural | Earthy);
+        D(FlowerBlue, "Цветы", 0x3c5a9a, .30f, MatGroup.Earth, Natural | Earthy);
+        D(Fern, "Папоротник", 0x3f6a2c, .30f, MatGroup.Earth, Natural | Earthy);
+        D(Reed, "Камыш", 0x6a7a42, .30f, MatGroup.Earth, Natural | Earthy);
+        D(Mushroom, "Грибы", 0xcfc4a8, .20f, MatGroup.Earth, Natural | Earthy);
+        D(Lily, "Кувшинки", 0x3e6a34, .24f, MatGroup.Earth, Natural);
+        D(Juniper, "Можжевельник", 0x33573a, .26f, MatGroup.Wood, Natural);
+        D(BerryRed, "Ягоды", 0x9c1f1c, .16f, MatGroup.Wood, Natural);
+        D(BerryBlue, "Ягоды", 0x2a2f62, .16f, MatGroup.Wood, Natural);
+        D(Nest, "Гнездо", 0x6e5636, .26f, MatGroup.Wood, Natural);
+        D(Anthill, "Муравейник", 0x5e4631, .34f, MatGroup.Earth, Natural | Earthy);
+        D(Hollow, "Дупло", 0x1e1712, .14f, MatGroup.Wood, Natural);
         Emission[Phial] = .35f;
         Emission[Window] = Emission[WindowLog] = .45f;
 
         // a number no material has been given yet (kept for one being made elsewhere) is at least something, not nothing
         for (int m = 1; m < Count; m++) if (Def[m].Name == null) D((byte)m, "—", 0x808080, 0, MatGroup.Hard, 0);
-        foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage, Flower, Bloom, Birch, NeedleLight, FoliageLight, FoliageGold, PineBark, Snag }) IsVeg[m] = true;
-        foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame, Stakes, Pitch, TowerLadder, Acid, Scaffold, Lava }) Passable[m] = true;
+        foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage, Flower, Bloom, Birch, NeedleLight, FoliageLight, FoliageGold, PineBark, Snag,
+            FlowerRed, FlowerWhite, FlowerBlue, Fern, Reed, Mushroom, Lily, Juniper, BerryRed, BerryBlue, Nest, Hollow }) IsVeg[m] = true;
+        foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame, Stakes, Pitch, TowerLadder, Acid, Scaffold, Lava,
+            FlowerRed, FlowerWhite, FlowerBlue, Fern, Reed, Mushroom, Lily, Juniper, BerryRed, BerryBlue, Nest }) Passable[m] = true;
         IsLadder[Ladder] = IsLadder[SiegeLadder] = IsLadder[TowerLadder] = IsLadder[Scaffold] = true;
-        foreach (var m in new[] { Tuft, Flower, Bloom }) SwayKind[m] = 1;
-        foreach (var m in new[] { Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold }) SwayKind[m] = 2;
+        foreach (var m in new[] { Tuft, Flower, Bloom, FlowerRed, FlowerWhite, FlowerBlue, Fern, Reed, Mushroom, Lily }) SwayKind[m] = 1;
+        foreach (var m in new[] { Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold, Juniper, BerryRed, BerryBlue, Nest }) SwayKind[m] = 2;
         foreach (var m in new[] { Stone, StoneDark, StoneLight, StoneWarm, StoneCool, Mortar, Keep, KeepShade, KeepDark, Cobble, Flag }) Smooth[m] = true;
         foreach (var m in new[] { Steel, Mail, Brass, Pitch, SteelEdge, SteelDark }) Metal[m] = true;
         for (int m = 0; m < Count; m++)
@@ -384,17 +409,23 @@ public static class Mat
         Skin[Acid] = 2;
         Skin[Lava] = 10;
         foreach (var m in new[] { Plate, IronGate, IronGateShut, IronGateOpen }) Skin[m] = 11;
+        // juniper in needles; berries, a nest's twigs and the inside of a hollow plain
+        Skin[Juniper] = 7;
+        Skin[BerryRed] = Skin[BerryBlue] = Skin[Nest] = Skin[Hollow] = 0;
         // what holds the world up: loose pieces resting on these never fall
-        foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Scorch, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank, Menhir, Trodden, Basalt, IronOre, OreRust }) IsAnchor[m] = true;
+        foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Scorch, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank, Menhir, Trodden, Basalt, IronOre, OreRust, Anthill }) IsAnchor[m] = true;
 
         // what burns: needles and leaves flare up and are gone in seconds, grass and flowers in a moment; timber
         // catches slowly and burns long, and some of it stands charred after; a living trunk and oak bound with iron
         // slower still, a dead tree readily; pitch catches from anything, runs with fire and burns long, twice as hot
         void F(float caught, float fuel, float charred, params byte[] ms) { foreach (var m in ms) { Catch[m] = caught; Fuel[m] = fuel; CharShare[m] = charred; Heat[m] = 1; } }
-        F(.5f, 4, 0, Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold);
-        F(.35f, 1.5f, 0, Tuft, Flower, Bloom);
+        F(.5f, 4, 0, Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold, Juniper, BerryRed, BerryBlue);
+        F(.35f, 1.5f, 0, Tuft, Flower, Bloom, FlowerRed, FlowerWhite, FlowerBlue, Fern);
+        // dry reeds and a nest of twigs go up at a touch; mushrooms only shrivel; lilies on the water do not burn
+        F(.6f, 2, 0, Reed, Nest);
+        F(.05f, 1, 0, Mushroom);
         F(.03f, 40, .6f, Trunk, Birch, PineBark);
-        F(.1f, 30, .6f, Snag);
+        F(.1f, 30, .6f, Snag, Hollow);
         F(.04f, 35, .35f, Wood, DropLog);
         F(.03f, 30, .35f, Plank);
         F(.04f, 25, .35f, Boardwalk);
@@ -443,12 +474,13 @@ public static class Mat
     public static string NameOf(byte m) => m == Air ? "воздух" : Def[m].Name ?? "?";
 
     /// <summary>The trunk of a tree, birch or any other.</summary>
-    public static bool IsTrunk(byte m) => m is Trunk or Birch or PineBark or Snag;
-    /// <summary>Needles and leaves, in any of their shades.</summary>
-    public static bool IsLeafy(byte m) => m is Leaf or Foliage or NeedleLight or FoliageLight or FoliageGold;
+    public static bool IsTrunk(byte m) => m is Trunk or Birch or PineBark or Snag or Hollow;
+    /// <summary>Needles and leaves, in any of their shades, and what hangs among them: juniper, berries, a nest.</summary>
+    public static bool IsLeafy(byte m) => m is Leaf or Foliage or NeedleLight or FoliageLight or FoliageGold or Juniper or BerryRed or BerryBlue or Nest;
 
-    /// <summary>A tuft of grass or a flower: the game draws it in blades and petals, not as a cube.</summary>
-    public static bool IsSprig(byte m) => m is Tuft or Flower or Bloom;
+    /// <summary>A tuft of grass, a flower, a fern, a reed, a mushroom, a lily on the water: the game draws it in blades and
+    /// petals, not as a cube.</summary>
+    public static bool IsSprig(byte m) => m is Tuft or Flower or Bloom or (>= Lily and <= FlowerRed);
 
     /// <summary>Turf of any shade.</summary>
     public static bool IsGrass(byte m) => m is Grass or GrassDry or GrassLush;

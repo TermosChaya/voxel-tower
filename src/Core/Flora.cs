@@ -9,13 +9,13 @@ namespace VoxelTower.Core;
 /// that are lighter where the sun is on them. Each keeps clear of the others, so that it is felled by itself. (The
 /// prototype's map keeps its small cypresses and dead trees as they were.)
 /// </summary>
-public static class Flora
+public static partial class Flora
 {
     static bool Put(VoxelWorld w, int x, int y, int z, byte m)
     {
         if (!w.InBounds(x, y, z)) return false;
         byte cur = w.Get(x, y, z);
-        if (cur != Mat.Air && cur is not (Mat.Tuft or Mat.Flower or Mat.Bloom)) return false;
+        if (cur != Mat.Air && !Mat.IsSprig(cur)) return false;
         w.SetRaw(x, y, z, m);
         return true;
     }
@@ -252,9 +252,11 @@ public static class Flora
 
     /// <summary>
     /// A clump of leaves: an ellipsoid rx across and ry high with a ragged rim (the noise in 2³ grains keeps the faces few),
-    /// its upper part mostly in the sunlit shade; <paramref name="sun"/> gives more of it to the light, or less.
+    /// its upper part mostly in the sunlit shade; <paramref name="sun"/> gives more of it to the light, or less. What it
+    /// lays goes into <paramref name="laid"/> when one is given.
     /// </summary>
-    static void Clump(VoxelWorld w, double cx, double cy, double cz, double rx, double ry, byte leaf, byte lit, double rag = .6, double sun = 0)
+    static void Clump(VoxelWorld w, double cx, double cy, double cz, double rx, double ry, byte leaf, byte lit, double rag = .6, double sun = 0,
+        List<(int x, int y, int z)> laid = null)
     {
         for (int y = (int)Math.Floor(cy - ry - 1); y <= (int)Math.Floor(cy + ry + 1); y++)
             for (int z = (int)Math.Floor(cz - rx - 1); z <= (int)Math.Floor(cz + rx + 1); z++)
@@ -264,7 +266,7 @@ public static class Flora
                     double e = Sq((x + .5 - cx) / rx) + ey * ey + Sq((z + .5 - cz) / rx) + (Hash.H3(x >> 1, y >> 1, z >> 1) - .5) * rag;
                     if (e >= 1) continue;
                     bool sunlit = ey > -.15 && Hash.H3((x >> 1) + 9, y >> 1, (z >> 1) + 5) < .3 + ey * .6 + sun;
-                    Put(w, x, y, z, sunlit ? lit : leaf);
+                    if (Put(w, x, y, z, sunlit ? lit : leaf)) laid?.Add((x, y, z));
                 }
     }
 

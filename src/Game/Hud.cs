@@ -61,7 +61,7 @@ public partial class Hud : CanvasLayer
     public static readonly (byte mat, Act act, int store, string tip)[] MatDefs =
     {
         (Mat.Stone, Act.MatStone, Stockpile.Stone, "Камень ({MatStone})\nСамый прочный, но кладётся дольше всего. Добывают киркой в скалах и валунах. Разобранная кладка возвращает 75 % камня."),
-        (Mat.Wood, Act.MatWood, Stockpile.Wood, "Брёвна ({MatWood})\nРубят в лесу. Кладутся быстрее камня, но орки легко их рубят, и они горят."),
+        (Mat.Wood, Act.MatWood, Stockpile.Wood, "Брёвна ({MatWood})\nРубят в лесу, упавшие деревья и пни тоже. Кладутся быстрее камня, но орки легко их рубят, и они горят."),
         (Mat.Rammed, Act.MatEarth, Stockpile.Earth, "Земля ({MatEarth})\nДаёт любой ров и котлован. Кладётся быстрее всего. Гоблин без кирки сквозь насыпь не пройдёт."),
         (Mat.Plate, Act.MatMetal, Stockpile.Metal, "Металл ({MatMetal})\nЖелезные листы на заклёпках: прочнее всего, держит пролёт до 3 м, не горит, орда рубит его втрое дольше камня. Добывают из железной руды: ржавые скалы-выходы и жилы под землёй."),
     };

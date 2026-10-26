@@ -593,7 +593,8 @@ public static partial class MapGen
                 }
         });
         site.WaterTop = water;
-        AfterRelief(w, site, p, new Relief { SX = SX, SZ = SZ, Kind = kind, Soil = soil, Water = water, Moist = moist });
+        var relief = new Relief { SX = SX, SZ = SZ, Kind = kind, Soil = soil, Water = water, Moist = moist };
+        AfterRelief(w, site, p, relief);
 
         // ---- the lines kept for the far land, the current and whoever asks where the river and the roads run
         site.River = new List<(float X, float Z, float Half)>(river.Count);
@@ -787,8 +788,12 @@ public static partial class MapGen
         // what stands in the middle: the citadel with its braziers at the door; or, in a valley of the map, the place of an
         // outpost or the horde's town (Holdings.cs)
         site.Holding = p.Holding;
+        // the small things (MapGen.Nature.cs): bushes, fallen trees, flowers, reeds and the rest, clear of the middle
+        // whatever stands there
+        if (p.Details) Nature(w, site, p, relief);
         if (p.Holding == Holding.Outpost) { site.KeepBase = Holdings.OutpostPlace(w, site); return site; }
         if (p.Holding == Holding.HordeTown) { site.KeepBase = Holdings.HordeTown(w, site, seed); return site; }
+
         site.KeepBase = WorldGen.Keep(w, site);
         int gx2 = site.KeepX - site.KeepR - 7;
         foreach (int dz in new[] { -10, 10 }) WorldGen.Brazier(w, site, gx2, w.SurfAt(gx2, site.KeepZ + dz), site.KeepZ + dz, post: 4);

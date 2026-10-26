@@ -20,7 +20,7 @@ public sealed class Landmark
 }
 
 /// <summary>Where things stand on the map: the citadel, the starter wall, torch positions.</summary>
-public sealed class Site
+public sealed partial class Site
 {
     public int KeepX = 286, KeepZ = 112, KeepR = 24;
     public int KeepBase = 72;

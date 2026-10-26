@@ -9,9 +9,11 @@ render_mode cull_disabled, world_vertex_coords, diffuse_burley, specular_schlick
 // meadow keeps its tone at every distance instead of shimmering away.
 // Mesh: VERTEX in voxels from the clump's root, CUSTOM0.xyz = how far this vertex lies from the blade's spine (or a
 // petal's from its flower's heart) and CUSTOM0.w with UV2.y where the blade itself is rooted (x, z), UV = (way up the
-// blade 0..1, which blade of the clump 0..1), UV2.x = part: 0 blade, 1 petal, 2 the heart of a flower.
-// Instance: COLOR = the grass's colour, alpha how dry it is; INSTANCE_CUSTOM = (kind: 0 tuft, 1 yellow flower,
-// 2 purple flower, 3 sward; its own random, 0, 0).
+// blade 0..1, which blade of the clump 0..1), UV2.x = part: 0 blade (a frond, a leaf, a pad), 1 petal (a mushroom's
+// cap), 2 the heart of a flower (a cattail's head), 3 a mushroom's stem, 4 a fleck on its cap.
+// Instance: COLOR = the grass's colour, alpha how dry it is; INSTANCE_CUSTOM = (kind: 0 tuft, 1 flower, 3 sward,
+// 4 fern, 5 reeds, 6 mushrooms, 7 water lilies; its own random; which colour: a flower's 0 buttercup, 1 bellflower,
+// 2 poppy, 3 daisy, 4 cornflower, mushrooms' 0 fly agaric, 1 brown, 2 pale, lilies' 0 white, 1 pink, 2 none in flower; 0).
 
 // how big a voxel is in the world, and where the voxel (0, 0, 0) lies
 uniform float vox = 0.0625;
@@ -41,6 +43,13 @@ varying float v_part;
 varying float v_dry;
 varying float v_tone;
 varying float v_kind;
+varying float v_pal;
+
+// the flowers' petals and hearts by their colour; the mushrooms' caps; the lilies' petals
+const vec3 PETAL[5] = vec3[](vec3(0.78, 0.6, 0.06), vec3(0.33, 0.17, 0.48), vec3(0.66, 0.07, 0.04), vec3(0.86, 0.85, 0.8), vec3(0.16, 0.3, 0.74));
+const vec3 HEART[5] = vec3[](vec3(0.62, 0.32, 0.03), vec3(0.75, 0.62, 0.12), vec3(0.06, 0.05, 0.05), vec3(0.85, 0.62, 0.08), vec3(0.1, 0.13, 0.32));
+const vec3 CAP[3] = vec3[](vec3(0.66, 0.08, 0.04), vec3(0.4, 0.24, 0.12), vec3(0.66, 0.56, 0.38));
+const vec3 LILY[2] = vec3[](vec3(0.9, 0.88, 0.84), vec3(0.88, 0.56, 0.64));
 
 float vhash(vec3 p) {
 	p = fract(p * 0.1031);
@@ -64,6 +73,8 @@ float turf_tone(vec3 cell) {
 void vertex() {
 	float kind = INSTANCE_CUSTOM.x;
 	float own = INSTANCE_CUSTOM.y;
+	float pal = INSTANCE_CUSTOM.z;
+	bool sward = abs(kind - 3.0) < 0.5;
 	float up = UV.x;
 	float part = UV2.x;
 	vec3 root = MODEL_MATRIX[3].xyz;
@@ -72,7 +83,7 @@ void vertex() {
 	vec3 base = mat3(MODEL_MATRIX) * vec3(CUSTOM0.w, 0.0, UV2.y);
 	// the sward grows in with the zoom and gives way to the bare turf with distance
 	float g = 1.0;
-	if (kind > 2.5) {
+	if (sward) {
 		g = sward_at.w * (1.0 - smoothstep(sward_reach.x, sward_reach.y, length(root.xz - sward_at.xz))) * step(UV.y, keep);
 	}
 	// never thinner than a pixel; where a blade is widened that much, fewer blades keep the same tone (the projection
@@ -84,7 +95,11 @@ void vertex() {
 	// the clump thins by whole blades, all of a clump alike, by how much a blade of the usual width would have to widen
 	// where it stands; a flower keeps its stems, or its heads would float
 	float spread = max(1.0, 0.6 * pixel * mix(max(-(VIEW_MATRIX * vec4(root, 1.0)).z, 0.001), 1.0, ortho) / (0.04 * vox));
-	if ((kind < 0.5 || kind > 2.5) && UV.y * min(spread, 8.0) > 1.6) g = 0.0;
+	if ((kind < 0.5 || sward) && UV.y * min(spread, 8.0) > 1.6) g = 0.0;
+	// far off a flower keeps its stems and heads and lets its leaves go (the first five of its blades)
+	if (kind > 0.5 && kind < 1.5 && part < 0.5 && UV.y < 0.62 && spread > 2.5) g = 0.0;
+	// lilies not in flower lie as pads alone
+	if (kind > 6.5 && pal > 1.5 && part > 0.5) g = 0.0;
 	if (g < 0.02) {
 		VERTEX = root;
 	} else {
@@ -153,19 +168,30 @@ void vertex() {
 	v_up = up;
 	v_part = part;
 	v_kind = kind;
+	v_pal = pal;
 }
 
 void fragment() {
 	// both faces of a blade are lit as its front: the normal leans up, so turned over it would face the ground
 	if (!FRONT_FACING) NORMAL = -NORMAL;
 	vec3 c = v_col * (1.0 + v_tone);
-	if (v_part > 1.5) {
-		// the heart of a flower
-		c = v_kind < 1.5 ? vec3(0.62, 0.32, 0.03) : vec3(0.75, 0.62, 0.12);
+	int pk = int(v_pal + 0.5);
+	if (v_part > 3.5) {
+		// the white flecks on a fly agaric's cap, none on the others
+		c = pk == 0 ? vec3(0.88, 0.86, 0.8) : CAP[clamp(pk, 0, 2)] * 0.9;
+	} else if (v_part > 2.5) {
+		// a mushroom's stem and the gills under its cap
+		c = vec3(0.82, 0.78, 0.68) * (1.0 + v_tone * 0.5);
+	} else if (v_part > 1.5) {
+		// the heart of a flower; a cattail's brown head
+		c = v_kind > 4.5 && v_kind < 5.5 ? vec3(0.27, 0.15, 0.07) : v_kind > 6.5 ? vec3(0.85, 0.66, 0.1) : HEART[clamp(pk, 0, 4)];
 	} else if (v_part > 0.5) {
-		// its petals: buttercup yellow or a bellflower's violet
-		c = v_kind < 1.5 ? vec3(0.78, 0.6, 0.06) : vec3(0.33, 0.17, 0.48);
+		// petals by the flower's colour, a mushroom's cap, a lily's
+		c = v_kind > 6.5 ? LILY[clamp(pk, 0, 1)] : v_kind > 5.5 ? CAP[clamp(pk, 0, 2)] : PETAL[clamp(pk, 0, 4)];
 		c *= 0.92 + 0.16 * v_up;
+	} else if (v_kind > 3.5) {
+		// a fern's fronds, a reed's leaves, a lily's pads: darker at the root, lighter out to the tip
+		c *= v_kind > 6.5 ? 1.0 : mix(0.7, 1.2, v_up);
 	} else {
 		// darker in the shade at the root, lighter toward the tip where the light gets through it; dry grass bleaches
 		c *= mix(0.62, 1.25, v_up);

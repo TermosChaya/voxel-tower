@@ -43,7 +43,8 @@ public static class Labour
     static Labour()
     {
         void D(byte m, float dig, int kind, float share) { DigCost[m] = dig; Kind[m] = (byte)kind; Share[m] = share; }
-        foreach (var m in new[] { Mat.Soil, Mat.Grass, Mat.GrassDry, Mat.GrassLush, Mat.Scorch, Mat.Path, Mat.Tuft, Mat.Flower, Mat.Bloom, Mat.Trodden, Mat.DirtPath }) D(m, 1, Stockpile.Earth, 1);
+        foreach (var m in new[] { Mat.Soil, Mat.Grass, Mat.GrassDry, Mat.GrassLush, Mat.Scorch, Mat.Path, Mat.Tuft, Mat.Flower, Mat.Bloom, Mat.Trodden, Mat.DirtPath,
+            Mat.FlowerRed, Mat.FlowerWhite, Mat.FlowerBlue, Mat.Fern, Mat.Reed, Mat.Mushroom, Mat.Lily, Mat.Anthill }) D(m, 1, Stockpile.Earth, 1);
         // the ways laid on purpose come up as what they were laid of
         D(Mat.Gravel, 1, Stockpile.Stone, 1); D(Mat.Cobble, 1.5f, Stockpile.Stone, 1); D(Mat.Flag, 1.5f, Stockpile.Stone, 1); D(Mat.Boardwalk, 1, Stockpile.Wood, .75f);
         D(Mat.Rammed, 1, Stockpile.Earth, 1);
@@ -51,9 +52,9 @@ public static class Labour
         foreach (var m in new[] { Mat.Stone, Mat.Mortar, Mat.StoneDark, Mat.StoneLight, Mat.StoneWarm, Mat.StoneCool }) D(m, 2.5f, Stockpile.Stone, .75f);
         // a voxel tree holds less wood than a real one of its height (its crown is leaves round a few boughs): a voxel of
         // trunk stands for four of timber, and needles and leaves give a little brushwood
-        foreach (var m in new[] { Mat.Trunk, Mat.Birch, Mat.PineBark, Mat.Snag }) D(m, 2, Stockpile.Wood, 4);
+        foreach (var m in new[] { Mat.Trunk, Mat.Birch, Mat.PineBark, Mat.Snag, Mat.Hollow }) D(m, 2, Stockpile.Wood, 4);
         D(Mat.Wood, 2, Stockpile.Wood, .75f);
-        foreach (var m in new[] { Mat.Leaf, Mat.Foliage, Mat.NeedleLight, Mat.FoliageLight, Mat.FoliageGold }) D(m, .25f, Stockpile.Wood, .15f);
+        foreach (var m in new[] { Mat.Leaf, Mat.Foliage, Mat.NeedleLight, Mat.FoliageLight, Mat.FoliageGold, Mat.Juniper, Mat.BerryRed, Mat.BerryBlue, Mat.Nest }) D(m, .25f, Stockpile.Wood, .15f);
         // ladders come apart quickly, and what the horde leaves behind is timber too
         D(Mat.Ladder, 1, Stockpile.Wood, .75f); D(Mat.SiegeLadder, .5f, Stockpile.Wood, .75f); D(Mat.Deck, 1.5f, Stockpile.Wood, .75f);
         D(Mat.Gate, 2.5f, Stockpile.Wood, .75f); D(Mat.GateShut, 2.5f, Stockpile.Wood, .75f); D(Mat.GateOpen, 2.5f, Stockpile.Wood, .75f);

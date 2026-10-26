@@ -858,7 +858,7 @@ public static class Shapes
                 if (!rail && !rung) continue;
                 int x = fx + tx * t, z = fz + tz * t;
                 byte at = w.Get(x, y, z);
-                bool room = at == Mat.Air || crush && (Mat.IsLeafy(at) || at is Mat.Tuft or Mat.Flower or Mat.Bloom);
+                bool room = at == Mat.Air || crush && (Mat.IsLeafy(at) || Mat.IsSprig(at));
                 if (w.InBounds(x, y, z) && room && !site.Forbidden(x, z)) L.Add(x, y, z, mat);
             }
         return L;
