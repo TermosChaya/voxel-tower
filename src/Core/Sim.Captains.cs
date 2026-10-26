@@ -33,12 +33,17 @@ public sealed partial class Sim
     /// <summary>A commander made a call: who, and which (0–3).</summary>
     public event Action<Unit, int> Called;
     /// <summary>Orders a commander gave the field over (for the bench): formed up, sent onto the walls, sent back to mend, mendings called.</summary>
-    public int CaptainFormed, CaptainPosted, CaptainSentBack, CaptainMended;
+    public int CaptainFormed, CaptainPosted, CaptainSentBack, CaptainMended, CaptainVolleys;
 
     // one line in the chronicle for each kind of order, not oftener than a minute
     readonly Dictionary<string, double> _orderSaid = new();
     // the wall a commander last stood its people at, for the mending after
     readonly Dictionary<int, (int x, int z)> _lastFront = new();
+    // posts on the walls found no way up to, till when they are not tried again: a wall with no stair up it costs a
+    // long search for each shooter each time the commander looks
+    readonly Dictionary<int, double> _noWayUp = new();
+    // the spot a commander last formed each of its groups about
+    readonly Dictionary<(int cap, string key), int> _placed = new();
 
     void OrderSaid(Unit cap, string key, string text)
     {
@@ -115,20 +120,24 @@ public sealed partial class Sim
             tx += o.X; tz += o.Z; n++;
         }
         tx /= n; tz /= n;
-        // the first wall of ours on the way from it to what is kept, and the line a few steps inside it
-        var wall = WallBetween(tx, tz, cx, cz);
+        // where the horde breaks into our building — hacking through it, up a ladder or a tower onto it — nearest what
+        // is kept: the breach, which the line holds; else the first wall of ours on the way from the knot to what is kept
+        var breach = Breach(tx, tz, cx, cz);
+        var wall = breach ?? WallBetween(tx, tz, cx, cz);
         float lx, lz;
         if (wall is { } w) { (lx, lz) = Toward(w.x, w.z, cx, cz, 3.5f * VoxelWorld.PerMetre); _lastFront[cap.Id] = (w.x, w.z); }
         else if (cap.Goal >= 0) (lx, lz) = (cx, cz);
         else (lx, lz) = Toward(cx, cz, tx, tz, 14 * VoxelWorld.PerMetre);
         int line = NearestStand((int)lx, (int)lz, 2);
         var melee = Melee(men);
-        Place(cap, melee, line, "line", wall != null ? "Командир строит бойцов у стены, к которой идёт орда." : "Командир строит бойцов навстречу орде.");
+        if (breach != null) Place(cap, melee, line, "breach", "Командир ставит бойцов в пролом, который пробивает орда.");
+        else Place(cap, melee, line, "line", wall != null ? "Командир строит бойцов у стены, к которой идёт орда." : "Командир строит бойцов навстречу орде.");
         // the shooters onto the wall-walks that face the horde; with no wall, behind the line
         var shooters = Shooters(men);
         if (shooters.Count > 0)
         {
             var posts = wall is { } ww ? WallWalks(ww.x, ww.z, tx, tz, shooters.Count) : new List<int>();
+            posts.RemoveAll(p => _noWayUp.TryGetValue(p, out double until) && Time < until);
             if (posts.Count == 0) Place(cap, shooters, NearestStand((int)Toward(lx, lz, cx, cz, 4 * VoxelWorld.PerMetre).x, (int)Toward(lx, lz, cx, cz, 4 * VoxelWorld.PerMetre).z, 2), "shooters", null);
             else
             {
@@ -136,10 +145,13 @@ public sealed partial class Sim
                 var free = new List<int>(posts);
                 var below = new List<Unit>();
                 bool moved = false;
+                int failed = 0;
                 foreach (var s in shooters)
                 {
                     if (s.Ward == cap && s.Post >= 0 && posts.Exists(p => CellsApart(s.Post, p) <= 2)) { free.RemoveAll(p => CellsApart(s.Post, p) <= 2); continue; }
                     bool placed = false;
+                    // (three posts in a row with no way up: the wall has no stair up it here, the rest are not tried)
+                    if (failed >= 3) { foreach (int p in free) _noWayUp[p] = Time + 20; free.Clear(); }
                     for (int tries = 0; tries < 3 && free.Count > 0 && !placed; tries++)
                     {
                         int pick = 0; float near = float.MaxValue;
@@ -151,7 +163,8 @@ public sealed partial class Sim
                         }
                         int post = free[pick];
                         free.RemoveAt(pick);
-                        if (Command(new[] { s }, post) > 0) { s.Ward = cap; placed = moved = true; }
+                        if (Command(new[] { s }, post) > 0) { s.Ward = cap; placed = moved = true; failed = 0; }
+                        else { _noWayUp[post] = Time + 20; failed++; }
                     }
                     if (!placed) below.Add(s);
                 }
@@ -180,6 +193,46 @@ public sealed partial class Sim
         }
         if (shaken >= 2 && CallReady(cap, 3)) Call(cap, 3, float.NaN, 0, 0);
         else if (pressed >= 3 && CallReady(cap, 1)) Call(cap, 1, float.NaN, 0, 0);
+        // a warlord or a ram at the walls in bowshot of three of its archers: a volley at it
+        else if (CallReady(cap, 2) && VolleyMark(cap, shooters) is { } mark) { Call(cap, 2, mark.X, mark.Y, mark.Z); CaptainVolleys++; }
+    }
+
+    /// <summary>
+    /// Where the horde about a knot of it breaks into our building, nearest what is kept: one hacking through our masonry
+    /// or timber, or coming up a ladder or a siege tower onto it. A column, or null if none does.
+    /// </summary>
+    (int x, int z)? Breach(float tx, float tz, float cx, float cz)
+    {
+        (int x, int z)? best = null; float bd = float.MaxValue;
+        foreach (var o in Units)
+        {
+            if (o.Dead || o.Team != Team.Horde || o.Inside || o.Bound || o.Routed) continue;
+            if ((o.X - tx) * (o.X - tx) + (o.Z - tz) * (o.Z - tz) > 24 * 24 * 64) continue;
+            int x, z;
+            if (o.State == UnitState.Carve && o.CarveI < o.CarveList.Count && Mat.IsPlayer[World.Get(o.CarveList[o.CarveI].x, o.CarveList[o.CarveI].y, o.CarveList[o.CarveI].z)])
+                (x, _, z) = o.CarveList[o.CarveI];
+            else if (Climbing(o) || o.T == Kinds.SiegeTower && o.Docked.Count > 0) (x, z) = ((int)o.X, (int)o.Z);
+            else continue;
+            float d = (x - cx) * (x - cx) + (z - cz) * (z - cz);
+            if (d < bd) { bd = d; best = (x, z); }
+        }
+        return best;
+    }
+
+    /// <summary>A warlord on his feet, or a ram or a siege tower at our building, in bowshot of three of a commander's shooters: where to loose a volley.</summary>
+    Unit VolleyMark(Unit cap, List<Unit> shooters)
+    {
+        if (shooters.Count < 3) return null;
+        foreach (var o in Units)
+        {
+            if (o.Dead || o.Team != Team.Horde || o.Inside || o.Bound || o.Abandoned) continue;
+            bool lord = o.Lord != null && !o.Routed, engine = (o.T == Kinds.Ram || o.T == Kinds.SiegeTower) && o.State is UnitState.Siege or UnitState.Carve || o.T == Kinds.SiegeTower && o.Docked.Count > 0;
+            if (!lord && !engine) continue;
+            int near = 0;
+            foreach (var s in shooters) if (Dist(s, o) <= RangeAt(s, o.X, o.Z)) near++;
+            if (near >= 3) return o;
+        }
+        return null;
     }
 
     /// <summary>The spot the player gave a commander: it stands there, and those under its word about it.</summary>
@@ -198,9 +251,13 @@ public sealed partial class Sim
     void Place(Unit cap, List<Unit> men, int spot, string key, string said)
     {
         if (spot < 0 || men.Count == 0) return;
+        // (formed up about a spot, the ranks stand wider than a few cells of it: they stand where it set them if it
+        // set them about much the same spot, and the ranks are not made up again for nothing, a search for each)
+        bool same = _placed.TryGetValue((cap.Id, key), out int was) && CellsApart(was, spot) <= 2;
         var go = new List<Unit>();
-        foreach (var u in men) if (u.Ward != cap || u.Post < 0 || CellsApart(u.Post, spot) > 4) go.Add(u);
+        foreach (var u in men) if (u.Ward != cap || u.Post < 0 || !same && CellsApart(u.Post, spot) > 4) go.Add(u);
         if (go.Count == 0) return;
+        _placed[(cap.Id, key)] = spot;
         // all of them, so that the ranks are made up again round the new spot
         Command(men, spot);
         foreach (var u in men) u.Ward = cap;
