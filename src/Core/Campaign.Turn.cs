@@ -101,6 +101,8 @@ public sealed partial class Campaign
     /// </summary>
     public void Advance(double seconds)
     {
+        // a battle for a point of ours being fought: the map waits for it (Campaign.Hold.cs)
+        if (Frozen != null) return;
         double seconds0 = seconds;
         Ready();
         // the open valley's rare resources are the realm's (spent on its buildings there)
@@ -272,11 +274,11 @@ public sealed partial class Campaign
         if (!p.Moving) Tell(NewsKind.Arrived, $"Отряд пришёл {Names(cell).prep}.", cell, p);
     }
 
-    /// <summary>The enemies in a cell for a party of ours: the horde's parties standing there and the cell's keepers if they are not ours.</summary>
+    /// <summary>The enemies in a cell for a party of ours: the horde's parties standing there (not those setting off or going by) and the cell's keepers if they are not ours.</summary>
     public int Foes(MapCell cell)
     {
         int n = cell.Owner != Owner.Ours ? cell.Sum.Holders().Count : 0;
-        foreach (var h in Parties) if (h.Owner == Owner.Horde && h.Q == cell.Q && h.R == cell.R) n += h.Party.Members.Count + (h.Lord != null ? 1 : 0);
+        foreach (var h in Parties) if (h.Owner == Owner.Horde && !h.Moving && h.Q == cell.Q && h.R == cell.R) n += h.Party.Members.Count + (h.Lord != null ? 1 : 0);
         return n;
     }
 
@@ -294,12 +296,13 @@ public sealed partial class Campaign
             Tell(NewsKind.RaidComing, $"Войско орды входит {Names(cell).prep}: {Raiders(p.Party.Members.Count)}{Led(p)}.", cell, p);
             return;
         }
+        // a point of ours: its garrison and ours standing there fight for it together (Campaign.Hold.cs)
+        if (cell.Owner == Owner.Ours) { Defend(p, cell); return; }
         foreach (var ours in Parties.ToArray())
         {
             if (ours.Owner != Owner.Ours || ours.Q != cell.Q || ours.R != cell.R || ours.Moving) continue;
-            if (!Battle(p, ours.Party.Members, null, cell.Owner == Owner.Ours ? cell.Sum.Walls : 0, cell, ours)) return;
+            if (!Battle(p, ours.Party.Members, null, 0, cell, ours)) return;
         }
-        if (cell.Owner == Owner.Ours) { Assault(p, cell); return; }
         // (the keepers of a treasure keep to it: the horde goes by them, and they let it)
         if (cell.Owner == Owner.None && cell.Sum.Keep.Count > 0 && !Untaken(cell))
         {
@@ -336,16 +339,22 @@ public sealed partial class Campaign
     }
 
     /// <summary>
-    /// The horde's party falls on a valley of ours it is not ours to watch: its keepers behind their walls. Won, the cell
-    /// is the horde's — some stay to hold it, the rest go home — and ours who got away run for the nearest cell of ours.
+    /// The horde's party falls on a valley of ours, counted at once (nobody plays it): its garrison and every party of
+    /// ours standing there fight it together, behind the works. Won, the cell is the horde's — some stay to hold it, the
+    /// rest go home — and ours who got away run for the nearest cell of ours.
     /// </summary>
     void Assault(MapParty p, MapCell cell)
     {
         var keep = cell.Sum.Keep;
-        int ours = keep.Count;
-        var r = QuickBattle.Fight(p.Party.Members, p.Lord, keep, null, cell.Sum.Walls, cell.Kind, Roll);
+        var standing = Parties.FindAll(o => o.Owner == Owner.Ours && o.Q == cell.Q && o.R == cell.R && !o.Moving);
+        var all = new List<Traveller>(keep);
+        foreach (var o in standing) all.AddRange(o.Party.Members);
+        var r = QuickBattle.Fight(p.Party.Members, p.Lord, all, null, cell.Sum.Walls, cell.Kind, Roll);
+        // the fallen gone from where they stood
+        keep.RemoveAll(m => !all.Contains(m));
+        foreach (var o in standing) { o.Party.Members.RemoveAll(m => !all.Contains(m)); if (o.Party.Members.Count == 0) Parties.Remove(o); }
         if (r.AttackerLordFell) p.Lord = null;
-        HeroNews(r, cell, null);
+        HeroNews(r, cell, standing.Count > 0 ? standing[0] : null);
         if (!r.AttackerWon)
         {
             Tell(NewsKind.Fought, $"Орда напала на {Names(cell).acc} и отбита. Пало налётчиков {r.AttackerFell.Count}, наших {r.DefenderFell.Count}.", cell, p);
@@ -353,6 +362,7 @@ public sealed partial class Campaign
             return;
         }
         // ours who got away run
+        foreach (var o in standing) if (Parties.Contains(o)) Flee(o, cell);
         if (keep.Count > 0)
         {
             var run = new MapParty { Id = _nextParty++, Owner = Owner.Ours, Party = new Party(), Q = cell.Q, R = cell.R, CameQ = cell.Q, CameR = cell.R };
@@ -534,7 +544,8 @@ public sealed partial class Campaign
         foreach (var c in _held)
         {
             if (c.Owner != Owner.Ours || InValley && c == Here) continue;
-            g += (c.Sum.TownGold + ValleySummary.MineGold(c.Kind) * ValleySummary.MineShare) / 60 * dt;
+            // (the big map's mines pay by themselves, a day at a time: MapThing.cs)
+            g += (c.Sum.TownGold + (Big ? 0 : ValleySummary.MineGold(c.Kind) * ValleySummary.MineShare)) / 60 * dt;
         }
         if (g <= 0) return;
         EarnedAway += g;
@@ -657,6 +668,8 @@ public sealed partial class Campaign
             cell.Sum.Take(sim, Team.Horde);
             if (cell.Sum.Keep.Count == 0) Retake(cell, cell.Holding == Holding.HordeTown, null);
         }
+        // nobody's, left with ours in it and no enemy: they hold it (Campaign.Hold.cs)
+        else if (HeldBy(sim)) Hold(cell, sim);
     }
 
     // ------------------------------------------------------------ what is said
@@ -768,6 +781,7 @@ public sealed partial class Campaign
         }
         else foreach (var c in Cells) c.Sum.Write(w);
         Realm.Write(w);
+        WriteHold(w);
     }
 
     void ReadTurn(BinaryReader r)
@@ -784,5 +798,6 @@ public sealed partial class Campaign
         if (Big) for (int n = r.ReadInt32(); n > 0; n--) Cells[r.ReadInt32()].Sum.Read(r);
         else foreach (var c in Cells) c.Sum.Read(r);
         Realm.Read(r);
+        ReadHold(r);
     }
 }

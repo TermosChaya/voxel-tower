@@ -608,10 +608,15 @@ public partial class AtlasHud : Control
     }
     readonly HashSet<MapCell> _doneWith = new();
 
+    /// <summary>Whether ours hold a cell of theirs, in words: its garrison and works, or that the horde takes it without a fight.</summary>
+    string Held(MapCell cell) => cell.Owner == Holder.Ours && C.Garrisoned(cell)
+        ? $"Наш. Под охраной: {C.Garrison(cell)}."
+        : "Наш, но без гарнизона: орда возьмёт его без боя. Войдите в клетку и оставьте там бойцов («Оставить гарнизон»), рабочие построят укрепления.";
+
     /// <summary>What a thing of the big map is and gives, in a line.</summary>
     string ThingLine(MapCell cell, MapThing t) => t.Kind switch
     {
-        ThingKind.Mine => $"{t.Name}: {MapThing.Amount_(t.Res, t.Amount)} в день. {(t.Owner == Holder.Ours ? "Наш." : t.Owner == Holder.Horde ? "Под флагом орды." : "Ничей: войдите героем, чтобы поднять флаг.")}",
+        ThingKind.Mine => $"{t.Name}: {MapThing.Amount_(t.Res, t.Amount)} в день. {(t.Owner == Holder.Ours ? Held(cell) : t.Owner == Holder.Horde ? "Под флагом орды." : "Ничей: войдите героем, чтобы поднять флаг.")}",
         ThingKind.Pile => t.Taken ? "Здесь ничего не осталось." : $"Куча: {MapThing.Amount_(t.Res, t.Amount)}. Подберёт герой.",
         ThingKind.Chest => t.Taken ? "Сундук открыт." : $"Сундук: {Campaign.ChestOf(t).gold} золота или {Campaign.ChestOf(t).xp} опыта.",
         ThingKind.Campfire => t.Taken ? "Костёр погас." : "Костёр: у него оставлены золото и припасы.",

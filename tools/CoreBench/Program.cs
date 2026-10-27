@@ -6283,6 +6283,7 @@ if (args.Length > 3 && args[0] == "--autoplay") AutoPlayBench.Run(uint.Parse(arg
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--heroes") HeroesBench.Run(Check);
 // what the realm's gold goes on: the tavern, artifacts and the merchant, convoys, the dear storeys (Campaign.Economy.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--economy") EconomyBench.Run(Check);
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--holdpoints") HoldPointsBench.Run(Check);
 // the map's content: the big map's lairs, the treasures and their keepers, scouts, a shrine's trial (TrovesBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troves") TrovesBench.Run(Check);
 // the map of valleys as a land: made in good time, every kind of cell its kind, the ways running on, walked from the

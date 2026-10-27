@@ -14,8 +14,13 @@ public sealed class ValleySummary
 {
     /// <summary>Those who keep the valley: they fight a quick battle for it, and come back into it when we do.</summary>
     public readonly List<Traveller> Keep = new();
-    /// <summary>The walls and towers about its stronghold, as a share added to its keepers' strength (0 to 1.5).</summary>
+    /// <summary>
+    /// What its works about the held point are worth to its keepers: the share their strength is raised by behind them
+    /// (0 to <see cref="Fortification.Most"/>, Fortification.cs), measured from the valley as we leave it.
+    /// </summary>
     public float Walls;
+    /// <summary>What stands there, as it was measured (for the words on the map); default where it was only guessed.</summary>
+    public Fort Works;
     /// <summary>Gold its town pays a minute (the town hall, the market, the houses' dues).</summary>
     public float TownGold;
     /// <summary>The level of its town hall standing and working, 0 without one: each gives the realm a commander more.</summary>
@@ -29,8 +34,6 @@ public sealed class ValleySummary
     /// <summary>It was taken off the valley itself, not guessed.</summary>
     public bool Known;
 
-    /// <summary>How far round the stronghold its walls are counted (40 m), and the cubic metres of masonry that make a wall's worth of 1.</summary>
-    public const float FortReach = 40 * VoxelWorld.PerMetre, WallMetres = 400;
     /// <summary>The mines' gold while nobody of ours stands at each: so much of what they pay with our men at them.</summary>
     public const float MineShare = .6f;
 
@@ -55,7 +58,8 @@ public sealed class ValleySummary
         Keep.Clear();
         foreach (var u in sim.Units)
             if (!u.Dead && u.Team == team && !u.Bound && !u.Envoy && u.Captor == null) Keep.Add(Traveller.Of(u, team == Team.Player ? key : -1));
-        Walls = WallsOf(sim);
+        Works = Fortification.Measure(sim, team);
+        Walls = Works.Score;
         TownGold = team == Team.Player ? sim.TownIncome() : 0;
         Hall = team == Team.Player ? sim.HallLevel() : 0;
         Room = team == Team.Player ? sim.Places : 0;
@@ -63,27 +67,8 @@ public sealed class ValleySummary
         Known = true;
     }
 
-    /// <summary>The worth of the walls about a valley's stronghold: masonry and timber standing over the bare ground within reach.</summary>
-    public static float WallsOf(Sim sim)
-    {
-        var w = sim.World; var s = sim.Site;
-        if (s.HTop == null) return 0;
-        int r = (int)FortReach, n = 0;
-        for (int z = Math.Max(0, s.KeepZ - r); z <= Math.Min(w.SZ - 1, s.KeepZ + r); z++)
-            for (int x = Math.Max(0, s.KeepX - r); x <= Math.Min(w.SX - 1, s.KeepX + r); x++)
-            {
-                int dx = x - s.KeepX, dz = z - s.KeepZ;
-                if (dx * dx + dz * dz > r * r) continue;
-                int g = s.HTop[z * w.SX + x], top = w.ColTop(x, z);
-                if (top <= g + 4) continue;
-                for (int y = g; y <= top; y++)
-                {
-                    byte m = w.Get(x, y, z);
-                    if (Mat.IsMasonry(m) || m == Mat.Wood) n++;
-                }
-            }
-        return Math.Clamp(n / (float)VoxelWorld.PerM3 / WallMetres, 0, 1.5f);
-    }
+    /// <summary>The worth of the works about a valley's held point as it stands (Fortification.cs).</summary>
+    public static float WallsOf(Sim sim) => Fortification.Measure(sim).Score;
 
     /// <summary>The gold a minute the mines of a kind of valley pay with our men at each (the copper mine 3, the silver vein 6, the gold workings 10).</summary>
     public static float MineGold(ValleyKind k)
@@ -111,6 +96,8 @@ public sealed class ValleySummary
         foreach (var m in Keep) m.Write(w);
         w.Write(Walls); w.Write(TownGold); w.Write(Raised); w.Write(Stone); w.Write(Logs); w.Write(Metal); w.Write(Known);
         w.Write(Hall); w.Write(Room);
+        var f = Works;
+        w.Write(f.Ring); w.Write(f.High); w.Write(f.Towers); w.Write(f.Gates); w.Write(f.Ditch); w.Write(f.Moat); w.Write(f.Traps); w.Write(f.Engines); w.Write(f.Keep);
     }
 
     internal void Read(BinaryReader r)
@@ -120,6 +107,7 @@ public sealed class ValleySummary
         Walls = r.ReadSingle(); TownGold = r.ReadSingle(); Raised = r.ReadSingle();
         Stone = r.ReadDouble(); Logs = r.ReadDouble(); Metal = r.ReadDouble(); Known = r.ReadBoolean();
         Hall = r.ReadInt32(); Room = r.ReadInt32();
+        Works = new Fort(r.ReadSingle(), r.ReadSingle(), r.ReadInt32(), r.ReadInt32(), r.ReadSingle(), r.ReadBoolean(), r.ReadInt32(), r.ReadInt32(), r.ReadBoolean());
     }
 }
 

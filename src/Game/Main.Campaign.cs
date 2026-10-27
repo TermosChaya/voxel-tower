@@ -42,7 +42,7 @@ public partial class Main
         if (Atlas == null && _campaignArg)
         {
             // (the map's content staged on the big map; --pose=bigmap a big map of «Heroes», --size=S…XL)
-            if (_pose is "bigmap" or "autoplay" or "economy")
+            if (_pose is "bigmap" or "autoplay" or "economy" or "holdfight")
             {
                 string size = "S";
                 foreach (var a in OS.GetCmdlineUserArgs()) if (a.StartsWith("--size=") && !int.TryParse(a["--size=".Length..], out _)) size = a["--size=".Length..];
@@ -122,6 +122,7 @@ public partial class Main
             Come(p.Party, _enteringSide >= 0 ? _enteringSide : Atlas.EntrySideOf(p), select: true);
             _enteringSide = -1;
         }
+        DefenceStart();
         string where = cell.Home ? "первая долина" : Campaign.Names(cell).nom;
         Hud.Log($"Кампания, день {Atlas.Clock.Day}: {where}. {{Board}} — карта долин.", Hud.Kind.Ok);
         if (cell.Owner == Holder.Horde) Hud.Log(cell.Holding == Holding.HordeTown ? "Логово орды. Перебейте гарнизон." : "Долина во власти орды. Перебейте её гарнизон.", Hud.Kind.Warn);
@@ -155,9 +156,13 @@ public partial class Main
         if (Atlas == null || _campaignOver || Sim == null) return;
         var here = Atlas.Here;
         RushTick();
+        Atlas.Interactive = DefenceInteractive;
         Atlas.Advance(dt);
-        // one clock: the valley's is the map's while we are in it (a raid holding the night holds the map's too)
-        Atlas.Clock = Sim.Clock.Now;
+        // a battle for a point of ours stops the map; one elsewhere, the game goes there (Main.Defence.cs)
+        if (DefenceDue()) return;
+        // one clock: the valley's is the map's while we are in it (a raid holding the night holds the map's too) — not
+        // while a battle for a point stops the map: its day is set back to the map's when it is over
+        if (Atlas.Frozen == null) Atlas.Clock = Sim.Clock.Now;
         Atlas.Gold = Sim.Stock.Gold;
         // a party gone over an edge goes onto the map whole, once the last of it is over
         foreach (var p in Sim.Departed.ToArray())
@@ -182,11 +187,13 @@ public partial class Main
             var away = new List<UnitType>();
             bool lordAway = false;
             foreach (var s in Sim.Escaped) { if (s.Lord != null) lordAway = true; else away.Add(s.Kind); }
+            if (_defence != null) _escapedThen = Sim.Escaped.Count;
             Sim.Escaped.Clear();
             for (int i = 0; i < _raiding.Count; i++) Atlas.RaidOver(_raiding[i], i == 0 ? away : new List<UnitType>(), i == 0 && lordAway);
             _raiding.Clear();
         }
         while (Atlas.TakeArrival(out var ours, out int from)) Come(ours.Party, from, select: false);
+        DefenceTick();
         // the valley's treasure: a chest taken, a shrine's trial going on
         if (Atlas.TroveTick(Sim, here, dt)) { RefreshLand(here); MapsChanged(); }
         bool told = Tell();
@@ -338,7 +345,7 @@ public partial class Main
         var list = new List<Unit> { u };
         foreach (var o in Sim.Units)
         {
-            if (o == u || o.Dead || o.Team != Team.Player || o.T == Kinds.Risen || o.Inside || o.Down || o.Captor != null || o.CarriedBy != null) continue;
+            if (o == u || o.Dead || o.Team != Team.Player || o.T == Kinds.Risen || o.Inside || o.Down || o.Captor != null || o.CarriedBy != null || o.Garrison) continue;
             float dx = o.X - u.X, dz = o.Z - u.Z;
             if (dx * dx + dz * dz <= WithHim * WithHim) list.Add(o);
         }
@@ -383,6 +390,7 @@ public partial class Main
     public void EnterCell(MapParty p)
     {
         if (Atlas == null || p == null) return;
+        if (_defence != null) { Hud.Log("Идёт бой за долину: карта ждёт его конца.", Hud.Kind.Warn); return; }
         var cell = Atlas.CellOf(p);
         KeepersLeft();
         if (!Saves.WriteCampaign(this, CampSlot, Atlas, Atlas.Here)) return;

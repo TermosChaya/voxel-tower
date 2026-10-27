@@ -11,7 +11,10 @@ namespace VoxelTower.Core;
 /// and to stand by the walls when an army of the horde comes for the first valley, and take their skills by a simple
 /// rule. The first valley it does not play: its growth stands in a summary, as the valleys we are not in do — a town
 /// paying more each day and built on while the gold allows (a step a day, each dearer: more gold, more men to hire and
-/// better ones, higher walls), the citadel with a few more men to hire each dawn (<see cref="HomeDawn"/>).
+/// better ones, higher walls), the citadel with a few more men to hire each dawn (<see cref="HomeDawn"/>). A mine its
+/// hero flags it holds, as a player would go into it and leave some of his men and two workers hired there to build
+/// (<see cref="HoldMine"/>); their works it does not build in the voxels but counts, a step a day for each worker
+/// (<see cref="FortDawn"/>) — and a battle for such a point, where nobody plays it, is counted behind them too.
 /// </summary>
 public sealed class AutoPlayer
 {
@@ -66,6 +69,13 @@ public sealed class AutoPlayer
 
     public AutoPlayer(Campaign c) { _c = c; _day = c.Clock.Day; }
 
+    /// <summary>A hero spares men to hold a mine (of gold, metal or a rare resource) only with so many fighters; he leaves so many, and hires two workers to build.</summary>
+    public const int GarrisonFrom = 10, GarrisonMen = 4, GarrisonHands = 2;
+    /// <summary>The works a worker of a held point raises a day (as its worth: a whole ring in about a week by two), and the most counted so.</summary>
+    public const float FortStep = .12f, FortMost = 3;
+    /// <summary>Mines held by a garrison so far (the harness tells it).</summary>
+    public int Garrisons;
+
     void Say(string s) => Said.Add($"д{_c.Clock.Day} {_c.Clock.At / DayClock.Cycle * 24:00}ч  {s}");
 
     IEnumerable<MapParty> OurHeroes()
@@ -97,7 +107,7 @@ public sealed class AutoPlayer
     /// <summary>Called as often as the map's clock is run: the dawn's business, then what each hero should do now.</summary>
     public void Tick()
     {
-        if (_c.Clock.Day != _day) { _day = _c.Clock.Day; HomeDawn(); }
+        if (_c.Clock.Day != _day) { _day = _c.Clock.Day; HomeDawn(); FortDawn(); }
         // a chest's choice: gold while the realm is poor, experience after the second week
         foreach (var (p, cell) in _c.Chests.ToArray())
             if (p.Owner == Owner.Ours)
@@ -404,6 +414,8 @@ public sealed class AutoPlayer
     {
         var here = _c.CellOf(p);
         if (here == null) return;
+        HoldMine(p, here);
+        if (!_c.Parties.Contains(p)) return;
         if (here == _c.Home)
         {
             HireInto(p);
@@ -452,6 +464,35 @@ public sealed class AutoPlayer
         if (!_c.Send(p, best)) { _tooStrong[best] = float.MaxValue; return; }
         Aims[p.Id] = why;
         Say($"{p.Party.Commander.Hero.Name} ({p.Party.Members.Count} чел., ход {p.MovesLeft}/{p.MovesMax}) → {Where(best)}: {why}.");
+    }
+
+    /// <summary>
+    /// A mine of gold, metal or a rare resource a hero has flagged and ours do not hold yet: if his army can spare them,
+    /// a few of his fighters (the bows first) stay as its garrison, and two workers hired there with them to raise its works.
+    /// </summary>
+    void HoldMine(MapParty p, MapCell c)
+    {
+        if (c.Home || c.Owner == Owner.Ours || c.Thing is not { Kind: ThingKind.Mine, Owner: Owner.Ours } t || t.Res is Res.Logs or Res.Stone) return;
+        var fighters = p.Party.Members.FindAll(m => m.Kind != Kinds.Captain && Campaign.Fights(m));
+        if (fighters.Count < GarrisonFrom) return;
+        fighters.Sort((a, b) => (b.Kind.Ranged ? 1 : 0).CompareTo(a.Kind.Ranged ? 1 : 0));
+        _c.Garrison(p, c, fighters.GetRange(0, GarrisonMen));
+        int key = Campaign.KeyOf(c), hands = 0;
+        while (hands < GarrisonHands && _c.Gold - Reserve >= Campaign.HireCost(Kinds.Worker))
+        {
+            _c.Gold -= Campaign.HireCost(Kinds.Worker); hands++;
+            c.Sum.Keep.Add(Man(Kinds.Worker, key));
+        }
+        Garrisons++;
+        Say($"{c.Thing.Name} {Where(c)}: оставлен гарнизон {GarrisonMen}, рабочих {hands}.");
+    }
+
+    /// <summary>The works of the points ours hold rise a step a day for each worker there (counted, not built: see the class).</summary>
+    void FortDawn()
+    {
+        foreach (var c in _c.Cells)
+            if (c.Owner == Owner.Ours && !c.Home && c.Sum.Workers > 0 && c.Sum.Walls < FortMost)
+                c.Sum.Walls = Math.Min(FortMost, c.Sum.Walls + FortStep * Math.Min(c.Sum.Workers, 4));
     }
 
     /// <summary>

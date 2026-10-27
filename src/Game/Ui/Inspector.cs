@@ -653,7 +653,15 @@ public partial class Inspector : Control
         }
         }
         bool workers = chosen.Exists(u => u.T.Work >= 1 && !u.T.Prays), archers = chosen.Exists(u => u.T.Ranged), melee = chosen.Exists(Sim.TakesAlive);
-        Button militia = null, fire = null, alive = null, commands = null;
+        Button militia = null, fire = null, alive = null, commands = null, garrison = null;
+        // in a valley of the map not the first: who stays to hold it when the party goes on
+        if (Main.Atlas is { } atlas && atlas.Here is { Home: false } && chosen.Exists(u => u.Team == Team.Player))
+        {
+            garrison = new Glyph(Icons.Of("hill-fort"), "Оставить гарнизон\nВыбранные остаются держать долину, когда отряд героя уходит на карту. Долина станет вашей, " +
+                "рудник в ней не отдадут без боя. Рабочие в гарнизоне строят укрепления, архитектор размечает их сам. Ещё раз — пойдут с отрядом.",
+                () => _m.Command.GarrisonSelected(), toggle: true);
+            row.AddChild(garrison);
+        }
         if (chosen.Exists(u => u.T == Kinds.Captain))
         {
             row.AddChild(new Rule(true));
@@ -696,6 +704,7 @@ public partial class Inspector : Control
             fire?.SetPressedNoSignal(chosen.TrueForAll(u => !u.T.Ranged || u.FireArrows));
             alive?.SetPressedNoSignal(chosen.TrueForAll(u => !Sim.TakesAlive(u) || u.TakeAlive));
             commands?.SetPressedNoSignal(chosen.TrueForAll(u => u.T != Kinds.Captain || u.Commands));
+            garrison?.SetPressedNoSignal(chosen.TrueForAll(u => u.Garrison));
         });
         return row;
     }

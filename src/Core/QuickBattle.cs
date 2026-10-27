@@ -11,6 +11,8 @@ public sealed class QuickResult
     public float Odds;
     public float Attack, Defence;
     public readonly List<UnitType> AttackerFell = new(), DefenderFell = new();
+    /// <summary>Of the winners who went down, so many were carried off hurt and live (the rest fell).</summary>
+    public int WinnersSaved;
     public bool AttackerLordFell, DefenderLordFell;
     /// <summary>Heroes of ours who fell in it (their names), and those who rose a level by it.</summary>
     public readonly List<string> HeroesFell = new();
@@ -20,12 +22,16 @@ public sealed class QuickResult
 /// <summary>
 /// A battle counted at once, where we are not (docs/handoff/13-world-map.md, 2.8). Each side's strength is the root of
 /// all its health times all its blows a second (Lanchester's square law: twice as many is twice as strong), the hurt
-/// counting by the health they have left; bows and the casters' spells count the more, engines not at all in the field
-/// — the horde's batter the defenders' walls down instead. The defenders' walls add to their health and to their
-/// shooters, the mountains to the defenders, the marsh takes from the attackers; a warlord fights as his level makes
-/// him and steadies his side, a commander of ours steadies ours, the more for his level and his fighting skills (Heroes.cs).
-/// Twice the strength wins 9 times in 10, the same strength half the time. The winners lose the fewer the stronger
-/// they were; of the beaten most fall and the rest run. A hero of ours gains by it as a raid beaten off gains him.
+/// counting by the health they have left; bows and the casters' spells count the more, engines not at all in the field.
+/// Behind works (Fortification.cs, a worth of 0 to 5) the defenders are a siege's: their health and their shooting
+/// raised by the whole of it, their blows at the gap by half of it, our engines among them adding a quarter each — so a
+/// few behind a good wall and towers beat several times their number; the horde's rams, the hill giant, sappers and
+/// trolls batter the works down first (<see cref="Breach"/>). The mountains help the defenders, the marsh hinders the
+/// attackers; a warlord fights as his level makes him and steadies his side, a commander of ours steadies ours, the
+/// more for his level and his fighting skills (Heroes.cs). Twice the strength wins 9 times in 10, the same strength
+/// half the time. The winners lose too, the more the closer it was (an even fight half of them, three to one a tenth),
+/// and of theirs who go down a quarter live, carried off hurt (a hero's Лекарь a tenth more a grade); of the beaten most
+/// fall and the rest run. A hero of ours gains by it as a raid beaten off gains him.
 /// </summary>
 public static class QuickBattle
 {
@@ -52,22 +58,24 @@ public static class QuickBattle
     }
 
     /// <summary>
-    /// How strong a side stands: the root of all its health times all its blows, with its walls if it keeps them (the
-    /// horde's engines batter them down), steadied by its commander or warlord.
+    /// How strong a side stands: the root of all its health times all its blows, behind its works if it keeps them (the
+    /// share of them its foes batter down taken off, <see cref="Breach"/>), steadied by its commander or warlord.
     /// </summary>
-    public static float Strength(IReadOnlyList<Traveller> side, Warlord lord, float walls = 0, int rams = 0)
+    public static float Strength(IReadOnlyList<Traveller> side, Warlord lord, float walls = 0, float breach = 0)
     {
         double hp = 0, dps = 0;
         bool commander = false, archers = false;
-        float wall = Math.Max(0, walls * (1 - .15f * rams)), hero = 0;
-        foreach (var m in side) archers |= m.Kind.Ranged && m.Kind != Kinds.Captain;
+        float hero = 0;
+        int engines = 0;
+        foreach (var m in side) { archers |= m.Kind.Ranged && m.Kind != Kinds.Captain; if (Kinds.IsOurEngine(m.Kind)) engines++; }
+        // works only behind something: a field battle's engines of ours stand in the open
+        float wall = walls > 0 ? Math.Max(0, walls * (1 - Math.Clamp(breach, 0, .9f))) + Math.Min(1, EngineWorks * engines) : 0;
         foreach (var m in side)
         {
             var (h, d) = Worth(m.Kind, m.Hp);
             hp += h * (1 + wall);
-            dps += m.Kind.Ranged ? d * (1 + wall) : d;
+            dps += d * (m.Kind.Ranged ? 1 + wall : 1 + wall / 2);
             if (m.Kind == Kinds.Captain && m.Commands) { commander = true; hero = Math.Max(hero, Heroes.Steady(m.Hero, archers)); }
-            if (Kinds.IsOurEngine(m.Kind)) wall += .1f;
         }
         if (lord != null) { var (h, d) = LordWorth(lord); hp += h; dps += d; }
         double s = Math.Sqrt(hp * dps);
@@ -76,12 +84,25 @@ public static class QuickBattle
         return (float)s;
     }
 
-    /// <summary>The horde's engines among a side: each batters a share of the walls down.</summary>
-    static int Rams(IReadOnlyList<Traveller> side)
+    /// <summary>What each engine of ours among the keepers of works adds to them (a quarter, a whole at most).</summary>
+    public const float EngineWorks = .25f;
+
+    /// <summary>
+    /// The share of the works a side comes against that it batters down before the fight: each ram or engine of the
+    /// horde's 15 %, a hill giant 20 %, a sapper 8 %, a troll 4 %; nine tenths at most.
+    /// </summary>
+    public static float Breach(IReadOnlyList<Traveller> side)
     {
-        int n = 0;
-        foreach (var m in side) if (Kinds.IsEngine(m.Kind) && !Kinds.IsOurEngine(m.Kind)) n++;
-        return n;
+        float b = 0;
+        foreach (var m in side)
+        {
+            var t = m.Kind;
+            if (Kinds.IsEngine(t) && !Kinds.IsOurEngine(t)) b += .15f;
+            else if (t == Kinds.HillGiant) b += .2f;
+            else if (t == Kinds.Sapper) b += .08f;
+            else if (t == Kinds.Troll) b += .04f;
+        }
+        return Math.Min(.9f, b);
     }
 
     /// <summary>The attacker's chance against a defender of these strengths.</summary>
@@ -100,7 +121,7 @@ public static class QuickBattle
 
     static (float a, float d) Sides(IReadOnlyList<Traveller> att, Warlord attLord, IReadOnlyList<Traveller> def, Warlord defLord, float walls, ValleyKind ground)
     {
-        float a = Strength(att, attLord), d = Strength(def, defLord, walls, Rams(att));
+        float a = Strength(att, attLord), d = Strength(def, defLord, walls, Breach(att));
         if (ground == ValleyKind.Mountain) d *= 1.15f;
         if (ground == ValleyKind.Marsh) a *= .9f;
         return (a, d);
@@ -119,11 +140,11 @@ public static class QuickBattle
         res.Odds = Odds(a, d);
         res.AttackerWon = roll() < res.Odds;
         float win = res.AttackerWon ? a : d, lose = res.AttackerWon ? d : a;
-        // the winners keep the more of themselves the stronger they were (the square law), an upset costing dear
-        double r = Math.Min(.95, win > 0 ? lose / win : .95), keep = Math.Sqrt(1 - r * r);
+        // the winners lose the more the closer it was: an even fight half of them, three to one a tenth (an upset dear)
+        double r = Math.Min(1, win > 0 ? lose / win : 1), lost = WinnersLose(r), keep = 1 - lost;
         var (winners, losers) = res.AttackerWon ? (att, def) : (def, att);
         var (winFell, loseFell) = res.AttackerWon ? (res.AttackerFell, res.DefenderFell) : (res.DefenderFell, res.AttackerFell);
-        Fall(winners, 1 - keep, roll, winFell, false, res.HeroesFell);
+        res.WinnersSaved = Fall(winners, lost, roll, winFell, false, res.HeroesFell, Saved(winners));
         Hurt(winners, keep, roll);
         // of the beaten most fall, the rest run; defenders shut in behind their walls the more
         double killed = .55 + .35 * roll() + (!res.AttackerWon ? 0 : walls > 0 ? .15 : 0);
@@ -149,22 +170,41 @@ public static class QuickBattle
         return res;
     }
 
-    /// <summary>So many of a side fall, the hurt and the weak first, with luck in it; the beaten lose their engines.</summary>
-    static void Fall(List<Traveller> side, double share, Func<double> roll, List<UnitType> fell, bool beaten, List<string> heroes)
+    /// <summary>The share of the winners who go down, by how near the beaten came to them (their strength over the winners', 0 to 1).</summary>
+    public static double WinnersLose(double r) => .05 + .5 * Math.Pow(Math.Clamp(r, 0, 1), 1.5);
+
+    /// <summary>The share of a winning side's men who go down that live, carried off hurt: a quarter, its best hero's Лекарь a tenth more a grade.</summary>
+    static double Saved(List<Traveller> side)
+    {
+        int healer = 0;
+        foreach (var m in side) if (m.Hero != null) healer = Math.Max(healer, m.Hero[Skill.Healer]);
+        return .25 + .1 * healer;
+    }
+
+    /// <summary>
+    /// So many of a side go down, the hurt and the weak first, with luck in it; of them, so many (<paramref name="saved"/>)
+    /// live, carried off hurt to a tenth or a quarter of their health, and the rest fall; the beaten lose their engines.
+    /// Returns how many lived.
+    /// </summary>
+    static int Fall(List<Traveller> side, double share, Func<double> roll, List<UnitType> fell, bool beaten, List<string> heroes, double saved = 0)
     {
         if (beaten)
             for (int i = side.Count - 1; i >= 0; i--)
                 if (Kinds.IsEngine(side[i].Kind)) { fell.Add(side[i].Kind); side.RemoveAt(i); }
         int men = side.Count, n = (int)Math.Floor(men * share + roll());
-        if (n <= 0 || men == 0) return;
+        if (n <= 0 || men == 0) return 0;
         var order = new List<(double key, Traveller m)>();
         foreach (var m in side) order.Add((m.Hp / Math.Max(1, m.MaxHp) + roll() * .6 + (m.Kind == Kinds.Captain ? .5 : 0), m));
         order.Sort((x, y) => x.key.CompareTo(y.key));
+        int lived = 0;
         for (int i = 0; i < Math.Min(n, order.Count); i++)
         {
-            fell.Add(order[i].m.Kind); side.Remove(order[i].m);
-            if (order[i].m.Hero is { } h) heroes.Add(h.Name);
+            var m = order[i].m;
+            if (!Kinds.IsEngine(m.Kind) && roll() < saved) { m.Hp = (float)Math.Max(1, m.MaxHp * (.1 + .15 * roll())); lived++; continue; }
+            fell.Add(m.Kind); side.Remove(m);
+            if (m.Hero is { } h) heroes.Add(h.Name);
         }
+        return lived;
     }
 
     /// <summary>Experience for the heroes of a side come through a battle; those who rose a level by it.</summary>
@@ -177,6 +217,6 @@ public static class QuickBattle
     static void Hurt(List<Traveller> side, double keep, Func<double> roll)
     {
         foreach (var m in side)
-            if (!Kinds.IsEngine(m.Kind)) m.Hp = (float)Math.Max(1, m.Hp * (keep + (1 - keep) * roll()));
+            if (!Kinds.IsEngine(m.Kind) && m.Hp > m.MaxHp * .3f) m.Hp = (float)Math.Max(1, m.Hp * (keep + (1 - keep) * roll()));
     }
 }

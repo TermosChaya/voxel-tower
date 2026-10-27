@@ -304,7 +304,11 @@ public partial class Main
             case "atlas-ore":
                 return await SelfTestAtlasGo(stage, check, fails);
             case "world":
-                return await SelfTestWorldGo(check);
+                return await SelfTestWorldGo(check, fails);
+            case "hold":
+            case "hold-check":
+            case "defend":
+                return await SelfTestHoldGo(stage, check, fails);
         }
         return true;
     }

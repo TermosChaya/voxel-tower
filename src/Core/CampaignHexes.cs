@@ -5,7 +5,8 @@ namespace VoxelTower.Core;
 /// <summary>
 /// The big map as the drawing reads it (HexLook.cs, the contract with the map's drawing): each hex's ground and relief,
 /// its roads and rivers, the one thing it shows and whose that is, the fog. Variant: bit 0 the thing is spent (picked
-/// up, opened, its week's given, its treasure taken), bit 1 it is kept by a stack.
+/// up, opened, its week's given, its treasure taken), bit 1 it is kept by a stack, bit 2 ours hold it with a garrison
+/// (not the first valley), bit 3 its works are worth a whole share or more (Campaign.Hold.cs, Fortification.cs).
 /// </summary>
 public sealed class CampaignHexes : IHexSource
 {
@@ -38,6 +39,8 @@ public sealed class CampaignHexes : IHexSource
         if (t != null && t.Owner != Owner.None) look.Owner = (byte)t.Owner;
         if (t != null && (t.Taken || t.Kind is ThingKind.Windmill or ThingKind.WaterWheel && t.Week == _c.Week || t.Kind == ThingKind.Trove && h.TroveTaken)) look.Variant |= 1;
         if (kept) look.Variant |= 2;
+        if (h.Owner == Owner.Ours && !h.Home && h.Sum.Keep.Exists(Campaign.Fights)) look.Variant |= 4;
+        if (h.Owner == Owner.Ours && !h.Home && h.Sum.Walls >= 1) look.Variant |= 8;
         return look;
     }
 

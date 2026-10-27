@@ -371,6 +371,25 @@ public partial class Commander : Node
         _m.Hud.OnSelectionChanged();
     }
 
+    /// <summary>
+    /// «Оставить гарнизон», or back with the party: the chosen stand where they are, and stay to hold the valley when the
+    /// party they came with goes out to the map (Campaign.Hold.cs). Again, they go with it.
+    /// </summary>
+    public void GarrisonSelected()
+    {
+        Prune();
+        bool stay = false;
+        foreach (var u in _m.Selected) stay |= !u.Garrison;
+        foreach (var u in _m.Selected)
+        {
+            if (u.Team != Team.Player) continue;
+            u.Garrison = stay;
+            if (stay) _m.Sim.Command(new[] { u }, u.Cell);
+        }
+        if (_m.Selected.Count > 0) _m.Hud.Float(stay ? "остаются гарнизоном" : "пойдут с отрядом", Ornament.EmberGlow);
+        _m.Hud.OnSelectionChanged();
+    }
+
     /// <summary>The alarm, or the all-clear: soldiers to their posts and everyone else to shelter, or all back to work.</summary>
     public void Alarm()
     {

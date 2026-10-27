@@ -126,6 +126,7 @@ public partial class Main
     void CampaignPoseBefore()
     {
         if (_pose == "trove" && Atlas != null) { TrovePoseBefore(); return; }
+        if (_pose == "holdfight" && Atlas != null) { HoldFightBefore(); return; }
         if (_pose != "lairfight" || Atlas == null) return;
         var lair = Atlas.Cells.Find(c => c.Holding == Holding.HordeTown);
         Atlas.HereQ = lair.Q; Atlas.HereR = lair.R;
@@ -163,6 +164,7 @@ public partial class Main
             case "land": LandPose(); break;
             case "bigmap": BigMapPose(); break;
             case "economy": EconomyPose(); break;
+            case "holdfight": HoldFight(); break;
             case "autoplay": AutoPlayStart(); break;
             case "march":
             {

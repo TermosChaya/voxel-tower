@@ -159,15 +159,16 @@ public sealed partial class Campaign
 
     /// <summary>
     /// A resource given the realm: gold to its treasury (the open valley's while one is), the rare ones to the realm's
-    /// stock, the stores to the nearest valley of ours with a stronghold (the open one straight in, any other kept for it
-    /// till it is gone into, as its workers' are).
+    /// stock, the stores to the valley it came from while ours hold it, else to the nearest valley of ours with a
+    /// stronghold (the open one straight in, any other kept for it till it is gone into, as its workers' are).
     /// </summary>
     public void Give(Res r, double n, MapCell near = null)
     {
         if (n <= 0) return;
         if (r == Res.Gold) { if (InValley && Live != null) Live.Stock.Gold += n; else Gold += n; return; }
         if (r >= Res.Mercury) { Rare[r - Res.Mercury] += n; if (Live != null) Live.Rare[r - Res.Mercury] = Rare[r - Res.Mercury]; return; }
-        var to = NearestOurs(near) ?? Home;
+        // a mine's stone, logs and metal to the stores of its own valley while ours hold it (to build its works with)
+        var to = near is { Owner: Owner.Ours } ? near : NearestOurs(near) ?? Home;
         if (to == null) return;
         if (InValley && Live != null && to == Here) { Live.Stock[StoreIndex(r)] += n * VoxelWorld.PerM3; return; }
         switch (r)

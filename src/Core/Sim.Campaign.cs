@@ -212,7 +212,7 @@ public sealed partial class Sim
     /// there — its raiders stay and hold the valley as a garrison, its bands are done — and the map is told; the valley
     /// runs on, its people where they are.
     /// </summary>
-    void ValleyLost()
+    void ValleyLost(string said = null)
     {
         Lost = true; LostAt = Time; LostDay = Clock.Day;
         KeepHp = 0;
@@ -225,8 +225,17 @@ public sealed partial class Sim
                 StopCarve(u); StopBuild(u);
             }
         if (Raids.Active) { Raids.Active = false; Bands.RemoveAll(b => b.State != BandState.Coming); }
-        Say(Site.HasKeep ? "Цитадель пала. Долина потеряна." : "Застава пала. Долина потеряна.", 3);
+        Say(said ?? (Site.HasKeep ? "Цитадель пала. Долина потеряна." : "Застава пала. Долина потеряна."), 3);
         ValleyFell?.Invoke();
+    }
+
+    /// <summary>
+    /// Nobody of ours left to fight for a valley of the map while the horde is in it (a point held by a garrison, no
+    /// citadel to fall): it is lost as a citadel's fall loses one.
+    /// </summary>
+    public void Overrun()
+    {
+        if (Campaign && !Lost) ValleyLost("Гарнизон пал. Долина потеряна.");
     }
 
     // ------------------------------------------------------------ the save
@@ -242,6 +251,9 @@ public sealed partial class Sim
         var guests = Units.FindAll(u => !u.Dead && u.Billet >= 0);
         w.Write(guests.Count);
         foreach (var u in guests) { w.Write(u.Id); w.Write(u.Billet); }
+        var garrison = Units.FindAll(u => !u.Dead && u.Garrison);
+        w.Write(garrison.Count);
+        foreach (var u in garrison) w.Write(u.Id);
     }
 
     void ReadCampaign(BinaryReader r)
@@ -260,6 +272,11 @@ public sealed partial class Sim
         {
             int id = r.ReadInt32(), billet = r.ReadInt32();
             if (Units.Find(u => u.Id == id) is { } u) u.Billet = billet;
+        }
+        for (int n = r.ReadInt32(); n > 0; n--)
+        {
+            int id = r.ReadInt32();
+            if (Units.Find(u => u.Id == id) is { } u) u.Garrison = true;
         }
     }
 }

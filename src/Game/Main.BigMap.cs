@@ -33,7 +33,8 @@ public partial class Main
         {
             v.ClickedHex += (c, r, b) => Hud.MapPane?.HexClicked(c, r, b);
             WorldFigures.Sync = SyncBigMap;
-            WorldFigures.KindOf = (c, r) => Atlas?.Cell(c, r) is { } h && h.Sum.Keep.Count > 0 ? h.Sum.Keep[0].Kind : null;
+            // (a garrison of ours shown by one who fights in it, not its workers)
+            WorldFigures.KindOf = (c, r) => Atlas?.Cell(c, r) is { } h && h.Sum.Keep.Count > 0 ? (h.Sum.Keep.Find(Campaign.Fights) ?? h.Sum.Keep[0]).Kind : null;
             WorldFigures.CountOf = (c, r) => Atlas?.Cell(c, r) is { } h ? h.Sum.Keep.Count : 0;
         }
         Hud.MapPane.FocusOn = p => { if (WorldMap?.Layout != null) WorldMap.FocusHex(p.Col, p.Row); };

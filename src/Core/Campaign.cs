@@ -150,7 +150,7 @@ public sealed partial class MapParty
 /// </summary>
 public sealed partial class Campaign
 {
-    public const int Version = 12;
+    public const int Version = 13;
     public const string FileName = "campaign.dat";
     static readonly byte[] Magic = { (byte)'V', (byte)'T', (byte)'C', (byte)'M' };
 

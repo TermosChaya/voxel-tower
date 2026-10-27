@@ -32,7 +32,7 @@ public partial class Main
         return false;
     }
 
-    async Task<bool> SelfTestWorldGo(Action<string, bool, string> check)
+    async Task<bool> SelfTestWorldGo(Action<string, bool, string> check, Func<int> fails)
     {
         async Task Frames(int n) { for (int i = 0; i < n; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         void Run(double seconds) { for (double t = 0; t < seconds; t += .5) { Advance(.5); CampaignTick(.5); } }
@@ -193,6 +193,8 @@ public partial class Main
             wrote && read.Big && rh != null && rh.Q == hero.Q && rh.R == hero.R && rh.MovesLeft == hero.MovesLeft
             && read.Cell(mine.Col, mine.Row).Thing.Owner == Holder.Ours && read.Cell(spot.Col, spot.Row).Thing == null,
             $"written {wrote}; hero at {rh?.Q},{rh?.R} of {hero.Q},{hero.R}, moves {rh?.MovesLeft} of {hero.MovesLeft}");
+        // the mine he flagged held (Main.SelfTest.Hold.cs)
+        if (mine != null && flagged) { CloseAtlas(); return SelfTestHold(fails, hero, mine); }
         CloseAtlas();
         string folder = Saves.CampaignDir(CampSlot);
         LeaveCampaign();

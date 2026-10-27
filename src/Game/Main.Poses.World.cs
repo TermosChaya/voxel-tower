@@ -151,7 +151,8 @@ public partial class Main
     /// A new campaign on the big map of «Heroes» (--campaign --pose=bigmap --size=S|M|L|XL): --look=0 the start, our hero
     /// by the citadel, chosen; 1 his way planned to a mine (most of today's moves spent), green as far as today, red
     /// beyond, the days at the cross; 2 him on his way there, walking; 3 a mine flagged ours, him on it; 4 a chest come to, its card asking gold or
-    /// experience; 5 a pass kept by a stack; 6 the horde's realm, its town in the burnt land; 7 the strategic view; 8 a road over a river on its bridge.
+    /// experience; 5 a pass kept by a stack; 6 the horde's realm, its town in the burnt land; 7 the strategic view; 8 a road over a river on its bridge;
+    /// 9 a mine held by a garrison of ours behind works, its card up (Campaign.Hold.cs).
     /// </summary>
     void BigMapPose()
     {
@@ -242,6 +243,24 @@ public partial class Main
                 c.RevealAll = true;
                 Look(home, 150, 90);
                 break;
+            case 9:
+            {
+                // a mine held: its garrison by it under our banner, the fort's mark over them
+                var mine = Nearest(Mine, home);
+                int key = Campaign.KeyOf(mine);
+                var stay = new List<Traveller>();
+                foreach (var t in new[] { Kinds.Archer, Kinds.Archer, Kinds.Spearman, Kinds.Spearman, Kinds.Swordsman, Kinds.Worker, Kinds.Worker })
+                    stay.Add(new Traveller { Kind = t, Hp = t.Hp, MaxHp = t.Hp, Billet = key });
+                mine.Sum.Works = new Fort(1, 3.3f, 2, 1, .6f, false, 0, 0, false);
+                mine.Sum.Walls = mine.Sum.Works.Score;
+                // (left there by the hero, as he would on the map)
+                hero.Party.Members.AddRange(stay);
+                c.Garrison(hero, mine, stay);
+                c.Reveal(mine, 4);
+                Hud.MapPane.Refresh();
+                Look(mine, 20, 14);
+                break;
+            }
             case 8:
             {
                 // a road crossing a river on its bridge, the land about it seen

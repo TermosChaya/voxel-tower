@@ -40,6 +40,8 @@ public partial class HexMapFigures : Node3D
     public MapWalker Chosen;
     readonly Dictionary<MapWalker, Token> _tokens = new();
     readonly Dictionary<(int, int), Token> _keepers = new();
+    /// <summary>What each keeper's figure was made for (a stack, ours holding it, and its works): made again when it changes.</summary>
+    readonly Dictionary<(int, int), int> _keeperState = new();
     MeshInstance3D _ring;
     double _keepersAt;
     /// <summary>Figures drawn on the last frame: ours, the horde's, the monsters (the self-test reads them).</summary>
@@ -163,16 +165,35 @@ public partial class HexMapFigures : Node3D
             {
                 var l = src.Look(c, r);
                 // a stack on its hex, or one keeping the thing of a hex beside it
-                bool stack = l.Icon == HexIcon.Monster, keeping = !stack && HexTiles.Kept(l) && l.Icon != HexIcon.None;
+                // ours holding a hex stand by its thing under our banner, a fort's mark over them if it has works
+                bool held = (l.Variant & 4) != 0, works = (l.Variant & 8) != 0;
+                bool stack = l.Icon == HexIcon.Monster, keeping = !stack && (HexTiles.Kept(l) || held) && l.Icon != HexIcon.None;
                 if (!stack && !keeping || !src.Seen(c, r)) continue;
                 keep.Add((c, r));
-                if (_keepers.ContainsKey((c, r))) continue;
+                int state = (held ? 1 : 0) | (works ? 2 : 0);
+                if (_keepers.ContainsKey((c, r)))
+                {
+                    if (_keeperState[(c, r)] == state) continue;
+                    _keepers[(c, r)].QueueFree(); _keepers.Remove((c, r));
+                }
                 int vr = HexTiles.Vary(c, r);
                 var kind = KindOf?.Invoke(c, r) ?? Keepers[vr % Keepers.Length];
-                var t = Make(Bodies.Plan(kind, vr), 0, banner: false);
+                var t = Make(Bodies.Plan(kind, vr), held ? (byte)1 : (byte)0, banner: held);
                 int n = CountOf?.Invoke(c, r) ?? 4 + vr % 23;
-                t.Count.Text = n > 1 ? n.ToString() : "";
-                t.Plate.Visible = n > 1;
+                t.Count.Text = n > 1 || held ? n.ToString() : "";
+                t.Plate.Visible = n > 1 || held;
+                if (held && works)
+                {
+                    var fort = new Sprite3D
+                    {
+                        Texture = GD.Load<Texture2D>("res://icons/hill-fort.svg"), Billboard = BaseMaterial3D.BillboardModeEnum.Enabled, FixedSize = true,
+                        PixelSize = .0006f * .45f, NoDepthTest = true, Position = t.Plate.Position + new Vector3(0, 0, 0), Offset = new Vector2(-70, 0),
+                        RenderPriority = 3, Shaded = false, Modulate = new Color("cfe0ff"),
+                    };
+                    t.AddChild(fort);
+                    t.Fort = fort;
+                }
+                _keeperState[(c, r)] = state;
                 var at = _view.HexToScene(c, r);
                 // (one keeping a thing stands by it, toward the south-east, the thing whole to the eye)
                 if (keeping) { var (hx, hz) = lay.Center(c, r); at = _view.ToScene(hx + 9, hz + 8); }
@@ -181,13 +202,14 @@ public partial class HexMapFigures : Node3D
                 t.Basis = new Basis(Vector3.Up, MathF.PI / 2 + (float)(vr % 6) * .6f + 2.1f).Scaled(Vector3.One * s);
                 t.Count.Scale = Vector3.One / s;
                 t.Plate.Scale = Vector3.One / s;
+                if (t.Fort != null) t.Fort.Scale = Vector3.One / s;
                 t.Pose(false, 0);
                 AddChild(t);
                 _keepers[(c, r)] = t;
             }
         }
         foreach (var k in new List<(int, int)>(_keepers.Keys))
-            if (!keep.Contains(k)) { _keepers[k].QueueFree(); _keepers.Remove(k); }
+            if (!keep.Contains(k)) { _keepers[k].QueueFree(); _keepers.Remove(k); _keeperState.Remove(k); }
         MonstersDrawn = _keepers.Count;
     }
 
@@ -298,6 +320,8 @@ public partial class HexMapFigures : Node3D
         public readonly MeshInstance3D[] Parts = new MeshInstance3D[Figure.Parts];
         public Label3D Count;
         public Sprite3D Plate;
+        /// <summary>The fort's mark over a garrison of ours behind works.</summary>
+        public Sprite3D Fort;
         public bool Seen;
         public float Face, Phase, Walk;
 

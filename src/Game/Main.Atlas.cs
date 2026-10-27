@@ -118,6 +118,7 @@ public partial class Main
     {
         if (Atlas == null || cell == null) return;
         if (cell == Atlas.Here) { CloseAtlas(); return; }
+        if (_defence != null) { Hud.Log("Идёт бой за долину: карта ждёт его конца.", Hud.Kind.Warn); return; }
         KeepersLeft();
         if (!Saves.WriteCampaign(this, CampSlot, Atlas, Atlas.Here)) return;
         Atlas.HereQ = cell.Q; Atlas.HereR = cell.R;
@@ -133,7 +134,8 @@ public partial class Main
     public string LeaveToMap(List<Unit> group)
     {
         if (Atlas == null) return "нет кампании";
-        group = group.FindAll(u => !u.Dead && u.Team == Team.Player && u.T != Kinds.Risen);
+        // (those left to hold the valley stay)
+        group = group.FindAll(u => !u.Dead && u.Team == Team.Player && u.T != Kinds.Risen && !u.Garrison);
         if (group.Count == 0) return "выберите в долине командира и бойцов";
         if (!group.Exists(u => u.T == Kinds.Captain) && !Scouts(group)) return $"в отряде нужен командир, или до {Campaign.ScoutMost} лёгких бойцов в разведку";
         float cx = 0, cz = 0;

@@ -520,6 +520,11 @@ public sealed class Unit
     /// -1 when it is this valley's own.
     /// </summary>
     public int Billet = -1;
+    /// <summary>
+    /// Left to hold the valley («Оставить гарнизон»): it stays when the party it came with goes out to the map, and the
+    /// valley is ours with it as its garrison (Campaign.Hold.cs).
+    /// </summary>
+    public bool Garrison;
 
     // labour
     public int Site = -1;
