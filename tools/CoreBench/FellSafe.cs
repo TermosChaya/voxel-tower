@@ -120,5 +120,56 @@ static class FellSafeBench
         check("trees of three valleys felled one after another with soldiers about them: those who step aside are not struck by the tree, a bough of it or its log",
             trees >= Math.Min(3 * want, 60) && felled >= trees * 9 / 10 && struck == 0,
             $"{trees} trees, {felled} down ({unwarned} without a warning, {standing} still standing), {rolled} with a log rolling; {struck} soldiers struck, {killed} killed; felling took {(felled > 0 ? felling / felled : 0):0} s a tree");
+        StuckLanes(check);
+    }
+
+    /// <summary>
+    /// Nobody waits by a tree for good (the author's playtest, 27.10.2026: three stood «отошёл: валят дерево» long after
+    /// the felling, and the alarm did not move them): a tree's lane kept on and on, nobody at its tree, is let go after the
+    /// longest a felling takes, and those waiting by one go when the alarm is called.
+    /// </summary>
+    static void StuckLanes(Action<string, bool, string> check)
+    {
+        var mp = new MapParams { Seed = 7, Kind = ValleyKind.First, Hexagon = true, SizeX = MapParams.GameSize, SizeZ = MapParams.GameSize };
+        var w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
+        var site = MapGen.Generate(w, mp);
+        w.Compact();
+        var sim = new Sim(w, site);
+        sim.Waves.Countdown = 1e9; sim.WildTarget = 0;
+        foreach (var u in sim.Units) if (u.Team == Team.Wild) { u.Dead = true; u.DiedAt = -999; }
+        void Run(double seconds) { for (double t = 0; t < seconds; t += .05) sim.Step(.05f); }
+        // two workers and a swordsman in the open, off the citadel
+        var ours = new[] { Kinds.Worker, Kinds.Worker, Kinds.Swordsman }
+            .Select((k, i) => sim.Spawn(k, sim.NearestStand(site.KeepX - 140 + i * 10, site.KeepZ + 60, k.Move.Height))).ToList();
+        // a lane laid by them, kept on and on (as a log caught rocking on a slope kept it), and them waiting by it
+        Danger Lane()
+        {
+            var u0 = ours[0];
+            var d = new Danger { PX = u0.X + 30, PZ = u0.Z, DX = 1, DZ = 0, Len = 60, Half = 12, HalfFoot = 6, Why = "отошёл: валят дерево", Kept = true, Tree = true, Born = sim.Time, Until = sim.Time + 1e6 };
+            sim.Dangers.Add(d);
+            foreach (var u in ours) { u.Avoiding = d; u.Path = null; }
+            return d;
+        }
+        var held = Lane();
+        Run(30);
+        bool waited = ours.All(u => u.Avoiding == held);
+        Run(Sim.TreeLaneMost);
+        bool let = !sim.Dangers.Contains(held) && ours.All(u => u.Avoiding == null);
+        // waiting by one, the alarm called: they go
+        var again = Lane();
+        Run(2);
+        var at = ours.Select(u => (u.X, u.Z)).ToList();
+        sim.RaiseAlarm();
+        Run(6);
+        // (none keeping out of it any more, nor saying so; the workers gone off a metre and more, or into the citadel —
+        // a soldier with no post on a wall here has nowhere to go, and stands)
+        bool alarmed = ours.All(u => u.Avoiding != again && u.Why != again.Why)
+            && ours.Select((u, i) => u.T.Work < 1 || u.Inside || MathF.Abs(u.X - at[i].X) + MathF.Abs(u.Z - at[i].Z) > VoxelWorld.PerMetre).All(b => b);
+        string how = string.Join(", ", ours.Select((u, i) => $"{u.T.Name} {u.State} «{u.Why}» moved {MathF.Abs(u.X - at[i].X) + MathF.Abs(u.Z - at[i].Z):0}"));
+        sim.StandDown();
+        sim.Dangers.Remove(again);
+        check("nobody waits by a tree for good: a tree's lane kept on and on is let go after the longest a felling takes, and those waiting by one go when the alarm is called",
+            waited && let && alarmed,
+            $"{ours.Count} of ours; waiting by it at 30 s {waited}; the lane let go and them with it by {Sim.TreeLaneMost + 30:0} s {let}; on the alarm they left it {alarmed} ({how})");
     }
 }

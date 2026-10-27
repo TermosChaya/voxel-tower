@@ -503,6 +503,7 @@ public sealed partial class Sim
         lane.RollSide = -MathF.Sign(rise);
         lane.RollLen = MathF.Max(lane.RollLen, 12 * VoxelWorld.PerMetre);
         lane.Roller = f;
+        lane.RollFrom = lane.Born = Time;
         lane.Until = Math.Max(lane.Until, Time + 1);
         if (!Dangers.Contains(lane)) Dangers.Add(lane);
         ClearLane(lane, null);

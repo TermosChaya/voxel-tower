@@ -16,8 +16,12 @@ public sealed class Danger
     /// A box (DX = DZ = 0): Len and Half to either side of (PX, PZ) in x and z.</summary>
     public float PX, PZ, DX, DZ, Len, Half, HalfFoot, Back, RollLen;
     public int RollSide;
-    /// <summary>The log of its tree rolling down the slope: the lane is kept while it rolls.</summary>
+    /// <summary>The log of its tree rolling down the slope: the lane is kept while it rolls, from RollFrom, a while at most.</summary>
     public Flier Roller;
+    public double RollFrom;
+    /// <summary>A tree's lane (not a digger's box): kept no longer than <see cref="Sim.TreeLaneMost"/> since Born, the last time it was in use (a blow at its tree, its fall, its log's roll).</summary>
+    public bool Tree;
+    public double Born = -1;
     /// <summary>The heights it covers, voxels (a lane covers all).</summary>
     public int Y0 = int.MinValue, Y1 = int.MaxValue;
     public double Until;
@@ -268,7 +272,7 @@ public sealed partial class Sim
             float t = Math.Clamp(a / len, 0, 1);
             if (t < .9f) foot = MathF.Max(foot, (c + 1.5f * m - half * t) / (1 - t));
         }
-        var lane = new Danger { PX = px, PZ = pz, DX = dx, DZ = dz, Len = len, Half = half, HalfFoot = foot, Back = back > 0 ? back + 1.5f * m : 0, Why = "отошёл: валят дерево", Kept = true };
+        var lane = new Danger { PX = px, PZ = pz, DX = dx, DZ = dz, Len = len, Half = half, HalfFoot = foot, Back = back > 0 ? back + 1.5f * m : 0, Why = "отошёл: валят дерево", Kept = true, Tree = true, Born = Time };
         (lane.RollSide, lane.RollLen) = RollOf(lane, top - baseY, butt);
         return lane;
     }
@@ -452,6 +456,9 @@ public sealed partial class Sim
             u.FellHold = true;
             return true;
         }
+        // (its lane in use while its feller is at it: kept however long the felling takes; only one nobody is at any more
+        // goes after TreeLaneMost)
+        plan.Lane.Born = Time;
         if (!Dangers.Contains(plan.Lane)) Dangers.Add(plan.Lane);
         // (a tree it held before is no longer its work: its lane, kept as long as it would be, is kept from it as from
         // anyone, so that it does not stand under that tree to cut another)
@@ -551,10 +558,14 @@ public sealed partial class Sim
     {
         var d = u.Avoiding;
         if (d == null) return false;
-        if (Time > d.Until || !Dangers.Contains(d)) { u.Avoiding = null; return false; }
+        // (what it said of the danger goes with it, so that nobody stands over «отошёл: валят дерево» after)
+        if (Time > d.Until || !Dangers.Contains(d)) { u.Avoiding = null; if (u.Why == d.Why) u.Why = ""; return false; }
         float r = u.T.BodyR + 4;
         if (!d.Has(u.X, u.Y, u.Z, r))
         {
+            // out of it, and the alarm called: to shelter or the posts (whoever's way lies into the lane is turned again by
+            // ClearLane), not waiting here till the tree is down
+            if (Alarm) { u.Avoiding = null; if (u.Why == d.Why) u.Why = ""; return false; }
             u.Path = null;
             u.State = UnitState.Idle;
             u.Why = d.Why;
@@ -612,6 +623,7 @@ public sealed partial class Sim
         // (its feller's work done: it keeps out of it as all of ours do, and does not walk back in to its next work)
         lane.By = null;
         lane.Until = t.To + 1;
+        lane.Born = Time;
         if (!Dangers.Contains(lane)) Dangers.Add(lane);
         if (ClearLane(lane, null) == 0 || plan != null) return;
         Unit near = null;
@@ -624,6 +636,9 @@ public sealed partial class Sim
         }
         if (near != null) Shouted?.Invoke(near, "Берегись!");
     }
+
+    /// <summary>How long a rolling log keeps its lane at most, seconds; how long any tree's lane is kept at most.</summary>
+    public const double RollLaneMost = 20, TreeLaneMost = 120;
 
     /// <summary>The dangers over are let go; the plans of trees long since down forgotten.</summary>
     void TickDangers()
@@ -639,14 +654,17 @@ public sealed partial class Sim
             if (!cut && p.Lane.By is { Dead: true } or { Hold: true }) p.Abandoned = true;
             if (cut || !p.Abandoned) p.Lane.Until = Math.Max(p.Lane.Until, Time + 1);
         }
-        // a felled tree's log rolling down a slope: its lane kept till it stops
+        // a felled tree's log rolling down a slope: its lane kept till it stops, and no longer than a log rolls (one
+        // caught rocking on the slope would otherwise hold those keeping out of it for good)
         foreach (var d in Dangers)
             if (d.Roller != null)
             {
-                if (d.Roller.Rolling && Fliers.Contains(d.Roller)) d.Until = Math.Max(d.Until, Time + 1);
+                if (d.Roller.Rolling && Fliers.Contains(d.Roller) && Time - d.RollFrom < RollLaneMost) d.Until = Math.Max(d.Until, Time + 1);
                 else d.Roller = null;
             }
-        if (Dangers.Count > 0) Dangers.RemoveAll(d => Time > d.Until);
+        // and no tree's lane is kept longer than any felling takes, whatever kept it (a tree's way chosen thrice over
+        // and its lane held a while each time is well inside it)
+        if (Dangers.Count > 0) Dangers.RemoveAll(d => Time > d.Until || d.Tree && d.Born >= 0 && Time - d.Born > TreeLaneMost);
         if (_fells.Count > 0) _fells.RemoveAll(p => Time - p.Made > 300);
         // whoever of ours walks into one while it lasts is sent out again
         foreach (var d in Dangers) if (d.Kept) ClearLane(d, d.By);
