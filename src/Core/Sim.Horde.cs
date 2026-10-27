@@ -152,6 +152,9 @@ public sealed partial class Sim
         u.Target = null;
         // one of its own pinned close by: dug out before anything
         if (!u.Routed && Armed(u) && !u.Envoy && Rescue(u, dt, 12 * VoxelWorld.PerMetre)) return;
+        // an orc or a troll with a body fresh by it: it falls on it and eats (Sim.HordeFaith.cs)
+        if (!u.Routed && !u.Envoy && u.CarveCell < 0 && u.BuildCell < 0 && Devours(u, dt)) return;
+        if (u.Meal != null) Unclaim(u);
         // nothing left to fight with, or no heart left for it: back west and out of the valley
         if (!Armed(u) || u.Routed) { StopCarve(u); StopBuild(u); Retreat(u, dt); return; }
         KeepEscort(u);
@@ -432,7 +435,8 @@ public sealed partial class Sim
         {
             // against whatever it leans on, from the feet if it starts on the ground
             int from = Nav.Ladder[u.Cell] != 0 || !Nav.Ground(Nav.I(u.Cell), Nav.Y(u.Cell) - 1, Nav.K(u.Cell)) ? qy << NavGrid.Shift : Nav.Floor[u.Cell];
-            LadderVoxels(qi, qy, qk, from, (qy + 1) << NavGrid.Shift, Mat.SiegeLadder, u.BuildList);
+            // (near a shaman of the goblins it grows as ivy: Sim.HordeFaith.cs)
+            LadderVoxels(qi, qy, qk, from, (qy + 1) << NavGrid.Shift, IvyBy(u) ? Mat.Ivy : Mat.SiegeLadder, u.BuildList);
         }
         else
         {
@@ -449,7 +453,8 @@ public sealed partial class Sim
 
     /// <summary>
     /// A ladder up the column of cell (i, k), from voxel height y0 to y1: two rails and rungs every third voxel, laid against
-    /// the face of whatever solid stands beside it.
+    /// the face of whatever solid stands beside it. Ivy grows over it as a mat: stems where the rails are and leaves
+    /// scattered between, thick but never closed.
     /// </summary>
     public void LadderVoxels(int i, int cy, int k, int y0, int y1, byte mat, List<(int, int, int, byte)> into)
     {
@@ -465,6 +470,7 @@ public sealed partial class Sim
             for (int t = 1; t <= 6; t++)
             {
                 bool rail = t == 1 || t == 6, rung = (y % 3) == 0;
+                if (mat == Mat.Ivy) { rail = t is 1 or 4 or 6; rung = ((y * 7 + t * 3 + i * 5 + k) & 3) != 0; }
                 if (!rail && !rung) continue;
                 // from the side it leans on inward, to the first free voxel: right against the face
                 for (int s = 0; s < NavGrid.CS; s++)
@@ -495,14 +501,16 @@ public sealed partial class Sim
         };
         int store = u.Building == Works.Fill ? Stockpile.Earth : Stockpile.Wood;
         // a fill goes in from the bottom up, so nothing hangs in the air while it rises
-        u.BuildEffort += Siege.Rate * u.T.Move.Build * dt;
+        bool ivy = u.BuildList.Count > 0 && u.BuildList[0].m == Mat.Ivy;
+        u.BuildEffort += Siege.Rate * u.T.Move.Build * dt * (ivy ? IvyPace : 1);
         while (u.BuildI < u.BuildList.Count && u.BuildEffort >= perVoxel)
         {
             var (x, y, z, m) = u.BuildList[u.BuildI];
             if (!Brushes.Free(World.Get(x, y, z))) { u.BuildI++; continue; }
             // nobody gets buried under a fill
             if (m == Mat.Soil && _bodies[Nav.CellOf(x, y, z)] > 0) break;
-            if (!HordeStock.Take(store, 1))
+            // (ivy grows of itself: no timber for it)
+            if (m != Mat.Ivy && !HordeStock.Take(store, 1))
             {
                 u.NoBuildUntil = Time + 4;
                 StopBuild(u);
@@ -511,7 +519,7 @@ public sealed partial class Sim
             u.BuildEffort -= perVoxel;
             u.BuildI++;
             World.Set(x, y, z, m);
-            if (m is Mat.SiegeLadder or Mat.Deck) _works.Add(Nav.CellOf(x, y, z));
+            if (m is Mat.SiegeLadder or Mat.Deck or Mat.Ivy) _works.Add(Nav.CellOf(x, y, z));
             Raised?.Invoke(x, y, z, m);
             u.Swing = 1;
         }

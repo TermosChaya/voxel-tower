@@ -87,6 +87,7 @@ public partial class Main
         if (_pose == "wand") { WandPose(); return; }
         if (_pose == "god") { GodPose(); return; }
         if (_pose == "angels") { FaithPose(); return; }
+        if (_pose == "swamp") { SwampPose(); return; }
         if (_pose == "square") { SquarePose(); return; }
         if (_pose == "templates") { TemplatesPose(); return; }
         if (_pose == "commander") { CommanderPose(); return; }

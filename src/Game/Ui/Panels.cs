@@ -285,7 +285,7 @@ public partial class HordeInfo : VBoxContainer
 {
     Main _m;
     VBoxContainer _bands;
-    Label _stores, _threat;
+    Label _stores, _threat, _faith;
     string _key = "";
 
     /// <summary>What the bands' lines say now (for the self-test).</summary>
@@ -313,6 +313,9 @@ public partial class HordeInfo : VBoxContainer
         AddChild(new Rule(false));
         _stores = Hud.Text("", Ornament.Serif, 12, Ornament.Aged, wrap: true);
         AddChild(_stores);
+        // the horde's faith, and how near it is to calling its god (Sim.HordeFaith.cs)
+        _faith = Hud.Text("", Ornament.Serif, 12, Ornament.EmberGlow, wrap: true);
+        AddChild(_faith);
         Refresh();
     }
 
@@ -386,6 +389,8 @@ public partial class HordeInfo : VBoxContainer
         _threat.Text = sim.ThreatLine();
         _stores.Text = $"Брёвна орды на лестницы и мосты: {Fmt.M3(sim.HordeStock[Stockpile.Wood])} м³, земля на засыпку рвов: {Fmt.M3(sim.HordeStock[Stockpile.Earth])} м³. " +
             "Каждая волна приносит свои запасы, а половина прорубленного идёт орде.";
+        _faith.Text = $"Вера орды: {sim.HordeFaith:0} из {Sim.HordeFaithFull:0}. Растёт, когда орки пожирают павших (наших втрое), а шаманы проклинают стены и бросают яд. " +
+            "Полная вера в набеге призывает Великую жабу.";
     }
 }
 

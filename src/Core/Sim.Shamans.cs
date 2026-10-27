@@ -18,9 +18,10 @@ public sealed class Curse
 }
 
 /// <summary>
-/// The horde's shamans: goblins with a skull for a face and an ember in the horn of their staff. One goes with its band
-/// and keeps it on its feet — every few seconds those hurt about it mend a little and bleed the less — and now and then
-/// it lays a curse on the nearest piece of our walls: for a while the horde hacks that twice as fast. Consecrated ground
+/// The horde's shamans: goblins with a skull for a face and an ember in the horn of their staff, workers of the swamp's
+/// magic. One goes with its band and keeps it on its feet — every few seconds those hurt about it mend a little and bleed
+/// the less — throws the swamp's poison over a knot of ours, has its band's ladders grow as ivy (Sim.HordeFaith.cs), and
+/// now and then lays a curse on the nearest piece of our walls: for a while the horde hacks that twice as fast. Consecrated ground
 /// is proof against it: no curse takes near a sanctuary, nor near a priest of ours. Our archers shoot a shaman before
 /// anyone else, and one taken alive is worth the most to the old powers.
 /// </summary>
@@ -51,6 +52,9 @@ public sealed partial class Sim
             }
             if (n > 0) { u.Swing = 1; Healed?.Invoke(u.X, u.Y, u.Z); }
         }
+        // the swamp's poison over a knot of ours (Sim.HordeFaith.cs)
+        if (u.NextPoison <= 0) u.NextPoison = Time + 3 + u.Id % 4;
+        if (Time >= u.NextPoison) { u.NextPoison = Time + PoisonEvery; Poison(u); }
         if (Time < u.NextCurse) return;
         u.NextCurse = Time + CurseEvery;
         if (CurseTarget(u) is not var (x, y, z) || Curses.Exists(c => MathF.Abs(c.X - x) + MathF.Abs(c.Z - z) < CurseR)) return;
@@ -61,6 +65,7 @@ public sealed partial class Sim
             return;
         }
         Curses.Add(new Curse { X = x, Y = y, Z = z, R = CurseR, Until = Time + CurseFor });
+        Feed(1);
         Hexed?.Invoke(x, y, z);
         if (Time - _curseSaid > 15) { _curseSaid = Time; Say("Шаман проклял стену: орда ломает её вдвое быстрее. Святилище рядом защищает от проклятий.", 3, x, z); }
     }

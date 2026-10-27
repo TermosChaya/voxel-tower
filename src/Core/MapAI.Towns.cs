@@ -87,7 +87,7 @@ public sealed partial class Campaign
         new() { Work = HordeWork.Shaman, Name = "Хижина шамана", Gold = 450, Logs = 5, Metal = 1, Needs = HordeWork.Pit, Breeds = new[] { (Kinds.Shaman, 2), (Kinds.Witch, 1) } },
         new() { Work = HordeWork.StoneWall, Name = "Каменный вал", Gold = 700, Stone = 20 },
         new() { Work = HordeWork.Yard, Name = "Двор машин", Gold = 550, Logs = 10, Metal = 1, Needs = HordeWork.Burrow, Breeds = new[] { (Kinds.Ram, 1), (Kinds.Catapult, 1), (Kinds.Mantlet, 1) } },
-        new() { Work = HordeWork.Alchemist, Name = "Варильня", Gold = 500, Rare = Res.Mercury, RareN = 3, Needs = HordeWork.Shaman, Breeds = new[] { (Kinds.Alchemist, 1), (Kinds.Necromancer, 1) } },
+        new() { Work = HordeWork.Alchemist, Name = "Варильня", Gold = 500, Rare = Res.Mercury, RareN = 3, Needs = HordeWork.Shaman, Breeds = new[] { (Kinds.Alchemist, 1), (Kinds.Witch, 1) } },
         new() { Work = HordeWork.GiantCave, Name = "Пещера великана", Gold = 1200, Stone = 15, Rare = Res.Crystal, RareN = 3, Needs = HordeWork.TrollDen, Breeds = new[] { (Kinds.HillGiant, 1) } },
     };
 

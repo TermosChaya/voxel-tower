@@ -270,7 +270,7 @@ public sealed partial class Sim
                     if (dx * dx + dy * dy + dz * dz > r * r || !World.InBounds(x, y, z)) continue;
                     byte m = World.Get(x, y, z);
                     // a siege ladder comes down whole from where it is struck, and whoever was on it
-                    if (m == Mat.SiegeLadder) { done += ThrowDown(x, y, z); continue; }
+                    if (m is Mat.SiegeLadder or Mat.Ivy) { done += ThrowDown(x, y, z); continue; }
                     if (m is Mat.Deck or Mat.TowerLadder) splinters.Add((x, y, z));
                 }
         if (splinters.Count > 0)

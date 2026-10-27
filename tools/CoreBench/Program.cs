@@ -3856,10 +3856,10 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--sorcerers")
     Check("our archers shoot a witch before a goblin nearer to them", bowV.Target == witchV, $"the archer aims at {bowV.Target?.T.Name ?? "nobody"}");
     Gone(bowV); Gone(gobV); Gone(witchV);
 
-    // witches come from the sixth wave, necromancers from the eighth
+    // witches come from the sixth wave; no necromancer in any (the dark faith's, a draft now)
     bool W(int n, UnitType t) { simV.PlanWave(n); return simV.Bands.Exists(b => b.Roster.Contains(t)); }
-    bool w5 = W(5, Kinds.Witch), w6 = W(6, Kinds.Witch), n7 = W(7, Kinds.Necromancer), n8 = W(8, Kinds.Necromancer);
-    Check("witches come from the sixth wave, necromancers from the eighth", !w5 && w6 && !n7 && n8, $"a witch in the fifth {w5}, the sixth {w6}; a necromancer in the seventh {n7}, the eighth {n8}");
+    bool w5 = W(5, Kinds.Witch), w6 = W(6, Kinds.Witch), n8 = W(8, Kinds.Necromancer), n11 = W(11, Kinds.Necromancer);
+    Check("witches come from the sixth wave, and no necromancer comes in any", !w5 && w6 && !n8 && !n11, $"a witch in the fifth {w5}, the sixth {w6}; a necromancer in the eighth {n8}, the eleventh {n11}");
 }
 
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--lore")
@@ -6303,6 +6303,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bestiary") BestiaryB
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--gods") GodsBench.Run(Check);
 
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--angels") AngelsBench.Run(Check);
+
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--hordefaith") HordeFaithBench.Run(Check);
 // the map of valleys as a land: made in good time, every kind of cell its kind, the ways running on, walked from the
 // castle everywhere, the same each time, a cell put on again as its holder changed (LandBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--atlas") LandBench.Run(Check);

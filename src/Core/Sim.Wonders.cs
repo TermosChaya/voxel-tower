@@ -29,7 +29,7 @@ public sealed partial class Sim
                 for (int y = 4, top = Math.Min(World.SY - 2, World.ColTop(cx, cz)); y < top; y++)
                 {
                     byte m = World.Get(cx, y, cz);
-                    if (m != Mat.SiegeLadder && m != Mat.Deck) continue;
+                    if (m != Mat.SiegeLadder && m != Mat.Deck && m != Mat.Ivy) continue;
                     int key = Nav.CellOf(cx, y, cz);
                     if (!pieces.TryGetValue(key, out var list)) pieces[key] = list = new List<(int, int, int)>();
                     list.Add((cx, y, cz));

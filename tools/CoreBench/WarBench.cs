@@ -486,7 +486,9 @@ static class WarBench
             var ours = Fort(s, 8, 8);
             Run(s, .1);
             var lord = s.NewWarlord(3);
-            s.Raid(Sim.Roster(8, 1), 3, .5, lord);
+            // (the ninth wave's army: big enough to come on and storm, the warlord with it, before it breaks — since the
+            // necromancer went to the drafts the eighth's broke on our archers before it came in reach of a volley)
+            s.Raid(Sim.Roster(9, 1), 3, .5, lord);
             double t0 = s.Time, cpu = 0; int steps = 0;
             BattleReport mid = null; Sim back = null;
             while (s.Raids.Active && !s.Over && s.Time - t0 < 900)

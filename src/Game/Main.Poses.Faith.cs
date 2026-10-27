@@ -94,4 +94,75 @@ public partial class Main
         Rig.SetAt(w.WX(sx), y, w.WZ(sz), yaw, .42f, 1.6f);
         Hud.Refresh();
     }
+
+    /// <summary>
+    /// The horde's faith (--pose=swamp), west of the citadel: --look=0 orcs at the fallen, tearing at them; 1 a sapper
+    /// and a shaman by a wall of ours, the ivy grown up it; 2 the swamp's poison over a knot of ours; 3 the horde's tab
+    /// with its faith.
+    /// </summary>
+    void SwampPose()
+    {
+        var sim = Sim; var w = World;
+        sim.Waves.Countdown = 1e9; sim.WildTarget = 0;
+        const float M = VoxelWorld.PerMetre;
+        int gx = Site.KeepX - Site.KeepR - (int)(40 * M), gz = Site.KeepZ;
+        ClearTrees(gx - 300, gz - 200, gx + 120, gz + 200);
+        Unit Put(UnitType t, float x, float z) { var u = sim.Spawn(t, sim.NearestStand((int)x, (int)z, t.Move.Height)); if (t.Team == Team.Horde) { u.Guard = true; u.Home = u.Cell; } else { u.Hold = true; u.Dest = u.Post = u.Cell; } return u; }
+        float sx = gx, sz = gz;
+        switch (_look)
+        {
+            case 0:
+                for (int i = 0; i < 4; i++)
+                {
+                    var body = Put(i % 2 == 0 ? Kinds.Swordsman : Kinds.Goblin, gx + i * 3 * M, gz + (i % 2) * 2 * M);
+                    sim.Hurt(body, null, 9999, "test");
+                    var orc = Put(i == 3 ? Kinds.Troll : Kinds.Orc, gx + i * 3 * M + 1.5f * M, gz + (i % 2) * 2 * M + 1 * M);
+                    orc.Hp = orc.MaxHp * .5f;
+                }
+                Advance(2.5);
+                sx = gx + 4 * M;
+                break;
+            case 1:
+            {
+                // a ring of stone about the citadel, the horde with timber; a sapper comes at it from the west, its shaman by
+                foreach (var u in sim.Units) if (u.Team == Team.Player) { u.Dead = true; u.DiedAt = -999; }
+                sim.InstantLabour = true;
+                int ring = Site.KeepR + 44;
+                sim.DesignateBuild(Shapes.Circle(w, Site, Site.KeepX, Site.KeepZ, ring, new Stroke { Mat = Mat.Stone, Width = 8, Height = 48, Hollow = true }, 0));
+                sim.InstantLabour = false;
+                sim.HordeStock[Stockpile.Wood] = 4096;
+                sim.ComputeFields();
+                var sapper = sim.Spawn(Kinds.Sapper, sim.NearestStand(Site.KeepX - ring - 36, Site.KeepZ, 3));
+                var shaman = sim.Spawn(Kinds.Shaman, sim.NearestStand(Site.KeepX - ring - 40, Site.KeepZ + 4, 2));
+                shaman.ChainedUntil = 1e9;
+                int ivy = 0;
+                sim.Raised = (x, y, z, m) => { if (m == Mat.Ivy) ivy++; };
+                for (int i = 0; i < 1200 && ivy < 60; i++)
+                {
+                    Advance(.05);
+                    if (i % 20 == 0) (shaman.X, shaman.Z) = (sapper.X - 2 * M, sapper.Z);
+                }
+                sx = sapper.X; sz = sapper.Z;
+                break;
+            }
+            case 2:
+                for (int i = 0; i < 6; i++) Put(Kinds.Swordsman, gx + i % 3 * 1.6f * M, gz + i / 3 * 1.6f * M);
+                var sh = Put(Kinds.Shaman, gx - 10 * M, gz);
+                sh.Hp = sh.MaxHp = 5000;
+                for (int i = 0; i < 300 && sim.Miasmas.Count == 0; i++) Advance(.05);
+                Advance(2);
+                sx = gx - 2 * M;
+                break;
+            case 3:
+                sim.HordeFaith = 96;
+                Hud.OpenPanel("horde");
+                break;
+        }
+        Paused = true;
+        _shotFrames = Math.Max(_shotFrames, 60);
+        float y = w.WY(w.SurfAt((int)sx, (int)sz)) + 2;
+        float yaw = _cam is { Length: > 0 } ? _cam[0] : -1.1f;
+        Rig.SetAt(w.WX(sx), y, w.WZ(sz), yaw, .42f, _look == 0 ? 4.5f : 3.2f);
+        Hud.Refresh();
+    }
 }

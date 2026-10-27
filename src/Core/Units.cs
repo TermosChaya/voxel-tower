@@ -758,7 +758,14 @@ public sealed class Unit
     public double CrumbleAt;
     /// <summary>A sorcerer of the horde: when it next casts each of its two spells — a shaman mends and curses, a witch
     /// douses fires and puts out torches, a necromancer raises the fallen.</summary>
-    public double NextHeal, NextCurse;
+    public double NextHeal, NextCurse, NextPoison;
+    /// <summary>
+    /// An orc's or a troll's meal (Sim.HordeFaith.cs): the body it is at and how long it has eaten, when it next looks
+    /// for one, and till when it is gorged and the fiercer.
+    /// </summary>
+    public Unit Meal;
+    public float MealDone;
+    public double NextMeal, GorgedUntil;
     /// <summary>Off its feet and in the air — thrown by a blast or a wind, or held up by telekinesis — or null.</summary>
     public Flier Airborne;
     /// <summary>A raider: till when the plague is on it. One of ours: till when the blood oath holds.</summary>

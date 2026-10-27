@@ -277,7 +277,7 @@ public partial class Hud : CanvasLayer
         _works.Init(m);
         var worksTab = _worksTab = Tab("works", Icons.Pick, "Работы", "Работы\nКто какую работу делает и в каком порядке: 1 — первым делом, 4 — в последнюю очередь, пусто — никогда. Здесь же: кто добывает сам и кто в ополчении.", _works, WorkTable.Width);
         _horde = new HordeInfo();
-        _hordeTab = Tab("horde", Icons.Of("goblin-head"), "Орда", "Орда\nВатаги ближайшей волны: состав, вожак, откуда придут. Их пути видны на поле и на карте ({Trails}). Ниже запасы орды на осадные работы.", _horde, 360);
+        _hordeTab = Tab("horde", Icons.Of("goblin-head"), "Орда", "Орда\nВатаги ближайшей волны: состав, вожак, откуда придут. Их пути видны на поле и на карте ({Trails}). Ниже запасы орды на осадные работы и её вера.", _horde, 360);
         _horde.Init(m);
         _lore = new LorePanel();
         _lore.Init(m);

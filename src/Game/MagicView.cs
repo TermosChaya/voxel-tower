@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Godot;
 using VoxelTower.Core;
 
@@ -134,6 +135,7 @@ public partial class MagicView : Node3D
         m.Sim.Quaked += Quake;
         m.Sim.Breathed += Breath;
         InitHeaven(m);
+        m.Sim.Devoured += Devoured;
     }
 
     MultiMeshInstance3D Multi(Mesh mesh, Material mat)
@@ -189,6 +191,14 @@ public partial class MagicView : Node3D
     {
         var at = At(x, y + 6, z);
         Flare(at, Hex, 2.5f, 7, 1.2f, Motes(at, Hex, 26, 1.1f, .6f));
+    }
+
+    /// <summary>A body eaten where it lay (Sim.HordeFaith.cs): blood and gobbets of it thrown up as the orc tears at it.</summary>
+    void Devoured(float x, float y, float z)
+    {
+        var at = At(x, y + 2, z);
+        _m.Debris.Spray(Mat.Blood, at, Vector3.Up, 50, 3, 1f, 2, life: 1.4f);
+        _m.Debris.Spray(Mat.Flesh, at, Vector3.Up, 14, 3.5f, .8f, 3, life: 1.6f);
     }
 
     /// <summary>A curse laid on our walls: a green flash where it took.</summary>
@@ -654,13 +664,14 @@ public partial class MagicView : Node3D
     {
         var w = _m.World;
         var mm = _fog.Multimesh;
-        int need = sim.DeadFogs.Count * Puffs;
+        int need = (sim.DeadFogs.Count + sim.Miasmas.Count) * Puffs;
         if (need > mm.InstanceCount) mm.InstanceCount = need + Puffs * 2;
         int n = 0;
         float t = (float)_t;
-        foreach (var f in sim.DeadFogs)
+        // (the swamp's poison a shaman throws lies the same, yellower and thicker: Sim.HordeFaith.cs)
+        foreach (var (f, poison) in sim.DeadFogs.Select(f => (f, false)).Concat(sim.Miasmas.Select(f => (f, true))))
         {
-            double left = f.Until - sim.Time, age = 45 - left;
+            double left = f.Until - sim.Time, age = (poison ? 12 : 45) - left;
             float fade = (float)Math.Clamp(Math.Min(age / 2, left / 3), 0, 1), r = f.R * VoxelWorld.Vox;
             int seed = (int)(f.X * 7 + f.Z * 13);
             for (int i = 0; i < Puffs; i++)
@@ -673,7 +684,8 @@ public partial class MagicView : Node3D
                 var at = new Vector3(w.WX(x / VoxelWorld.Vox), w.WY(w.SurfAt(vx, vz)) + h, w.WZ(z / VoxelWorld.Vox));
                 var basis = new Basis(Vector3.Up, t * .04f * (i % 2 == 0 ? 1 : -1) + i).Scaled(new Vector3(size, 1, size));
                 mm.SetInstanceTransform(n, new Transform3D(basis, at));
-                mm.SetInstanceColor(n, new Color(.34f, .44f, .38f, fade * (.1f + .05f * MathF.Sin(t * .5f + i * 1.7f))));
+                mm.SetInstanceColor(n, poison ? new Color(.45f, .55f, .18f, fade * (.16f + .06f * MathF.Sin(t * .5f + i * 1.7f)))
+                    : new Color(.34f, .44f, .38f, fade * (.1f + .05f * MathF.Sin(t * .5f + i * 1.7f))));
                 n++;
             }
         }
@@ -834,5 +846,6 @@ public partial class MagicView : Node3D
         _m.Sim.Quaked -= Quake;
         _m.Sim.Breathed -= Breath;
         ExitHeaven();
+        _m.Sim.Devoured -= Devoured;
     }
 }

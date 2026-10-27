@@ -733,6 +733,7 @@ public sealed partial class Sim
         _hexAt = Time;
         if (Skins.Count > 0) Skins.RemoveAll(s => s.Until <= Time);
         if (DeadFogs.Count > 0) DeadFogs.RemoveAll(f => f.Until <= Time);
+        TickMiasma();
         bool fog = DeadFogs.Count > 0;
         _sick.Clear();
         foreach (var u in Units)

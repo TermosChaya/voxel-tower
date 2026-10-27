@@ -722,14 +722,19 @@ public sealed partial class Sim
         for (int y = y0; y < y0 + NavGrid.CS; y++)
             for (int z = z0; z < z0 + NavGrid.CS; z++)
                 for (int x = x0; x < x0 + NavGrid.CS; x++)
-                    if (World.Get(x, y, z) == Mat.SiegeLadder) { v = (x, y, z); return true; }
+                    if (World.Get(x, y, z) is Mat.SiegeLadder or Mat.Ivy) { v = (x, y, z); return true; }
         v = default;
         return false;
     }
 
-    /// <summary>Takes away a whole siege ladder from one of its voxels; whoever was on it falls.</summary>
+    /// <summary>
+    /// Takes away a whole siege ladder from one of its voxels; whoever was on it falls. Ivy (Sim.HordeFaith.cs) has grown
+    /// into the wall and does not come away whole: a stretch of it a metre and a half about the voxel is cut out.
+    /// </summary>
     public int ThrowDown(int x0, int y0, int z0)
     {
+        byte what = World.Get(x0, y0, z0);
+        int reach = what == Mat.Ivy ? 6 : 12, high = what == Mat.Ivy ? 6 : int.MaxValue;
         var queue = new Queue<(int x, int y, int z)>();
         var seen = new HashSet<long>();
         long Key(int x, int y, int z) => ((long)y * World.SZ + z) * World.SX + x;
@@ -738,14 +743,14 @@ public sealed partial class Sim
         while (queue.Count > 0 && n < 3000)
         {
             var (x, y, z) = queue.Dequeue();
-            if (World.Get(x, y, z) != Mat.SiegeLadder) continue;
+            if (World.Get(x, y, z) != what || what is not (Mat.SiegeLadder or Mat.Ivy)) continue;
             World.Set(x, y, z, Mat.Air);
-            Hacked?.Invoke(x, y, z, Mat.SiegeLadder);
+            Hacked?.Invoke(x, y, z, what);
             n++;
             foreach (var (dx, dy, dz) in Around)
             {
                 int nx = x + dx, ny = y + dy, nz = z + dz;
-                if (Math.Abs(nx - x0) > 12 || Math.Abs(nz - z0) > 12 || !seen.Add(Key(nx, ny, nz))) continue;
+                if (Math.Abs(nx - x0) > reach || Math.Abs(nz - z0) > reach || Math.Abs(ny - y0) > high || !seen.Add(Key(nx, ny, nz))) continue;
                 queue.Enqueue((nx, ny, nz));
             }
         }

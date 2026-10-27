@@ -212,6 +212,9 @@ public static class Mat
     /// wind as leaves do — blue ours, red the horde's — and crystals red as blood. None of it is in a valley.
     /// </summary>
     public const byte MapFlagBlue = 229, MapFlagRed = 228, CrystalRed = 227;
+    /// <summary>Ivy the horde's shamans grow up our walls for their bands to climb, as a ladder is climbed (Sim.HordeFaith.cs).</summary>
+    public const byte Ivy = 195;
+
     public const int Count = 253;
 
     public static readonly MaterialDef[] Def = new MaterialDef[Count];
@@ -279,6 +282,7 @@ public static class Mat
         D(Ladder, "Лестница", 0x7a5634, .2f, MatGroup.Wood, Player);
         D(SiegeLadder, "Осадная лестница", 0x4a3726, .22f, MatGroup.Wood, 0);
         D(Deck, "Настил орды", 0x4f3d2c, .26f, MatGroup.Wood, 0);
+        D(Ivy, "Плющ", 0x3b6a28, .34f, MatGroup.Wood, 0);
         D(Water, "Вода", 0x1f3a44, .04f, MatGroup.Hard, Natural);
         // oak bound with iron: the horde hacks it no faster than masonry
         D(Gate, "Ворота", 0x4b3322, .26f, MatGroup.Stone, Player);
@@ -453,9 +457,9 @@ public static class Mat
         for (int m = 1; m < Count; m++) if (Def[m].Name == null) D((byte)m, "—", 0x808080, 0, MatGroup.Hard, 0);
         foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage, Flower, Bloom, Birch, NeedleLight, FoliageLight, FoliageGold, PineBark, Snag,
             FlowerRed, FlowerWhite, FlowerBlue, Fern, Reed, Mushroom, Lily, Juniper, BerryRed, BerryBlue, Nest, Hollow }) IsVeg[m] = true;
-        foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame, Stakes, Pitch, TowerLadder, Acid, Scaffold, Lava,
+        foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Ivy, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame, Stakes, Pitch, TowerLadder, Acid, Scaffold, Lava,
             FlowerRed, FlowerWhite, FlowerBlue, Fern, Reed, Mushroom, Lily, Juniper, BerryRed, BerryBlue, Nest }) Passable[m] = true;
-        IsLadder[Ladder] = IsLadder[SiegeLadder] = IsLadder[TowerLadder] = IsLadder[Scaffold] = true;
+        IsLadder[Ladder] = IsLadder[SiegeLadder] = IsLadder[TowerLadder] = IsLadder[Scaffold] = IsLadder[Ivy] = true;
         foreach (var m in new[] { Tuft, Flower, Bloom, FlowerRed, FlowerWhite, FlowerBlue, Fern, Reed, Mushroom, Lily }) SwayKind[m] = 1;
         foreach (var m in new[] { Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold, Juniper, BerryRed, BerryBlue, Nest, MapFlagBlue, MapFlagRed }) SwayKind[m] = 2;
         foreach (var m in new[] { Stone, StoneDark, StoneLight, StoneWarm, StoneCool, Mortar, Keep, KeepShade, KeepDark, Cobble, Flag }) Smooth[m] = true;
@@ -490,6 +494,8 @@ public static class Mat
         F(.03f, 30, .35f, Plank);
         F(.04f, 25, .35f, Boardwalk);
         F(.12f, 15, 0, Ladder, SiegeLadder, Scaffold);
+        // green ivy is slow to catch, quick to burn through once it has
+        F(.08f, 8, 0, Ivy);
         F(.08f, 22, .1f, Prop);
         F(.1f, 20, .2f, Deck);
         F(.03f, 45, .2f, Gate, GateShut, GateOpen);

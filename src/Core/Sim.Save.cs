@@ -16,7 +16,7 @@ namespace VoxelTower.Core;
 public sealed partial class Sim
 {
     /// <summary>20: the bodies sculpted finer, their half-voxels (and so a wounded body's) not what they were.</summary>
-    public const int SaveVersion = 76;
+    public const int SaveVersion = 77;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -118,6 +118,7 @@ public sealed partial class Sim
         foreach (double t in _spellReady) w.Write(t);
         w.Write(Mires.Count); foreach (var m in Mires) { w.Write(m.X); w.Write(m.Z); w.Write(m.R); w.Write(m.Until); }
         w.Write(BloodMoonUntil); w.Write(EyeUntil);
+        w.Write(HordeFaith);
         w.Write(Curses.Count); foreach (var c in Curses) { w.Write(c.X); w.Write(c.Y); w.Write(c.Z); w.Write(c.R); w.Write(c.Until); w.Write(c.Power); w.Write(c.Stone); }
         foreach (var list in new[] { Skins, DeadFogs })
         {
@@ -439,6 +440,7 @@ public sealed partial class Sim
         Mires.Clear();
         for (int i = r.ReadInt32(); i > 0; i--) Mires.Add(new Mire { X = r.ReadSingle(), Z = r.ReadSingle(), R = r.ReadSingle(), Until = r.ReadDouble() });
         BloodMoonUntil = r.ReadDouble(); EyeUntil = r.ReadDouble();
+        HordeFaith = r.ReadDouble();
         Curses.Clear();
         for (int i = r.ReadInt32(); i > 0; i--) Curses.Add(new Curse { X = r.ReadSingle(), Y = r.ReadSingle(), Z = r.ReadSingle(), R = r.ReadSingle(), Until = r.ReadDouble(), Power = r.ReadSingle(), Stone = r.ReadBoolean() });
         foreach (var list in new[] { Skins, DeadFogs })

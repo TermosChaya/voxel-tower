@@ -144,7 +144,7 @@ public sealed partial class Sim
         for (int y = (int)o.Y - 12; y < (int)o.Y; y++)
             for (int dz = -3; dz <= 3; dz++)
                 for (int dx = -3; dx <= 3; dx++)
-                    if (World.Get(ox + dx, y, oz + dz) == Mat.SiegeLadder) { spot = WaterPlanner.Pack(ox + dx, y, oz + dz); return true; }
+                    if (World.Get(ox + dx, y, oz + dz) is Mat.SiegeLadder or Mat.Ivy) { spot = WaterPlanner.Pack(ox + dx, y, oz + dz); return true; }
         return false;
     }
 
@@ -167,7 +167,7 @@ public sealed partial class Sim
             for (int z = z0; z < z0 + NavGrid.CS; z++)
                 for (int x = x0; x < x0 + NavGrid.CS; x++)
                 {
-                    if (World.Get(x, y, z) != Mat.SiegeLadder) continue;
+                    if (World.Get(x, y, z) is not (Mat.SiegeLadder or Mat.Ivy)) continue;
                     bool leans = Mat.IsPlayer[World.Get(x + 1, y, z)] || Mat.IsPlayer[World.Get(x - 1, y, z)] || Mat.IsPlayer[World.Get(x, y, z + 1)] || Mat.IsPlayer[World.Get(x, y, z - 1)];
                     if (!leans) continue;
                     spot = WaterPlanner.Pack(x, y, z);
@@ -251,9 +251,9 @@ public sealed partial class Sim
                     int ex = vx - ix, ey = vy - iy, ez = vz - iz;
                     if (ex * ex + ey * ey + ez * ez > OurSplash * OurSplash || !World.InBounds(vx, vy, vz)) continue;
                     byte m = World.Get(vx, vy, vz);
-                    if (m is not (Mat.SiegeLadder or Mat.Deck)) continue;
+                    if (m is not (Mat.SiegeLadder or Mat.Deck or Mat.Ivy)) continue;
                     int p = WaterPlanner.Pack(vx, vy, vz);
-                    float due = (m == Mat.SiegeLadder ? EatLadder : EatDeck) * (.8f + .4f * (float)Rng.NextDouble());
+                    float due = (m != Mat.Deck ? EatLadder : EatDeck) * (.8f + .4f * (float)Rng.NextDouble());
                     _oursEating[p] = Math.Min(_oursEating.GetValueOrDefault(p, due), due);
                 }
         // out in the open, well clear of anything of ours, it lies and runs as acid does
@@ -337,8 +337,8 @@ public sealed partial class Sim
         {
             var (x, y, z) = WaterPlanner.Unpack(p);
             byte m = World.Get(x, y, z);
-            if (m is not (Mat.SiegeLadder or Mat.Deck)) { _oursEating.Remove(p); Etched.Remove(p); continue; }
-            float left = _oursEating[p] - dt, all = m == Mat.SiegeLadder ? EatLadder : EatDeck;
+            if (m is not (Mat.SiegeLadder or Mat.Deck or Mat.Ivy)) { _oursEating.Remove(p); Etched.Remove(p); continue; }
+            float left = _oursEating[p] - dt, all = m != Mat.Deck ? EatLadder : EatDeck;
             if (left > 0) { _oursEating[p] = left; Etched[p] = Math.Clamp(1 - left / all, 0, .99f); continue; }
             _oursEating.Remove(p);
             Etched.Remove(p);

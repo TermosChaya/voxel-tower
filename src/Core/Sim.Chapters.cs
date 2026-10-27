@@ -35,7 +35,8 @@ public sealed partial class Sim
     {
         1 => ("Гнилозуб", "Гнилозуба", Kinds.Orc, new[] { Kinds.Orc, Kinds.Orc, Kinds.Goblin, Kinds.Goblin }),
         2 => ("Камнелом", "Камнелома", Kinds.Troll, new[] { Kinds.Orc, Kinds.Orc, Kinds.Orc, Kinds.Sapper }),
-        3 => ("Мор", "Мора", Kinds.Necromancer, new[] { Kinds.Orc, Kinds.Orc, Kinds.Orc, Kinds.Shaman }),
+        // (the necromancer of before is of the dark faith, a draft now: the third is a shaman of the swamps)
+        3 => ("Тинник", "Тинника", Kinds.Shaman, new[] { Kinds.Orc, Kinds.Orc, Kinds.Goblin, Kinds.Shaman }),
         _ => ("Гарм", "Гарма", Kinds.Orc, new[] { Kinds.Orc, Kinds.Orc, Kinds.Orc, Kinds.Orc, Kinds.Troll, Kinds.Troll }),
     };
 

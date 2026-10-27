@@ -402,7 +402,7 @@ public sealed partial class Sim
         for (int y = y0; y < y0 + NavGrid.CS; y++)
             for (int z = z0; z < z0 + NavGrid.CS; z++)
                 for (int x = x0; x < x0 + NavGrid.CS; x++)
-                    if (World.Get(x, y, z) is Mat.SiegeLadder or Mat.Deck) return true;
+                    if (World.Get(x, y, z) is Mat.SiegeLadder or Mat.Deck or Mat.Ivy) return true;
         return false;
     }
 
@@ -414,7 +414,7 @@ public sealed partial class Sim
             for (int z = z0; z < z0 + NavGrid.CS; z++)
                 for (int x = x0; x < x0 + NavGrid.CS; x++)
                 {
-                    if (World.Get(x, y, z) is not (Mat.SiegeLadder or Mat.Deck) || IsBurning(x, y, z)) continue;
+                    if (World.Get(x, y, z) is not (Mat.SiegeLadder or Mat.Deck or Mat.Ivy) || IsBurning(x, y, z)) continue;
                     // one of them at random, so two archers don't aim at the same rung
                     if (Rng.Next(++n) == 0) found = WaterPlanner.Pack(x, y, z);
                 }
