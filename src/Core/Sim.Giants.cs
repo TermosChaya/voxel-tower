@@ -40,7 +40,7 @@ public sealed partial class Sim
     /// <summary>Called as a boulder is let go: where, and how many voxels it is (for the sound of the heave).</summary>
     public event Action<float, float, float, int> Heaved;
 
-    static bool IsBoulder(Flier f) => f.Cause is HurledCause or BoulderCause or LordStoneCause or DevourerStoneCause || OurStone(f.Cause);
+    static bool IsBoulder(Flier f) => f.Cause is HurledCause or BoulderCause or LordStoneCause || OurStone(f.Cause);
 
     /// <summary>Whether one is at a throw: the stone in its hands, or just let go and the arms coming down.</summary>
     public bool Hurling(Unit u) => u.Hefted != null || Time - u.HurlFrom < HurlDone;

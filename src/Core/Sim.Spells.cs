@@ -126,10 +126,11 @@ public sealed partial class Sim
         new() { Kind = SpellKind.Whirlwind, Circle = 3, Learn = 4, Name = "Смерч", Cost = 50, Cooldown = 120, Radius = 2.5f * VoxelWorld.PerMetre,
             About = "Смерч шириной 5 м 10 секунд идёт по полю на орду. Подхватывает и отбрасывает налётчиков, срывает их " +
             "лестницы и настилы. Наших обходит." },
-        new() { Kind = SpellKind.Awaken, Circle = 0, Learn = 8, Name = "Пробуждение", Cost = 150, Cooldown = 1800, Radius = 8 * VoxelWorld.PerMetre,
-            About = "Колосс высотой 48 м вырывается из-под земли в выбранном месте и 3 минуты ходит по долине. Он давит орду " +
-            "ногами, сметает её рукой вместе с машинами и лестницами, бьёт кулаком в землю, бросает глыбы, а от его рёва " +
-            "орда бежит. Наших и нашу кладку не трогает. В него можно вселиться. Встаёт за 10 секунд, не ближе 14 м к цитадели." },
+        new() { Kind = SpellKind.Awaken, Circle = 0, Learn = 8, Name = "Явление", Cost = 150, Cooldown = 1800, Radius = 8 * VoxelWorld.PerMetre,
+            About = "С неба в выбранное место сходит Архангел высотой 44 м и 3 минуты ходит по долине. Пламенный меч рубит и " +
+            "поджигает орду, огненный столп бьёт с неба далеко впереди, взмах крыльев сносит орду с её лестницами. Он " +
+            "перелетает через долину и трубит в трубу: работы орды рушатся, орда бежит. Наших и нашу кладку не трогает. В " +
+            "него можно вселиться. Сходит за 10 секунд, не ближе 14 м к цитадели." },
     };
 
     public static Spell SpellOf(SpellKind k) => Spells[(int)k];
@@ -212,7 +213,7 @@ public sealed partial class Sim
             SpellKind.Quake => Shake(x, z, s.Radius),
             SpellKind.Meteor => Fallstar(x, z, s.Radius),
             SpellKind.Whirlwind => Unleash(x, z, s.Radius),
-            SpellKind.Awaken => Awaken(DeityKind.Colossus, x, z),
+            SpellKind.Awaken => Awaken(DeityKind.Archangel, x, z),
             _ => Watch(),
         };
         if (why != null) return why;

@@ -87,8 +87,10 @@ static class OurAlchemistBench
         lone.ChainedUntil = 1e9; lone.Hp = lone.MaxHp = 5000;
         int flasks0 = sim.OurFlasks;
         float ram0 = ram.Hp;
+        // (a flask from before still in the air, at a raider come down off the ladder, is not this throw)
+        var flying = sim.Arrows.ToHashSet();
         Arrow first = null;
-        for (int i = 0; i < 160 && first == null; i++) { Run(.05); first = sim.Arrows.FirstOrDefault(a => a.Kind == Shot.Flask && a.From == al); }
+        for (int i = 0; i < 160 && first == null; i++) { Run(.05); first = sim.Arrows.FirstOrDefault(a => a.Kind == Shot.Flask && a.From == al && !flying.Contains(a)); }
         Run(3);
         check("an engine of the horde in a throw comes before a raider nearer by: the flask goes at the ram and the acid eats into it",
             first != null && first.Target == ram && ram.Hp < ram0,

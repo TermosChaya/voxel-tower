@@ -36,16 +36,16 @@ public sealed partial class Sim
     /// it looks, the spot on the ground it looks at, and the blow asked for (a sweep's way: +1 the right hand, −1 the left).
     /// </summary>
     public float GodWishX, GodWishZ, GodLookYaw, GodAimX, GodAimY, GodAimZ;
-    public bool GodWishSlam, GodWishLift, GodWishRoar;
+    public bool GodWishSlam, GodWishLift, GodWishRoar, GodWishLeap;
     public int GodWishSweep;
     /// <summary>The god the player is in, or null.</summary>
     public Deity Ridden { get; private set; }
 
-    public const string ColossusStoneCause = "глыба колосса", DevourerStoneCause = "глыба пожирателя";
-    const string WakeCause = "пробуждение", DevourerWakeCause = "пробуждение пожирателя";
+    public const string ColossusStoneCause = "глыба колосса";
+    const string WakeCause = "пробуждение", HordeWakeCause = "призыв орды";
 
     /// <summary>What the earth a god broke out of is told as, by whose god it was.</summary>
-    static string WakeOf(Deity d) => d.Team == Team.Player ? WakeCause : DevourerWakeCause;
+    static string WakeOf(Deity d) => d.Team == Team.Player ? WakeCause : HordeWakeCause;
 
     /// <summary>How long it takes to come up out of the ground and to go back under, seconds.</summary>
     public const float GodRiseFor = 10, GodSinkFor = 8;
@@ -66,7 +66,7 @@ public sealed partial class Sim
     const float LumpR = 16;
 
     /// <summary>Whether what struck was the household's god's work: the earth it broke out of, its blows, its lumps.</summary>
-    static bool OurGodsDoing(string cause) => cause is WakeCause or ColossusStoneCause || cause == Deities.Colossus.Cause;
+    static bool OurGodsDoing(string cause) => cause is WakeCause or ColossusStoneCause || cause == Deities.Colossus.Cause || cause == Deities.Archangel.Cause;
 
     /// <summary>The god of the household in the valley, if one is.</summary>
     public Deity OurGod => Gods.Find(g => !g.Gone && g.Team == Team.Player);
@@ -85,9 +85,10 @@ public sealed partial class Sim
         if (ix < 8 || iz < 8 || ix >= World.SX - 8 || iz >= World.SZ - 8 || Site.Hex != null && Site.Hex.Edge(x, z) < PitR) return "слишком близко к краю долины";
         if (Site.HasKeep && Dist2(x, z, Site.KeepX, Site.KeepZ) < MathF.Pow(Site.KeepR + PitR + 6 * VoxelWorld.PerMetre, 2)) return "слишком близко к цитадели";
         float g = Ground(ix, iz);
+        bool under = t.Arrives != Arrival.Sky;
         var d = new Deity
         {
-            Id = _nextGod++, T = t, X = x, Y = g - PitDeep * .6f, Z = z, Hp = t.Hp, Born = Time, Until = Time + GodRiseFor + (lasts >= 0 ? lasts : t.Lasts * (t.Team == Team.Player ? Might : 1)),
+            Id = _nextGod++, T = t, X = x, Y = under ? g - PitDeep * .6f : g, Z = z, Hp = t.Hp, Born = Time, Until = Time + GodRiseFor + (lasts >= 0 ? lasts : t.Lasts * (t.Team == Team.Player ? Might : 1)),
             Act = DeityAct.Rising, ActFrom = Time, Up = 0,
         };
         // it faces the enemy's side: the horde's god the citadel, ours the way the horde comes
@@ -99,16 +100,22 @@ public sealed partial class Sim
             float s = i == 0 ? 1 : -1;
             d.FootX[i] = x + rx * d.T.Stance * .5f * s; d.FootZ[i] = z + rz * d.T.Stance * .5f * s; d.FootY[i] = d.Y;
         }
-        d.Pit = PitOf(x, z, PitR, PitDeep);
+        if (under) d.Pit = PitOf(x, z, PitR, t.Arrives == Arrival.Bog ? PitDeep * .7f : PitDeep);
         d.HandX = x; d.HandY = d.Y; d.HandZ = z;
         Gods.Add(d);
-        // the ground heaves: those on it are thrown down, and those over the pit up
-        Heave(d, x, z, HeaveR, 1);
-        Say(t.Team == Team.Player
-            ? $"Колосс пробуждается. Земля расходится, и он выходит на {d.Until - Time - GodRiseFor:0} секунд."
-            : "Орда призвала Пожирателя. Он выходит из-под земли.", t.Team == Team.Player ? 1 : 3, x, z);
+        // the ground heaves: those on it are thrown down, and those over the pit up; the light out of heaven on the spot
+        // first blinds the horde about it
+        if (under) Heave(d, x, z, HeaveR, 1);
+        else Heralded(d);
+        double stays = d.Until - Time - GodRiseFor;
+        Say(t.Kind switch
+        {
+            DeityKind.Archangel => $"Небеса отверзлись: Архангел сходит в долину на {stays:0} секунд.",
+            DeityKind.Toad => "Орда призвала Великую жабу. Земля уходит в трясину, и жаба выходит из болота.",
+            _ => $"Колосс пробуждается. Земля расходится, и он выходит на {stays:0} секунд.",
+        }, t.Team == Team.Player ? 1 : 3, x, z);
         GodRose?.Invoke(d);
-        GodShook?.Invoke(d, x, g, z, 4);
+        GodShook?.Invoke(d, x, g, z, under ? 4 : 1);
         return null;
     }
 
@@ -201,7 +208,13 @@ public sealed partial class Sim
                 default:
                     if (d.Hp <= 0) { FallApart(d); break; }
                     if (Time >= d.Until && d.Act is DeityAct.Standing or DeityAct.Walking && d.Lifted < 0) { BeginSink(d); break; }
-                    if (d.Act is DeityAct.Standing or DeityAct.Walking) { if (d.Ridden) Obey(d, dt); else Think(d, dt); }
+                    if (d.Act is DeityAct.Standing or DeityAct.Walking)
+                    {
+                        if (d.Ridden) Obey(d, dt);
+                        else if (d.T.Kind == DeityKind.Archangel) ThinkHeaven(d, dt);
+                        else if (d.T.Hops) ThinkSwamp(d, dt);
+                        else Think(d, dt);
+                    }
                     else Acting(d, dt);
                     Step(d, dt);
                     break;
@@ -219,17 +232,29 @@ public sealed partial class Sim
     {
         float t = d.Into(Time);
         d.Up = Smooth(t / GodRiseFor);
+        if (d.T.Arrives == Arrival.Sky)
+        {
+            // coming down in the light: as it touches the ground, the ground shakes and the horde is thrown off it
+            if (!d.Landed && t >= GodRiseFor * .92f) { d.Landed = true; TouchDown(d); }
+            if (t < GodRiseFor) return;
+            d.Up = 1;
+            Begin(d, DeityAct.Standing);
+            return;
+        }
+        bool bog = d.T.Arrives == Arrival.Bog;
         while (d.Bursts < GodBursts.Length && t >= GodBursts[d.Bursts])
         {
             int b = d.Bursts++;
-            Burst(d, (b + 1f) / GodBursts.Length, b == 0 ? 1 : .7f);
+            // (out of a bog the mud goes up the lower)
+            Burst(d, (b + 1f) / GodBursts.Length, (b == 0 ? 1 : .7f) * (bog ? .7f : 1));
             if (b > 0) Heave(d, d.X, d.Z, HeaveR * .6f, .5f);
             GodShook?.Invoke(d, d.X, d.Y, d.Z, 3);
         }
-        if (t >= ChainsAt && d.Bursts == GodBursts.Length) { d.Bursts++; Chains(d); }
+        if (!bog && t >= ChainsAt && d.Bursts == GodBursts.Length) { d.Bursts++; Chains(d); }
         if (t < GodRiseFor) return;
-        // what is left of the pit goes to dust: it is out
+        // what is left of the pit goes to dust: it is out (and out of a bog, the pit fills and the ground about goes to mire)
         ClearPit(d);
+        if (bog) Bogged(d, d.X, d.Z, PitR * 2.5f, true);
         d.Up = 1;
         Begin(d, DeityAct.Standing);
     }
@@ -319,10 +344,13 @@ public sealed partial class Sim
     void BeginSink(Deity d)
     {
         if (d.Held != null) { d.Held.Bearer = null; d.Held = null; }
-        d.Pit = PitOf(d.X, d.Z, PitR * .8f, PitDeep * .7f);
+        LetCaughtGo(d);
+        bool sky = d.T.Arrives == Arrival.Sky;
+        d.Pit = sky ? null : PitOf(d.X, d.Z, PitR * .8f, PitDeep * .7f);
         d.PitAt = 0; d.Bursts = 0;
         Begin(d, DeityAct.Sinking);
-        Say($"{d.T.Name} уходит под землю. Убито {d.Kills}, разбито {d.Broke / 512f:0} м³.", d.Team == Team.Player ? 1 : 2, d.X, d.Z);
+        string going = sky ? "возносится на небо" : d.T.Arrives == Arrival.Bog ? "уходит в трясину" : "уходит под землю";
+        Say($"{d.T.Name} {going}. Убито {d.Kills}, разбито {d.Broke / 512f:0} м³.", d.Team == Team.Player ? 1 : 2, d.X, d.Z);
     }
 
     /// <summary>Going back under: the ground opening about its feet a little at a time, the body going down into it.</summary>
@@ -330,6 +358,8 @@ public sealed partial class Sim
     {
         float t = d.Into(Time);
         d.Up = 1 - Smooth(t / GodSinkFor);
+        // up into heaven: nothing breaks
+        if (d.T.Arrives == Arrival.Sky) { if (t >= GodSinkFor) Gone(d); return; }
         int b = Math.Min(3, (int)(t / GodSinkFor * 4));
         while (d.Bursts <= b && d.Bursts < 4) { d.Bursts++; Burst(d, d.Bursts / 4f, .45f); GodShook?.Invoke(d, d.X, d.Y, d.Z, 1.5f); }
         if (t >= GodSinkFor) { ClearPit(d); Gone(d); }
@@ -339,15 +369,22 @@ public sealed partial class Sim
     void FallApart(Deity d)
     {
         if (d.Held != null) { d.Held.Bearer = null; d.Held = null; }
-        byte rock = d.T.Fiery ? Mat.Basalt : Mat.Rock;
+        LetCaughtGo(d);
+        // the archangel struck down goes up into heaven, the toad down into its bog; the colossus falls to pieces
+        if (d.T.Kind != DeityKind.Colossus)
+        {
+            Say(d.T.Kind == DeityKind.Archangel ? "Архангел повержен и возносится." : "Великая жаба повержена и уходит в трясину.", d.Team == Team.Player ? 3 : 1, d.X, d.Z);
+            BeginSink(d);
+            return;
+        }
+        const byte rock = Mat.Rock;
         for (int k = 0; k < 12; k++)
         {
             float h = (.15f + k / 12f * .8f) * d.T.Height, a = k * 2.39996f;
             float r = 9 + k % 3 * 2, off = (2 + k % 4) * VoxelWorld.PerMetre;
             var ball = Ball(r, rock);
-            if (d.T.Fiery) for (int i = 0; i < ball.Count; i += 5) ball[i] = (ball[i].dx, ball[i].dy, ball[i].dz, Mat.Ember);
             Hurl(ball, d.X + MathF.Cos(a) * off, d.Y + h * d.Up, d.Z + MathF.Sin(a) * off, MathF.Cos(a) * 4 * VoxelWorld.PerMetre, 2 * VoxelWorld.PerMetre, MathF.Sin(a) * 4 * VoxelWorld.PerMetre,
-                d.Team == Team.Player ? ColossusStoneCause : DevourerStoneCause);
+                ColossusStoneCause);
         }
         Say($"{d.T.Name} повержен и рассыпался камнем.", d.Team == Team.Player ? 3 : 1, d.X, d.Z);
         Begin(d, DeityAct.Fallen);
@@ -375,6 +412,10 @@ public sealed partial class Sim
     /// </summary>
     void Step(Deity d, float dt)
     {
+        // a leap carries it bodily (Acting), a toad goes only by hops, and the archangel glides over the ground on its
+        // wings: their feet are where their body is
+        if (d.Act == DeityAct.Leap || d.T.Hops) { FeetUnder(d, d.Act != DeityAct.Leap); return; }
+        if (d.T.Winged) { Glide(d, dt); return; }
         if (d.Lifted >= 0)
         {
             int i = d.Lifted;
@@ -504,10 +545,8 @@ public sealed partial class Sim
                     if (d.Team == Team.Player && Mat.IsPlayer[m]) break;
                     Dust(vx, top - k, vz); pressed++;
                 }
-                if (d.T.Fiery && (dx + dz) % 3 == 0) { int s = World.SurfAt(vx, vz) - 1; if (s > 4 && Mat.Def[World.Get(vx, s, vz)].Group == MatGroup.Earth) World.Set(vx, s, vz, Mat.Scorch); }
             }
         if (pressed > 0 || under.Count > 0) InvalidateFields();
-        if (d.T.Fiery) Kindle(x, y, z, r * 1.5f, 6);
         GodShook?.Invoke(d, x, y, z, 1);
     }
 
@@ -666,6 +705,13 @@ public sealed partial class Sim
     void Obey(Deity d, float dt)
     {
         Turn(d, GodLookYaw, dt * 1.6f);
+        if (GodWishLeap && d.T.Winged)
+        {
+            GodWishLeap = false;
+            BeginLeap(d, GodAimX, GodAimZ);
+            return;
+        }
+        GodWishLeap = false;
         if (GodWishSweep != 0) { BeginSweep(d, GodWishSweep); GodWishSweep = 0; return; }
         if (GodWishSlam)
         {
@@ -679,6 +725,8 @@ public sealed partial class Sim
         if (GodWishLift)
         {
             GodWishLift = false;
+            // the archangel's wings beat at what it looks at; the colossus tears up a lump, and throws it
+            if (d.T.Winged) { BeginGust(d); return; }
             if (d.Held != null) { BeginThrow(d, GodAimX, GodAimY, GodAimZ); return; }
             BeginLift(d, GodAimX, GodAimZ);
             return;
@@ -702,7 +750,7 @@ public sealed partial class Sim
         if (Ridden != null) Ridden.Ridden = false;
         Ridden = d; d.Ridden = true;
         GodLookYaw = d.Facing;
-        GodWishX = GodWishZ = 0; GodWishSweep = 0; GodWishSlam = GodWishLift = GodWishRoar = false;
+        GodWishX = GodWishZ = 0; GodWishSweep = 0; GodWishSlam = GodWishLift = GodWishRoar = GodWishLeap = false;
         return true;
     }
 
@@ -711,7 +759,7 @@ public sealed partial class Sim
     {
         if (Ridden != null) Ridden.Ridden = false;
         Ridden = null;
-        GodWishX = GodWishZ = 0; GodWishSweep = 0; GodWishSlam = GodWishLift = GodWishRoar = false;
+        GodWishX = GodWishZ = 0; GodWishSweep = 0; GodWishSlam = GodWishLift = GodWishRoar = GodWishLeap = false;
     }
 
     // ------------------------------------------------------------ the blows
@@ -750,7 +798,7 @@ public sealed partial class Sim
         Begin(d, DeityAct.Throw);
     }
 
-    void BeginRoar(Deity d) { d.GoX = float.NaN; Begin(d, DeityAct.Roar); }
+    void BeginRoar(Deity d) { d.GoX = float.NaN; d.LastRoar = Time; Begin(d, DeityAct.Roar); }
 
     /// <summary>An act going on: the blow lands at its moment, and the act ends at its end.</summary>
     void Acting(Deity d, float dt)
@@ -763,7 +811,7 @@ public sealed partial class Sim
                 if (t >= SweepDone) Begin(d, DeityAct.Standing);
                 break;
             case DeityAct.Slam:
-                if (!d.Landed && t >= SlamHit) { d.Landed = true; Slammed(d); }
+                if (!d.Landed && t >= SlamHit) { d.Landed = true; if (d.T.Winged) Pillar(d); else Slammed(d); }
                 if (t >= SlamDone) Begin(d, DeityAct.Standing);
                 break;
             case DeityAct.Lift:
@@ -781,8 +829,19 @@ public sealed partial class Sim
                 if (t >= ThrowDone) Begin(d, DeityAct.Standing);
                 break;
             case DeityAct.Roar:
-                if (!d.Landed && t >= RoarAt) { d.Landed = true; Roared(d); }
+                if (!d.Landed && t >= RoarAt) { d.Landed = true; if (d.T.Winged) Trumpet(d); else if (d.T.Hops) Croak(d); else Roared(d); }
                 if (t >= RoarDone) Begin(d, DeityAct.Standing);
+                break;
+            case DeityAct.Gust:
+                if (!d.Landed && t >= GustAt) { d.Landed = true; Gusted(d); }
+                if (t >= GustDone) Begin(d, DeityAct.Standing);
+                break;
+            case DeityAct.Leap: Leaping(d, t); break;
+            case DeityAct.Tongue: Tonguing(d, t); break;
+            case DeityAct.Spit:
+                Turn(d, MathF.Atan2(d.AimZ - d.Z, d.AimX - d.X), dt * 2);
+                if (!d.Landed && t >= SpitAt) { d.Landed = true; Spat(d); }
+                if (t >= SpitDone) Begin(d, DeityAct.Standing);
                 break;
         }
     }
@@ -836,7 +895,16 @@ public sealed partial class Sim
                 hy = d.Y + h * (.7f + .25f * back - .25f * on);
                 break;
             }
+            case DeityAct.Tongue:
+            {
+                // the tongue's tip: out of the mouth to the spot, and back with what it caught
+                var (mx, my, mz) = Mouth(d);
+                float o = TongueOut(t);
+                hx = Lerp(mx, d.AimX, o); hy = Lerp(my, d.AimY + 1.5f * VoxelWorld.PerMetre, o); hz = Lerp(mz, d.AimZ, o);
+                break;
+            }
             default:
+                if (d.T.Hops) { (hx, hy, hz) = Mouth(d); break; }
                 if (d.Held != null) { hx = d.X + rx * d.T.Stance * .6f + fx * 4 * VoxelWorld.PerMetre; hz = d.Z + rz * d.T.Stance * .6f + fz * 4 * VoxelWorld.PerMetre; hy = d.Y + h * .7f; }
                 break;
         }
@@ -948,7 +1016,7 @@ public sealed partial class Sim
         foreach (var u in Units)
             if (!u.Dead && !u.Inside && u.Airborne == null && Dist2(u.X, u.Z, x, z) < MathF.Pow(LumpR + 2 * VoxelWorld.PerMetre, 2))
                 Fling(u, 0, 6 * VoxelWorld.PerMetre, 0, d.T.Cause);
-        var f = Loose(lump, 0, 0, 0, d.Team == Team.Player ? ColossusStoneCause : DevourerStoneCause);
+        var f = Loose(lump, 0, 0, 0, ColossusStoneCause);
         if (f == null) return;
         d.Broke += f.Voxels.Count;
         f.Bearer = d;
@@ -960,7 +1028,7 @@ public sealed partial class Sim
     void InHand(Flier f, float dt)
     {
         var d = f.Bearer;
-        if (d == null || d.Gone || d.Held != f) { f.Bearer = null; return; }
+        if (d == null || d.Gone || !InGrip(d, f)) { f.Bearer = null; return; }
         float x = d.HandX, y = d.HandY + f.R * .3f, z = d.HandZ;
         if (dt > 0) { f.VX = (x - f.X) / dt; f.VY = (y - f.Y) / dt; f.VZ = (z - f.Z) / dt; }
         f.X = x; f.Y = y; f.Z = z;
@@ -1014,19 +1082,31 @@ public sealed partial class Sim
         if (!was && u.Dead) d.Kills++;
     }
 
+    /// <summary>A god pushed so far along a way, its feet with it (and a leap it is on, the whole arc).</summary>
+    void Shove(Deity g, float dx, float dz, float by)
+    {
+        float l = MathF.Max(.01f, MathF.Sqrt(dx * dx + dz * dz)), mx = dx / l * by, mz = dz / l * by;
+        g.X += mx; g.Z += mz;
+        for (int i = 0; i < 2; i++) { g.FootX[i] += mx; g.FootZ[i] += mz; }
+        if (g.Act == DeityAct.Leap) { g.LeapFromX += mx; g.LeapFromZ += mz; g.AimX += mx; g.AimZ += mz; }
+        g.Lifted = -1;
+    }
+
     /// <summary>One god struck by the other: hurt, and staggered back from it, out of whatever it was at.</summary>
     void Smite(Deity d, Deity foe, float harm, float dx, float dz)
     {
         foe.Hp -= harm;
-        float l = MathF.Max(.01f, MathF.Sqrt(dx * dx + dz * dz)), push = 5 * VoxelWorld.PerMetre;
-        for (int i = 0; i < 2; i++) { foe.FootX[i] += dx / l * push; foe.FootZ[i] += dz / l * push; }
-        foe.Lifted = -1;
-        if (foe.Act is DeityAct.Sweep or DeityAct.Slam or DeityAct.Lift or DeityAct.Throw or DeityAct.Roar)
+        Shove(foe, dx, dz, 5 * VoxelWorld.PerMetre);
+        // a heavy blow (the sword, the pillar, the colossus's fist) breaks off whatever blow it was at, and a leap not yet
+        // off the ground; a hop or the venom does not
+        if (harm >= 3000 && (foe.Act is DeityAct.Sweep or DeityAct.Slam or DeityAct.Lift or DeityAct.Throw or DeityAct.Roar or DeityAct.Gust or DeityAct.Tongue or DeityAct.Spit
+            || foe.Act == DeityAct.Leap && foe.Into(Time) < LeapCrouch))
         {
-            if (foe.Held != null) { foe.Held.Bearer = null; foe.Held = null; }
+            LetCaughtGo(foe);
             Begin(foe, DeityAct.Standing);
         }
-        Say($"{d.T.Name} бьёт {(foe.T.Kind == DeityKind.Colossus ? "Колосса" : "Пожирателя")}: у того осталось {Math.Max(0, foe.Hp) / foe.T.Hp * 100:0} %.", 2, foe.X, foe.Z);
+        string whom = foe.T.Kind switch { DeityKind.Archangel => "Архангела", DeityKind.Toad => "Великую жабу", _ => "Колосса" };
+        Say($"{d.T.Name} бьёт {whom}: осталось {Math.Max(0, foe.Hp) / foe.T.Hp * 100:0} %.", 2, foe.X, foe.Z);
         GodShook?.Invoke(foe, foe.X, foe.Y + foe.T.Height * .5f, foe.Z, 2.5f);
     }
 

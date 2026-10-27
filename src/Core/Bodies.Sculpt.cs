@@ -183,6 +183,8 @@ public static partial class Bodies
 
         /// <summary>A cell is there (fine coordinates).</summary>
         public bool FHas(BodyPart p, int x, int y, int z) => _c.Has((int)p, x, y, z);
+        /// <summary>All a part's cells as they stand now (fine coordinates), null when it has none.</summary>
+        public PartGrid FGrid(BodyPart p) => _c.Grid((int)p, out _);
         public bool FGet(BodyPart p, int x, int y, int z, out byte m, out Tissue t) => _c.Get((int)p, x, y, z, out m, out t);
         public void FSet(BodyPart p, int x, int y, int z, byte m, Tissue t = Tissue.Skin) { if (Detail) Finer(() => _c.Set((int)p, x, y, z, m, t)); }
         /// <summary>Recolours a cell that is there (fine coordinates), keeping what it is.</summary>
@@ -675,5 +677,10 @@ public static partial class Bodies
 
     static void Joint(BodyPlan f, BodyPart p, float x, float y, float z) { f.JX[(int)p] = x; f.JY[(int)p] = y; f.JZ[(int)p] = z; }
 
-    static BodyPlan Done(Sculpt s, BodyPlan f, Build b) => s.Into(f, b.Waist, b.Neck, b.Chest);
+    static BodyPlan Done(Sculpt s, BodyPlan f, Build b)
+    {
+        // (shaped out of its boxes, Bodies.Anatomy.cs)
+        Relief(s, f, b);
+        return s.Into(f, b.Waist, b.Neck, b.Chest);
+    }
 }

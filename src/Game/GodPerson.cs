@@ -63,12 +63,12 @@ public partial class GodPerson : Node3D
         _plateText = Hud.Text("", Ornament.SerifBold, 15, Ornament.Parchment);
         row.AddChild(_plateText);
         _plateGo = new Button { Text = "Вселиться", FocusMode = Control.FocusModeEnum.None, MouseDefaultCursorShape = Control.CursorShape.PointingHand,
-            TooltipText = Bindings.Fill("Вселиться в Колосса ({Possess})\nУправлять им от первого лица: {FpForward}{FpLeft}{FpBack}{FpRight} — шаги, {Lmb} — смести рукой, {Rmb} — удар кулаком, {FpSwitch} — вырвать глыбу и бросить, {FpUp} — рёв. Esc — выйти.") };
+            TooltipText = Bindings.Fill("Вселиться в Архангела ({Possess})\nУправлять им от первого лица: {FpForward}{FpLeft}{FpBack}{FpRight} — шаги, {Lmb} — пламенный меч, {Rmb} — огненный столп, {FpSwitch} — взмах крыльями, {FpUp} — перелёт, {FpKick} — труба. Esc — выйти.") };
         _plateGo.AddThemeFontOverride("font", Ornament.SerifBold);
         _plateGo.Pressed += () => { if (m.Sim.OurGod is { } g) Enter(g); };
         row.AddChild(_plateGo);
         _plateLayer.AddChild(_plate);
-        m.Sim.GodGone += d => { if (d == _d) Leave(d.Hp <= 0 ? "Колосс повержен" : "Колосс ушёл под землю"); };
+        m.Sim.GodGone += d => { if (d == _d) Leave(d.Hp <= 0 ? $"{d.T.Name} повержен" : $"{d.T.Name} вознёсся"); };
     }
 
     /// <summary>Goes into the household's god; false if it cannot be gone into now (still coming up, or going under).</summary>
@@ -140,7 +140,8 @@ public partial class GodPerson : Node3D
             case InputEventKey { Pressed: true, Echo: false } k:
                 if (k.PhysicalKeycode == Key.Escape) { Exit(); break; }
                 if (Bindings.Is(k, Act.FpSwitch)) sim.GodWishLift = true;
-                else if (Bindings.Is(k, Act.FpUp)) sim.GodWishRoar = true;
+                else if (Bindings.Is(k, Act.FpUp)) sim.GodWishLeap = true;
+                else if (Bindings.Is(k, Act.FpKick)) sim.GodWishRoar = true;
                 else if (Bindings.Is(k, Act.Pause) || Bindings.Is(k, Act.Speed) || Bindings.Is(k, Act.QuickSave)) return;
                 break;
             default:
@@ -166,7 +167,7 @@ public partial class GodPerson : Node3D
         _plate.Visible = show;
         if (!show) return;
         double left = Math.Max(0, g.Until - _m.Sim.Time);
-        _plateText.Text = g.Act == DeityAct.Rising ? "Колосс выходит из-под земли" : $"Колосс · {(int)left / 60}:{(int)left % 60:00}";
+        _plateText.Text = g.Act == DeityAct.Rising ? $"{g.T.Name} сходит" : $"{g.T.Name} · {(int)left / 60}:{(int)left % 60:00}";
         _plateGo.Disabled = g.Act == DeityAct.Rising;
         var vp = GetViewport().GetVisibleRect().Size;
         _plate.Position = new Vector2((vp.X - _plate.Size.X) / 2, 58);
@@ -230,9 +231,9 @@ public partial class GodPerson : Node3D
         _name.Text = $"{d.T.Name} · {(int)left / 60}:{(int)left % 60:00} · {Math.Max(0, d.Hp) / d.T.Hp * 100:0} %{foe} · убито {d.Kills}";
         _name.Position = new Vector2(96, vp.Y - 84);
         float dist = MathF.Sqrt((sim.GodAimX - d.X) * (sim.GodAimX - d.X) + (sim.GodAimZ - d.Z) * (sim.GodAimZ - d.Z)) / VoxelWorld.PerMetre;
-        _aim.Text = d.Held != null ? $"в руке глыба · бросить туда: {dist:0} м" : $"взгляд: {dist:0} м";
+        _aim.Text = $"взгляд: {dist:0} м";
         _aim.Position = new Vector2(vp.X / 2 + 22, vp.Y / 2 + 14);
-        _hint.Text = Bindings.Fill("{FpForward}{FpLeft}{FpBack}{FpRight} — шаг · {Lmb} — смести рукой (Shift — левой) · {Rmb} — кулаком в землю · {FpSwitch} — вырвать глыбу, ещё раз — бросить · {FpUp} — рёв · Esc — выйти");
+        _hint.Text = Bindings.Fill("{FpForward}{FpLeft}{FpBack}{FpRight} — шаг · {Lmb} — меч (Shift — справа налево) · {Rmb} — огненный столп · {FpSwitch} — крылья · {FpUp} — перелёт · {FpKick} — труба · Esc — выйти");
         _hint.Position = new Vector2(96, vp.Y - 56);
     }
 

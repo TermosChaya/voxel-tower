@@ -76,8 +76,10 @@ public sealed class Flier
     public Unit Carrier;
     public List<Unit> Struck;
     public int Bounces;
-    /// <summary>In a god's hand, to be thrown (Sim.Deities.cs).</summary>
+    /// <summary>In a god's hand, to be thrown, or on its tongue (Sim.Deities.cs).</summary>
     public Deity Bearer;
+    /// <summary>The toad's venom (Sim.Deities.Swamp.cs): where it comes down it burns and eats in, and lies as nothing.</summary>
+    public bool Venom;
 }
 
 /// <summary>
@@ -510,6 +512,7 @@ public sealed partial class Sim
         if (f.Unit != null) { Alight(f, speed); return true; }
         // a great one's boulder: through whoever it meets, breaking what its force breaks (Sim.Giants.cs)
         if (IsBoulder(f) && BoulderStrikes(f, speed)) return false;
+        if (f.Venom) { VenomLands(f); return true; }
         if (f.Star) StarStrikes(f);
         int broke = f.Smash > 0 ? StoneLands(f, speed) : 0;
         int ix = Math.Clamp((int)f.X, 2, World.SX - 3), iz = Math.Clamp((int)f.Z, 2, World.SZ - 3), iy = Math.Clamp((int)f.Y, 2, World.SY - 3);

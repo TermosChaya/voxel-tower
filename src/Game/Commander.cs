@@ -448,7 +448,7 @@ public partial class Commander : Node
         int n = 0;
         foreach (var u in _m.Selected) if (!u.Dead) { one = u; n++; }
         // with none chosen and the household's god up, into the god
-        if (n == 0 && _m.Sim.OurGod is { } god) { if (!_m.Gods.Enter(god)) _m.Hud.Float("Колосс ещё выходит из-под земли", Ornament.Blood); return; }
+        if (n == 0 && _m.Sim.OurGod is { } god) { if (!_m.Gods.Enter(god)) _m.Hud.Float($"{god.T.Name} ещё не сошёл", Ornament.Blood); return; }
         if (n != 1) { _m.Hud.Float("выберите одного из своих", Ornament.Blood); return; }
         if (!_m.FP.Enter(one)) _m.Hud.Float("в него сейчас не войти", Ornament.Blood);
     }
@@ -508,7 +508,7 @@ public partial class Commander : Node
         var (o, d) = _m.Rig.Ray(GetViewport().GetMousePosition());
         var w = _m.World;
         if (!Raycast.Cast(w, (o.X - w.OriginX) / VoxelWorld.Vox, o.Y / VoxelWorld.Vox, (o.Z - w.OriginZ) / VoxelWorld.Vox, d.X, d.Y, d.Z, out var hit, skipVeg: true)) return;
-        string no = _m.Sim.Awaken(horde ? DeityKind.Devourer : DeityKind.Colossus, hit.X + .5f, hit.Z + .5f);
+        string no = _m.Sim.Awaken(horde ? DeityKind.Toad : DeityKind.Archangel, hit.X + .5f, hit.Z + .5f);
         if (no != null) _m.Hud.Float(no, Ornament.Blood);
     }
 
