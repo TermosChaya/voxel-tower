@@ -194,7 +194,8 @@ public partial class Main
             && read.Cell(mine.Col, mine.Row).Thing.Owner == Holder.Ours && read.Cell(spot.Col, spot.Row).Thing == null,
             $"written {wrote}; hero at {rh?.Q},{rh?.R} of {hero.Q},{hero.R}, moves {rh?.MovesLeft} of {hero.MovesLeft}");
         // the mine he flagged held (Main.SelfTest.Hold.cs)
-        if (mine != null && flagged) { CloseAtlas(); return SelfTestHold(fails, hero, mine); }
+        // (gone into from the open map, as «Войти в клетку» goes)
+        if (mine != null && flagged) return SelfTestHold(fails, hero, mine);
 
         // the horde a faction with heroes of its own (MapAI.Heroes.cs): one of them brought where ours see, his figure
         // drawn under its banner as the warlord he is; out of sight again, not drawn

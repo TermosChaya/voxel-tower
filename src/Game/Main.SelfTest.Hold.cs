@@ -44,6 +44,8 @@ public partial class Main
         {
             case "hold":
             {
+                check("a valley gone into from the open map is drawn: the map's switch for the valley's drawing is not left off as the scene begins again",
+                    !GetTree().Root.Disable3D && Rig.Cam.IsCurrent() && !AtlasOpen, $"3D off {GetTree().Root.Disable3D}, the valley's camera current {Rig.Cam.IsCurrent()}, the map open {AtlasOpen}");
                 var ours = Sim.Units.FindAll(u => !u.Dead && u.Team == Team.Player);
                 var captain = ours.Find(u => u.T == Kinds.Captain);
                 var archers = ours.FindAll(u => u.T == Kinds.Archer);

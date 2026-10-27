@@ -260,6 +260,9 @@ public partial class Main : Node3D
         // the self-test and the screenshots play out of the player's sight (--show keeps the window up)
         if ((_selfTest || _shot != null || _trailer >= 0 || _tutCheck || _pose == "autoplay") && !OS.GetCmdlineUserArgs().Contains("--show")) Backstage.Withdraw(this);
         Settings.Apply(GetTree().Root);
+        // a map open as the scene began again (a cell or a valley gone into from it) left the window drawing no valley:
+        // the map's own drawing went with the scene, its switch did not
+        GetTree().Root.Disable3D = false;
         Settings.ApplyVolume();
         if (_lines) Settings.ScriptLines(true);
         else Settings.ApplyLines();
