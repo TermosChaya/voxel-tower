@@ -66,6 +66,10 @@ static class AutoPlayBench
                 Frame(c, ap, dir, day);
                 Line(c, ap, csv);
                 Console.WriteLine(Brief(c, ap));
+                // the horde's day, as a player of «Heroes»: its treasury, its towns, its heroes and what each is about
+                log.AppendLine($"   ◆ {c.HordeReport()}");
+                foreach (var h in c.HeroesOf(Owner.Horde))
+                    log.AppendLine($"   ◆ {h.Lord.Hero.Name} ур.{h.Lord.Hero.Level} {h.Party.Members.Count} чел. @{h.Col},{h.Row}: {h.Errand}");
             }
         }
         string end = c.Won ? $"Победа на {c.Clock.Day}-й день: взяты все логова орды." : c.Defeated ? $"Поражение на {c.Clock.Day}-й день: первая долина пала, другой нет." : $"После {days} дней партия идёт: {Brief(c, ap)}";
@@ -90,7 +94,8 @@ static class AutoPlayBench
         int ourCells = c.Cells.Count(x => x.Owner == Owner.Ours), ourMines = c.Cells.Count(x => x.Thing is { Kind: ThingKind.Mine, Owner: Owner.Ours });
         int hordeCells = c.Cells.Count(x => x.Owner == Owner.Horde), hordeMines = c.Cells.Count(x => x.Thing is { Kind: ThingKind.Mine, Owner: Owner.Horde });
         string hs = string.Join("; ", heroes.Select(p => $"{p.Party.Commander.Hero.Name} ур.{p.Party.Commander.Hero.Level} {p.Party.Members.Count}чел. @{p.Col},{p.Row} {(ap.Aims.TryGetValue(p.Id, out var a) ? a : "")}"));
-        return $"день {c.Clock.Day}: золото {c.Gold:0}, рудников {ourMines} (орды {hordeMines}), клеток наших {ourCells} (орды {hordeCells}), гарнизон {c.Home?.Sum.Keep.Count}, туман снят {Explored(c):0}%; {hs}";
+        string horde = string.Join("; ", c.HeroesOf(Owner.Horde).Select(p => $"{p.Lord.Hero.Name} ур.{p.Lord.Hero.Level} {p.Party.Members.Count}"));
+        return $"день {c.Clock.Day}: золото {c.Gold:0}, рудников {ourMines} (орды {hordeMines}), клеток наших {ourCells} (орды {hordeCells}), гарнизон {c.Home?.Sum.Keep.Count}, туман снят {Explored(c):0}%; {hs} | орда: построек {c.Realm.Built}, походов на дом {c.Realm.Marches}, героев: {horde}";
     }
 
     static double Explored(Campaign c) => 100.0 * c.Cells.Count(x => c.Explored(x)) / c.Cells.Count;

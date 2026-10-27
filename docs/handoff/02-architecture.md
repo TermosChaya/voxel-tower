@@ -824,7 +824,24 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   - `MapWalk.cs` — `HexStep` (клетка и день), у `MapParty` — `MovesLeft`, `MovesMax`, `StablesWeek`, `Steps`, `Tired`,
     `StepCost`, `Col`/`Row`; цена клетки (`Ground`, `Cost`), дневной запас (`MaxMoves`), путь (`Find`, A* на общих
     буферах), план с днями (`Plan`, `Days`, `StepsOf`), один поиск на все цели (`Spread`/`SpreadWay`).
-  - `MapAI.World.cs` — орда на большой карте (`DecideWide`, `WorthWide`), `CampaignHexes.cs` — `IHexSource` над
+  - Орда на большой карте — вторая фракция, как ИИ-игрок «Героев» (13-world-map.md, 2.18). `Factions.cs` —
+    `Faction` (сторона, вид `FactionKind`, имя, играет ли машина), `Campaign.Factions`, `FactionOf`, `TownsOf`,
+    `HeroesOf`, `Treasury`; сложность `Difficulty` (в файле кампании) и её ручки: `PeaceDays`, `MarchGap`,
+    `HordeIncome`, `HordeGrowth`, `HordeWants`, `LeastArmy`, `HeroesPerTown`. `MapAI.Towns.cs` — города орды:
+    `HordeWork` (постройки), `HordeTown` (постройки битами, `Pool` ждущих найма, день постройки), `HordeWorks`
+    (цены, нужная постройка, недельный прирост), `HordeKinds` и `HordeCost`, `TownOf`, `Breed`, `Build` (одна в день по
+    `BuildOrder`), `GarrisonWant`, `HireFrom`, `TownsDawn` (доход городов и рудников орды, прирост, стройка, гарнизон),
+    `HordeReport`. `MapAI.Heroes.cs` — герои орды: у `Warlord` есть `Hero` (Heroes.cs), уровень военачальника в долине
+    из уровня героя (`Spend`); `BeginRealm` (казна, по герою в каждом городе), `NewHordeHero`, `HordeGlory` (опыт за
+    бой, гибель), `HordeDawnBig` (города, лечение героев, найм нового героя `HireHeroes`), `HordeThink` (раз в ход
+    карты: герои без дела думают не чаще раза в два часа) → `HeroDecide`: `AtTown` (герои в городе сводят армии, наём
+    из `Pool`), `Guard` (наши у города — ближний герой домой), `Pick` (лучшее на день пути, на три, если рядом нет:
+    `HordeWorth`, бой только при шансах `NeutralOdds` или `HordeWants`; первая долина — `StrikeOdds`, тем же поиском),
+    `HordeVisit` (кучи, костры, сундуки, рудники с охраной из двух, мельницы, камни, конюшни, наши жилища). Обход
+    стражи: `MapWalk.Find`/`Spread` спрашивают `Campaign.Shuns` — герой орды, чей путь ищется (`_shun`, `WayFor`),
+    обходит стражу, которую не побьёт с шансом 0,8. `Realm` (MapAI.cs) держит казну `Stock`, `Towns`, `LastMarch`,
+    счётчики `Built`, `Hired`, `Fell`, `Picked`. Город орды в долине показывает свои постройки: `MapParams.HordeWorks`
+    → `Holdings.HordeTown(…, works)`. `CampaignHexes.cs` — `IHexSource` над
     кампанией (значок вещи, флаг, `Variant`: бит 0 — взято/потрачено, бит 1 — под стражей), `Sim.Rare.cs` — редкие
     ресурсы в долине и их цена у верхних этажей.
 - `Campaign.Troves.cs` — содержимое карты (13-world-map.md, этап 2): `Rings` (2 малая, 3 большая), `Blessings`;

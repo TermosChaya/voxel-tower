@@ -444,11 +444,12 @@ public partial class Main
     /// A new campaign in a slot (whatever was in it gone), begun on the map by its first valley: a big map of so many hexes a
     /// side (S 36, M 72, L 108, XL 144), or, with <paramref name="side"/> 0, the small test map of 3 rings (37 valleys) or 2 (19).
     /// </summary>
-    public static void NewCampaign(SceneTree tree, string slot, uint seed, int rings = 3, int side = 0)
+    public static void NewCampaign(SceneTree tree, string slot, uint seed, int rings = 3, int side = 0, Difficulty level = Difficulty.Normal)
     {
         string dir = Saves.CampaignDir(slot);
         if (Directory.Exists(dir)) Directory.Delete(dir, true);
         Atlas = side > 0 ? Campaign.NewWorld(seed, side) : Campaign.New(seed, rings);
+        Atlas.Difficulty = level;
         // the first heroes by the first valley's citadel (more on the bigger maps), the campaign opening on the map
         Atlas.StartHeroes();
         CampSlot = slot;

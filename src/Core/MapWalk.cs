@@ -75,7 +75,7 @@ public static class MapWalk
         // (a convoy's carts as slow as engines)
         if (p.Convoy) slow = true;
         int n = slow ? SlowMoves : p.Scouting ? ScoutMoves : riders ? RiderMoves : Moves;
-        n = (int)Math.Round(n / Heroes.March(p.Party.Commander?.Hero));
+        n = (int)Math.Round(n / Heroes.March(p.Party.Commander?.Hero ?? p.Lord?.Hero));
         if (p.StablesWeek == week) n += Campaign.StablesMoves;
         // and what he wears (Artifacts.cs)
         n += p.Party.Commander?.Hero?.ArtMoves ?? 0;
@@ -121,8 +121,14 @@ public static class MapWalk
                 if (buf.Done[bi] == stamp || bi != goal && blocked.Contains(bi)) continue;
                 int step = Cost(a, b, s);
                 if (step == int.MaxValue) continue;
-                // (the horde fights its way through the beasts and the dead that keep a hex nobody holds, as a day's walk)
-                if (side == Owner.Horde && b.Owner == Owner.None && b.Sum.Keep.Count > 0 && bi != goal) step += Moves;
+                // (the horde fights its way through the beasts and the dead that keep a hex nobody holds, as a day's walk;
+                // a hero of it goes round those he would not beat, and round the valleys of ours he is not going to —
+                // MapAI.Heroes.cs)
+                if (side == Owner.Horde && bi != goal)
+                {
+                    if (c.Shuns(b) || c.GoesRound(b)) continue;
+                    if (b.Owner == Owner.None && b.Sum.Keep.Count > 0) step += Moves;
+                }
                 int g = cost[ai] + step;
                 if (g >= Got(bi)) continue;
                 mark[bi] = stamp; cost[bi] = g; back[bi] = ai;
@@ -152,22 +158,25 @@ public static class MapWalk
         var open = buf.Open;
         open.Clear();
         open.Enqueue(start, 0);
+        buf.Reached.Clear();
         var blocked = c.KeptFor(side);
+        var (to, by) = c.StepTable();
         while (open.TryDequeue(out int ai, out int ag))
         {
             if (buf.Done[ai] == stamp || ag > cost[ai]) continue;
             buf.Done[ai] = stamp;
-            if (ai != start && blocked.Contains(ai)) continue;
-            var a = c.Cell(ai % c.Width, ai / c.Width);
-            for (int s = 0; s < 6; s++)
+            buf.Reached.Add(ai);
+            // (a hex kept against the side is reached, not walked through; a valley of ours neither, by a hero of the horde)
+            if (ai != start && (blocked.Contains(ai) || side == Owner.Horde && c.GoesRound(c.Cells[ai]))) continue;
+            for (int k = ai * 6, end = k + 6; k < end; k++)
             {
-                var b = c.Neighbour(a, s);
-                if (b == null) continue;
-                int bi = c.IndexOf(b);
-                if (buf.Done[bi] == stamp) continue;
-                int step = Cost(a, b, s);
-                if (step == int.MaxValue) continue;
-                if (side == Owner.Horde && b.Owner == Owner.None && b.Sum.Keep.Count > 0) step += Moves;
+                int bi = to[k], step = by[k];
+                if (bi < 0 || step == int.MaxValue || buf.Done[bi] == stamp) continue;
+                if (side == Owner.Horde && c.Cells[bi] is { Owner: Owner.None } b && b.Sum.Keep.Count > 0)
+                {
+                    if (c.Shuns(b)) continue;
+                    step += Moves;
+                }
                 int g = cost[ai] + step;
                 if (g > most || mark[bi] >= stamp && g >= cost[bi]) continue;
                 mark[bi] = stamp; cost[bi] = g; back[bi] = ai;
@@ -190,10 +199,10 @@ public static class MapWalk
     }
 
     /// <summary>The hexes a party of a side does not walk through on its way elsewhere: those kept against it, and the other side's parties.</summary>
-    internal static HashSet<int> Kept(Campaign c, Owner side)
+    internal static HashSet<int> Kept(Campaign c, Owner side, bool cells = true)
     {
         var set = new HashSet<int>();
-        foreach (var cell in c.Cells)
+        if (cells) foreach (var cell in c.Cells)
         {
             if (cell.Sum.Keep.Count == 0 || cell.Owner == side || side == Owner.Horde && cell.Owner == Owner.None) continue;
             set.Add(c.IndexOf(cell));
@@ -248,6 +257,8 @@ sealed class WalkBuffers
 {
     public int[] Cost, Back, Mark, Done;
     public int Stamp;
+    /// <summary>The hexes the last <see cref="MapWalk.Spread"/> reached, each once.</summary>
+    public readonly List<int> Reached = new();
     public readonly PriorityQueue<int, int> Open = new();
 }
 
@@ -258,6 +269,30 @@ public sealed partial class Campaign
     /// <summary>The horde deciding at a dawn: the hexes kept gathered once for all its searches.</summary>
     bool _cacheKept;
 
+    int[] _stepTo, _stepBy;
+
+    /// <summary>
+    /// Each hex's neighbour across each side (−1 off the map) and the moves a step into it costs, reckoned once for the
+    /// searches: the big map's ground does not change in play.
+    /// </summary>
+    internal (int[] to, int[] by) StepTable()
+    {
+        int n = Width * Height;
+        if (_stepTo != null && _stepTo.Length == n * 6) return (_stepTo, _stepBy);
+        _stepTo = new int[n * 6]; _stepBy = new int[n * 6];
+        for (int i = 0; i < n; i++)
+        {
+            var a = Cells[i];
+            for (int s = 0; s < 6; s++)
+            {
+                var b = Neighbour(a, s);
+                _stepTo[i * 6 + s] = b == null ? -1 : IndexOf(b);
+                _stepBy[i * 6 + s] = b == null ? int.MaxValue : MapWalk.Cost(a, b, s);
+            }
+        }
+        return (_stepTo, _stepBy);
+    }
+
     internal WalkBuffers WalkBuffers(int n)
     {
         if (_walk == null || _walk.Cost.Length != n) _walk = new WalkBuffers { Cost = new int[n], Back = new int[n], Mark = new int[n], Done = new int[n] };
@@ -267,6 +302,9 @@ public sealed partial class Campaign
     /// <summary>The hexes kept against a side: gathered anew for each search but while the horde decides.</summary>
     internal HashSet<int> KeptFor(Owner side)
     {
+        // (a hero of the horde goes round every valley of ours anyway, kept or not: only our parties are looked for —
+        // MapAI.Heroes.cs)
+        if (side == Owner.Horde && _shun != null) return MapWalk.Kept(this, side, cells: false);
         if (!_cacheKept) return MapWalk.Kept(this, side);
         return side == Owner.Horde ? _keptHorde ??= MapWalk.Kept(this, Owner.Horde) : _keptOurs ??= MapWalk.Kept(this, side);
     }
@@ -276,6 +314,6 @@ public sealed partial class Campaign
     {
         _cacheKept = true;
         try { HordeDawn(); }
-        finally { _cacheKept = false; _keptOurs = _keptHorde = null; _wide = null; }
+        finally { _cacheKept = false; _keptOurs = _keptHorde = null; }
     }
 }

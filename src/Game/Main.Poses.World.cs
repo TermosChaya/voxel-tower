@@ -269,6 +269,19 @@ public partial class Main
                 Look(ford, 22, 16);
                 break;
             }
+            case 9:
+            {
+                // a hero of the horde come up by ours, under its banner, his figure the warlord he is
+                MapParty foe = null;
+                foreach (var p in c.HeroesOf(Holder.Horde)) { foe = p; break; }
+                if (foe == null) break;
+                var by = c.Neighbour(c.Neighbour(home, 0) ?? home, 0) ?? home;
+                foe.Q = by.Q; foe.R = by.R; foe.Path = null; foe.ThinkAt = double.MaxValue;
+                c.Reveal(by, 3);
+                var (fx, fz) = v.Layout.Center((home.Col + by.Col) / 2, (home.Row + by.Row) / 2);
+                v.Snap(fx, fz + 14, 18);
+                break;
+            }
         }
         _poseLater = () => { var (t, d, sh) = v.Drawn(); GD.Print($"[world map] {Engine.GetFramesPerSecond()} fps; {t} k triangles in {d} draw calls, {sh} k for shadows; {v.PiecesShown} pieces; slowest frame {v.WorstFrameMs:0} ms"); };
     }

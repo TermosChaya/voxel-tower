@@ -269,6 +269,8 @@ public partial class GameMenu : Control
     /// map of 3 rings or 2. Kept while the game runs.
     /// </summary>
     static int _side = 72, _rings = 3;
+    /// <summary>How hard the horde plays a new campaign.</summary>
+    static Difficulty _level = Difficulty.Normal;
 
     /// <summary>The campaigns' slots: a new campaign in one (what was in it gone), or one read back where it was left.</summary>
     void Campaign_()
@@ -299,6 +301,25 @@ public partial class GameMenu : Control
             size.AddChild(b);
         }
         _page.AddChild(size);
+        // how hard the horde plays
+        var hard = new HBoxContainer();
+        hard.AddThemeConstantOverride("separation", 8);
+        hard.AddChild(Hud.Text("Орда:", Ornament.Serif, 13, Ornament.Aged));
+        foreach (var (level, tip) in new[]
+        {
+            (Difficulty.Easy, "Орда богатеет медленнее, оставляет вас в покое 10 дней и идёт на первую долину не чаще раза в 5 дней."),
+            (Difficulty.Normal, "Неделя покоя, потом войско орды на первую долину не чаще раза в 4 дня."),
+            (Difficulty.Hard, "Орда богаче и растёт быстрее, покой 5 дней, войско на первую долину раз в 3 дня."),
+        })
+        {
+            var lv = level;
+            var b = new Button { Text = Core.Campaign.NameOf(lv), FocusMode = FocusModeEnum.None, ToggleMode = true, ButtonPressed = _level == lv, TooltipText = tip,
+                MouseDefaultCursorShape = CursorShape.PointingHand, CustomMinimumSize = new Vector2(96, 30) };
+            b.AddThemeFontSizeOverride("font_size", 13);
+            b.Pressed += () => { _level = lv; Campaign_(); };
+            hard.AddChild(b);
+        }
+        _page.AddChild(hard);
         foreach (string slot in Saves.CampaignSlots)
         {
             string s = slot;
@@ -320,7 +341,7 @@ public partial class GameMenu : Control
                 return b;
             }
             row.AddChild(Act("Новая", peek != null ? "Новая кампания в этой ячейке. Прежняя пропадёт." : "Новая кампания в этой ячейке.",
-                () => Main.NewCampaign(_m.GetTree(), s, (uint)Random.Shared.Next(1, int.MaxValue), _rings, _side), true));
+                () => Main.NewCampaign(_m.GetTree(), s, (uint)Random.Shared.Next(1, int.MaxValue), _rings, _side, _level), true));
             row.AddChild(Act("Продолжить", "С того места, где кампания сохранена.", () =>
             {
                 if (!Main.LoadCampaign(_m.GetTree(), s)) _m.Hud.Float("эту кампанию не прочесть", Ornament.Blood);

@@ -150,7 +150,7 @@ public sealed partial class MapParty
 /// </summary>
 public sealed partial class Campaign
 {
-    public const int Version = 13;
+    public const int Version = 14;
     public const string FileName = "campaign.dat";
     static readonly byte[] Magic = { (byte)'V', (byte)'T', (byte)'C', (byte)'M' };
 
@@ -452,6 +452,8 @@ public sealed partial class Campaign
     {
         Seed = c.Seed, Kind = c.Kind, Classic = false, Hexagon = true, SizeX = MapParams.GameSize, SizeZ = MapParams.GameSize,
         Edges = c.Edges, EntrySide = c.EntrySide, Holding = c.Holding, Trove = c.Trove, TroveTaken = c.TroveTaken,
+        // (a town of the horde shows what it has built: MapAI.Towns.cs, Holdings.cs)
+        HordeWorks = Big && c.Holding == Holding.HordeTown && Realm.Towns.TryGetValue(KeyOf(c), out var town) ? town.Works : 0,
     };
 
     // ------------------------------------------------------------ going in and out of a valley
@@ -556,6 +558,7 @@ public sealed partial class Campaign
             w.Write(Magic); w.Write(Version); w.Write(Sim.SaveVersion);
             w.Write(Seed); w.Write(Clock.Day); w.Write(Clock.At); w.Write(Gold); w.Write(HereQ); w.Write(HereR); w.Write(HomeFell);
             w.Write(Rings); w.Write(Blessings.Count); foreach (var b in Blessings) w.Write((byte)b);
+            w.Write((byte)Difficulty);
             // the big map is made again from its seed, and only what changed of it is written (WriteWorld)
             w.Write(Width); w.Write(Height);
             w.Write(Big ? 0 : Cells.Count);
@@ -592,10 +595,11 @@ public sealed partial class Campaign
         double gold = r.ReadDouble(); int hq = r.ReadInt32(), hr = r.ReadInt32(), fell = r.ReadInt32(), rings = r.ReadInt32();
         var blessings = new List<Blessing>();
         for (int n = r.ReadInt32(); n > 0; n--) blessings.Add((Blessing)r.ReadByte());
+        var difficulty = (Difficulty)r.ReadByte();
         int width = r.ReadInt32(), height = r.ReadInt32();
         // the big map made again from its seed, the small one read cell by cell
         var c = width > 0 ? NewWorld(seed, width) : new Campaign { Seed = seed };
-        c.Clock = clock; c.Gold = gold; c.HereQ = hq; c.HereR = hr; c.HomeFell = fell; c.Rings = rings;
+        c.Clock = clock; c.Gold = gold; c.HereQ = hq; c.HereR = hr; c.HomeFell = fell; c.Rings = rings; c.Difficulty = difficulty;
         c.Blessings.AddRange(blessings);
         for (int n = r.ReadInt32(); n > 0; n--)
         {

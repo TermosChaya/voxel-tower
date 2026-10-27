@@ -6275,6 +6275,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--map") MapBench.Run(C
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--atlas") AtlasBench.Run(Check);
 // the big map as in «Heroes»: its sizes, zones and passes, its things, the moves of a day, the horde on it, its save (WorldBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--world") WorldBench.Run(Check);
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--hordeai") HordeAIBench.Run(Check);
 if (args.Length > 2 && args[0] == "--world-debug") WorldDebug.Run(uint.Parse(args[1]), int.Parse(args[2]));
 if (args.Length > 3 && args[0] == "--world-dump") WorldDump.Run(uint.Parse(args[1]), int.Parse(args[2]), args[3]);
 // not in the usual run: a campaign on the big map played by itself, a picture a day and a film (AutoPlayBench.cs)

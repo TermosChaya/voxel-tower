@@ -33,6 +33,11 @@ public sealed class Warlord
     public bool Champion;
     /// <summary>What his army did in the valley this time: ours killed, voxels of our building broken.</summary>
     public int Slew, Broke;
+    /// <summary>
+    /// A hero of the horde on the big map (MapAI.Heroes.cs) has his record as ours do (Heroes.cs): a level from 1 to 10,
+    /// experience, skills; his warlord's level in a valley follows it. None on the small maps and in a siege.
+    /// </summary>
+    public Hero Hero;
 
     /// <summary>What a warlord of a level has to do to come to the next.</summary>
     public static float Next(int level) => 60 + 40 * level;

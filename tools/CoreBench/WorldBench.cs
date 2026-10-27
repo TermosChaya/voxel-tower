@@ -272,21 +272,28 @@ static class WorldBench
 
         // ---- sixty days of the horde on an XL map, quickly; the same seed the same
         {
-            var c = Campaign.NewWorld(17, 144);
-            c.AddHero();
-            double worst = 0, sum = 0;
-            for (int d = 0; d < 60; d++)
+            // (timed the second time over: the first warms the code up, as a game played a while has it)
+            Campaign Sixty(out double sum, out double worst)
             {
-                double t0 = BenchClock.CpuMs();
-                c.Advance(DayClock.Cycle);
-                double t = BenchClock.CpuMs() - t0;
-                sum += t; worst = Math.Max(worst, t);
-                c.News.Clear();
+                var c = Campaign.NewWorld(17, 144);
+                c.AddHero();
+                sum = 0; worst = 0;
+                for (int d = 0; d < 60; d++)
+                {
+                    double t0 = BenchClock.CpuMs();
+                    c.Advance(DayClock.Cycle);
+                    double t = BenchClock.CpuMs() - t0;
+                    sum += t; worst = Math.Max(worst, t);
+                    c.News.Clear();
+                }
+                return c;
             }
+            var first = Sixty(out double cold, out _);
+            var c = Sixty(out double sum, out double worst);
             int out_ = c.Parties.Count(p => p.Owner == Owner.Horde), mines = c.Cells.Count(x => x.Thing is { Kind: ThingKind.Mine, Owner: Owner.Horde });
-            check("sixty days of the horde on an XL map: it musters, sends parties along the hexes and flags mines, a day in a few milliseconds",
-                sum / 60 < 8 && c.Realm.Sent > 0 && mines > 0,
-                $"{sum / 60:0.0} ms a day on average, {worst:0} ms the worst; sent {c.Realm.Sent}, out {out_}, mines of the horde {mines}");
+            check("sixty days of the horde on an XL map: it musters, sends parties along the hexes and flags mines, a day in a few milliseconds; the same seed the same",
+                sum / 60 < 8 && c.Realm.Sent > 0 && mines > 0 && Print(first) == Print(c),
+                $"{sum / 60:0.0} ms a day on average ({cold / 60:0.0} the first time over), {worst:0} ms the worst; sent {c.Realm.Sent}, out {out_}, mines of the horde {mines}; the same {Print(first) == Print(c)}");
 
             // written small mid-game, read back the same, and going on the same
             string dir = Path.Combine(Path.GetTempPath(), "vt-world-bench");

@@ -121,6 +121,7 @@ public sealed partial class Campaign
             Haul();
             Raise(dt);
             Dawns();
+            HordeThink();
         }
         Dawns();
         Judge();
@@ -189,13 +190,13 @@ public sealed partial class Campaign
     public bool Send(MapParty p, MapCell to)
     {
         var from = At(p.Q, p.R);
-        var way = Big ? MapWalk.Find(this, from, to, p.Owner) : MapPath.Find(this, from, to, p.Owner);
+        var way = Big ? WayFor(p, from, to) : MapPath.Find(this, from, to, p.Owner);
         if (way == null) return false;
         // on the big map a step half walked (and paid) is walked on to its end first
         if (Big && p.Moving && p.StepCost > 0)
         {
             var on = p.Path[0];
-            var rest = on == to ? new List<MapCell>() : MapWalk.Find(this, on, to, p.Owner);
+            var rest = on == to ? new List<MapCell>() : WayFor(p, on, to);
             if (rest == null) return false;
             rest.Insert(0, on);
             way = rest;
@@ -296,17 +297,27 @@ public sealed partial class Campaign
             Tell(NewsKind.RaidComing, $"Войско орды входит {Names(cell).prep}: {Raiders(p.Party.Members.Count)}{Led(p)}.", cell, p);
             return;
         }
-        // a point of ours: its garrison and ours standing there fight for it together (Campaign.Hold.cs)
-        if (cell.Owner == Owner.Ours) { Defend(p, cell); return; }
+        // (a hero of the horde leaves ours be while the peace lasts — MapAI.Heroes.cs)
+        bool peace = HordeHero(p) && !AtWar;
+        // a point of ours: its garrison and ours standing there fight for it together (Campaign.Hold.cs); a hero of the
+        // horde falls on one only where he goes, and on the first valley only as an army sent against it (MapAI.Heroes.cs)
+        if (cell.Owner == Owner.Ours && !peace && (!HordeHero(p) || !p.Moving && (!cell.Home || p.Aim == PartyAim.Strike))) { Defend(p, cell); return; }
         foreach (var ours in Parties.ToArray())
         {
-            if (ours.Owner != Owner.Ours || ours.Q != cell.Q || ours.R != cell.R || ours.Moving) continue;
+            if (peace || ours.Owner != Owner.Ours || ours.Q != cell.Q || ours.R != cell.R || ours.Moving) continue;
             if (!Battle(p, ours.Party.Members, null, 0, cell, ours)) return;
         }
         // (the keepers of a treasure keep to it: the horde goes by them, and they let it)
         if (cell.Owner == Owner.None && cell.Sum.Keep.Count > 0 && !Untaken(cell))
         {
             if (!Battle(p, cell.Sum.Keep, null, 0, cell, null)) return;
+        }
+        // a hero of the horde has what lies there, and at the end of his way looks at what to do next
+        if (HordeHero(p))
+        {
+            HordeVisit(p, cell);
+            if (!p.Moving) HeroArrived(p);
+            return;
         }
         if (p.Moving) return;
         if (cell.Owner == Owner.None && p.Aim is PartyAim.Take or PartyAim.Strike) { Occupy(p, cell); return; }
@@ -322,6 +333,7 @@ public sealed partial class Campaign
     bool Battle(MapParty p, List<Traveller> them, Warlord theirs, float walls, MapCell cell, MapParty ours)
     {
         var r = QuickBattle.Fight(p.Party.Members, p.Lord, them, theirs, walls, cell.Kind, Roll);
+        HordeGlory(p, r, attacker: true);
         if (r.AttackerLordFell) p.Lord = null;
         if (ours != null) HeroNews(r, cell, ours);
         if (ours != null && them.Count == 0) Parties.Remove(ours);
@@ -353,6 +365,7 @@ public sealed partial class Campaign
         // the fallen gone from where they stood
         keep.RemoveAll(m => !all.Contains(m));
         foreach (var o in standing) { o.Party.Members.RemoveAll(m => !all.Contains(m)); if (o.Party.Members.Count == 0) Parties.Remove(o); }
+        HordeGlory(p, r, attacker: true);
         if (r.AttackerLordFell) p.Lord = null;
         HeroNews(r, cell, standing.Count > 0 ? standing[0] : null);
         if (!r.AttackerWon)
@@ -406,12 +419,16 @@ public sealed partial class Campaign
         }
         if (said) Tell(NewsKind.Taken, $"Орда заняла {Names(cell).acc}.", cell, p);
         if (men.Count == 0 && p.Lord == null) { Parties.Remove(p); return; }
+        // a hero of the horde goes on from there (MapAI.Heroes.cs); a band sent out goes home
+        if (HordeHero(p)) { HeroArrived(p); return; }
         GoHome(p);
     }
 
     /// <summary>A party of the horde home at the lair: its men into the lair's garrison, its warlord rests there.</summary>
     void BackHome(MapParty p, MapCell lair)
     {
+        // a hero of the horde stays on the map in his town, to hire and go out again
+        if (HordeHero(p)) { p.Path = null; HeroArrived(p); return; }
         lair.Sum.Keep.AddRange(p.Party.Members);
         if (p.Lord != null) Realm.Lords.Add(p.Lord);
         Parties.Remove(p);
@@ -468,6 +485,7 @@ public sealed partial class Campaign
         {
             if (h.Owner != Owner.Horde || h.Q != cell.Q || h.R != cell.R) continue;
             last = QuickBattle.Fight(ours.Party.Members, null, h.Party.Members, h.Lord, 0, cell.Kind, Roll);
+            HordeGlory(h, last, attacker: false);
             if (last.DefenderLordFell) h.Lord = null;
             HeroNews(last, cell, ours);
             if (!last.AttackerWon)
@@ -714,6 +732,7 @@ public sealed partial class Campaign
         w.Write(l != null);
         if (l == null) return;
         w.Write(l.Id); w.Write(l.Name); w.Write(l.Of); w.Write(l.Kind.Key); w.Write(l.Level); w.Write(l.Xp); w.Write(l.Health); w.Write((byte)l.Fate);
+        Heroes.Write(w, l.Hero);
     }
 
     internal static Warlord ReadLord(BinaryReader r)
@@ -722,6 +741,7 @@ public sealed partial class Campaign
         var l = new Warlord { Id = r.ReadInt32(), Name = r.ReadString(), Of = r.ReadString() };
         l.Kind = Sim.KindOf(r.ReadString()) ?? Kinds.Orc;
         l.Level = r.ReadInt32(); l.Xp = r.ReadSingle(); l.Health = r.ReadSingle(); l.Fate = (LordFate)r.ReadByte();
+        l.Hero = Heroes.Read(r);
         return l;
     }
 
@@ -742,6 +762,7 @@ public sealed partial class Campaign
         w.Write(p.AtX); w.Write(p.AtZ); w.Write(p.Facing); w.Write(p.WalkIn);
         w.Write(p.Trail?.Count ?? -1);
         if (p.Trail != null) foreach (var (x, z) in p.Trail) { w.Write(x); w.Write(z); }
+        w.Write(p.ThinkAt); w.Write(p.Errand ?? "");
     }
 
     void ReadWay(BinaryReader r, MapParty p)
@@ -762,6 +783,7 @@ public sealed partial class Campaign
             p.Trail = new List<(float X, float Z)>(trail);
             for (int i = 0; i < trail; i++) p.Trail.Add((r.ReadSingle(), r.ReadSingle()));
         }
+        p.ThinkAt = r.ReadDouble(); p.Errand = r.ReadString();
     }
 
     /// <summary>The turn's own state, after the parties: the dawns seen, the luck, the parties off the map into the valley, what each cell keeps, the horde's realm.</summary>

@@ -195,6 +195,27 @@ public partial class Main
             $"written {wrote}; hero at {rh?.Q},{rh?.R} of {hero.Q},{hero.R}, moves {rh?.MovesLeft} of {hero.MovesLeft}");
         // the mine he flagged held (Main.SelfTest.Hold.cs)
         if (mine != null && flagged) { CloseAtlas(); return SelfTestHold(fails, hero, mine); }
+
+        // the horde a faction with heroes of its own (MapAI.Heroes.cs): one of them brought where ours see, his figure
+        // drawn under its banner as the warlord he is; out of sight again, not drawn
+        var foe = c.HeroesOf(Holder.Horde).FirstOrDefault();
+        bool foeSeen = false, foeHidden = false;
+        string foeSaid = "no hero of the horde";
+        if (foe != null)
+        {
+            var by = Enumerable.Range(0, 6).Select(s => c.Neighbour(c.CellOf(hero), s)).FirstOrDefault(n => n != null && n.Passable && n.Sum.Keep.Count == 0);
+            var was = c.CellOf(foe);
+            int hidden = WorldFigures.TheirsDrawn;
+            foe.Q = by.Q; foe.R = by.R; foe.Path = null; foe.ThinkAt = double.MaxValue;
+            await Frames(4);
+            foeSeen = WorldFigures.TheirsDrawn >= 1 && WorldFigures.Walkers.Exists(w => w.Owner == 2 && w.Col == by.Col && w.Row == by.Row);
+            foe.Q = was.Q; foe.R = was.R; foe.ThinkAt = 0;
+            await Frames(4);
+            foeHidden = c.Seen(was) || WorldFigures.TheirsDrawn <= hidden;
+            foeSaid = $"{foe.Lord.Hero.Name} ({foe.Lord.Kind.Name}), drawn by ours {foeSeen}, hidden at home {foeHidden}";
+        }
+        check("the horde has heroes of its own on the big map: one brought where ours see is drawn there under its banner",
+            foe != null && foe.Lord.Hero != null && foeSeen && foeHidden, foeSaid);
         CloseAtlas();
         string folder = Saves.CampaignDir(CampSlot);
         LeaveCampaign();

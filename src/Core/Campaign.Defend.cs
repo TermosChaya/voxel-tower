@@ -40,6 +40,7 @@ public sealed partial class Campaign
         }
         var stood = new List<Traveller>(ours);
         var r = QuickBattle.Fight(enemy.Party.Members, enemy.Lord, ours, null, ValleySummary.WallsOf(sim), cell.Kind, Roll);
+        HordeGlory(enemy, r, attacker: true);
         if (r.AttackerLordFell) enemy.Lord = null;
         HeroNews(r, cell, null);
         foreach (var t in stood)

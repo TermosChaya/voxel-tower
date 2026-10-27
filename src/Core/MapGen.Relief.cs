@@ -818,7 +818,7 @@ public static partial class MapGen
         // whatever stands there
         if (p.Details) Nature(w, site, p, relief);
         if (p.Holding == Holding.Outpost) { site.KeepBase = Holdings.OutpostPlace(w, site); return site; }
-        if (p.Holding == Holding.HordeTown) { site.KeepBase = Holdings.HordeTown(w, site, seed); return site; }
+        if (p.Holding == Holding.HordeTown) { site.KeepBase = Holdings.HordeTown(w, site, seed, p.HordeWorks); return site; }
 
         site.KeepBase = WorldGen.Keep(w, site);
         int gx2 = site.KeepX - site.KeepR - 7;

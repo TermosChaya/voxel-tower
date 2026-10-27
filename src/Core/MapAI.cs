@@ -4,22 +4,41 @@ using System.IO;
 
 namespace VoxelTower.Core;
 
-/// <summary>The horde's realm on the map: its warlords resting at the lair, and what it has mustered and sent out since the start.</summary>
+/// <summary>
+/// The horde's realm on the map, the faction's own state (Factions.cs): on the small maps its warlords resting at the
+/// lair; on the big map its treasury (gold, the stores and the rare resources, by <see cref="Res"/>), each of its towns'
+/// buildings and what waits in them to be hired (MapAI.Towns.cs), and the day it last set out against the first valley;
+/// what it has mustered, sent out and built since the start (the bench reads them).
+/// </summary>
 public sealed class Realm
 {
-    /// <summary>The warlords at the lair, not leading a party now.</summary>
+    /// <summary>The warlords at the lair, not leading a party now (the small maps).</summary>
     public readonly List<Warlord> Lords = new();
     public int NextLord = 1;
-    /// <summary>Raiders mustered and parties sent out since the start (the bench reads them).</summary>
+    /// <summary>Raiders mustered (hired, on the big map) and parties sent out since the start.</summary>
     public int Mustered, Sent;
     /// <summary>The cells nobody holds were given their beasts, and the lair its garrison.</summary>
     public bool Ready;
+    /// <summary>The horde's treasury on the big map, by <see cref="Res"/>.</summary>
+    public readonly double[] Stock = new double[9];
+    /// <summary>Its towns and lairs by their cells' keys.</summary>
+    public readonly Dictionary<int, HordeTown> Towns = new();
+    /// <summary>The day an army of the horde last set out against the first valley (far back for never), and how many have.</summary>
+    public int LastMarch = -99, Marches;
+    /// <summary>Buildings built, heroes hired, its heroes fallen, piles and the like its heroes picked up, since the start.</summary>
+    public int Built, Hired, Fell, Picked;
 
     internal void Write(BinaryWriter w)
     {
         w.Write(Lords.Count);
         foreach (var l in Lords) Campaign.WriteLord(w, l);
         w.Write(NextLord); w.Write(Mustered); w.Write(Sent); w.Write(Ready);
+        foreach (double s in Stock) w.Write(s);
+        var keys = new List<int>(Towns.Keys);
+        keys.Sort();
+        w.Write(keys.Count);
+        foreach (int k in keys) Towns[k].Write(w);
+        w.Write(LastMarch); w.Write(Marches); w.Write(Built); w.Write(Hired); w.Write(Fell); w.Write(Picked);
     }
 
     internal void Read(BinaryReader r)
@@ -27,6 +46,10 @@ public sealed class Realm
         Lords.Clear();
         for (int n = r.ReadInt32(); n > 0; n--) if (Campaign.ReadLord(r) is { } l) Lords.Add(l);
         NextLord = r.ReadInt32(); Mustered = r.ReadInt32(); Sent = r.ReadInt32(); Ready = r.ReadBoolean();
+        for (int i = 0; i < Stock.Length; i++) Stock[i] = r.ReadDouble();
+        Towns.Clear();
+        for (int n = r.ReadInt32(); n > 0; n--) { var t = HordeTown.Read(r); Towns[t.Key] = t; }
+        LastMarch = r.ReadInt32(); Marches = r.ReadInt32(); Built = r.ReadInt32(); Hired = r.ReadInt32(); Fell = r.ReadInt32(); Picked = r.ReadInt32();
     }
 }
 
@@ -60,8 +83,18 @@ public sealed partial class Campaign
 
     /// <summary>The horde's lair, while it holds one (the first of them on the big map).</summary>
     public MapCell Lair => Cells.Find(c => c.Holding == Holding.HordeTown && c.Owner == Owner.Horde);
-    /// <summary>The horde's lairs it still holds: one on the small map, two or three on the big one.</summary>
-    public List<MapCell> Lairs => Cells.FindAll(c => c.Holding == Holding.HordeTown && c.Owner == Owner.Horde);
+    /// <summary>The horde's lairs it still holds: one on the small map, its towns and lairs on the big one.</summary>
+    public List<MapCell> Lairs
+    {
+        get
+        {
+            if (!Big) return Cells.FindAll(c => c.Holding == Holding.HordeTown && c.Owner == Owner.Horde);
+            // (the big map's towns are made with it: looked for once, then only who holds them looked at)
+            _townCells ??= Cells.FindAll(c => c.Holding == Holding.HordeTown);
+            return _townCells.FindAll(c => c.Owner == Owner.Horde);
+        }
+    }
+    List<MapCell> _townCells;
     /// <summary>The most warlords the realm has at once: three, and one more for every lair past the first.</summary>
     int LordsMost => MostLords + Math.Max(0, Lairs.Count - 1);
 
@@ -98,8 +131,9 @@ public sealed partial class Campaign
             // its palisade
             lair.Sum.Walls = .5f;
         }
-        // (the big map's keepers were laid with it: its treasures', its mines', its passes')
-        if (Big) { if (Realm.Lords.Count == 0) Realm.Lords.Add(NewLord(1)); return; }
+        // (the big map's keepers were laid with it: its treasures', its mines', its passes'; the horde plays it as a
+        // faction, from its towns with its heroes — MapAI.Heroes.cs)
+        if (Big) { BeginRealm(); return; }
         KeepTroves();
         foreach (var c in Cells)
         {
@@ -128,6 +162,7 @@ public sealed partial class Campaign
     /// </summary>
     void HordeDawn()
     {
+        if (Big) { HordeDawnBig(); return; }
         var lairs = Lairs;
         if (lairs.Count == 0) return;
         int cells = 0;
@@ -153,7 +188,6 @@ public sealed partial class Campaign
     /// </summary>
     void Decide(MapCell lair)
     {
-        if (Big) { DecideWide(lair); return; }
         // ours at the door: all home
         bool threat = false;
         foreach (var p in Parties) if (p.Owner == Owner.Ours && Distance(p.Q, p.R, lair.Q, lair.R) <= 1) threat = true;

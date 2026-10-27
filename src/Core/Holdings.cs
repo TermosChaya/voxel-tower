@@ -59,10 +59,14 @@ public static class Holdings
     /// it with a gap toward the side the enemy comes by (<see cref="Site.EntrySide"/>, ours) between two tall posts with
     /// bones on them; four huts and the chief's bigger one, of logs under thatch, their doors to the middle; a fire in a
     /// ring of stones, a totem with a red rag and a skull, heaps of bones. The garrison keeps at the doors, the fire and
-    /// the gap (<see cref="Site.HordePosts"/>). Returns the height of its ground.
+    /// the gap (<see cref="Site.HordePosts"/>). What the town has built on the big map (<paramref name="works"/>, a bit a
+    /// <see cref="HordeWork"/>) stands about the yard: the fighting pit, the shaman's hut, the chief's banners nearer the
+    /// fire; the trolls' den, the giant's cave, the yard of engines, the war camp's tents, the brewery, the sappers'
+    /// burrows further out; with the stone wall the palisade is of rough stone. Returns the height of its ground.
     /// </summary>
-    public static int HordeTown(VoxelWorld w, Site s, uint seed)
+    public static int HordeTown(VoxelWorld w, Site s, uint seed, uint works = 0)
     {
+        bool Has(HordeWork k) => (works >> (int)k & 1) != 0;
         int cx = s.KeepX, cz = s.KeepZ, g = s.HTop[cz * w.SX + cx];
         Level(w, s, cx, cz, PalisadeR + 12, 20, g);
         var noise = new ValueNoise(seed * 71 + 5);
@@ -87,8 +91,9 @@ public static class Holdings
                 if (Math.Abs(Angle(a - gate)) < gap) continue;
                 int log = (int)Math.Floor((a + Math.PI) * PalisadeR / 2), h = s.HTop[z * w.SX + x];
                 int top = h + PalisadeH + (log % 2 == 0 ? 2 : 0) + (int)(noise.Sample(log * .7, 3) * 3);
-                // the logs set a little into the ground, sharpened: their outer half stops a voxel short
-                for (int y = h - 2; y < top - (d > PalisadeR ? 1 : 0); y++) w.SetRaw(x, y, z, Mat.Wood);
+                // the logs set a little into the ground, sharpened: their outer half stops a voxel short; of rough stone
+                // once the town has its stone wall
+                for (int y = h - 2; y < top - (d > PalisadeR ? 1 : 0); y++) w.SetRaw(x, y, z, Has(HordeWork.StoneWall) ? Mat.Rock : Mat.Wood);
             }
         // the two posts either side of the gap, a heap of bones on each
         foreach (int side in new[] { -1, 1 })
@@ -143,8 +148,105 @@ public static class Holdings
                 for (int x = bx - 2; x <= bx + 2; x++)
                     if (Math.Abs(x - bx) + Math.Abs(z - bz) <= 3) for (int y = g; y < g + (Math.Abs(x - bx) + Math.Abs(z - bz) <= 1 ? 2 : 1); y++) w.SetRaw(x, y, z, Mat.BonePile);
         }
+        if (works != 0) Works(w, s, works, gate, cx, cz, g);
         s.Landmarks.Add(new Landmark { Kind = LandmarkKind.Lair, Name = "Логово орды", X = cx, Z = cz, R = PalisadeR + 10, StandX = cx, StandZ = cz });
         return g;
+    }
+
+    /// <summary>
+    /// What a town of the horde has built, about its yard between the huts: nearer the fire the fighting pit, the
+    /// shaman's hut and the chief's banners; further out the trolls' den and the giant's cave (heaps of rough stone with a
+    /// dark mouth), the yard of engines (a ram's frame of logs), the war camp (two tents of red cloth), the brewery (a
+    /// cauldron of green brew in a ring of stones) and the sappers' burrows (mounds of earth).
+    /// </summary>
+    static void Works(VoxelWorld w, Site s, uint works, double gate, int cx, int cz, int g)
+    {
+        bool Has(HordeWork k) => (works >> (int)k & 1) != 0;
+        (int x, int z) At(double a, int d) => (cx + (int)Math.Round(Math.Cos(a) * d), cz + (int)Math.Round(Math.Sin(a) * d));
+        void Mound(int x0, int z0, int r, int tall, byte m, bool mouth, double face)
+        {
+            for (int z = z0 - r; z <= z0 + r; z++)
+                for (int x = x0 - r; x <= x0 + r; x++)
+                {
+                    double d = Brushes.Dist(x - x0 + .5, z - z0 + .5);
+                    if (d > r || !w.OnLand(x, z)) continue;
+                    int top = g + (int)(tall * Math.Sqrt(1 - d * d / (r * r)));
+                    bool door = mouth && Math.Abs(Angle(Math.Atan2(z - z0, x - x0) - face)) * r < 4;
+                    for (int y = g; y < top; y++) if (!(door && y < g + 8 && d > r * .3)) w.SetRaw(x, y, z, m);
+                }
+        }
+        // nearer the fire, between the huts
+        int slot = 0;
+        double Inner() => gate + Math.PI / 2 + Math.PI / 3 * slot++;
+        if (Has(HordeWork.Pit))
+        {
+            var (px, pz) = At(Inner(), 46);
+            for (int z = pz - 10; z <= pz + 10; z++)
+                for (int x = px - 10; x <= px + 10; x++)
+                {
+                    double d = Brushes.Dist(x - px + .5, z - pz + .5);
+                    if (d < 8) for (int y = g - 3; y < g; y++) w.SetRaw(x, y, z, y == g - 3 ? Mat.DirtPath : Mat.Air);
+                    else if (d < 10 && Hash.H3(x, z, 63) < .35) for (int y = g - 1; y < g + 7; y++) w.SetRaw(x, y, z, Mat.Wood);
+                }
+        }
+        if (Has(HordeWork.Shaman))
+        {
+            var (hx, hz) = At(Inner(), 46);
+            Hut(w, s, hx, hz, 10, 10, Math.Atan2(cz - hz, cx - hx), g);
+            Block(w, hx + 12, g - 2, hz - 1, 2, 30, 2, Mat.Wood);
+            Block(w, hx + 11, g + 28, hz - 2, 4, 4, 4, Mat.BonePile);
+            Block(w, hx + 14, g + 18, hz - 3, 1, 10, 6, Mat.Brew);
+        }
+        if (Has(HordeWork.ChiefHall))
+        {
+            var (bx, bz) = At(Inner(), 46);
+            foreach (int dz in new[] { -5, 5 })
+            {
+                Block(w, bx - 1, g - 2, bz + dz - 1, 2, 40, 2, Mat.Wood);
+                Block(w, bx + 1, g + 22, bz + dz - 4, 1, 16, 8, Mat.Paint);
+            }
+        }
+        // further out
+        slot = 0;
+        double Outer() => gate + Math.PI / 6 + Math.PI / 3 * slot++;
+        if (Has(HordeWork.TrollDen)) { var (x, z) = At(Outer(), 98); Mound(x, z, 12, 12, Mat.Rock, true, Math.Atan2(cz - z, cx - x)); }
+        else slot++;
+        if (Has(HordeWork.GiantCave)) { var (x, z) = At(Outer(), 98); Mound(x, z, 14, 16, Mat.Rock, true, Math.Atan2(cz - z, cx - x)); }
+        else slot++;
+        if (Has(HordeWork.Yard))
+        {
+            var (x, z) = At(Outer(), 98);
+            Block(w, x - 8, g, z - 4, 16, 2, 2, Mat.Wood); Block(w, x - 8, g, z + 2, 16, 2, 2, Mat.Wood);
+            Block(w, x - 6, g + 2, z - 4, 2, 8, 2, Mat.Wood); Block(w, x + 4, g + 2, z - 4, 2, 8, 2, Mat.Wood);
+            Block(w, x - 6, g + 2, z + 2, 2, 8, 2, Mat.Wood); Block(w, x + 4, g + 2, z + 2, 2, 8, 2, Mat.Wood);
+            Block(w, x - 9, g + 6, z - 1, 18, 2, 2, Mat.Wood);
+        }
+        else slot++;
+        if (Has(HordeWork.WarCamp))
+        {
+            var (x, z) = At(Outer(), 98);
+            foreach (int dx in new[] { -8, 8 })
+                for (int y = 0; y < 9; y++)
+                    Block(w, x + dx - 6 + y * 6 / 9, g + y, z - 5, Math.Max(1, 12 - y * 12 / 9), 1, 10, Mat.Paint);
+        }
+        else slot++;
+        if (Has(HordeWork.Alchemist))
+        {
+            var (x, z) = At(Outer(), 98);
+            for (int zz = z - 4; zz <= z + 4; zz++)
+                for (int xx = x - 4; xx <= x + 4; xx++)
+                {
+                    double d = Brushes.Dist(xx - x + .5, zz - z + .5);
+                    if (d < 4.5 && d >= 3) for (int y = g; y < g + 4; y++) w.SetRaw(xx, y, zz, Mat.Rock);
+                    else if (d < 3) w.SetRaw(xx, g + 2, zz, Mat.Brew);
+                }
+        }
+        else slot++;
+        if (Has(HordeWork.Burrow))
+        {
+            var (x, z) = At(Outer(), 98);
+            foreach (var (dx, dz) in new[] { (-7, -4), (6, -3), (0, 6) }) Mound(x + dx, z + dz, 5, 4, Mat.Soil, true, Math.Atan2(-dz, -dx));
+        }
     }
 
     /// <summary>A round hut of logs under a cone of thatch, its door (a man's height, a metre wide) turned the way given.</summary>

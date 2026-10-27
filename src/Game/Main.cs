@@ -172,6 +172,9 @@ public partial class Main : Node3D
     int _entry = Hex.West;
     /// <summary>What stands in the middle of the valley (--holding=citadel|outpost|horde), and its sides as a save keeps them.</summary>
     Holding _holding = Holding.Citadel;
+    /// <summary>--horde-works=all: the horde's town of a valley made with --holding=horde shows every building of its (for pictures).</summary>
+    uint _hordeWorks;
+    static readonly int HordeWorks_Count = Enum.GetValues<HordeWork>().Length;
     HexEdge[] _edges;
     /// <summary>The treasure of a valley of the campaign (Troves.cs), and whether it was taken (then its chest is gone).</summary>
     TroveKind _trove;
@@ -205,6 +208,7 @@ public partial class Main : Node3D
             else if (a.StartsWith("--size=") && int.TryParse(a["--size=".Length..], out int sz) && sz >= 256) _size = sz / 32 * 32;
             else if (a.StartsWith("--entry=") && int.TryParse(a["--entry=".Length..], out int es) && es is >= 0 and < 6) _entry = es;
             else if (a.StartsWith("--holding=")) _holding = a["--holding=".Length..] switch { "outpost" => Holding.Outpost, "horde" => Holding.HordeTown, _ => Holding.Citadel };
+            else if (a == "--horde-works=all") _hordeWorks = (1u << HordeWorks_Count) - 1;
             else if (a.StartsWith("--look=") && int.TryParse(a["--look=".Length..], out int lk)) _look = lk;
             else if (a.StartsWith("--wave=") && double.TryParse(a["--wave=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double wa)) _waveAt = wa;
             else if (a.StartsWith("--day=") && double.TryParse(a["--day=".Length..], System.Globalization.CultureInfo.InvariantCulture, out double da)) _dayAt = da;
@@ -274,7 +278,7 @@ public partial class Main : Node3D
         Task.Run(() => Bodies.Warm(Kinds.All()));
         var sw = Stopwatch.StartNew();
         var mp = new MapParams { Seed = _seed, Kind = _valley, Classic = _classic, Hexagon = _hexagon, EntrySide = _entry, Holding = _holding, Edges = _edges,
-            Trove = _trove, TroveTaken = _troveTaken };
+            Trove = _trove, TroveTaken = _troveTaken, HordeWorks = _hordeWorks };
         // (--perf-without=details: the valley made without its small things, to weigh what they cost)
         mp.Details = Array.IndexOf(_perfWithout, "details") < 0;
         // the game's valley: a hexagon in a box a half again as wide as the bench's (192 m from point to point)
