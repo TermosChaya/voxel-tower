@@ -29,6 +29,14 @@ public static class Craft
         return b;
     }
 
+    /// <summary>A plate as a container's own box, with room inside it.</summary>
+    public static StyleBoxFlat PlateBox()
+    {
+        var b = Box(new Color(Fill, .95f), Line, 1, Round, true);
+        b.ContentMarginLeft = b.ContentMarginRight = 14; b.ContentMarginTop = b.ContentMarginBottom = 7;
+        return b;
+    }
+
     /// <summary>A plate: the panels, the clock, the dialogs, a menu.</summary>
     public static void Plate(CanvasItem c, Rect2 r, float alpha = 1)
     {

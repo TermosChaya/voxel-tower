@@ -76,6 +76,8 @@ public sealed class Flier
     public Unit Carrier;
     public List<Unit> Struck;
     public int Bounces;
+    /// <summary>In a god's hand, to be thrown (Sim.Deities.cs).</summary>
+    public Deity Bearer;
 }
 
 /// <summary>
@@ -469,6 +471,7 @@ public sealed partial class Sim
             if (f.Held && (f.Unit is { Dead: true } || f.Unit is { Inside: true })) f.Held = false;
             if (f.Held) { Hold(f, dt); continue; }
             if (f.Carrier != null) { Carried(f, dt); continue; }
+            if (f.Bearer != null) { InHand(f, dt); if (f.Bearer != null) continue; }
             if (f.Rolling) { if (Roll(f, dt)) Fliers.Remove(f); continue; }
             if (f.Toppling) { GoOver(f, dt); continue; }
             if (f.Tipping) { TipOver(f); continue; }
@@ -528,6 +531,7 @@ public sealed partial class Sim
         // alone: a block let down a hand's breadth breaks nothing
         if (blow > 60 && f.Voxels.Count > 150 && speed > 9 * VoxelWorld.PerMetre)
         {
+            bool ours = OurGodsDoing(f.Cause);
             int cr = Math.Min(6, (int)(f.R * .45f * MathF.Min(1.5f, blow / 120)));
             float s = MathF.Max(1, speed);
             int bx = ix + (int)(f.VX / s * f.R * .6f), by = iy + (int)(f.VY / s * f.R * .6f), bz = iz + (int)(f.VZ / s * f.R * .6f);
@@ -540,6 +544,8 @@ public sealed partial class Sim
                         if (dx * dx + dy * dy + dz * dz > cr * cr || !World.InBounds(x, y, z) || y < 4) continue;
                         byte m = World.Get(x, y, z);
                         if (!Breakable(m)) continue;
+                        // what the household's god sent flying does not break what the household built (Sim.Deities.cs)
+                        if (ours && Mat.IsPlayer[m]) continue;
                         // powder it falls on is not knocked aside: it goes up
                         if (m == Mat.Powder) { Fuse(x, y, z, .2, "порох"); continue; }
                         chips.Add((x, y, z));
@@ -556,7 +562,7 @@ public sealed partial class Sim
                 else foreach (var (x, y, z) in chip) { World.Set(x, y, z, Mat.Air); if (Orders.At(x, y, z) != 0) Orders.Clear(x, y, z); }
             }
             // and what is built about where it struck is jarred
-            Jar(bx, by, bz, cr + 4, Math.Min(.8f, blow / 300));
+            if (!ours) Jar(bx, by, bz, cr + 4, Math.Min(.8f, blow / 300));
         }
         Landed?.Invoke(f.X, f.Y, f.Z, f.Voxels.Count, speed);
         for (int k = 0; k <= f.R + 1 && iy - k > 0; k++)

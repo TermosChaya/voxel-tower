@@ -118,6 +118,9 @@ public sealed partial class Sim
         }
         var reap = G("reap", "Жатва", 4, 3, .5f, "Каждый налётчик, убитый заклинанием, возвращает 2 вмешательства.", SpellKey(SpellKind.Plague), SpellKey(SpellKind.Raise));
         reap.Branch = "Круг смерти"; reap.Coin = Coin.Revelations;
+        // the waking of the god: at the heart of the page, on the greatest of every circle and the strength of faith
+        var wake = S(SpellKind.Awaken, Heart, .5f, SpellKind.Quake, SpellKind.Meteor, SpellKind.Whirlwind);
+        wake.Branch = ""; wake.Needs = new[] { SpellKey(SpellKind.Quake), SpellKey(SpellKind.Meteor), "reap", SpellKey(SpellKind.Whirlwind), "might" };
         return new[]
         {
             S(SpellKind.Hand, 0, .5f), S(SpellKind.Rift, 1, 0, SpellKind.Hand), S(SpellKind.Mire, 1, 1, SpellKind.Hand),
@@ -134,8 +137,12 @@ public sealed partial class Sim
             G("litany", "Литании", 60, 2, 0, "Заклинания на 20 % дешевле.", "vessel"),
             G("vigil", "Бдение", 60, 2, 1, "Заклинания перезаряжаются на 33 % быстрее.", "altar"),
             G("might", "Сила веры", 90, 3, .5f, "Заклинания на 33 % сильнее и действуют на 33 % дольше.", "litany", "vigil"),
+            wake,
         };
     }
+
+    /// <summary>The tier of the one lore at the heart of its page, past the four rings: the waking of the god.</summary>
+    public const int Heart = 4;
 
     /// <summary>The lore key of a spell's learning.</summary>
     public static string SpellKey(SpellKind k) => "spell." + k;

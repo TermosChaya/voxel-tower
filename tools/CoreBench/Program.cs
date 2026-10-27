@@ -3918,8 +3918,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--lore")
         if (l.Page == 0) skills++; else if (l.Page == 1) troops++; else rites++;
         if (l.Page < 2 && (l.Tier == 0) != (l.Needs.Length == 0)) chained = false;
     }
-    Check("the town's page has nine buildings and the troops' nine, each branch's second resting on its first; the intervention's thirty",
-        skills == 9 && troops == 9 && rites == 30 && chained && MathF.Abs(reachK2 / reachK0 - 1.15f * 1.15f) < .01f,
+    Check("the town's page has nine buildings and the troops' nine, each branch's second resting on its first; the intervention's thirty and the waking of the god at its heart",
+        skills == 9 && troops == 9 && rites == 31 && chained && MathF.Abs(reachK2 / reachK0 - 1.15f * 1.15f) < .01f,
         $"{skills} of the town, {troops} of the troops, {rites} of the intervention; chained {chained}; reach ×{reachK2 / reachK0:0.000}");
     // every page's branches are its own, each branch a tier 0 to a tier 3, every root on its own page
     bool shaped = true;
@@ -3932,7 +3932,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--lore")
         }
     foreach (var l in Sim.Lores) foreach (string nd in l.Needs) if (Sim.LoreOf(nd) is not { } r || r.Page != l.Page) shaped = false;
     Check("every branch of the town's and the troops' pages begins with a building, of the intervention's is six lores from a first to a last, every lore resting on its own page; the circles are the spells' own",
-        shaped && Sim.Circles[0] == Sim.PageBranches[2][0] && Sim.Circles[3] == Sim.PageBranches[2][3] && Sim.Spells.Length == 23,
+        shaped && Sim.Circles[0] == Sim.PageBranches[2][0] && Sim.Circles[3] == Sim.PageBranches[2][3] && Sim.Spells.Length == 24,
         $"shaped {shaped}, {Sim.Spells.Length} spells");
 
     // mail takes a fifth off a blow to a soldier of ours; tracks and barrows have workers walk a fifth faster
@@ -6289,6 +6289,9 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--holdpoints") HoldPoi
 // the map's content: the big map's lairs, the treasures and their keepers, scouts, a shrine's trial (TrovesBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troves") TrovesBench.Run(Check);
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bestiary") BestiaryBench.Run(Check);
+// the gods: the waking learnt and cast, the Colossus out of the ground, set loose on the horde, ridden, against the
+// horde's god, back under (Gods.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--gods") GodsBench.Run(Check);
 // the map of valleys as a land: made in good time, every kind of cell its kind, the ways running on, walked from the
 // castle everywhere, the same each time, a cell put on again as its holder changed (LandBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--atlas") LandBench.Run(Check);

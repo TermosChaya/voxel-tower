@@ -620,9 +620,9 @@ public partial class Main
         KeyPress(Key.Escape);
         foreach (var g in flock) { g.Dead = true; g.DiedAt = -999; }
 
-        // the spells in their four circles, twenty-three of them, each with its plaque and its medallion on the tree
+        // the spells in their four circles, twenty-four of them with the waking of the god, each with its plaque and its medallion on the tree
         bool plaques = Array.TrueForAll(Sim.Spells, sp => Hud.Mysteries.SpellPlaque(sp.Kind) != null && Hud.Lore.PlaqueOf(Sim.SpellKey(sp.Kind)) != null);
-        Check("«Таинства» hold the spells in four circles, twenty-three of them, each with its plaque and its medallion on the tree", Sim.Circles.Length == 4 && Sim.Spells.Length == 23 && plaques,
+        Check("«Таинства» hold the spells in four circles, twenty-four of them, each with its plaque and its medallion on the tree", Sim.Circles.Length == 4 && Sim.Spells.Length == 24 && plaques,
             $"{Sim.Circles.Length} circles, {Sim.Spells.Length} spells, plaques for all {plaques}");
         Hud.ClosePanel();
 
@@ -1063,6 +1063,7 @@ public partial class Main
         await SelfTestGiants(Check);
         await SelfTestTrauma(Check);
         await SelfTestWand(Check);
+        await SelfTestGods(Check);
         await SelfTestHouses(Check);
         await SelfTestScaffold(Check);
         await SelfTestCarry(Check);

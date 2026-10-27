@@ -23,7 +23,7 @@ public sealed partial class Sim
     public const string MangonelCause = "камень камнемёта", TrebuchetCause = "камень требушета", SpearCause = "копьё баллисты";
 
     /// <summary>Whether a flying stone is one of our engines'.</summary>
-    static bool OurStone(string cause) => cause is MangonelCause or TrebuchetCause;
+    static bool OurStone(string cause) => cause is MangonelCause or TrebuchetCause or ColossusStoneCause;
 
     /// <summary>Stones, kegs and bolts our engines have let fly since the start; raiders their bolts went through.</summary>
     public int EngineShots, SpearsThrough;

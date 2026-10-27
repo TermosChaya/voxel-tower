@@ -66,11 +66,15 @@ public partial class Main : Node3D
     public TownPlates Plates { get; private set; }
     public ShoutTags Shouts { get; private set; }
     public UnitView Units { get; private set; }
+    /// <summary>The gods, when one is called up (DeityView.cs).</summary>
+    public DeityView GodView { get; private set; }
     public OrdersView Marks { get; private set; }
     public ZoneView Areas { get; private set; }
     public Commander Command { get; private set; }
     /// <summary>First person: the player in one of ours.</summary>
     public FirstPerson FP { get; private set; }
+    /// <summary>The player in the household's god (GodPerson.cs).</summary>
+    public GodPerson Gods { get; private set; }
     /// <summary>The rings where the player sent its people (OrderMarks.cs).</summary>
     public OrderMarks Rings { get; private set; }
     /// <summary>The architect's plan as a ghost while he is chosen (ArchitectView.cs).</summary>
@@ -367,6 +371,9 @@ public partial class Main : Node3D
         Units = new UnitView();
         AddChild(Units);
         Units.Init(this);
+        GodView = new DeityView();
+        AddChild(GodView);
+        GodView.Init(this);
         var trails = new TrailView(); Trails = trails;
         AddChild(trails);
         trails.Init(this);
@@ -450,6 +457,8 @@ public partial class Main : Node3D
         Input.MouseMode = Input.MouseModeEnum.Visible;
         FP = new FirstPerson();
         AddChild(FP);
+        Gods = new GodPerson();
+        AddChild(Gods);
         Cine = new CineCam();
         AddChild(Cine);
         Cine.Init(this);
@@ -460,6 +469,7 @@ public partial class Main : Node3D
         if (!_selfTest && !_demo) LoadBlueprints();
         Hud.Init(this);
         FP.Init(this);
+        Gods.Init(this);
 
         Sim.Said += (text, kind, x, z) => Hud.Log(text, (Hud.Kind)Math.Clamp(kind, 0, 3), x, z);
         // an errand done rings the small bell

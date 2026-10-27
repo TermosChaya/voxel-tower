@@ -120,8 +120,9 @@ public partial class LorePanel : VBoxContainer
     }
 
     static Vector2 At(float ry, float a) => C + new Vector2(MathF.Cos(a) * ry * Wide, MathF.Sin(a) * ry);
-    static Vector2 Spot(Lore l) => At(RY[Math.Clamp(l.Tier, 0, 3)], AngleOf(l));
-    static Color HueOf(Lore l) => Hues[l.Page][Math.Clamp(BranchIndex(l), 0, Hues[l.Page].Length - 1)];
+    /// <summary>Where a lore stands: on its ring, or the one at the heart of its page (the waking of the god) at the heart.</summary>
+    static Vector2 Spot(Lore l) => l.Tier >= Sim.Heart ? C : At(RY[Math.Clamp(l.Tier, 0, 3)], AngleOf(l));
+    static Color HueOf(Lore l) => l.Tier >= Sim.Heart ? new Color("e8b04a") : Hues[l.Page][Math.Clamp(BranchIndex(l), 0, Hues[l.Page].Length - 1)];
 
     /// <summary>How a lore stands now: 0 learnt, 1 to be learnt now, 2 open but wanting what it costs, 3 shut (its roots not learnt).</summary>
     int StateOf(Lore l)
@@ -351,6 +352,8 @@ public partial class LorePanel : VBoxContainer
             // the lines: from what a lore rests on to it
             foreach (var l in Sim.LoresOn(page))
             {
+                // (the heart rests on the ends of every branch: its rays are the branches' own, from the heart out)
+                if (l.Tier >= Sim.Heart) continue;
                 var to = Spot(l);
                 foreach (string need in l.Needs)
                 {
@@ -397,6 +400,7 @@ public partial class LorePanel : VBoxContainer
         /// <summary>The roots of a lore: its lines back to the first of its branch, in ember.</summary>
         void Roots(Lore l, Sim sim)
         {
+            if (l.Tier >= Sim.Heart) return;
             foreach (string need in l.Needs)
             {
                 var from = Sim.LoreOf(need);
@@ -414,11 +418,13 @@ public partial class LorePanel : VBoxContainer
             DrawCircle(C, Heart, Ornament.IronDark, true, -1, true);
             DrawCircle(C, Heart - 3, Ornament.IronMid, true, -1, true);
             DrawArc(C, Heart - 1, 0, MathF.Tau, 56, Ornament.Bronze, 2.2f, true);
-            Icons.PageMark(page)(this, new Rect2(C - new Vector2(10, 23), new Vector2(20, 20)), Ornament.Fade(Ornament.Bronze, .9f));
             string big = page == 2 ? $"{sim.Favour:0}" : $"{sim.Knowledge:0}";
-            Ornament.Lettering(this, Ornament.SerifBold, C + new Vector2(-Heart, 10), big, 20, Ornament.Parchment, HorizontalAlignment.Center, 2 * Heart);
             string small = page == 2 ? $"откр. {sim.Revelations}" : "знаний";
-            Ornament.Lettering(this, Ornament.Caps, C + new Vector2(-Heart, 21), small.ToUpperInvariant(), 7, Ornament.Aged, HorizontalAlignment.Center, 2 * Heart);
+            // the intervention's heart holds the waking of the god: what there is to spend is written under it
+            var under = page == 2 ? new Vector2(0, Heart + 14) : Vector2.Zero;
+            if (page != 2) Icons.PageMark(page)(this, new Rect2(C - new Vector2(10, 23), new Vector2(20, 20)), Ornament.Fade(Ornament.Bronze, .9f));
+            Ornament.Lettering(this, Ornament.SerifBold, C + under + new Vector2(-Heart, 10), big, 20, Ornament.Parchment, HorizontalAlignment.Center, 2 * Heart);
+            Ornament.Lettering(this, Ornament.Caps, C + under + new Vector2(-Heart, 21), small.ToUpperInvariant(), 7, Ornament.Aged, HorizontalAlignment.Center, 2 * Heart);
         }
     }
 }

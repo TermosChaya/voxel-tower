@@ -447,6 +447,8 @@ public partial class Commander : Node
         Unit one = null;
         int n = 0;
         foreach (var u in _m.Selected) if (!u.Dead) { one = u; n++; }
+        // with none chosen and the household's god up, into the god
+        if (n == 0 && _m.Sim.OurGod is { } god) { if (!_m.Gods.Enter(god)) _m.Hud.Float("Колосс ещё выходит из-под земли", Ornament.Blood); return; }
         if (n != 1) { _m.Hud.Float("выберите одного из своих", Ornament.Blood); return; }
         if (!_m.FP.Enter(one)) _m.Hud.Float("в него сейчас не войти", Ornament.Blood);
     }
@@ -500,6 +502,16 @@ public partial class Commander : Node
         _m.Hud.Float(!ok ? "здесь некуда встать" : heavy ? "тяжёлая ватага" : "ватага", ok ? Ornament.EmberGlow : Ornament.Blood);
     }
 
+    /// <summary>The sandbox: a god called up out of the ground under the pointer, for as long as gods stay.</summary>
+    void SummonGod(bool horde)
+    {
+        var (o, d) = _m.Rig.Ray(GetViewport().GetMousePosition());
+        var w = _m.World;
+        if (!Raycast.Cast(w, (o.X - w.OriginX) / VoxelWorld.Vox, o.Y / VoxelWorld.Vox, (o.Z - w.OriginZ) / VoxelWorld.Vox, d.X, d.Y, d.Z, out var hit, skipVeg: true)) return;
+        string no = _m.Sim.Awaken(horde ? DeityKind.Devourer : DeityKind.Colossus, hit.X + .5f, hit.Z + .5f);
+        if (no != null) _m.Hud.Float(no, Ornament.Blood);
+    }
+
     void SummonArmy()
     {
         var (o, d) = _m.Rig.Ray(GetViewport().GetMousePosition());
@@ -543,6 +555,8 @@ public partial class Commander : Node
         }
         if ((_m.Hud.Board?.IsOpen == true || _m.AtlasOpen) && Bindings.Find(k.PhysicalKeycode, Bindings.Scope.Field) is not (Act.Pause or Act.Speed or Act.Help)) return;
         // the sandbox: a band of the horde called up where the pointer is, a heavy one with Shift
+        // and with Alt a god where the pointer is: ours, with Shift the horde's
+        if (_m.Sim.Waves.OnCall && k.PhysicalKeycode == Bindings.KeyOf(Act.Summon) && k.AltPressed) { SummonGod(k.ShiftPressed); GetViewport().SetInputAsHandled(); return; }
         if (_m.Sim.Waves.OnCall && Bindings.Is(k, Act.Summon) && !k.CtrlPressed && !k.MetaPressed) { Summon(k.ShiftPressed); GetViewport().SetInputAsHandled(); return; }
         // and with Ctrl an army with a warlord at its head, by the side of the valley nearest the pointer
         if (_m.Sim.Waves.OnCall && k.PhysicalKeycode == Bindings.KeyOf(Act.Summon) && (k.CtrlPressed || k.MetaPressed)) { SummonArmy(); GetViewport().SetInputAsHandled(); return; }

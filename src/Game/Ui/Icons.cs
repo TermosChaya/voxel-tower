@@ -77,7 +77,7 @@ public static class Icons
         ["spell.Fall"] = "falling-rocks", ["spell.Quake"] = "quake-stomp", ["spell.FireRain"] = "fire-wave",
         ["spell.Thunder"] = "lightning-branches", ["spell.Weather"] = "lightning-storm", ["spell.BlackWind"] = "wind-slap",
         ["spell.BloodMoon"] = "evil-moon", ["spell.Meteor"] = "meteor-impact", ["spell.Dread"] = "terror", ["spell.DeadFog"] = "poison-cloud",
-        ["spell.Chains"] = "manacles", ["spell.Plague"] = "rat", ["spell.Raise"] = "raise-skeleton", ["reap"] = "scythe",
+        ["spell.Chains"] = "manacles", ["spell.Plague"] = "rat", ["spell.Raise"] = "raise-skeleton", ["reap"] = "scythe", ["spell.Awaken"] = "giant",
         ["spell.Telekinesis"] = "magic-palm", ["spell.Recall"] = "return-arrow", ["spell.Eye"] = "all-seeing-eye",
         ["spell.Explosion"] = "mine-explosion", ["spell.Oath"] = "bloody-sword", ["spell.Whirlwind"] = "whirlwind",
         ["rosary"] = "prayer-beads", ["vessel"] = "jeweled-chalice", ["altar"] = "sword-altar", ["litany"] = "open-book",

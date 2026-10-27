@@ -75,6 +75,8 @@ public sealed partial class Sim
     public float Strike(Unit u, float kg, float speed, float dx, float dy, float dz, float at, string cause, float blow = float.NaN, Unit by = null)
     {
         if (u.Dead) return 0;
+        // what the household's god sends flying comes down on ours harmless (Sim.Deities.cs)
+        if (u.Team == Team.Player && OurGodsDoing(cause)) return 0;
         float e = .5f * kg * speed * speed;
         float len = MathF.Sqrt(dx * dx + dy * dy + dz * dz);
         if (len > 1e-4f) { dx /= len; dy /= len; dz /= len; } else { dx = 0; dy = -1; dz = 0; }
