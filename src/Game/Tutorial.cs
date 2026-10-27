@@ -12,7 +12,9 @@ namespace VoxelTower.Game;
 /// three is let in for the lesson), the muster, the lore and the old powers, the eyes of one of ours, the menu and
 /// the controls. Each step says what to do and is done when the player has done it; a bronze frame shows where on
 /// the frame, a beacon where in the valley. The horde does not come by itself while it lasts: the clock stands at
-/// the forenoon. At the end the player starts a siege of his own or stays in this valley, its clock let go.
+/// the forenoon. At the end the player starts a siege of his own, stays in this valley, or goes on to the campaign's
+/// part (Tutorial.Campaign.cs): a small campaign of its own on the big map, its step kept while the scene begins again
+/// for each valley gone into, the cell it is about framed on the map.
 /// </summary>
 public partial class Tutorial : Node
 {
@@ -27,6 +29,8 @@ public partial class Tutorial : Node
         public Func<(int x, int z)?> Mark;
         /// <summary>A line of how far it has got, under the task.</summary>
         public Func<string> Status;
+        /// <summary>The hex of the big map the step is about, framed on it while the map is open (the campaign's part).</summary>
+        public Func<(int col, int row)?> Hex;
     }
 
     Main _m;
@@ -34,6 +38,10 @@ public partial class Tutorial : Node
     int _at = -1;
     double _clock, _doneAt = -1;
     bool _over;
+    /// <summary>The campaign's part (Tutorial.Campaign.cs), not the valley's.</summary>
+    bool _campaign;
+    /// <summary>The step the campaign's part is at, kept while the scene begins again for each valley; −1 when it is not on.</summary>
+    public static int CampaignAt = -1;
     Card _card;
     Pointer _pointer;
     Beacon _beacon;
@@ -47,11 +55,15 @@ public partial class Tutorial : Node
     public string Title => _at >= 0 ? _steps[_at].Title : "";
     public int Count => _steps.Count;
 
-    public void Init(Main m, int from = 0)
+    public bool Campaign => _campaign;
+
+    public void Init(Main m, int from = 0, bool campaign = false)
     {
         _m = m;
-        Build();
-        _m.Hud.Conceal();
+        _campaign = campaign;
+        if (campaign) BuildCampaign(); else Build();
+        // (the campaign's part has the whole frame out: the valley's part let it out piece by piece)
+        if (!campaign) _m.Hud.Conceal();
         _card = new Card(this);
         _m.Hud.Mount(_card);
         _pointer = new Pointer();
@@ -59,7 +71,7 @@ public partial class Tutorial : Node
         _beacon = new Beacon();
         _m.AddChild(_beacon);
         // the horde's ways are shown when the lesson comes to the horde
-        _m.Sim.WantTrails = false;
+        if (!campaign) _m.Sim.WantTrails = false;
         Go(Math.Clamp(from, 0, _steps.Count - 1));
     }
 
@@ -69,6 +81,7 @@ public partial class Tutorial : Node
     {
         _at = i;
         _doneAt = -1;
+        if (_campaign) CampaignAt = i;
         var s = _steps[i];
         // whatever the steps up to here let out is out, even when the player skipped them
         for (int k = 0; k <= i; k++) LetOut(k);
@@ -107,8 +120,17 @@ public partial class Tutorial : Node
         _over = true;
         _m.Hud.RevealAll();
         _m.Sim.WantTrails = true;
-        if (!_m.Sim.Raids.Active) _m.Sim.Waves.Countdown = Waves.Prep;
-        _m.Hud.Log("Обучение окончено. Орда придёт через 10 минут.", Hud.Kind.Warn);
+        if (_campaign)
+        {
+            CampaignAt = -1;
+            if (_m.WorldMap != null) _m.WorldMap.Chosen = (-1, -1);
+            _m.Hud.Log("Обучение кампании окончено. Кампания идёт дальше.", Hud.Kind.Ok);
+        }
+        else
+        {
+            if (!_m.Sim.Raids.Active) _m.Sim.Waves.Countdown = Waves.Prep;
+            _m.Hud.Log("Обучение окончено. Орда придёт через 10 минут.", Hud.Kind.Warn);
+        }
         _card.QueueFree();
         _pointer.QueueFree();
         _beacon.QueueFree();
@@ -121,8 +143,8 @@ public partial class Tutorial : Node
         if (_over || _at < 0) return;
         _clock += delta;
         var sim = _m.Sim;
-        // the horde keeps away while the lesson is not about it
-        if (!sim.Raids.Active) { sim.Waves.Countdown = HoldAt; sim.Waves.DawnLeft = Math.Min(sim.Waves.DawnLeft, 2); }
+        // the horde keeps away while the lesson is not about it (in the campaign the map's own peace keeps it away)
+        if (!_campaign && !sim.Raids.Active) { sim.Waves.Countdown = HoldAt; sim.Waves.DawnLeft = Math.Min(sim.Waves.DawnLeft, 2); }
         var s = _steps[_at];
         if (_doneAt < 0 && s.Done != null && s.Done())
         {
@@ -134,8 +156,10 @@ public partial class Tutorial : Node
         _card.Status(s.Status?.Invoke());
         _pointer.Target = s.Point != null && !_m.Hud.MenuOpen ? _m.Hud.Target(s.Point) : null;
         var mark = s.Mark?.Invoke();
-        _beacon.Visible = mark != null && !_m.FP.On;
+        _beacon.Visible = mark != null && !_m.FP.On && !_m.AtlasOpen;
         if (mark is { } p) _beacon.Place(_m.World, p.x, p.z, _clock);
+        // on the big map, the hex the step is about framed
+        if (_m.WorldMap is { } map) map.Chosen = _m.AtlasOpen && s.Hex?.Invoke() is { } h ? (h.col, h.row) : (-1, -1);
     }
 
     // ---------------------------------------------------------------- the valley, for the steps
@@ -241,8 +265,7 @@ public partial class Tutorial : Node
         Vector2 from = default;
         float yaw0 = 0, zoomLo = 1, zoomHi = 1;
         int n0 = 0, h0 = 0, clicks0 = 0;
-        bool flag = false;
-        int width0 = 0, height0 = 0;
+        bool flag = false, moved = false, turned = false, zoomed = false;
         int learnt0 = 0, house0 = 0;
         Unit prey = null;
         double fought = 0;
@@ -252,61 +275,38 @@ public partial class Tutorial : Node
         Add(new Step
         {
             Chapter = view, Title = "Voxel Tower",
-            Text = "Ваша цитадель стоит на плато. Каждые 10 минут с запада приходит орда, всего 12 волн. Между " +
-                "волнами вы размечаете, что строить и копать, а дружина это делает.\n\nВ обучении орда не придёт, " +
-                "пока вы не дойдёте до боя. Шаг засчитывается, когда задание выполнено. «Пропустить» переходит к " +
-                "следующему шагу.",
+            Text = "Ваша цитадель стоит на плато. Орда приходит с запада: в осаде 12 волн, по одной раз в 10 минут. Вы " +
+                "размечаете, что строить и копать, а ваши люди это делают.\n\nВ обучении орда не придёт, пока вы не " +
+                "дойдёте до боя. Шаг засчитывается, когда задание выполнено. «Пропустить» переходит к следующему.",
         });
         Add(new Step
         {
-            Chapter = view, Title = "Сдвинуть вид",
-            Text = "{CamForward}{CamLeft}{CamBack}{CamRight} или стрелки двигают вид. Ещё можно тянуть землю правой " +
-                "кнопкой мыши.",
-            Task = "Сдвиньте вид в сторону",
-            Enter = () => from = Aim(),
-            Done = () => (Aim() - from).Length() > 3,
-        });
-        Add(new Step
-        {
-            Chapter = view, Title = "Повернуть",
-            Text = "{CamTurnLeft} и {CamTurnRight} поворачивают вид. Средней кнопкой мыши (или Alt и левой) вид можно " +
-                "повернуть и наклонить.",
-            Task = "Поверните вид",
-            Enter = () => yaw0 = m.Rig.Aim.yaw,
-            Done = () => MathF.Abs(m.Rig.Aim.yaw - yaw0) > .8f,
-        });
-        Add(new Step
-        {
-            Chapter = view, Title = "Ближе и дальше",
-            Text = "Колесо мыши приближает и отдаляет вид. На тачпаде для этого щипок или два пальца вверх и вниз.",
-            Task = "Приблизьте вид, потом отдалите",
-            Enter = () => { zoomLo = zoomHi = m.Rig.Aim.zoom; flag = false; },
+            Chapter = view, Title = "Камера",
+            Text = "{CamForward}{CamLeft}{CamBack}{CamRight} или стрелки двигают вид, правая кнопка мыши тоже. " +
+                "{CamTurnLeft} и {CamTurnRight} поворачивают его. Колесо мыши приближает и отдаляет.",
+            Task = "Сдвиньте, поверните и приблизьте вид",
+            Enter = () => { from = Aim(); yaw0 = m.Rig.Aim.yaw; zoomLo = zoomHi = m.Rig.Aim.zoom; moved = turned = zoomed = false; },
             Done = () =>
             {
                 float z = m.Rig.Aim.zoom;
                 zoomHi = Math.Max(zoomHi, z); zoomLo = Math.Min(zoomLo, z);
-                return zoomHi / zoomLo > 2.2f;
+                moved |= (Aim() - from).Length() > 3;
+                turned |= MathF.Abs(m.Rig.Aim.yaw - yaw0) > .8f;
+                zoomed |= zoomHi / zoomLo > 2.2f;
+                return moved && turned && zoomed;
             },
+            Status = () => $"{(moved ? "◆" : "◇")} сдвиг  {(turned ? "◆" : "◇")} поворот  {(zoomed ? "◆" : "◇")} приближение",
         });
         Opens(Hud.Part.Map);
         Add(new Step
         {
             Chapter = view, Title = "Вид сверху",
-            Text = "{CamTop} или кнопка с картой у миникарты показывает долину сверху. Так удобнее размечать стройку " +
-                "по сетке.",
-            Task = "Посмотрите сверху",
+            Text = "{CamTop} или кнопка с картой у миникарты показывает долину сверху: так удобнее размечать по сетке. " +
+                "Ещё одно нажатие возвращает обычный вид. {CamHome} или кнопка с башней возвращает вид к крепости.",
+            Task = "Посмотрите сверху, потом верните вид к крепости",
             Point = "map:top",
-            Done = () => m.Rig.TopDown,
-        });
-        Add(new Step
-        {
-            Chapter = view, Title = "Вернуть вид",
-            Text = "Ещё одно нажатие {CamTop} возвращает обычный вид. {CamHome} или кнопка с башней возвращает вид к " +
-                "крепости.",
-            Task = "Верните вид к крепости",
-            Point = "map:home",
-            Enter = () => h0 = m.Rig.Homes,
-            Done = () => !m.Rig.TopDown && m.Rig.Homes > h0,
+            Enter = () => { flag = false; h0 = m.Rig.Homes; },
+            Done = () => { if (m.Rig.TopDown) flag = true; return flag && !m.Rig.TopDown && m.Rig.Homes > h0; },
         });
         Add(new Step
         {
@@ -320,63 +320,32 @@ public partial class Tutorial : Node
         });
 
         // ---- the household
-        const string folk = "Дружина";
+        const string folk = "Люди";
         Opens(Hud.Part.Faces);
-        Add(new Step
-        {
-            Chapter = folk, Title = "Лица дружины",
-            Text = "Под верхней панелью портреты вашей дружины: 4 рабочих, лучник и мечник. Щелчок по портрету " +
-                "выбирает человека, второй щелчок показывает его на поле.",
-            Task = "Выберите рабочего",
-            Point = "faces",
-            Enter = () => m.Rig.Home(),
-            Done = () => Chosen(Kinds.Worker),
-        });
         Opens(Hud.Part.Console);
         Add(new Step
         {
-            Chapter = folk, Title = "Послать",
-            Text = "В нижней панели видно, кто выбран и чем занят. {Rmb} по земле посылает выбранных туда. " +
-                "Рабочий дойдёт и сам вернётся к работе, а посланный на делянку будет работать на ней. Солдат " +
-                "займёт это место как пост.",
-            Task = "Пошлите выбранного {RmbBy}",
-            Point = "console",
-            Enter = () => n0 = m.Command.Sent,
+            Chapter = folk, Title = "Выбрать и послать",
+            Text = "Под верхней панелью портреты ваших людей: 4 рабочих, лучник и мечник. Щелчок по портрету выбирает " +
+                "человека. {Rmb} по земле посылает выбранных туда. Рабочий дойдёт и вернётся к работе, солдат займёт " +
+                "это место как пост.",
+            Task = "Выберите рабочего и пошлите его {RmbBy}",
+            Point = "faces",
+            Enter = () => { n0 = m.Command.Sent; m.Rig.Home(); },
             Done = () => m.Command.Sent > n0,
         });
         Add(new Step
         {
-            Chapter = folk, Title = "Рамкой",
-            Text = "Зажмите левую кнопку и обведите рамкой нескольких человек. Shift и щелчок добавляет или убирает " +
-                "одного.",
-            Task = "Выберите троих или больше",
-            Done = () => m.Selected.Count >= 3,
-        });
-        Add(new Step
-        {
-            Chapter = folk, Title = "Отряд",
-            Text = "Ctrl+1 запоминает выбранных как отряд I, Shift+1 выбирает их снова, двойное нажатие показывает " +
-                "их. Отрядов 5: Ctrl+1…5.",
-            Task = "Запомните выбранных: Ctrl+1",
-            Done = () => m.Command.Squads[0].Count > 0,
-        });
-        Add(new Step
-        {
-            Chapter = folk, Title = "Снять выбор",
-            Text = "Esc снимает выбор. Если ничего не выбрано, Esc открывает меню. Потом нажмите Shift+1, и отряд " +
-                "снова будет выбран.",
-            Task = "Esc, затем Shift+1",
-            Enter = () => flag = false,
-            Done = () =>
-            {
-                if (m.Selected.Count == 0) flag = true;
-                return flag && m.Selected.Count > 0 && m.Selected.SetEquals(m.Command.Squads[0]);
-            },
+            Chapter = folk, Title = "Отряды",
+            Text = "Зажмите левую кнопку и обведите людей рамкой. Shift и щелчок добавляет или убирает одного. Ctrl+1 " +
+                "запоминает выбранных как отряд I, Shift+1 выбирает их снова. Отрядов 5. Esc снимает выбор.",
+            Task = "Выберите троих и запомните их: Ctrl+1",
+            Done = () => m.Command.Squads[0].Count >= 3,
         });
         Add(new Step
         {
             Chapter = folk, Title = "Охота",
-            Text = "За каждого убитого зверя дают золото, а на золото набирают войско. Выберите лучника и щёлкните " +
+            Text = "За каждого убитого зверя дают золото, а на золото нанимают войско. Выберите лучника и щёлкните " +
                 "{RmbBy} по зверю.",
             Task = "Пошлите лучника на охоту",
             Point = "faces",
@@ -388,21 +357,14 @@ public partial class Tutorial : Node
         // ---- the stores
         const string stores = "Добыча";
         Opens(Hud.Part.Stores);
-        Add(new Step
-        {
-            Chapter = stores, Title = "Запасы",
-            Text = "Вверху показаны запасы: золото, камень, брёвна, земля (в м³), вмешательство и места в войске. " +
-                "Стройка тратит запасы, рабочие их пополняют.",
-            Point = "stores",
-        });
         _pickAt = _steps.Count;
         Opens(Tool.Line);
         Add(new Step
         {
             Chapter = stores, Title = "Кирка",
-            Text = "Кисти не строят сами, они только размечают работу. Кирка ({Pick} или ячейка с киркой справа " +
-                "внизу) отмечает, что срубить или выкопать. Возьмите её и щёлкните по дереву у маяка. Рабочие " +
-                "придут и срубят его.",
+            Text = "Вверху запасы: золото, камень, брёвна, земля, металл, вмешательство и места в войске. Кисти не " +
+                "строят сами, они размечают работу. Кирка ({Pick}) отмечает, что срубить или выкопать. Возьмите её и " +
+                "щёлкните по дереву у маяка.",
             Task = "Кирка, затем щелчок по дереву",
             Point = "pick",
             Mark = TreeNear,
@@ -415,42 +377,22 @@ public partial class Tutorial : Node
         {
             Chapter = stores, Title = "Делянка",
             Text = "Каждое дерево размечать не нужно. Возьмите делянку ({ToolGather}), выберите брёвна ({MatWood}) и " +
-                "обведите лес рамкой. Свободные рабочие будут понемногу рубить там лес, но стены и рвы делают в " +
-                "первую очередь.",
+                "обведите лес рамкой. Свободные рабочие будут рубить там лес, когда нет работы важнее.",
             Task = "Делянка на лес: {ToolGather}, {MatWood}, рамка",
             Point = "tool:Gather",
             Mark = TreeNear,
-            Enter = () => { n0 = m.Sim.Zones.Count; },
             Done = () => m.Sim.Zones.Exists(z => z.Kind == Stockpile.Wood),
         });
         Add(new Step
         {
-            Chapter = stores, Title = "Каменоломня",
-            Text = "Камень добывают так же: делянка с камнем ({MatStone}) на скале, валунах или руинах. Глубину " +
-                "задают в нижней панели. Руины есть у маяка.",
-            Task = "Делянка на камень: {ToolGather}, {MatStone}, рамка",
+            Chapter = stores, Title = "Камень и руда",
+            Text = "Делянка с камнем ({MatStone}) на скале или руинах даёт камень. Делянка с металлом ({MatMetal}) на " +
+                "ржавой скале становится рудником: рабочие роют до руды. Маяк стоит у руин. Esc или {Rmb} убирает кисть.",
+            Task = "Делянка на камень или руду",
             Point = "mat:" + Mat.Stone,
-            Mark = Ruin,
-            Enter = () => { if (Ruin() is { } r) Look(r.x, r.z, 1.6f); },
-            Done = () => m.Sim.Zones.Exists(z => z.Kind == Stockpile.Stone),
-        });
-        Add(new Step
-        {
-            Chapter = stores, Title = "Железная руда",
-            Text = "Железная руда выходит наружу ржавыми скалами. Делянка с металлом ({MatMetal}) на такой скале станет " +
-                "рудником: рабочие роют до руды, и металл идёт в запасы. Из него кладут самые прочные стены и железные ворота.",
-            Task = "Делянка на руду: {ToolGather}, {MatMetal}, рамка",
-            Point = "mat:" + Mat.Plate,
-            Mark = Outcrop,
-            Enter = () => { if (Outcrop() is { } o) Look(o.x, o.z, 1.6f); },
-            Done = () => m.Sim.Zones.Exists(z => z.Kind == Stockpile.Metal),
-        });
-        Add(new Step
-        {
-            Chapter = stores, Title = "Убрать кисть",
-            Text = "Esc или {Rmb} убирает кисть. Без кисти {Lmb} снова выбирает людей.",
-            Task = "Уберите кисть",
-            Done = () => m.Tools.Tool == Tool.None,
+            Mark = () => Ruin() ?? Outcrop(),
+            Enter = () => { if ((Ruin() ?? Outcrop()) is { } r) Look(r.x, r.z, 1.6f); },
+            Done = () => m.Sim.Zones.Exists(z => z.Kind is Stockpile.Stone or Stockpile.Metal),
         });
 
         // ---- the old fort
@@ -470,10 +412,9 @@ public partial class Tutorial : Node
         Opens(Hud.Part.Goals);
         Add(new Step
         {
-            Chapter = mend, Title = "Задачи",
-            Text = "Во вкладке «Задачи» написано, чем заняться. В обычной игре сверху «Поручения»: одно главное и два " +
-                "малых, за каждое дают награду. Ниже цели на всю осаду. Число на вкладке показывает, сколько целей " +
-                "осталось.",
+            Chapter = mend, Title = "Задачи и летопись",
+            Text = "Во вкладке «Задачи» сверху поручения: одно главное и два малых, за каждое награда. Ниже цели осады, " +
+                "ещё ниже летопись всех событий. Щелчок по строке со значком ◎ переносит вид к событию.",
             Task = "Откройте «Задачи»",
             Point = "tab:goals",
             Done = () => m.Hud.OpenTab == "goals",
@@ -484,8 +425,10 @@ public partial class Tutorial : Node
         Add(new Step
         {
             Chapter = build, Title = "Линия",
-            Text = "Линия ({ToolLine}): зажмите левую кнопку и протяните. Рабочие сложат прямую стену. Жёлтый контур " +
-                "значит, что запасов хватит, красный — что не хватит.",
+            Text = "Линия ({ToolLine}): зажмите левую кнопку и протяните, люди сложат стену. Жёлтый контур значит, что " +
+                "запасов хватит, красный значит, что нет. Толщину меняют {WidthLess} и {WidthMore}, высоту {HeightLess} " +
+                "и {HeightMore}. Камень ({MatStone}) прочнее всего. Брёвна ({MatWood}) строятся быстрее, но горят. Земля " +
+                "({MatEarth}) кладётся быстрее всего.",
             Task = "Проведите стену линией",
             Point = "tool:Line",
             Enter = () => n0 = m.Sim.MarkingsMade,
@@ -493,34 +436,13 @@ public partial class Tutorial : Node
         });
         Add(new Step
         {
-            Chapter = build, Title = "Толщина и высота",
-            Text = "Толщину меняют {WidthLess} и {WidthMore}, высоту {HeightLess} и {HeightMore}, или кнопки − и + " +
-                "внизу. {Level} переключает верх стены: ровный или по рельефу.",
-            Task = "Измените толщину или высоту",
-            Point = "console",
-            Enter = () => { width0 = m.Tools.Opt.Width; height0 = m.Tools.Opt.Height; if (m.Tools.Tool == Tool.None) m.Tools.SetTool(Tool.Line); },
-            Done = () => m.Tools.Opt.Width != width0 || m.Tools.Opt.Height != height0,
-        });
-        Add(new Step
-        {
             Chapter = build, Title = "Сетка",
             Text = "Сетка ({Grid}) выравнивает стройку: концы линий встают в узлы, стены идут вдоль осей или под 45°. " +
-                "Шаг сетки (50 см, 1 м, 2 м) выбирают внизу. Линии через центр цитадели ярче. С сеткой удобнее " +
-                "работать в виде сверху ({CamTop}).",
+                "Шаг сетки выбирают в нижней панели. С сеткой удобнее работать в виде сверху ({CamTop}).",
             Task = "Включите сетку и проведите линию по ней",
             Point = "console",
             Enter = () => { n0 = m.Sim.MarkingsMade; if (m.Tools.Tool == Tool.None) m.Tools.SetTool(Tool.Line); },
             Done = () => m.Tools.Opt.Grid > 0 && Marked(n0, Tool.Line, Tool.Box, Tool.Circle),
-        });
-        Add(new Step
-        {
-            Chapter = build, Title = "Материал",
-            Text = "Камень ({MatStone}) самый прочный, но строится дольше. Брёвна ({MatWood}) быстрее, но горят. " +
-                "Земля ({MatEarth}) кладётся быстрее всего, и гоблины без кирки её не пройдут. Выгодно класть " +
-                "снаружи камень, а внутрь землю.",
-            Task = "Возьмите брёвна",
-            Point = "mat:" + Mat.Wood,
-            Done = () => m.Tools.Opt.Material == Mat.Wood && !m.Tools.Opt.Dig,
         });
         Opens(Tool.Box); Opens(Tool.Circle);
         Add(new Step
@@ -544,8 +466,8 @@ public partial class Tutorial : Node
         Add(new Step
         {
             Chapter = build, Title = "Ров",
-            Text = "С киркой ({Pick}) те же кисти размечают раскопки: линия даёт ров, прямоугольник котлован, круг " +
-                "кольцевой ров. Вынутая земля идёт в запасы. Если довести ров до пруда, он наполнится водой.",
+            Text = "С киркой ({Pick}) те же кисти размечают раскопки: линия даёт ров, прямоугольник котлован. Вынутая " +
+                "земля идёт в запасы. Ров, доведённый до пруда, наполнится водой.",
             Task = "Разметьте ров: кирка и линия",
             Enter = () => n0 = m.Sim.MarkingsMade,
             Done = () => Marked(n0, Tool.Line, Tool.Box, Tool.Circle, Tool.Brush) && m.Tools.Opt.Dig,
@@ -564,10 +486,9 @@ public partial class Tutorial : Node
         Add(new Step
         {
             Chapter = build, Title = "Лестница, ворота, мост",
-            Text = "Лестница ({ToolLadder}) ставится щелчком по стене, по ней ваши люди поднимаются наверх. Ворота " +
-                "({ToolGate}) пропускают своих, а орде их надо прорубить. В стене пруда ворота служат затвором: " +
-                "откройте их, и вода хлынет волной и собьёт орду с ног. Мост ({ToolBridge}) тянут от берега до " +
-                "берега, он бывает арочный или подъёмный.",
+            Text = "Лестница ({ToolLadder}) ставится щелчком по стене, по ней люди поднимаются наверх. Ворота " +
+                "({ToolGate}) пропускают своих, а орде их надо прорубить. Ворота в стене пруда работают как затвор: " +
+                "откройте их, и вода собьёт орду с ног. Мост ({ToolBridge}) тянут от берега до берега.",
             Task = "Приставьте лестницу к стене",
             Point = "tool:Ladder",
             Mark = FortWall,
@@ -577,21 +498,19 @@ public partial class Tutorial : Node
         Opens(Tool.Brush); Opens(Tool.Extrude); Opens(Tool.Capture); Opens(Tool.Wand);
         Add(new Step
         {
-            Chapter = build, Title = "Кисть, выдавить, чертёж",
-            Text = "Кисть ({ToolBrush}) рисует стену от руки или шаром. Выдавливание ({ToolExtrude}) наращивает грань " +
-                "или углубляет её, так делают ступени и проходы в скале. {ToolCapture} сохраняет постройку как " +
-                "чертёж: обведите её рамкой. Чертежи лежат в нижней панели этого инструмента, {Rotate} поворачивает копию. " +
-                "Волшебная палочка ({ToolWand}) выделяет всё прилегающее из одного материала: так сносят или перекладывают постройку целиком. Shift добавляет к выделению.",
+            Chapter = build, Title = "Кисть и чертёж",
+            Text = "Кисть ({ToolBrush}) рисует стену от руки. Выдавливание ({ToolExtrude}) наращивает или углубляет " +
+                "грань: так делают ступени в скале. {ToolCapture} сохраняет постройку как чертёж. Волшебная палочка " +
+                "({ToolWand}) выделяет всё прилегающее из одного материала, чтобы снести или переложить постройку целиком.",
             Point = "tool:Capture",
         });
         Opens(Tool.Template);
         Add(new Step
         {
             Chapter = build, Title = "Шаблоны",
-            Text = "Шаблоны ({ToolTemplate}) — готовые постройки: башни, участок стены с зубцами, частокол, надвратная башня, " +
-                "вышка, жилой дом, амбар, лестница и настил. Выберите шаблон в нижней панели, щелчок ставит его, рабочие построят. " +
-                "{Rotate} поворачивает, {HeightLess} и {HeightMore} меняют высоту. Стену протяните мышью. Раздел «Декор» — костры, " +
-                "скамьи, колодец и другие вещи для поселения. Там же лежат ваши чертежи.",
+            Text = "Шаблоны ({ToolTemplate}): готовые башни, стены с зубцами, частокол, надвратная башня, вышка, амбар, " +
+                "лестница и настил. Выберите шаблон в нижней панели и щёлкните по земле, рабочие построят. {Rotate} " +
+                "поворачивает. В разделе «Декор» костры, скамьи, колодец и другие вещи для поселения.",
             Task = "Поставьте шаблон",
             Point = "tool:Template",
             Enter = () => n0 = m.Sim.MarkingsMade,
@@ -605,20 +524,10 @@ public partial class Tutorial : Node
         {
             Chapter = work, Title = "Работы",
             Text = "Во вкладке «Работы» задают, кто какую работу делает и в каком порядке: 1 в первую очередь, 4 в " +
-                "последнюю, пусто — никогда. Там же видно, кто добывает сам и кто в ополчении.",
+                "последнюю, пусто значит никогда.",
             Task = "Откройте «Работы»",
             Point = "tab:works",
             Done = () => m.Hud.OpenTab == "works",
-        });
-        Add(new Step
-        {
-            Chapter = work, Title = "Летопись",
-            Text = "Внизу вкладки «Задачи» летопись: все события игры. Последние строки видны над нижней панелью. Щелчок " +
-                "по строке со значком ◎ переносит вид на место события.",
-            Task = "Откройте «Задачи»",
-            Point = "tab:goals",
-            Enter = () => m.Hud.ClosePanel(),
-            Done = () => m.Hud.OpenTab == "goals",
         });
 
         // ---- the time
@@ -627,18 +536,18 @@ public partial class Tutorial : Node
         Add(new Step
         {
             Chapter = time, Title = "Часы",
-            Text = "Часы показывают, сколько осталось до орды. В обучении они стоят. {Pause} ставит паузу (размечать " +
-                "можно и на паузе), {Speed} меняет скорость: ×1, ×2, ×3.",
+            Text = "Часы показывают, сколько осталось до орды. В обучении они стоят. {Pause} ставит паузу, размечать " +
+                "можно и на паузе. {Speed} меняет скорость: ×1, ×2, ×3.",
             Task = "Поставьте паузу и смените скорость",
             Point = "clock",
-            Enter = () => flag = false,
+            Enter = () => { flag = false; m.Hud.ClosePanel(); },
             Done = () => { if (m.Paused) flag = true; return flag && m.Speed > 1 && !m.Paused; },
         });
         Add(new Step
         {
             Chapter = time, Title = "Рудник",
-            Text = "Рудник приносит золото, пока он ваш. Медный рудник к востоку от крепости, у маяка. Пошлите людей " +
-                "к входу, и через несколько секунд он станет вашим. Оставьте там охрану: орда попробует его отбить.",
+            Text = "Рудник приносит золото, пока он ваш. Медный рудник отмечен маяком. Пошлите людей к входу, и через " +
+                "несколько секунд он станет вашим. Оставьте охрану: орда попробует его отбить.",
             Task = "Займите Медный рудник",
             Mark = () => Copper() is { } c ? (c.Place.StandX > 0 ? c.Place.StandX : c.Place.X, c.Place.StandZ > 0 ? c.Place.StandZ : c.Place.Z) : null,
             Enter = () => { if (Copper() is { } c) Look(c.Place.X, c.Place.Z, 1.3f); },
@@ -652,9 +561,9 @@ public partial class Tutorial : Node
         Add(new Step
         {
             Chapter = horde, Title = "Орда",
-            Text = "Орда приходит с запада ватагами, у каждой свой вожак. Во вкладке «Орда» видно, кто придёт и " +
-                "откуда. Линии на земле показывают их пути ({Trails} скрывает их). Орда обходит стены, а если " +
-                "обхода нет, ломает их или лезет по лестницам.",
+            Text = "Орда приходит ватагами, у каждой свой вожак. Во вкладке «Орда» видно, кто придёт и откуда. Линии на " +
+                "земле показывают их пути ({Trails} скрывает их). Орда обходит стены, а если обхода нет, ломает их или " +
+                "лезет по лестницам.",
             Task = "Откройте «Орду»",
             Point = "tab:horde",
             Enter = () => { if (!m.Sim.WantTrails) m.Command.ToggleTrails(); },
@@ -673,8 +582,7 @@ public partial class Tutorial : Node
         {
             Chapter = horde, Title = "Учебная ватага",
             Text = "С запада идут трое налётчиков. Лучник стреляет сам, мечник защищает свой пост. Чтобы приказать " +
-                "атаковать, выберите солдат и щёлкните {RmbBy} по врагу. Ожидание можно ускорить клавишей " +
-                "{Speed}.",
+                "атаковать, выберите солдат и щёлкните {RmbBy} по врагу. Ожидание ускоряет {Speed}.",
             Task = "Перебейте ватагу",
             Point = "faces",
             Enter = () =>
@@ -697,59 +605,73 @@ public partial class Tutorial : Node
         Add(new Step
         {
             Chapter = horde, Title = "Отбой",
-            Text = "Волна отбита. Тревога после волны снимается сама, а поднятую вручную снимает {Alarm}. За каждую " +
+            Text = "Волна отбита. После волны тревога снимается сама, а поднятую вручную снимает {Alarm}. За каждую " +
                 "отбитую волну дают знания и золото.",
-            Done = () => !m.Sim.Alarm,
             Task = "Тревоги нет",
+            Done = () => !m.Sim.Alarm,
         });
 
-        // ---- the muster and the lore
-        const string lore = "Войско";
+        // ---- the muster, the lore and the town
+        const string lore = "Войско и город";
         Add(new Step
         {
             Chapter = lore, Title = "Цитадель",
-            Text = "В цитадели ({Keep} или щелчок по ней) набирают войско за золото. Нанятый сразу выходит из цитадели. " +
+            Text = "В цитадели ({Keep} или щелчок по ней) нанимают войско за золото. Нанятый сразу выходит из цитадели. " +
                 "Сколько мест в войске, видно на верхней панели справа.",
             Task = "Наймите кого-нибудь",
             Point = "console",
             Enter = () => { house0 = m.Sim.Household(); if (m.Sim.Stock.Gold < 200) m.Sim.Stock.Gold = 200; },
             Done = () => m.Sim.Household() > house0,
         });
+        Opens(Hud.Part.Lore);
+        Add(new Step
+        {
+            Chapter = lore, Title = "Знания",
+            Text = "Во вкладке «Знания» древо: «Город», «Войско» и «Вмешательство». Город и войско открывают здания. " +
+                "Знания дают за отбитые волны, сначала их мало: выбирайте, что строить первым.",
+            Task = "Изучите что-нибудь",
+            Point = "tab:lore",
+            Enter = () => { learnt0 = m.Sim.Learnt.Count; if (m.Sim.Knowledge < 3) m.Sim.Knowledge = 3; },
+            Done = () => m.Sim.Learnt.Count > learnt0,
+        });
+        Opens(Hud.Part.Town);
+        Add(new Step
+        {
+            Chapter = lore, Title = "Город",
+            Text = "Изученное здание ставят во вкладке «Город»: выберите его и щёлкните по земле, рабочие построят. " +
+                "Готовое здание нанимает войска и надстраивается вторым этажом. Там же видно уровень поселения и что " +
+                "строить дальше.",
+            Task = "Откройте вкладку «Город»",
+            Point = "tab:town",
+            Done = () => m.Hud.OpenTab == "town",
+        });
         int dwellings0 = 0;
         Opens(Tool.Yard);
         Add(new Step
         {
             Chapter = lore, Title = "Жилой дом",
-            Text = "Мест в войске столько, сколько лежанок: их дают цитадель и жилые дома. Возьмите прямоугольник ({ToolBox}) " +
-                "и в нижней панели выберите заливку «дом» ({Form} переключает). Получатся стены, пол, двускатная крыша и ворота. " +
-                "Когда дом встанет, рабочие поставят лежанки, каждая даёт место в войске. {Rotate} выбирает сторону двери. " +
-                "Дома можно ставить вплотную: стена станет общей. Новую дверь ставят воротами ({ToolGate}) по стене дома, " +
-                "старую закладывают щелчком воротами по ней. " +
-                "Дорожки между домами, костры, скамьи и факелы ставит «Обустройство» ({ToolYard}). " +
-                "Когда в городе есть ратуша, дома платят ей подать, а колодец, огонь, скамья и дорожка рядом прибавляют её.",
+            Text = "Мест в войске столько, сколько лежанок: их дают цитадель и жилые дома. Возьмите прямоугольник " +
+                "({ToolBox}) и в нижней панели выберите заливку «дом» ({Form} переключает). Рабочие построят стены, пол, " +
+                "крышу и дверь, потом поставят лежанки. Дома можно ставить вплотную. Дорожки, костры и скамьи ставит " +
+                "«Обустройство» ({ToolYard}).",
             Task = "Нарисуйте дом прямоугольником",
             Point = "tool:Box",
             Enter = () => dwellings0 = m.Sim.Zones.FindAll(z => z.Kind == Zone.Dwelling).Count,
             Done = () => m.Sim.Zones.FindAll(z => z.Kind == Zone.Dwelling).Count > dwellings0,
         });
-        Opens(Hud.Part.Lore);
         Add(new Step
         {
-            Chapter = lore, Title = "Знания",
-            Text = "Во вкладке «Знания» древо на трёх страницах: «Город», «Войско» и «Вмешательство». Город и войско открывают здания, " +
-                "их потом строят во вкладке «Город». Знания дают за отбитые волны. Сначала их мало, выбирайте, что строить первым.",
-            Task = "Изучите что-нибудь",
-            Point = "tab:lore",
-            Enter = () => { learnt0 = m.Sim.Learnt.Count; if (m.Sim.Knowledge < 3) m.Sim.Knowledge = 3; },
-            Done = () => m.Sim.Learnt.Count > learnt0,
+            Chapter = lore, Title = "Командир и архитектор",
+            Text = "Командир сам ставит бойцов к бою и подаёт призывы. Архитектор нанимается во дворе каменщиков. Он " +
+                "сам размечает стену, ворота, башни и ров вокруг цитадели или рудника и чинит их после боя. Рабочие " +
+                "строят по его разметке.",
         });
         Opens(Hud.Part.Magic);
         Add(new Step
         {
             Chapter = lore, Title = "Таинства",
             Text = "Жрецы молятся в святилище и копят вмешательство, а на него вы колдуете. Святилище размечают " +
-                "делянкой. На месте силы молитва даёт втрое больше. Вмешательство приносят и жертвы: пленные и " +
-                "туши с охоты. Всё это на четвёртой странице «Знаний», «Таинства».",
+                "делянкой. На месте силы молитва даёт втрое больше. Всё это на странице «Таинства» во вкладке «Знания».",
             Task = "Откройте в «Знаниях» страницу «Таинства»",
             Point = "tab:lore",
             Done = () => m.Hud.OpenTab == "magic",
@@ -762,7 +684,7 @@ public partial class Tutorial : Node
             Chapter = eyes, Title = "Вселиться",
             Text = "Выберите мечника и нажмите {Possess}, чтобы управлять им от первого лица. " +
                 "{FpForward}{FpLeft}{FpBack}{FpRight} — идти, {FpRun} — бежать, мышь — смотреть, {Lmb} — " +
-                "удар, держать — тяжёлый удар, {Rmb} — блок, {FpKick} — пинок. Рабочий {Rmb} кладёт размеченное.",
+                "удар, держать — тяжёлый удар, {Rmb} — блок, {FpKick} — пинок.",
             Task = "Вселитесь в мечника",
             Point = "faces",
             Done = () => m.FP.On,
@@ -770,8 +692,8 @@ public partial class Tutorial : Node
         Add(new Step
         {
             Chapter = eyes, Title = "Выйти",
-            Text = "Пройдитесь, ударьте по камню или дереву. {FpSwitch} — войти в другого из своих. В осаде с вами будет " +
-                "командир: в нём {FpStone}–{FpFourth} — призывы, {FpOrder} — приказ взглядом. Esc возвращает обычный вид.",
+            Text = "{FpSwitch} — войти в другого из своих. В командире {FpStone}–{FpFourth} — призывы, {FpOrder} — " +
+                "приказ взглядом. Esc возвращает обычный вид.",
             Task = "Выйдите: Esc",
             Done = () => !m.FP.On,
         });
@@ -781,20 +703,19 @@ public partial class Tutorial : Node
         Add(new Step
         {
             Chapter = last, Title = "Меню и управление",
-            Text = "Esc открывает меню: сохранение, загрузка, настройки. В разделе «Управление» (или кнопка «?» " +
-                "справа вверху, {Help}) перечислены все клавиши, любую можно переназначить. Держите Alt, и на кнопках " +
-                "появятся их клавиши. Быстрое сохранение {QuickSave}, загрузка {QuickLoad}.",
+            Text = "Esc открывает меню: сохранение, загрузка, настройки. В разделе «Управление» (кнопка «?» справа " +
+                "вверху, {Help}) все клавиши, любую можно переназначить. Держите Alt, и на кнопках появятся их клавиши. " +
+                "Быстрое сохранение {QuickSave}, загрузка {QuickLoad}.",
             Task = "Откройте «Управление»",
             Point = "help",
             Done = () => m.Hud.MenuPage == "controls",
         });
         Add(new Step
         {
-            Chapter = last, Title = "Обучение пройдено",
-            Text = "Дальше настоящая осада: 12 волн раз в 10 минут, каждая сильнее прежней. {CallWave} вызывает орду " +
-                "раньше срока. Награды за это нет, зато орда хуже знает вашу оборону.\n\nМожно начать новую игру " +
-                "или остаться в этой долине. Тогда часы пойдут, и орда придёт через 10 минут. В песочнице из меню " +
-                "орда приходит, только когда её позовёте.",
+            Chapter = last, Title = "Долина пройдена",
+            Text = "Дальше осада: 12 волн раз в 10 минут, каждая сильнее прежней. {CallWave} зовёт орду раньше срока.\n\n" +
+                "Вторая часть обучения про кампанию: большая карта, герои, рудники и гарнизоны, существа и орда со " +
+                "своими героями и городами. Её можно пройти сейчас или потом из меню.",
         });
     }
 
@@ -850,7 +771,7 @@ public partial class Tutorial : Node
 
         public void Show(Step s, int i, int count, (int n, int of, string name) chapter)
         {
-            _chapter.Text = $"обучение · глава {chapter.n} из {chapter.of} · {chapter.name} · шаг {i + 1} из {count}".ToUpperInvariant();
+            _chapter.Text = $"{(_t._campaign ? "обучение кампании" : "обучение")} · глава {chapter.n} из {chapter.of} · {chapter.name} · шаг {i + 1} из {count}".ToUpperInvariant();
             _title.Text = s.Title;
             _body.Text = Bindings.Fill(s.Text);
             _task.Visible = s.Task != null;
@@ -861,9 +782,15 @@ public partial class Tutorial : Node
             foreach (var c in _buttons.GetChildren()) c.QueueFree();
             bool last = i == count - 1;
             if (i > 0 && !last) _buttons.AddChild(Btn("‹", "Предыдущий шаг", _t.Back));
-            if (last)
+            if (last && _t._campaign)
             {
-                _buttons.AddChild(Btn("Новая игра", "Начать осаду в новой долине.", () => _t._m.NewGame(), true));
+                _buttons.AddChild(Btn("Играть дальше", "Обучение окончено, кампания идёт дальше.", _t.Leave, true));
+                _buttons.AddChild(Btn("Новая кампания", "Меню кампаний: размер карты и сложность орды.", () => { _t.Leave(); _t._m.Hud.OpenMenu("campaign"); }));
+            }
+            else if (last)
+            {
+                _buttons.AddChild(Btn("Обучение кампании", "Вторая часть обучения: большая карта, герои, рудники, гарнизоны и орда.", () => _t._m.StartCampaignTutorial(), true));
+                _buttons.AddChild(Btn("Новая игра", "Начать осаду в новой долине.", () => _t._m.NewGame()));
                 _buttons.AddChild(Btn("Остаться здесь", "Играть дальше в этой долине. Орда придёт через 10 минут.", _t.Leave));
             }
             else if (s.Done == null) _buttons.AddChild(Btn("Дальше", "", _t.Next, true));
@@ -894,8 +821,10 @@ public partial class Tutorial : Node
             var vp = GetViewportRect().Size;
             Size = _box.GetCombinedMinimumSize();
             _box.Size = Size;
-            // under the clock at the right, clear of the faces and of the console
-            Position = new Vector2(vp.X - Size.X - 14, Math.Min(WaveClock.H + 14, Math.Max(10, vp.Y - BottomConsole.Band - Size.Y - 10)));
+            // under the clock at the right, clear of the faces and of the console; on the big map at the left, clear of
+            // its panel at the right and its small map at the bottom
+            Position = _t._m.AtlasOpen ? new Vector2(14, 58)
+                : new Vector2(vp.X - Size.X - 14, Math.Min(WaveClock.H + 14, Math.Max(10, vp.Y - BottomConsole.Band - Size.Y - 10)));
             Visible = !_t._m.Hud.MenuOpen;
         }
 

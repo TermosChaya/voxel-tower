@@ -551,6 +551,8 @@ public partial class Hud : CanvasLayer
         "faces" => _colonists, "map" => _ring, "map:top" => _ring.TopButton, "map:home" => _ring.HomeButton, "console" => _inspector,
         "portrait" => _portrait, "stores" => _stores, "clock" => _clockPanel, "help" => _help, "menu" => _menuButton, "tools" => _toolGrid,
         "pick" => _pickSlot,
+        // the big map's frame (Ui/AtlasHud.cs, HexMapView.Fog.cs)
+        "atlas:dawn" => MapPane?.DawnButton, "atlas:enter" => MapPane?.EnterButton, "atlas:side" => MapPane?.Panel, "atlas:mini" => _m.WorldMap?.MiniMap,
         _ when key.StartsWith("tool:") && Enum.TryParse<Tool>(key[5..], out var t) && _toolSlots.TryGetValue(t, out var s) => s,
         _ when key.StartsWith("mat:") && byte.TryParse(key[4..], out var m) && _matSlots.TryGetValue(m, out var ms) => ms,
         _ when key.StartsWith("tab:") => key[4..] switch

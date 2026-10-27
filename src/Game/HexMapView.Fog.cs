@@ -148,6 +148,9 @@ public partial class HexMapView
     bool _miniStale = true;
     /// <summary>The dots on the small map: where the heroes and the horde's armies are (the map's voxels) and their colour.</summary>
     public Func<IEnumerable<(float X, float Z, Color C)>> MiniDots;
+    /// <summary>The small map, and how many times a click on it sent the eye somewhere (the tutorial).</summary>
+    public Control MiniMap => _mini;
+    public int MiniJumps;
 
     void MiniReady()
     {
@@ -254,6 +257,7 @@ public partial class HexMapView
                 _ => null,
             };
             if (at is not { } pos) return;
+            if (e is InputEventMouseButton) _v.MiniJumps++;
             var v = (pos - new Vector2(6, 6)) / Scale;
             _v.Focus(v.X, v.Y);
             AcceptEvent();

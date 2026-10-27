@@ -25,7 +25,7 @@ public static class Saves
     /// <summary>The campaigns' slots: a folder each, never among the slots of a single valley.</summary>
     public static readonly string[] CampaignSlots = { "campaign1", "campaign2", "campaign3" };
     public static string CampaignDir(string slot) => ProjectSettings.GlobalizePath($"user://saves/campaigns/{slot}");
-    public static string CampaignName(string slot) => Array.IndexOf(CampaignSlots, slot) is int i and >= 0 ? "Кампания " + (i + 1) : slot;
+    public static string CampaignName(string slot) => Array.IndexOf(CampaignSlots, slot) is int i and >= 0 ? "Кампания " + (i + 1) : slot == Tutorial.Slot ? "Обучение" : slot;
 
     /// <summary>What a campaign's slot holds, for the list: its day and when it was written, or null when empty or unreadable.</summary>
     public static (int day, DateTime when)? PeekCampaign(string slot)

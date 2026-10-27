@@ -9,15 +9,31 @@ namespace VoxelTower.Game;
 /// <summary>
 /// --tutorial-check: the tutorial gone through from its first step to its last as a player would go through it — the
 /// view moved, pawns chosen and sent, trees felled, plots and walls marked through the tools' own input, the band of
-/// the lesson fought — each step checked to be taken as done and left for the next by itself. Prints a line a step
-/// and quits with the number of steps that would not go.
+/// the lesson fought — each step checked to be taken as done and left for the next by itself; then on into the
+/// campaign's part (Main.TutorialCheck.Campaign.cs). Prints a line a step and quits with the number of steps that
+/// would not go.
 /// </summary>
 public partial class Main
 {
     bool _tutCheck;
+    /// <summary>The steps that would not go, kept while the scene begins again for the campaign's part and its valleys.</summary>
+    static int _tutFails;
+    /// <summary>Where each step is saved as it shows (--tutorial-shots=folder), for a sheet of them; none, not saved.</summary>
+    string _tutShots;
+
+    /// <summary>The step as it shows a moment after it began, its card come up, saved as name.png (with --tutorial-shots).</summary>
+    async Task StepPicture(string name)
+    {
+        if (_tutShots == null) return;
+        for (int i = 0; i < 14; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        var img = GetViewport().GetTexture().GetImage();
+        if (img.GetWidth() > 1280) img.Resize(1280, img.GetHeight() * 1280 / img.GetWidth(), Image.Interpolation.Lanczos);
+        img.SavePng(System.IO.Path.Combine(_tutShots, name + ".png"));
+    }
 
     async void TutorialCheck()
     {
+        if (Tutor is { Campaign: true }) { CampaignCheck(); return; }
         int fails = 0;
         async Task Frames(int n) { for (int i = 0; i < n; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         Vector2 ScreenAt(float x, float y, float z) => Rig.Cam.UnprojectPosition(new Vector3(World.WX(x), World.WY(y), World.WZ(z)));
@@ -56,20 +72,29 @@ public partial class Main
         {
             int at = Tutor.At;
             string title = Tutor.Title;
-            if (at == Tutor.Count - 1) { GD.Print($"[tutorial] ok   {at + 1:00} {title}"); break; }
+            await StepPicture($"v{at + 1:00}");
+            // the valley's part gone through: on to the campaign's, the scene begun again on its map
+            if (at == Tutor.Count - 1)
+            {
+                GD.Print($"[tutorial] ok   {at + 1:00} {title}");
+                _tutFails = fails;
+                StartCampaignTutorial();
+                return;
+            }
             switch (title)
             {
-                case "Сдвинуть вид": { var a = Rig.Aim; Rig.Set(a.x + 5, a.z, a.yaw, a.pitch, a.zoom, false); break; }
-                case "Повернуть": { var a = Rig.Aim; Rig.Set(a.x, a.z, a.yaw + 1.2f, a.pitch, a.zoom, false); break; }
-                case "Ближе и дальше": Rig.ZoomBy(3); await Frames(3); Rig.ZoomBy(1 / 3f); break;
-                case "Вид сверху": Rig.ToggleTopDown(); break;
-                case "Вернуть вид": Rig.ToggleTopDown(); Rig.Home(); break;
+                case "Камера":
+                {
+                    var a = Rig.Aim;
+                    Rig.Set(a.x + 5, a.z, a.yaw + 1.2f, a.pitch, a.zoom, false);
+                    await Frames(3);
+                    Rig.ZoomBy(3); await Frames(3); Rig.ZoomBy(1 / 3f);
+                    break;
+                }
+                case "Вид сверху": Rig.ToggleTopDown(); await Frames(3); Rig.ToggleTopDown(); Rig.Home(); break;
                 case "Карта": Hud.Map._GuiInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = Hud.Map.Size / 2 }); break;
-                case "Лица дружины": Choose(First(Kinds.Worker)); break;
-                case "Послать": await Look(kx - 40, kz); Command.OrderTo(Screen(kx - 40, kz + 6)); break;
-                case "Рамкой": Choose(Sim.Units.FindAll(u => !u.Dead && u.Team == Team.Player && u.T == Kinds.Worker).ToArray()); break;
-                case "Отряд": Command.RememberSquad(0); break;
-                case "Снять выбор": Choose(); await Frames(3); Command.CallSquad(0); break;
+                case "Выбрать и послать": Choose(First(Kinds.Worker)); await Look(kx - 40, kz); Command.OrderTo(Screen(kx - 40, kz + 6)); break;
+                case "Отряды": Choose(Sim.Units.FindAll(u => !u.Dead && u.Team == Team.Player && u.T == Kinds.Worker).ToArray()); Command.RememberSquad(0); break;
                 case "Охота":
                 {
                     var archer = First(Kinds.Archer);
@@ -90,7 +115,7 @@ public partial class Main
                     await Look(tree.x, tree.z);
                     await Drag((tree.x - 30, tree.z - 30), (tree.x + 30, tree.z + 30));
                     break;
-                case "Каменоломня":
+                case "Камень и руда":
                 {
                     Tools.SetMaterial(Mat.Stone);
                     Landmark ruin = Site.Landmarks.Find(l => l.Kind == LandmarkKind.Ruin);
@@ -99,22 +124,6 @@ public partial class Main
                     await Drag((rx - 20, rz - 20), (rx + 20, rz + 20));
                     break;
                 }
-                case "Железная руда":
-                {
-                    if (Tools.Tool != Tool.Gather) Tools.SetTool(Tool.Gather);
-                    Tools.SetMaterial(Mat.Plate);
-                    // (an outcrop clear of the plots drawn before, wherever the valley put them; the next if one will not take)
-                    foreach (var o in Site.Outcrops)
-                    {
-                        if (Sim.OreLeft(o.X, o.Z, o.R) < 40 || Sim.Zones.Exists(z => z.X0 < o.X + 24 && z.X1 > o.X - 24 && z.Z0 < o.Z + 24 && z.Z1 > o.Z - 24)) continue;
-                        await Look(o.X, o.Z);
-                        await Drag((o.X - 16, o.Z - 16), (o.X + 16, o.Z + 16));
-                        GD.Print($"[tutorial]      ore: the outcrop at {o.X},{o.Z}, «{Tools.HoverText}»");
-                        if (Sim.Zones.Exists(z => z.Kind == Stockpile.Metal)) break;
-                    }
-                    break;
-                }
-                case "Убрать кисть": Tools.SetTool(Tool.None); break;
                 case "Старая крепость":
                 {
                     Tools.SetTool(Tool.Repair);
@@ -125,11 +134,9 @@ public partial class Main
                     await ClickAt(ScreenAt(fx + .5f, World.SurfAt(fx, fz), fz + .5f));
                     break;
                 }
-                case "Задачи": Hud.OpenPanel("goals"); break;
+                case "Задачи и летопись": Hud.OpenPanel("goals"); break;
                 case "Линия": Tools.SetTool(Tool.Line); await Look(kx - 120, kz + 60); await Drag((kx - 130, kz + 50), (kx - 110, kz + 70)); break;
-                case "Толщина и высота": Tools.StepWidth(1); break;
                 case "Сетка": Tools.SetGrid(8); await Drag((kx - 130, kz + 80), (kx - 100, kz + 80)); break;
-                case "Материал": Tools.SetMaterial(Mat.Wood); break;
                 case "Прямоугольник и круг": Tools.SetTool(Tool.Circle); await Drag((kx - 120, kz + 100), (kx - 110, kz + 100)); break;
                 case "Жилой дом":
                 {
@@ -182,7 +189,6 @@ public partial class Main
                     break;
                 }
                 case "Работы": Hud.OpenPanel("works"); break;
-                case "Летопись": Hud.OpenPanel("goals"); break;
                 case "Часы": Command.TogglePause(); await Frames(3); Command.SetSpeed(3); break;
                 case "Рудник":
                 {
@@ -241,6 +247,7 @@ public partial class Main
                 case "Знания":
                     foreach (var l in Sim.LoresOn(0)) if (Sim.CanLearn(l)) { Sim.Learn(l.Key); break; }
                     break;
+                case "Город": Hud.OpenPanel("town"); break;
                 case "Таинства": Hud.OpenPanel("magic"); break;
                 case "Вселиться":
                 {

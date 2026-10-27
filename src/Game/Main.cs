@@ -241,6 +241,7 @@ public partial class Main : Node3D
             else if (a.StartsWith("--campaign=") && uint.TryParse(a["--campaign=".Length..], out uint cs)) { _campaignArg = true; _seed = cs; }
             else if (a == "--board") _boardArg = true;
             else if (a == "--tutorial-check") { _tutCheck = true; _tutorialAt = 0; }
+            else if (a.StartsWith("--tutorial-shots=")) _tutShots = a["--tutorial-shots=".Length..];
             else if (a == "--menu" || a.StartsWith("--menu=")) _menu = a.Length > 7 ? a[7..] : "";
             else if (a.StartsWith("--pose=")) _pose = a["--pose=".Length..];
             else if (a.StartsWith("--quality=") && int.TryParse(a["--quality=".Length..], out int qa)) _quality = qa;
@@ -479,7 +480,10 @@ public partial class Main : Node3D
             CampaignPose();
             GD.Print($"[voxel-tower] world {genMs:0} ms, navigation {navMs:0} ms, mesh {View.LastFullMeshMs:0} ms, {View.Triangles()} triangles; campaign, cell {Atlas.HereQ},{Atlas.HereR}");
             if (_boardArg) OpenAtlas();
+            // the tutorial's campaign part, on whatever valley the scene opens on (Tutorial.Campaign.cs)
+            if (Tutorial.CampaignAt >= 0 && CampSlot == Tutorial.Slot) StartTutorial(Tutorial.CampaignAt, campaign: true);
             if (_selfTest) SelfTest();
+            if (_tutCheck) TutorialCheck();
             if (_perf > 0) Perf(_perf);
             int drawn = Engine.GetFramesDrawn();
             if (_shot != null || _selfTest) GetTree().CreateTimer(120).Timeout += () =>
@@ -730,12 +734,12 @@ public partial class Main : Node3D
     }
 
     /// <summary>The tutorial, from its step n: the frame shut, the card on the first step.</summary>
-    public void StartTutorial(int from = 0)
+    public void StartTutorial(int from = 0, bool campaign = false)
     {
         if (Tutor != null) return;
         Tutor = new Tutorial();
         AddChild(Tutor);
-        Tutor.Init(this, from);
+        Tutor.Init(this, from, campaign);
     }
 
     /// <summary>A new siege (or the tutorial) from the menu: the scene begins again, without the title.</summary>

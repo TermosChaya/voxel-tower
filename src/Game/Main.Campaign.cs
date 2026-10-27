@@ -476,8 +476,13 @@ public partial class Main
     {
         if (Atlas == null) return false;
         KeepersLeft();
-        return Saves.WriteCampaign(this, CampSlot, Atlas, Atlas.Here);
+        bool wrote = Saves.WriteCampaign(this, CampSlot, Atlas, Atlas.Here);
+        if (wrote) CampaignSaves++;
+        return wrote;
     }
+
+    /// <summary>How many times a campaign has been written since the game began (the tutorial waits on one).</summary>
+    public static int CampaignSaves;
 
     /// <summary>Out of the campaign: a siege, the sandbox, the tutorial or a single valley's save is begun instead.</summary>
     public static void LeaveCampaign() { Atlas = null; CampSlot = null; _entering = null; _atlasAtStart = false; _land = null; }

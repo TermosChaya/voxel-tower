@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Godot;
 using VoxelTower.Core;
 
@@ -225,14 +226,15 @@ public partial class GameMenu : Control
         PageName = "main";
         if (_title)
         {
-            Fit(W, 592);
+            Fit(W, 640);
             var sub = Hud.Text("Оборона крепости в долине из вокселей", Ornament.SerifItalic, 15, Ornament.Aged);
             sub.HorizontalAlignment = HorizontalAlignment.Center;
             _page.AddChild(sub);
             _page.AddChild(Big("Новая игра", "12 волн орды, по одной каждые 10 минут.", Hardness_));
             _page.AddChild(Big("Кампания", CampaignTip, Campaign_));
             _page.AddChild(Big("Песочница", "Орда приходит, только когда её позовёте.", Sandbox_));
-            _page.AddChild(Big("Обучение", "Пошаговое знакомство с игрой.", () => Begin(() => _m.StartTutorial())));
+            _page.AddChild(Big("Обучение", "Пошаговое знакомство с игрой: долина, стройка, орда.", () => Begin(() => _m.StartTutorial())));
+            _page.AddChild(Big("Обучение кампании", CampaignTutorTip, () => Begin(() => _m.StartCampaignTutorial())));
             _page.AddChild(Big("Загрузить игру", "Ячейки, быстрое сохранение и автосохранение после каждой волны.", Loading));
             _page.AddChild(Big("Управление", "Все клавиши. Любую можно переназначить.", Controls_));
             _page.AddChild(Big("Настройки", "Интерфейс, звук, графика.", Settings_));
@@ -243,7 +245,7 @@ public partial class GameMenu : Control
             _page.AddChild(credits);
             return;
         }
-        Fit(W, H + 48);
+        Fit(W, H + 96);
         _page.AddChild(Big("Продолжить", "Вернуться к игре (Esc).", Close));
         if (Main.Atlas != null)
             _page.AddChild(Big("Сохранить кампанию", $"В её ячейку: {Saves.CampaignName(Main.CampSlot)}. То же делает {{QuickSave}}.", () =>
@@ -257,12 +259,14 @@ public partial class GameMenu : Control
         _page.AddChild(Big("Новая игра", "Несохранённый прогресс пропадёт.", Hardness_));
         _page.AddChild(Big("Кампания", CampaignTip + " Несохранённый прогресс пропадёт.", Campaign_));
         _page.AddChild(Big("Песочница", "Орда приходит, только когда её позовёте. Несохранённый прогресс пропадёт.", Sandbox_));
-        _page.AddChild(Big(_m.Tutor is { Over: false } ? "Обучение сначала" : "Обучение", "Пошаговое знакомство с игрой. Несохранённый прогресс пропадёт.", () => _m.NewGame(tutorial: true)));
+        _page.AddChild(Big(_m.Tutor is { Over: false, Campaign: false } ? "Обучение сначала" : "Обучение", "Пошаговое знакомство с игрой. Несохранённый прогресс пропадёт.", () => _m.NewGame(tutorial: true)));
+        _page.AddChild(Big(_m.Tutor is { Over: false, Campaign: true } ? "Обучение кампании сначала" : "Обучение кампании", CampaignTutorTip + " Несохранённый прогресс пропадёт.", () => { Close(); _m.StartCampaignTutorial(); }));
         _page.AddChild(Big("Отчёт об ошибке", "Собрать логи игры в файл, чтобы прислать автору.", Report_));
         _page.AddChild(Big("Выйти из игры", "Несохранённый прогресс пропадёт. Автосохранение делается после каждой волны.", () => _m.GetTree().Quit()));
     }
 
-    const string CampaignTip = "Большая карта, как в «Героях»: от 36×36 до 144×144 клеток. Герои ходят по ней, поднимают флаги на рудниках, берут сокровища и идут на города орды.";
+    const string CampaignTip = "Большая карта от 36×36 до 144×144 клеток. Герои ходят по ней, поднимают флаги на рудниках, берут сокровища и идут на города орды.";
+    const string CampaignTutorTip = "Маленькая кампания по шагам: карта и герой, рудник и гарнизон, существа, таверна, торговец, бой за точку.";
 
     /// <summary>
     /// How big a new campaign's map is: a big map of so many hexes a side (S 36, M 72, L 108, XL 144), or (0) a small test
@@ -278,10 +282,10 @@ public partial class GameMenu : Control
         _onMain = false;
         Clear();
         PageName = "campaign";
-        Fit(W, 450);
+        Fit(W, 540);
         _page.AddChild(Hud.CapsLabel("Кампания", 10));
-        _page.AddChild(Para("Большая карта, как в «Героях»: каждая клетка — долина. Карта поделена на зоны, между ними перевалы под стражей. " +
-            "У героя ход на день; рудники платят каждое утро. Карта открывается клавишей {Board}.", Ornament.Parchment));
+        _page.AddChild(Para("Большая карта, каждая её клетка отдельная долина. Карта поделена на зоны, между ними перевалы под стражей. " +
+            "У героя ход на день, рудники платят каждое утро. Карта открывается клавишей {Board}. «Обучение» ниже проведёт по кампании шаг за шагом.", Ornament.Parchment));
         // the size of a new campaign's map
         var size = new HBoxContainer();
         size.AddThemeConstantOverride("separation", 8);
@@ -320,16 +324,17 @@ public partial class GameMenu : Control
             hard.AddChild(b);
         }
         _page.AddChild(hard);
-        foreach (string slot in Saves.CampaignSlots)
+        foreach (string slot in Saves.CampaignSlots.Append(Tutorial.Slot))
         {
             string s = slot;
             var peek = Saves.PeekCampaign(s);
+            bool lesson = s == Tutorial.Slot;
             var row = new HBoxContainer();
             row.AddThemeConstantOverride("separation", 10);
             var text = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
             text.AddThemeConstantOverride("separation", 0);
             text.AddChild(Hud.Text(Saves.CampaignName(s), Ornament.SerifBold, 15, Ornament.Parchment));
-            text.AddChild(Hud.Text(peek is { } p ? $"День {p.day} · {p.when:dd.MM, HH:mm}" : "пусто", Ornament.Serif, 12, Ornament.Aged));
+            text.AddChild(Hud.Text(peek is { } p ? $"День {p.day} · {p.when:dd.MM, HH:mm}" : lesson ? "по шагам, на маленькой карте" : "пусто", Ornament.Serif, 12, Ornament.Aged));
             row.AddChild(text);
             Button Act(string name, string tip, Action act, bool enabled)
             {
@@ -340,7 +345,8 @@ public partial class GameMenu : Control
                 if (!enabled) b.Modulate = new Color(1, 1, 1, .4f);
                 return b;
             }
-            row.AddChild(Act("Новая", peek != null ? "Новая кампания в этой ячейке. Прежняя пропадёт." : "Новая кампания в этой ячейке.",
+            if (lesson) row.AddChild(Act(peek != null ? "Заново" : "Начать", CampaignTutorTip, () => { Close(); _m.StartCampaignTutorial(); }, true));
+            else row.AddChild(Act("Новая", peek != null ? "Новая кампания в этой ячейке. Прежняя пропадёт." : "Новая кампания в этой ячейке.",
                 () => Main.NewCampaign(_m.GetTree(), s, (uint)Random.Shared.Next(1, int.MaxValue), _rings, _side, _level), true));
             row.AddChild(Act("Продолжить", "С того места, где кампания сохранена.", () =>
             {

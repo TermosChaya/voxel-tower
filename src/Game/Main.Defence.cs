@@ -21,6 +21,8 @@ public partial class Main
     /// <summary>The point whose battle is being fought in this valley; how many fought for it and came against it.</summary>
     MapCell _defence;
     int _defOurs0, _defTheirs0, _escapedThen;
+    /// <summary>How many battles for points of ours were won since the game began (the tutorial waits on one).</summary>
+    public static int DefencesHeld;
 
     /// <summary>Whether the map stops for battles for our points here: in play, not in the scripted runs (pictures, the harness's films, tests).</summary>
     bool DefenceInteractive => !Scripted || _selfDefence;
@@ -91,6 +93,7 @@ public partial class Main
         // the battle took none of the map's time: the valley's day back to it
         Sim.SetClock(Atlas.Clock);
         Atlas.DefenceOver(cell, held, oursFell, theirsFell);
+        if (held) DefencesHeld++;
         Hud.Log(held ? $"{Campaign.Names(cell).nom}: бой выигран. Пало наших {oursFell}, налётчиков {theirsFell}. Карта снова идёт."
             : $"{Campaign.Names(cell).nom}: бой проигран, долина за ордой. Карта снова идёт.", held ? Hud.Kind.Ok : Hud.Kind.Bad);
         Hud.Float(held ? "точка удержана" : "точка потеряна", held ? Ornament.EmberGlow : Ornament.Blood);

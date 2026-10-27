@@ -55,6 +55,10 @@ public partial class AtlasHud : Control
     public MapParty Warning => _warning;
     public bool EnterShown => _enter?.Visible == true;
     public AtlasFigures Figures => _figs;
+    /// <summary>What the tutorial points at on the map's frame: «До рассвета», «Войти в клетку», the panel of the chosen.</summary>
+    public Button DawnButton { get; private set; }
+    public Control EnterButton => _enter;
+    public Control Panel => _about;
 
     public void Init(Main m, AtlasView view)
     {
@@ -107,7 +111,7 @@ public partial class AtlasHud : Control
             row.AddChild(b);
             _speeds.Add(b);
         }
-        row.AddChild(Small("До рассвета", "Время до следующего рассвета: на карте сразу, долины проживут его сами. Ход героев на рассвете снова полный.", () => _m.ToDawn()));
+        row.AddChild(DawnButton = Small("До рассвета", "Время до следующего рассвета: на карте сразу, долины проживут его сами. Ход героев на рассвете снова полный.", () => _m.ToDawn()));
         row.AddChild(Small("В долину", "Вернуться в долину, где вы сейчас ({Board}).", () => _m.CloseAtlas()));
 
         // the right: our heroes, and the hero or the valley chosen
@@ -202,7 +206,8 @@ public partial class AtlasHud : Control
         }
         else Focus(Hero);
         Refresh();
-        if (Settings.Meet("atlas"))
+        // (not over the tutorial's card, which says it step by step)
+        if (_m.Tutor is not { Campaign: true, Over: false } && Settings.Meet("atlas"))
             _first.Show("Карта долин\nЩёлкните героя, потом место на карте: появится путь и время в пути. Щёлкните ещё раз или правой кнопкой, и герой пойдёт. " +
                 "Стоя в долине, нажмите «Войти в клетку» ({EnterCell}): герой с армией войдёт в неё. {Board} — вернуться в долину.");
     }

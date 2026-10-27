@@ -1247,6 +1247,14 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `Beacon` (столб света и кольцо) — `Hud.Mount` кладёт карточку и рамку под меню. Шаг сделан — звон (`Sound.Chime`),
   через 1,1 с следующий. `Leave` — всё открыть, часы пустить (`Waves.Prep`). Автосохранения в обучении нет.
   `Main.TutorialCheck.cs` — `--tutorial-check`: действие на каждый заголовок шага, ожидание перехода.
+  Вторая часть — `Tutorial.Campaign.cs`: `BuildCampaign` (24 шага), `Prepare` раскладывает свою кампанию (ячейка
+  `Tutorial.Slot`, сид `Tutorial.Seed`, карта 36, лёгкая орда): сундук на пути к ближнему руднику своей зоны, волков у
+  рудника столько, чтобы отряд после гарнизона был сильнее впятеро (вшестеро — разбегутся), огров вдвое сильнее всей
+  армии, архитектора и рабочих в армию героя, 3000 золота. `Main.StartCampaignTutorial` пишет её и перезапускает сцену;
+  шаг хранится в статике `Tutorial.CampaignAt`, и ветка кампании в `Main._Ready` снова начинает обучение с него.
+  `Step.Hex` — клетка большой карты, обведённая (`HexMapView.Chosen`), пока карта открыта; карточка тогда слева.
+  Засчитывание: `Main.DefencesHeld`, `Main.CampaignSaves`, `HexMapView.MiniJumps`, `AtlasHud.Planned` и т. п.
+  `Main.TutorialCheck.Campaign.cs` — её прогон, продолжается в каждой новой сцене (`_tutFails` статичен).
 - `Settings.cs` — свои настройки игрока в `user://settings.cfg`: масштаб интерфейса
   (`Window.ContentScaleFactor` поверх растяжения `canvas_items`, 70–110 %: на 120 % балка и консоль уже не
   помещаются), громкость, `Shake` (0, ½, 1 — тряска и вспышки, `view/shake`), `SlowMo` (`view/slowmo`), `Lines`
