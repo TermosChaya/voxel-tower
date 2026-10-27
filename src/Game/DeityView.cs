@@ -39,7 +39,7 @@ public partial class DeityView : Node3D
     readonly Transform3D[] _xf = new Transform3D[Figure.Bones];
     /// <summary>The pillars of heaven come down, fading: the beam and how much of it is left.</summary>
     readonly List<(MeshInstance3D beam, float left)> _beams = new();
-    static readonly Mesh WingMeshL, WingMeshR, HaloMesh;
+    static readonly Mesh WingMeshL, WingMeshR, DarkWingL, DarkWingR, HaloMesh;
     static readonly StandardMaterial3D Light = new()
     {
         ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, Transparency = BaseMaterial3D.TransparencyEnum.Alpha, BlendMode = BaseMaterial3D.BlendModeEnum.Add,
@@ -51,6 +51,9 @@ public partial class DeityView : Node3D
         var wing = Bodies.Wing();
         WingMeshL = Figure.MeshOf(wing);
         WingMeshR = Figure.MeshOf(Mirror(wing));
+        var dark = Bodies.Wing(dark: true);
+        DarkWingL = Figure.MeshOf(dark);
+        DarkWingR = Figure.MeshOf(Mirror(dark));
         HaloMesh = Figure.MeshOf(Bodies.Halo());
     }
 
@@ -176,10 +179,15 @@ public partial class DeityView : Node3D
         }
         if (d.T.Winged)
         {
-            s.WingL = Part(WingMeshL, BodyPlan.Sub, true);
-            s.WingR = Part(WingMeshR, BodyPlan.Sub, true);
-            s.Halo = Part(HaloMesh, BodyPlan.Sub, false);
+            // (the destroying angel's wings are black, and no light is behind its head)
+            bool dark = d.T.Kind == DeityKind.Destroyer;
+            s.WingL = Part(dark ? DarkWingL : WingMeshL, BodyPlan.Sub, true);
+            s.WingR = Part(dark ? DarkWingR : WingMeshR, BodyPlan.Sub, true);
+            if (!dark) s.Halo = Part(HaloMesh, BodyPlan.Sub, false);
             s.Beam = BeamNode();
+            // (a lesser angel's light as narrow as it is small)
+            float w = Math.Max(.15f, d.T.Height / Deities.Archangel.Height);
+            s.Beam.Scale = new Vector3(w, 1, w);
             s.Beam.Visible = false;
         }
         if (d.T.Hops)
@@ -190,8 +198,8 @@ public partial class DeityView : Node3D
                 MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(.82f, .42f, .46f), Roughness = .3f } };
             foreach (var n in new[] { s.Tongue, s.Tip }) { n.Visible = false; AddChild(n); }
         }
-        var glow = d.T.Winged ? new Color(1f, .82f, .45f) : d.T.Hops ? new Color(.9f, .8f, .2f) : new Color(1f, .62f, .25f);
-        s.Eyes = new OmniLight3D { LightColor = glow, LightEnergy = 3.5f, OmniRange = 30, ShadowEnabled = false };
+        var glow = d.T.Kind == DeityKind.Destroyer ? new Color(1f, .3f, .15f) : d.T.Winged ? new Color(1f, .82f, .45f) : d.T.Hops ? new Color(.9f, .8f, .2f) : new Color(1f, .62f, .25f);
+        s.Eyes = new OmniLight3D { LightColor = glow, LightEnergy = d.T.Minor ? 1.4f : 3.5f, OmniRange = d.T.Minor ? 5 : 30, ShadowEnabled = false };
         AddChild(s.Eyes);
         return s;
     }
@@ -226,16 +234,20 @@ public partial class DeityView : Node3D
         var sim = _m.Sim;
         float t = d.Into(sim.Time), k = Math.Min(1, dt * 5);
         bool going = d.Act is DeityAct.Rising or DeityAct.Sinking, sky = d.T.Arrives == Arrival.Sky;
-        bool under = going && !sky, aloft = going && sky || d.Act == DeityAct.Leap && t > Sim.LeapCrouch;
+        bool under = going && !sky, aloft = going && sky || d.Act == DeityAct.Leap && t > Sim.LeapCrouch || d.Act == DeityAct.Pass;
         // (set again below for one that hangs in the air)
         // the root: between its feet on the ground; sunk under it, or high in the sky, while it comes and goes
-        float off = going ? (sky ? (1 - d.Up) * 110 * VoxelWorld.PerMetre : -(1 - d.Up) * d.T.Height * 1.02f) : 0;
+        // (a lesser angel comes down from as many times its height as the archangel does)
+        float skyFrom = d.T.Minor ? d.T.Height * 6 : 110 * VoxelWorld.PerMetre;
+        float off = going ? (sky ? (1 - d.Up) * skyFrom : -(1 - d.Up) * d.T.Height * 1.02f) : 0;
         // the archangel hangs in the air over the ground, lower as it strikes, rising and falling a little with its wings
-        if (d.T.Winged && !going)
+        // (a lesser angel half its own height over it; the destroyer is high in the air already)
+        if (d.T.Winged && !going && d.Act != DeityAct.Pass)
         {
             float low = d.Act is DeityAct.Sweep or DeityAct.Slam or DeityAct.Gust ? .35f : d.Act == DeityAct.Leap ? 0 : 1;
             s.Hover += (low - s.Hover) * Math.Min(1, dt * 2);
-            off += s.Hover * (6 + .6f * MathF.Sin((float)sim.Time * 1.7f)) * VoxelWorld.PerMetre;
+            float high = d.T.Minor ? d.T.Height * .45f / VoxelWorld.PerMetre : 6;
+            off += s.Hover * high * (1 + .1f * MathF.Sin((float)sim.Time * 1.7f)) * VoxelWorld.PerMetre;
             aloft = true;
         }
         var root = new Transform3D(new Basis(Vector3.Up, MathF.PI / 2 - d.Facing).Scaled(Vector3.One * VoxelWorld.Vox * s.Scale),
@@ -292,6 +304,7 @@ public partial class DeityView : Node3D
             case DeityAct.Roar: lean = -.25f; headPitch = -.6f; break;
             case DeityAct.Gust: lean = t < Sim.GustAt ? -.2f : .3f; spread = true; break;
             case DeityAct.Leap: lean = t < Sim.LeapCrouch ? .4f : .25f; spread = true; headPitch = .3f; break;
+            case DeityAct.Pass: lean = .45f; spread = true; headPitch = .5f; break;
             default:
                 if (d.Held != null) { reach = true; arm = 0; }
                 break;
@@ -382,7 +395,7 @@ public partial class DeityView : Node3D
         // how open they are, and how they beat
         float open = spread ? 1 : d.Act is DeityAct.Sweep or DeityAct.Slam ? .45f : .12f;
         s.Spread += (open - s.Spread) * Math.Min(1, dt * 3);
-        bool flying = d.Act == DeityAct.Leap || going;
+        bool flying = d.Act is DeityAct.Leap or DeityAct.Pass || going;
         float rate = d.Act == DeityAct.Gust ? 0 : flying ? 1.1f : spread ? .45f : .3f;
         s.Flap += dt * rate;
         float beat = MathF.Sin(s.Flap * MathF.Tau) * (flying ? .55f : spread ? .22f : .05f);
@@ -401,14 +414,18 @@ public partial class DeityView : Node3D
         s.WingL.Visible = s.WingR.Visible = !hide;
         // the light behind the head, upright
         float mid = (s.Plan.HeadY0 + s.Plan.HeadY1) / 4f + 1;
-        s.Halo.Transform = s.Root * _xf[(int)Bone.Head] * new Transform3D(Basis.Identity, new Vector3(0, mid, neck.Z - 4.5f));
-        s.Halo.Visible = d.Id != HiddenId;
+        if (s.Halo != null)
+        {
+            s.Halo.Transform = s.Root * _xf[(int)Bone.Head] * new Transform3D(Basis.Identity, new Vector3(0, mid, neck.Z - 4.5f));
+            s.Halo.Visible = d.Id != HiddenId;
+        }
         // the light it comes down and goes up in
         s.Beam.Visible = going && sky;
         if (s.Beam.Visible)
         {
             s.Beam.Position = new Vector3(_w.WX(d.X), _w.WY(d.Y) + 120, _w.WZ(d.Z));
-            float a = d.Act == DeityAct.Rising ? 1 - Smooth((t - Sim.GodRiseFor + 1.5f) / 1.5f) : Smooth(t / 1.5f);
+            float fade = Math.Min(1.5f, d.T.RiseFor * .5f);
+            float a = d.Act == DeityAct.Rising ? 1 - Smooth((t - d.T.RiseFor + fade) / fade) : Smooth(t / fade);
             ((StandardMaterial3D)s.Beam.MaterialOverride).AlbedoColor = new Color(1f, .86f, .55f, .55f * Math.Clamp(a, 0, 1));
         }
     }

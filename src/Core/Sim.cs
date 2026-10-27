@@ -240,6 +240,7 @@ public sealed partial class Sim
         Stage = "TickStrays"; TickStrays(dt);
         Stage = "TickFlight"; TickFlight(dt);
         Stage = "TickDeities"; TickDeities(dt);
+        Stage = "TickHeavens"; TickHeavens(dt);
         Stage = "TickGates"; TickGates(dt);
         Stage = "TickDrawbridges"; TickDrawbridges(dt);
         Stage = "TickDecor"; TickDecor();
@@ -737,7 +738,7 @@ public sealed partial class Sim
     public void Recall()
     {
         foreach (var u in Units)
-            if (!u.Dead && u.Team == Team.Player && u.T.Work < 1 && u.Post >= 0 && u.T != Kinds.Risen)
+            if (!u.Dead && u.Team == Team.Player && u.T.Work < 1 && u.Post >= 0 && !u.T.Called)
             {
                 ReleaseSite(u);
                 Busy(u);

@@ -147,7 +147,7 @@ public sealed partial class Sim
             foreach (var o in Units)
             {
                 if (o.Dead || o.Inside || o.Down || o.Team != Team.Player || o.Escort != null || Kinds.IsEngine(o.T) || o.T.Prays || o.T.NoHands || o.T.Mounted
-                    || o.T == Kinds.Risen || o.Captor != null || o.PinKg > 0 || o.Airborne != null) continue;
+                    || o.T.Called || o.Captor != null || o.PinKg > 0 || o.Airborne != null) continue;
                 float d = Dist(o, e);
                 bool sent = o.Hold && d < e.T.BodyR + CrewReach + VoxelWorld.PerMetre;
                 bool idle = !o.Hold && o.Site < 0 && o.State is UnitState.Idle or UnitState.Walk && o.Target == null && o.Prey == null;

@@ -83,7 +83,7 @@ public sealed partial class Sim
     {
         // lava is no water to swim in or go under
         if (Lavas.Count > 0 && World.Get((int)MathF.Floor(u.X), (int)MathF.Floor(u.Y), (int)MathF.Floor(u.Z)) == Mat.Lava) return false;
-        if (Kinds.IsEngine(u.T) || u.T.Key is "risen" or "thrall") return false;
+        if (Kinds.IsEngine(u.T) || u.T.Called) return false;
         if (Armoured(u.T, u.Look) < SinksArmoured) return false;
         if (u.UnderSince < 0) { u.UnderSince = Time; if (u.Team == Team.Player) Say($"{u.Name} тонет: доспех тянет на дно.", 3, u); }
         if (Time - u.UnderSince >= DrownsIn) { Fatal(u, "утонул", "вода", null); u.UnderSince = -1; }

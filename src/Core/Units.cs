@@ -34,6 +34,8 @@ public sealed class UnitType
     public float TorchShare;
     /// <summary>A priest: it prays in a sanctuary by day and does no other work.</summary>
     public bool Prays;
+    /// <summary>Called by a spell, not hired: not the household's (nor the horde's) own, gone in a minute — the risen dead, the host's angels.</summary>
+    public bool Called;
     /// <summary>Ours: the lore that must be learnt before the citadel will take this kind on; none for those it always takes.</summary>
     public string Lore = "";
     /// <summary>Ours: how many of the household's places it takes — a man one, a horse and its rider two, a giant four.</summary>
@@ -420,17 +422,27 @@ public static partial class Kinds
     {
         Key = "risen", Name = "Мертвец", Team = Team.Player,
         Move = new Mover { Height = 2, Climb = 1, Drop = 5, Speed = 2.3f },
-        Work = 0, Yield = 0, Hp = 60, Damage = 11, AttackTime = 1.1f, Reach = 10, Tool = "sword",
+        Work = 0, Yield = 0, Hp = 60, Damage = 11, AttackTime = 1.1f, Reach = 10, Tool = "sword", Called = true,
+    };
+    /// <summary>
+    /// A warrior of the heavenly host a spell sends down: white and gold, wings and a halo, a sword; it fights for us a
+    /// minute and goes up again.
+    /// </summary>
+    public static readonly UnitType Angel = new()
+    {
+        Key = "angel", Name = "Ангел воинства", Team = Team.Player,
+        Move = new Mover { Height = 2, Climb = 1, Drop = 10, Speed = 3.2f },
+        Work = 0, Yield = 0, Hp = 160, Damage = 22, AttackTime = 1f, Reach = 10, Tool = "sword", Called = true,
     };
     /// <summary>A bone thrall: one of the horde's fallen got up again by a necromancer; it fights for the horde a minute, then falls apart.</summary>
     public static readonly UnitType Thrall = new()
     {
         Key = "thrall", Name = "Костяк", Team = Team.Horde,
         Move = new Mover { Height = 2, Climb = 1, Drop = 5, Speed = 2.4f, Carve = new float[] { 10, 22, 3, 1 } },
-        Hp = 45, Damage = 9, AttackTime = 1.1f, KeepDamage = 1, Bounty = 0, BodyH = 15, BodyR = 2, Reach = 10, Tool = "sword",
+        Hp = 45, Damage = 9, AttackTime = 1.1f, KeepDamage = 1, Bounty = 0, BodyH = 15, BodyR = 2, Reach = 10, Tool = "sword", Called = true,
     };
     /// <summary>What the spells raise, ours or the horde's: not hired, not the household's, gone in a minute.</summary>
-    public static readonly UnitType[] Summoned = { Risen, Thrall };
+    public static readonly UnitType[] Summoned = { Risen, Thrall, Angel };
 
     /// <summary>
     /// A goblin shaman: a skull for a face and an ember in the horn of its staff; it mends the band it goes with and lays

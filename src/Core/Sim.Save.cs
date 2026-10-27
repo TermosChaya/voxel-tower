@@ -16,7 +16,7 @@ namespace VoxelTower.Core;
 public sealed partial class Sim
 {
     /// <summary>20: the bodies sculpted finer, their half-voxels (and so a wounded body's) not what they were.</summary>
-    public const int SaveVersion = 75;
+    public const int SaveVersion = 76;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -114,6 +114,7 @@ public sealed partial class Sim
         w.Write(Carcasses.Count); foreach (var t in Carcasses) w.Write(t.Key);
         // the spells known and when each is ready; the bogs, the red moon, the eye
         w.Write(Known.Count); foreach (var k in Known) w.Write((byte)k);
+        w.Write(_spellReady.Length);
         foreach (double t in _spellReady) w.Write(t);
         w.Write(Mires.Count); foreach (var m in Mires) { w.Write(m.X); w.Write(m.Z); w.Write(m.R); w.Write(m.Until); }
         w.Write(BloodMoonUntil); w.Write(EyeUntil);
@@ -434,7 +435,7 @@ public sealed partial class Sim
         for (int i = r.ReadInt32(); i > 0; i--) if (KindOf(r.ReadString()) is { } beast) Carcasses.Add(beast);
         Known.Clear();
         for (int i = r.ReadInt32(); i > 0; i--) Known.Add((SpellKind)r.ReadByte());
-        for (int i = 0; i < _spellReady.Length; i++) _spellReady[i] = r.ReadDouble();
+        for (int i = 0, n = r.ReadInt32(); i < n; i++) { double t = r.ReadDouble(); if (i < _spellReady.Length) _spellReady[i] = t; }
         Mires.Clear();
         for (int i = r.ReadInt32(); i > 0; i--) Mires.Add(new Mire { X = r.ReadSingle(), Z = r.ReadSingle(), R = r.ReadSingle(), Until = r.ReadDouble() });
         BloodMoonUntil = r.ReadDouble(); EyeUntil = r.ReadDouble();

@@ -8,6 +8,7 @@ public enum SpellKind : byte
     Hand, Rift, Mire, Skin, Fall, FireRain, Thunder, Weather, BloodMoon, BlackWind,
     Dread, DeadFog, Plague, Chains, Raise, Oath, Eye, Recall, Telekinesis, Explosion,
     Quake, Meteor, Whirlwind, Awaken,
+    Hail, FirePillar, Guardian, Cherub, Destroyer, Host,
 }
 
 /// <summary>A spell: what it does, its circle, what learning it takes, what a casting costs, and how far it reaches.</summary>
@@ -27,6 +28,11 @@ public sealed class Spell
     public bool Stroke;
     /// <summary>Aimed at the very voxel under the cursor (a wall, a rock, a building), not at the ground there.</summary>
     public bool AtVoxel;
+    /// <summary>
+    /// Of the dark faith, kept for a side to come (the author's word of 28.10.2026): not on the tree nor offered, though
+    /// what it does still works.
+    /// </summary>
+    public bool Draft;
 }
 
 /// <summary>A patch of ground made a bog by a spell, and till when.</summary>
@@ -42,14 +48,16 @@ public sealed class Patch { public float X, Y, Z, R; public double Until; }
 public sealed class Whirl { public float X, Z, VX, VZ, R; public double Until, Next; }
 
 /// <summary>
-/// Spells: the player's own hand in the fight, paid for in intervention. Four circles — earth, fire and the sky, death,
-/// and the will — learnt on the intervention's page of the lore tree: the first spell of each for intervention, the rest
-/// for revelations, each only once what it rests on is learnt, up to the greatest of the circle at its end. Each costs
-/// intervention to cast and wants a while before it can be cast again; grace makes them cheaper, readier and stronger.
+/// Spells: the player's own hand in the fight, paid for in intervention — the household's faith, of the Bible and of
+/// the angels. Four circles — the earth, the sky, the angels and the miracles — learnt on the intervention's page of the
+/// lore tree: the first spell of each for intervention, the rest for revelations, each only once what it rests on is
+/// learnt, up to the greatest of the circle at its end. Each costs intervention to cast and wants a while before it can
+/// be cast again; grace makes them cheaper, readier and stronger. The dark spells of before (the blood moon, the black
+/// wind, the fog of the dead, the plague, the raising of the dead) are drafts now, for a side to come.
 /// </summary>
 public sealed partial class Sim
 {
-    public static readonly string[] Circles = { "Круг земли", "Круг огня и неба", "Круг смерти", "Круг воли" };
+    public static readonly string[] Circles = { "Круг земли", "Круг неба", "Круг ангелов", "Круг чудес" };
 
     /// <summary>The weathers the spell can call down, in the order offered.</summary>
     public static readonly Weather[] Summonable = { Weather.Rain, Weather.Fog, Weather.Wind };
@@ -69,38 +77,38 @@ public sealed partial class Sim
         new() { Kind = SpellKind.Fall, Circle = 0, Learn = 2, Name = "Обвал", Cost = 30, Cooldown = 45, Radius = 2.5f * VoxelWorld.PerMetre, AtVoxel = true,
             About = "Выбивает шар 2,5 м из стены, скалы или осадной башни. То, что держалось на нём, падает на тех, кто " +
             "внизу." },
-        new() { Kind = SpellKind.FireRain, Circle = 1, ByFavour = true, Learn = 25, Name = "Огненный дождь", Cost = 30, Cooldown = 50, Radius = 5 * VoxelWorld.PerMetre,
-            About = "3 секунды на круг 5 м падает горящая смола. Поджигает дерево и налётчиков. В дождь вдвое слабее." },
+        new() { Kind = SpellKind.FireRain, Circle = 1, ByFavour = true, Learn = 25, Name = "Огонь и сера", Cost = 30, Cooldown = 50, Radius = 5 * VoxelWorld.PerMetre,
+            About = "3 секунды на круг 5 м с неба падает горящая сера. Поджигает дерево и налётчиков. В дождь вдвое слабее." },
         new() { Kind = SpellKind.Thunder, Circle = 1, Learn = 2, Name = "Перст грома", Cost = 25, Cooldown = 25, Radius = 3 * VoxelWorld.PerMetre,
             About = "Молния бьёт в налётчика у курсора: 150 урона, в том числе машинам, и поджог. Соседей задевает слабее. " +
             "В дождь в 1,5 раза сильнее." },
         new() { Kind = SpellKind.Weather, Circle = 1, Learn = 2, Name = "Призвать непогоду", Cost = 35, Cooldown = 180,
             About = "На 3 минуты задаёт погоду. Дождь гасит пожары и смолу, молния сильнее в 1,5 раза. Туман прячет врагов " +
             "от лучников и наших от орды. Ветер вдвое быстрее разносит огонь и сносит стрелы." },
-        new() { Kind = SpellKind.BloodMoon, Circle = 1, Learn = 3, Name = "Кровавая луна", Cost = 40, Cooldown = 240,
+        new() { Kind = SpellKind.BloodMoon, Circle = 1, Learn = 3, Draft = true, Name = "Кровавая луна", Cost = 40, Cooldown = 240,
             About = "На 90 секунд луна светит красным, и ночью становится светло: лучники стреляют в полную силу. Только " +
             "ночью." },
-        new() { Kind = SpellKind.BlackWind, Circle = 1, Learn = 3, Name = "Чёрный ветер", Cost = 30, Cooldown = 60, Radius = 6 * VoxelWorld.PerMetre,
+        new() { Kind = SpellKind.BlackWind, Circle = 1, Learn = 3, Draft = true, Name = "Чёрный ветер", Cost = 30, Cooldown = 60, Radius = 6 * VoxelWorld.PerMetre,
             About = "Вихрь в круге 6 м срывает лестницы и настилы орды и отбрасывает налётчиков от цитадели. Упавшие " +
             "получают урон, сброшенные со стены гибнут. Тролли отлетают недалеко, машины и скованные стоят на " +
             "месте." },
-        new() { Kind = SpellKind.Dread, Circle = 2, ByFavour = true, Learn = 25, Name = "Ужас", Cost = 30, Cooldown = 60, Radius = 7 * VoxelWorld.PerMetre,
-            About = "Налётчики в круге 7 м бросают всё и бегут на запад. Вожаки и тролли поддаются через раз, машины " +
+        new() { Kind = SpellKind.Dread, Circle = 2, Learn = 2, Name = "Страх Божий", Cost = 30, Cooldown = 60, Radius = 7 * VoxelWorld.PerMetre,
+            About = "Над кругом 7 м вспыхивает свет. Налётчики в нём бросают всё и бегут на запад. Вожаки и тролли поддаются через раз, машины " +
             "никогда." },
-        new() { Kind = SpellKind.DeadFog, Circle = 2, Learn = 2, Name = "Туман мёртвых", Cost = 30, Cooldown = 60, Radius = 6 * VoxelWorld.PerMetre,
+        new() { Kind = SpellKind.DeadFog, Circle = 2, Learn = 2, Draft = true, Name = "Туман мёртвых", Cost = 30, Cooldown = 60, Radius = 6 * VoxelWorld.PerMetre,
             About = "Туман на 45 секунд накрывает круг 6 м. Налётчики в нём теряют по 3 здоровья в секунду и двигаются " +
             "вдвое медленнее. Наших и мертвецов не трогает." },
-        new() { Kind = SpellKind.Plague, Circle = 2, Learn = 3, Name = "Мор", Cost = 40, Cooldown = 90, Radius = 5 * VoxelWorld.PerMetre,
+        new() { Kind = SpellKind.Plague, Circle = 2, Learn = 3, Draft = true, Name = "Мор", Cost = 40, Cooldown = 90, Radius = 5 * VoxelWorld.PerMetre,
             About = "Налётчики в круге 5 м заболевают и 20 секунд теряют по 2 здоровья в секунду. Мор передаётся тем, кто " +
             "стоит рядом с больным." },
-        new() { Kind = SpellKind.Chains, Circle = 2, Learn = 2, Name = "Цепи", Cost = 25, Cooldown = 40, Radius = 5 * VoxelWorld.PerMetre,
-            About = "Налётчики в круге 5 м скованы на 10 секунд: не двигаются и не бьют. Скованного мечник с приказом «Брать живым» " +
+        new() { Kind = SpellKind.Chains, Circle = 2, Learn = 2, Name = "Узы", Cost = 25, Cooldown = 40, Radius = 5 * VoxelWorld.PerMetre,
+            About = "Ангел связывает налётчиков в круге 5 м на 10 секунд: они не двигаются и не бьют. Скованного мечник с приказом «Брать живым» " +
             "связывает уже при 60 % здоровья." },
-        new() { Kind = SpellKind.Raise, Circle = 2, Learn = 3, Name = "Поднять мёртвых", Cost = 45, Cooldown = 90, Radius = 8 * VoxelWorld.PerMetre,
+        new() { Kind = SpellKind.Raise, Circle = 2, Learn = 3, Draft = true, Name = "Поднять мёртвых", Cost = 45, Cooldown = 90, Radius = 8 * VoxelWorld.PerMetre,
             About = "До 6 павших налётчиков в круге 8 м встают мертвецами и минуту дерутся за вас. Тела лежат 30 секунд." },
-        new() { Kind = SpellKind.Oath, Circle = 3, Learn = 2, Name = "Кровавый обет", Cost = 35, Cooldown = 90, Radius = 6 * VoxelWorld.PerMetre,
-            About = "Наши в круге 6 м восстанавливают 40 % здоровья, кровотечение останавливается, и минуту они бьют в 1,5 " +
-            "раза сильнее." },
+        new() { Kind = SpellKind.Oath, Circle = 3, Learn = 2, Name = "Обет назорея", Cost = 35, Cooldown = 90, Radius = 6 * VoxelWorld.PerMetre,
+            About = "Наши в круге 6 м получают силу Самсона: восстанавливают 40 % здоровья, кровотечение останавливается, и " +
+            "минуту они бьют в 1,5 раза сильнее." },
         new() { Kind = SpellKind.Eye, Circle = 3, Learn = 2, Name = "Око", Cost = 20, Cooldown = 120,
             About = "2 минуты видна вся орда: над каждым налётчиком метка, видная сквозь стены и лес. Туман не мешает " +
             "лучникам." },
@@ -119,7 +127,7 @@ public sealed partial class Sim
         new() { Kind = SpellKind.Quake, Circle = 0, Learn = 4, Name = "Землетрясение", Cost = 45, Cooldown = 120, Radius = 8 * VoxelWorld.PerMetre,
             About = "Земля в круге 8 м трясётся. Налётчиков подбрасывает и сбивает с ног, лестницы, настилы и мосты орды " +
             "разваливаются, осадные машины получают по 120 урона. Нашу кладку не трогает." },
-        new() { Kind = SpellKind.Meteor, Circle = 1, Learn = 4, Name = "Падучая звезда", Cost = 55, Cooldown = 150, Radius = 3 * VoxelWorld.PerMetre,
+        new() { Kind = SpellKind.Meteor, Circle = 1, Learn = 4, Name = "Звезда Полынь", Cost = 55, Cooldown = 150, Radius = 3 * VoxelWorld.PerMetre,
             About = "С неба падает горящая глыба и выбивает воронку 3 м. Налётчиков рядом ранит и раскидывает, машинам до " +
             "300 урона, всё вокруг загорается. В воронке остаётся лава: она жжёт, поджигает дерево и за пару минут " +
             "застывает камнем, а водой гаснет сразу. Глыба катится дальше и давит тех, кто на пути." },
@@ -131,6 +139,22 @@ public sealed partial class Sim
             "поджигает орду, огненный столп бьёт с неба далеко впереди, взмах крыльев сносит орду с её лестницами. Он " +
             "перелетает через долину и трубит в трубу: работы орды рушатся, орда бежит. Наших и нашу кладку не трогает. В " +
             "него можно вселиться. Сходит за 10 секунд, не ближе 14 м к цитадели." },
+        new() { Kind = SpellKind.Hail, Circle = 1, Learn = 2, Name = "Град", Cost = 30, Cooldown = 60, Radius = 7 * VoxelWorld.PerMetre,
+            About = "5 секунд на круг 7 м падает град с кулак и больше. Каждая градина бьёт и сбивает с ног, ломает " +
+            "лестницы, настилы и мосты орды. Нашу кладку не трогает. В дождь вдвое сильнее." },
+        new() { Kind = SpellKind.FirePillar, Circle = 1, Learn = 3, Name = "Столп огненный", Cost = 35, Cooldown = 120, Radius = 3 * VoxelWorld.PerMetre,
+            About = "Столп огня высотой 30 м стоит на месте 90 секунд. Налётчиков, что подходят ближе 3 м, жжёт и " +
+            "отбрасывает. Ночью светит на 30 м вокруг: лучники там стреляют в полную силу." },
+        new() { Kind = SpellKind.Guardian, Circle = 2, ByFavour = true, Learn = 25, Name = "Ангел-хранитель", Cost = 25, Cooldown = 60, Radius = 6 * VoxelWorld.PerMetre,
+            About = "Ангел высотой 4 м минуту парит над местом. Наши в круге 6 м получают втрое меньше урона." },
+        new() { Kind = SpellKind.Cherub, Circle = 2, Learn = 3, Name = "Херувим у врат", Cost = 40, Cooldown = 120, Radius = 7 * VoxelWorld.PerMetre,
+            About = "Херувим с пламенным мечом, 7 м, минуту стоит на месте. Налётчиков в 7 м от него рубит, поджигает и " +
+            "отбрасывает. Наших и нашу кладку не трогает." },
+        new() { Kind = SpellKind.Destroyer, Circle = 2, Learn = 3, Name = "Ангел-губитель", Cost = 45, Cooldown = 150, Radius = 10 * VoxelWorld.PerMetre,
+            About = "Тёмный ангел пролетает над кругом 10 м. Каждый третий налётчик в нём падает замертво, вожаки и тролли " +
+            "вдвое реже. Машины не трогает." },
+        new() { Kind = SpellKind.Host, Circle = 2, Learn = 4, Name = "Небесное воинство", Cost = 55, Cooldown = 180, Radius = 6 * VoxelWorld.PerMetre,
+            About = "С неба в столпе света сходят 6 ангелов с мечами. Минуту они бьются за вас, потом возносятся." },
     };
 
     public static Spell SpellOf(SpellKind k) => Spells[(int)k];
@@ -214,6 +238,12 @@ public sealed partial class Sim
             SpellKind.Meteor => Fallstar(x, z, s.Radius),
             SpellKind.Whirlwind => Unleash(x, z, s.Radius),
             SpellKind.Awaken => Awaken(DeityKind.Archangel, x, z),
+            SpellKind.Hail => CallHail(x, z, s.Radius),
+            SpellKind.FirePillar => RaisePillar(x, z),
+            SpellKind.Guardian => Awaken(DeityKind.Guardian, x, z, 60 * Might),
+            SpellKind.Cherub => Awaken(DeityKind.Cherub, x, z, 60 * Might),
+            SpellKind.Destroyer => SendDestroyer(x, z),
+            SpellKind.Host => SendHost(x, z, s.Radius),
             _ => Watch(),
         };
         if (why != null) return why;
@@ -540,7 +570,7 @@ public sealed partial class Sim
             StopCarve(u); StopBuild(u);
             fled++;
         }
-        Say(fled == 0 ? "Ужас не взял никого." : $"Ужас: бегут {fled} из {them.Count}.", fled > 0 ? 1 : 2, x, z);
+        Say(fled == 0 ? "Страх Божий не взял никого." : $"Страх Божий: бегут {fled} из {them.Count}.", fled > 0 ? 1 : 2, x, z);
         return null;
     }
 
@@ -579,10 +609,20 @@ public sealed partial class Sim
         return n == 0 ? "павшим не встать: им негде стоять" : null;
     }
 
-    /// <summary>One of the risen: at the nearest raider, and down it; after its minute, it falls apart.</summary>
+    /// <summary>
+    /// One of the risen, or an angel of the host: at the nearest raider, and down it; after its minute, the risen falls
+    /// apart and the angel goes up again, leaving nothing on the field.
+    /// </summary>
     void RisenTick(Unit u, float dt)
     {
-        if (Time >= u.CrumbleAt) { Kill(u, null, "рассыпался"); return; }
+        if (Time >= u.CrumbleAt)
+        {
+            if (u.T != Kinds.Angel) { Kill(u, null, "рассыпался"); return; }
+            Kill(u, null, AscendCause);
+            u.DiedAt = -999;
+            AngelRose?.Invoke(u.X, u.Y, u.Z);
+            return;
+        }
         const float Seek = 30 * VoxelWorld.PerMetre;
         if (u.Target == null || u.Target.Dead || u.Target.Bound || Time >= u.NextSearch)
         {
@@ -624,7 +664,7 @@ public sealed partial class Sim
     }
 
     /// <summary>What the fog of the dead and the plague take nothing from: engines, and the dead walking.</summary>
-    static bool Deathless(Unit u) => Kinds.IsEngine(u.T) || u.T == Kinds.Risen || u.T == Kinds.Thrall;
+    static bool Deathless(Unit u) => Kinds.IsEngine(u.T) || u.T.Called;
 
     /// <summary>The plague on the raiders in the circle.</summary>
     string Sicken(float x, float z, float r)
@@ -646,7 +686,7 @@ public sealed partial class Sim
         int n = 0;
         foreach (var u in Units)
         {
-            if (u.Dead || u.Inside || u.Team != Team.Player || u.T == Kinds.Risen) continue;
+            if (u.Dead || u.Inside || u.Team != Team.Player || u.T.Called) continue;
             if ((u.X - x) * (u.X - x) + (u.Z - z) * (u.Z - z) > r * r) continue;
             u.Hp = Math.Min(u.MaxHp, u.Hp + u.MaxHp * .4f);
             if (u.Wounds != null) u.Wounds.Bleed = 0;
@@ -666,7 +706,7 @@ public sealed partial class Sim
         Unit one = null; float bd = r * r;
         foreach (var u in Units)
         {
-            if (u.Dead || u.Inside || u.Team != Team.Player || u.T == Kinds.Risen) continue;
+            if (u.Dead || u.Inside || u.Team != Team.Player || u.T.Called) continue;
             float d = (u.X - x) * (u.X - x) + (u.Z - z) * (u.Z - z);
             if (d < bd) { bd = d; one = u; }
         }

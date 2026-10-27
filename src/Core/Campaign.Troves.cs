@@ -238,7 +238,7 @@ public sealed partial class Campaign
         return TakeTrove(cell) != null;
     }
 
-    static bool Ours(Unit u) => !u.Dead && u.Team == Team.Player && u.T != Kinds.Risen && !u.Inside;
+    static bool Ours(Unit u) => !u.Dead && u.Team == Team.Player && !u.T.Called && !u.Inside;
 
     static float Flat(Unit u, float x, float z)
     {

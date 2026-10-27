@@ -62,7 +62,7 @@ public sealed partial class Sim
     void NightFell(Unit u, Unit by)
     {
         if (!Raids.Active) return;
-        if (u.Team == Team.Player && u.T != Kinds.Risen) _nightLost++;
+        if (u.Team == Team.Player && !u.T.Called) _nightLost++;
         if (u.Team != Team.Horde || u.T == Kinds.Thrall) return;
         // (a band's leader counted once, however many took its place and fell after)
         if (u.Leader) { if (u.Band is not { LostLeader: true }) _nightLeadersKilled++; if (u.Band != null) _slainBands.Add(u.Band.Id); }

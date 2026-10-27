@@ -92,7 +92,7 @@ public static class Fortification
     }
 
     /// <summary>One who fights for a point: a soldier, a commander, an engine's crew, a worker called to arms; not a worker at his work, nor a priest.</summary>
-    public static bool Fighter(Unit u) => !u.Dead && u.T != Kinds.Risen && !u.T.Prays && (u.T.Work < 1 || u.Militia);
+    public static bool Fighter(Unit u) => !u.Dead && !u.T.Called && !u.T.Prays && (u.T.Work < 1 || u.Militia);
 
     /// <summary>What stands about the point a valley is held at by a side (<see cref="PointOf"/>).</summary>
     public static Fort Measure(Sim sim, Team team = Team.Player)

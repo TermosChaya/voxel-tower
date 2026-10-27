@@ -120,7 +120,7 @@ public sealed partial class Sim
         side = ((side % 6) + 6) % 6;
         var hex = Site.Hex ?? Hex.In(World.SX, World.SZ);
         var group = new List<Unit>();
-        foreach (var u in units) if (!u.Dead && u.Team == Team.Player && u.T != Kinds.Risen) group.Add(u);
+        foreach (var u in units) if (!u.Dead && u.Team == Team.Player && !u.T.Called) group.Add(u);
         // across the way out as they stand, so that nobody crosses another's way to the edge
         var (ix, iz) = hex.Inward(side);
         group.Sort((a, b) => (a.X * -iz + a.Z * ix).CompareTo(b.X * -iz + b.Z * ix));

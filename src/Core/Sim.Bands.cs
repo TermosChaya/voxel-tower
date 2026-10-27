@@ -248,7 +248,7 @@ public sealed partial class Sim
         Array.Clear(SideKeep);
         foreach (var u in Units)
         {
-            if (u.Dead || u.Team != Team.Player || u.T.Work >= 1 && !u.Militia || u.T == Kinds.Risen) continue;
+            if (u.Dead || u.Team != Team.Player || u.T.Work >= 1 && !u.Militia || u.T.Called) continue;
             var (x, _, z) = u.Post >= 0 ? Nav.Feet(u.Post) : (u.X, u.Y, u.Z);
             float dx = x - Site.KeepX, dz = z - Site.KeepZ;
             if (dx * dx + dz * dz > 60 * 60 * VoxelWorld.PerMetre * VoxelWorld.PerMetre) continue;

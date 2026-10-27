@@ -141,7 +141,7 @@ public partial class Main
     {
         if (Atlas == null) return "нет кампании";
         // (those left to hold the valley stay)
-        group = group.FindAll(u => !u.Dead && u.Team == Team.Player && u.T != Kinds.Risen && !u.Garrison);
+        group = group.FindAll(u => !u.Dead && u.Team == Team.Player && !u.T.Called && !u.Garrison);
         if (group.Count == 0) return "выберите в долине командира и бойцов";
         if (!group.Exists(u => u.T == Kinds.Captain) && !Scouts(group)) return $"в отряде нужен командир, или до {Campaign.ScoutMost} лёгких бойцов в разведку";
         float cx = 0, cz = 0;

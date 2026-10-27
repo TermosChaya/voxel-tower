@@ -23,11 +23,12 @@ public sealed class Rite
 }
 
 /// <summary>
-/// Sacrifices. By day, in peace, the player asks for one, and a priest does it: it fetches a prisoner from the citadel
-/// and leads it bound to the altar — the place in the sanctuary nearest its heart — or goes there with a carcass from the
-/// hunt, or leads there one of our own, and gives it to the old powers. What they give back is intervention and,
-/// for a life, revelations: what the old powers showed, with which spells are learnt. On a place of power we hold it is
-/// worth half as much again. One of our own given up leaves the household mourning: for a while they work slower.
+/// The rites. By day, in peace, the player asks for one, and a priest does it: it fetches a prisoner from the citadel and
+/// leads it bound to the altar — the place in the sanctuary nearest its heart — and turns it to the faith there, and the
+/// prisoner takes off the horde's gear and joins the household as a worker; or it goes there with a carcass from the hunt
+/// and offers it up whole as a burnt offering. What comes back is intervention and, for a soul turned, revelations, with
+/// which spells are learnt. On a place of power we hold it is worth half as much again. The dark faith's rites — a
+/// prisoner given up, one of our own given up and the household mourning — are kept for a side to come and are off.
 /// </summary>
 public sealed partial class Sim
 {
@@ -44,7 +45,10 @@ public sealed partial class Sim
     public const double OwnFavour = 50;
     public const int OwnRevelations = 2;
 
-    /// <summary>Fired when a rite is done, at the altar: for the dark flash over it.</summary>
+    /// <summary>The dark faith's rites, kept for a side to come: a prisoner killed at the altar, one of our own given up. Off.</summary>
+    public bool DarkRites;
+
+    /// <summary>Fired when a rite is done, at the altar: for the flash over it.</summary>
     public event Action<float, float, float> RiteDone;
 
     /// <summary>What a prisoner is worth to the old powers, by its kind: intervention and revelations.</summary>
@@ -74,7 +78,8 @@ public sealed partial class Sim
     /// </summary>
     public string Sacrifice(RiteKind kind, Unit victim = null)
     {
-        if (Raids.Active) return "жертвы приносят днём, когда орды нет в долине";
+        if (Raids.Active) return "обряды совершают днём, когда орды нет в долине";
+        if (kind == RiteKind.Own && !DarkRites) return "вера людей не приносит в жертву своих";
         if (!Zones.Exists(z => z.Kind == Zone.Sanctum)) return "нет святилища: отметьте его делянкой ({ToolGather} → «святилище»)";
         if (RiteNow != null) return "обряд уже идёт";
         Unit priest = null; float bd = float.MaxValue;
@@ -126,8 +131,9 @@ public sealed partial class Sim
         priest.Rite = r;
         Say(kind switch
         {
-            RiteKind.Prisoner => $"Жрец идёт за пленным: {r.Victim.Name.ToLowerInvariant()} будет принесён в жертву.",
-            RiteKind.Carcass => $"Жрец несёт в святилище тушу: {r.Beast.Name.ToLowerInvariant()}.",
+            RiteKind.Prisoner when DarkRites => $"Жрец идёт за пленным: {r.Victim.Name.ToLowerInvariant()} будет принесён в жертву.",
+            RiteKind.Prisoner => $"Жрец идёт за пленным: {r.Victim.Name.ToLowerInvariant()} будет обращён в веру.",
+            RiteKind.Carcass => $"Жрец несёт в святилище тушу на всесожжение: {r.Beast.Name.ToLowerInvariant()}.",
             _ => $"Жрец уводит в святилище: {r.Victim.T.Name.ToLowerInvariant()} №{r.Victim.Id}.",
         }, 2, priest);
         return null;
@@ -167,7 +173,7 @@ public sealed partial class Sim
                 Walk(u, dt);
                 return;
             case 1:
-                u.Why = r.Kind == RiteKind.Carcass ? "несёт тушу в святилище" : "ведёт жертву в святилище";
+                u.Why = r.Kind == RiteKind.Carcass ? "несёт тушу в святилище" : r.Kind == RiteKind.Prisoner && !DarkRites ? "ведёт пленного в святилище" : "ведёт жертву в святилище";
                 if (r.Spot < 0 || SanctumAt(r.Spot) == null) r.Spot = AltarFor(u);
                 if (r.Spot < 0) { CancelRite(u, "в святилище не встать"); return; }
                 if (u.Cell == r.Spot) { r.Stage = 2; r.Done = 0; u.Path = null; return; }
@@ -181,7 +187,7 @@ public sealed partial class Sim
                 Walk(u, dt, .7f);
                 return;
             default:
-                u.Why = "приносит жертву";
+                u.Why = r.Kind == RiteKind.Carcass ? "совершает всесожжение" : r.Kind == RiteKind.Prisoner && !DarkRites ? "обращает пленного в веру" : "приносит жертву";
                 u.Path = null;
                 u.State = UnitState.Work;
                 var z = SanctumAt(r.Spot);
@@ -194,7 +200,10 @@ public sealed partial class Sim
         }
     }
 
-    /// <summary>The life given: what the old powers send back, and the household's grief if it was one of ours.</summary>
+    /// <summary>
+    /// The rite done: what comes back for it; the prisoner turned and joined to the household (in the dark faith, killed),
+    /// and the household's grief if one of ours was given.
+    /// </summary>
     void Fulfil(Unit priest, Rite r)
     {
         var z = SanctumAt(r.Spot);
@@ -208,7 +217,8 @@ public sealed partial class Sim
                 if (r.Victim.Leader) favour *= 1.5;
                 what = r.Victim.Name.ToLowerInvariant();
                 (ax, ay, az) = (r.Victim.X, r.Victim.Y, r.Victim.Z);
-                Kill(r.Victim, priest, GivenToPowers);
+                if (DarkRites) Kill(r.Victim, priest, GivenToPowers);
+                else TurnToFaith(r.Victim, priest);
                 break;
             case RiteKind.Carcass:
                 favour = CarcassWorth(r.Beast); revelations = 0;
@@ -233,13 +243,25 @@ public sealed partial class Sim
         Revelations += revelations;
         priest.Rite = null; priest.Captive = null; priest.State = UnitState.Idle; priest.NextSearch = 0;
         RiteDone?.Invoke(ax, ay, az);
-        Say($"Жертва принята: {what}. Вмешательство +{kept:0}" + (kept < favour - .5 ? $" (из {favour:0}: больше не вместить)" : "")
+        string done = r.Kind == RiteKind.Carcass ? "Всесожжение принято" : r.Kind == RiteKind.Prisoner && !DarkRites ? "Пленный обращён и стал рабочим" : "Жертва принята";
+        Say($"{done}: {what}. Вмешательство +{kept:0}" + (kept < favour - .5 ? $" (из {favour:0}: больше не вместить)" : "")
             + (revelations > 0 ? $", откровения +{revelations}" : "") + (power ? " (на месте силы в 1,5 раза больше)." : "."), 1, priest);
         if (r.Kind == RiteKind.Own) Say("Дружина скорбит: 5 минут работа идёт на 25 % медленнее.", 2);
     }
 
     /// <summary>What the chronicle says killed one given to the old powers.</summary>
     public const string GivenToPowers = "принесён в жертву";
+    /// <summary>What the chronicle says of a prisoner of the horde gone from it, turned to the faith.</summary>
+    public const string TurnedToFaith = "обращён в веру";
+
+    /// <summary>A prisoner turned to the faith: gone from the horde, and in its place at the altar a worker of the household.</summary>
+    void TurnToFaith(Unit v, Unit priest)
+    {
+        v.Captor = null; priest.Captive = null;
+        v.Dead = true; v.DiedAt = -999; v.State = UnitState.Dead; v.KilledBy = TurnedToFaith;
+        int cell = NearestStand((int)v.X, (int)v.Z, Kinds.Worker.Move.Height);
+        if (cell >= 0) Spawn(Kinds.Worker, cell).Facing = priest.Facing + MathF.PI;
+    }
 
     /// <summary>A rite ended before it was done: the prisoner goes back into the citadel, one of ours back to its work, a carcass back to the stores.</summary>
     void CancelRite(Unit u, string why)

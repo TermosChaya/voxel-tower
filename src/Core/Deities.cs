@@ -5,9 +5,10 @@ namespace VoxelTower.Core;
 
 /// <summary>
 /// The gods the sides can call into the world: the household's archangel, the horde's toad out of the swamps; and the
-/// chained god of the earth, kept for a side to come (no side calls it now).
+/// chained god of the earth, kept for a side to come (no side calls it now). And the lesser angels the household's
+/// spells send: the guardian over a spot, the cherub with its sword at a gate, the destroyer passing over.
 /// </summary>
-public enum DeityKind : byte { Archangel, Toad, Colossus }
+public enum DeityKind : byte { Archangel, Toad, Colossus, Guardian, Cherub, Destroyer }
 
 /// <summary>Where a god comes into the world from: down out of the sky, up out of the earth, up out of a bog.</summary>
 public enum Arrival : byte { Sky, Earth, Bog }
@@ -16,9 +17,9 @@ public enum Arrival : byte { Sky, Earth, Bog }
 /// What a god is at: coming into the world, standing, walking; one of its blows — the arm (or the sword) swept along the
 /// ground, the fist (or the pillar of heaven) brought down, a lump of the land torn up and thrown, the roar (the
 /// trumpet, the croak); a beat of the wings; a leap (a flight on its wings, a toad's hop); the tongue shot out; venom
-/// spat; going out of the world; fallen.
+/// spat; going out of the world; fallen; passing over the field (the destroyer).
 /// </summary>
-public enum DeityAct : byte { Rising, Standing, Walking, Sweep, Slam, Lift, Throw, Roar, Sinking, Fallen, Gust, Leap, Tongue, Spit }
+public enum DeityAct : byte { Rising, Standing, Walking, Sweep, Slam, Lift, Throw, Roar, Sinking, Fallen, Gust, Leap, Tongue, Spit, Pass }
 
 /// <summary>
 /// A kind of god: whose it is, how great, how it walks and strikes, how long the world holds it. The greatest thing in
@@ -48,6 +49,13 @@ public sealed class DeityType
     public bool Hops;
     /// <summary>What it is called in the chronicle when it kills or breaks, «колосс», «пожиратель».</summary>
     public string Cause = "";
+    /// <summary>
+    /// A lesser angel a spell sends, not a god: no god goes for it nor it for a god, the player does not go into it, it
+    /// is not told of as it comes and goes, and there may be several.
+    /// </summary>
+    public bool Minor;
+    /// <summary>Seconds it takes to come into the world and to go out of it.</summary>
+    public float RiseFor = 10, SinkFor = 8;
 }
 
 /// <summary>
@@ -157,5 +165,33 @@ public static class Deities
         Reach = 24 * M, SlamNear = 9 * M, SlamFar = 22 * M, Hp = 40000, Lasts = 180, Arrives = Arrival.Earth,
     };
 
-    public static DeityType Of(DeityKind k) => k switch { DeityKind.Archangel => Archangel, DeityKind.Toad => Toad, _ => Colossus };
+    /// <summary>The guardian angel: four metres, hovering over a spot; ours under it take a third of the harm.</summary>
+    public static readonly DeityType Guardian = new()
+    {
+        Kind = DeityKind.Guardian, Key = "guardian", Name = "Ангел-хранитель", Team = Team.Player, Cause = "ангел-хранитель",
+        Height = 4 * M, Stance = .8f * M, Stride = 1 * M, Foot = .4f * M, Speed = 0, Turn = 1.5f,
+        Reach = 3 * M, SlamNear = 2 * M, SlamFar = 4 * M, Hp = 1e9f, Lasts = 60, Arrives = Arrival.Sky, Winged = true, Minor = true, RiseFor = 2, SinkFor = 2,
+    };
+
+    /// <summary>The cherub at the gate: seven metres with a sword of fire, standing where it is set and cutting down whoever comes near.</summary>
+    public static readonly DeityType Cherub = new()
+    {
+        Kind = DeityKind.Cherub, Key = "cherub", Name = "Херувим", Team = Team.Player, Cause = "херувим",
+        Height = 7 * M, Stance = 1.4f * M, Stride = 2 * M, Foot = .6f * M, Speed = 0, Turn = 2.5f,
+        Reach = 3.5f * M, SlamNear = 2 * M, SlamFar = 6 * M, Hp = 1e9f, Lasts = 60, Fiery = true, Arrives = Arrival.Sky, Winged = true, Minor = true, RiseFor = 2.5f, SinkFor = 2,
+    };
+
+    /// <summary>The destroying angel: dark-winged, it passes over a stretch of the field, and one in three of the horde under it falls dead.</summary>
+    public static readonly DeityType Destroyer = new()
+    {
+        Kind = DeityKind.Destroyer, Key = "destroyer", Name = "Ангел-губитель", Team = Team.Player, Cause = "ангел-губитель",
+        Height = 6 * M, Stance = 1.2f * M, Stride = 2 * M, Foot = .5f * M, Speed = 0, Turn = 1,
+        Reach = 3 * M, SlamNear = 2 * M, SlamFar = 4 * M, Hp = 1e9f, Lasts = 0, Arrives = Arrival.Sky, Winged = true, Minor = true, RiseFor = 0, SinkFor = 0,
+    };
+
+    public static DeityType Of(DeityKind k) => k switch
+    {
+        DeityKind.Archangel => Archangel, DeityKind.Toad => Toad, DeityKind.Guardian => Guardian, DeityKind.Cherub => Cherub, DeityKind.Destroyer => Destroyer,
+        _ => Colossus,
+    };
 }

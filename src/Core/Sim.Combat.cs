@@ -181,7 +181,7 @@ public sealed partial class Sim
     public void Hurt(Unit b, Unit by, float dmg, string cause = null)
     {
         if (b.Dead) return;
-        dmg *= MailGuard(b) * Walled(b, Time) * Steadied(b);
+        dmg *= MailGuard(b) * Walled(b, Time) * Steadied(b) * Warded(b);
         Hurting?.Invoke(b, dmg, cause ?? by?.T.Name ?? "");
         b.Hp -= dmg;
         b.LastHurt = Time;
@@ -237,7 +237,7 @@ public sealed partial class Sim
             }
         }
         // (a hero's fall is told with his name and what went with him: Sim.Heroes.cs)
-        else if (cause != GivenToPowers && u.T != Kinds.Risen && u.Hero == null) Say($"{u.T.Name} пал.", 3, u);
+        else if (cause != GivenToPowers && !u.T.Called && u.Hero == null) Say($"{u.T.Name} пал.", 3, u);
     }
 
     /// <summary>Beasts taken by the pawns since the start.</summary>
@@ -420,6 +420,7 @@ public sealed partial class Sim
         // the fires set out in the settlement light more round them than a torch on a wall
         foreach (var f in Fixtures) if (f.Kind is FixtureKind.Campfire or FixtureKind.Brazier && f.DarkUntil <= Time) Around(f.LX, f.LZ, TorchLight * 1.4f);
         Around(Site.KeepX, Site.KeepZ, Site.KeepR + 8 * VoxelWorld.PerMetre);
+        PillarsLight(Around);
         int n = 0;
         foreach (int p in Burning.Keys)
         {

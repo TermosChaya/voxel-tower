@@ -21,8 +21,21 @@ public partial class Main
         if (!sim.Alarm) sim.RaiseAlarm();
         var lord = sim.NewWarlord(2, Kinds.Goblin);
         sim.Raid(new List<UnitType> { Kinds.Goblin, Kinds.Goblin, Kinds.Goblin, Kinds.Goblin, Kinds.Goblin, Kinds.Goblin, Kinds.Orc }, 1, .5, lord);
-        var lurk = sim.Bands.Find(b => b.Lurk);
-        for (int i = 0; i < 300 && !(lurk is { State: BandState.Lurk } && lurk.Members.Exists(u => u.Lurking)); i++) Advance(.5);
+        // (the band in wait is this army's, the last told off; and ours hold their blows and shots while it comes in: what
+        // is looked at is his bar and the ambush, not how the fight goes — a soldier on a post cutting the warlord down
+        // early takes his whole army off the field, the band in wait with it)
+        var lurk = sim.Bands.FindLast(b => b.Lurk);
+        Unit lordUnit = null;
+        for (int i = 0; i < 300 && !(lurk is { State: BandState.Lurk } && lurk.Members.Exists(u => u.Lurking)); i++)
+        {
+            foreach (var u in sim.Units)
+            {
+                if (u.Dead) continue;
+                if (u.Team == Team.Player) u.Cooldown = 1;
+                else if (u.Lord == lord) lordUnit = u;
+            }
+            Advance(.5);
+        }
         Hud.Refresh();
         await Frames(4);
         string line = Hud.LordLine;
@@ -36,7 +49,7 @@ public partial class Main
         }
         check("a goblin warlord's army come in: his bar names his kind; one of his bands lies down in wait, and a click on one of it lying there picks nobody of it",
             line != null && line.Contains("гоблин-военачальник") && lying != null && picked?.Band != lurk,
-            $"the bar «{line}»; the band in wait {lurk?.Name ?? "none"} {lurk?.State}, lying {lurk?.Members.FindAll(u => u.Lurking).Count}; picked {picked?.Name ?? "nobody"}");
+            $"the bar «{line}»; the band in wait {lurk?.Name ?? "none"} {lurk?.State}, lying {lurk?.Members.FindAll(u => u.Lurking).Count}; picked {picked?.Name ?? "nobody"}; the warlord {(lordUnit == null ? "never seen" : lordUnit.Dead ? "dead of " + lordUnit.KilledBy : "up")}, his kind {lord.Kind?.Name}");
         // the raid gone at once, as if it had got out
         sim.Raids._queue.Clear();
         foreach (var u in sim.Units) if (!u.Dead && u.Team == Team.Horde) { u.Dead = true; u.DiedAt = -999; u.Lurking = false; }

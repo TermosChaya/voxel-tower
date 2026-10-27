@@ -365,7 +365,7 @@ public partial class Main
         int revelations0 = Sim.Revelations;
         Hud.Mysteries.PlaqueOf(RiteKind.Prisoner).EmitSignal(BaseButton.SignalName.Pressed);
         for (int t = 0; t < 240 && !captive.Dead; t++) Advance(.5);
-        Check("…and the plaque in «Таинства» has the priest give the prisoner to the old powers", captive.Dead && captive.KilledBy == Sim.GivenToPowers && Sim.Revelations == revelations0 + 1,
+        Check("…and the plaque in «Таинства» has the priest turn the prisoner to the faith", captive.Dead && captive.KilledBy == Sim.TurnedToFaith && Sim.Revelations == revelations0 + 1,
             $"the goblin {(captive.Dead ? captive.KilledBy : "alive")}, revelations {revelations0} → {Sim.Revelations}");
         Hud.ClosePanel();
 
@@ -589,10 +589,13 @@ public partial class Main
             $"page {Hud.Lore.Page}, the barracks learnt {Sim.Knows("b_barracks")}, {Sim.Knowledge} knowledge left");
         Hud.ClosePanel();
 
-        // a spell: a click on Dread's plaque in «Таинства» before it is learnt opens the intervention's page of the tree;
-        // there it is learnt with a click on its medallion, taken in hand from «Таинства», and a click on the field among
-        // three goblins puts them to flight
+        // a spell: a click on the Fear of God's plaque in «Таинства» before it is learnt opens the intervention's page of
+        // the tree; there it is learnt with a click on its medallion (the guardian angel it rests on learnt already, the
+        // revelations it costs at hand), taken in hand from «Таинства», and a click on the field among three goblins puts
+        // them to flight
         Sim.Favour += 60;
+        Sim.Known.Add(SpellKind.Guardian);
+        Sim.Revelations += Sim.SpellOf(SpellKind.Dread).Learn;
         Hud.OpenPanel("magic");
         Hud.Refresh();
         Hud.Mysteries.SpellPlaque(SpellKind.Dread).EmitSignal(BaseButton.SignalName.Pressed);
@@ -614,16 +617,19 @@ public partial class Main
         await Look(sx1 + 10, sz1);
         double favourBefore = Sim.Favour;
         await Click(sx1 + 10, sz1);
-        Check("a spell is learnt in the tree, taken in hand from «Таинства», and a click on the field casts it: Dread puts the goblins to flight",
+        Check("a spell is learnt in the tree, taken in hand from «Таинства», and a click on the field casts it: the Fear of God puts the goblins to flight",
             learnt && inHand && flock.TrueForAll(g => g.Routed) && Sim.Favour < favourBefore,
             $"learnt {learnt}, in hand {inHand}, running {flock.FindAll(g => g.Routed).Count} of 3, intervention {favourBefore:0} → {Sim.Favour:0}");
         KeyPress(Key.Escape);
         foreach (var g in flock) { g.Dead = true; g.DiedAt = -999; }
 
-        // the spells in their four circles, twenty-four of them with the waking of the god, each with its plaque and its medallion on the tree
-        bool plaques = Array.TrueForAll(Sim.Spells, sp => Hud.Mysteries.SpellPlaque(sp.Kind) != null && Hud.Lore.PlaqueOf(Sim.SpellKey(sp.Kind)) != null);
-        Check("«Таинства» hold the spells in four circles, twenty-four of them, each with its plaque and its medallion on the tree", Sim.Circles.Length == 4 && Sim.Spells.Length == 24 && plaques,
-            $"{Sim.Circles.Length} circles, {Sim.Spells.Length} spells, plaques for all {plaques}");
+        // the faith's spells in their four circles, twenty-five of them with the appearance of the god, each with its plaque
+        // and its medallion on the tree; the dark faith's, drafts, on neither
+        var faith = Array.FindAll(Sim.Spells, sp => !sp.Draft);
+        bool plaques = Array.TrueForAll(faith, sp => Hud.Mysteries.SpellPlaque(sp.Kind) != null && Hud.Lore.PlaqueOf(Sim.SpellKey(sp.Kind)) != null)
+            && Array.TrueForAll(Sim.Spells, sp => !sp.Draft || Hud.Mysteries.SpellPlaque(sp.Kind) == null && Hud.Lore.PlaqueOf(Sim.SpellKey(sp.Kind)) == null);
+        Check("«Таинства» hold the faith's spells in four circles, twenty-five of them, each with its plaque and its medallion on the tree, and none of the dark faith's", Sim.Circles.Length == 4 && faith.Length == 25 && plaques,
+            $"{Sim.Circles.Length} circles, {faith.Length} spells of the faith of {Sim.Spells.Length}, plaques for all and none for the drafts {plaques}");
         Hud.ClosePanel();
 
         // a blast at a click: the ground there goes up in pieces that are seen flying, and come down

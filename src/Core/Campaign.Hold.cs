@@ -36,7 +36,7 @@ public sealed partial class Campaign
     }
 
     /// <summary>One of a garrison who fights for it: anyone but a worker or a priest.</summary>
-    public static bool Fights(Traveller m) => m.Kind.Work < 1 && !m.Kind.Prays && m.Kind != Kinds.Risen;
+    public static bool Fights(Traveller m) => m.Kind.Work < 1 && !m.Kind.Prays && !m.Kind.Called;
 
     /// <summary>Whether anyone of ours would fight for a cell.</summary>
     public bool Garrisoned(MapCell cell) => DefendersOf(cell).Exists(Fights);
@@ -73,7 +73,7 @@ public sealed partial class Campaign
         foreach (var u in sim.Units)
         {
             if (u.Dead || u.Bound || u.Captor != null) continue;
-            if (u.Team == Team.Player && u.T != Kinds.Risen) ours = true;
+            if (u.Team == Team.Player && !u.T.Called) ours = true;
             else if (u.Team == Team.Horde && !u.Envoy && !u.Routed) return false;
             else if (u.Team == Team.Wild && u.Guard) return false;
         }

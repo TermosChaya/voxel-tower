@@ -59,14 +59,14 @@ static class GodsBench
         // ---- the learning and the casting
         var wake = Sim.LoreOf(Sim.SpellKey(SpellKind.Awaken));
         bool shut = !sim.CanLearnSpell(Sim.SpellOf(SpellKind.Awaken));
-        foreach (var k in new[] { SpellKind.Quake, SpellKind.Meteor, SpellKind.Whirlwind }) sim.Known.Add(k);
+        foreach (var k in new[] { SpellKind.Quake, SpellKind.Meteor, SpellKind.Host, SpellKind.Whirlwind }) sim.Known.Add(k);
         sim.Revelations = 20;
         bool stillShut = !sim.CanLearnSpell(Sim.SpellOf(SpellKind.Awaken));
-        sim.Grant(Sim.LoreOf("reap")); sim.Grant(Sim.LoreOf("might"));
+        sim.Grant(Sim.LoreOf("might"));
         bool learnt = sim.LearnSpell(SpellKind.Awaken);
         check("the appearance stands at the heart of the intervention's page, on the greatest of each circle and the strength of faith, and is learnt for revelations",
             wake != null && wake.Tier == Sim.Heart && wake.Page == 2 && wake.Needs.Length == 5 && shut && stillShut && learnt && sim.Known.Contains(SpellKind.Awaken) && sim.Revelations == 12,
-            $"tier {wake?.Tier}, needs {wake?.Needs.Length}; shut at first {shut}, without reap and might {stillShut}, learnt {learnt}, revelations left {sim.Revelations}");
+            $"tier {wake?.Tier}, needs {wake?.Needs.Length}; shut at first {shut}, without might {stillShut}, learnt {learnt}, revelations left {sim.Revelations}");
         float cx = fx0 + 300, cz = fz0 + 300;
         // a few of the horde near where it is to come down
         var near = new List<Unit>();

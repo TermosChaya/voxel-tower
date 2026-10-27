@@ -49,7 +49,7 @@ public sealed partial class Sim
     double _handLands;
 
     /// <summary>Whether this one can be gone into now: ours, alive and on the field, not one of the risen dead.</summary>
-    public bool CanPossess(Unit u) => u is { Dead: false, Inside: false, Captor: null, Airborne: null } && u.Team == Team.Player && u.T != Kinds.Risen;
+    public bool CanPossess(Unit u) => u is { Dead: false, Inside: false, Captor: null, Airborne: null } && u.Team == Team.Player && !u.T.Called;
 
     /// <summary>Goes into one of ours: it leaves off whatever it was doing and waits on the player.</summary>
     public bool Possess(Unit u)

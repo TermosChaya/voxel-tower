@@ -38,7 +38,7 @@ public partial class Commander : Node
             var r = Box(_from, mb.Position);
             if (!add) _m.Selected.Clear();
             foreach (var u in _m.Sim.Units)
-                if (!u.Dead && !u.Inside && u.Team == Team.Player && u.T != Kinds.Risen && r.HasPoint(Screen(u, .5f))) _m.Selected.Add(u);
+                if (!u.Dead && !u.Inside && u.Team == Team.Player && !u.T.Called && r.HasPoint(Screen(u, .5f))) _m.Selected.Add(u);
             _m.KeepChosen = false;
             _m.Hud.OnSelectionChanged();
             return;
@@ -50,7 +50,7 @@ public partial class Commander : Node
         _m.KeepChosen = false;
         if (!add) _m.Selected.Clear();
         // one of ours is picked; a raider, a beast or one of the risen is only looked at
-        bool ours = hit != null && hit.Team == Team.Player && hit.T != Kinds.Risen;
+        bool ours = hit != null && hit.Team == Team.Player && !hit.T.Called;
         _m.Inspected = hit != null && !ours && _m.Selected.Count == 0 ? hit : null;
         if (ours)
         {

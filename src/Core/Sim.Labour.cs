@@ -72,7 +72,7 @@ public sealed partial class Sim
     void PawnTick(Unit u, float dt)
     {
         // one of the dead raised: it goes for the horde, and does nothing else
-        if (u.T == Kinds.Risen) { RisenTick(u, dt); return; }
+        if (u.T.Called) { RisenTick(u, dt); return; }
         // an engine of ours goes about its own work; its crew keeps by it (Sim.OurEngines.cs)
         if (Kinds.IsEngine(u.T)) { OurEngineTick(u, dt); return; }
         TroopTick(u, dt);

@@ -56,7 +56,7 @@ public sealed partial class Sim
     {
         new[] { "Хозяйство", "Ремёсла", "Кладка", "Дружина", "Ловушки" },
         new[] { "Пехота", "Стрелки", "Конница", "Великаны", "Машины" },
-        new[] { "Круг земли", "Круг огня и неба", "Круг смерти", "Круг воли", "Благодать" },
+        new[] { "Круг земли", "Круг неба", "Круг ангелов", "Круг чудес", "Благодать" },
     };
     public static readonly string[] Branches = PageBranches[0];
 
@@ -116,24 +116,23 @@ public sealed partial class Sim
                 Tier = tier, Lane = lane, Page = 2, Spell = k, Needs = Array.ConvertAll(needs, SpellKey),
             };
         }
-        var reap = G("reap", "Жатва", 4, 3, .5f, "Каждый налётчик, убитый заклинанием, возвращает 2 вмешательства.", SpellKey(SpellKind.Plague), SpellKey(SpellKind.Raise));
-        reap.Branch = "Круг смерти"; reap.Coin = Coin.Revelations;
         // the waking of the god: at the heart of the page, on the greatest of every circle and the strength of faith
-        var wake = S(SpellKind.Awaken, Heart, .5f, SpellKind.Quake, SpellKind.Meteor, SpellKind.Whirlwind);
-        wake.Branch = ""; wake.Needs = new[] { SpellKey(SpellKind.Quake), SpellKey(SpellKind.Meteor), "reap", SpellKey(SpellKind.Whirlwind), "might" };
+        var wake = S(SpellKind.Awaken, Heart, .5f, SpellKind.Quake, SpellKind.Meteor, SpellKind.Host, SpellKind.Whirlwind);
+        wake.Branch = ""; wake.Needs = new[] { SpellKey(SpellKind.Quake), SpellKey(SpellKind.Meteor), SpellKey(SpellKind.Host), SpellKey(SpellKind.Whirlwind), "might" };
+        // (the circle of death, the blood moon and the black wind, and the reaping are of the dark faith, kept for a side to come)
         return new[]
         {
             S(SpellKind.Hand, 0, .5f), S(SpellKind.Rift, 1, 0, SpellKind.Hand), S(SpellKind.Mire, 1, 1, SpellKind.Hand),
             S(SpellKind.Fall, 2, 0, SpellKind.Rift), S(SpellKind.Skin, 2, 1, SpellKind.Mire), S(SpellKind.Quake, 3, .5f, SpellKind.Fall, SpellKind.Skin),
             S(SpellKind.FireRain, 0, .5f), S(SpellKind.Thunder, 1, 0, SpellKind.FireRain), S(SpellKind.Weather, 1, 1, SpellKind.FireRain),
-            S(SpellKind.BlackWind, 2, 0, SpellKind.Thunder), S(SpellKind.BloodMoon, 2, 1, SpellKind.Weather), S(SpellKind.Meteor, 3, .5f, SpellKind.BlackWind, SpellKind.BloodMoon),
-            S(SpellKind.Dread, 0, .5f), S(SpellKind.DeadFog, 1, 0, SpellKind.Dread), S(SpellKind.Chains, 1, 1, SpellKind.Dread),
-            S(SpellKind.Plague, 2, 0, SpellKind.DeadFog), S(SpellKind.Raise, 2, 1, SpellKind.Chains), reap,
+            S(SpellKind.Hail, 2, 0, SpellKind.Thunder), S(SpellKind.FirePillar, 2, 1, SpellKind.Weather), S(SpellKind.Meteor, 3, .5f, SpellKind.Hail, SpellKind.FirePillar),
+            S(SpellKind.Guardian, 0, .5f), S(SpellKind.Dread, 1, 0, SpellKind.Guardian), S(SpellKind.Chains, 1, 1, SpellKind.Guardian),
+            S(SpellKind.Destroyer, 2, 0, SpellKind.Dread), S(SpellKind.Cherub, 2, 1, SpellKind.Chains), S(SpellKind.Host, 3, .5f, SpellKind.Destroyer, SpellKind.Cherub),
             S(SpellKind.Telekinesis, 0, .5f), S(SpellKind.Recall, 1, 0, SpellKind.Telekinesis), S(SpellKind.Eye, 1, 1, SpellKind.Telekinesis),
             S(SpellKind.Explosion, 2, 0, SpellKind.Recall), S(SpellKind.Oath, 2, 1, SpellKind.Eye), S(SpellKind.Whirlwind, 3, .5f, SpellKind.Explosion, SpellKind.Oath),
             G("rosary", "Чётки", 30, 0, .5f, "Молитва жрецов даёт в 1,5 раза больше вмешательства."),
             G("vessel", "Сосуд", 40, 1, 0, "Запас вмешательства вдвое больше: до 300, а не до 150.", "rosary"),
-            G("altar", "Жертвенник", 40, 1, 1, "Жертва даёт в 1,5 раза больше вмешательства и ещё одно откровение.", "rosary"),
+            G("altar", "Жертвенник", 40, 1, 1, "Обряд даёт в 1,5 раза больше вмешательства и ещё одно откровение.", "rosary"),
             G("litany", "Литании", 60, 2, 0, "Заклинания на 20 % дешевле.", "vessel"),
             G("vigil", "Бдение", 60, 2, 1, "Заклинания перезаряжаются на 33 % быстрее.", "altar"),
             G("might", "Сила веры", 90, 3, .5f, "Заклинания на 33 % сильнее и действуют на 33 % дольше.", "litany", "vigil"),
@@ -220,7 +219,7 @@ public sealed partial class Sim
     // what the lore does, where it is read
 
     /// <summary>One of our soldiers: an archer or a swordsman (not a worker, a priest or the risen dead).</summary>
-    static bool Soldier(Unit u) => u.Team == Team.Player && u.T.Work < 1 && u.T != Kinds.Risen && !Kinds.IsEngine(u.T);
+    static bool Soldier(Unit u) => u.Team == Team.Player && u.T.Work < 1 && !u.T.Called && !Kinds.IsEngine(u.T);
 
     /// <summary>How far a bow carries by day: its own reach, 15 % more with yew and as much again with longbows — ours
     /// only; what the household learns is its own.</summary>

@@ -157,7 +157,7 @@ public sealed partial class Sim
         c.Captor = null;
         c.Inside = true; c.Path = null; c.State = UnitState.Idle;
         c.Unguarded = 0;
-        Say($"Пленный в цитадели: {c.Name.ToLowerInvariant()}. Жрецы могут принести его в жертву (вкладка «Таинства»).", 1, c);
+        Say($"Пленный в цитадели: {c.Name.ToLowerInvariant()}. Жрецы могут обратить его в веру (вкладка «Таинства»).", 1, c);
     }
 
     /// <summary>

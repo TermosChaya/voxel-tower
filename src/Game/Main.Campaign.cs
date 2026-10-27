@@ -212,7 +212,7 @@ public partial class Main
         }
         if (told) MapsChanged();
         // the last of ours gone out of a valley not the first: back to the first, the board open
-        bool any = Sim.Units.Exists(u => !u.Dead && u.Team == Team.Player && u.T != Kinds.Risen);
+        bool any = Sim.Units.Exists(u => !u.Dead && u.Team == Team.Player && !u.T.Called);
         _emptyFor = !here.Home && !any && Sim.Departed.Count == 0 ? _emptyFor + Math.Max(dt, .02) : 0;
         if (_emptyFor > 2 && !_selfTest) GoHome();
     }
@@ -309,7 +309,7 @@ public partial class Main
         if (Atlas == null || to == null) return "нет кампании";
         if (to == Atlas.Here) return "отряд уже в этой долине";
         var group = new List<Unit>();
-        foreach (var u in Selected) if (!u.Dead && u.Team == Team.Player && u.T != Kinds.Risen) group.Add(u);
+        foreach (var u in Selected) if (!u.Dead && u.Team == Team.Player && !u.T.Called) group.Add(u);
         if (group.Count == 0) return "выберите в долине командира и бойцов";
         if (!group.Exists(u => u.T == Kinds.Captain) && !Scouts(group)) return $"в отряде нужен командир, или до {Campaign.ScoutMost} лёгких бойцов в разведку";
         int side = Campaign.SideToward(Atlas.Here, to.Q, to.R);
@@ -345,7 +345,7 @@ public partial class Main
         var list = new List<Unit> { u };
         foreach (var o in Sim.Units)
         {
-            if (o == u || o.Dead || o.Team != Team.Player || o.T == Kinds.Risen || o.Inside || o.Down || o.Captor != null || o.CarriedBy != null || o.Garrison) continue;
+            if (o == u || o.Dead || o.Team != Team.Player || o.T.Called || o.Inside || o.Down || o.Captor != null || o.CarriedBy != null || o.Garrison) continue;
             float dx = o.X - u.X, dz = o.Z - u.Z;
             if (dx * dx + dz * dz <= WithHim * WithHim) list.Add(o);
         }

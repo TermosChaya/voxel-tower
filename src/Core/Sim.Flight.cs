@@ -80,6 +80,8 @@ public sealed class Flier
     public Deity Bearer;
     /// <summary>The toad's venom (Sim.Deities.Swamp.cs): where it comes down it burns and eats in, and lies as nothing.</summary>
     public bool Venom;
+    /// <summary>A hailstone: where it comes down it strikes and melts (Sim.Heavens.cs).</summary>
+    public bool Hail;
 }
 
 /// <summary>
@@ -513,6 +515,7 @@ public sealed partial class Sim
         // a great one's boulder: through whoever it meets, breaking what its force breaks (Sim.Giants.cs)
         if (IsBoulder(f) && BoulderStrikes(f, speed)) return false;
         if (f.Venom) { VenomLands(f); return true; }
+        if (f.Hail) { HailLands(f); return true; }
         if (f.Star) StarStrikes(f);
         int broke = f.Smash > 0 ? StoneLands(f, speed) : 0;
         int ix = Math.Clamp((int)f.X, 2, World.SX - 3), iz = Math.Clamp((int)f.Z, 2, World.SZ - 3), iy = Math.Clamp((int)f.Y, 2, World.SY - 3);

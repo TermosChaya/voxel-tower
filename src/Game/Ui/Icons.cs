@@ -77,9 +77,11 @@ public static class Icons
         ["spell.Fall"] = "falling-rocks", ["spell.Quake"] = "quake-stomp", ["spell.FireRain"] = "fire-wave",
         ["spell.Thunder"] = "lightning-branches", ["spell.Weather"] = "lightning-storm", ["spell.BlackWind"] = "wind-slap",
         ["spell.BloodMoon"] = "evil-moon", ["spell.Meteor"] = "meteor-impact", ["spell.Dread"] = "terror", ["spell.DeadFog"] = "poison-cloud",
-        ["spell.Chains"] = "manacles", ["spell.Plague"] = "rat", ["spell.Raise"] = "raise-skeleton", ["reap"] = "scythe", ["spell.Awaken"] = "giant",
+        ["spell.Chains"] = "manacles", ["spell.Plague"] = "rat", ["spell.Raise"] = "raise-skeleton", ["reap"] = "scythe", ["spell.Awaken"] = "archangel",
         ["spell.Telekinesis"] = "magic-palm", ["spell.Recall"] = "return-arrow", ["spell.Eye"] = "all-seeing-eye",
         ["spell.Explosion"] = "mine-explosion", ["spell.Oath"] = "bloody-sword", ["spell.Whirlwind"] = "whirlwind",
+        ["spell.Hail"] = "hail", ["spell.FirePillar"] = "fire-pillar", ["spell.Guardian"] = "guardian-angel", ["spell.Cherub"] = "cherub-sword",
+        ["spell.Destroyer"] = "scythe", ["spell.Host"] = "heavenly-host",
         ["rosary"] = "prayer-beads", ["vessel"] = "jeweled-chalice", ["altar"] = "sword-altar", ["litany"] = "open-book",
         ["vigil"] = "candle-light", ["might"] = "holy-symbol",
     };
@@ -92,8 +94,8 @@ public static class Icons
     {
         "Хозяйство" => Of("two-coins"), "Ремёсла" => Of("anvil"), "Кладка" => Of("stone-wall"), "Дружина" => Sword, "Ловушки" => Of("spiky-pit"),
         "Пехота" => Of("swordman"), "Стрелки" => Of("bowman"), "Конница" => Of("horse-head"), "Великаны" => Of("footprint"), "Машины" => Of("catapult"),
-        "Круг земли" => Of("mountains"), "Круг огня и неба" => Of("fire"), "Круг смерти" => Skull, "Круг воли" => Of("magic-swirl"),
-        "Благодать" => Of("angel-wings"),
+        "Круг земли" => Of("mountains"), "Круг неба" => Of("lightning-storm"), "Круг ангелов" => Of("angel-wings"), "Круг чудес" => Of("magic-swirl"),
+        "Благодать" => Of("prayer"),
         _ => Question,
     };
 

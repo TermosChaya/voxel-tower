@@ -6,8 +6,8 @@ using VoxelTower.Core;
 namespace VoxelTower.Game;
 
 /// <summary>
-/// What is seen of the old powers at work. When a life is given at the altar, a flash of dark violet light over it and
-/// a swarm of pale motes rising from it. And the spells: gobbets of burning pitch coming down out of the sky, a bolt of
+/// What is seen of the old powers at work. When a rite is done at the altar, a flash of warm light over it and a swarm
+/// of golden motes rising from it. And the spells: gobbets of burning pitch coming down out of the sky, a bolt of
 /// lightning with its flash, a bog dark on the ground, a ring of dread running out over the field, iron rings about the
 /// feet of those held in chains, a red mark over every raider while the Eye is open, dust where earth rises or falls,
 /// a green glimmer where the dead get up. And what flies: the pieces of the world broken loose, voxel by voxel as they
@@ -133,6 +133,7 @@ public partial class MagicView : Node3D
         m.Sim.Hexed += Cursed;
         m.Sim.Quaked += Quake;
         m.Sim.Breathed += Breath;
+        InitHeaven(m);
     }
 
     MultiMeshInstance3D Multi(Mesh mesh, Material mat)
@@ -178,7 +179,9 @@ public partial class MagicView : Node3D
     void Given(float x, float y, float z)
     {
         var at = At(x, y + 6, z);
-        Flare(at + Vector3.Up * .6f, Violet, 9, 9, 3.5f, Motes(at, Pale, 48, 2.2f, .45f));
+        // the faith's: a warm light over the altar and motes of it going up (the dark faith's was violet)
+        bool dark = _m.Sim.DarkRites;
+        Flare(at + Vector3.Up * .6f, dark ? Violet : Gold, 9, 9, 3.5f, Motes(at, dark ? Pale : Gold, 48, 2.2f, .45f));
     }
 
     /// <summary>A shaman mends those about it: a sickly green glimmer round it.</summary>
@@ -206,8 +209,9 @@ public partial class MagicView : Node3D
                 Flare(ground + Vector3.Up, new Color(.4f, .6f, .3f), 2, 9, 2, Motes(ground, new Color(.3f, .4f, .22f), 40, 1.2f, sp.Radius * VoxelWorld.Vox * .6f));
                 break;
             case SpellKind.Dread:
-                Spread(ground, sp.Radius, new Color(.42f, .1f, .62f));
-                Flare(ground + Vector3.Up * 2, Violet, 6, 12, 1.5f);
+                // the fear of God: a blinding light over the circle
+                Spread(ground, sp.Radius, new Color(1f, .9f, .6f));
+                Flare(ground + Vector3.Up * 4, new Color(1f, .92f, .7f), 9, 16, 1.5f, Motes(ground, new Color(1f, .92f, .7f), 50, 2.2f, sp.Radius * VoxelWorld.Vox * .4f));
                 break;
             case SpellKind.Chains:
                 Spread(ground, sp.Radius, new Color(.3f, .3f, .34f));
@@ -259,6 +263,9 @@ public partial class MagicView : Node3D
             case SpellKind.Meteor:
                 // the sky lights up red over the spot as the star comes in
                 Flare(ground + Vector3.Up * 14, new Color(1f, .45f, .2f), 6, 30, 2.5f);
+                break;
+            case SpellKind.Hail or SpellKind.FirePillar or SpellKind.Guardian or SpellKind.Cherub or SpellKind.Destroyer or SpellKind.Host:
+                CastHeaven(k, ground, sp.Radius);
                 break;
             case SpellKind.Whirlwind:
                 Spread(ground, sp.Radius * 2, new Color(.25f, .22f, .2f));
@@ -547,6 +554,7 @@ public partial class MagicView : Node3D
         Trails(sim, (float)delta);
         Grip(sim);
         Skins(sim);
+        Heaven(sim);
         Fogs(sim);
         Afflicted(sim);
         Fuses(sim);
@@ -825,5 +833,6 @@ public partial class MagicView : Node3D
         _m.Sim.Woken -= Wake;
         _m.Sim.Quaked -= Quake;
         _m.Sim.Breathed -= Breath;
+        ExitHeaven();
     }
 }

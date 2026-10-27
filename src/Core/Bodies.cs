@@ -166,7 +166,7 @@ public static partial class Bodies
     /// <summary>How many looks a kind comes in.</summary>
     public static int Looks(UnitType t) => BodyKey(t) switch
     {
-        "worker" => 8, "archer" => 6, "sword" => 6, "priest" => 3, "risen" => 2, "thrall" => 2, "shaman" => 2, "witch" => 2, "necro" => 2, "goblin" => 8, "sapper" => 4, "orc" => 6, "miner" => 4, "troll" => 3, "thief" => 3, "deer" => 2, "ram" => 2, "catapult" => 2, "mantlet" => 2, "tower" => 1, "stag" => 1, "bear" => 1,
+        "worker" => 8, "archer" => 6, "sword" => 6, "priest" => 3, "risen" => 2, "thrall" => 2, "angel" => 2, "shaman" => 2, "witch" => 2, "necro" => 2, "goblin" => 8, "sapper" => 4, "orc" => 6, "miner" => 4, "troll" => 3, "thief" => 3, "deer" => 2, "ram" => 2, "catapult" => 2, "mantlet" => 2, "tower" => 1, "stag" => 1, "bear" => 1,
         "spear" => 4, "shield" => 3, "halberd" => 3, "knight" => 3, "sling" => 4, "crossbow" => 3, "bombard" => 3, "hound" => 3, "rider" => 4, "horsearcher" => 3,
         "lancer" => 2, "tametroll" => 2, "giant" => 3, "alchemist" => 3, "hillgiant" => 2, "ouralchemist" => 3,
         "mangonel" => 2, "ballista" => 2, "trebuchet" => 2, "crew" => 3, "captain" => 3, "architect" => 2, "skeleton" => 2, "wolf" => 2,
@@ -236,6 +236,7 @@ public static partial class Bodies
         "tametroll" => TameTroll(look),
         "giant" => Giant(look),
         "risen" => Bones(look, Mat.SoulFire, Mat.Rag),
+        "angel" => HostAngel(look),
         "thrall" => Bones(look, Mat.Ember, Mat.ClothRed),
         "skeleton" => Bones(look, Mat.Brew, Mat.Rag),
         "wolf" => Wolf(look),

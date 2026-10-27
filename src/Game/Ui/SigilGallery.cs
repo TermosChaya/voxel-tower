@@ -24,14 +24,14 @@ public partial class SigilGallery : Control
 
     public static readonly string[] RiteKeys =
     {
-        "spell.Hand", "spell.Rift", "spell.Mire", "spell.Skin", "spell.Fall", "spell.Quake", "spell.FireRain", "spell.Thunder", "spell.Weather", "spell.BlackWind",
-        "spell.BloodMoon", "spell.Meteor", "spell.Dread", "spell.DeadFog", "spell.Chains", "spell.Plague", "spell.Raise", "reap", "spell.Telekinesis", "spell.Recall",
-        "spell.Eye", "spell.Explosion", "spell.Oath", "spell.Whirlwind", "rosary", "vessel", "altar", "litany", "vigil", "might",
+        "spell.Hand", "spell.Rift", "spell.Mire", "spell.Skin", "spell.Fall", "spell.Quake", "spell.FireRain", "spell.Thunder", "spell.Weather", "spell.Hail",
+        "spell.FirePillar", "spell.Meteor", "spell.Guardian", "spell.Dread", "spell.Chains", "spell.Destroyer", "spell.Cherub", "spell.Host", "spell.Telekinesis", "spell.Recall",
+        "spell.Eye", "spell.Explosion", "spell.Oath", "spell.Whirlwind", "rosary", "vessel", "altar", "litany", "vigil", "might", "spell.Awaken",
     };
 
     public static readonly string[] BranchNames =
     {
-        "Пехота", "Стрелки", "Конница", "Великаны", "Машины", "Круг земли", "Круг огня и неба", "Круг смерти", "Круг воли", "Благодать",
+        "Пехота", "Стрелки", "Конница", "Великаны", "Машины", "Круг земли", "Круг неба", "Круг ангелов", "Круг чудес", "Благодать",
     };
 
     const float Margin = 16, Big = 64, Small = 28, Rim = 18, CellW = 156, CellH = 88, HeadH = 26;

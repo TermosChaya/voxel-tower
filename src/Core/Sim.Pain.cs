@@ -30,7 +30,7 @@ public sealed partial class Sim
     /// <summary>How much a wound hurts a kind, for the share of it its health it cost: the dead and the engines feel nothing.</summary>
     public static float Sense(UnitType t) => Kinds.IsEngine(t) ? 0 : t.Key switch
     {
-        "risen" or "thrall" => 0, "troll" or "tametroll" or "giant" => .55f, "orc" => 1f, "goblin" or "thief" or "alchemist" => 1.45f, "bear" or "boar" => .7f, _ => 1.25f,
+        "risen" or "thrall" or "angel" => 0, "troll" or "tametroll" or "giant" => .55f, "orc" => 1f, "goblin" or "thief" or "alchemist" => 1.45f, "bear" or "boar" => .7f, _ => 1.25f,
     };
 
     /// <summary>Pain past which a raider breaks and runs (a leader holds on longer); past which one goes down.</summary>
@@ -71,7 +71,7 @@ public sealed partial class Sim
     /// <summary>Off its feet: for a while, or (forever) till the pain eases enough to get up.</summary>
     void GoDown(Unit u, double seconds)
     {
-        if (u.Dead || u.Airborne != null || Kinds.IsEngine(u.T) || u.T.Key is "risen" or "thrall") return;
+        if (u.Dead || u.Airborne != null || Kinds.IsEngine(u.T) || u.T.Called) return;
         u.Down = true;
         u.DownSince = Time;
         u.DownUntil = double.IsInfinity(seconds) ? double.PositiveInfinity : Time + seconds;

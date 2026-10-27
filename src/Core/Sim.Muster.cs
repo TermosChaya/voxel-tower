@@ -23,7 +23,7 @@ public sealed partial class Sim
     {
         int n = AwayPlaces;
         foreach (var u in Units)
-            if (!u.Dead && u.Team == Team.Player && u.T != Kinds.Risen && u.Billet < 0) n += u.T.Room;
+            if (!u.Dead && u.Team == Team.Player && !u.T.Called && u.Billet < 0) n += u.T.Room;
         return n;
     }
 
@@ -32,7 +32,7 @@ public sealed partial class Sim
     {
         int n = 0;
         foreach (var u in Units)
-            if (!u.Dead && u.Team == Team.Player && u.T != Kinds.Risen && u.Billet >= 0) n += u.T.Room;
+            if (!u.Dead && u.Team == Team.Player && !u.T.Called && u.Billet >= 0) n += u.T.Room;
         return n;
     }
 

@@ -11,7 +11,12 @@ public static partial class Bodies
     /// A god's body, sculpted as a body of the valley is and drawn many times its size (its height over the
     /// <see cref="BodyPlan.Top"/> of this). Sculpted once, on whatever thread first wants it.
     /// </summary>
-    public static BodyPlan God(DeityKind k) => Gods.GetOrAdd(k, kind => kind switch { DeityKind.Archangel => Archangel(), DeityKind.Toad => Toad(), _ => Colossus() });
+    public static BodyPlan God(DeityKind k) => Gods.GetOrAdd(k, kind => kind switch
+    {
+        // (the lesser angels are the archangel's body drawn smaller; the destroyer's dark)
+        DeityKind.Archangel or DeityKind.Guardian or DeityKind.Cherub => Archangel(), DeityKind.Destroyer => Archangel(dark: true),
+        DeityKind.Toad => Toad(), _ => Colossus(),
+    });
 
     /// <summary>
     /// The Colossus: a hulk of dark rock stooped under shoulders heaped with crags, the head sunk between them, long arms
@@ -126,17 +131,18 @@ public static partial class Bodies
     /// breastplate shaped to the chest over a belly of gold-edged lames, round pauldrons, vambraces and greaves, a skirt of
     /// plates to the knee with a gold panel down its front; the face bare and calm, the eyes alight, gold hair standing up
     /// off the head in points; a long sword of fire in the right hand. Its wings and the light behind its head are drawn on
-    /// their own (<see cref="Wing"/>, <see cref="Halo"/>).
+    /// their own (<see cref="Wing"/>, <see cref="Halo"/>). Dark, it is the destroying angel: black plate banded with
+    /// iron, black hair, eyes like embers.
     /// </summary>
-    static BodyPlan Archangel()
+    static BodyPlan Archangel(bool dark = false)
     {
         var f = new BodyPlan { Chop = 2f, Carry = .1f, Stride = 30 };
-        byte plate = Mat.SteelDark, gold = Mat.Brass, glow = Mat.Crystal;
+        byte plate = dark ? Mat.Chitin : Mat.SteelDark, gold = dark ? Mat.SteelDark : Mat.Brass, glow = dark ? Mat.Ember : Mat.Crystal;
         var b = new Build
         {
             Leg = 42, LegW = 7, LegD = 8, Gap = 3, Boot = 10, Torso = 32, Chest = 13, ChestD = 11, Head = 12, HeadW = 6, HeadD = 11, HeadZ = -4,
             Arm = 34, ArmW = 6, ArmD = 7, Hand = 6, FaceUp = 1, Skin = Mat.SkinHuman, Shirt = plate, Sleeve = plate, Trousers = plate, Boots = plate,
-            Belt = gold, Hair = gold, Brow = gold, HairStyle = 1, Eye = glow, Mouth = Mat.Lips,
+            Belt = gold, Hair = dark ? Mat.Hair : gold, Brow = dark ? Mat.Hair : gold, HairStyle = 1, Eye = glow, Mouth = Mat.Lips,
         };
         var s = Humanoid(b, f);
         int hx = b.HeadW, hz0 = b.HeadZ, hz1 = b.HZ1, hy0 = b.Neck, crown = b.Crown, T = b.Torso;
@@ -283,9 +289,10 @@ public static partial class Bodies
     /// One of the archangel's wings, in half-voxels from its root (the left one: it goes out along +x and up; the right
     /// is its mirror). As a bird's: its bones from the root up and out to the bend, out to the wrist, and out and a little
     /// down to the tip, plated in gold along their middles and white at the joints; the feathers hanging under the bones
-    /// in long white blades, the longer the farther out, each a little apart from the next.
+    /// in long white blades, the longer the farther out, each a little apart from the next. Dark, the destroying angel's:
+    /// black feathers on iron bones.
     /// </summary>
-    public static PartGrid Wing()
+    public static PartGrid Wing(bool dark = false)
     {
         // the bones: root → bend → wrist → tip
         var pts = new (float x, float y)[] { (0, 0), (16, 26), (46, 38), (74, 32) };
@@ -316,7 +323,8 @@ public static partial class Bodies
                 if (!isBone && x % 4 == 3 && y < top - bone - feather / 2) continue;
                 // the tip of each feather drawn to a point
                 if (!isBone && y < top - bone - feather + 2 && x % 4 is 0 or 2) continue;
-                byte m = isBone ? (plated && y > top - bone + 1 ? Mat.Brass : Mat.FeatherPale) : (y > top - bone - 4 ? Mat.ClothWhite : Mat.FeatherPale);
+                byte m = isBone ? (plated && y > top - bone + 1 ? (dark ? Mat.SteelDark : Mat.Brass) : dark ? Mat.Chitin : Mat.FeatherPale)
+                    : dark ? (y > top - bone - 4 ? Mat.Chitin : Mat.Char) : (y > top - bone - 4 ? Mat.ClothWhite : Mat.FeatherPale);
                 for (int z = -thick; z <= thick - (isBone ? 0 : 1); z++) Put(x, y, z, m);
             }
         }

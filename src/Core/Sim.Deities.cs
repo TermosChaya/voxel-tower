@@ -66,10 +66,11 @@ public sealed partial class Sim
     const float LumpR = 16;
 
     /// <summary>Whether what struck was the household's god's work: the earth it broke out of, its blows, its lumps.</summary>
-    static bool OurGodsDoing(string cause) => cause is WakeCause or ColossusStoneCause || cause == Deities.Colossus.Cause || cause == Deities.Archangel.Cause;
+    static bool OurGodsDoing(string cause) => cause is WakeCause or ColossusStoneCause || cause == Deities.Colossus.Cause || cause == Deities.Archangel.Cause
+        || cause == Deities.Cherub.Cause || cause == Deities.Destroyer.Cause || cause is HailCause or PillarCause;
 
-    /// <summary>The god of the household in the valley, if one is.</summary>
-    public Deity OurGod => Gods.Find(g => !g.Gone && g.Team == Team.Player);
+    /// <summary>The god of the household in the valley, if one is (not a lesser angel a spell sent).</summary>
+    public Deity OurGod => Gods.Find(g => !g.Gone && g.Team == Team.Player && !g.T.Minor);
 
     // ------------------------------------------------------------ waking
 
@@ -77,18 +78,23 @@ public sealed partial class Sim
     /// Calls a god up out of the ground at a spot (voxels): the ring heaves at once, and it climbs out over the next ten
     /// seconds. Null when it comes; otherwise why it cannot.
     /// </summary>
-    public string Awaken(DeityKind kind, float x, float z, double lasts = -1)
+    public string Awaken(DeityKind kind, float x, float z, double lasts = -1) => Awaken(kind, x, z, lasts, out _);
+
+    string Awaken(DeityKind kind, float x, float z, double lasts, out Deity made)
     {
+        made = null;
         var t = Deities.Of(kind);
-        if (Gods.Exists(g => !g.Gone && g.T == t)) return $"{t.Name} уже в долине";
+        if (!t.Minor && Gods.Exists(g => !g.Gone && g.T == t)) return $"{t.Name} уже в долине";
         int ix = (int)x, iz = (int)z;
-        if (ix < 8 || iz < 8 || ix >= World.SX - 8 || iz >= World.SZ - 8 || Site.Hex != null && Site.Hex.Edge(x, z) < PitR) return "слишком близко к краю долины";
-        if (Site.HasKeep && Dist2(x, z, Site.KeepX, Site.KeepZ) < MathF.Pow(Site.KeepR + PitR + 6 * VoxelWorld.PerMetre, 2)) return "слишком близко к цитадели";
+        // (a lesser angel breaks no ground: it may come to the citadel's walls, and near the valley's edge)
+        float edge = t.Minor ? 2 * VoxelWorld.PerMetre : PitR;
+        if (ix < 8 || iz < 8 || ix >= World.SX - 8 || iz >= World.SZ - 8 || Site.Hex != null && Site.Hex.Edge(x, z) < edge) return "слишком близко к краю долины";
+        if (!t.Minor && Site.HasKeep && Dist2(x, z, Site.KeepX, Site.KeepZ) < MathF.Pow(Site.KeepR + PitR + 6 * VoxelWorld.PerMetre, 2)) return "слишком близко к цитадели";
         float g = Ground(ix, iz);
         bool under = t.Arrives != Arrival.Sky;
         var d = new Deity
         {
-            Id = _nextGod++, T = t, X = x, Y = under ? g - PitDeep * .6f : g, Z = z, Hp = t.Hp, Born = Time, Until = Time + GodRiseFor + (lasts >= 0 ? lasts : t.Lasts * (t.Team == Team.Player ? Might : 1)),
+            Id = _nextGod++, T = t, X = x, Y = under ? g - PitDeep * .6f : g, Z = z, Hp = t.Hp, Born = Time, Until = Time + t.RiseFor + (lasts >= 0 ? lasts : t.Lasts * (t.Team == Team.Player ? Might : 1)),
             Act = DeityAct.Rising, ActFrom = Time, Up = 0,
         };
         // it faces the enemy's side: the horde's god the citadel, ours the way the horde comes
@@ -103,6 +109,8 @@ public sealed partial class Sim
         if (under) d.Pit = PitOf(x, z, PitR, t.Arrives == Arrival.Bog ? PitDeep * .7f : PitDeep);
         d.HandX = x; d.HandY = d.Y; d.HandZ = z;
         Gods.Add(d);
+        made = d;
+        if (t.Minor) { GodRose?.Invoke(d); return null; }
         // the ground heaves: those on it are thrown down, and those over the pit up; the light out of heaven on the spot
         // first blinds the horde about it
         if (under) Heave(d, x, z, HeaveR, 1);
@@ -204,6 +212,7 @@ public sealed partial class Sim
             {
                 case DeityAct.Rising: Rising(d); break;
                 case DeityAct.Sinking: Sinking(d); break;
+                case DeityAct.Pass: Passing(d, dt); break;
                 case DeityAct.Fallen: Gone(d); break;
                 default:
                     if (d.Hp <= 0) { FallApart(d); break; }
@@ -211,6 +220,7 @@ public sealed partial class Sim
                     if (d.Act is DeityAct.Standing or DeityAct.Walking)
                     {
                         if (d.Ridden) Obey(d, dt);
+                        else if (d.T.Minor) ThinkAngel(d, dt);
                         else if (d.T.Kind == DeityKind.Archangel) ThinkHeaven(d, dt);
                         else if (d.T.Hops) ThinkSwamp(d, dt);
                         else Think(d, dt);
@@ -223,20 +233,22 @@ public sealed partial class Sim
         }
     }
 
-    Deity FoeOf(Deity d) => Gods.Find(g => g != d && !g.Gone && g.Team != d.Team && g.Act is not (DeityAct.Rising or DeityAct.Sinking or DeityAct.Fallen));
+    Deity FoeOf(Deity d) => d.T.Minor ? null
+        : Gods.Find(g => g != d && !g.Gone && !g.T.Minor && g.Team != d.Team && g.Act is not (DeityAct.Rising or DeityAct.Sinking or DeityAct.Fallen));
 
     // ------------------------------------------------------------ rising and going under
 
     /// <summary>Coming up: the body climbing, the ground bursting about it at its times, the chains coming up after.</summary>
     void Rising(Deity d)
     {
-        float t = d.Into(Time);
-        d.Up = Smooth(t / GodRiseFor);
+        float t = d.Into(Time), rise = d.T.RiseFor;
+        d.Up = Smooth(t / rise);
         if (d.T.Arrives == Arrival.Sky)
         {
-            // coming down in the light: as it touches the ground, the ground shakes and the horde is thrown off it
-            if (!d.Landed && t >= GodRiseFor * .92f) { d.Landed = true; TouchDown(d); }
-            if (t < GodRiseFor) return;
+            // coming down in the light: as it touches the ground, the ground shakes and the horde is thrown off it (a
+            // lesser angel only comes down)
+            if (!d.Landed && t >= rise * .92f) { d.Landed = true; if (!d.T.Minor) TouchDown(d); }
+            if (t < rise) return;
             d.Up = 1;
             Begin(d, DeityAct.Standing);
             return;
@@ -251,7 +263,7 @@ public sealed partial class Sim
             GodShook?.Invoke(d, d.X, d.Y, d.Z, 3);
         }
         if (!bog && t >= ChainsAt && d.Bursts == GodBursts.Length) { d.Bursts++; Chains(d); }
-        if (t < GodRiseFor) return;
+        if (t < rise) return;
         // what is left of the pit goes to dust: it is out (and out of a bog, the pit fills and the ground about goes to mire)
         ClearPit(d);
         if (bog) Bogged(d, d.X, d.Z, PitR * 2.5f, true);
@@ -350,16 +362,16 @@ public sealed partial class Sim
         d.PitAt = 0; d.Bursts = 0;
         Begin(d, DeityAct.Sinking);
         string going = sky ? "возносится на небо" : d.T.Arrives == Arrival.Bog ? "уходит в трясину" : "уходит под землю";
-        Say($"{d.T.Name} {going}. Убито {d.Kills}, разбито {d.Broke / 512f:0} м³.", d.Team == Team.Player ? 1 : 2, d.X, d.Z);
+        if (!d.T.Minor) Say($"{d.T.Name} {going}. Убито {d.Kills}, разбито {d.Broke / 512f:0} м³.", d.Team == Team.Player ? 1 : 2, d.X, d.Z);
     }
 
     /// <summary>Going back under: the ground opening about its feet a little at a time, the body going down into it.</summary>
     void Sinking(Deity d)
     {
         float t = d.Into(Time);
-        d.Up = 1 - Smooth(t / GodSinkFor);
+        d.Up = 1 - Smooth(t / d.T.SinkFor);
         // up into heaven: nothing breaks
-        if (d.T.Arrives == Arrival.Sky) { if (t >= GodSinkFor) Gone(d); return; }
+        if (d.T.Arrives == Arrival.Sky) { if (t >= d.T.SinkFor) Gone(d); return; }
         int b = Math.Min(3, (int)(t / GodSinkFor * 4));
         while (d.Bursts <= b && d.Bursts < 4) { d.Bursts++; Burst(d, d.Bursts / 4f, .45f); GodShook?.Invoke(d, d.X, d.Y, d.Z, 1.5f); }
         if (t >= GodSinkFor) { ClearPit(d); Gone(d); }
@@ -935,7 +947,8 @@ public sealed partial class Sim
                 continue;
             }
             float lift = MathF.Min(1, 15 / u.T.BodyH), cx = u.X - d.X, cz = u.Z - d.Z, cl = MathF.Max(1, MathF.Sqrt(cx * cx + cz * cz));
-            float on = (22 + 8 * (float)Rng.NextDouble()) * VoxelWorld.PerMetre * lift, outw = 7 * VoxelWorld.PerMetre * lift, up = (8 + 5 * (float)Rng.NextDouble()) * VoxelWorld.PerMetre * MathF.Sqrt(lift);
+            // (a lesser angel's sword throws them less far)
+            float on = (22 + 8 * (float)Rng.NextDouble()) * VoxelWorld.PerMetre * lift * (d.T.Minor ? .55f : 1), outw = 7 * VoxelWorld.PerMetre * lift, up = (8 + 5 * (float)Rng.NextDouble()) * VoxelWorld.PerMetre * MathF.Sqrt(lift);
             Strike(d, u, Kinds.IsEngine(u.T) ? 500 : 120);
             // (the dead go flying too)
             Fling(u, tx * on + cx / cl * outw, up, tz * on + cz / cl * outw, d.T.Cause);

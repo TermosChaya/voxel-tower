@@ -75,7 +75,7 @@ public sealed partial class Sim
     {
         if (_battle == null) return;
         if (u.Team == Team.Horde && u.T != Kinds.Thrall) BattleReport.Add(_battle.Fell, u.T);
-        else if (u.Team == Team.Player && u.T != Kinds.Risen) BattleReport.Add(_battle.OursFell, u.T);
+        else if (u.Team == Team.Player && !u.T.Called) BattleReport.Add(_battle.OursFell, u.T);
     }
 
     /// <summary>One of the horde got out of the valley alive, or was taken alive.</summary>

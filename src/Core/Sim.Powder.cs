@@ -169,7 +169,7 @@ public sealed partial class Sim
         Unit by = null;
         foreach (var u in Units)
         {
-            if (u.Dead || u.Inside || u.Airborne != null || u.Team != Team.Player || u.T == Kinds.Risen) continue;
+            if (u.Dead || u.Inside || u.Airborne != null || u.Team != Team.Player || u.T.Called) continue;
             if (ToCharge(u.X, u.Y + 4, u.Z, c) < CutReach) { by = u; break; }
         }
         c.Cutting = by != null ? c.Cutting + dt : Math.Max(0, c.Cutting - dt);
@@ -244,7 +244,7 @@ public sealed partial class Sim
         var free = new List<Unit>();
         foreach (var u in Units)
         {
-            if (u.Dead || u.Inside || u.Airborne != null || u == Possessed || u.Team != Team.Player || u.Captor != null || u.T == Kinds.Risen || u.T.Prays) continue;
+            if (u.Dead || u.Inside || u.Airborne != null || u == Possessed || u.Team != Team.Player || u.Captor != null || u.T.Called || u.T.Prays) continue;
             if (!(u.T.Work < 1 || u.Militia) || u.T.NoHands || u.Mending || u.Defusing != null || u.State == UnitState.Fight || !HasMainHand(u)) continue;
             if (ToCharge(u.X, u.Y + 4, u.Z, c) > 30 * VoxelWorld.PerMetre) continue;
             free.Add(u);

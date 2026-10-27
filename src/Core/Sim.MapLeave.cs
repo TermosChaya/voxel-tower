@@ -15,7 +15,7 @@ public sealed partial class Sim
         var party = new Party { Side = side };
         foreach (var u in new List<Unit>(units))
         {
-            if (u.Dead || u.Team != Team.Player || u.T == Kinds.Risen || u.Down || u.PinKg > 0 || u.CarriedBy != null || u.Carrying != null || u.Captor != null) continue;
+            if (u.Dead || u.Team != Team.Player || u.T.Called || u.Down || u.PinKg > 0 || u.CarriedBy != null || u.Carrying != null || u.Captor != null) continue;
             party.Members.Add(Traveller.Of(u, CellKey));
             if (u.Captive != null) { u.Captive.Captor = null; u.Captive = null; }
             ReleaseSite(u);

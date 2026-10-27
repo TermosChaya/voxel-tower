@@ -32,17 +32,19 @@ public partial class MysteryPanel : VBoxContainer
         _where = Hud.Text("", Ornament.SerifItalic, 13, Ornament.Aged, wrap: true);
         _where.CustomMinimumSize = new Vector2(Width - 30, 0);
         AddChild(_where);
-        AddChild(Hud.CapsLabel("Жертвы · днём, в мирное время", 9, Ornament.BronzeLight));
+        AddChild(Hud.CapsLabel("Обряды · днём, в мирное время", 9, Ornament.BronzeLight));
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 8);
-        _prisoner = Plaque("Пленного в жертву\nЖрец отведёт к алтарю в святилище самого ценного пленного. " +
-            "Гоблин: 15 вмешательства и 1 откровение, орк или рудокоп: 25 и 2, тролль: 40 и 3. За вожака вмешательства в 1,5 раза больше, " +
-            "на месте силы тоже. Пленных берут мечники с приказом «Брать живым».", () => Ask(RiteKind.Prisoner));
-        _carcass = Plaque("Тушу в жертву\nЖрец отнесёт к алтарю лучшую тушу с охоты. Заяц: 1 вмешательство, олень: 4, кабан: 5, " +
+        _prisoner = Plaque("Обратить пленного\nЖрец отведёт к алтарю в святилище самого ценного пленного и обратит его в веру: " +
+            "пленный станет нашим рабочим. Гоблин: 15 вмешательства и 1 откровение, орк или рудокоп: 25 и 2, тролль: 40 и 3. За вожака " +
+            "вмешательства в 1,5 раза больше, на месте силы тоже. Пленных берут мечники с приказом «Брать живым».", () => Ask(RiteKind.Prisoner));
+        _carcass = Plaque("Всесожжение\nЖрец сожжёт на алтаре лучшую тушу с охоты. Заяц: 1 вмешательство, олень: 4, кабан: 5, " +
             "медведь: 10, белый олень: 15. Откровений туши не дают.", () => Ask(RiteKind.Carcass));
         _own = Plaque("Своего в жертву\nВыберите одного из своих (не жреца) и щёлкните дважды. Даёт 50 вмешательства и 2 откровения, " +
             "но 5 минут дружина работает на 25 % медленнее. Отменить нельзя.", AskOwn);
-        row.AddChild(_prisoner); row.AddChild(_carcass); row.AddChild(_own);
+        row.AddChild(_prisoner); row.AddChild(_carcass);
+        // (one of ours given up is the dark faith's, kept for a side to come)
+        if (m.Sim.DarkRites) row.AddChild(_own);
         AddChild(row);
         _rite = Hud.Text("", Ornament.SerifItalic, 13, Ornament.EmberGlow, wrap: true);
         _rite.CustomMinimumSize = new Vector2(Width - 30, 0);
@@ -64,7 +66,7 @@ public partial class MysteryPanel : VBoxContainer
             flow.AddThemeConstantOverride("v_separation", 5);
             foreach (var sp in Sim.Spells)
             {
-                if (sp.Circle != c) continue;
+                if (sp.Circle != c || sp.Draft) continue;
                 var spell = sp;
                 var b = new Button { FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(196, 30), MouseDefaultCursorShape = CursorShape.PointingHand };
                 b.AddThemeFontSizeOverride("font_size", 12);
@@ -167,7 +169,7 @@ public partial class MysteryPanel : VBoxContainer
                   + "Щелчок — открыть древо.";
             b.TooltipText = $"{sp.Name} · {Sim.Circles[sp.Circle].ToLowerInvariant()}\n{sp.About} {what}";
         }
-        _rite.Text = sim.RiteNow is { } r ? RiteText(r) : !day ? "Ночью жрецы в цитадели. Жертвы приносят днём." : !hasPriest ? "Жрецов нет. Наберите их в цитадели (K)."
+        _rite.Text = sim.RiteNow is { } r ? RiteText(r) : !day ? "Ночью жрецы в цитадели. Обряды совершают днём." : !hasPriest ? "Жрецов нет. Наберите их в цитадели (K)."
             : !hasSanctum ? Bindings.Fill("Святилища нет. Отметьте его делянкой ({ToolGather}) и выберите внизу «святилище».") : sim.Time < sim.MournUntil ? $"Дружина скорбит ещё {sim.MournUntil - sim.Time:0} с, работа идёт медленнее." : "";
     }
 

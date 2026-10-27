@@ -698,7 +698,7 @@ public partial class Inspector : Control
         {
             row.AddChild(new Rule(true));
             alive = new Glyph(Icons.Of("manacles"), "Брать живым\nМечники и ополчение связывают налётчика, когда у него остаётся 25 % здоровья (скованного Цепями — 60 %). " +
-                "Свободный рабочий отведёт пленного в цитадель. Пленных приносят в жертву или отдают послу орды за выкуп. Ещё раз — снова бить насмерть.", () => _m.Command.TakeAliveSelected(), toggle: true);
+                "Свободный рабочий отведёт пленного в цитадель. Пленных обращают в веру или отдают послу орды за выкуп. Ещё раз — снова бить насмерть.", () => _m.Command.TakeAliveSelected(), toggle: true);
             row.AddChild(alive);
         }
         if (workers)
@@ -755,7 +755,7 @@ public partial class Inspector : Control
             : (u.Leader ? $"Вожак: {u.T.Bounty * 3} зол. за голову. " : $"{u.T.Bounty} зол. за голову. ")
               + (u.Returned ? "Сбежал в прошлый раз и вернулся. " : "") + "Выберите своих и щёлкните по нему {Rmb}.";
         if (u.Bound)
-            note = u.Inside ? "Пленный в цитадели. Его можно принести в жертву (вкладка «Таинства») или отдать послу орды за выкуп. Ночью без стражи он сбежит."
+            note = u.Inside ? "Пленный в цитадели. Его можно обратить в веру (вкладка «Таинства») или отдать послу орды за выкуп. Ночью без стражи он сбежит."
                 : "Связан. Свободный рабочий отведёт его в цитадель. Если оставить надолго, развяжется и убежит.";
         var noteLabel = Hud.Text(Bindings.Fill(note), Ornament.Serif, 12, Ornament.Aged, wrap: true);
         noteLabel.CustomMinimumSize = new Vector2(330, 0);

@@ -1006,7 +1006,7 @@ public partial class Main
         var s = Site;
         int bx = s.KeepX - s.KeepR - 95, bz = s.KeepZ;
         Unit troll = null;
-        var parts = new (float from, string name)[] { (0, "Магия жрецов"), (3.2f, "Огненный дождь"), (6.6f, "Перст грома"), (9.4f, "Землетрясение"), (12.6f, "Падучая звезда"), (15.8f, "Смерч") };
+        var parts = new (float from, string name)[] { (0, "Магия жрецов"), (3.2f, "Огонь и сера"), (6.6f, "Перст грома"), (9.4f, "Землетрясение"), (12.6f, "Звезда Полынь"), (15.8f, "Смерч") };
         // where each spell falls (voxels)
         (int x, int z) fire = (bx + 30, bz - 72), bolt = (bx + 50, bz + 78), quake = (bx - 20, bz + 4), star = (bx - 60, bz - 64), whirl = (bx - 50, bz + 88);
         var shot = new Shot

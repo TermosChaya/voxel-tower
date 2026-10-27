@@ -34,7 +34,7 @@ public sealed partial class Campaign
         var ours = new List<Traveller>();
         foreach (var u in sim.Units)
         {
-            if (u.Dead || u.Team != Team.Player || u.Bound || u.Envoy || u.Captor != null || u.T == Kinds.Risen) continue;
+            if (u.Dead || u.Team != Team.Player || u.Bound || u.Envoy || u.Captor != null || u.T.Called) continue;
             var t = Traveller.Of(u, KeyOf(cell));
             by[t] = u; ours.Add(t);
         }

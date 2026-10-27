@@ -77,7 +77,7 @@ public sealed partial class Sim
         foreach (var u in Units)
         {
             if (u == cap || u.Dead || u.Inside || u.Team != Team.Player || u == Possessed || u.Captor != null || u.Airborne != null) continue;
-            if (u.T == Kinds.Captain || u.T == Kinds.Architect || u.T == Kinds.Crewman || Kinds.IsEngine(u.T) || u.T.Prays || u.T == Kinds.Risen || u.Mending) continue;
+            if (u.T == Kinds.Captain || u.T == Kinds.Architect || u.T == Kinds.Crewman || Kinds.IsEngine(u.T) || u.T.Prays || u.T.Called || u.Mending) continue;
             if (!(u.T.Work < 1 || u.Militia) || !Armed(u)) continue;
             // sent by the player: its own, till it is let go; set by another commander still about: that one's
             if (u.Hold && u.Ward == null) continue;

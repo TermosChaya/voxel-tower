@@ -2822,16 +2822,18 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--captives")
     Check("a free worker goes out for the bound goblin and leads it into the citadel, a prisoner", gobC.Inside && gobC.Bound && simC.Prisoners() == 1,
         $"inside {gobC.Inside}, {simC.Prisoners()} prisoners; the worker {Retinue0(porterC)}");
 
-    // a priest leads the prisoner to the altar and gives it to the old powers
+    // a priest leads the prisoner to the altar and turns it to the faith: it joins the household as a worker
     var priestC = simC.Spawn(Kinds.Priest, simC.Gate);
     simC.AddZone(kxC - 200, kzC + 60, kxC - 160, kzC + 100, Zone.Sanctum, 1);
     RunC(5);
     double favC = simC.Favour;
+    int workersC = simC.Units.Count(u => !u.Dead && u.T == Kinds.Worker);
     string askC = simC.Sacrifice(RiteKind.Prisoner);
     for (int t = 0; t < 240 && !gobC.Dead; t++) RunC(.5);
-    Check("a priest leads the prisoner bound to the altar and gives it to the old powers: intervention and a revelation",
-        askC == null && gobC.Dead && gobC.KilledBy == Sim.GivenToPowers && simC.Revelations == 1 && simC.Favour - favC >= 15 && simC.RiteNow == null,
-        $"asked: {askC ?? "taken in hand"}; the goblin {(gobC.Dead ? gobC.KilledBy : "alive")}; revelations {simC.Revelations}, intervention +{simC.Favour - favC:0.0}");
+    int workersC1 = simC.Units.Count(u => !u.Dead && u.T == Kinds.Worker);
+    Check("a priest leads the prisoner bound to the altar and turns it to the faith: it joins the household as a worker, and there is intervention and a revelation for it",
+        askC == null && gobC.Dead && gobC.KilledBy == Sim.TurnedToFaith && workersC1 == workersC + 1 && simC.Revelations == 1 && simC.Favour - favC >= 15 && simC.RiteNow == null,
+        $"asked: {askC ?? "taken in hand"}; the goblin {(gobC.Dead ? gobC.KilledBy : "alive")}; workers {workersC} → {workersC1}; revelations {simC.Revelations}, intervention +{simC.Favour - favC:0.0}");
 
     // a carcass from the hunt: a little intervention, no revelation
     simC.Carcasses.Add(Kinds.Deer);
@@ -2842,14 +2844,17 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--captives")
         askC == null && simC.RiteNow == null && simC.Carcasses.Count == 0 && simC.Favour - favC >= 4 && simC.Revelations == 1,
         $"asked: {askC ?? "taken in hand"}; intervention +{simC.Favour - favC:0.0}, revelations {simC.Revelations}");
 
-    // one of ours: much intervention, two revelations, and the household mourns and works slower
+    // one of ours: the faith gives none of its own; the dark faith's rite, kept as a draft, still works when let
     var lambC = simC.Spawn(Kinds.Worker, simC.Gate);
+    string refusedC = simC.Sacrifice(RiteKind.Own, lambC);
+    simC.DarkRites = true;
     favC = simC.Favour;
     askC = simC.Sacrifice(RiteKind.Own, lambC);
     for (int t = 0; t < 240 && !lambC.Dead; t++) RunC(.5);
-    Check("one of ours given up: much intervention, two revelations, and the household mourns",
-        askC == null && lambC.Dead && simC.Revelations == 3 && simC.Favour - favC >= 50 && simC.MournUntil > simC.Time,
-        $"asked: {askC ?? "taken in hand"}; the worker {(lambC.Dead ? lambC.KilledBy : "alive")}; revelations {simC.Revelations}, intervention +{simC.Favour - favC:0.0}, mourning {simC.MournUntil - simC.Time:0} s");
+    simC.DarkRites = false;
+    Check("one of ours is not given up in the faith; in the dark faith's draft much intervention, two revelations, and the household mourns",
+        refusedC != null && askC == null && lambC.Dead && simC.Revelations == 3 && simC.Favour - favC >= 50 && simC.MournUntil > simC.Time,
+        $"refused «{refusedC}»; in the draft: {askC ?? "taken in hand"}; the worker {(lambC.Dead ? lambC.KilledBy : "alive")}; revelations {simC.Revelations}, intervention +{simC.Favour - favC:0.0}, mourning {simC.MournUntil - simC.Time:0} s");
 
     // by night there are no rites, and a prisoner left unguarded slips out of the citadel and runs
     var gob2C = simC.Spawn(Kinds.Goblin, simC.Gate);
@@ -3931,9 +3936,13 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--lore")
             if (pg < 2 ? tiers.Count < 1 || !tiers.Contains(0) : tiers.Count != 6 || !tiers.Contains(0) || !tiers.Contains(3)) shaped = false;
         }
     foreach (var l in Sim.Lores) foreach (string nd in l.Needs) if (Sim.LoreOf(nd) is not { } r || r.Page != l.Page) shaped = false;
-    Check("every branch of the town's and the troops' pages begins with a building, of the intervention's is six lores from a first to a last, every lore resting on its own page; the circles are the spells' own",
-        shaped && Sim.Circles[0] == Sim.PageBranches[2][0] && Sim.Circles[3] == Sim.PageBranches[2][3] && Sim.Spells.Length == 24,
-        $"shaped {shaped}, {Sim.Spells.Length} spells");
+    // (the dark faith's spells are drafts now, on no page)
+    int playable = 0, onTree = 0;
+    foreach (var sp in Sim.Spells) if (!sp.Draft) playable++;
+    foreach (var l in Sim.LoresOn(2)) if (l.Spell is { } k && !Sim.SpellOf(k).Draft) onTree++; else if (l.Spell is { } d && Sim.SpellOf(d).Draft) onTree = -99;
+    Check("every branch of the town's and the troops' pages begins with a building, of the intervention's is six lores from a first to a last, every lore resting on its own page; the circles are the spells' own, and every spell of the faith is on the tree and none of the dark faith's",
+        shaped && Sim.Circles[0] == Sim.PageBranches[2][0] && Sim.Circles[3] == Sim.PageBranches[2][3] && Sim.Spells.Length == 30 && playable == 25 && onTree == 25,
+        $"shaped {shaped}, {Sim.Spells.Length} spells, {playable} of the faith, {onTree} on the tree");
 
     // mail takes a fifth off a blow to a soldier of ours; tracks and barrows have workers walk a fifth faster
     float hpK0 = swordK.Hp;
@@ -4139,7 +4148,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--grace")
     simG.Favour = 200; simG.Revelations = 30;
     bool meteorFirst = simG.Learn(Sim.SpellKey(SpellKind.Meteor));
     bool meteorK = simG.Learn(Sim.SpellKey(SpellKind.FireRain)) && simG.Learn(Sim.SpellKey(SpellKind.Thunder)) && simG.Learn(Sim.SpellKey(SpellKind.Weather))
-        && simG.Learn(Sim.SpellKey(SpellKind.BlackWind)) && simG.Learn(Sim.SpellKey(SpellKind.BloodMoon)) && simG.Learn(Sim.SpellKey(SpellKind.Meteor));
+        && simG.Learn(Sim.SpellKey(SpellKind.Hail)) && simG.Learn(Sim.SpellKey(SpellKind.FirePillar)) && simG.Learn(Sim.SpellKey(SpellKind.Meteor));
     var thunder = Sim.SpellOf(SpellKind.Thunder);
     double cost0 = simG.CostOf(thunder), cd0 = simG.CooldownOf(thunder);
     simG.Learnt.Add("litany"); simG.Learnt.Add("vigil");
@@ -6292,6 +6301,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bestiary") BestiaryB
 // the gods: the waking learnt and cast, the Colossus out of the ground, set loose on the horde, ridden, against the
 // horde's god, back under (Gods.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--gods") GodsBench.Run(Check);
+
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--angels") AngelsBench.Run(Check);
 // the map of valleys as a land: made in good time, every kind of cell its kind, the ways running on, walked from the
 // castle everywhere, the same each time, a cell put on again as its holder changed (LandBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--atlas") LandBench.Run(Check);
