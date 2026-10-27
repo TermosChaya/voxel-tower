@@ -26,9 +26,19 @@ public partial class Main
         void Button(Vector2 p, bool down) => Tools._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = down, Position = p });
         async Task ClickAt(Vector2 p) { Move(p); await Frames(2); Button(p, true); Button(p, false); await Frames(2); }
         async Task Look(float vx, float vz) { Rig.Set(World.WX(vx), World.WZ(vz), -.66f, .62f, 1.6f, snap: true); await Frames(10); }
+        // a point of the ground pressed on as the tools take it: the first voxel on the way from the eye, so what stands
+        // nearer (a tower the workers are raising) takes the press instead; said, for the step that fails by it
+        void InTheWay((int x, int z) at, Vector2 p)
+        {
+            var (o, d) = Rig.Ray(p);
+            if (Raycast.Cast(World, (o.X - World.OriginX) / VoxelWorld.Vox, o.Y / VoxelWorld.Vox, (o.Z - World.OriginZ) / VoxelWorld.Vox, d.X, d.Y, d.Z, out var hit, skipVeg: true)
+                && (Math.Abs(hit.X - at.x) > 2 || Math.Abs(hit.Z - at.z) > 2))
+                GD.Print($"[tutorial]      in the way of {at.x},{at.z}: {Mat.NameOf(hit.M)} at {hit.X},{hit.Y},{hit.Z}");
+        }
         async Task Drag((int x, int z) a, (int x, int z) b)
         {
             var pa = Screen(a.x, a.z); var pb = Screen(b.x, b.z);
+            InTheWay(a, pa); InTheWay(b, pb);
             Move(pa); await Frames(1); Button(pa, true);
             for (int i = 1; i <= 8; i++) { Move(pa.Lerp(pb, i / 8f)); await Frames(1); }
             Button(pb, false);
@@ -129,7 +139,8 @@ public partial class Main
                     int hx = kx - 150, hz = kz + 110;
                     await Look(hx + 20, hz + 17);
                     await Drag((hx, hz), (hx + 40, hz + 34));
-                    GD.Print($"[tutorial]      house: dwellings {Sim.Zones.FindAll(z => z.Kind == Zone.Dwelling).Count}, doors waiting {Sim.HouseDoors.Count}");
+                    int dwellings = Sim.Zones.FindAll(z => z.Kind == Zone.Dwelling).Count;
+                    GD.Print($"[tutorial]      house: dwellings {dwellings}, doors waiting {Sim.HouseDoors.Count}" + (dwellings == 0 ? $", the hand said «{Tools.LastRefusal}»" : ""));
                     Tools.Opt.House = false; Tools.Opt.Hollow = false;
                     break;
                 }
@@ -158,12 +169,15 @@ public partial class Main
                 }
                 case "Шаблоны":
                 {
-                    // the round tower from the library, on open ground south of the old works
+                    // the round tower from the library, on open ground west of the old works: north-west of where the house
+                    // goes later, off its ground and out of the way the view looks at it (from the south-west). Stood
+                    // south-west of it, the tower the workers were raising took the press meant for the house's corner, or
+                    // did not, as far as they had got
                     Tools.SetTool(Tool.Template);
                     Tools.PickTemplate(0);
-                    await Look(kx - 150, kz + 140);
+                    await Look(kx - 178, kz + 62);
                     int made = Sim.MarkingsMade;
-                    await ClickAt(Screen(kx - 150, kz + 140));
+                    await ClickAt(Screen(kx - 178, kz + 62));
                     GD.Print($"[tutorial]      template: {(Sim.MarkingsMade > made ? "put up" : "nothing put up")}, «{Tools.PlanText}»");
                     break;
                 }

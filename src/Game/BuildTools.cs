@@ -1158,6 +1158,8 @@ public partial class BuildTools : Node3D
     }
 
     string _lastRefuse = ""; double _lastRefuseAt = -9;
+    /// <summary>What the hand last said it would not do (for the checks to say).</summary>
+    public string LastRefusal => _lastRefuse;
     void Refuse(string msg)
     {
         if (msg == _lastRefuse && _clock - _lastRefuseAt < .8) return;
