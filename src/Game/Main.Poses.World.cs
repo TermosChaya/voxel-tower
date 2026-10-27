@@ -269,7 +269,7 @@ public partial class Main
                 Look(ford, 22, 16);
                 break;
             }
-            case 9:
+            case 10:
             {
                 // a hero of the horde come up by ours, under its banner, his figure the warlord he is
                 MapParty foe = null;

@@ -141,12 +141,13 @@ static class WorldViewBench
         var near = new List<(int Col, int Row)>();
         foreach (var (tx, tz) in pieces)
         {
-            var sw = Stopwatch.StartNew();
+            // (the thread's own time, so that other work on the machine does not count)
+            double t0 = BenchClock.CpuMs();
             var w = HexTiles.Build(world, lm, tx, tz);
-            make += sw.Elapsed.TotalMilliseconds;
-            sw.Restart();
+            make += BenchClock.CpuMs() - t0;
+            t0 = BenchClock.CpuMs();
             var (solid, wat) = HexTiles.Mesh(w, tx, tz);
-            mesh += sw.Elapsed.TotalMilliseconds;
+            mesh += BenchClock.CpuMs() - t0;
             verts += solid?.Vertices ?? 0; waterVerts += wat?.Vertices ?? 0;
             // made again: the same
             var again = HexTiles.Build(world, lm, tx, tz);
