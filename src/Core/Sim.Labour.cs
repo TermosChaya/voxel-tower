@@ -92,6 +92,8 @@ public sealed partial class Sim
         if (FallBack(u, dt)) { Busy(u); return; }
         // a commander looks over the field now and then and gives its orders; one following it keeps behind it (Sim.Captains.cs)
         if (u.T == Kinds.Captain) CaptainThink(u);
+        // an architect looks the valley over and marks its defences, and keeps out of the fighting (Sim.Architect.cs)
+        if (u.T == Kinds.Architect && ArchitectTick(u, dt)) return;
         if (u.Follows != null && FollowTick(u, dt)) { Busy(u); return; }
         // one that has lost the hand it fights with (or, with a bow, either hand) runs like a worker
         bool soldier = u.T.Work < 1, fighter = (soldier || u.Militia) && Armed(u);

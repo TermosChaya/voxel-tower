@@ -77,7 +77,7 @@ public sealed partial class Sim
         foreach (var u in Units)
         {
             if (u == cap || u.Dead || u.Inside || u.Team != Team.Player || u == Possessed || u.Captor != null || u.Airborne != null) continue;
-            if (u.T == Kinds.Captain || u.T == Kinds.Crewman || Kinds.IsEngine(u.T) || u.T.Prays || u.T == Kinds.Risen || u.Mending) continue;
+            if (u.T == Kinds.Captain || u.T == Kinds.Architect || u.T == Kinds.Crewman || Kinds.IsEngine(u.T) || u.T.Prays || u.T == Kinds.Risen || u.Mending) continue;
             if (!(u.T.Work < 1 || u.Militia) || !Armed(u)) continue;
             // sent by the player: its own, till it is let go; set by another commander still about: that one's
             if (u.Hold && u.Ward == null) continue;
@@ -563,7 +563,7 @@ public sealed partial class Sim
 
     /// <summary>One of ours who heeds a commander's call to arms: a soldier on its feet, not an engine.</summary>
     bool Soldierly(Unit u, Unit cap) => u != cap && !u.Dead && !u.Inside && u.Team == Team.Player && u.Captor == null && u.Airborne == null && u != Possessed
-        && (u.T.Work < 1 || u.Militia) && !Kinds.IsEngine(u.T) && u.T != Kinds.Crewman && u.T != Kinds.Captain && !u.T.Prays && Armed(u) && !u.Mending;
+        && (u.T.Work < 1 || u.Militia) && !Kinds.IsEngine(u.T) && u.T != Kinds.Crewman && u.T != Kinds.Captain && u.T != Kinds.Architect && !u.T.Prays && Armed(u) && !u.Mending;
 
     /// <summary>One shooter's part in a volley: a shot at the point, falling about it, at one of the horde near it if any; so much harder for the commander's Тактика.</summary>
     bool Volley(Unit u, float ax, float ay, float az, float harm = 1)

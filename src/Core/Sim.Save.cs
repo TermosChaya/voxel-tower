@@ -16,7 +16,7 @@ namespace VoxelTower.Core;
 public sealed partial class Sim
 {
     /// <summary>20: the bodies sculpted finer, their half-voxels (and so a wounded body's) not what they were.</summary>
-    public const int SaveVersion = 73;
+    public const int SaveVersion = 74;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -176,6 +176,7 @@ public sealed partial class Sim
         WriteStanding(w);
         WriteRaids(w);
         WriteCaptains(w);
+        WriteArchitect(w);
         WriteCampaign(w);
         w.Write(OreStruck); w.Write(MetalMined);
         w.Write(extra ?? "");
@@ -517,6 +518,7 @@ public sealed partial class Sim
         ReadStanding(r);
         ReadRaids(r);
         ReadCaptains(r);
+        ReadArchitect(r);
         ReadCampaign(r);
         OreStruck = r.ReadBoolean(); MetalMined = r.ReadDouble();
         string extra = r.ReadString();

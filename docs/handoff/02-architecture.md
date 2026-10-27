@@ -469,6 +469,24 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `Charge` до 1 за `HeavyDraw`, `_heavyNext` в `Blow`/`Land`), пинок `WishKick` (`Kick`: толчок, лестница орды долой),
   `LayMarked`/`DigMarked` (только размеченное, `_layingMarked` на всю протяжку, `OnMarked`), `PossessedLadder` (L,
   `Shapes.LadderAt` → `DesignateBuild`); отказы `Refuse` → `Refused`/`RefusedAt` для слова посреди экрана.
+- `Sim.Architect.cs` — архитектор (`Kinds.Architect`, тело `Bodies.Architect.cs`, нанимает «Двор каменщиков», один
+  на долину — `ArchitectOne`). Весь его ход — `ArchitectTick` из `PawnTick` (бежит от орды, прячется по тревоге, ходит
+  смотреть кусок, иначе стоит; не дерётся и не работает руками). `ArchitectThink` раз в 4 с: `ArchPlan` ??=
+  `MakeArchPlan` — квадратное кольцо вокруг `PointToHold` (`HoldPoint` — для рудника кампании, иначе цитадель или
+  камень заставы), полусторона `H` от «места» + 3 м по размаху и гарнизону, сдвиг на клетку-две по `RingCost`
+  (постройки, вода, край, круча на линии); сторона орды по `Site.EntrySide`; ворота там, где кольцо пересекает
+  дорога (`RoadCrossings`), вторая дорога — вторые ворота; `Stone`, если камня ≥ 0,6 кольца и размах не «сдержанно»;
+  `Gatehouse`, если есть 0,6 м³ металла. `ArchPieces` — куски по индексам битовых масок `Marked`/`Done` (стороны,
+  ворота, углы, ров, колья, частокол долой и камень вместо него, лестница); кусок размечается, когда готово то, что в
+  `After`, при не больше двух строящихся и запасе на половину (`Labour.Estimate`); готов, когда в его коробке не
+  осталось разметки (`MarkedLeft`); не сдвинувшийся 4 мин не держит очередь. Стены — свои столбцы от `Site.HTop`
+  (`StoneStretch`, зубцы снаружи, не над воротами `OverGate`; `TimberStretch`), ворота — `GatePlan.At` с правилом
+  перемычки или шаблон `Gatehouse`, углы — `Watchtower`/`RoundTower`. Нет камня на кольцо в начале — `Stone = false`.
+  `ArchitectMend` раз в 30 с вне набега — `Mend` только по замыслу его готовых кусков; `ArchitectEngines` — наши
+  машины внутри кольца у стороны орды; `ArchDuty` — свободным рабочим добычу недостающего. Карточка — `ArchDoing`,
+  `ArchLacks`; `ArchStyle` (сдержанно, крепко, до неба), `Unit.Commands` — включён. Сохранение `WriteArchitect`
+  (версия 74). В игре: `ArchitectView.cs` — призрак плана, пока он выбран; кнопки в `Inspector`, строка в
+  `Retinue.DoingNow`, совет `Advisor`, строка справки.
 - `Sim.Captains.cs` — командиры (`Kinds.Captain`): `CaptainThink` раз в 2,5 с (из `PawnTick`): `Under` — бойцы в
   `CaptainReach` 40 м, не посланные игроком (`Hold && Ward == null`) и не чужого командира; `Front` (строй в пролом
   `Breach`; иначе поперёк прохода `Opening` — по полю ближнего налётчика первое место без рубки, где наша стена с обеих

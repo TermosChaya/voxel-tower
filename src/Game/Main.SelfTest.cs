@@ -1070,6 +1070,7 @@ public partial class Main
         await SelfTestTown(Check);
         await MinesSelfTest((what, ok, detail) => Check(what, ok, detail));
         await SelfTestYard(Check);
+        await SelfTestArchitect(Check);
         await SelfTestFelling(Check);
         await SelfTestTemplates(Check);
         await SelfTestRowHouses(Check);

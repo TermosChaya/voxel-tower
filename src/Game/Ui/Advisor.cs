@@ -71,6 +71,11 @@ public partial class Advisor : VBoxContainer
             list.Add(new Advice("board", Icons.Of("tied-scroll"), Bindings.Fill("Карта долин: {Board}. По ней ходят герои"),
                 Bindings.Fill("Карта долин ({Board})\nВсе долины кампании. Щёлкните героя, потом место на карте, и он пойдёт туда. У долины нажмите «Войти в клетку». Щелчок откроет карту."),
                 () => _m.OpenAtlas()));
+        // the first architect hired: what he does by himself, till he has been looked at once
+        if (!Settings.Met("architect") && sim.Units.Find(u => !u.Dead && u.T == Kinds.Architect && u.Team == Team.Player) is { } arch)
+            list.Add(new Advice("architect", Icons.Of("hill-fort"), "Архитектор сам строит оборону",
+                "Архитектор\nОн сам размечает стену или частокол вокруг места, ворота к дороге, вышки, ров и колья, а рабочие строят. Щелчок выберет его: план виден призраком, на карточке — выключить и размах.",
+                () => { Settings.Meet("architect"); _m.Selected.Clear(); _m.Selected.Add(arch); _m.Hud.OnSelectionChanged(); }));
         var stuck = new List<Unit>(); var idle = new List<Unit>(); var unfooted = new List<Unit>();
         int wanting = Stockpile.None;
         bool barred = false, idleLong = false;

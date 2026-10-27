@@ -105,6 +105,9 @@ public static class Retinue
         // a commander's word, and those under it (Sim.Captains.cs)
         if (u.Follows != null && sim.Time < u.FollowUntil) return u.State == UnitState.Fight ? "в бою, за командиром" : "идёт за командиром";
         if (u.WallUntil > sim.Time) return u.State == UnitState.Fight ? "держит строй, в бою" : "держит строй";
+        // the architect: what he has marked and what he is short of (Sim.Architect.cs)
+        if (u.T == Kinds.Architect && !u.Mending && u.State is not (UnitState.Fight or UnitState.Flee))
+            return !u.Commands ? "ждёт приказа: сам не строит" : sim.ArchDoing == "" ? "осматривает место" : $"{sim.ArchDoing}{(sim.ArchLacks != "" ? $" · не хватает: {sim.ArchLacks}" : "")}";
         if (u.T == Kinds.Captain && !u.Mending && u.State != UnitState.Fight)
             return !u.Commands ? "ждёт приказа: сам не командует" : u.Goal >= 0 ? "командует: держит указанное место" : "командует бойцами вокруг";
         if (u.Propping is { } led) return Sim.Propped(led) ? "ведёт хромого к цитадели" : "идёт помочь хромому";
@@ -235,7 +238,7 @@ public static class Retinue
     /// <summary>"Рабочие", "Лучники", "Мечники".</summary>
     public static string Many(UnitType t) => t.Key switch
     {
-        "worker" => "Рабочие", "archer" => "Лучники", "sword" => "Мечники", "priest" => "Жрецы", "spear" => "Копейщики", "shield" => "Щитоносцы",
+        "worker" => "Рабочие", "archer" => "Лучники", "sword" => "Мечники", "priest" => "Жрецы", "architect" => "Архитекторы", "spear" => "Копейщики", "shield" => "Щитоносцы",
         "halberd" => "Алебардщики", "knight" => "Рыцари", "sling" => "Пращники", "crossbow" => "Арбалетчики", "bombard" => "Бомбардиры", "ouralchemist" => "Алхимики", "hound" => "Боевые псы",
         "rider" => "Всадники", "horsearcher" => "Конные лучники", "lancer" => "Конные рыцари", "tametroll" => "Ручные тролли", "giant" => "Великаны", _ => t.Name,
     };
@@ -250,6 +253,7 @@ public static class Retinue
             "sword" => new[] { "мечник", "мечника", "мечников" },
             "priest" => new[] { "жрец", "жреца", "жрецов" },
             "captain" => new[] { "командир", "командира", "командиров" },
+            "architect" => new[] { "архитектор", "архитектора", "архитекторов" },
             "spear" => new[] { "копейщик", "копейщика", "копейщиков" },
             "shield" => new[] { "щитоносец", "щитоносца", "щитоносцев" },
             "halberd" => new[] { "алебардщик", "алебардщика", "алебардщиков" },

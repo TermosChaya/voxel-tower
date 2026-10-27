@@ -52,7 +52,7 @@ public partial class Inspector : Control
         if (sel.Count == 0)
         {
             var kinds = new System.Text.StringBuilder("home:");
-            foreach (var t in Kinds.PlayerKinds) kinds.Append(_m.Sim.Count(t) > 0 ? '1' : '0');
+            foreach (var t in Kinds.Ours) kinds.Append(_m.Sim.Count(t) > 0 ? '1' : '0');
             return kinds.ToString();
         }
         return (sel.Count == 1 ? "one:" : "many:") + string.Join(",", sel.ConvertAll(u => u.Id));
@@ -62,7 +62,7 @@ public partial class Inspector : Control
     {
         var list = new List<Unit>();
         foreach (var u in _m.Selected) if (!u.Dead) list.Add(u);
-        list.Sort((a, b) => a.T == b.T ? a.Id.CompareTo(b.Id) : Array.IndexOf(Kinds.PlayerKinds, a.T).CompareTo(Array.IndexOf(Kinds.PlayerKinds, b.T)));
+        list.Sort((a, b) => a.T == b.T ? a.Id.CompareTo(b.Id) : Array.IndexOf(Kinds.Ours, a.T).CompareTo(Array.IndexOf(Kinds.Ours, b.T)));
         return list;
     }
 
@@ -675,6 +675,17 @@ public partial class Inspector : Control
                     () => _m.Hud.HeroPane.Show(one)));
             }
         }
+        Button planning = null;
+        if (chosen.Exists(Sim.IsArchitect))
+        {
+            row.AddChild(new Rule(true));
+            planning = new Glyph(Icons.Of("hill-fort"), "Строит оборону сам\nАрхитектор сам размечает укрепления вокруг места, которое держит долина: стену или частокол, ворота к дороге, " +
+                "вышки или башни по углам, ров и колья перед стороной орды. Ставит наши машины к стороне орды и велит чинить сломанное. Его план виден призраком, пока он выбран. " +
+                "Ещё раз — ждёт ваших приказов.", () => _m.Command.ArchitectSelected(), toggle: true);
+            row.AddChild(planning);
+            row.AddChild(new Glyph(Icons.Of("castle"), $"Размах: {Sim.ArchStyleNames[(int)_m.Sim.ArchStyle]}\nСдержанно — частокол, ворота и две вышки. Крепко — стена, вышки по углам, ров и колья. " +
+                "До неба — высокие стены, каменные башни и колья с трёх сторон. Щелчок меняет размах: то, что ещё не размечено, он сделает по-новому.", () => _m.Command.ArchitectStyle()));
+        }
         if (archers)
         {
             row.AddChild(new Rule(true));
@@ -705,6 +716,7 @@ public partial class Inspector : Control
             alive?.SetPressedNoSignal(chosen.TrueForAll(u => !Sim.TakesAlive(u) || u.TakeAlive));
             commands?.SetPressedNoSignal(chosen.TrueForAll(u => u.T != Kinds.Captain || u.Commands));
             garrison?.SetPressedNoSignal(chosen.TrueForAll(u => u.Garrison));
+            planning?.SetPressedNoSignal(chosen.TrueForAll(u => u.T != Kinds.Architect || u.Commands));
         });
         return row;
     }
@@ -767,7 +779,7 @@ public partial class Inspector : Control
         var col = new VBoxContainer();
         col.AddThemeConstantOverride("separation", 4);
         var counts = new List<string>();
-        foreach (var t in Kinds.PlayerKinds) { int n = chosen.FindAll(u => u.T == t).Count; if (n > 0) counts.Add(Retinue.Plural(t, n)); }
+        foreach (var t in Kinds.Ours) { int n = chosen.FindAll(u => u.T == t).Count; if (n > 0) counts.Add(Retinue.Plural(t, n)); }
         col.AddChild(Hud.Text($"Выбрано {chosen.Count}: {string.Join(", ", counts)} · щелчок по портрету — выбрать одного", Ornament.SerifBold, 13, Ornament.BronzeLight));
         var faces = new HFlowContainer();
         faces.AddThemeConstantOverride("h_separation", 4);
@@ -806,7 +818,7 @@ public partial class Inspector : Control
         kinds.AddThemeConstantOverride("h_separation", 4);
         kinds.AddThemeConstantOverride("v_separation", 3);
         _tiles.Clear();
-        foreach (var t in Kinds.PlayerKinds)
+        foreach (var t in Kinds.Ours)
         {
             var tile = new KindTile(_m, t) { CustomMinimumSize = new Vector2(35, 44) };
             _tiles.Add(tile);
@@ -831,7 +843,7 @@ public partial class Inspector : Control
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 10);
         var present = new List<UnitType>();
-        foreach (var kind in Kinds.PlayerKinds) if (_m.Sim.Count(kind) > 0) present.Add(kind);
+        foreach (var kind in Kinds.Ours) if (_m.Sim.Count(kind) > 0) present.Add(kind);
         var keep = Btn($"Цитадель · {Bindings.Label(Act.Keep)}", "Цитадель ({Keep})\nНабор войска. Новобранцы готовятся по очереди. Войско не может быть больше числа мест.", () => _m.Command.OpenKeep(), 98);
         keep.SizeFlagsVertical = SizeFlags.ShrinkBegin;
         row.AddChild(keep);

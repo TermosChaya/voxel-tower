@@ -169,7 +169,7 @@ public static partial class Bodies
         "worker" => 8, "archer" => 6, "sword" => 6, "priest" => 3, "risen" => 2, "thrall" => 2, "shaman" => 2, "witch" => 2, "necro" => 2, "goblin" => 8, "sapper" => 4, "orc" => 6, "miner" => 4, "troll" => 3, "thief" => 3, "deer" => 2, "ram" => 2, "catapult" => 2, "mantlet" => 2, "tower" => 1, "stag" => 1, "bear" => 1,
         "spear" => 4, "shield" => 3, "halberd" => 3, "knight" => 3, "sling" => 4, "crossbow" => 3, "bombard" => 3, "hound" => 3, "rider" => 4, "horsearcher" => 3,
         "lancer" => 2, "tametroll" => 2, "giant" => 3, "alchemist" => 3, "hillgiant" => 2, "ouralchemist" => 3,
-        "mangonel" => 2, "ballista" => 2, "trebuchet" => 2, "crew" => 3, "captain" => 3, "skeleton" => 2, "wolf" => 2, _ => 1,
+        "mangonel" => 2, "ballista" => 2, "trebuchet" => 2, "crew" => 3, "captain" => 3, "architect" => 2, "skeleton" => 2, "wolf" => 2, _ => 1,
     };
 
     /// <summary>A look for a unit, from its number, so it keeps it.</summary>
@@ -215,6 +215,7 @@ public static partial class Bodies
         "archer" => Archer(look),
         "sword" => Swordsman(look),
         "priest" => Priest(look),
+        "architect" => Architect(look),
         "spear" => Spearman(look),
         "shield" => Shieldbearer(look),
         "halberd" => Halberdier(look),

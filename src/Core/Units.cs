@@ -84,6 +84,18 @@ public static class Kinds
         Move = new Mover { Height = 2, Climb = 2, Speed = 2.5f },
         Work = 0, Yield = 0, Hp = 190, Damage = 18, AttackTime = 1f, Cost = 120, Tool = "sword", BodyR = 2.5f, Reach = 11,
     };
+    /// <summary>
+    /// An architect of ours: a master builder in a long coat and a broad hat, a measuring rod in his hand and the plans
+    /// under his arm. He lays no stone himself: he looks the valley over and marks out its defences for the workers by
+    /// himself (Sim.Architect.cs) — walls or a palisade round the point it holds, a gate toward the road, towers, a ditch,
+    /// stakes, the engines set facing the horde — and has what the horde breaks mended. Hired at the mason's yard, one to a valley.
+    /// </summary>
+    public static readonly UnitType Architect = new()
+    {
+        Key = "architect", Name = "Архитектор", Team = Team.Player,
+        Move = new Mover { Height = 2, Climb = 2, Speed = 2.5f },
+        Work = 0, Yield = 0, Hp = 70, Damage = 5, AttackTime = 1.3f, Cost = 150, Tool = "staff",
+    };
     /// <summary>A priest of the old powers: in a dark robe and hood, with a staff; it prays, and fights only for its life.</summary>
     public static readonly UnitType Priest = new()
     {
@@ -461,12 +473,22 @@ public static class Kinds
         Hp = 50, Damage = 14, AttackTime = 4.5f, KeepDamage = 1, Bounty = 12, BodyH = 10, BodyR = 1.5f, Reach = 9,
         Range = 18 * VoxelWorld.PerMetre, Tool = "flask",
     };
+    /// <summary>Ours who neither fight nor work with their hands, and are hired in a building of the town: the architect.</summary>
+    public static readonly UnitType[] Masters = { Architect };
+    /// <summary>All of ours as the panels list them: the household, the masters after it, then the troops.</summary>
+    public static readonly UnitType[] Ours = Ordered();
+    static UnitType[] Ordered()
+    {
+        var all = new List<UnitType>(PlayerKinds);
+        all.InsertRange(5, Masters);
+        return all.ToArray();
+    }
     /// <summary>The horde's throwers of what is not a weapon of war: the alchemists.</summary>
     public static readonly UnitType[] Throwers = { Alchemist };
-    /// <summary>Every kind there is, ours, the horde's, the beasts', the risen and the engines (bodies sculpted ahead, saves read back).</summary>
+    /// <summary>Every kind there is, ours and our masters, the horde's, the beasts', the risen and the engines (bodies sculpted ahead, saves read back).</summary>
     public static IEnumerable<UnitType> All()
     {
-        foreach (var arr in new[] { PlayerKinds, HordeKinds, WildKinds, Guardians, Engines, Summoned, Casters, Throwers, Crews })
+        foreach (var arr in new[] { PlayerKinds, Masters, HordeKinds, WildKinds, Guardians, Engines, Summoned, Casters, Throwers, Crews })
             foreach (var t in arr) yield return t;
     }
 }

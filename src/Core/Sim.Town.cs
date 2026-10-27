@@ -131,6 +131,7 @@ public sealed partial class Sim
             About = "Известковый раствор: орда ломает камень на 33 % дольше. Артель каменщиков: строят на 25 % быстрее.",
             Level2 = "Тёсаный камень, цитадель на скале и крепость: камни бьют вдвое меньше, цитадель получает вдвое меньше урона, орда ломает камень ещё дольше.",
             Grants1 = new[] { "mortar", "masons" }, Grants2 = new[] { "granite", "bastion", "fortress" },
+            Hires = new[] { H(Kinds.Architect, 1, 1) },
             Props1 = new[] { Prop.Blocks, Prop.Workbench }, Props2 = new[] { Prop.Blocks, Prop.Blocks } },
         new() { Key = "drill", W = 37, D = 57, Name = "Учебный плац", Lore = "b_drill", Gold = 40, UpGold = 90, Roof = Mat.Shingle,
             About = "Наём на 20 % дешевле, стёганки: у новых солдат на 20 % больше здоровья.", Level2 = "Солдаты ходят и бегают на 15 % быстрее.",
@@ -388,6 +389,7 @@ public sealed partial class Sim
         foreach (var (kind, level, _) in b.K.Hires) if (kind == t) at = level;
         if (at < 0) return "здесь таких не нанимают";
         if (b.Level < at) return "сначала улучшите здание";
+        if (t == Kinds.Architect && Count(Kinds.Architect) > 0) return ArchitectOne;
         if (!Sandbox && (!b.Stock.TryGetValue(t.Key, out float n) || n < 1)) return "пока некого: прибудут к утру";
         int have = Household();
         if (have + t.Room > Places) return $"мест нет: занято {have} из {Places}, постройте жилой дом";

@@ -73,6 +73,7 @@ public sealed partial class Sim
         if (!CitadelHires(t) && !Sandbox) return HiredWhere(t);
         if (t == Kinds.Captain && Captains >= CaptainCap)
             return HallLevel() < 3 ? $"командиров {Captains} из {CaptainCap}: ратуша даёт ещё одного за каждый уровень" : $"командиров не больше {CaptainCap}";
+        if (t == Kinds.Architect && Count(Kinds.Architect) > 0) return ArchitectOne;
         if (!Unlocked(t)) return $"сначала изучите «{LoreOf(t.Lore)?.Name ?? t.Lore}»";
         int have = Household();
         if (have + t.Room > Places) return t.Room > 1 && have < Places

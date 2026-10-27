@@ -73,6 +73,8 @@ public partial class Main : Node3D
     public FirstPerson FP { get; private set; }
     /// <summary>The rings where the player sent its people (OrderMarks.cs).</summary>
     public OrderMarks Rings { get; private set; }
+    /// <summary>The architect's plan as a ghost while he is chosen (ArchitectView.cs).</summary>
+    public ArchitectView ArchView { get; private set; }
     /// <summary>The horde's ways and our archers' cover, drawn over the field: put away in first person.</summary>
     public Node3D Trails { get; private set; }
     public Node3D Cover { get; private set; }
@@ -436,6 +438,9 @@ public partial class Main : Node3D
         Rings = new OrderMarks();
         AddChild(Rings);
         Rings.Init(this);
+        ArchView = new ArchitectView();
+        AddChild(ArchView);
+        ArchView.Init(this);
         // last, so it hears the keys and the mouse before anything else when the player is in one of ours; the mouse,
         // held in first person, is free again in a game loaded from there
         Input.MouseMode = Input.MouseModeEnum.Visible;

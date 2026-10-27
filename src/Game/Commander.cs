@@ -90,6 +90,26 @@ public partial class Commander : Node
         _m.Hud.Refresh();
     }
 
+    /// <summary>The chosen architect plans and marks the defences by himself, or waits on the player's word if he was.</summary>
+    public void ArchitectSelected()
+    {
+        bool any = false, all = true;
+        foreach (var u in _m.Selected) if (u.T == Kinds.Architect) { any = true; all &= u.Commands; }
+        if (!any) return;
+        foreach (var u in _m.Selected) if (u.T == Kinds.Architect) { u.Commands = !all; u.NextOrders = 0; }
+        _m.Hud.Float(all ? "архитектор ждёт ваших приказов" : "архитектор строит оборону сам", Ornament.BronzeLight);
+        _m.Hud.Refresh();
+    }
+
+    /// <summary>The architect's way, round in turn: modest, strong, sky-high.</summary>
+    public void ArchitectStyle()
+    {
+        var s = (ArchStyle)(((int)_m.Sim.ArchStyle + 1) % 3);
+        _m.Sim.SetArchStyle(s);
+        _m.Hud.Float($"архитектор строит {Sim.ArchStyleNames[(int)s]}", Ornament.BronzeLight);
+        _m.Hud.Refresh();
+    }
+
     /// <summary>The chosen commanders give their orders by themselves, or wait on the player's if all of them were giving them.</summary>
     public void CommandsSelected()
     {

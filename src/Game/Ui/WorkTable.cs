@@ -45,7 +45,7 @@ public partial class WorkTable : Control
         _rows.Clear();
         // priests do none of this work, nor hounds and riders: they are not in the table
         foreach (var u in _m.Sim.Units) if (!u.Dead && u.Team == Team.Player && !u.T.Prays && u.T.Work > 0 && u.T != Kinds.Risen) _rows.Add(u);
-        _rows.Sort((a, b) => a.T == b.T ? a.Id.CompareTo(b.Id) : Array.IndexOf(Kinds.PlayerKinds, a.T).CompareTo(Array.IndexOf(Kinds.PlayerKinds, b.T)));
+        _rows.Sort((a, b) => a.T == b.T ? a.Id.CompareTo(b.Id) : Array.IndexOf(Kinds.Ours, a.T).CompareTo(Array.IndexOf(Kinds.Ours, b.T)));
         CustomMinimumSize = new Vector2(Width - 40, Head + Math.Max(1, _rows.Count) * Row + 34);
         QueueRedraw();
     }
