@@ -54,6 +54,8 @@ public partial class AtlasHud : Control
     public MapParty CardParty => _arrived.Count > 0 ? _arrived[0] : null;
     public MapParty Warning => _warning;
     public bool EnterShown => _enter?.Visible == true;
+    /// <summary>Whether the pane offers to take someone of the valley out onto the map.</summary>
+    public bool LeaveShown { get; private set; }
     public AtlasFigures Figures => _figs;
     /// <summary>What the tutorial points at on the map's frame: «До рассвета», «Войти в клетку», the panel of the chosen.</summary>
     public Button DawnButton { get; private set; }
@@ -497,7 +499,7 @@ public partial class AtlasHud : Control
             if (p == Hero) b.AddThemeColorOverride("font_color", Ornament.EmberGlow);
             _heroes.AddChild(b);
         }
-        if (shown == 0) _heroes.AddChild(Line("На карте нет героев. Выберите в долине командира и бойцов: {Board}, «Вывести на карту».", Ornament.Aged));
+        if (shown == 0) _heroes.AddChild(Line("На карте нет героев. В долине выберите командира и бойцов и нажмите {EnterCell}.", Ornament.Aged));
     }
 
     string Status(MapParty p)
@@ -530,6 +532,7 @@ public partial class AtlasHud : Control
     void About()
     {
         foreach (var c in _about.GetChildren()) c.QueueFree();
+        LeaveShown = false;
         var h = Hero;
         if (h != null && C.Parties.Contains(h))
         {
@@ -555,6 +558,7 @@ public partial class AtlasHud : Control
             }
             if (hero != null) _about.AddChild(Big("Карточка героя", "Опыт, умения, артефакты, выбор умения на новом уровне.", () => _m.Hud.HeroPane.Show(h)));
             EconomyHero(h);
+            LeaveRows();
             return;
         }
         var c0 = Cell ?? C.Here;
@@ -564,18 +568,39 @@ public partial class AtlasHud : Control
         // our own valleys are gone into without a hero, as a town in «Heroes»
         if (c0.Owner == Holder.Ours)
             _about.AddChild(Big(c0 == C.Here ? "В долину" : "Войти в долину", "Открыть эту долину: её город, её стены, её людей.", () => _m.GoToValley(c0)));
-        // the chosen of the valley
+        LeaveRows();
+    }
+
+    /// <summary>Who of the valley can go out onto the map from here: the chosen, if they may go, or else each commander of ours with those about him.</summary>
+    void LeaveRows()
+    {
         int chosen = 0; bool captain = false;
         var group = new List<Unit>();
         foreach (var u in _m.Selected) if (!u.Dead && u.Team == Team.Player) { chosen++; captain |= u.T == Kinds.Captain; group.Add(u); }
         if (chosen > 0 && (captain || Main.Scouts(group)))
         {
-            _about.AddChild(Big($"Вывести на карту ({chosen})", "Выбранные в долине сразу выйдут на карту у её края. В отряде нужен командир, или до 3 лёгких бойцов в разведку.", () =>
-            {
-                string why = _m.LeaveToMap(group);
-                _m.Hud.Float(why ?? "отряд на карте", why == null ? Ornament.Moss : Ornament.Blood);
-            }));
+            _about.AddChild(Big($"Вывести на карту ({chosen})", "Выбранные в долине сразу выйдут на карту у её края. В отряде нужен командир, или до 3 лёгких бойцов в разведку.", () => Leave(group)));
+            LeaveShown = true;
+            return;
         }
+        int shown = 0;
+        foreach (var u in _m.Sim.Units)
+        {
+            if (u.Dead || u.Team != Team.Player || u.T != Kinds.Captain || u.Garrison || shown == 3) continue;
+            var party = _m.PartyAbout(u);
+            shown++;
+            LeaveShown = true;
+            // (his first name only: the button keeps the pane's width)
+            string who = u.Hero != null ? u.Hero.Name.Split(' ')[0] : "командир";
+            _about.AddChild(Big($"Вывести на карту: {who} ({party.Count})",
+                $"{u.Name} и те, кто в 20 м от него, сразу выйдут на карту у ближнего края долины.", () => Leave(party)));
+        }
+    }
+
+    void Leave(List<Unit> group)
+    {
+        string why = _m.LeaveToMap(group);
+        _m.Hud.Float(why ?? "отряд на карте", why == null ? Ornament.Moss : Ornament.Blood);
     }
 
     static string Upper(string s) => s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s[1..];

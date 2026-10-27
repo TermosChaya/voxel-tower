@@ -28,6 +28,8 @@ public partial class Tutorial
     /// <summary>Where the campaign's part laid its chest, chose its mine, set its wolves and its ogres; the hero it is about.</summary>
     public static (int col, int row) ChestAt, MineAt, WolvesAt, OgresAt;
     public static string HeroName = "";
+    /// <summary>The step that goes into a valley: no valley is gone into from the map before it.</summary>
+    public const string IntoCell = "Войти в клетку";
     /// <summary>Whether its army of the horde has been sent at the mine (once, not again as the scene begins anew).</summary>
     public static bool ArmySent;
     /// <summary>The battles for points won when the part began, the saves and the small map's jumps when their steps began.</summary>
@@ -186,7 +188,7 @@ public partial class Tutorial
         });
         Add(new Step
         {
-            Chapter = point, Title = "Войти в клетку",
+            Chapter = point, Title = IntoCell,
             Text = "Пока герой стоит на клетке, кнопка «Войти в клетку» внизу или {EnterCell} открывает её долину. Герой " +
                 "войдёт туда со всей армией.",
             Task = "Войдите в долину рудника",
@@ -225,8 +227,8 @@ public partial class Tutorial
         Add(new Step
         {
             Chapter = point, Title = "На карту",
-            Text = "Остальные уходят с героем. Обведите рамкой всех своих, гарнизон останется. Откройте карту ({Board}) и " +
-                "нажмите «Вывести на карту». Отряд выйдет у ближнего края.",
+            Text = "Остальные уходят с героем. Обведите рамкой всех своих, гарнизон останется, и нажмите {EnterCell}. " +
+                "Или откройте карту ({Board}) и нажмите «Вывести на карту». Отряд выйдет у ближнего края.",
             Task = "Выведите героя на карту",
             Point = "atlas:side",
             Done = () => Hero != null,

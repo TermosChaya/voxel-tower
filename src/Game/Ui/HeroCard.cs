@@ -32,6 +32,8 @@ public partial class HeroCard : Control
     /// <summary>The hero whose card is open, or null.</summary>
     public Hero Hero => _unit?.Hero ?? _away?.Party.Commander?.Hero;
     public bool IsOpen => Visible && Hero != null;
+    /// <summary>Whether the card offers to take its commander out onto the map.</summary>
+    public bool OutShown => _out.Visible;
     /// <summary>The buttons of the skills offered at a level, as the card shows them now; and its name line (for the self-test).</summary>
     public List<Button> Choices => _offer.GetChildren().OfType<Choice>().Where(c => !c.IsQueuedForDeletion()).Cast<Button>().ToList();
     public string NameShown => _name.Text;
@@ -193,7 +195,7 @@ public partial class HeroCard : Control
         _deeds.Text = $"Сразил сам: {h.Kills}. Умения: {Heroes.Skills(h)}.";
         ArtifactsRefresh(h);
         _party.Text = party;
-        _out.Visible = _unit != null && Main.Atlas != null && _m.AtlasLand != null;
+        _out.Visible = _unit != null && Main.Atlas != null;
         foreach (var c in _skills.GetChildren()) ((Control)c).QueueRedraw();
         foreach (var c in _offer.GetChildren()) c.QueueFree();
         _offerHead.Visible = _offer.Visible = h.Pending;

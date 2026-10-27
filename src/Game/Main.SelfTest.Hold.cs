@@ -72,11 +72,31 @@ public partial class Main
                 Sim.CompleteAll();
                 Sim.InstantLabour = false;
                 Run(1);
-                // the hero out to the map with the rest: those left to hold it stay
-                string no = LeaveToMap(new List<Unit>(ours));
-                bool stayed = stay.All(u => !u.Dead) && captain != null && captain.Dead;
-                check("in a valley of the map «Оставить гарнизон» marks the chosen; the hero sent out to the map with all of them, those marked stay",
-                    marked && no == null && stayed, $"marked {marked}, out «{no}», the garrison stayed {stayed} ({stay.Count(u => !u.Dead)} of {stay.Count}), the hero gone {captain?.Dead}");
+                // the map's key opens the big map over the valley, its pane offering the valley's commander out, and shuts it
+                // again; his card offers it too; {EnterCell} with all of them chosen takes the hero out with the rest, and
+                // those left to hold it stay
+                static InputEventKey Key(Act a) => new() { PhysicalKeycode = Bindings.KeyOf(a), Keycode = Bindings.KeyOf(a), Pressed = true };
+                Selected.Clear(); Hud.OnSelectionChanged();
+                Command._UnhandledInput(Key(Act.Board));
+                await Frames(3);
+                bool opened = AtlasOpen && Hud.MapPane.IsOpen, offered = Hud.MapPane.LeaveShown;
+                Command._UnhandledInput(Key(Act.Board));
+                await Frames(3);
+                bool shut = !AtlasOpen;
+                if (captain != null) Hud.HeroPane.Show(captain);
+                await Frames(2);
+                bool card = Hud.HeroPane.IsOpen && Hud.HeroPane.OutShown;
+                Hud.HeroPane.Close();
+                check("in a valley of the big map its key opens the map, which offers the commander out, and shuts it; his card offers it as well",
+                    opened && offered && shut && card, $"opened {opened} offering {offered}, shut {shut}, the card's button {card}");
+                Selected.Clear(); foreach (var u in ours) Selected.Add(u);
+                Hud.OnSelectionChanged();
+                Command._UnhandledInput(Key(Act.EnterCell));
+                await Frames(3);
+                bool went = AtlasOpen && captain != null && captain.Dead;
+                bool stayed = stay.All(u => !u.Dead) && went;
+                check("in a valley of the map «Оставить гарнизон» marks the chosen; {EnterCell} with all of them chosen takes the hero out to the map, those marked stay",
+                    marked && went && stayed, $"marked {marked}, out {went}, the garrison stayed {stayed} ({stay.Count(u => !u.Dead)} of {stay.Count}), the hero gone {captain?.Dead}");
                 // the valley left: home, the scene begun again
                 Again("hold-check", fails);
                 GoToValley(c.Home);

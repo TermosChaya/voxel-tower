@@ -53,6 +53,8 @@ public partial class Tutorial : Node
     /// <summary>The step it is at, from 0, and how many there are (tests and screenshots).</summary>
     public int At => _at;
     public string Title => _at >= 0 ? _steps[_at].Title : "";
+    /// <summary>Where a step stands in the lesson, by its title; -1 if it has none such.</summary>
+    public int IndexOf(string title) => _steps.FindIndex(s => s.Title == title);
     public int Count => _steps.Count;
 
     public bool Campaign => _campaign;

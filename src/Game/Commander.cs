@@ -528,7 +528,17 @@ public partial class Commander : Node
         // the map of valleys, in a campaign; while it is open only the time and the map's own key mean anything
         if (Bindings.Is(k, Act.Board) && !k.CtrlPressed && !k.MetaPressed)
         {
-            if (_m.AtlasLand != null) _m.ToggleAtlas(); else _m.Hud.Float("карта долин есть только в кампании", Ornament.Aged);
+            // (any campaign: the big ones draw their map without the small one's land)
+            if (Main.Atlas != null) _m.ToggleAtlas(); else _m.Hud.Float("карта долин есть только в кампании", Ornament.Aged);
+            GetViewport().SetInputAsHandled(); return;
+        }
+        // in a campaign's valley the key that takes a hero in takes the chosen with a commander out onto the map
+        if (Main.Atlas != null && !_m.AtlasOpen && _m.Hud.Board?.IsOpen != true && Bindings.Is(k, Act.EnterCell) && !k.CtrlPressed && !k.MetaPressed)
+        {
+            var group = new List<Unit>(_m.Selected);
+            if (group.Count == 0 && _m.LoneCommander() is { } lone) group = _m.PartyAbout(lone);
+            string no = _m.LeaveToMap(group);
+            if (no != null) _m.Hud.Float(no, Ornament.Blood);
             GetViewport().SetInputAsHandled(); return;
         }
         if ((_m.Hud.Board?.IsOpen == true || _m.AtlasOpen) && Bindings.Find(k.PhysicalKeycode, Bindings.Scope.Field) is not (Act.Pause or Act.Speed or Act.Help)) return;

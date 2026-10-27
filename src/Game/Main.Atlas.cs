@@ -99,6 +99,12 @@ public partial class Main
     public void EnterHero(MapParty p)
     {
         if (Atlas == null || p == null || !Atlas.Parties.Contains(p)) return;
+        // the campaign's lesson goes over the map first, and goes into a valley at its own step
+        if (Tutor is { Campaign: true, Over: false } t && t.At < t.IndexOf(Tutorial.IntoCell))
+        {
+            Hud.Float("сначала шаги обучения на карте", Ornament.Aged);
+            return;
+        }
         var cell = Atlas.CellOf(p);
         int side = SideNear(p);
         if (cell == Atlas.Here)
@@ -159,6 +165,19 @@ public partial class Main
         OpenAtlas();
         Hud.MapPane.Choose(mp, focus: true);
         return null;
+    }
+
+    /// <summary>The one commander of ours free to go out of this valley (not left to hold it), or null if there are none or more.</summary>
+    public Unit LoneCommander()
+    {
+        Unit one = null;
+        foreach (var u in Sim.Units)
+        {
+            if (u.Dead || u.Team != Team.Player || u.T != Kinds.Captain || u.Garrison) continue;
+            if (one != null) return null;
+            one = u;
+        }
+        return one;
     }
 
     /// <summary>A commander's party, for his card's «Вывести на карту»: the chosen with him, if he is among them, else those about him.</summary>

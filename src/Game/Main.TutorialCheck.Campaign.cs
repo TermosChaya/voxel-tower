@@ -53,6 +53,9 @@ public partial class Main
             {
                 case "Обзор карты":
                 {
+                    // ({EnterCell} before the lesson's own step leaves the hero on the map)
+                    if (Hero() is { } h) { map.Choose(h); EnterHero(h); await Frames(2); }
+                    if (!AtlasOpen || Hero() == null) { GD.Print("[tutorial] FAIL the hero went into a valley before the lesson's step"); _tutFails++; }
                     var v = WorldMap;
                     float dx = v.Look.X < v.Layout.SX / 2 ? 80 : -80;
                     v.Snap(v.Look.X + dx, v.Look.Y, v.Distance * 1.6f);

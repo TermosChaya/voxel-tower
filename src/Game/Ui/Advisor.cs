@@ -67,7 +67,7 @@ public partial class Advisor : VBoxContainer
                 Bindings.Fill("Новый уровень командира\nКаждый уровень даёт одно умение на выбор. Щелчок откроет его карточку. Её открывает и {Rmb} по его лицу в ряду наверху."),
                 () => _m.Hud.OpenRisenHero()));
         // in a campaign, the map of valleys till it has been opened once
-        if (Main.Atlas != null && !Settings.Met("atlas") && _m.AtlasLand != null)
+        if (Main.Atlas != null && !Settings.Met("atlas"))
             list.Add(new Advice("board", Icons.Of("tied-scroll"), Bindings.Fill("Карта долин: {Board}. По ней ходят герои"),
                 Bindings.Fill("Карта долин ({Board})\nВсе долины кампании. Щёлкните героя, потом место на карте, и он пойдёт туда. У долины нажмите «Войти в клетку». Щелчок откроет карту."),
                 () => _m.OpenAtlas()));
