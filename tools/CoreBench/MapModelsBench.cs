@@ -88,9 +88,10 @@ static class MapModelsBench
         for (int tz = 0; tz < lay.TilesZ; tz++)
             for (int tx = 0; tx < lay.TilesX; tx++)
             {
-                var t = Stopwatch.StartNew();
+                // (the thread's own time, so that other work on the machine does not count)
+                double t = BenchClock.CpuMs();
                 var d = MapDress.Dress(src, lay, tx, tz);
-                times.Add(t.Elapsed.TotalMilliseconds);
+                times.Add(BenchClock.CpuMs() - t);
                 first ??= d;
                 quads += d.NearQuads;
                 foreach (var p in d.Placed)

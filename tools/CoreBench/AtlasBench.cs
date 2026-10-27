@@ -106,9 +106,10 @@ static class AtlasBench
         {
             if (cell == home) continue;
             var (tx, tz) = Center(land, cell);
-            var t0 = sw.Elapsed.TotalMilliseconds;
+            // (the thread's own time, so that other work on the machine does not count)
+            var t0 = BenchClock.CpuMs();
             var way = AtlasWalk.Find(land, hero.AtX, hero.AtZ, tx, tz);
-            worstMs = Math.Max(worstMs, sw.Elapsed.TotalMilliseconds - t0);
+            worstMs = Math.Max(worstMs, BenchClock.CpuMs() - t0);
             if (way == null) { none++; continue; }
             ways++;
             bool crossedFord = false;
