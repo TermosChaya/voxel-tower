@@ -184,6 +184,13 @@ public static class Mat
     /// </summary>
     public const byte Tile = 156, Shingle = 157, Thatch = 158, Slate = 174;
     /// <summary>
+    /// The creatures of the bestiary (Bestiary.cs), for their figures: the green scales of a basilisk and a wyvern, a
+    /// dragon's red ones and the darker skin of its wings, a scaled belly, a spider's black chitin, a griffin's and a
+    /// harpy's feathers. And the one of them laid in the world: a spider's web, thrown over whoever it caught, burning at
+    /// a spark.
+    /// </summary>
+    public const byte ScaleGreen = 216, ScaleRed = 217, Membrane = 218, ScaleBelly = 219, Chitin = 220, Feather = 221, FeatherPale = 222, Web = 223;
+    /// <summary>
     /// The town's buildings' looks (Looks.cs): daub, clay and straw packed between the timbers of a framed wall and
     /// limewashed pale; and the bronze of a belfry's bell.
     /// </summary>
@@ -375,6 +382,12 @@ public static class Mat
         D(Prop, "Крепь", 0x7a5a38, .2f, MatGroup.Wood, 0);
         D(SkinGiant, "кожа", 0x6e4c38, .1f, MatGroup.Hard, 0); D(SkinGiantGrey, "кожа", 0x5c584c, .1f, MatGroup.Hard, 0);
         D(Woad, "вайда", 0x2c4a78, .08f, MatGroup.Hard, 0);
+        D(ScaleGreen, "чешуя", 0x4f6b3a, .14f, MatGroup.Hard, 0); D(ScaleRed, "чешуя", 0x8a2f22, .14f, MatGroup.Hard, 0);
+        D(Membrane, "перепонка", 0x5a2420, .1f, MatGroup.Hard, 0); D(ScaleBelly, "брюхо", 0xb59a62, .1f, MatGroup.Hard, 0);
+        D(Chitin, "панцирь", 0x24211f, .12f, MatGroup.Hard, 0); D(Feather, "перья", 0x6b5034, .16f, MatGroup.Hard, 0);
+        D(FeatherPale, "перья", 0xd8d2c2, .1f, MatGroup.Hard, 0);
+        D(Web, "Паутина", 0xdcdad4, .06f, MatGroup.Hard, Decor);
+        Passable[Web] = true;
         D(Window, "Окно", 0x2e2116, .06f, MatGroup.Stone, Player); D(WindowLog, "Окно", 0x2e2116, .06f, MatGroup.Wood, Player);
         D(Shutter, "Ставни", 0x8a6640, .14f, MatGroup.Stone, Player); D(ShutterLog, "Ставни", 0x8a6640, .14f, MatGroup.Wood, Player);
         D(Trodden, "Натоптанная тропа", 0x6e5a43, .22f, MatGroup.Earth, Natural | Earthy);
@@ -488,6 +501,8 @@ public static class Mat
         F(.05f, 25, .35f, Stakes);
         // a thatched roof takes from a spark and is gone in a blaze; shingles catch as timber does
         F(.25f, 10, 0, Thatch);
+        // a spider's web goes up at a spark and is gone at once
+        F(.4f, 3, 0, Web);
         F(.05f, 25, .3f, Shingle);
         F(.06f, 18, .3f, TrapDeck);
         F(.03f, 40, .35f, DrawDeck);

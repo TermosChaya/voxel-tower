@@ -803,7 +803,8 @@ sealed class WorldMaker
     {
         if (c == null) return;
         c.Thing ??= new MapThing { Kind = kind };
-        foreach (var t in MapThing.Stack(tier, R)) c.Sum.Keep.Add(Campaign.Raider(t));
+        // a stack of the bestiary at home on the hex's ground (Bestiary.cs)
+        foreach (var t in Bestiary.Stack(tier, c.Ground, c.Relief, R)) c.Sum.Keep.Add(Campaign.Raider(t));
     }
 
     void Things()

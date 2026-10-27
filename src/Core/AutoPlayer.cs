@@ -115,6 +115,9 @@ public sealed class AutoPlayer
                 bool gold = _c.Clock.Day <= 14;
                 Say($"Сундук {Where(cell)}: {(gold ? "золото" : "опыт")}. {_c.OpenChest(cell, gold)}");
             }
+        // a stack of the wild asking to join: taken while the army has room for them (Campaign.Bestiary.cs)
+        foreach (var (p, cell) in _c.Joiners.ToArray())
+            if (p.Owner == Owner.Ours) Say($"{Where(cell)}: {_c.Join(cell, take: Men() < Places)}");
         // a dwelling: hired from while the gold lasts over the reserve
         foreach (var (p, cell) in _c.Dwellings.ToArray())
         {

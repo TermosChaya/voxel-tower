@@ -676,6 +676,9 @@ public partial class UnitView : Node3D
         if (borne) fall = 0;
         // lying in wait: low in the grass, the top of the head over it (Sim.Ambush.cs)
         if (u.Lurking && !u.Dead) sink += u.T.BodyH * .62f;
+        // a winged one of the wild hovers over the ground, rising and falling, and comes down as it strikes (Bestiary.cs)
+        if (u.T.Hover > 0 && !u.Dead && !u.Down)
+            bob += u.T.Hover * (u.State == UnitState.Fight ? .25f + .5f * (1 - u.Swing) : 1) + MathF.Sin((float)_t * 2.3f + seed) * MathF.Min(2, u.T.Hover * .15f);
         var at = new Vector3(_w.WX(u.X), _w.WY(u.Y + bob - sink), _w.WZ(u.Z));
         // a leader stands a little taller than its kind
         var root = new Transform3D(new Basis(Vector3.Up, MathF.PI / 2 - look.Face).Scaled(Vector3.One * VoxelWorld.Vox * (u.Leader ? 1.15f : 1)), at);

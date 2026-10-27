@@ -36,10 +36,29 @@ public partial class Main
             // (a garrison of ours shown by one who fights in it, not its workers)
             WorldFigures.KindOf = (c, r) => Atlas?.Cell(c, r) is { } h && h.Sum.Keep.Count > 0 ? (h.Sum.Keep.Find(Campaign.Fights) ?? h.Sum.Keep[0]).Kind : null;
             WorldFigures.CountOf = (c, r) => Atlas?.Cell(c, r) is { } h ? h.Sum.Keep.Count : 0;
+            v.Describe = DescribeHex;
         }
         Hud.MapPane.FocusOn = p => { if (WorldMap?.Layout != null) WorldMap.FocusHex(p.Col, p.Row); };
         v.Focus(x, z);
         _arrowsOf = null; _arrowsCount = -1; _reachKey = -2;
+    }
+
+    /// <summary>
+    /// A hex of the big map as the hover says it: its ground and its thing (HexMapView.Tell), and a stack of the wild
+    /// keeping it by its name — «Стая волков: 12» — and how it stands against the hero chosen.
+    /// </summary>
+    string DescribeHex(int col, int row)
+    {
+        string said = WorldMap.Tell(col, row);
+        if (_hexes == null || !_hexes.Seen(col, row) || Atlas?.Cell(col, row) is not { } h) return said;
+        if (h.Owner != Holder.None || h.Sum.Keep.Count == 0 || Bestiary.Of(h.Sum.Keep[0].Kind) == null) return said;
+        // a stack on a hex of its own is named in place of the bare «Стража»; one keeping a thing after what it keeps
+        int nl = said.IndexOf('\n');
+        if (h.Thing?.Kind == ThingKind.Monster && nl > 0) said = $"{Bestiary.Label(h.Sum.Keep)}.{said[nl..]}";
+        else said += $"\n{Bestiary.Label(h.Sum.Keep)}.";
+        var hero = Hud.MapPane?.Hero;
+        if (hero != null && Atlas.Parties.Contains(hero)) said += $"\n{MapBoard.Against(hero.Party.Members, h)}";
+        return said;
     }
 
     /// <summary>The figures and the arrows brought up to the campaign each frame the big map is open.</summary>

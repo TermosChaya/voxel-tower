@@ -427,7 +427,7 @@ public partial class AtlasHud : Control
         var vp = GetViewportRect().Size;
         _arrived.RemoveAll(p => !C.Parties.Contains(p));
         if (_warning != null && (!C.Parties.Contains(_warning) || !_warning.Moving && !_warning.Walking)) _warning = null;
-        bool card = (CardParty != null || _warning != null || C.Chests.Count > 0 || DwellingDue != null) && !_m.Hud.MenuOpen;
+        bool card = (CardParty != null || _warning != null || C.Chests.Count > 0 || C.Joiners.Count > 0 || DwellingDue != null) && !_m.Hud.MenuOpen;
         if (card != _card.Visible) { _card.Visible = card; Card(); }
         // under the map's bar in the middle of the land; in the valley, under its beam
         if (_card.Visible) _card.Position = IsOpen ? new Vector2(MathF.Round((vp.X - Side - _card.Size.X) / 2), 64) : new Vector2(MathF.Round((vp.X - _card.Size.X) / 2), Hud.TopBand + 10);
@@ -628,7 +628,7 @@ public partial class AtlasHud : Control
         ThingKind.Signpost => t.Text ?? "Указатель.",
         ThingKind.Shrine => t.Taken ? "Святыня: благословение уже получено." : $"Святыня: {Campaign.BlessingText(t.Blessing)}.",
         ThingKind.Dwelling => $"Жилище: {t.Breed.Name.ToLowerInvariant()}, готовы наняться {t.Stock}, по {Campaign.HireCost(t.Breed)} зол.",
-        ThingKind.Monster => cell.Sum.Keep.Count > 0 ? $"Стража: {cell.Sum.Keep.Count}." : "Путь свободен.",
+        ThingKind.Monster => cell.Sum.Keep.Count > 0 ? $"{Bestiary.Label(cell.Sum.Keep)}." : "Путь свободен.",
         _ => t.Name,
     };
 
@@ -636,7 +636,18 @@ public partial class AtlasHud : Control
     {
         foreach (var c in _cardButtons.GetChildren()) c.QueueFree();
         _doneWith.RemoveWhere(c => !C.Dwellings.Exists(d => d.cell == c));
-        if (C.Chests.Count > 0)
+        if (C.Joiners.Count > 0)
+        {
+            // a stack of the wild asking to go with a hero of ours (Campaign.Bestiary.cs)
+            var (_, cell) = C.Joiners[0];
+            _cardTitle.Text = Bestiary.Label(cell.Sum.Keep);
+            _cardText.Text = "Видят силу отряда и просятся к вам. Возьмёте — пойдут с героем и будут биться за вас.";
+            var take = Small("Взять в отряд", "Они пойдут с героем как наши.", () => { _m.Hud.Log(C.Join(cell, take: true) ?? "", Hud.Kind.Ok); _m.TellMap(); Refresh(); });
+            take.AddThemeFontOverride("font", Ornament.SerifBold);
+            _cardButtons.AddChild(take);
+            _cardButtons.AddChild(Small("Сразиться", "Бой решится сразу, по силе отрядов.", () => { _m.Hud.Log(C.Join(cell, take: false) ?? "", Hud.Kind.Ok); _m.TellMap(); Refresh(); }));
+        }
+        else if (C.Chests.Count > 0)
         {
             var (_, cell) = C.Chests[0];
             var (gold, xp) = Campaign.ChestOf(cell.Thing);

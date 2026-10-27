@@ -57,24 +57,6 @@ public sealed class MapThing
     /// <summary>A dwelling's growth a week.</summary>
     public static int Growth(UnitType t) => t == Kinds.Knight || t == Kinds.Rider ? 2 : t == Kinds.Halberdier || t == Kinds.Crossbowman ? 3 : 4;
 
-    /// <summary>A stack keeping a hex, the stronger the further out: wolves and boars, then bears, then the dead and trolls.</summary>
-    public static List<UnitType> Stack(int tier, Func<double> roll)
-    {
-        var list = new List<UnitType>();
-        void Add(UnitType t, int n) { for (int i = 0; i < n; i++) list.Add(t); }
-        double d = roll();
-        switch (Math.Clamp(tier, 0, 5))
-        {
-            case 0: Add(d < .5 ? Kinds.Wolf : Kinds.Boar, 3 + (int)(roll() * 2)); break;
-            case 1: Add(d < .5 ? Kinds.Wolf : Kinds.Boar, 4 + (int)(roll() * 3)); if (roll() < .4) Add(Kinds.Bear, 1); break;
-            case 2: if (d < .5) { Add(Kinds.Bear, 2); Add(Kinds.Wolf, 4); } else Add(Kinds.Skeleton, 7 + (int)(roll() * 3)); break;
-            case 3: Add(Kinds.Skeleton, 9 + (int)(roll() * 3)); Add(Kinds.Bear, 2); break;
-            case 4: Add(Kinds.Skeleton, 12); Add(Kinds.Bear, 3); Add(Kinds.Troll, 1); break;
-            default: Add(Kinds.Skeleton, 16); Add(Kinds.Bear, 3); Add(Kinds.Troll, 2); break;
-        }
-        return list;
-    }
-
     public static string NameOf(Res r) => r switch
     {
         Res.Gold => "золото", Res.Logs => "брёвна", Res.Stone => "камень", Res.Earth => "земля", Res.Metal => "металл",

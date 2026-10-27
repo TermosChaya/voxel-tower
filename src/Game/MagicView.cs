@@ -132,6 +132,7 @@ public partial class MagicView : Node3D
         m.Sim.Healed += Mended;
         m.Sim.Hexed += Cursed;
         m.Sim.Quaked += Quake;
+        m.Sim.Breathed += Breath;
     }
 
     MultiMeshInstance3D Multi(Mesh mesh, Material mat)
@@ -359,6 +360,28 @@ public partial class MagicView : Node3D
         Pass(sparks, 2);
         // and a column of smoke going up after, slow and long
         Pass(Motes(at + Vector3.Up * reach * .4f, new Color(.1f, .09f, .08f), (int)(14 + 22 * k), .9f + .4f * k, reach * .3f, .35f + .15f * k, 4.5f), 6);
+    }
+
+    /// <summary>
+    /// A dragon's breath: a jet of fire out of its mouth along the way it breathes and down toward the ground, white at
+    /// the mouth, orange and dark red as it spreads; a glare over the cone, and smoke rising after.
+    /// </summary>
+    void Breath(float x, float y, float z, float dx, float dz, float reach)
+    {
+        var at = At(x, y, z);
+        float len = reach * VoxelWorld.Vox;
+        var way = new Vector3(dx, -.22f, dz).Normalized();
+        var jet = Motes(at, new Color(1f, .7f, .3f), 220, len * 1.5f, .12f, .16f, .75f);
+        var ramp = new Gradient();
+        ramp.SetColor(0, new Color(1.9f, 1.5f, .8f, 1));
+        ramp.SetColor(1, new Color(.35f, .06f, .02f, 0));
+        ramp.AddPoint(.3f, new Color(1.6f, .62f, .14f, .95f));
+        ramp.AddPoint(.7f, new Color(.9f, .2f, .05f, .7f));
+        jet.ColorRamp = ramp;
+        jet.Direction = way; jet.Spread = 13; jet.Explosiveness = .15f; jet.Gravity = new Vector3(0, 1.2f, 0);
+        jet.DampingMin = 2; jet.DampingMax = 5; jet.ScaleAmountMin = .6f; jet.ScaleAmountMax = 1.8f;
+        Flare(at + way * len * .45f, new Color(1f, .6f, .25f), 12, len * 1.3f, 1.4f, jet);
+        Pass(Motes(at + way * len * .6f, new Color(.1f, .09f, .08f), 26, 1.1f, len * .2f, .3f, 3.5f), 5);
     }
 
     /// <summary>The fuses burning down to powder: sparks spitting where each charge is.</summary>
@@ -801,5 +824,6 @@ public partial class MagicView : Node3D
         _m.Sim.Darkened -= Smother;
         _m.Sim.Woken -= Wake;
         _m.Sim.Quaked -= Quake;
+        _m.Sim.Breathed -= Breath;
     }
 }

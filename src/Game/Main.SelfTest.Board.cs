@@ -304,11 +304,15 @@ public partial class Main
             case "atlas-ore":
                 return await SelfTestAtlasGo(stage, check, fails);
             case "world":
-                return await SelfTestWorldGo(check, fails);
+                // the big map's own test, then its creatures of the wild (Main.SelfTest.Bestiary.cs)
+                return await SelfTestWorldGo(check, fails) && SelfTestBeasts(fails);
             case "hold":
             case "hold-check":
             case "defend":
-                return await SelfTestHoldGo(stage, check, fails);
+                return await SelfTestHoldGo(stage, check, fails) && SelfTestBeasts(fails);
+            case "beasts":
+            case "beasts-valley":
+                return await SelfTestBeastsGo(stage, check, fails);
         }
         return true;
     }

@@ -4484,7 +4484,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bodies")
     Console.WriteLine();
     // every kind in every look: whole on the outside, the body's insides hidden under the skin
     int looks = 0, showing = 0;
-    foreach (var t in Kinds.PlayerKinds.Concat(Kinds.HordeKinds).Concat(Kinds.WildKinds))
+    foreach (var t in Kinds.PlayerKinds.Concat(Kinds.HordeKinds).Concat(Kinds.WildKinds).Concat(Kinds.Beasts))
         for (int l = 0; l < Bodies.Looks(t); l++)
         {
             var plan = Bodies.Plan(t, l);
@@ -4509,7 +4509,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bodies")
     // tissue, the same brain, heart and joints — so the wounds cut what they always cut
     int parityLooks = 0, parityCells = 0;
     var parityOff = new System.Collections.Generic.List<string>();
-    var everyKind = Kinds.PlayerKinds.Concat(Kinds.HordeKinds).Concat(Kinds.WildKinds)
+    var everyKind = Kinds.PlayerKinds.Concat(Kinds.HordeKinds).Concat(Kinds.WildKinds).Concat(Kinds.Beasts)
         .Concat(new[] { Kinds.Catapult, Kinds.Mantlet, Kinds.SiegeTower, Kinds.Risen, Kinds.Thrall, Kinds.Shaman, Kinds.Witch, Kinds.Necromancer, Kinds.Alchemist }).Distinct().ToArray();
     foreach (var t in everyKind)
         for (int l = 0; l < Bodies.Looks(t); l++)
@@ -6288,6 +6288,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--economy") EconomyBen
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--holdpoints") HoldPointsBench.Run(Check);
 // the map's content: the big map's lairs, the treasures and their keepers, scouts, a shrine's trial (TrovesBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troves") TrovesBench.Run(Check);
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bestiary") BestiaryBench.Run(Check);
 // the map of valleys as a land: made in good time, every kind of cell its kind, the ways running on, walked from the
 // castle everywhere, the same each time, a cell put on again as its holder changed (LandBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--atlas") LandBench.Run(Check);

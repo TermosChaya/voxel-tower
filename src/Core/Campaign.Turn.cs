@@ -264,6 +264,8 @@ public sealed partial class Campaign
             Tell(NewsKind.Arrived, $"Отряд пришёл {Names(cell).prep}: {Men(p.Party.Members.Count)}.", cell, p);
             return;
         }
+        // a stack of the wild far weaker than the party runs off, or asks to go with it (Campaign.Bestiary.cs)
+        if (Meet(p, cell) && cell.Sum.Keep.Count > 0) return;
         int foes = Foes(cell);
         if (foes > 0)
         {
@@ -332,6 +334,8 @@ public sealed partial class Campaign
     /// </summary>
     bool Battle(MapParty p, List<Traveller> them, Warlord theirs, float walls, MapCell cell, MapParty ours)
     {
+        // (a stack of the wild by its own name: «стаю волков (12)», Bestiary.cs)
+        string beasts = Bestiary.Accusative(them);
         var r = QuickBattle.Fight(p.Party.Members, p.Lord, them, theirs, walls, cell.Kind, Roll);
         HordeGlory(p, r, attacker: true);
         if (r.AttackerLordFell) p.Lord = null;
@@ -341,10 +345,10 @@ public sealed partial class Campaign
         if (r.AttackerWon)
         {
             if (ours != null && them.Count > 0) Flee(ours, cell);
-            Tell(NewsKind.Fought, $"Бой {Names(cell).prep}: орда разбила {(ours != null ? "наш отряд" : "зверей")}. Пало {they} {r.DefenderFell.Count}, налётчиков {r.AttackerFell.Count}.", cell, p);
+            Tell(NewsKind.Fought, $"Бой {Names(cell).prep}: орда разбила {(ours != null ? "наш отряд" : beasts)}. Пало {they} {r.DefenderFell.Count}, налётчиков {r.AttackerFell.Count}.", cell, p);
             return true;
         }
-        Tell(NewsKind.Fought, $"Бой {Names(cell).prep}: {(ours != null ? "наш отряд отбил" : "звери отбили")} орду. Пало налётчиков {r.AttackerFell.Count}, {they} {r.DefenderFell.Count}.", cell, p);
+        Tell(NewsKind.Fought, $"Бой {Names(cell).prep}: {(ours != null ? "наш отряд отбил орду" : $"орда не одолела {beasts}")}. Пало налётчиков {r.AttackerFell.Count}, {they} {r.DefenderFell.Count}.", cell, p);
         if (ours != null) ours.Waits = false;
         Beaten(p);
         return false;

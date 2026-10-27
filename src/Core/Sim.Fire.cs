@@ -204,6 +204,8 @@ public sealed partial class Sim
         foreach (var u in Units)
         {
             if (u.Dead || u.Inside) continue;
+            // a fire spirit, a dragon: fire is their own
+            if (FireProof(u.T)) { u.Burn = 0; continue; }
             if (_hotBlocks.Count > 0)
             {
                 float heat = FireOn(u);
@@ -214,7 +216,8 @@ public sealed partial class Sim
             u.Burn -= step * (Weather == Weather.Rain ? 2 : 1);
             // one of a band burning: the band loses heart
             if (u.Team == Team.Horde && u.Band != null) Dismay(u.Band, .012f * step);
-            Hurt(u, null, BurnDamage * u.BurnHeat * step * (Kinds.IsEngine(u.T) ? 3 : 1), "огонь");
+            u.ScorchedAt = Time;
+            Hurt(u, null, BurnDamage * u.BurnHeat * step * (Kinds.IsEngine(u.T) ? 3 : 1) * FireHarm(u.T), "огонь");
             if (u.Burn <= 0) { u.Burn = 0; u.BurnHeat = 1; }
         }
     }

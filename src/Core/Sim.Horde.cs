@@ -136,7 +136,8 @@ public sealed partial class Sim
         if (Kinds.IsEngine(u.T)) { EngineTick(u, dt); return; }
         // a thief goes about its own business near the citadel
         if (u.T == Kinds.Thief && !u.Routed && ThiefTick(u, dt)) return;
-        var foe = Nearest(u, Team.Player, u.T.Reach + 8);
+        // (a creature of the wild that set on it a moment ago is fought as one of ours is)
+        var foe = Nearest(u, Team.Player, u.T.Reach + 8) ?? WildFoe(u);
         // one running away bites only what has caught it
         if (foe != null && InReach(u, foe) && Armed(u) && (!u.Routed || Time - u.LastHurt < 1.5))
         {

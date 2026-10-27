@@ -152,7 +152,9 @@ public partial class Main
     /// by the citadel, chosen; 1 his way planned to a mine (most of today's moves spent), green as far as today, red
     /// beyond, the days at the cross; 2 him on his way there, walking; 3 a mine flagged ours, him on it; 4 a chest come to, its card asking gold or
     /// experience; 5 a pass kept by a stack; 6 the horde's realm, its town in the burnt land; 7 the strategic view; 8 a road over a river on its bridge;
-    /// 9 a mine held by a garrison of ours behind works, its card up (Campaign.Hold.cs).
+    /// 9 a mine held by a garrison of ours behind works, its card up (Campaign.Hold.cs); 10 a hero of the horde come up by
+    /// ours under its banner; 11 the creatures of the wild about the citadel, the word over the nearest stack (what, how
+    /// many, against our hero).
     /// </summary>
     void BigMapPose()
     {
@@ -172,6 +174,7 @@ public partial class Main
         }
         void Look(MapCell h, float dist, float dz = 26) { var (x, z) = v.Layout.Center(h.Col, h.Row); v.Snap(x, z + dz, dist); }
         var home = c.Home;
+        Action hover = null;
         bool Mine(MapCell h) => h.Thing is { Kind: ThingKind.Mine, Owner: Holder.None } && h.Sum.Keep.Count == 0 && h.Passable;
         switch (_look)
         {
@@ -282,8 +285,18 @@ public partial class Main
                 v.Snap(fx, fz + 14, 18);
                 break;
             }
+            case 11:
+            {
+                // (on open land, the figure not lost among the trees)
+                var stack = Nearest(h => h.Thing is { Kind: ThingKind.Monster } && h.Sum.Keep.Count > 0 && h.Relief is HexRelief.Flat or HexRelief.Hills, home)
+                    ?? Nearest(h => h.Thing is { Kind: ThingKind.Monster } && h.Sum.Keep.Count > 0, home);
+                c.Reveal(stack, 6);
+                Look(stack, 22, 16);
+                hover = () => v.HoverAt(v.Cam.UnprojectPosition(v.HexToScene(stack.Col, stack.Row)));
+                break;
+            }
         }
-        _poseLater = () => { var (t, d, sh) = v.Drawn(); GD.Print($"[world map] {Engine.GetFramesPerSecond()} fps; {t} k triangles in {d} draw calls, {sh} k for shadows; {v.PiecesShown} pieces; slowest frame {v.WorstFrameMs:0} ms"); };
+        _poseLater = () => { hover?.Invoke(); var (t, d, sh) = v.Drawn(); GD.Print($"[world map] {Engine.GetFramesPerSecond()} fps; {t} k triangles in {d} draw calls, {sh} k for shadows; {v.PiecesShown} pieces; slowest frame {v.WorstFrameMs:0} ms"); };
     }
 
     /// <summary>A way over the made-up world between two hexes, over open land (not mountains or water), the fewest steps.</summary>

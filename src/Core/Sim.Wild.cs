@@ -134,9 +134,11 @@ public sealed partial class Sim
 
     void WildTick(Unit u, float dt)
     {
-        if (EscapeFire(u, dt)) return;
+        if (!FireProof(u.T) && EscapeFire(u, dt)) return;
         // a bear goes for whoever comes near it
         BearTick(u);
+        // a creature of the bestiary: its pack, its power, its bow or its fire (Sim.Bestiary.cs)
+        if (BeastTick(u, dt)) return;
         // a wounded boar goes for whoever wounded it, for a while
         var foe = u.Target;
         if (foe != null && (foe.Dead || Time - u.LastHurt > 8 || Dist(u, foe) > 24 * 16 || Leashed(u))) { u.Target = foe = null; u.Path = null; }

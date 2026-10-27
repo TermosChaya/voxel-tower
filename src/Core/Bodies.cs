@@ -164,12 +164,14 @@ public static partial class Bodies
     static readonly ConcurrentDictionary<(string, int), BodyPlan> Cache = new();
 
     /// <summary>How many looks a kind comes in.</summary>
-    public static int Looks(UnitType t) => t.Key switch
+    public static int Looks(UnitType t) => BodyKey(t) switch
     {
         "worker" => 8, "archer" => 6, "sword" => 6, "priest" => 3, "risen" => 2, "thrall" => 2, "shaman" => 2, "witch" => 2, "necro" => 2, "goblin" => 8, "sapper" => 4, "orc" => 6, "miner" => 4, "troll" => 3, "thief" => 3, "deer" => 2, "ram" => 2, "catapult" => 2, "mantlet" => 2, "tower" => 1, "stag" => 1, "bear" => 1,
         "spear" => 4, "shield" => 3, "halberd" => 3, "knight" => 3, "sling" => 4, "crossbow" => 3, "bombard" => 3, "hound" => 3, "rider" => 4, "horsearcher" => 3,
         "lancer" => 2, "tametroll" => 2, "giant" => 3, "alchemist" => 3, "hillgiant" => 2, "ouralchemist" => 3,
-        "mangonel" => 2, "ballista" => 2, "trebuchet" => 2, "crew" => 3, "captain" => 3, "architect" => 2, "skeleton" => 2, "wolf" => 2, _ => 1,
+        "mangonel" => 2, "ballista" => 2, "trebuchet" => 2, "crew" => 3, "captain" => 3, "architect" => 2, "skeleton" => 2, "wolf" => 2,
+        "bandit" => 3, "spider" => 2, "warg" => 2, "harpy" => 2, "cultist" => 2, "centaur" => 3, "ghoul" => 2, "ogre" => 2, "wildtroll" => 2, "wraith" => 2,
+        "minotaur" => 2, "griffin" => 2, "basilisk" => 2, "treant" => 2, "golem" => 2, "firespirit" => 1, "wyvern" => 2, "dragon" => 2, _ => 1,
     };
 
     /// <summary>A look for a unit, from its number, so it keeps it.</summary>
@@ -209,7 +211,10 @@ public static partial class Bodies
     [ThreadStatic] static int _k;
     [ThreadStatic] static bool _detail;
 
-    static BodyPlan Make(UnitType t, int look) => t.Key switch
+    /// <summary>The key a kind's body is sculpted by: a creature gone over to us is the creature still.</summary>
+    static string BodyKey(UnitType t) => t.Key.EndsWith("_ours") ? t.Key[..^5] : t.Key;
+
+    static BodyPlan Make(UnitType t, int look) => BodyKey(t) switch
     {
         "worker" => Worker(look),
         "archer" => Archer(look),
@@ -259,6 +264,24 @@ public static partial class Bodies
         "bear" => BearPlan(),
         "boar" => Boar(),
         "hare" => Hare(),
+        "bandit" => Bandit(look),
+        "spider" => Spider(look),
+        "warg" => Warg(look),
+        "harpy" => Harpy(look),
+        "cultist" => Cultist(look),
+        "centaur" => Centaur(look),
+        "ghoul" => Ghoul(look),
+        "ogre" => Ogre(look),
+        "wildtroll" => WildTroll(look),
+        "wraith" => Wraith(look),
+        "minotaur" => Minotaur(look),
+        "griffin" => Griffin(look),
+        "basilisk" => Basilisk(look),
+        "treant" => Treant(look),
+        "golem" => Golem(look),
+        "firespirit" => FireSpirit(look),
+        "wyvern" => Wyvern(look),
+        "dragon" => Dragon(look),
         _ => Worker(0),
     };
 

@@ -160,7 +160,7 @@ public sealed partial class Sim
         a.NextStroke = Choose(a, b);
         a.StrokeFor = b;
         float dmg = a.T.Damage * (.8f + (float)Rng.NextDouble() * .4f) * share * Oath(a) * SergeantArm(a) * TroopArm(a, b, out bool charge) * ShieldWall(b) * Grip(a) * Heartened(a)
-            * (a.Team == Team.Horde ? HordeHarm * ChampionArm(a) * LordArm(a) : 1);
+            * (a.Team == Team.Horde ? HordeHarm * ChampionArm(a) * LordArm(a) : 1) * BeastArm(a);
         // told to take them alive: the blow that would bring a raider down to a quarter of itself (three fifths in
         // chains), or kill it, fells it instead, to be bound where it lies
         if (a.TakeAlive && !b.Dead && Takeable(b) && b.Hp - dmg <= TakeAt(b))
@@ -172,6 +172,7 @@ public sealed partial class Sim
         }
         Hurt(b, a, dmg);
         TroopBlow(a, b, charge);
+        if (a.Team == Team.Wild) BeastBlow(a, b, dmg);
     }
 
     /// <summary>One is hurt: who, how much, and by what (the bench counts by it what the work costs those at it).</summary>
@@ -224,13 +225,15 @@ public sealed partial class Sim
         else if (u.Team == Team.Wild)
         {
             // a keeper of the map's treasures struck down: no quarry
-            if (by?.Team == Team.Player && u.T.Bounty == 0) Say($"{u.T.Name} повержен.", 1, u);
+            // a harpy, a wyvern: the word for her is feminine
+            bool she = u.T.Name.EndsWith('а') || u.T.Name.EndsWith('я');
+            if (by?.Team == Team.Player && u.T.Bounty == 0) Say($"{u.T.Name} повержен{(she ? "а" : "")}.", 1, u);
             else if (by?.Team == Team.Player)
             {
                 Stock.Gold += u.T.Bounty; Hunted++;
                 // and its carcass, for the old powers if the priests ask
                 Carcasses.Add(u.T);
-                Say($"Добыт {u.T.Name.ToLowerInvariant()}: +{u.T.Bounty} золота.", 1, u);
+                Say($"Добыт{(she ? "а" : "")} {u.T.Name.ToLowerInvariant()}: +{u.T.Bounty} золота.", 1, u);
             }
         }
         // (a hero's fall is told with his name and what went with him: Sim.Heroes.cs)

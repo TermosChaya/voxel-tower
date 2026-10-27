@@ -50,9 +50,16 @@ public sealed class UnitType
     public float Metal;
     /// <summary>A beast or a guardian that goes for whoever comes so near it (voxels), ours or the horde's; 0 for one that does not.</summary>
     public float Aggro;
+    /// <summary>
+    /// A winged one of the wild (Bestiary.cs): how high over the ground it is drawn hovering, in voxels; it walks the
+    /// ground's ways as any other, and comes down to strike.
+    /// </summary>
+    public float Hover;
+    /// <summary>Health it gets back a second, unless fire is on it (a troll of the woods, a treant).</summary>
+    public float Regen;
 }
 
-public static class Kinds
+public static partial class Kinds
 {
     public static readonly UnitType Worker = new()
     {
@@ -488,7 +495,7 @@ public static class Kinds
     /// <summary>Every kind there is, ours and our masters, the horde's, the beasts', the risen and the engines (bodies sculpted ahead, saves read back).</summary>
     public static IEnumerable<UnitType> All()
     {
-        foreach (var arr in new[] { PlayerKinds, Masters, HordeKinds, WildKinds, Guardians, Engines, Summoned, Casters, Throwers, Crews })
+        foreach (var arr in new[] { PlayerKinds, Masters, HordeKinds, WildKinds, Guardians, Engines, Summoned, Casters, Throwers, Crews, Beasts, Joiners })
             foreach (var t in arr) yield return t;
     }
 }
@@ -778,6 +785,17 @@ public sealed class Unit
     // fire
     /// <summary>Seconds it will go on burning (its clothes alight, or standing in the flames), and how hot.</summary>
     public float Burn, BurnHeat = 1;
+    /// <summary>When fire was last on it: a troll's wounds do not close for a while after (Sim.Bestiary.cs).</summary>
+    public double ScorchedAt = -99;
+    /// <summary>Held in a web or stiffened by a basilisk's look: till when, and at what share of its pace.</summary>
+    public double SlowUntil = -99;
+    public float SlowBy = 1;
+    /// <summary>A creature's venom in its wounds: till when, how much a second, and whose.</summary>
+    public double VenomUntil = -99;
+    public float VenomHarm;
+    public Unit VenomBy;
+    /// <summary>A creature of the wild: when its power is ready again, and till when it is charging.</summary>
+    public double PowerAt, ChargeUntil = -99;
     /// <summary>A raider carrying a torch; when it may set the next thing alight, and how long it has been at it.</summary>
     public bool Torch;
     public double NextTorch;

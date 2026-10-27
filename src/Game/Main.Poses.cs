@@ -47,6 +47,7 @@ public partial class Main
         if (_pose == "trees") { LookAtGrove(); return; }
         if (_pose == "grass") { Meadow(); return; }
         if (_pose == "people") { People(); return; }
+        if (_pose == "bestiary") { BestiaryPose(); return; }
         if (_pose == "beasts") { Beasts(); return; }
         if (_pose == "walk") { Walkers(); return; }
         if (_pose == "duel") { Duel(); return; }
@@ -1743,7 +1744,7 @@ public partial class Main
     {
         var w = World;
         var (gx, gz) = GroveAt;
-        bool bare = _pose == "people";
+        bool bare = _pose is "people" or "bestiary";
         for (int z = gz - 50; z < gz + 300; z++)
             for (int x = gx - 50; x < gx + 340; x++)
                 for (int y = w.SurfAt(x, z); y < w.SY; y++)
