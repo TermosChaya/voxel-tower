@@ -21,6 +21,8 @@ public partial class GodPerson : Node3D
     bool _eyeSet;
     CanvasLayer _layer, _plateLayer;
     Label _name, _hint, _aim;
+    /// <summary>The dark over the side of the sight whose eye the toad tore out (Sim.Kaiju.cs).</summary>
+    TextureRect _blind;
     Control _cross;
     PanelContainer _plate;
     Label _plateText;
@@ -44,6 +46,18 @@ public partial class GodPerson : Node3D
         var root = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
         root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         _layer.AddChild(root);
+        // the eye torn out: the right of the sight dark, thinning toward the middle
+        var shade = new Gradient();
+        shade.SetColor(0, new Color(0, 0, 0, 0));
+        shade.SetColor(1, new Color(.03f, 0, 0, .93f));
+        shade.AddPoint(.55f, new Color(.03f, 0, 0, .8f));
+        _blind = new TextureRect
+        {
+            Texture = new GradientTexture2D { Gradient = shade, Width = 256, Height = 4, FillFrom = new Vector2(.35f, 0), FillTo = new Vector2(1, 0) },
+            StretchMode = TextureRect.StretchModeEnum.Scale, MouseFilter = Control.MouseFilterEnum.Ignore, Visible = false,
+        };
+        _blind.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        root.AddChild(_blind);
         _cross = new Crosshair { MouseFilter = Control.MouseFilterEnum.Ignore };
         _cross.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         root.AddChild(_cross);
@@ -195,7 +209,7 @@ public partial class GodPerson : Node3D
         sim.GodLookYaw = _yaw;
         // the eyes: in its head as the view draws it, the jolts of its steps smoothed out
         Vector3 eye;
-        if (_m.GodView.TryHead(d, out var head)) eye = head.Origin + head.Basis.Y.Normalized() * d.T.Height * .06f * VoxelWorld.Vox + head.Basis.Z.Normalized() * 3;
+        if (_m.GodView.TryEyes(d, out var eyes)) eye = eyes;
         else eye = new Vector3(w.WX(d.X), w.WY(d.Y + d.T.Height * .9f), w.WZ(d.Z));
         if (!_eyeSet || dt <= 0) { _eye = eye; _eyeSet = true; }
         else _eye = _eye.Lerp(eye, 1 - MathF.Exp(-dt * 6));
@@ -233,7 +247,9 @@ public partial class GodPerson : Node3D
         float dist = MathF.Sqrt((sim.GodAimX - d.X) * (sim.GodAimX - d.X) + (sim.GodAimZ - d.Z) * (sim.GodAimZ - d.Z)) / VoxelWorld.PerMetre;
         _aim.Text = $"взгляд: {dist:0} м";
         _aim.Position = new Vector2(vp.X / 2 + 22, vp.Y / 2 + 14);
-        _hint.Text = Bindings.Fill("{FpForward}{FpLeft}{FpBack}{FpRight} — шаг · {Lmb} — меч (Shift — справа налево) · {Rmb} — огненный столп · {FpSwitch} — крылья · {FpUp} — перелёт · {FpKick} — труба · Esc — выйти");
+        _blind.Visible = (d.Wounds & GodWound.RightEye) != 0;
+        string fly = Sim.CanFly(d) ? " · {FpUp} — перелёт" : "";
+        _hint.Text = Bindings.Fill("{FpForward}{FpLeft}{FpBack}{FpRight} — шаг · {Lmb} — меч (Shift — справа налево) · {Rmb} — огненный столп · {FpSwitch} — крылья" + fly + " · {FpKick} — труба · Esc — выйти");
         _hint.Position = new Vector2(96, vp.Y - 56);
     }
 

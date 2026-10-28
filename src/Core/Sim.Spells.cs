@@ -134,11 +134,12 @@ public sealed partial class Sim
         new() { Kind = SpellKind.Whirlwind, Circle = 3, Learn = 4, Name = "Смерч", Cost = 50, Cooldown = 120, Radius = 2.5f * VoxelWorld.PerMetre,
             About = "Смерч шириной 5 м 10 секунд идёт по полю на орду. Подхватывает и отбрасывает налётчиков, срывает их " +
             "лестницы и настилы. Наших обходит." },
-        new() { Kind = SpellKind.Awaken, Circle = 0, Learn = 8, Name = "Явление", Cost = 150, Cooldown = 1800, Radius = 8 * VoxelWorld.PerMetre,
-            About = "С неба в выбранное место сходит Архангел высотой 44 м и 3 минуты ходит по долине. Пламенный меч рубит и " +
-            "поджигает орду, огненный столп бьёт с неба далеко впереди, взмах крыльев сносит орду с её лестницами. Он " +
-            "перелетает через долину и трубит в трубу: работы орды рушатся, орда бежит. Наших и нашу кладку не трогает. В " +
-            "него можно вселиться. Сходит за 10 секунд, не ближе 14 м к цитадели." },
+        new() { Kind = SpellKind.Awaken, Circle = 0, Learn = 12, Name = "Явление", Cost = 300, Cooldown = 1800, Radius = 8 * VoxelWorld.PerMetre,
+            About = "Вершина веры. Его вымаливают все жрецы вместе: нужно 3 жреца и 300 вмешательства. С неба в выбранное место " +
+            "сходит Архангел высотой 62 м и 3 минуты ходит по долине. Пламенный меч рубит и поджигает орду, огненный столп " +
+            "бьёт с неба далеко впереди, взмах крыльев сносит орду с её лестницами, он перелетает через долину и трубит в " +
+            "трубу. Наших и нашу кладку не трогает. В него можно вселиться. Остановить его может только бог орды. Сходит за 10 " +
+            "секунд, не ближе 14 м к цитадели." },
         new() { Kind = SpellKind.Hail, Circle = 1, Learn = 2, Name = "Град", Cost = 30, Cooldown = 60, Radius = 7 * VoxelWorld.PerMetre,
             About = "5 секунд на круг 7 м падает град с кулак и больше. Каждая градина бьёт и сбивает с ног, ломает " +
             "лестницы, настилы и мосты орды. Нашу кладку не трогает. В дождь вдвое сильнее." },
@@ -237,7 +238,7 @@ public sealed partial class Sim
             SpellKind.Quake => Shake(x, z, s.Radius),
             SpellKind.Meteor => Fallstar(x, z, s.Radius),
             SpellKind.Whirlwind => Unleash(x, z, s.Radius),
-            SpellKind.Awaken => Awaken(DeityKind.Archangel, x, z),
+            SpellKind.Awaken => Prayers() < 3 ? "нужно 3 жреца: Явление вымаливают вместе" : Awaken(DeityKind.Archangel, x, z),
             SpellKind.Hail => CallHail(x, z, s.Radius),
             SpellKind.FirePillar => RaisePillar(x, z),
             SpellKind.Guardian => Awaken(DeityKind.Guardian, x, z, 60 * Might),
@@ -251,6 +252,8 @@ public sealed partial class Sim
         _spellReady[(int)k] = Time + CooldownOf(s);
         Spelled?.Invoke(k, x, y, z);
         Say($"Заклинание: «{s.Name}».", 1, x, z);
+        // the horde's shamans answer a god with theirs, if its faith will carry it (Sim.HordeFaith.cs)
+        if (k == SpellKind.Awaken) Answer();
         return null;
     }
 

@@ -10,6 +10,16 @@ namespace VoxelTower.Core;
 /// </summary>
 public enum DeityKind : byte { Archangel, Toad, Colossus, Guardian, Cherub, Destroyer }
 
+/// <summary>
+/// What a god may lose to the other god, piece by piece as it is struck down: the toad a leg to the archangel's sword
+/// (a foreleg first, a hind leg after), the archangel an eye and a wing to the toad's tongue and jaws.
+/// </summary>
+[Flags]
+public enum GodWound : byte
+{
+    None = 0, ForeRight = 1, ForeLeft = 2, HindRight = 4, HindLeft = 8, RightEye = 16, LeftEye = 32, RightWing = 64, LeftWing = 128,
+}
+
 /// <summary>Where a god comes into the world from: down out of the sky, up out of the earth, up out of a bog.</summary>
 public enum Arrival : byte { Sky, Earth, Bog }
 
@@ -119,8 +129,16 @@ public sealed class Deity
     internal List<(int x, int y, int z)> Pit;
     internal int PitAt, Bursts;
 
+    /// <summary>What it has lost to the other god (Sim.Kaiju.cs).</summary>
+    public GodWound Wounds;
+    /// <summary>The tongue shot at the other god (its head), not at the field.</summary>
+    public bool TongueAtFoe;
+
     /// <summary>Seconds into the act.</summary>
     public float Into(double now) => (float)(now - ActFrom);
+
+    /// <summary>How many of these it has lost.</summary>
+    public int Lost(GodWound of) => System.Numerics.BitOperations.PopCount((uint)(Wounds & of));
 }
 
 /// <summary>The gods there are.</summary>
@@ -129,16 +147,16 @@ public static class Deities
     const float M = VoxelWorld.PerMetre;
 
     /// <summary>
-    /// The Archangel: the household's, sent down out of heaven in a pillar of light when it is called. Forty-four metres
-    /// in white and gold, great wings, a halo, a sword of fire. It cuts through the horde with the sword and sets it
+    /// The Archangel: the household's, sent down out of heaven in a pillar of light when it is called. Sixty-two metres
+    /// in dark plate and gold, as great as the toad, great wings, a halo, a sword of fire. It cuts through the horde with the sword and sets it
     /// alight, calls a pillar of fire down out of the sky, beats the wings and blows the horde away, flies over the valley
     /// in leaps and comes down hard, and sounds the trumpet at which the horde's works fall and the horde runs.
     /// </summary>
     public static readonly DeityType Archangel = new()
     {
         Kind = DeityKind.Archangel, Key = "archangel", Name = "Архангел", Team = Team.Player, Cause = "архангел",
-        Height = 44 * M, Stance = 8 * M, Stride = 13 * M, Foot = 3 * M, Speed = 3.8f * M, Turn = .6f,
-        Reach = 26 * M, SlamNear = 10 * M, SlamFar = 45 * M, Hp = 40000, Lasts = 180, Fiery = true, Arrives = Arrival.Sky, Winged = true,
+        Height = 62 * M, Stance = 11 * M, Stride = 18 * M, Foot = 4 * M, Speed = 5.2f * M, Turn = .6f,
+        Reach = 36 * M, SlamNear = 14 * M, SlamFar = 60 * M, Hp = 40000, Lasts = 180, Fiery = true, Arrives = Arrival.Sky, Winged = true,
     };
 
     /// <summary>

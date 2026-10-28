@@ -69,6 +69,14 @@ public sealed partial class Sim
     static bool OurGodsDoing(string cause) => cause is WakeCause or ColossusStoneCause || cause == Deities.Colossus.Cause || cause == Deities.Archangel.Cause
         || cause == Deities.Cherub.Cause || cause == Deities.Destroyer.Cause || cause is HailCause or PillarCause;
 
+    /// <summary>The household's priests, who pray the appearance down together.</summary>
+    public int Prayers()
+    {
+        int n = 0;
+        foreach (var u in Units) if (!u.Dead && u.Team == Team.Player && u.T.Prays) n++;
+        return n;
+    }
+
     /// <summary>The god of the household in the valley, if one is (not a lesser angel a spell sent).</summary>
     public Deity OurGod => Gods.Find(g => !g.Gone && g.Team == Team.Player && !g.T.Minor);
 
@@ -202,6 +210,7 @@ public sealed partial class Sim
 
     void TickDeities(float dt)
     {
+        TickGodPieces(dt);
         if (Gods.Count == 0) return;
         for (int i = Gods.Count - 1; i >= 0; i--)
         {
@@ -717,7 +726,7 @@ public sealed partial class Sim
     void Obey(Deity d, float dt)
     {
         Turn(d, GodLookYaw, dt * 1.6f);
-        if (GodWishLeap && d.T.Winged)
+        if (GodWishLeap && CanFly(d))
         {
             GodWishLeap = false;
             BeginLeap(d, GodAimX, GodAimZ);
@@ -962,6 +971,8 @@ public sealed partial class Sim
         {
             d.FoeStruck = true;
             Smite(d, foe, 3200, tx, tz);
+            // struck low enough, the sword takes a leg off it (Sim.Kaiju.cs)
+            Sever(d, foe);
         }
         if (d.T.Fiery) Kindle(bx, by, bz, HandR, 3);
     }

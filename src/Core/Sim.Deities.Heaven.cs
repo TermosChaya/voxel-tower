@@ -16,10 +16,10 @@ public sealed partial class Sim
 {
     /// <summary>A beat of the wings: when it blows, when the act is done, how far it reaches (voxels) and how wide (radians either side).</summary>
     public const float GustAt = .9f, GustDone = 1.9f;
-    const float GustR = 45 * VoxelWorld.PerMetre, GustSpread = .9f;
+    const float GustR = 60 * VoxelWorld.PerMetre, GustSpread = .9f;
     /// <summary>A leap: the crouch before it, the flight (on wings, and a toad's hop), how far it goes at most (voxels).</summary>
     public const float LeapCrouch = .45f, FlightFor = 2.2f, HopFor = 1f;
-    const float FlightFar = 70 * VoxelWorld.PerMetre;
+    const float FlightFar = 90 * VoxelWorld.PerMetre;
 
     /// <summary>A pillar of fire came down out of heaven at a spot (voxels), for the view.</summary>
     public event Action<Deity, float, float, float> PillarFell;
@@ -45,14 +45,21 @@ public sealed partial class Sim
     /// <summary>It touches the ground: a blast about its feet, the turf burnt round them.</summary>
     void TouchDown(Deity d)
     {
-        Blast(d, d.X, d.Y, d.Z, 3 * VoxelWorld.PerMetre, 24 * VoxelWorld.PerMetre, 50, false);
+        Blast(d, d.X, d.Y, d.Z, 4 * VoxelWorld.PerMetre, 30 * VoxelWorld.PerMetre, 50, false);
         SearRound(d.X, d.Y, d.Z, 10 * VoxelWorld.PerMetre);
     }
 
     /// <summary>The pillar of heaven: a blow of fire out of the sky at the spot — a crater, a blast, all about it alight.</summary>
     void Pillar(Deity d)
     {
-        Blast(d, d.AimX, d.AimY, d.AimZ, 4.5f * VoxelWorld.PerMetre, 22 * VoxelWorld.PerMetre, 140, true);
+        // (with an eye gone it comes down wide of where it was looked at, up to six metres)
+        if (d.Lost(Eyes) > 0)
+        {
+            float a = (float)Rng.NextDouble() * MathF.Tau, off = (2 + 4 * (float)Rng.NextDouble()) * VoxelWorld.PerMetre;
+            d.AimX = Math.Clamp(d.AimX + MathF.Cos(a) * off, 8, World.SX - 9); d.AimZ = Math.Clamp(d.AimZ + MathF.Sin(a) * off, 8, World.SZ - 9);
+            d.AimY = Ground((int)d.AimX, (int)d.AimZ, false);
+        }
+        Blast(d, d.AimX, d.AimY, d.AimZ, 5.5f * VoxelWorld.PerMetre, 28 * VoxelWorld.PerMetre, 140, true);
         SearRound(d.AimX, d.AimY, d.AimZ, 8 * VoxelWorld.PerMetre);
         PillarFell?.Invoke(d, d.AimX, d.AimY, d.AimZ);
     }
@@ -183,7 +190,8 @@ public sealed partial class Sim
     /// <summary>A leap toward a spot: on wings as far as seventy metres, a toad's hop as far as its stride.</summary>
     void BeginLeap(Deity d, float x, float z)
     {
-        float far = d.T.Winged ? FlightFar : d.T.Stride;
+        // (a toad short of a leg hops the shorter, a fifth for each)
+        float far = d.T.Winged ? FlightFar : d.T.Stride * (1 - .2f * d.Lost(Legs));
         float dx = x - d.X, dz = z - d.Z, dist = MathF.Sqrt(dx * dx + dz * dz);
         if (dist > far) { x = d.X + dx / dist * far; z = d.Z + dz / dist * far; }
         x = Math.Clamp(x, 12, World.SX - 13); z = Math.Clamp(z, 12, World.SZ - 13);
@@ -219,7 +227,7 @@ public sealed partial class Sim
                 Crush(d, d.X, d.Y, d.Z, d.T.Foot);
                 Bogged(d, d.X, d.Z, 8 * VoxelWorld.PerMetre, false);
             }
-            else Blast(d, d.X, d.Y, d.Z, 3 * VoxelWorld.PerMetre, 20 * VoxelWorld.PerMetre, 80, false);
+            else Blast(d, d.X, d.Y, d.Z, 4 * VoxelWorld.PerMetre, 26 * VoxelWorld.PerMetre, 80, false);
         }
         if (t >= LeapCrouch + fly + .4f) Begin(d, float.IsNaN(d.GoX) ? DeityAct.Standing : DeityAct.Walking);
     }
@@ -288,7 +296,9 @@ public sealed partial class Sim
             if (fd < d.T.Reach * .5f) { d.Facing = MathF.Atan2(uz, ux); BeginGust(d); return; }
             if (fd < d.T.Reach * 1.1f && MathF.Abs(fa) < SweepSpread * .8f && Rng.NextDouble() < .6) { BeginSweep(d, fa > 0 ? -1 : 1); return; }
             if (fd < d.T.SlamFar && MathF.Abs(fa) < .5f) { BeginSlam(d, foe.X, foe.Z); return; }
-            BeginLeap(d, foe.X - ux * d.T.Reach * .7f, foe.Z - uz * d.T.Reach * .7f);
+            // (with a wing torn off it walks to it)
+            if (CanFly(d)) BeginLeap(d, foe.X - ux * d.T.Reach * .7f, foe.Z - uz * d.T.Reach * .7f);
+            else GoTo(d, foe.X - ux * d.T.Reach * .7f, foe.Z - uz * d.T.Reach * .7f);
             return;
         }
         var (cx, cz, score, ours) = Thickest(d);
@@ -306,7 +316,7 @@ public sealed partial class Sim
         }
         if (dist < 35 * VoxelWorld.PerMetre && MathF.Abs(off) < .6f && score >= 4 && ours == 0 && Rng.NextDouble() < .35) { BeginGust(d); return; }
         if (dist >= d.T.SlamNear && dist <= d.T.SlamFar && MathF.Abs(off) < .55f && ours == 0) { BeginSlam(d, cx, cz); return; }
-        if (dist > 55 * VoxelWorld.PerMetre)
+        if (dist > 55 * VoxelWorld.PerMetre && CanFly(d))
         {
             float k = (dist - d.T.Reach * .8f) / dist;
             BeginLeap(d, d.X + (cx - d.X) * k, d.Z + (cz - d.Z) * k);

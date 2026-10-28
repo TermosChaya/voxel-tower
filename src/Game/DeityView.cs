@@ -62,6 +62,7 @@ public partial class DeityView : Node3D
         _m = m;
         _w = m.World;
         m.Sim.GodShook += Shook;
+        m.Sim.GodMaimed += Maimed;
         m.Sim.PillarFell += (d, x, y, z) => Beam(x, y, z, d.Act == DeityAct.Rising ? 0 : 1.4f);
         m.Sim.VenomSplashed += (x, y, z) => _m.Debris.Spray(Mat.Brew, new Vector3(_w.WX(x), _w.WY(y), _w.WZ(z)), Vector3.Up, 60, 5, 1.2f, 3, life: 1.4f);
         // (sculpted ahead on a worker thread: a god's body is many times a man's)
@@ -77,11 +78,11 @@ public partial class DeityView : Node3D
         return true;
     }
 
-    /// <summary>A god's figure this frame, for the eyes of the one in it: where its head is and how it is turned.</summary>
-    public bool TryHead(Deity d, out Transform3D head)
+    /// <summary>Where a god's eyes are in the world as the view draws it, just before its face: the eyes of the one in it.</summary>
+    public bool TryEyes(Deity d, out Vector3 eyes)
     {
-        if (_shown.TryGetValue(d.Id, out var s)) { head = s.Head; return true; }
-        head = Transform3D.Identity;
+        if (_shown.TryGetValue(d.Id, out var s) && s.Eyes != null) { eyes = s.Eyes.Position; return true; }
+        eyes = default;
         return false;
     }
 
@@ -130,6 +131,7 @@ public partial class DeityView : Node3D
             if (!_shown.TryGetValue(d.Id, out var s)) { s = Make(d); if (s == null) continue; _shown[d.Id] = s; }
             if (d.T.Hops) PoseToad(s, dt); else Pose(s, dt);
         }
+        Kaiju();
         for (int i = _beams.Count - 1; i >= 0; i--)
         {
             var (b, left) = _beams[i];
@@ -242,7 +244,7 @@ public partial class DeityView : Node3D
         float off = going ? (sky ? (1 - d.Up) * skyFrom : -(1 - d.Up) * d.T.Height * 1.02f) : 0;
         // the archangel hangs in the air over the ground, lower as it strikes, rising and falling a little with its wings
         // (a lesser angel half its own height over it; the destroyer is high in the air already)
-        if (d.T.Winged && !going && d.Act != DeityAct.Pass)
+        if (d.T.Winged && Sim.CanFly(d) && !going && d.Act != DeityAct.Pass)
         {
             float low = d.Act is DeityAct.Sweep or DeityAct.Slam or DeityAct.Gust ? .35f : d.Act == DeityAct.Leap ? 0 : 1;
             s.Hover += (low - s.Hover) * Math.Min(1, dt * 2);
@@ -411,7 +413,8 @@ public partial class DeityView : Node3D
         s.WingL.Transform = s.Root * left;
         s.WingR.Transform = s.Root * right;
         bool hide = d.Id == HiddenId && s.Spread < .3f;
-        s.WingL.Visible = s.WingR.Visible = !hide;
+        s.WingL.Visible = !hide && (d.Wounds & GodWound.LeftWing) == 0;
+        s.WingR.Visible = !hide && (d.Wounds & GodWound.RightWing) == 0;
         // the light behind the head, upright
         float mid = (s.Plan.HeadY0 + s.Plan.HeadY1) / 4f + 1;
         if (s.Halo != null)
@@ -436,9 +439,10 @@ public partial class DeityView : Node3D
         for (int b = 0; b < Figure.Bones; b++)
         {
             var xf = root * _xf[b];
-            bool on = s.D.Id != HiddenId || (Bone)b is not (Bone.Head or Bone.Torso);
+            // (what it has lost to the other god is gone from it: DeityView.Kaiju.cs)
+            bool lost = Lost(s.D, (Bone)b), on = !lost && (s.D.Id != HiddenId || (Bone)b is not (Bone.Head or Bone.Torso));
             if (s.Bones[b] is { } n) { n.Transform = xf; n.Visible = on; }
-            if (s.Shades[b] is { } sh) sh.Transform = xf;
+            if (s.Shades[b] is { } sh) { sh.Transform = xf; sh.Visible = !lost; }
         }
         for (int i = 0; i < s.Dress.Length; i++)
             if (s.Dress[i] is { } n) n.Transform = root * _xf[(int)s.Fig.DressBone[i]];

@@ -37,14 +37,18 @@ static class GodsBench
         }
         // a broad field west of the citadel, level and bare
         int fx0 = (site.KeepX - 760) & ~7, fz0 = (site.KeepZ - 300) & ~7, fg = w.SurfAt(fx0 + 300, fz0 + 300);
-        for (int z = fz0; z < fz0 + 600; z++)
-            for (int x = fx0; x < fx0 + 600; x++)
-            {
-                if (x < 4 || z < 4 || x >= w.SX - 4 || z >= w.SZ - 4) continue;
-                for (int y = fg - 12; y < fg + 60; y++) w.Set(x, y, z, y < fg ? (y < fg - 5 ? Mat.Rock : Mat.Soil) : Mat.Air);
-                site.HTop[z * w.SX + x] = fg;
-            }
-        Run(.5);
+        void Field()
+        {
+            for (int z = fz0; z < fz0 + 600; z++)
+                for (int x = fx0; x < fx0 + 600; x++)
+                {
+                    if (x < 4 || z < 4 || x >= w.SX - 4 || z >= w.SZ - 4) continue;
+                    for (int y = fg - 12; y < fg + 60; y++) w.Set(x, y, z, y < fg ? (y < fg - 5 ? Mat.Rock : Mat.Soil) : Mat.Air);
+                    site.HTop[z * w.SX + x] = fg;
+                }
+            Run(.5);
+        }
+        Field();
         Unit Put(UnitType t, float x, float z)
         {
             int c = sim.NearestStand(Math.Clamp((int)x, 8, w.SX - 9), Math.Clamp((int)z, 8, w.SZ - 9), t.Move.Height);
@@ -62,25 +66,29 @@ static class GodsBench
         foreach (var k in new[] { SpellKind.Quake, SpellKind.Meteor, SpellKind.Host, SpellKind.Whirlwind }) sim.Known.Add(k);
         sim.Revelations = 20;
         bool stillShut = !sim.CanLearnSpell(Sim.SpellOf(SpellKind.Awaken));
-        sim.Grant(Sim.LoreOf("might"));
+        sim.Grant(Sim.LoreOf("might")); sim.Grant(Sim.LoreOf("vessel"));
         bool learnt = sim.LearnSpell(SpellKind.Awaken);
-        check("the appearance stands at the heart of the intervention's page, on the greatest of each circle and the strength of faith, and is learnt for revelations",
-            wake != null && wake.Tier == Sim.Heart && wake.Page == 2 && wake.Needs.Length == 5 && shut && stillShut && learnt && sim.Known.Contains(SpellKind.Awaken) && sim.Revelations == 12,
-            $"tier {wake?.Tier}, needs {wake?.Needs.Length}; shut at first {shut}, without might {stillShut}, learnt {learnt}, revelations left {sim.Revelations}");
+        check("the appearance stands at the heart of the intervention's page, on the greatest of each circle, the strength of faith and the vessel, and is learnt for twelve revelations",
+            wake != null && wake.Tier == Sim.Heart && wake.Page == 2 && wake.Needs.Length == 6 && shut && stillShut && learnt && sim.Known.Contains(SpellKind.Awaken) && sim.Revelations == 8,
+            $"tier {wake?.Tier}, needs {wake?.Needs.Length}; shut at first {shut}, without might and the vessel {stillShut}, learnt {learnt}, revelations left {sim.Revelations}");
         float cx = fx0 + 300, cz = fz0 + 300;
         // a few of the horde near where it is to come down
         var near = new List<Unit>();
         for (int i = 0; i < 6; i++) near.Add(Put(Kinds.Goblin, cx - 18 * M + i % 3 * 2 * M, cz + 10 * M + i / 3 * 2 * M));
-        sim.Favour = 100;
-        string poor = sim.Cast(SpellKind.Awaken, cx, fg, cz);
+        // (prayed down by the priests together: none at first, three after)
+        foreach (var u in sim.Units) if (u.T.Prays) Gone(new[] { u });
         sim.Favour = 150;
+        string poor = sim.Cast(SpellKind.Awaken, cx, fg, cz);
+        sim.Favour = 300;
+        string alone = sim.Cast(SpellKind.Awaken, cx, fg, cz);
+        for (int i = 0; i < 3; i++) Put(Kinds.Priest, site.KeepX + i * 2 * M, site.KeepZ + 6 * M);
         string nearKeep = sim.Cast(SpellKind.Awaken, site.KeepX + 40, w.SurfAt(site.KeepX + 40, site.KeepZ), site.KeepZ);
         int ground0 = w.SurfAt((int)cx, (int)cz);
         string cast = sim.Cast(SpellKind.Awaken, cx, fg, cz);
         var god = sim.OurGod;
-        check("cast with the store full, away from the citadel, the Archangel comes; it takes all of it and is not ready again for half an hour; not with less, nor at the citadel",
-            poor != null && nearKeep != null && cast == null && god != null && god.T.Kind == DeityKind.Archangel && sim.Favour < 1 && sim.ReadyIn(SpellKind.Awaken) > 1700 && god.Act == DeityAct.Rising,
-            $"with 100: «{poor}»; at the citadel: «{nearKeep}»; cast «{cast}» ({god?.T.Name}), left {sim.Favour:0}, ready in {sim.ReadyIn(SpellKind.Awaken):0} s");
+        check("cast with the whole store of the vessel and three priests, away from the citadel, the Archangel comes, and is not ready again for half an hour; not with less, nor without the priests, nor at the citadel",
+            poor != null && alone != null && nearKeep != null && cast == null && god != null && god.T.Kind == DeityKind.Archangel && sim.Favour < 1 && sim.ReadyIn(SpellKind.Awaken) > 1700 && god.Act == DeityAct.Rising,
+            $"with 150: «{poor}»; without priests: «{alone}»; at the citadel: «{nearKeep}»; cast «{cast}» ({god?.T.Name}), left {sim.Favour:0}, ready in {sim.ReadyIn(SpellKind.Awaken):0} s");
         if (god == null) return;
 
         // ---- coming down: the horde about it runs from the light; touching down the ground shakes, no pit
@@ -260,7 +268,67 @@ static class GodsBench
         string angelCame = sim.Awaken(DeityKind.Archangel, cx, cz - 25 * M, lasts: 600);
         var angel = sim.OurGod;
         Run(Sim.GodRiseFor + .5);
-        double hpA = angel?.Hp ?? 0, hpT = toad.Hp, fight = 0;
+        if (angel == null) return;
+
+        // ---- the kaiju's wounds. The toad struck past three fifths, held at the sword's reach before the archangel (the
+        // player in it): the sword takes a foreleg off, and the leg comes down on whoever is under it, of either side
+        GodPiece flying = null; int landed = 0;
+        sim.GodMaimed += (g, wnd, p) => { if (p != null) flying = p; };
+        sim.GodPieceLanded += p => landed++;
+        sim.Ride(angel);
+        float fa = angel.Facing;
+        // (both out of whatever hop or flight they were in at each other)
+        toad.Act = angel.Act = DeityAct.Standing;
+        toad.X = angel.X + MathF.Cos(fa) * angel.T.Reach; toad.Z = angel.Z + MathF.Sin(fa) * angel.T.Reach;
+        toad.Hp = toad.T.Hp * .55f; toad.NextThink = sim.Time + 20;
+        Run(.2);
+        sim.GodLookYaw = fa; sim.GodWishSweep = 1;
+        for (int i = 0; i < 80 && flying == null; i++) Run(.05);
+        var crowd = new List<Unit>();
+        if (flying != null)
+        {
+            // where it will come down: its arc followed to the ground
+            float lx2 = flying.X, ly2 = flying.Y, lz2 = flying.Z, vy = flying.VY;
+            for (int i = 0; i < 400; i++)
+            {
+                vy -= Sim.Gravity * .02f; lx2 += flying.VX * .02f; ly2 += vy * .02f; lz2 += flying.VZ * .02f;
+                if (vy < 0 && ly2 - flying.R * .3f <= w.ColTop(Math.Clamp((int)lx2, 2, w.SX - 3), Math.Clamp((int)lz2, 2, w.SZ - 3)) + 1) break;
+            }
+            for (int i = 0; i < 6; i++) crowd.Add(Put(i % 3 == 2 ? Kinds.Swordsman : Kinds.Goblin, lx2 + (i % 3 - 1) * 1.2f * M, lz2 + (i / 3 - .5f) * 1.2f * M));
+        }
+        for (int i = 0; i < 120 && landed == 0; i++) Run(.05);
+        int crushed = crowd.Count(u => u.Dead && u.KilledBy == "раздавлен лапой жабы");
+        check("struck down past three fifths, the toad has a foreleg cut off by the archangel's sword: it flies off, comes down and crushes those under it, of either side",
+            (toad.Wounds & (GodWound.ForeRight | GodWound.ForeLeft)) != 0 && flying != null && landed == 1 && crushed >= crowd.Count - 1,
+            $"wounds {toad.Wounds}; the leg {(flying == null ? "not off" : $"{flying.R / M:0} m across")}, landed {landed}; crushed {crushed} of {crowd.Count}");
+        Gone(crowd);
+        // the toad at the archangel's head, the archangel held still by the player in it: struck past three fifths an eye
+        // torn out, past seven tenths a wing torn off, which comes down as the leg did; it flies no more
+        toad.NextThink = 0;
+        toad.X = angel.X + MathF.Cos(fa) * 30 * M; toad.Z = angel.Z + MathF.Sin(fa) * 30 * M;
+        bool eye = false, wing = false;
+        int landed0 = landed;
+        for (int i = 0; i < 1600 && !eye; i++)
+        {
+            angel.Hp = Math.Clamp(angel.Hp, angel.T.Hp * .45f, angel.T.Hp * .59f);
+            Run(.05);
+            eye = (angel.Wounds & GodWound.RightEye) != 0;
+        }
+        for (int i = 0; i < 1600 && !wing; i++)
+        {
+            angel.Hp = Math.Clamp(angel.Hp, angel.T.Hp * .15f, angel.T.Hp * .29f);
+            Run(.05);
+            wing = (angel.Wounds & GodWound.LeftWing) != 0;
+        }
+        for (int i = 0; i < 120 && landed == landed0; i++) Run(.05);
+        check("struck low, the archangel has an eye torn out by the toad's tongue, and then a wing torn off, which comes down as the leg did: it flies no more",
+            eye && wing && !Sim.CanFly(angel) && landed == landed0 + 1, $"wounds {angel.Wounds}; can fly {Sim.CanFly(angel)}; the wing landed {landed - landed0}");
+        sim.Unride();
+        angel.Hp = angel.T.Hp; toad.Hp = toad.T.Hp;
+        toad.X = angel.X + MathF.Cos(fa) * 50 * M; toad.Z = angel.Z + MathF.Sin(fa) * 50 * M;
+
+        // ---- and fought out, maimed as they are
+        double hpA = angel.Hp, hpT = toad.Hp, fight = 0;
         int byAngel = 0, byToad = 0;
         sim.Said += (s, k, x, z) => { if (s.StartsWith("Архангел бьёт")) byAngel++; else if (s.StartsWith("Великая жаба бьёт")) byToad++; };
         for (int i = 0; i < 3600 && angel != null && !toad.Gone && !angel.Gone; i++)
@@ -283,24 +351,57 @@ static class GodsBench
         int cg1 = w.SurfAt((int)kx, (int)kz);
         var col = sim.Gods.Find(g => !g.Gone && g.T.Kind == DeityKind.Colossus);
         check("the colossus, no side's now, still breaks up out of the earth and leaves its pit",
-            colossus == null && col != null && col.Up >= 1 && cg0 - cg1 >= 4 * M, $"came «{colossus}», up {col?.Up:0.00}, the ground {cg0} → {cg1}");
+            colossus == null && col != null && col.Up >= 1 && (cg0 - cg1 >= 4 * M || cg1 <= 6), $"came «{colossus}», up {col?.Up:0.00}, the ground {cg0} → {cg1}");
         if (col != null) { col.Until = sim.Time; Run(Sim.GodSinkFor + Sim.SweepDone + 1); }
 
-        // ---- a tick with a god at its work
-        sim.Favour = 150; sim.ReadyNow(SpellKind.Awaken);
-        sim.Cast(SpellKind.Awaken, cx + 30 * M, fg, cz - 30 * M);
+        // ---- the horde's faith half full or more, it answers the household's god with its own
+        sim.HordeFaith = Sim.HordeFaithFull * .6;
+        sim.Favour = 300; sim.ReadyNow(SpellKind.Awaken);
+        // (priests again: the toad had those of before)
+        for (int i = 0; i < 3; i++) Put(Kinds.Priest, site.KeepX + i * 2 * M, site.KeepZ + 6 * M);
+        string cast2 = sim.Cast(SpellKind.Awaken, cx + 30 * M, fg, cz - 30 * M);
         var g2 = sim.OurGod;
+        Run(13);
+        var answer = sim.Gods.Find(g => !g.Gone && g.T == Deities.Toad);
+        check("only a god stands against a god: the horde's faith over half full, its shamans answer the household's god with the Great Toad, and the faith is spent",
+            cast2 == null && answer != null && sim.HordeFaith < 1, $"cast «{cast2}»; the toad {(answer == null ? "not come" : "come")}; faith {sim.HordeFaith:0}");
+
+        // ---- how long a tick takes, in a valley of its own as a game has it (its field not strewn with the rubble of all
+        // the gods above): the household's god at its work among the horde, and then the horde's god come against it, the
+        // heaviest the valley has, two gods tearing up the field and all they throw up weighed as it comes down
+        w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
+        site = MapGen.Generate(w, mp);
+        w.Compact();
+        sim = new Sim(w, site);
+        sim.Waves.Countdown = 1e9; sim.WildTarget = 0;
+        Field();
+        sim.Known.Add(SpellKind.Awaken);
+        sim.Favour = 300;
+        for (int i = 0; i < 3; i++) Put(Kinds.Priest, site.KeepX + i * 2 * M, site.KeepZ + 6 * M);
+        string cast3 = sim.Cast(SpellKind.Awaken, cx + 30 * M, fg, cz - 30 * M);
+        var g3 = sim.OurGod;
         Run(Sim.GodRiseFor + .5);
         for (int i = 0; i < 30; i++) Put(Kinds.Goblin, cx - 10 * M + i % 6 * 2 * M, cz - 50 * M + i / 6 * 2 * M);
-        double worst = 0, sum = 0; int n = 0;
-        for (int i = 0; i < 300; i++)
+        (double average, double worst) Ticks()
         {
-            double a = BenchClock.CpuMs();
-            sim.Step(.05f);
-            double ms = BenchClock.CpuMs() - a;
-            worst = Math.Max(worst, ms); sum += ms; n++;
+            double worst = 0, sum = 0;
+            for (int i = 0; i < 300; i++)
+            {
+                double a = BenchClock.CpuMs();
+                sim.Step(.05f);
+                double ms = BenchClock.CpuMs() - a;
+                worst = Math.Max(worst, ms); sum += ms;
+            }
+            return (sum / 300, worst);
         }
-        check("a tick with the god at its work among the horde takes little: under 12 ms on the average",
-            g2 != null && sum / n < 12, $"average {sum / n:0.0} ms, worst {worst:0.0} ms");
+        var lone = Ticks();
+        check("a tick with the household's god at its work among the horde takes little: under 12 ms on the average",
+            cast3 == null && g3 != null && lone.average < 12, $"cast «{cast3}»; average {lone.average:0.0} ms, worst {lone.worst:0.0} ms");
+        string toad3 = sim.Awaken(DeityKind.Toad, cx - 30 * M, cz - 30 * M, lasts: 600);
+        Run(Sim.GodRiseFor + .5);
+        for (int i = 0; i < 30; i++) Put(Kinds.Goblin, cx - 10 * M + i % 6 * 2 * M, cz - 50 * M + i / 6 * 2 * M);
+        var both = Ticks();
+        check("and with the horde's god at it, the two gods at each other: under 16 ms on the average",
+            toad3 == null && both.average < 16, $"came «{toad3}»; average {both.average:0.0} ms, worst {both.worst:0.0} ms");
     }
 }

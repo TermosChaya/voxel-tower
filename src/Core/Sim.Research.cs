@@ -118,7 +118,8 @@ public sealed partial class Sim
         }
         // the waking of the god: at the heart of the page, on the greatest of every circle and the strength of faith
         var wake = S(SpellKind.Awaken, Heart, .5f, SpellKind.Quake, SpellKind.Meteor, SpellKind.Host, SpellKind.Whirlwind);
-        wake.Branch = ""; wake.Needs = new[] { SpellKey(SpellKind.Quake), SpellKey(SpellKind.Meteor), SpellKey(SpellKind.Host), SpellKey(SpellKind.Whirlwind), "might" };
+        // (and the vessel, for the store it takes)
+        wake.Branch = ""; wake.Needs = new[] { SpellKey(SpellKind.Quake), SpellKey(SpellKind.Meteor), SpellKey(SpellKind.Host), SpellKey(SpellKind.Whirlwind), "might", "vessel" };
         // (the circle of death, the blood moon and the black wind, and the reaping are of the dark faith, kept for a side to come)
         return new[]
         {

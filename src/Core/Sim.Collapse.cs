@@ -304,11 +304,13 @@ public sealed partial class Sim
         int n = wx * wz * sy;
         if (_reach.Length < n) _reach = new int[n];
         int I(int x, int y, int z) => ((y * wz) + (z - bz0)) * wx + (x - bx0);
-        Array.Fill(_reach, int.MaxValue, 0, n);
         _head = _tail = 0;
         _built.Clear();
-        // only the chunks that hold more than one material are looked into: what is built never fills a chunk
+        // only the chunks that hold more than one material are looked into: what is built never fills a chunk; and the
+        // reach is made ready only through the courses of chunks where something built was found (it is read nowhere else)
         for (int cy = 0; cy < World.CY; cy++)
+        {
+            bool ready = false;
             for (int cz = bz0 >> VoxelWorld.Shift; cz <= bz1 >> VoxelWorld.Shift; cz++)
                 for (int cx = bx0 >> VoxelWorld.Shift; cx <= bx1 >> VoxelWorld.Shift; cx++)
                 {
@@ -320,6 +322,12 @@ public sealed partial class Sim
                         if (!Holds(m)) continue;
                         int x = cx * VoxelWorld.CS + (i & 31), z = cz * VoxelWorld.CS + (i >> 5 & 31), y = cy * VoxelWorld.CS + (i >> 10);
                         if (x < bx0 || x > bx1 || z < bz0 || z > bz1 || y < 1) continue;
+                        if (!ready)
+                        {
+                            ready = true;
+                            int from = cy * VoxelWorld.CS * wx * wz;
+                            Array.Fill(_reach, int.MaxValue, from, Math.Min(n, from + VoxelWorld.CS * wx * wz) - from);
+                        }
                         _built.Add(WaterPlanner.Pack(x, y, z));
                         // held from the start: on the ground, set into rock aside, at the edge of the patch, or an arch; and
                         // what came down on a tree's wood, caught in a fork or lying on a bough or a log, as on the ground
@@ -333,6 +341,7 @@ public sealed partial class Sim
                         PushBack(WaterPlanner.Pack(x, y, z));
                     }
                 }
+        }
         if (_built.Count == 0) return;
         while (_head != _tail)
         {

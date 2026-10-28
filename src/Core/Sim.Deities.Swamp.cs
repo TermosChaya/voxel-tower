@@ -52,9 +52,12 @@ public sealed partial class Sim
 
     // ------------------------------------------------------------ the tongue
 
-    void BeginTongue(Deity d, float x, float z)
+    void BeginTongue(Deity d, float x, float z, Deity atHead = null)
     {
         d.AimX = x; d.AimZ = z; d.AimY = Ground((int)x, (int)z, false);
+        // at the other god: at its head
+        d.TongueAtFoe = atHead != null;
+        if (atHead != null) d.AimY = atHead.Y + atHead.T.Height * .9f * atHead.Up;
         d.Facing = MathF.Atan2(z - d.Z, x - d.X);
         d.GoX = float.NaN;
         Begin(d, DeityAct.Tongue);
@@ -66,6 +69,16 @@ public sealed partial class Sim
     /// </summary>
     void Tonguing(Deity d, float t)
     {
+        if (!d.Landed && t >= TongueGrab && d.TongueAtFoe)
+        {
+            // at the other god's head: struck, and if it is low enough, an eye or a wing torn from it (Sim.Kaiju.cs)
+            d.Landed = true;
+            if (d.Foe is { } foe && Dist2(foe.X, foe.Z, d.AimX, d.AimZ) < MathF.Pow(foe.T.Stance + TongueCatch, 2))
+            {
+                Smite(d, foe, 2200, foe.X - d.X, foe.Z - d.Z);
+                Tear(d, foe);
+            }
+        }
         if (!d.Landed && t >= TongueGrab)
         {
             d.Landed = true;
@@ -206,6 +219,8 @@ public sealed partial class Sim
         if (d.Foe is { } foe)
         {
             float fd = MathF.Sqrt(Dist2(foe.X, foe.Z, d.X, d.Z));
+            // the tongue at its head, the hops onto it, the venom
+            if (fd < d.T.Reach * .9f && Rng.NextDouble() < .35) { d.Facing = MathF.Atan2(foe.Z - d.Z, foe.X - d.X); BeginTongue(d, foe.X, foe.Z, foe); return; }
             if (fd < d.T.SlamFar && Rng.NextDouble() < .5) { BeginLeap(d, foe.X, foe.Z); return; }
             if (fd < d.T.Reach) { BeginSpit(d, foe.X, foe.Z); return; }
             BeginLeap(d, foe.X, foe.Z);

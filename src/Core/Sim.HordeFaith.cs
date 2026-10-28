@@ -123,14 +123,35 @@ public sealed partial class Sim
         }
     }
 
-    /// <summary>The horde's god called, if its faith is full and a raid is on: up out of a bog between the horde's edge and the citadel.</summary>
+    /// <summary>When the horde's shamans answer the household's god with theirs (0: they do not).</summary>
+    double _answerAt;
+
+    /// <summary>
+    /// The household's god come: if the horde's faith is half full or more, its shamans throw all of it into the call and
+    /// answer with the Great Toad a little after — only a god stands against a god.
+    /// </summary>
+    void Answer()
+    {
+        if (HordeFaith >= HordeFaithFull * .5 && !Gods.Exists(g => !g.Gone && g.T == Deities.Toad)) _answerAt = Time + 12;
+    }
+
+    /// <summary>
+    /// The horde's god called: its faith full in a raid, or in answer to the household's god — up out of a bog between
+    /// the horde's edge and the citadel.
+    /// </summary>
     void TickHordeFaith()
     {
-        if (HordeFaith < HordeFaithFull || !Raids.Active || !Site.HasKeep || Gods.Exists(g => !g.Gone && g.T == Deities.Toad)) return;
+        bool answer = _answerAt > 0 && Time >= _answerAt;
+        if (!answer && (HordeFaith < HordeFaithFull || !Raids.Active)) return;
+        _answerAt = 0;
+        if (!Site.HasKeep || Gods.Exists(g => !g.Gone && g.T == Deities.Toad)) return;
         float x = Site.SpawnStrip + (Site.KeepX - Site.SpawnStrip) * .35f, z = Site.KeepZ + (float)(Rng.NextDouble() - .5) * 40 * VoxelWorld.PerMetre;
         if (Awaken(DeityKind.Toad, x, z) != null) return;
         HordeFaith = 0; _faithTold = 0;
-        Say("Вера орды полна: шаманы призвали Великую жабу.", 3, x, z);
+        Say(answer ? "Орда отвечает богу богом: шаманы отдали зову всю веру орды, и из болот поднимается Великая жаба."
+            : "Вера орды полна: шаманы призвали Великую жабу.", 3, x, z);
+        // (and what may be done against it, once the household can)
+        if (!answer && Known.Contains(SpellKind.Awaken)) Say("Против бога выстоит только бог: Явление.", 2);
     }
 
     // ------------------------------------------------------------ the shamans' swamp magic
