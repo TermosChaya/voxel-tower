@@ -1097,7 +1097,7 @@ public partial class PriorityCell : Control
         MouseExited += () => { _hover = false; QueueRedraw(); };
     }
 
-    public static Icons.Painter IconOf(WorkKind k) => k switch { WorkKind.Build => Icons.Box, WorkKind.Dig => Icons.Shovel, WorkKind.Fell => Icons.Gather, WorkKind.Fire => Icons.Flame, _ => Icons.Pick };
+    public static Icons.Painter IconOf(WorkKind k) => k switch { WorkKind.Build => Icons.Box, WorkKind.Dig => Icons.Shovel, WorkKind.Fell => Icons.Gather, WorkKind.Fire => Icons.Flame, WorkKind.Town => Icons.TownWays, _ => Icons.Pick };
 
     public static Color InkOf(byte p) => p switch { 1 => Ornament.EmberGlow, 2 => Ornament.BronzeLight, 3 => Ornament.Parchment, 4 => Ornament.Aged, _ => Ornament.Faded };
 

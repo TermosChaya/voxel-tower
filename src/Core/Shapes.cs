@@ -121,7 +121,41 @@ public static class Shapes
             }
             o.Add(x, y, z, m);
         }
+        o = Footed(w, o);
         o.MetaBase = L.MetaBase; o.MetaPlat = L.MetaPlat;
+        return o;
+    }
+
+    /// <summary>
+    /// A stone of a raked face left with nothing under it and nothing beside it, its neighbours all raked or set back (at
+    /// the round end of a wall), would wait for ever for something to be laid on: it is set back too, from the bottom up.
+    /// </summary>
+    static VoxelList Footed(VoxelWorld w, VoxelList L)
+    {
+        var kept = new HashSet<long>();
+        for (int i = 0; i < L.Count; i++) if (L.M(i) != 0) kept.Add(Key(w, L.X(i), L.Y(i), L.Z(i)));
+        bool Holds(int x, int y, int z) => kept.Contains(Key(w, x, y, z)) || !Brushes.Free(w.Get(x, y, z));
+        var order = new int[L.Count];
+        for (int i = 0; i < order.Length; i++) order[i] = i;
+        Array.Sort(order, (a, b) => L.Y(a).CompareTo(L.Y(b)));
+        var drop = new HashSet<int>();
+        for (int pass = 0; pass < 3; pass++)
+        {
+            bool any = false;
+            foreach (int i in order)
+            {
+                if (drop.Contains(i) || L.M(i) == 0) continue;
+                int x = L.X(i), y = L.Y(i), z = L.Z(i);
+                if (Holds(x, y - 1, z) || Holds(x + 1, y, z) || Holds(x - 1, y, z) || Holds(x, y, z + 1) || Holds(x, y, z - 1)) continue;
+                drop.Add(i);
+                kept.Remove(Key(w, x, y, z));
+                any = true;
+            }
+            if (!any) break;
+        }
+        if (drop.Count == 0) return L;
+        var o = new VoxelList();
+        for (int i = 0; i < L.Count; i++) if (!drop.Contains(i)) o.Add(L.X(i), L.Y(i), L.Z(i), L.M(i));
         return o;
     }
 

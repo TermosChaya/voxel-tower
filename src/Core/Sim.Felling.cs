@@ -19,7 +19,7 @@ public sealed class Danger
     /// <summary>The log of its tree rolling down the slope: the lane is kept while it rolls, from RollFrom, a while at most.</summary>
     public Flier Roller;
     public double RollFrom;
-    /// <summary>A tree's lane (not a digger's box): kept no longer than <see cref="Sim.TreeLaneMost"/> since Born, the last time it was in use (a blow at its tree, its fall, its log's roll).</summary>
+    /// <summary>A tree's lane (not a digger's box): kept no longer than <see cref="Sim.TreeLaneMost"/> since Born, the last time it was in use (a blow at its tree, its fall, its log's roll). A digger's box: Born when what it covers began to come down (<see cref="Sim.FallKeptMost"/>).</summary>
     public bool Tree;
     public double Born = -1;
     /// <summary>The heights it covers, voxels (a lane covers all).</summary>
@@ -584,9 +584,11 @@ public sealed partial class Sim
             bool lanes = false;
             foreach (var o in Dangers) if (o != d && (o.DX != 0 || o.DZ != 0)) { lanes = true; break; }
             bool Other(int c) { var (px, py, pz) = Nav.Feet(c); foreach (var o in Dangers) if (o != d && (o.DX != 0 || o.DZ != 0) && o.Has(px, py, pz, r)) return true; return false; }
-            var path = Paths.Find(u.Cell, c => { var (px, py, pz) = Nav.Feet(c); return !d.Has(px, py, pz, r + 2) && (!lanes || !Other(c)); }, c => 0, MoverOf(u), 2500, gates: true,
+            // (by any way out, up a ledge or down off one: there is no time to look for the stair, Pathing.cs, Careful)
+            var flee = Careless(MoverOf(u));
+            var path = Paths.Find(u.Cell, c => { var (px, py, pz) = Nav.Feet(c); return !d.Has(px, py, pz, r + 2) && (!lanes || !Other(c)); }, c => 0, flee, 2500, gates: true,
                 lane: lanes ? c => Other(c) ? 12 : 0 : null);
-            path ??= Paths.Find(u.Cell, c => { var (px, py, pz) = Nav.Feet(c); return !d.Has(px, py, pz, r + 2); }, c => 0, MoverOf(u), 2500, gates: true);
+            path ??= Paths.Find(u.Cell, c => { var (px, py, pz) = Nav.Feet(c); return !d.Has(px, py, pz, r + 2); }, c => 0, flee, 2500, gates: true);
             if (path == null) { u.State = UnitState.Idle; return true; }
             u.Path = path; u.PathI = 0;
         }

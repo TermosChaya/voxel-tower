@@ -461,17 +461,18 @@ public sealed partial class Sim
     }
 
     /// <summary>
-    /// The weight of a body standing as a stiff one on what it stands on: spread over it evenly, and more toward the edge
-    /// its weight leans to, as a plank's on two trestles; the voxels it stands on that carry more than they bear crack.
+    /// How a body standing as a stiff one on these voxels puts its weight on them: spread over them evenly, and more toward
+    /// the edge its weight leans to, as a plank's on two trestles. The load on the one at (x, z) is even + bx·(x + ½ − cx)
+    /// + bz·(z + ½ − cz).
     /// </summary>
-    void Bear(in Bulk b)
+    static (float even, float cx, float cz, float bx, float bz) Spread(in Bulk b, List<int> stands)
     {
-        int n = _stands.Count;
+        int n = stands.Count;
         float cx = 0, cz = 0;
-        foreach (int p in _stands) { var (x, _, z) = WaterPlanner.Unpack(p); cx += x + .5f; cz += z + .5f; }
+        foreach (int p in stands) { var (x, _, z) = WaterPlanner.Unpack(p); cx += x + .5f; cz += z + .5f; }
         cx /= n; cz /= n;
         float jxx = .1f * n, jxz = 0, jzz = .1f * n;
-        foreach (int p in _stands)
+        foreach (int p in stands)
         {
             var (x, _, z) = WaterPlanner.Unpack(p);
             float dx = x + .5f - cx, dz = z + .5f - cz;
@@ -479,7 +480,17 @@ public sealed partial class Sim
         }
         float det = jxx * jzz - jxz * jxz, ex = b.GX - cx, ez = b.GZ - cz;
         float bx = det > 1e-3f ? b.M * (jzz * ex - jxz * ez) / det : 0, bz = det > 1e-3f ? b.M * (jxx * ez - jxz * ex) / det : 0;
-        float even = b.M / n, worst = 0;
+        return (b.M / n, cx, cz, bx, bz);
+    }
+
+    /// <summary>
+    /// The weight of a body standing as a stiff one on what it stands on (<see cref="Spread"/>); the voxels it stands on
+    /// that carry more than they bear crack.
+    /// </summary>
+    void Bear(in Bulk b)
+    {
+        var (even, cx, cz, bx, bz) = Spread(b, _stands);
+        float worst = 0;
         foreach (int p in _stands)
         {
             var (x, y, z) = WaterPlanner.Unpack(p);
@@ -493,6 +504,54 @@ public sealed partial class Sim
         }
         // a tower in a wall: its joint with the wall cracks as its foot does (Sim.Joint.cs)
         StrainJoint(worst);
+    }
+
+    readonly HashSet<int> _foreTaken = new();
+    readonly List<int> _foreStands = new();
+
+    /// <summary>
+    /// Whether taking out what the built voxel at (x, y, z) stands on brings down the building it belongs to, weighed as
+    /// <see cref="Balance"/> weighs it then: its weight past the edge of what is left under it by more than half a voxel,
+    /// standing high enough, it goes over; or what is left under it carries more than it bears, as cracked as it is, and
+    /// cracks through. Its bounds, when it does. (Nothing left under it at all is what rests on nothing, Sim.Undermine.cs;
+    /// what was found too great to weigh as one body is left as it was found.)
+    /// </summary>
+    bool WouldGoOver(int x, int y, int z, out int x0, out int y0, out int z0, out int x1, out int y1, out int z1)
+    {
+        x0 = y0 = z0 = x1 = y1 = z1 = 0;
+        if (!World.InBounds(x, y, z) || !Rigid(World.Get(x, y, z))) return false;
+        int bigGen = _bigGen, bigX = _bigX, bigZ = _bigZ;
+        _foreTaken.Clear();
+        var bulk = Gather(x, y, z, _foreTaken);
+        _bigGen = bigGen; _bigX = bigX; _bigZ = bigZ;
+        if (bulk is not { } b || _body.Count < BodyLeast) return false;
+        int on = WaterPlanner.Pack(x, y, z);
+        _foreStands.Clear();
+        b.FX0 = b.FZ0 = int.MaxValue; b.FX1 = b.FZ1 = int.MinValue;
+        foreach (int p in _stands)
+        {
+            if (p == on) continue;
+            _foreStands.Add(p);
+            var (px, _, pz) = WaterPlanner.Unpack(p);
+            b.FX0 = Math.Min(b.FX0, px); b.FX1 = Math.Max(b.FX1, px); b.FZ0 = Math.Min(b.FZ0, pz); b.FZ1 = Math.Max(b.FZ1, pz);
+        }
+        if (_foreStands.Count == 0 || _foreStands.Count == _stands.Count) return false;
+        if (Past(b, out _) > .5f ? !Tall(b) : !Overloaded(b, _foreStands)) return false;
+        (x0, y0, z0, x1, y1, z1) = (b.X0, b.Y0, b.Z0, b.X1, b.Y1, b.Z1);
+        return true;
+    }
+
+    /// <summary>Whether a body standing as a stiff one on these voxels loads one of them past what it bears, as cracked as it is.</summary>
+    bool Overloaded(in Bulk b, List<int> stands)
+    {
+        var (even, cx, cz, bx, bz) = Spread(b, stands);
+        foreach (int p in stands)
+        {
+            var (x, y, z) = WaterPlanner.Unpack(p);
+            float down = BearsDown(World.Get(x, y, z));
+            if (down > 0 && even + bx * (x + .5f - cx) + bz * (z + .5f - cz) > down * Unbroken(Cracks.GetValueOrDefault(p))) return true;
+        }
+        return false;
     }
 
     /// <summary>

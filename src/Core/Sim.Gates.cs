@@ -149,7 +149,8 @@ public sealed class GatePlan
             {
                 int a = p + (inward > 0 ? t : -1 - t);
                 int y = hit.Y;
-                while (y > 0 && !Blocking(Get(u, y - 1, a))) y--;
+                // (a crate or a barrel of the wall's dressing set out there is no ground: the leaves take its place)
+                while (y > 0 && (!Blocking(Get(u, y - 1, a)) || Mat.IsDecor[Get(u, y - 1, a)])) y--;
                 y0 = Math.Max(y0, y);
             }
         if (threshold > 0) y0 = threshold;

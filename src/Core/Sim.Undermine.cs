@@ -9,14 +9,19 @@ namespace VoxelTower.Core;
 /// following what is built, as the rules of what holds what up have it) is not simply dug out from under it: the
 /// digger calls out, those of ours about it walk out of the ground it will come down on and scatter over, and only then
 /// is it undercut; the digger steps back out of the way with them, and it gives way under the weight a few seconds
-/// later. One shut in at the bottom of a pit it dug cuts steps up out of it at once, and the rest in the pit use them
-/// (Sim.Escape.cs). Our countermine is dug no further than its last frame of props: without logs, the rest of the bore
-/// waits, and a step left bare is shored as soon as there are logs again (Sim.Tunnels.cs).
+/// later. The ground is kept clear, the digger out of it too, while any of it is still coming down: it may go over by
+/// itself before its last footing is cut, tip into the hole dug beside it, break up and run off as a heap, all seconds
+/// after the warning would have run out. One shut in at the bottom of a pit it dug cuts steps up out of it at once, and
+/// the rest in the pit use them (Sim.Escape.cs). Our countermine is dug no further than its last frame of props:
+/// without logs, the rest of the bore waits, and a step left bare is shored as soon as there are logs again
+/// (Sim.Tunnels.cs).
 /// </summary>
 public sealed partial class Sim
 {
     /// <summary>Seconds an undercut footing holds before it gives way under what it bears.</summary>
     const double FootingHolds = 3;
+    /// <summary>The longest a dig's box is kept clear for what it brought down still coming down in it, seconds.</summary>
+    public const double FallKeptMost = 30;
     /// <summary>The footings undercut and about to give way: where, what they are, when, by whom, the ground kept clear.</summary>
     readonly List<(int x, int y, int z, byte m, double at, Unit by, Danger zone)> _footings = new();
     readonly HashSet<int> _footingsAt = new();
@@ -124,6 +129,28 @@ public sealed partial class Sim
     }
 
     /// <summary>
+    /// Whether taking out this voxel of the ground brings down what is built on it though it still rests on more: it goes
+    /// over, its weight out past the edge of what is left under it, or what is left under it cracks through under the
+    /// weight (as Sim.Strain.cs weighs it after). The box it would come down on: its own breadth and, round it, three
+    /// metres and its height more (going over, it lies down its height out from its foot). (A stone block three metres
+    /// on a side, the ground dug from under it a course at a time, went over on the last few of its footing before the
+    /// last of them was undercut: no warning had been called for that.)
+    /// </summary>
+    bool WouldTip(int x, int y, int z, out Danger zone, out float cx, out float cz, out int y0)
+    {
+        zone = null; cx = cz = 0; y0 = 0;
+        if (!WouldGoOver(x, y + 1, z, out int x0, out int by0, out int z0, out int x1, out int y1, out int z1)) return false;
+        float round = 3 * VoxelWorld.PerMetre + (y1 - by0);
+        cx = (x0 + x1 + 1) * .5f; cz = (z0 + z1 + 1) * .5f; y0 = by0;
+        zone = new Danger
+        {
+            PX = cx, PZ = cz, Len = (x1 - x0 + 1) * .5f + round, Half = (z1 - z0 + 1) * .5f + round,
+            Y0 = by0 - 4 * VoxelWorld.PerMetre, Y1 = y1 + 2 * VoxelWorld.PerMetre, Why = "отошёл: сейчас рухнет", Kept = true,
+        };
+        return true;
+    }
+
+    /// <summary>
     /// Before a blow at the ground (or masonry) something built rests on: if it is the last that holds it up, those of
     /// ours it would come down on are sent out of the way first, then the digger calls out, undercuts it and steps back
     /// itself; it gives way a few seconds after (<see cref="TickUndercut"/>). True while the blow is held, or once the
@@ -138,7 +165,7 @@ public sealed partial class Sim
         if (u.FellHold && u.FellLooked == key && Time < u.FellLookedUntil) return true;
         u.FellLooked = key; u.FellLookedUntil = Time + .5;
         u.FellHold = false;
-        if (!WouldDrop(j.x, j.y, j.z, out var fresh, out float cx, out float cz, out int y0)) return false;
+        if (!WouldDrop(j.x, j.y, j.z, out var fresh, out float cx, out float cz, out int y0) && !WouldTip(j.x, j.y, j.z, out fresh, out cx, out cz, out y0)) return false;
         FellPlan plan = null;
         foreach (var p in _drops)
             if (MathF.Abs(p.PX - cx) < 12 && MathF.Abs(p.PZ - cz) < 12 && Math.Abs(p.Base - y0) < 16 && Time - p.Made < 120) { plan = p; break; }
@@ -187,6 +214,32 @@ public sealed partial class Sim
             DigAway(x, y, z, cur, by is { Dead: false } ? by.T.Yield : 1);
         }
         if (_drops.Count > 0) _drops.RemoveAll(p => Time - p.Made > 120);
+        // what a dig brought down still coming down in its box, or cracking under its weight before it comes: the box kept
+        // clear a second past the last of it, its digger sent out with the rest (a block went over by itself as the
+        // ground under one side of it was dug, before its footing was undercut, and tipped into the hole; the box was let
+        // go 6 seconds after the warning, the workers went back to their work, and 3 seconds later the block broke up and
+        // its stones struck one dead)
+        if (Fliers.Count > 0 || Cracking.Count > 0)
+            foreach (var d in Dangers)
+            {
+                if (d.Tree || d.DX != 0 || d.DZ != 0 || d.Born >= 0 && Time - d.Born > FallKeptMost || !StillComing(d)) continue;
+                if (d.Born < 0) d.Born = Time;
+                d.Until = Math.Max(d.Until, Time + 1);
+                d.By = null;
+            }
+    }
+
+    /// <summary>Whether something in a dig's box is still coming down: a piece of it loose, or a voxel cracking under its weight.</summary>
+    bool StillComing(Danger d)
+    {
+        foreach (var f in Fliers)
+            if (f.Unit == null && f.Voxels.Count > 0 && d.Has(f.X, f.Y, f.Z, f.R)) return true;
+        foreach (int p in Cracking)
+        {
+            var (x, y, z) = WaterPlanner.Unpack(p);
+            if (d.Has(x + .5f, y, z + .5f, 0)) return true;
+        }
+        return false;
     }
 
     /// <summary>A voxel dug out: the ground open there, what it gives in the stores.</summary>

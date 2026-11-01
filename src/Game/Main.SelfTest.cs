@@ -968,13 +968,15 @@ public partial class Main
         foreach (var u in Sim.Units) if (u.Team == Team.Horde && !u.Dead && !u.Bound && !u.Inside) { u.Dead = true; u.DiedAt = -999; }
         int lowTop = Shapes.LevelTop(World, kx - 110, kz + 70, 4);
         var low = Shapes.Line(World, Site, kx - 116, kz + 70, kx - 104, kz + 70, new Stroke { Mat = Mat.Stone, Width = 2, Height = 2, Level = true }, lowTop);
-        int finished0 = Progress.Finished, lines0 = Hud.Lines.Count;
+        // (the chronicle keeps its last 80 lines: what is new is what follows the last line there now, wherever that is)
+        int finished0 = Progress.Finished;
+        var lastLine = Hud.Lines.Count > 0 ? Hud.Lines[^1] : default;
         Sim.DesignateBuild(low);
         Progress.Track("Камень", low, false);
         bool following = Progress.Following > 0;
         for (int t = 0; t < 240 && Progress.Finished == finished0; t++) { Advance(.5); await Frames(1); }
         bool toldDone = false;
-        for (int i = lines0; i < Hud.Lines.Count; i++) toldDone |= Hud.Lines[i].text.StartsWith("Готово: камень");
+        for (int i = Hud.Lines.Count - 1; i >= 0 && !Equals(Hud.Lines[i], lastLine); i--) toldDone |= Hud.Lines[i].text.StartsWith("Готово: камень");
         Check("work marked is followed with how far it has got, and when it is done the chronicle says so",
             following && Progress.Finished > finished0 && toldDone,
             $"followed {following}; finished {Progress.Finished - finished0}, told {toldDone}; " +

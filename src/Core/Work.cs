@@ -3,10 +3,11 @@ using System;
 namespace VoxelTower.Core;
 
 /// <summary>
-/// The kinds of work a pawn can be set to, the columns of the work table: laying; taking out earth, wood or stone; and
-/// putting out fires in what we built and round the citadel, which comes first unless told otherwise.
+/// The kinds of work a pawn can be set to, the columns of the work table: laying; taking out earth, wood or stone;
+/// putting out fires in what we built and round the citadel, which comes first unless told otherwise; and laying the
+/// town's own ways by itself when nothing marked is to be done (Sim.TownWays.cs).
 /// </summary>
-public enum WorkKind : byte { Build, Dig, Fell, Quarry, Fire }
+public enum WorkKind : byte { Build, Dig, Fell, Quarry, Fire, Town }
 
 /// <summary>
 /// What each pawn takes up and in what order, as colonists are set in RimWorld: for every kind of work a priority
@@ -15,15 +16,15 @@ public enum WorkKind : byte { Build, Dig, Fell, Quarry, Fire }
 /// </summary>
 public static class Work
 {
-    public const int Kinds = 5;
+    public const int Kinds = 6;
     /// <summary>The priority a new pawn has for everything (but putting out fires, which is 1).</summary>
     public const byte Usual = 3;
     /// <summary>The kinds of work that are marked out on the orders layer (all but putting out fires), as bits.</summary>
     public const int Marked = (1 << (int)WorkKind.Fire) - 1;
 
-    public static readonly string[] Names = { "Стройка", "Копать", "Рубить", "Камень", "Тушить" };
+    public static readonly string[] Names = { "Стройка", "Копать", "Рубить", "Камень", "Тушить", "Город" };
     /// <summary>What it is to do it: "не велено: копать".</summary>
-    public static readonly string[] Verbs = { "строить", "копать", "рубить", "ломать камень", "тушить" };
+    public static readonly string[] Verbs = { "строить", "копать", "рубить", "ломать камень", "тушить", "мостить улицы" };
 
     public static readonly string[] Tips =
     {
@@ -32,6 +33,8 @@ public static class Work
         "Рубить\nДеревья и кусты, деревянные постройки, лестницы и настилы орды.",
         "Камень\nСкалы, валуны, руины, руда и своя кладка, если её велено разобрать.",
         "Тушить\nТушить пожары в постройках и у цитадели. Лес вдали не тушат. По умолчанию у всех стоит 1.",
+        "Город\nРабочие сами прокладывают тропы от цитадели к дверям домов и зданий, к воротам и колодцам и мостят площадки у дверей. " +
+            "Сначала утоптанная земля, при запасе камня гравий, с двором каменщиков булыжник. Размеченная работа с той же очередью идёт первой.",
     };
 
     /// <summary>The work an order is: laying for what is to be laid, else what is taken out.</summary>
