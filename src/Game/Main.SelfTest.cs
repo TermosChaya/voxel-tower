@@ -154,6 +154,15 @@ public partial class Main
             GetTree().Quit(fails == 0 ? 0 : 1);
             return;
         }
+        // SELFTEST_ONLY=hands: only what is held before the eyes in first person
+        if (System.Environment.GetEnvironmentVariable("SELFTEST_ONLY") == "hands")
+        {
+            await Frames(5);
+            await SelfTestHands(Check);
+            GD.Print($"[selftest] {(fails == 0 ? "all passed" : fails + " failed")}");
+            GetTree().Quit(fails == 0 ? 0 : 1);
+            return;
+        }
         await Frames(5);
         int kx = Site.KeepX, kz = Site.KeepZ;
         // the places below were set out round the citadel where it stood at 819,512 on the old valley: they go with it
@@ -1093,6 +1102,7 @@ public partial class Main
         await SelfTestRowHouses(Check);
         await SelfTestHex(Check);
         await SelfTestCaptain(Check);
+        await SelfTestHands(Check);
         await SelfTestHeroes(Check);
         await SelfTestWar(Check);
         await SelfTestWarlords(Check);

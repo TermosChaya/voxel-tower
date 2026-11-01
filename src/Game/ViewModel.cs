@@ -51,6 +51,14 @@ public partial class ViewModel : Node3D
     // the bow: the cooldown at the last shot and now, how far the string is drawn, how high the bow is held, the hand when the shot went
     float _cool0, _cool, _draw, _up = 1;
     Vector3 _loosed, _hand;
+    // how far the hands are up at the guard (1) from carried low at the side (0), and how long there has been no call to raise them
+    float _raise, _calm;
+    string _tool = "";
+    bool _big;
+    /// <summary>How near one of the horde (or a beast, nearer) brings the hands up to the guard, voxels (10 m).</summary>
+    const float Threat = 10 * VoxelWorld.PerMetre;
+    /// <summary>How long the hands stay up after the last call to raise them, seconds.</summary>
+    const float Settle = .9f;
 
     public void Init()
     {
@@ -73,7 +81,97 @@ public partial class ViewModel : Node3D
         _strokeT = u.StrokeTime; _simT = sim.Time;
         _snap = true; _stroking = false; _ready = _work = _pick = _lagY = _lagP = _swR = _swD = 0;
         _cool = u.Cooldown; _cool0 = 0; _draw = 0; _up = 1;
+        _raise = 0; _calm = Settle;
         _dirty = true;
+    }
+
+    /// <summary>
+    /// Whether there is a call for the hands to be up: one of the horde in reach before the eyes or near, a beast nearer,
+    /// a blow struck or asked for, the guard, a heavy blow drawn back, a shot asked, the pick at work or something laid.
+    /// </summary>
+    static bool Called(Unit u, Sim sim, bool foe, bool striking) =>
+        foe || striking || sim.WishStrike || sim.WishGuard || sim.Guarding || sim.Charge > 0 || sim.ShotAsked || sim.WishLay || u.State == UnitState.Work
+        || Threatened(u, sim);
+
+    /// <summary>One of the horde near, or a beast that falls on people nearer (a deer or a hare going by is no call).</summary>
+    static bool Threatened(Unit u, Sim sim)
+    {
+        foreach (var o in sim.Units)
+        {
+            if (o.Dead || o.Inside || o.Team == Team.Player || o.Team == Team.Wild && o.T.Aggro <= 0) continue;
+            float dx = o.X - u.X, dz = o.Z - u.Z, r = o.Team == Team.Wild ? Threat * .6f : Threat;
+            if (dx * dx + dz * dz < r * r) return true;
+        }
+        return false;
+    }
+
+    /// <summary>How far the hands are up at the guard (1) from carried low at the side (0).</summary>
+    public float Raised => _raise;
+
+    /// <summary>
+    /// How much of the sight the hands and what they hold cover, as a share of it (counted on a grid of 96 by 54 over
+    /// the viewport, a cell covered when its middle is under a face of theirs); whether any of it is in
+    /// <paramref name="middle"/>, and the middle of what is covered (for the tests); of what the fist holds alone, if asked.
+    /// </summary>
+    public float Covered(Camera3D cam, Vector2 size, Rect2 middle, out bool inMiddle, out Vector2 centre, bool heldOnly = false)
+    {
+        const int GX = 96, GY = 54;
+        var on = new bool[GX * GY];
+        foreach (var mi in heldOnly ? new[] { _held } : new[] { _armR, _armL, _held, _shield })
+        {
+            if (mi.Mesh == null || !mi.Visible || !Visible) continue;
+            var t = mi.GlobalTransform;
+            for (int sfc = 0; sfc < mi.Mesh.GetSurfaceCount(); sfc++)
+            {
+                var arrays = mi.Mesh.SurfaceGetArrays(sfc);
+                var verts = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+                var idx = arrays[(int)Mesh.ArrayType.Index].AsInt32Array();
+                int n = idx.Length > 0 ? idx.Length : verts.Length;
+                for (int i = 0; i + 2 < n; i += 3)
+                {
+                    Vector3 a = t * verts[idx.Length > 0 ? idx[i] : i], b = t * verts[idx.Length > 0 ? idx[i + 1] : i + 1], c = t * verts[idx.Length > 0 ? idx[i + 2] : i + 2];
+                    if (cam.IsPositionBehind(a) || cam.IsPositionBehind(b) || cam.IsPositionBehind(c)) continue;
+                    Fill(cam.UnprojectPosition(a), cam.UnprojectPosition(b), cam.UnprojectPosition(c));
+                }
+            }
+        }
+        void Fill(Vector2 a, Vector2 b, Vector2 c)
+        {
+            float cw = size.X / GX, ch = size.Y / GY;
+            int x0 = Math.Max(0, (int)(Math.Min(a.X, Math.Min(b.X, c.X)) / cw)), x1 = Math.Min(GX - 1, (int)(Math.Max(a.X, Math.Max(b.X, c.X)) / cw));
+            int y0 = Math.Max(0, (int)(Math.Min(a.Y, Math.Min(b.Y, c.Y)) / ch)), y1 = Math.Min(GY - 1, (int)(Math.Max(a.Y, Math.Max(b.Y, c.Y)) / ch));
+            float area = (b - a).Cross(c - a);
+            if (MathF.Abs(area) < 1e-6f) return;
+            for (int y = y0; y <= y1; y++)
+                for (int x = x0; x <= x1; x++)
+                {
+                    var p = new Vector2((x + .5f) * cw, (y + .5f) * ch);
+                    float w0 = (b - a).Cross(p - a) / area, w1 = (c - b).Cross(p - b) / area, w2 = (a - c).Cross(p - c) / area;
+                    if (w0 >= 0 && w1 >= 0 && w2 >= 0) on[y * GX + x] = true;
+                }
+        }
+        int count = 0;
+        inMiddle = false;
+        centre = Vector2.Zero;
+        for (int y = 0; y < GY; y++)
+            for (int x = 0; x < GX; x++)
+            {
+                if (!on[y * GX + x]) continue;
+                var p = new Vector2((x + .5f) * size.X / GX, (y + .5f) * size.Y / GY);
+                count++;
+                centre += p;
+                if (middle.HasPoint(p)) inMiddle = true;
+            }
+        if (count > 0) centre /= count;
+        return count / (float)(GX * GY);
+    }
+
+    /// <summary>The hands coming up at a call and going down a moment after it is over: up quickly, down slowly.</summary>
+    void Raise(bool called, float dt, bool snap)
+    {
+        _calm = called ? 0 : _calm + dt;
+        float up = _calm < Settle ? 1 : 0;
+        _raise = snap ? up : _raise + (up - _raise) * (1 - MathF.Exp(-dt * (up > _raise ? 11 : 3.2f)));
     }
 
     /// <summary>
@@ -105,14 +203,22 @@ public partial class ViewModel : Node3D
         Transform = new Transform3D(rig, sway * M);
 
         // the bow comes up and is drawn for one of the horde before it, and for a shot asked at anything else
-        if (_bow) { Bow(u, sdt, dt, foe || sim.ShotAsked || sim.WishStrike, snap); return; }
+        if (_bow)
+        {
+            Raise(Called(u, sim, foe, false), dt, snap);
+            Bow(u, sdt, dt, foe || sim.ShotAsked || sim.WishStrike, snap);
+            return;
+        }
 
         // the eyes' swing of the last fifth of a second: the stroke the next blow is leant toward
         float fade = MathF.Exp(-dt / .2f);
         _swR = _swR * fade + turnYaw; _swD = _swD * fade - turnPitch;
         var next = _spear ? StrokeKind.Thrust : Sim.StrokeOfSwing(_swR, _swD, sim.LookPitch);
         if (next == StrokeKind.Bash && _si < 0 || next == StrokeKind.Bite) next = StrokeKind.DiagR;
-        var guard = Guard();
+        // up at the guard while there is a call for it, else carried low at the side
+        bool striking = !_aimed && (u.StrokeTime > _strokeT || _stroking && sim.Time - _strokeT < Total);
+        Raise(Called(u, sim, foe, striking), dt, snap);
+        var guard = Mix(Carried(w, steps), Guard(), Smooth(_raise));
         if (snap) _now = guard;
         if (!_aimed && u.StrokeTime > _strokeT) { _strokeT = u.StrokeTime; _k = u.Stroke; _from = _now; _glanced = u.Glanced; _stroking = true; }
         // the blow lands as the blade comes to the body, and only then is it known whether it was turned
@@ -137,13 +243,20 @@ public partial class ViewModel : Node3D
         var D = _now.D;
         Held(_held, _now);
         Arm(_armR, false, Fist(), _now.P, D, new Vector3(.40f, -.42f, 0));
+        // the other hand: on the shield; once the hands are up, further up the haft or under the stock, or empty at the
+        // lower left; else down at the side, out of sight
+        float up = Smooth(_raise);
         if (_si >= 0) Shield(since);
         else if (_two || _aimed)
-            // the other hand further up the haft, or under the stock
-            Arm(_armL, true, V(_g.OffFist), _now.P + D * (_aimed ? .2f : .28f) + (_aimed ? new Vector3(0, -.04f, 0) : Vector3.Zero), D, new Vector3(-.40f, -.42f, 0));
-        else Arm(_armL, true, V(_g.OffFist), new Vector3(-.25f, -.31f, -.36f), new Vector3(.25f, .55f, -.8f), new Vector3(-.40f, -.50f, 0));
+            Arm(_armL, true, V(_g.OffFist), Away.Lerp(_now.P + D * (_aimed ? .2f : .28f) + (_aimed ? new Vector3(0, -.04f, 0) : Vector3.Zero), up), D,
+                AwayElbow.Lerp(new Vector3(-.40f, -.42f, 0), up));
+        else Arm(_armL, true, V(_g.OffFist), Away.Lerp(new Vector3(-.25f, -.31f, -.36f), up), new Vector3(.25f, .55f, -.8f), AwayElbow.Lerp(new Vector3(-.40f, -.50f, 0), up));
+        if (_si < 0 && up < .02f) _armL.Visible = false;
         _strA.Visible = _strB.Visible = _shaft.Visible = _head.Visible = false;
     }
+
+    /// <summary>The other hand down at the side, out of sight, and its elbow.</summary>
+    static readonly Vector3 Away = new(-.32f, -.70f, -.24f), AwayElbow = new(-.42f, -.95f, .05f);
 
     // ---------------------------------------------------------------- the figure's pieces
 
@@ -159,6 +272,8 @@ public partial class ViewModel : Node3D
         _two = _g.TwoHands;
         _spear = u.T.Tool is "spear" or "lance";
         _aimed = u.T.Ranged && !_bow;
+        _tool = u.T.Tool;
+        _big = u.T.BodyH >= 20;
         _dirty = true;
     }
 
@@ -175,7 +290,19 @@ public partial class ViewModel : Node3D
         _shield.Mesh = _si < 0 ? null : Made(Figure.DressOf(plan, _si, Now(plan.Dress[_si].On), out _), plan.Dress[_si].Sub);
         _armR.Visible = _armR.Mesh != null; _armL.Visible = _armL.Mesh != null;
         _held.Visible = _held.Mesh != null; _shield.Visible = _shield.Mesh != null;
+        // how much further than a round shield's this one reaches from the fist, metres: carried, it goes that much lower
+        _shieldTall = 0;
+        if (_shield.Mesh != null)
+        {
+            var box = _shield.Mesh.GetAabb();
+            var g = V(plan.Dress[_si].Grip);
+            float far = 0;
+            for (int i = 0; i < 8; i++) far = Math.Max(far, (box.GetEndpoint(i) - g).Length());
+            _shieldTall = Math.Max(0, far / VoxelWorld.PerMetre - .5f);
+        }
     }
+
+    float _shieldTall;
 
     static ArrayMesh Made(MeshBuffers b, int grid)
     {
@@ -289,6 +416,39 @@ public partial class ViewModel : Node3D
 
     Pose Guard() => _aimed ? GuardAimed : _spear ? GuardSpear : _two ? GuardTwo : GuardOne;
 
+    // carried at rest, low at the right and out of the middle of the sight: a blade, a mace or an axe with its point
+    // ahead, up and out to the right; a spear, a halberd or a staff leant forward up the right side, its head at the
+    // top; a pick, a club or a maul by its haft at the right side, its head up and out; a crossbow, a hand gun or a
+    // flask at the right hip, pointing ahead and down; a sling hanging from the fist
+    static readonly Pose CarryOne = At(.29f, -.31f, -.42f, new Vector3(.34f, .38f, -.86f), Vector3.Forward, 1.05f);
+    static readonly Pose CarryUpright = At(.38f, -.31f, -.44f, new Vector3(.24f, .72f, -.65f), Vector3.Forward);
+    static readonly Pose CarrySide = At(.31f, -.31f, -.42f, new Vector3(.40f, .62f, -.68f), Vector3.Forward);
+    static readonly Pose CarryHeavy = At(.36f, -.33f, -.40f, new Vector3(.55f, .50f, -.67f), Vector3.Forward);
+    // (a troll's club or a giant's maul, as long as a man and thick as his body: further out and lower still, its head at the right edge)
+    static readonly Pose CarryHuge = At(.42f, -.40f, -.40f, new Vector3(.72f, .32f, -.62f), Vector3.Forward);
+    static readonly Pose CarryAimed = At(.28f, -.31f, -.42f, new Vector3(.10f, -.30f, -.95f), Vector3.Down);
+    static readonly Pose CarrySling = At(.29f, -.30f, -.42f, new Vector3(.04f, -.92f, -.38f), Vector3.Forward);
+
+    Pose Carry() => _tool switch
+    {
+        "spear" or "lance" or "halberd" or "staff" => CarryUpright,
+        "pick" or "mallet" => CarrySide,
+        "maul" or "club" => _big ? CarryHuge : CarryHeavy,
+        "sling" => CarrySling,
+        _ => _aimed ? CarryAimed : CarryOne,
+    };
+
+    /// <summary>What is held, carried low at the side: walking, it goes lower and swings a little with the steps.</summary>
+    Pose Carried(float walk, float steps)
+    {
+        var p = Carry();
+        if (walk <= .01f) return p;
+        float s = MathF.Sin(MathF.PI * steps), c = MathF.Abs(MathF.Cos(MathF.PI * steps));
+        p.P += new Vector3(.010f * s, -.03f * walk - .012f * walk * c, .015f * s);
+        p.Q = (new Quaternion(Vector3.Right, .06f * walk * s) * p.Q).Normalized();
+        return p;
+    }
+
     /// <summary>A stroke's three holds: cocked, at the blow, spent — the edge leading the way the blade goes.</summary>
     static Pose[] Arc(Vector3 pw, Vector3 dw, Vector3 pc, Vector3 dc, Vector3 pe, Vector3 de) => new[]
     {
@@ -370,13 +530,16 @@ public partial class ViewModel : Node3D
         return jar;
     }
 
-    /// <summary>The shield on the left forearm: its upper right at the lower left of the sight, its face to the foe.</summary>
+    /// <summary>
+    /// The shield on the left forearm: up at the guard, its upper right at the lower left of the sight, its face to the
+    /// foe; carried at rest, lowered at the side with only its rim showing in the corner (a tall one lower still).
+    /// </summary>
     void Shield(float since)
     {
         var w = _plan.Dress[_si];
-        float b = Bash(since);
-        var c = new Vector3(-.42f, -.36f, -.38f);
-        var n = new Vector3(.15f, -.15f, -.98f);
+        float b = Bash(since), up = Smooth(_raise);
+        var c = new Vector3(-.47f, -.45f - 2.8f * _shieldTall, -.34f).Lerp(new Vector3(-.42f, -.36f, -.38f), up);
+        var n = new Vector3(.20f, -.42f, -.88f).Lerp(new Vector3(.15f, -.15f, -.98f), up);
         if (b > 0) { c = c.Lerp(new Vector3(-.16f, -.20f, -.50f), b); n = n.Lerp(new Vector3(0, -.05f, -1), b); }
         else c += new Vector3(-.05f, -.06f, .04f) * -b;
         var r = Frame(n, new Vector3(-.35f, -.85f, .4f)) * Frame(V(w.Edge), V(_g.OffShoulder) - V(w.Grip)).Transposed();
@@ -409,13 +572,17 @@ public partial class ViewModel : Node3D
         _cool = u.Cooldown;
         float f = _cool0 > 0 ? Math.Clamp(1 - u.Cooldown / _cool0, 0, 1) : 1;
         float k = 1 - MathF.Exp(-dt * 6);
-        _up = snap ? (foe ? 1 : .3f) : _up + ((foe ? 1 : .3f) - _up) * k;
-        float target = f < .45f ? 0 : Smooth((f - .45f) / .45f) * (foe ? 1 : .2f);
+        // up and drawn for a foe in sight or a shot asked; half up with the horde about; else carried low at the left
+        float want = foe ? 1 : .3f * Smooth(_raise);
+        _up = snap ? want : _up + (want - _up) * k;
+        float carried = Smooth(Math.Clamp(1 - _up / .3f, 0, 1));
+        float target = f < .45f ? 0 : Smooth((f - .45f) / .45f) * (foe ? 1 : .2f * (1 - carried));
         _draw = f < .45f || snap ? target : _draw + (target - _draw) * (1 - MathF.Exp(-dt * 8));
-        // the bow hand, the bow canted with its top to the right; jerked forward and rolled as the string goes
-        float jerk = f < .1f ? 1 - f / .1f : 0;
-        var b = new Vector3(-.18f, -.24f, -.52f).Lerp(new Vector3(-.10f, -.10f, -.62f), _up) + new Vector3(0, 0, -.02f) * jerk;
-        float tilt = Mathf.Lerp(.6f, .26f, _up) + .07f * jerk;
+        // the bow hand, the bow canted with its top to the right; jerked forward and rolled as the string goes; carried,
+        // the bow hangs low at the left with its top canted out to the left
+        float jerk = f < .1f ? 1 - f / .1f : 0, held = Math.Max(_up, .3f);
+        var b = new Vector3(-.18f, -.24f, -.52f).Lerp(new Vector3(-.10f, -.10f, -.62f), held).Lerp(BowLow, carried) + new Vector3(0, 0, -.02f) * jerk;
+        float tilt = Mathf.Lerp(Mathf.Lerp(.6f, .26f, held), -.42f, carried) + .07f * jerk;
         var axis = new Vector3(MathF.Sin(tilt), MathF.Cos(tilt), 0);
         var w = _plan.Dress[_wi];
         var grip = V(w.Grip);
@@ -434,13 +601,15 @@ public partial class ViewModel : Node3D
         var flown = _loosed + new Vector3(.03f, -.01f, .06f);
         _hand = f < .1f ? _loosed.Lerp(flown, Out(f / .1f)) : f < .28f ? flown.Lerp(quiver, Smooth((f - .1f) / .18f))
             : f < .45f ? quiver.Lerp(rest, Smooth((f - .28f) / .17f)) : rest.Lerp(anchor, _draw);
-        bool nocked = f >= .45f;
+        // carried, the drawing hand is down at the side with no arrow in it
+        _hand = _hand.Lerp(HandDown, carried);
+        bool nocked = f >= .45f && carried < .5f;
         // the string: straight and shivering after the shot, else to the fingers
         var nock = nocked ? _hand : rest + (f < .1f ? new Vector3(.006f * MathF.Sin(f * 140), 0, 0) * jerk : Vector3.Zero);
         Rod(_strA, top, nock, .003f);
         Rod(_strB, nock, low, .003f);
         // the arrow from the fingers out past the bow's grip on its right
-        if (f >= .28f)
+        if (f >= .28f && carried < .5f)
         {
             var shelf = b + new Vector3(.022f, .02f, 0);
             var dir = (shelf - _hand).Normalized();
@@ -449,8 +618,11 @@ public partial class ViewModel : Node3D
             Rod(_head, point - dir * .05f, point, .013f);
         }
         else _shaft.Visible = _head.Visible = false;
-        Arm(_armR, false, V(_g.Fist), _hand, (b - _hand).Normalized(), new Vector3(.34f, -.16f, .10f));
+        Arm(_armR, false, V(_g.Fist), _hand, (b - _hand).Normalized(), new Vector3(.34f, -.16f, .10f).Lerp(new Vector3(.40f, -.95f, .05f), carried));
         // drawn to the cheek the hand is beside the eye, out of sight: only the string and the arrow show
-        if (nocked && _draw > .5f) _armR.Visible = false;
+        if (nocked && _draw > .5f || carried > .95f) _armR.Visible = false;
     }
+
+    /// <summary>The bow carried low at the left, and the drawing hand down at the right side.</summary>
+    static readonly Vector3 BowLow = new(-.30f, -.45f, -.42f), HandDown = new(.30f, -.70f, -.20f);
 }

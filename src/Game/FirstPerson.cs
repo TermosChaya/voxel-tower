@@ -43,6 +43,8 @@ public partial class FirstPerson : Node3D
     public bool Bare;
     public Unit Unit => _u;
     public Camera3D Cam => _cam;
+    /// <summary>The hands and what they hold, before the eyes.</summary>
+    public ViewModel Hands => _vm;
 
     // dying: the view falling and going dark this long more, and why it is let go after; going over into another
     float _dying;

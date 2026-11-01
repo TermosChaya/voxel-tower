@@ -600,16 +600,43 @@ public partial class Main
         Hud.Refresh();
     }
 
+    /// <summary>The kinds of ours with hands, in the order the first person's --look=10 and on goes through them.</summary>
+    static readonly UnitType[] EyesKinds =
+    {
+        Kinds.Swordsman, Kinds.Shieldbearer, Kinds.Spearman, Kinds.Halberdier, Kinds.Knight, Kinds.Archer, Kinds.Crossbowman, Kinds.Slinger,
+        Kinds.Worker, Kinds.Captain, Kinds.Architect, Kinds.Priest, Kinds.OurAlchemist, Kinds.Bombardier, Kinds.TameTroll, Kinds.Giant,
+    };
+
     /// <summary>
     /// First person: one of ours gone into on the field west of the citadel, a band coming at it — a swordsman with his
     /// sword up; with --look=1 an archer drawing on a goblin; with --look=2 a worker with the pick at the ground; with
-    /// --look=3 the archer turned from the band, drawing for a shot at the sky.
+    /// --look=3 the archer turned from the band, drawing for a shot at the sky. From --look=10 on, one of each kind of
+    /// ours with hands (<see cref="EyesKinds"/>) on the open field with nobody near: standing at rest (10 + its place),
+    /// walking (30 + it), and with a goblin before it in reach, ready to strike or to shoot (50 + it).
     /// </summary>
     void Eyes()
     {
         var sim = Sim; var w = World;
         sim.Waves.Countdown = 1e9;
         int cx = Site.KeepX - Site.KeepR - 150, cz = Site.KeepZ + 10;
+        if (_look >= 10)
+        {
+            int which = (_look - 10) % 20, how = (_look - 10) / 20;
+            var t = EyesKinds[Math.Clamp(which, 0, EyesKinds.Length - 1)];
+            var one = sim.Spawn(t, sim.NearestStand(cx + 40, cz, t.Move.Height));
+            if (how == 2)
+            {
+                var goblin = sim.Spawn(Kinds.Goblin, sim.NearestStand(cx + 40 - (t.Ranged ? 90 : 14), cz + 2, Kinds.Goblin.Move.Height));
+                goblin.Guard = true; goblin.Home = goblin.Cell;
+            }
+            Advance(.3);
+            FP.Enter(one);
+            FP.Face(MathF.PI, how == 2 && !t.Ranged ? -.12f : -.04f);
+            if (how == 1) FP.TestMove = new Vector2(0, 1);
+            else Paused = true;
+            Hud.Refresh();
+            return;
+        }
         Unit Raider(UnitType t, int dx, int dz) { var u = sim.Spawn(t, sim.NearestStand(cx + dx, cz + dz, t.Move.Height)); u.Guard = true; u.Home = u.Cell; return u; }
         var kind = _look is 1 or 3 ? Kinds.Archer : _look == 2 ? Kinds.Worker : Kinds.Swordsman;
         var me = sim.Spawn(kind, sim.NearestStand(cx + 40, cz, 2));
