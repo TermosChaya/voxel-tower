@@ -6302,6 +6302,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troves") TrovesBench
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bestiary") BestiaryBench.Run(Check);
 // the horde's homeland a bog: its zones on the big map, the map of before the same in all else, a bog valley (BogBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bog") BogBench.Run(Check);
+// every side of a valley reaches the citadel: the river's valley on a dozen seeds, the other kinds on three (ReachBench.cs)
+if (args.Length == 0 || args[0] == "--reach") ReachBench.Run(Check);
 // the gods: the waking learnt and cast, the Colossus out of the ground, set loose on the horde, ridden, against the
 // horde's god, back under (Gods.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--gods") GodsBench.Run(Check);

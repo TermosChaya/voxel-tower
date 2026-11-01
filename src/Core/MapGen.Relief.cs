@@ -633,6 +633,190 @@ public static partial class MapGen
             }
         }
 
+        // ---- where the road's old bridge will stand (laid with the other places, below): along the road where it crosses
+        // the river, if that span stands (Bridges.MaxSpan); else square across the river where the road comes to it, or a
+        // little up or down it. (Along the road, which crossed the broad river of the river's valley aslant, the span ran
+        // too long to stand, no bridge was laid, and the side the horde comes by was cut off from the citadel.)
+        bool Wet(double x, double z) => x >= 0 && z >= 0 && x < SX && z < SZ && water[(int)z * SX + (int)x] > 0;
+        (int xa, int za, int xb, int zb)? Span(double x, double z, double dx, double dz)
+        {
+            double l = Math.Max(1e-6, Math.Sqrt(dx * dx + dz * dz)); dx /= l; dz /= l;
+            double a = 0, b = 0;
+            while (a < 200 && Wet(x - dx * a, z - dz * a)) a += 1;
+            while (b < 200 && Wet(x + dx * b, z + dz * b)) b += 1;
+            a += 10; b += 10;
+            int xa = (int)(x - dx * a), za = (int)(z - dz * a), xb = (int)(x + dx * b), zb = (int)(z + dz * b);
+            // as long as Bridges.Plan will lay it, measured between the same ends
+            double span = Math.Sqrt((double)(xb - xa) * (xb - xa) + (double)(zb - za) * (zb - za));
+            return span >= Bridges.MinSpan && span <= Bridges.MaxSpan && hex.Inside(xa, za) && hex.Inside(xb, zb) ? (xa, za, xb, zb) : null;
+        }
+        (int xa, int za, int xb, int zb)? RoadBridge()
+        {
+            for (int i = 0; i + 1 < road1.Count; i++)
+            {
+                var (x, z) = road1[i];
+                if (!(x >= 0 && z >= 0 && x < SX && z < SZ && hex.Edge((float)x, (float)z) > 8 && riverD[(int)z * SX + (int)x] < 2)) continue;
+                var (ax, az) = road1[Math.Max(0, i - 2)]; var (bx, bz) = road1[Math.Min(road1.Count - 1, i + 2)];
+                if (Span(x, z, bx - ax, bz - az) is { } along) return along;
+                break;
+            }
+            // the point of the river nearest the road where the road comes into it
+            int crossI = -1;
+            double nearest = 1e9;
+            foreach (var (x, z) in road1)
+            {
+                if (x < 0 || z < 0 || x >= SX || z >= SZ || hex.Edge((float)x, (float)z) <= 8) continue;
+                int c = (int)z * SX + (int)x;
+                if (riverD[c] >= riverH[c] || riverD[c] >= nearest) continue;
+                nearest = riverD[c];
+                double nd = 1e18;
+                for (int r = inside0; r <= inside1; r++)
+                {
+                    double d = (river[r].x - x) * (river[r].x - x) + (river[r].z - z) * (river[r].z - z);
+                    if (d < nd) { nd = d; crossI = r; }
+                }
+            }
+            // square across it there, or the nearest point up or down the river (some 100 voxels either way) where it stands
+            for (int k = 0; crossI >= 0 && k <= 48; k++)
+            {
+                int r = crossI + (k % 2 == 0 ? k / 2 : -(k + 1) / 2);
+                if (r < inside0 || r > inside1) continue;
+                var (ta, tb) = (river[Math.Max(0, r - 2)], river[Math.Min(river.Count - 1, r + 2)]);
+                if (Span(river[r].x, river[r].z, -(tb.z - ta.z), tb.x - ta.x) is { } across) return across;
+            }
+            return null;
+        }
+        var roadBridge = (places & Places.Bridges) != 0 ? RoadBridge() : null;
+
+        // ---- every piece of the land reached on foot from before the citadel's gate, over the metre cells the walkers go
+        // by (NavGrid): the river, the stream or a lake may cut one off between them and the land's edge (the broad river
+        // of the river's valley ran up against the edge and left the far bank's strip beyond with no way over), and such a
+        // piece gets a ford, the water made shallow along the shortest way over to the land that is reached
+        FordsToCutOffLand();
+        void FordsToCutOffLand()
+        {
+            // a cell drowns whoever stands in it under so many voxels of water on the average (NavGrid.DeepT); a man steps up
+            // or down no more than this between two cells' floors (Mover.Climb); a piece of fewer cells than this is left as
+            // it is (a bar in the river); the ford so many cells wide either side of its way over
+            const int C = NavGrid.CS, Wadeable = 3, Steep = 2 * NavGrid.CS + 2, Least = 8, Wide = 1;
+            int nx = SX / C, nz = SZ / C, M = nx * nz;
+            var land = new bool[M];
+            var deep = new bool[M];
+            var wet = new bool[M];
+            var top = new int[M];
+            var ford = new int[M];
+            var state = new byte[M];
+            var piece = new int[M];
+            var from = new int[M];
+            var q = new Queue<int>();
+            var cells = new List<int>();
+            var around = new int[4];
+            for (int m = 0; m < M; m++) land[m] = hex.Edge(m % nx * C + C / 2f, m / nx * C + C / 2f) >= 2;
+            // each cell's water on the average and the highest of its ground, as the walkers find it, and as it would be with
+            // a ford through it
+            void Weigh()
+            {
+                for (int m = 0; m < M; m++)
+                {
+                    int depth = 0, high = int.MinValue, shallow = int.MinValue, x0 = m % nx * C, z0 = m / nx * C;
+                    bool any = false;
+                    for (int z = z0; z < z0 + C; z++)
+                        for (int x = x0; x < x0 + C; x++)
+                        {
+                            int i = z * SX + x;
+                            if (water[i] > 0) { depth += Math.Max(0, water[i] - site.HTop[i]); any = true; }
+                            high = Math.Max(high, site.HTop[i]);
+                            shallow = Math.Max(shallow, water[i] > 0 && kind[i] != Relief.Pond ? Math.Max(site.HTop[i], water[i] - 2) : site.HTop[i]);
+                        }
+                    deep[m] = depth >= Wadeable * C * C; wet[m] = any; top[m] = high; ford[m] = shallow;
+                }
+            }
+            // over the road's old bridge, from the cell at either end to the other's
+            var over = new Dictionary<int, int>();
+            if (roadBridge is { } rb)
+            {
+                int a = rb.za / C * nx + rb.xa / C, b = rb.zb / C * nx + rb.xb / C;
+                over[a] = b; over[b] = a;
+            }
+            // the four cells beside one (those off the box left out, as -1)
+            void Around(int m)
+            {
+                int x = m % nx, z = m / nx;
+                around[0] = x > 0 ? m - 1 : -1; around[1] = x < nx - 1 ? m + 1 : -1;
+                around[2] = z > 0 ? m - nx : -1; around[3] = z < nz - 1 ? m + nx : -1;
+            }
+            // from a cell, over the land that is walked (no deeper than wading, no cliff), marking it so, its cells kept
+            void Flood(int at, byte mark, int label)
+            {
+                cells.Clear();
+                state[at] = mark; piece[at] = label; q.Enqueue(at);
+                while (q.Count > 0)
+                {
+                    int m = q.Dequeue();
+                    cells.Add(m);
+                    Around(m);
+                    foreach (int j in around)
+                        if (j >= 0 && state[j] == 0 && land[j] && !deep[j] && Math.Abs(top[j] - top[m]) <= Steep)
+                        { state[j] = mark; piece[j] = label; q.Enqueue(j); }
+                    if (over.TryGetValue(m, out int t) && state[t] == 0 && land[t] && !deep[t]) { state[t] = mark; piece[t] = label; q.Enqueue(t); }
+                }
+            }
+            int gate = (int)CZ / C * nx + (int)(CX - site.KeepR - 20) / C;
+            for (int round = 0; round < 6; round++)
+            {
+                Weigh();
+                Array.Clear(state);
+                Flood(gate, 1, 0);
+                // the pieces not reached, those big enough to matter (2), and the bits left as they are (3)
+                var pieces = new List<int>();
+                for (int m = 0; m < M; m++)
+                {
+                    if (state[m] != 0 || !land[m] || deep[m]) continue;
+                    Flood(m, 2, pieces.Count + 1);
+                    if (cells.Count >= Least) pieces.Add(m);
+                    else foreach (int c in cells) state[c] = 3;
+                }
+                if (pieces.Count == 0) break;
+                // out from what is reached over the water, any depth, to the nearest cell of each piece, by the way a ford
+                // would be walked (a piece up a cliff from the water gets none: a ford would bring nobody up to it)
+                var reached = new int[pieces.Count + 1];
+                Array.Fill(reached, -1);
+                for (int m = 0; m < M; m++)
+                {
+                    if (state[m] != 1) continue;
+                    Around(m);
+                    foreach (int j in around)
+                        if (j >= 0 && wet[j] && state[j] == 0 && land[j] && Math.Abs(ford[j] - ford[m]) <= Steep) { state[j] = 4; from[j] = -1; q.Enqueue(j); }
+                }
+                int left = pieces.Count;
+                while (q.Count > 0 && left > 0)
+                {
+                    int m = q.Dequeue();
+                    Around(m);
+                    foreach (int j in around)
+                    {
+                        if (j < 0 || Math.Abs(ford[j] - ford[m]) > Steep) continue;
+                        if (state[j] == 2 && reached[piece[j]] < 0) { reached[piece[j]] = m; left--; continue; }
+                        if (state[j] == 0 && wet[j] && land[j]) { state[j] = 4; from[j] = m; q.Enqueue(j); }
+                    }
+                }
+                q.Clear();
+                bool forded = false;
+                for (int n = 1; n <= pieces.Count; n++)
+                    // the way over traced back to the land reached, and the water along it, a cell either side, made a
+                    // wading depth
+                    for (int m = reached[n]; m >= 0; m = from[m])
+                        for (int z = (m / nx - Wide) * C; z < (m / nx + Wide + 1) * C; z++)
+                            for (int x = (m % nx - Wide) * C; x < (m % nx + Wide + 1) * C; x++)
+                            {
+                                if (x < 0 || z < 0 || x >= SX || z >= SZ) continue;
+                                int c = z * SX + x;
+                                if (water[c] > 0 && kind[c] != Relief.Pond && site.HTop[c] < water[c] - 2) { site.HTop[c] = water[c] - 2; forded = true; }
+                            }
+                if (!forded) break;
+            }
+        }
+
         // ---- the ground bare where it is steep: the faces of the bluffs and the knolls' flanks are rock
         Parallel.For(1, SZ - 1, z =>
         {
@@ -783,39 +967,15 @@ public static partial class MapGen
         }
         if ((places & Places.Bridges) != 0)
         {
-            // the road's bridge where the road from the horde's side crosses the river, whole; a fallen one up the river
-            (double x, double z)? cross = null;
-            for (int i = 0; i + 1 < road1.Count && cross == null; i++)
-            {
-                var (x, z) = road1[i];
-                int c = (int)z * SX + (int)x;
-                if (x >= 0 && z >= 0 && x < SX && z < SZ && hex.Edge((float)x, (float)z) > 8 && riverD[c] < 2) cross = (x, z);
-            }
-            void Span((double x, double z) at, double dx, double dz, bool whole, string name)
-            {
-                double l = Math.Max(1e-6, Math.Sqrt(dx * dx + dz * dz)); dx /= l; dz /= l;
-                double a = 0, b = 0;
-                while (a < 200 && Wet(at.x - dx * a, at.z - dz * a)) a += 1;
-                while (b < 200 && Wet(at.x + dx * b, at.z + dz * b)) b += 1;
-                a += 10; b += 10;
-                int xa = (int)(at.x - dx * a), za = (int)(at.z - dz * a), xb = (int)(at.x + dx * b), zb = (int)(at.z + dz * b);
-                if (!hex.Inside(xa, za) || !hex.Inside(xb, zb)) return;
-                Landmarks.OldBridge(w, site, xa, za, xb, zb, name, whole, seed + (whole ? 8u : 9u));
-            }
-            bool Wet(double x, double z) => x >= 0 && z >= 0 && x < SX && z < SZ && water[(int)z * SX + (int)x] > 0;
-            if (cross is { } c0)
-            {
-                // along the road where it crosses
-                int ci = road1.FindIndex(q => q == c0);
-                var (ax, az) = road1[Math.Max(0, ci - 2)]; var (bx, bz) = road1[Math.Min(road1.Count - 1, ci + 2)];
-                Span(c0, bx - ax, bz - az, true, "Старый мост");
-            }
+            // the road's bridge where it was found to stand (above), whole; a fallen one up the river
+            if (roadBridge is { } span) Landmarks.OldBridge(w, site, span.xa, span.za, span.xb, span.zb, "Старый мост", true, seed + 8u);
             // the fallen one between the ford and the crossing, square across the river
             int fi0 = inside0 + (inside1 - inside0) / 5;
             var (ux0, uz0) = river[fi0]; var (ux1, uz1) = river[Math.Min(river.Count - 1, fi0 + 2)];
             bool clear = true;
             foreach (var l in site.Landmarks) if (Brushes.Dist(ux0 - l.X, uz0 - l.Z) < l.R + 50) clear = false;
-            if (clear) Span((ux0, uz0), -(uz1 - uz0), ux1 - ux0, false, "Обрушенный мост");
+            if (clear && Span(ux0, uz0, -(uz1 - uz0), ux1 - ux0) is { } fallen)
+                Landmarks.OldBridge(w, site, fallen.xa, fallen.za, fallen.xb, fallen.zb, "Обрушенный мост", false, seed + 9u);
         }
         if ((places & Places.Power) != 0)
         {

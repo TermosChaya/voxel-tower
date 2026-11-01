@@ -195,11 +195,13 @@ public static class Landmarks
 
     /// <summary>
     /// An old stone bridge over the river, weathered and mossy, arched from bank to bank. One whose middle fell in lies
-    /// broken over the water, its stones on the riverbed below; mended, it carries the road across again.
+    /// broken over the water, its stones on the riverbed below; mended, it carries the road across again. None (and no
+    /// place named for it) where no bridge would stand: a span too short or too long (<see cref="Bridges.Plan"/>).
     /// </summary>
     public static Landmark OldBridge(VoxelWorld w, Site s, int ax, int az, int bx, int bz, string name, bool whole, uint seed)
     {
         var plan = Bridges.Plan(w, s, ax, az, bx, bz, 12, Mat.Stone);
+        if (plan.Count == 0) return null;
         s.Arched ??= new VoxelWorld(w.SX, w.SY, w.SZ);
         for (int i = 0; i < plan.Count; i++) s.Arched.SetRaw(plan.X(i), plan.Y(i), plan.Z(i), 1);
         double dx = bx - ax, dz = bz - az, span = Math.Sqrt(dx * dx + dz * dz);
