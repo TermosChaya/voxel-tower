@@ -133,6 +133,13 @@ public sealed partial class Site
     public readonly List<(int X, int Z, int R, int Level)> Ponds = new();
     /// <summary>The lakes in the lowland's hollows (a hexagon made by itself): centre, radius, the height of their water.</summary>
     public readonly List<(int X, int Z, int R, int Level)> Lakes = new();
+    /// <summary>A bog's pools between its lakes (MapGen.Relief.cs), as the lakes are kept: centre, radius, the height of their water.</summary>
+    public readonly List<(int X, int Z, int R, int Level)> Pools = new();
+    /// <summary>
+    /// A bog's mires, the black mud underfoot that slows whoever wades it as the spell's does, for good (the sim lays
+    /// them when the valley is new, Sim.Spells.cs): centre and radius, voxels.
+    /// </summary>
+    public readonly List<(float X, float Z, float R)> Mires = new();
 
     /// <summary>
     /// The river's course as a line (voxels) with its half width at each point, from where it comes in to where it goes

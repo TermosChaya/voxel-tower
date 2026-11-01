@@ -30,7 +30,7 @@ public partial class Main
     /// <summary>
     /// The big world map made up (--demo --pose=world --size=S|M|L|XL, the seed --seed=N): --look=0 the walking view about
     /// our citadel, the fog about what is seen; 1 a ridge of mountains with its pass and the gate in it; 2 a mine with the
-    /// monster that keeps it, a chest by; 3 the horde's town in its burnt land; 4 the strategic view of a region; 5 the
+    /// monster that keeps it, a chest by; 3 the horde's town in its bog; 4 the strategic view of a region; 5 the
     /// whole map from as far as it goes; 6 a hero of ours with his way laid out, green today and red beyond, an army of the
     /// horde on its way; 7 the walking view close; 8 the walking view drawn across the map, measured.
     /// </summary>
@@ -151,7 +151,7 @@ public partial class Main
     /// A new campaign on the big map of «Heroes» (--campaign --pose=bigmap --size=S|M|L|XL): --look=0 the start, our hero
     /// by the citadel, chosen; 1 his way planned to a mine (most of today's moves spent), green as far as today, red
     /// beyond, the days at the cross; 2 him on his way there, walking; 3 a mine flagged ours, him on it; 4 a chest come to, its card asking gold or
-    /// experience; 5 a pass kept by a stack; 6 the horde's realm, its town in the burnt land; 7 the strategic view; 8 a road over a river on its bridge;
+    /// experience; 5 a pass kept by a stack; 6 the horde's realm, its town in the bog; 7 the strategic view; 8 a road over a river on its bridge;
     /// 9 a mine held by a garrison of ours behind works, its card up (Campaign.Hold.cs); 10 a hero of the horde come up by
     /// ours under its banner; 11 the creatures of the wild about the citadel, the word over the nearest stack (what, how
     /// many, against our hero); 12 a dwelling the hero stands at, its card up and his pane offering «Нанять в жилище».

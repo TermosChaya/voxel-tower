@@ -12,12 +12,13 @@ namespace VoxelTower.Core;
 /// more the nearer its middle); low rolls of the ground lie over all of it, hills swell where the hexes are hilly. The
 /// grounds meet raggedly, each column taking the ground of the hex nearest to it as a gentle wander of the land has it,
 /// and each ground is no one colour but drifts of its shades: lush and dry grass, bare earth, a scatter of flowers on a
-/// meadow, pebbles on rough land, ash and cinders and cracks of lava in the horde's realm. Mountains are massifs: where
-/// mountain hexes lie the rock rises in ridges and summits, cliffs banded in its layers, scree at their feet, snow on
-/// the heights, foothills running out into the land about it; in the horde's realm they are black rock glowing at the
-/// top. Lakes and the sea lie where the hexes are water, their shores running as the land falls rather than along the
-/// hexes' sides, sand or reeds at the edge and deeper toward the middle. Rivers wind from a hex's middle out over the
-/// sides they cross, in a bed cut into the land with a green bank, lava in the horde's land; a road winds the same way,
+/// meadow, pebbles on rough land, moss and black mud and dark pools fringed with reeds in the horde's bog, toadstools on
+/// it (a burnt land, ash and cinders and cracks of lava, is no zone's now). Mountains are massifs: where mountain hexes
+/// lie the rock rises in ridges and summits, cliffs banded in its layers, scree at their feet, snow on the heights,
+/// foothills running out into the land about it; by burnt land they are black rock glowing at the top. Lakes and the
+/// sea lie where the hexes are water, their shores running as the land falls rather than along the hexes' sides, sand or
+/// reeds at the edge and deeper toward the middle. Rivers wind from a hex's middle out over the sides they cross, in a
+/// bed cut into the land with a green bank, lava in burnt land; a road winds the same way,
 /// a worn track of earth (cobbles by a town), a bridge of planks with rails where it crosses a river. A thing
 /// (HexModels.cs) stands at its hex's middle on ground made level for it, and woods are planted by HexModels too.
 /// A piece is a world of 192 × 96 × 192 voxels, the piece in the middle of it with a chunk of margin round it of which
@@ -311,6 +312,7 @@ public static class HexTiles
             HexGround.Sand => p2 > .86f ? Mat.Gravel : p1 > .82f ? Mat.GrassDry : Mat.Sand,
             HexGround.Snow => p2 > .86f ? Mat.Rock : woodFloor && p1 < .3f ? Mat.Soil : Mat.Snow,
             HexGround.Swamp => p1 < .38f ? Mat.Moss : p1 < .66f ? Mat.GrassLush : Mat.Reedbed,
+            HexGround.Bog => woodFloor ? (p1 < .45f ? Mat.Peat : Mat.Moss) : p1 < .4f ? Mat.Moss : p1 < .7f ? Mat.Peat : p1 < .86f ? Mat.GrassLush : Mat.Reedbed,
             HexGround.Rough => p2 > .76f ? Mat.Rock : p1 < .3f ? Mat.Soil : p1 > .72f ? Mat.GrassDry : Mat.Gravel,
             HexGround.Lava => N(x, z, 23, 327) > .86f && p2 > .55f ? Mat.Lava : p2 > .7f ? Mat.Ash : Mat.Basalt,
             HexGround.Scorched => p1 < .22f ? Mat.Basalt : p1 > .74f ? Mat.Rock : p2 > .9f ? Mat.Char : Mat.Ash,
@@ -327,6 +329,7 @@ public static class HexTiles
             }
             else if (g is HexGround.Rough or HexGround.Dirt && hs > .994) c0.Deco = Mat.Gravel;
             else if (g == HexGround.Sand && hs > .985) c0.Deco = Mat.Tuft;
+            else if (g == HexGround.Bog && hs < .007) c0.Deco = Mat.Mushroom;
         }
         // the horde's land: thin cracks of lava running over it
         if (Burnt(g) && !under)
@@ -334,13 +337,23 @@ public static class HexTiles
             float cr = MathF.Abs(N(x, z, 21, 316) - .5f);
             if (cr < (g == HexGround.Lava ? .02f : .011f) && N(x, z, 37, 317) > .45f) c0.Mat = Mat.Lava;
         }
-        if (under) c0.Mat = h > WaterTop - 2.5f ? (g == HexGround.Swamp ? Mat.Soil : Mat.Sand) : h > WaterTop - 4 ? Mat.Gravel : Mat.Soil;
-        else if (wet > thr - .09f && c0.Top <= WaterTop + 1) c0.Mat = g == HexGround.Swamp || p1 < .3f ? Mat.Reedbed : p2 > .6f ? Mat.Gravel : Mat.Sand;
-        // a swamp's pools among its moss
-        if (!under && g == HexGround.Swamp && !thing && mount == 0)
+        bool boggy = g is HexGround.Swamp or HexGround.Bog;
+        if (under) c0.Mat = h > WaterTop - 2.5f ? (boggy ? Mat.Soil : Mat.Sand) : h > WaterTop - 4 ? Mat.Gravel : Mat.Soil;
+        else if (wet > thr - .09f && c0.Top <= WaterTop + 1) c0.Mat = boggy || p1 < .3f ? Mat.Reedbed : p2 > .6f ? Mat.Gravel : Mat.Sand;
+        // a swamp's pools among its moss; the horde's bog more of them and darker, some of them deeper, in rings of black
+        // mud and reeds
+        if (!under && boggy && !thing && mount == 0)
         {
             float pool = N(x, z, 7, 318) * .7f + N(x, z, 3, 319) * .3f;
-            if (pool > .62f && r0 > 3) { c0.Water = c0.Top; c0.Top -= 1; c0.Mat = Mat.Soil; c0.Deco = 0; }
+            if (g == HexGround.Bog)
+            {
+                // (fewer and broader than a swamp's, a voxel deep at the edge and two in the middle, so no step in the
+                // land is more than a voxel)
+                float broad = N(x, z, 12, 340), bog = broad * .75f + N(x, z, 4, 341) * .25f;
+                if (bog > .64f && r0 > 3) { c0.Water = c0.Top; c0.Top -= broad > .74f && bog > .7f ? 2 : 1; c0.Mat = Mat.Peat; c0.Deco = 0; }
+                else if (bog > .61f) { c0.Mat = (x * 7 + z * 3) % 3 == 0 ? Mat.Reedbed : Mat.Peat; c0.Deco = 0; }
+            }
+            else if (pool > .62f && r0 > 3) { c0.Water = c0.Top; c0.Top -= 1; c0.Mat = Mat.Soil; c0.Deco = 0; }
             else if (pool > .57f) { c0.Mat = Mat.Reedbed; c0.Deco = 0; }
         }
 
@@ -378,12 +391,12 @@ public static class HexTiles
                 if (hs > .93) c0.Mat = Mat.Gravel;
                 c0.Deco = 0;
             }
-            else if (river < bend + 1.5f && g is HexGround.Grass or HexGround.Dirt or HexGround.Swamp) { c0.Mat = p2 > .7f ? Mat.Reedbed : Mat.GrassLush; c0.Deco = 0; }
+            else if (river < bend + 1.5f && g is HexGround.Grass or HexGround.Dirt or HexGround.Swamp or HexGround.Bog) { c0.Mat = p2 > .7f ? Mat.Reedbed : Mat.GrassLush; c0.Deco = 0; }
         }
-        // the earth trodden about the horde's towns, the citadel's yard
+        // the earth trodden about the horde's towns (to mud in its bog, to ash on burnt land), the citadel's yard
         if (thing && r0 < Level - 2 && c0.Water == 0 && !c0.Bridge)
         {
-            if (own.Icon is HexIcon.HordeTown or HexIcon.Lair) c0.Mat = p2 < .5f ? Mat.Ash : Mat.Trodden;
+            if (own.Icon is HexIcon.HordeTown or HexIcon.Lair) c0.Mat = p2 < .5f ? (Burnt(g) ? Mat.Ash : g == HexGround.Bog ? Mat.Peat : Mat.Soil) : Mat.Trodden;
             else if (own.Icon == HexIcon.Citadel) c0.Mat = Mat.Trodden;
             c0.Deco = 0;
         }

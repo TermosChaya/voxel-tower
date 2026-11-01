@@ -536,7 +536,7 @@ public partial class HexMapView : Node3D
         string land = l.Ground switch
         {
             HexGround.Grass => "Луг", HexGround.Dirt => "Земля", HexGround.Sand => "Песок", HexGround.Snow => "Снег", HexGround.Swamp => "Болото",
-            HexGround.Rough => "Каменистая земля", HexGround.Lava => "Лава", HexGround.Scorched => "Выжженная земля", HexGround.Water => "Озеро", _ => "Глубокая вода",
+            HexGround.Rough => "Каменистая земля", HexGround.Lava => "Лава", HexGround.Scorched => "Выжженная земля", HexGround.Bog => "Топь", HexGround.Water => "Озеро", _ => "Глубокая вода",
         };
         if (l.Relief == HexRelief.Forest) land += ", лес";
         else if (l.Relief == HexRelief.Hills) land += ", холмы";

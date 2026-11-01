@@ -89,6 +89,7 @@ public partial class Main
         if (_pose == "crowd") { CrowdPose(); return; }
         if (_pose == "angels") { FaithPose(); return; }
         if (_pose == "swamp") { SwampPose(); return; }
+        if (_pose == "bog") { BogPose(); return; }
         if (_pose == "square") { SquarePose(); return; }
         if (_pose == "templates") { TemplatesPose(); return; }
         if (_pose == "commander") { CommanderPose(); return; }

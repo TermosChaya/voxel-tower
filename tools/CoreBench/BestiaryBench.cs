@@ -100,15 +100,15 @@ static class BestiaryBench
                 l.Add(QuickBattle.Strength(cell.Sum.Keep, null));
                 if (b.Kind == Kinds.Dragon) { dragons++; if (cell.Tier < 3) dragonsNear++; }
                 if (b.Kind == Kinds.Treant) { treants++; if (cell.Relief == HexRelief.Forest) treantsWood++; }
-                if (b.Kind == Kinds.FireSpirit) { fire++; if (cell.Ground is HexGround.Scorched or HexGround.Lava) fireBurnt++; }
+                if (b.Kind == Kinds.FireSpirit) { fire++; if (cell.Ground is HexGround.Scorched or HexGround.Lava or HexGround.Rough) fireBurnt++; }
             }
         }
         kinds = seen.Count;
         var means = byTier.OrderBy(k => k.Key).Select(k => (k.Key, mean: k.Value.Average(), n: k.Value.Count)).ToList();
         bool stronger = means.Count >= 3 && means[^1].mean > means[0].mean * 4;
-        check("the big map's stacks: of many breeds, the stronger the further out, every pass kept, a dragon rare and only far out, treants only in the woods and fire spirits only on the burnt land",
+        check("the big map's stacks: of many breeds, the stronger the further out, every pass kept, a dragon rare and only far out, treants only in the woods and fire spirits only on rocky or burnt land",
             stacks > 80 && kinds >= 16 && stronger && keptPasses * 2 >= passes - 2 && dragons < stacks / 20 && dragonsNear == 0 && treantsWood == treants && fireBurnt == fire,
-            $"{stacks} stacks of {kinds} breeds on four M maps and an XL; by tier {string.Join(", ", means.Select(m => $"{m.Key}: {m.mean:0} ×{m.n}"))}; passes kept {keptPasses} of {passes / 2} (two hexes each); dragons {dragons} ({dragonsNear} near); treants {treantsWood}/{treants} in woods; fire spirits {fireBurnt}/{fire} on burnt land");
+            $"{stacks} stacks of {kinds} breeds on four M maps and an XL; by tier {string.Join(", ", means.Select(m => $"{m.Key}: {m.mean:0} ×{m.n}"))}; passes kept {keptPasses} of {passes / 2} (two hexes each); dragons {dragons} ({dragonsNear} near); treants {treantsWood}/{treants} in woods; fire spirits {fireBurnt}/{fire} on rocky or burnt land");
 
         // ---- meeting a stack: the weak run, the people of the wild ask to join and go with the party, the strong hold
         {

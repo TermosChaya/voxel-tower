@@ -63,6 +63,8 @@ public sealed partial class Sim
             _ => NearestStand(s.KeepX - s.KeepR - 12, s.KeepZ, 4),
         };
         FindMines();
+        // a bog's mires, for good (a game read back has them among its spell's, Sim.Save.cs)
+        foreach (var (x, z, r) in s.Mires) Mires.Add(new Mire { X = x, Z = z, R = r, Until = double.MaxValue });
         PlanWave(1);
         Stock[Stockpile.Stone] = 16 * VoxelWorld.PerM3;
         Stock[Stockpile.Wood] = 24 * VoxelWorld.PerM3;

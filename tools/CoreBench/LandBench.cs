@@ -184,19 +184,19 @@ static class LandBench
             var fresh = Atlas.Build(c);
             bool same1 = Same(at.World, fresh.World, out int d1, out var f1);
             bool tower = at.ThingIn(ore, AtlasThingKind.Outpost) != null;
-            // the horde takes a cell next to the first valley: the ash comes over into it
+            // the horde takes a cell next to the first valley: its bog comes over into it
             var near = c.Cells.Find(x => !x.Home && x != ore && Campaign.Distance(0, 0, x.Q, x.R) == 1);
-            int ash0 = Count(at, near, m => m is Mat.Ash or Mat.Lava, out _);
+            int ash0 = Count(at, near, m => m is Mat.Peat, out _);
             near.Owner = Owner.Horde;
             at.Refresh(near);
-            int ash1 = Count(at, near, m => m is Mat.Ash or Mat.Lava, out _), homeAsh = Count(at, c.Home, m => m == Mat.Ash, out _);
+            int ash1 = Count(at, near, m => m is Mat.Peat, out _), homeAsh = Count(at, c.Home, m => m == Mat.Peat, out _);
             trove.TroveTaken = true;
             at.Refresh(trove);
             fresh = Atlas.Build(c);
             bool same2 = Same(at.World, fresh.World, out int d2, out var f2);
-            check("a cell put on again as its holder changed is the land a new map makes: an outpost on a cell taken, ash over one the horde took, a treasure taken; only its chunks and those about it made again",
+            check("a cell put on again as its holder changed is the land a new map makes: an outpost on a cell taken, the bog's peat over one the horde took, a treasure taken; only its chunks and those about it made again",
                 same1 && same2 && tower && ash1 > ash0 + 500 && homeAsh > 0 && dirty.Count < a.World.ChunkCount / 4 && ms < 200,
-                $"taken in {ms} ms, {dirty.Count} chunks of {at.World.ChunkCount}; outpost {tower}; ash in the cell the horde took {ash0} → {ash1}, in the first valley {homeAsh}; " +
+                $"taken in {ms} ms, {dirty.Count} chunks of {at.World.ChunkCount}; outpost {tower};  peat in the cell the horde took {ash0} → {ash1}, in the first valley {homeAsh}; " +
                 $"differ from a new map: {d1} {(d1 > 0 ? f1.ToString() : "")}, {d2} {(d2 > 0 ? $"{f2}: {Mat.NameOf(at.World.Get(f2.x, f2.y, f2.z))} against {Mat.NameOf(fresh.World.Get(f2.x, f2.y, f2.z))}, in {at.CellOfColumn(f2.x, f2.z)?.Q},{at.CellOfColumn(f2.x, f2.z)?.R}; the horde took {near.Q},{near.R}, the treasure {trove.Q},{trove.R}" : "")}");
         }
     }

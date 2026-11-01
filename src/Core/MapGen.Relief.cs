@@ -557,6 +557,82 @@ public static partial class MapGen
         }
         site.Lakes.AddRange(lakes);
 
+        // ---- a bog's pools (the horde's homeland, ValleyKind.Bog): many small and shallow ones in the lowland between
+        // its lakes, each as high as the lowest of its shore, a voxel or two deep at the edge and three in the middle; and
+        // its mires, black mud that slows whoever wades it, kept off the roads, the river and the island in the middle
+        bool bog = p.Kind == ValleyKind.Bog;
+        var mire = bog ? new bool[N] : null;
+        if (bog)
+        {
+            const int poolShore = 3;
+            for (int tries = 0; site.Pools.Count < 90 && tries < 1200; tries++)
+            {
+                int r = 10 + (int)(Rand() * 26);
+                double a = Rand() * Math.PI * 2, d = rpMax + r + 40 + Rand() * Math.Max(0, R - rpMax - r - 80);
+                int px = (int)(CX + Math.Cos(a) * d), pz = (int)(CZ + Math.Sin(a) * d);
+                if (px < r + 8 || pz < r + 8 || px >= SX - r - 8 || pz >= SZ - r - 8) continue;
+                int c0 = pz * SX + px;
+                if (kind[c0] != Relief.Low || hex.Edge(px, pz) < r + 40 || site.InStrip(px, pz)) continue;
+                if (riverD[c0] - riverH[c0] < r + 12 || streamD[c0] < r + 12 || roadD[c0] < r + 14) continue;
+                bool clear = true;
+                foreach (var l in lakes) if (Brushes.Dist(l.x - px, l.z - pz) < l.r + r + 24) clear = false;
+                foreach (var l in site.Pools) if (Brushes.Dist(l.X - px, l.Z - pz) < l.R + r + 10) clear = false;
+                if (!clear) continue;
+                int level = int.MaxValue;
+                for (int k = 0; k < 32; k++)
+                {
+                    double b = k * Math.PI / 16;
+                    int sx = (int)(px + Math.Cos(b) * (r + poolShore)), sz = (int)(pz + Math.Sin(b) * (r + poolShore));
+                    level = Math.Min(level, site.HTop[sz * SX + sx] - 1);
+                }
+                if (level <= MapGen.RiverLevel + 1) continue;
+                site.Pools.Add((px, pz, r, level));
+                int span = r + poolShore + 1;
+                for (int z = pz - span; z <= pz + span; z++)
+                    for (int x = px - span; x <= px + span; x++)
+                    {
+                        int i = z * SX + x;
+                        double dd = Brushes.Dist(x - px, z - pz), rr = r * (.8 + .4 * nPond.Sample(x * .07 + 31, z * .07 + 17));
+                        if (dd >= rr + poolShore || kind[i] is not (Relief.Low or Relief.Bank)) continue;
+                        if (dd < rr)
+                        {
+                            double t = dd / rr;
+                            site.HTop[i] = (int)Math.Round(level - 1 - (1 - t * t) * 2.2);
+                            kind[i] = Relief.Lake; water[i] = hex.Inside(x, z) ? (short)level : (short)0; soil[i] = 4;
+                            moist[i] += .3f;
+                        }
+                        else
+                        {
+                            double h = site.HTop[i];
+                            site.HTop[i] = (int)Math.Round(level + Math.Max(0, h - level) * Smooth((dd - rr) / poolShore));
+                            moist[i] += .15f;
+                        }
+                    }
+            }
+            for (int tries = 0; site.Mires.Count < 7 && tries < 400; tries++)
+            {
+                int r = 28 + (int)(Rand() * 26);
+                double a = Rand() * Math.PI * 2, d = rpMax + r + 30 + Rand() * Math.Max(0, R - rpMax - r - 90);
+                int mx = (int)(CX + Math.Cos(a) * d), mz = (int)(CZ + Math.Sin(a) * d);
+                if (mx < r + 8 || mz < r + 8 || mx >= SX - r - 8 || mz >= SZ - r - 8) continue;
+                int c0 = mz * SX + mx;
+                if (kind[c0] != Relief.Low || hex.Edge(mx, mz) < r + 50 || site.InStrip(mx, mz)) continue;
+                if (riverD[c0] - riverH[c0] < r + 8 || roadD[c0] < r + 18) continue;
+                bool clear = true;
+                foreach (var l in site.Mires) if (Brushes.Dist(l.X - mx, l.Z - mz) < l.R + r + 40) clear = false;
+                if (!clear) continue;
+                site.Mires.Add((mx, mz, r));
+                for (int z = mz - r; z <= mz + r; z++)
+                    for (int x = mx - r; x <= mx + r; x++)
+                    {
+                        int i = z * SX + x;
+                        // (a ragged edge, the mud thinning out into the moss)
+                        double dd = Brushes.Dist(x - mx, z - mz) / r + (nPond.Sample(x * .09 + 5, z * .09 + 41) - .5) * .5;
+                        if (dd < 1 && kind[i] is Relief.Low or Relief.Bank) { mire[i] = true; moist[i] += .2f; }
+                    }
+            }
+        }
+
         // ---- the ground bare where it is steep: the faces of the bluffs and the knolls' flanks are rock
         Parallel.For(1, SZ - 1, z =>
         {
@@ -584,12 +660,20 @@ public static partial class MapGen
                     w.FillColumnRaw(x, z, h - s, h - 1, Mat.Soil);
                     double m = moist[i];
                     byte grass = m < .22 ? Mat.GrassDry : m > .64 ? Mat.GrassLush : Mat.Grass;
+                    // a bog's lowland: lush grass in tussocks between moss and patches of black peat, the mires all peat
+                    if (bog && k is Relief.Low or Relief.Bank)
+                    {
+                        double b = nBloom.Sample(x * .021 + 71, z * .021 + 13);
+                        grass = mire[i] ? (Hash.H3(x, z, 85) < .12 ? Mat.Moss : Mat.Peat)
+                            : b > .68 && m > .5 ? Mat.Peat : b < .27 ? Mat.Moss : m > .45 ? Mat.GrassLush : Mat.Grass;
+                    }
                     byte top = k switch
                     {
                         Relief.Rim => Mat.Moss,
                         Relief.Ramp or Relief.Road => Mat.Path,
                         Relief.Knoll => Hash.H3(x, z, 41) < .35 ? Mat.Moss : Mat.Rock,
                         Relief.Crag => Hash.H3(x, z, 43) < .25 ? Mat.Moss : Mat.Rock,
+                        Relief.Lake when bog => Mat.Peat,
                         Relief.River or Relief.Pond or Relief.Lake => Mat.Soil,
                         _ => grass,
                     };
@@ -598,7 +682,7 @@ public static partial class MapGen
                     else if (Mat.IsGrass(top))
                     {
                         double bloom = nBloom.Sample(x * .03, z * .03);
-                        if (top != Mat.GrassDry && bloom > .74 && Hash.H3(x, z, 79) < .035)
+                        if (top != Mat.GrassDry && !bog && bloom > .74 && Hash.H3(x, z, 79) < .035)
                             w.FillColumnRaw(x, z, h, h + 1, Hash.H3(x, z, 80) < .6 ? Mat.Flower : Mat.Bloom);
                         else if (Hash.H3(x, z, 77) < p.TuftChance * (top == Mat.GrassDry ? 2.2 : 1))
                         {
@@ -795,6 +879,13 @@ public static partial class MapGen
             if (plateau) density = NearKeep(x, z, 160) ? 0 : density * .3;
             if (Hash.H3(qx, qz, 203) > density * p.TreeDensity * ground.Trees) return null;
             double r = Hash.H3(qx, qz, 204), size = Hash.H3(qx, qz, 205), biome = nBiome.Sample(x * .004, z * .004) - (hgt - 12) / 60 + (m - .45) * .5;
+            // a bog's trees: birches and stunted pines, and trees drowned and dead standing grey among them
+            if (bog && r is >= .3 and < .38) { Flora.Bush(w, x, z, 3 + (int)(size * 4)); return true; }
+            if (bog)
+                return r < .3 ? Flora.DeadTree(w, x, z, grown: true, scale: .9 + size * .5)
+                    : r < .7 ? Flora.Birch(w, x, z, 34 + (int)(size * 22))
+                    : r < .92 ? Flora.Pine(w, x, z, 42 + (int)(size * 26))
+                    : Flora.Spruce(w, x, z, 40 + (int)(size * 26), 2);
             if (r > .94) return Flora.DeadTree(w, x, z, grown: true, scale: 1.45);
             if (r > .86) { Flora.Bush(w, x, z, 3 + (int)(size * 4)); return true; }
             if (plateau)

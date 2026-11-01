@@ -101,14 +101,16 @@ public sealed partial class Campaign
     }
 
     /// <summary>
-    /// The valley kind of a hex of the big map, from its look: a mine's is an ore valley, a shrine's a holy one, a wood a
-    /// forest, a swamp a marsh, hills, rough ground and snow mountains, the rest the plain of the first.
+    /// The valley kind of a hex of the big map, from its look: a mine's is an ore valley, a shrine's a holy one, the
+    /// horde's bog a bog's (its towns' too), a wood a forest, a swamp a marsh, hills, rough ground and snow mountains, the
+    /// rest the plain of the first.
     /// </summary>
     public static ValleyKind KindOfHex(MapCell c)
     {
         if (c.Home) return ValleyKind.First;
         if (c.Thing is { Kind: ThingKind.Mine } || c.Trove == TroveKind.DeadMine) return ValleyKind.Ore;
         if (c.Thing is { Kind: ThingKind.Shrine } || c.Trove == TroveKind.Shrine) return ValleyKind.Sacred;
+        if (c.Ground == HexGround.Bog) return ValleyKind.Bog;
         if (c.Relief == HexRelief.Forest) return ValleyKind.Forest;
         if (c.Ground is HexGround.Swamp or HexGround.Water || c.Rivers != 0) return ValleyKind.Marsh;
         if (c.Relief == HexRelief.Hills || c.Ground is HexGround.Rough or HexGround.Snow) return ValleyKind.Mountain;
@@ -152,6 +154,12 @@ public sealed partial class Campaign
 /// <summary>The making of a big map, kept apart: the zones, the walls between them and their passes, the ground, the waters, the roads, the things.</summary>
 sealed class WorldMaker
 {
+    /// <summary>
+    /// The ground of the horde's zones: its homeland's bog. (The bench makes a map with the burnt land of before, to see
+    /// that the rest of it comes out the same and a campaign begun before reads back as it was.)
+    /// </summary>
+    internal static HexGround HordeGround = HexGround.Bog;
+
     readonly Campaign _c;
     readonly Mulberry32 _rnd;
     readonly ValueNoise _n1, _n2, _n3, _n4;
@@ -378,12 +386,12 @@ sealed class WorldMaker
         {
             z.Tier = tier[z.Id] == int.MaxValue ? 4 : tier[z.Id];
             if (z.Kind == ZoneKind.Neutral && (z.Tier >= 3 || z.Tier == 2 && R() < .4)) z.Kind = ZoneKind.Treasure;
-            // the ground: ours green, the horde's burnt, the rest by how far north or south it lies
+            // the ground: ours green, the horde's its homeland's bog, the rest by how far north or south it lies
             double lat = z.Row / (double)H, roll = R();
             z.Ground = z.Kind switch
             {
                 ZoneKind.Home => HexGround.Grass,
-                ZoneKind.Horde => HexGround.Scorched,
+                ZoneKind.Horde => HordeGround,
                 _ when lat < .28 => roll < .55 ? HexGround.Snow : roll < .8 ? HexGround.Rough : HexGround.Dirt,
                 _ when lat > .72 => roll < .5 ? HexGround.Sand : roll < .75 ? HexGround.Dirt : HexGround.Swamp,
                 _ => roll < .4 ? HexGround.Grass : roll < .6 ? HexGround.Dirt : roll < .8 ? HexGround.Swamp : HexGround.Rough,
@@ -539,15 +547,16 @@ sealed class WorldMaker
             if (!_blocked[Idx(cell)])
             {
                 cell.Ground = z.Ground;
-                // patches of a second ground
+                // patches of a second ground (none in a bog: its pools and mire are the land's own, HexTiles.cs)
                 if (_n2.Sample(x * .17 + 40, y * .17) > .66)
                     cell.Ground = z.Ground switch
                     {
                         HexGround.Grass => HexGround.Dirt, HexGround.Snow => HexGround.Rough, HexGround.Sand => HexGround.Dirt,
-                        HexGround.Scorched => HexGround.Lava, HexGround.Swamp => HexGround.Grass, _ => HexGround.Grass,
+                        HexGround.Scorched => HexGround.Lava, HexGround.Swamp => HexGround.Grass, HexGround.Bog => HexGround.Bog, _ => HexGround.Grass,
                     };
-                // woods in clumps, hills, and a few crags
-                double wood = z.Ground switch { HexGround.Sand or HexGround.Lava or HexGround.Scorched => .74, HexGround.Swamp => .68, _ => .6 };
+                // woods in clumps, hills, and a few crags (a bog's woods as thin as the burnt land's were: the map of a
+                // campaign begun before the bog is made again from its seed the same, Campaign.Read)
+                double wood = z.Ground switch { HexGround.Sand or HexGround.Lava or HexGround.Scorched or HexGround.Bog => .74, HexGround.Swamp => .68, _ => .6 };
                 if (_n3.Sample(x * .19, y * .19 + 90) > wood) cell.Relief = HexRelief.Forest;
                 else if (_n4.Sample(x * .21 + 13, y * .21) > .7) cell.Relief = HexRelief.Hills;
                 if (_n1.Sample(x * .29 + 70, y * .29 - 20) > .84 && !NearPass(cell, 2)) cell.Relief = HexRelief.Mountain;
@@ -576,7 +585,7 @@ sealed class WorldMaker
             var mid = G(z.Col, z.Row);
             Open(mid, false);
             Seal(mid);
-            mid.Ground = z.Ground == HexGround.Scorched || z.Kind != ZoneKind.Horde ? z.Ground : HexGround.Scorched;
+            mid.Ground = z.Ground;
             if (mid.Ground is HexGround.Water or HexGround.DeepWater) mid.Ground = HexGround.Grass;
             var reached = Reached(z, mid);
             // a pass cut off from the middle by a crag or a lake: a way carved to it
@@ -794,7 +803,7 @@ sealed class WorldMaker
     {
         if (c == null) return null;
         c.Thing = new MapThing { Kind = kind, Res = res, Amount = amount };
-        if (c.Ground is HexGround.Water) c.Ground = HexGround.Grass;
+        if (c.Ground is HexGround.Water) c.Ground = _c.Zones[c.Zone].Ground == HexGround.Bog ? HexGround.Bog : HexGround.Grass;
         return c.Thing;
     }
 

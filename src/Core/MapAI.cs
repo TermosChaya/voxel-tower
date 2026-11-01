@@ -314,7 +314,7 @@ public sealed partial class Campaign
     {
         float d = QuickBattle.Strength(t.Defence, null, t.Walls);
         if (t.Cell.Kind == ValleyKind.Mountain) d *= 1.15f;
-        if (t.Cell.Kind == ValleyKind.Marsh) d /= .9f;
+        if (t.Cell.Kind is ValleyKind.Marsh or ValleyKind.Bog) d /= .9f;
         return d * (float)Math.Pow(WantOdds / (1 - WantOdds), 1 / QuickBattle.Sharpness);
     }
 

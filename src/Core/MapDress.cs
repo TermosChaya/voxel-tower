@@ -295,10 +295,10 @@ public static class MapDress
                 if (Try(tree, ux, uz, Girth(tree), (int)(H(col, row, k, 47) * 6), (int)(H(col, row, k, 48) * 4), .1f)) many--;
             }
         }
-        // ---- the farms about our castle, a field by an outpost; the horde's bones about its towns
+        // ---- the farms about our castle, a field by an outpost; the horde's bones and totems about its towns and over its bog
         if (tilled && near == HexIcon.Citadel) { Farm(col, row, vr, rich: true); return; }
         if (tilled && near == HexIcon.Outpost) Farm(col, row, vr, rich: false);
-        if (near == HexIcon.HordeTown || g is HexGround.Scorched or HexGround.Lava)
+        if (near == HexIcon.HordeTown || g is HexGround.Scorched or HexGround.Lava or HexGround.Bog)
         {
             if (H(col, row, 0, 61) < (near == HexIcon.HordeTown ? .6 : .04)) { var (ux, uz) = Somewhere(0, 62, 12); Try(MapModel.Totem, ux, uz, 2, vr % 3); }
             if (H(col, row, 0, 63) < (near == HexIcon.HordeTown ? .6 : .07)) { var (ux, uz) = Somewhere(0, 64, 13); Try(MapModel.BoneHeap, ux, uz, 2, 0, vr % 4); }
@@ -316,7 +316,7 @@ public static class MapDress
         }
         // (open land is quiet: a bush in some hexes, flowers in a few, a stone now and then; the woods' edges and the farms give it life)
         int bushes = vr % 9 == 0 ? 2 : vr % 4 == 0 ? 1 : 0;
-        if (g == HexGround.Swamp) bushes++;
+        if (g is HexGround.Swamp or HexGround.Bog) bushes++;
         for (int k = 0; k < 16 && bushes > 0; k++)
         {
             var (ux, uz) = Somewhere(k, 81);
@@ -325,16 +325,18 @@ public static class MapDress
         if (g is HexGround.Grass && vr % 7 == 3) { var (ux, uz) = Somewhere(1, 91, 12); Try(MapModel.Flowers, ux, uz, 2.5f, vr % 4, vr % 4); }
         if (g is HexGround.Grass or HexGround.Dirt or HexGround.Rough or HexGround.Sand && vr % 9 == 1) { var (ux, uz) = Somewhere(2, 92, 13); Try(g == HexGround.Grass ? MapModel.MossRock : MapModel.Rock, ux, uz, 2, vr, vr % 4); }
         if (g == HexGround.Rough && vr % 3 == 0) { var (ux, uz) = Somewhere(3, 93, 13); Try(MapModel.Boulder, ux, uz, 3.5f, vr, vr % 4); }
-        // a tree alone, or two: oaks and birches on the meadows, palms by the sand, firs in the snow, willows over the swamp
-        if (H(col, row, 0, 101) < (g == HexGround.Swamp ? .6 : g is HexGround.Grass or HexGround.Dirt ? .18 : .2))
+        // a tree alone, or two: oaks and birches on the meadows, palms by the sand, firs in the snow, willows over the swamp,
+        // drowned trees dead in the bog's pools and a willow or two
+        if (H(col, row, 0, 101) < (g is HexGround.Swamp or HexGround.Bog ? .6 : g is HexGround.Grass or HexGround.Dirt ? .18 : .2))
         {
-            int many = g == HexGround.Swamp ? 2 : 1 + (int)(H(col, row, 0, 102) * 1.6);
+            int many = g == HexGround.Bog ? 3 : g == HexGround.Swamp ? 2 : 1 + (int)(H(col, row, 0, 102) * 1.6);
             for (int k = 0; k < 12 && many > 0; k++)
             {
                 var (ux, uz) = Somewhere(k, 103, 13);
                 var tree = g switch
                 {
                     HexGround.Swamp => k % 2 == 0 ? MapModel.Willow : MapModel.DeadTree,
+                    HexGround.Bog => k % 3 == 0 ? MapModel.Willow : MapModel.DeadTree,
                     HexGround.Sand => MapModel.Palm, HexGround.Snow => MapModel.SnowFir,
                     HexGround.Scorched or HexGround.Lava => MapModel.Charred, HexGround.Rough => MapModel.Pine,
                     _ => H(col, row, k, 104) < .55 ? MapModel.Oak : MapModel.Birch,
@@ -342,8 +344,8 @@ public static class MapDress
                 if (Try(tree, ux, uz, Girth(tree), k, k % 4)) many--;
             }
         }
-        // the swamp's pools and every shore: reeds in the shallows, lilies further out
-        if (g == HexGround.Swamp || l.Rivers != 0 || HasWaterBeside(src, col, row)) Shore(src, lay, col, row, cx, cz, l, d, deep: false);
+        // the swamp's and the bog's pools and every shore: reeds in the shallows, lilies further out
+        if (g is HexGround.Swamp or HexGround.Bog || l.Rivers != 0 || HasWaterBeside(src, col, row)) Shore(src, lay, col, row, cx, cz, l, d, deep: false);
 
         void Farm(int c, int r, int v, bool rich)
         {
@@ -421,6 +423,8 @@ public static class MapDress
     {
         HexGround.Snow => h < .88 ? MapModel.SnowFir : MapModel.DeadTree,
         HexGround.Swamp => clump < .45 ? MapModel.Willow : clump < .75 ? MapModel.Birch : MapModel.DeadTree,
+        // the bog's woods: willows, trees drowned and dead standing in the mire, a stunted pine on the drier ground
+        HexGround.Bog => clump < .36 ? MapModel.Willow : clump < .8 ? MapModel.DeadTree : MapModel.Pine,
         HexGround.Sand => clump < .45 ? MapModel.Palm : clump < .8 ? MapModel.Pine : MapModel.Scrub,
         HexGround.Rough => clump < .55 ? MapModel.Pine : clump < .85 ? MapModel.Spruce : MapModel.DeadTree,
         HexGround.Scorched or HexGround.Lava => h < .8 ? MapModel.Charred : MapModel.DeadTree,

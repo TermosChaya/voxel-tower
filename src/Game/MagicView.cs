@@ -739,7 +739,8 @@ public partial class MagicView : Node3D
         List<Mire> gone = null;
         foreach (var (mire, (node, mat)) in _mires)
         {
-            double left = mire.Until - sim.Time, age = 60 - left;
+            // (a bog's own mire is there for good: as dark as the spell's at its darkest)
+            double left = mire.Until - sim.Time, age = mire.Until > 1e12 ? 99 : 60 - left;
             if (!sim.Mires.Contains(mire) || left <= 0) { node.QueueFree(); (gone ??= new()).Add(mire); continue; }
             float a = (float)Math.Clamp(Math.Min(age / 1.5, left / 3), 0, 1) * .72f;
             mat.AlbedoColor = new Color(.13f, .16f, .09f, a);

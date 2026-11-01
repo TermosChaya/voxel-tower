@@ -171,7 +171,7 @@ static class AutoPlayBench
             else if (x.Relief == HexRelief.Forest) g = ((int)(g.Item1 * .55), (int)(g.Item2 * .7), (int)(g.Item3 * .5));
             else if (x.Relief == HexRelief.Hills) g = ((int)(g.Item1 * .85 + 20), (int)(g.Item2 * .85 + 14), (int)(g.Item3 * .8));
             if (x.Owner == Owner.Ours) g = Mix(g, (60, 110, 255), .4);
-            else if (x.Owner == Owner.Horde && x.Ground != HexGround.Scorched) g = Mix(g, (230, 40, 30), .35);
+            else if (x.Owner == Owner.Horde && x.Ground is not (HexGround.Scorched or HexGround.Bog)) g = Mix(g, (230, 40, 30), .35);
             bool seen = c.Explored(x);
             if (!seen) g = Mix(g, (12, 12, 16), .78);
             for (int yy = 0; yy < S; yy++)
@@ -232,7 +232,7 @@ static class AutoPlayBench
     {
         HexGround.Grass => (96, 150, 64), HexGround.Dirt => (140, 120, 80), HexGround.Sand => (214, 196, 130), HexGround.Snow => (232, 236, 240),
         HexGround.Swamp => (70, 96, 70), HexGround.Rough => (128, 112, 96), HexGround.Lava => (190, 70, 30), HexGround.Scorched => (60, 44, 40),
-        HexGround.Water => (90, 140, 200), _ => (30, 60, 120),
+        HexGround.Bog => (52, 62, 40), HexGround.Water => (90, 140, 200), _ => (30, 60, 120),
     };
 
     static (int, int, int) Mix((int r, int g, int b) a, (int r, int g, int b) b, double t) =>

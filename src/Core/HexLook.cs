@@ -2,8 +2,12 @@ using System;
 
 namespace VoxelTower.Core;
 
-/// <summary>The ground a hex of the world map is, as the eye takes it from above (docs/handoff/13-world-map.md).</summary>
-public enum HexGround : byte { Grass, Dirt, Sand, Snow, Swamp, Rough, Lava, Scorched, Water, DeepWater }
+/// <summary>
+/// The ground a hex of the world map is, as the eye takes it from above (docs/handoff/13-world-map.md). A swamp is the
+/// gentle wet land of the wild, willows over moss; a bog the horde's homeland, dark mire and pools, reeds and drowned
+/// trees (the author's word: «их родиной - болота, а не выжженные земли»). The burnt land and lava are no zone's now.
+/// </summary>
+public enum HexGround : byte { Grass, Dirt, Sand, Snow, Swamp, Rough, Lava, Scorched, Water, DeepWater, Bog }
 
 /// <summary>What stands up out of a hex's ground: nothing, low hills, a wood, or mountains no one walks over.</summary>
 public enum HexRelief : byte { Flat, Hills, Forest, Mountain }

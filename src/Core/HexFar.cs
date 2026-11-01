@@ -20,9 +20,10 @@ public static class HexFar
         {
             HexGround.Grass => 0x56703au, HexGround.Dirt => 0x6a573cu, HexGround.Sand => 0xa8946au, HexGround.Snow => 0xd0d5dc,
             HexGround.Swamp => 0x4a5838u, HexGround.Rough => 0x7d766au, HexGround.Lava => 0x47261cu, HexGround.Scorched => 0x342d2au,
+            HexGround.Bog => 0x3b4230u,
             HexGround.Water => 0x2f5f86u, _ => 0x1f456eu,
         };
-        if (l.Relief == HexRelief.Forest) g = l.Ground switch { HexGround.Snow => 0x4a5e52u, HexGround.Scorched or HexGround.Lava => 0x26201cu, HexGround.Sand => 0x67663eu, _ => 0x2f4a28u };
+        if (l.Relief == HexRelief.Forest) g = l.Ground switch { HexGround.Snow => 0x4a5e52u, HexGround.Scorched or HexGround.Lava => 0x26201cu, HexGround.Sand => 0x67663eu, HexGround.Bog => 0x2b3326u, _ => 0x2f4a28u };
         else if (l.Relief == HexRelief.Hills) g = Shade(g, .9f);
         return g;
     }

@@ -4,9 +4,9 @@ using System.Collections.Generic;
 namespace VoxelTower.Core;
 
 /// <summary>
-/// What the map's ground is dressed in as the campaign now has it: the columns of ground and water, the ash of the land
-/// the horde holds (all of a cell it holds, spreading into the cells about it the more it holds) with fire in its cracks,
-/// the woods, groves and lone trees of each kind of cell (dead ones in the ash), the flowers of the meadows, the reeds of
+/// What the map's ground is dressed in as the campaign now has it: the columns of ground and water, the bog of the land
+/// the horde holds (all of a cell it holds, spreading into the cells about it the more it holds) with reeds in its runs,
+/// the woods, groves and lone trees of each kind of cell (dead ones in the bog), the flowers of the meadows, the reeds of
 /// the marshes, the stones of the hills; and the buildings (Atlas.Works.cs). Made for all the map at once, or again for a
 /// few cells: what grows in a cell next to them and leans over into them is put back too, and nothing is put outside them.
 /// </summary>
@@ -98,12 +98,12 @@ public sealed partial class Atlas
     }
 
     /// <summary>
-    /// How deep the horde's ash lies at a column: all of it within most of a cell the horde holds, thinning raggedly over
+    /// How deep the horde's bog lies at a column: all of it within most of a cell the horde holds, thinning raggedly over
     /// its sides into the cells about it; the more cells it holds, the more of the map lies under it.
     /// </summary>
     float TaintAt(int x, int z, MapCell c)
     {
-        // (the land off the field is never dressed again, so the ash keeps to the field)
+        // (the land off the field is never dressed again, so the bog keeps to the field)
         if (_held.Count == 0 || c == null) return 0;
         float best = 0, wob = (Fbm(_n3, x / 9f + 90, z / 9f) - .5f) * 30;
         foreach (var (hx, hz) in _held)
@@ -127,10 +127,10 @@ public sealed partial class Atlas
         {
             float n = Fbm(_n2, x / 6f + 300, z / 6f);
             bool road = top == Mat.Dust;
-            if (!road && n < taint * .95f) top = Mat.Ash;
-            else if (taint > .5f && Mat.IsGrass(top) && n < taint * 1.2f) top = Mat.Scorch;
-            // the cracks the fire shows in
-            if (taint >= .9f && !road && (_lie[i] & Lie.Peak) == 0 && Crack(x, z)) top = Mat.Lava;
+            // the horde's land its homeland's bog: black peat, moss over the grass at its edge, reeds in the wettest runs
+            if (!road && n < taint * .95f) top = Mat.Peat;
+            else if (taint > .5f && Mat.IsGrass(top) && n < taint * 1.2f) top = Mat.Moss;
+            if (taint >= .9f && !road && (_lie[i] & Lie.Peak) == 0 && Crack(x, z)) top = Mat.Reedbed;
         }
         int clearTo = Math.Max(_built[i], Math.Max(h, wet));
         for (int y = 32; y < h; y++)
@@ -147,7 +147,7 @@ public sealed partial class Atlas
         _built[i] = Math.Max(h, wet);
     }
 
-    /// <summary>Whether the ash cracks open at a column: thin wandering lines where two cells of a noise meet.</summary>
+    /// <summary>Whether the bog's reeds run through a column: thin wandering lines where two cells of a noise meet.</summary>
     bool Crack(int x, int z)
     {
         float a = Fbm(_n1, x / 11f + 70, z / 11f + 30), b = Fbm(_n1, (x + 1) / 11f + 70, z / 11f + 30), c = Fbm(_n1, x / 11f + 70, (z + 1) / 11f + 30);

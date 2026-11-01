@@ -84,6 +84,8 @@ public sealed class ValleySummary
         ValleyKind.Mountain => (.5, 0, .15),
         ValleyKind.Forest => (0, .6, 0),
         ValleyKind.Marsh => (0, .3, 0),
+        // (willows to cut, and bog iron raked out of the mire)
+        ValleyKind.Bog => (0, .3, .1),
         _ => (0, 0, 0),
     };
 

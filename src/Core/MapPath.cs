@@ -21,7 +21,7 @@ public static class MapPath
     /// <summary>The hours a party on foot takes to cross a cell, by its ground.</summary>
     public static double Hours(MapCell c) => c.Kind switch
     {
-        ValleyKind.Marsh or ValleyKind.Mountain => 12,
+        ValleyKind.Marsh or ValleyKind.Mountain or ValleyKind.Bog => 12,
         ValleyKind.Forest => 10,
         _ => 8,
     };

@@ -407,6 +407,13 @@ public static partial class MapGen
                         continue;
                     }
                     if (f > .12) continue;
+                    // a bog's open ground: tussocks of reeds and rushes, ferns where it is wet, toadstools
+                    if (p.Kind == ValleyKind.Bog)
+                    {
+                        if (nReed.Sample(x * .04 + 9, z * .04 + 2) > .56 && roll < .07 * look.Reeds * Math.Clamp(m, .3, 1)) { Reeds(w, x, h, z, H(x, z, 420)); continue; }
+                        if (roll > .97 && roll < .97 + .012 * look.Ferns * Math.Clamp(m - .2, 0, 1)) { w.SetRaw(x, h, z, Mat.Fern); continue; }
+                        if (roll > 1 - .0016 * look.Mushrooms) { w.SetRaw(x, h, z, Mat.Mushroom); continue; }
+                    }
                     // the open: drifts of flowers, each drift mostly of one colour and the colour by how wet the ground is
                     double drift = Site.Smooth01((nDrift.Sample(x * .014, z * .014) - .6) / .16);
                     if (roll >= .13 * drift * look.Flowers + .003) continue;
@@ -443,6 +450,9 @@ public static partial class MapGen
         ValleyKind.Mountain => new Look(fallen: .7, juniper: 2.8, scree: 2, stones: 1.8, flowers: .7, ferns: .7, reeds: .6, burrows: 1.5, oldOaks: 0),
         ValleyKind.Ore => new Look(juniper: 1.6, scree: 1.6, stones: 1.4, flowers: .8, burrows: 1.3),
         ValleyKind.Sacred => new Look(flowers: 1.4, rings: 2, oldOaks: 2, mushrooms: 1.4),
+        // the horde's bog: reeds and lilies on every pool, drowned trees, ferns and toadstools, hardly a flower
+        ValleyKind.Bog => new Look(fallen: 1.4, stumps: .6, bushes: 1.2, bilberry: .5, juniper: .1, anthills: .1, stones: .3, pits: 1.4, burrows: .3,
+            drowned: 2.6, scree: .2, ferns: 2.2, mushrooms: 3, flowers: .2, reeds: 3, lilies: 2.4, oldOaks: 0, rings: 2),
         _ => new Look(oldOaks: 1),
     };
 

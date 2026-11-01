@@ -197,7 +197,7 @@ public static class Mat
     public const byte Daub = 188, Bell = 189;
     /// <summary>
     /// The map of valleys' own ground (Atlas.cs), seen from high over it: snow on the peaks, sand on the shores, the ripe
-    /// wheat of the fields about the first valley, the ash of the land the horde holds, the flowers of the meadows each
+    /// wheat of the fields about the first valley, ash where land is burnt, the flowers of the meadows each
     /// voxel a clump of them, a bed of reeds, and the pale dust of the roads. None of it is in a valley.
     /// </summary>
     public const byte Snow = 230, Sand = 231, Wheat = 232, Ash = 233, BloomRed = 234, BloomYellow = 235, BloomWhite = 236,
@@ -214,6 +214,8 @@ public static class Mat
     public const byte MapFlagBlue = 229, MapFlagRed = 228, CrystalRed = 227;
     /// <summary>Ivy the horde's shamans grow up our walls for their bands to climb, as a ladder is climbed (Sim.HordeFaith.cs).</summary>
     public const byte Ivy = 195;
+    /// <summary>Peat, the black wet mud of the horde's bog: its mires, its patches between the tussocks and the bottoms of its pools.</summary>
+    public const byte Peat = 210;
 
     public const int Count = 253;
 
@@ -283,6 +285,7 @@ public static class Mat
         D(SiegeLadder, "Осадная лестница", 0x4a3726, .22f, MatGroup.Wood, 0);
         D(Deck, "Настил орды", 0x4f3d2c, .26f, MatGroup.Wood, 0);
         D(Ivy, "Плющ", 0x3b6a28, .34f, MatGroup.Wood, 0);
+        D(Peat, "Торф", 0x30261c, .2f, MatGroup.Earth, Natural | Earthy);
         D(Water, "Вода", 0x1f3a44, .04f, MatGroup.Hard, Natural);
         // oak bound with iron: the horde hacks it no faster than masonry
         D(Gate, "Ворота", 0x4b3322, .26f, MatGroup.Stone, Player);
@@ -477,7 +480,7 @@ public static class Mat
         // the ash of the horde's land flecked as burnt turf is
         Skin[Ash] = 8;
         // what holds the world up: loose pieces resting on these never fall
-        foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Scorch, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank, Menhir, Trodden, Basalt, IronOre, OreRust, Anthill }) IsAnchor[m] = true;
+        foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Scorch, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank, Menhir, Trodden, Basalt, IronOre, OreRust, Anthill, Peat }) IsAnchor[m] = true;
 
         // what burns: needles and leaves flare up and are gone in seconds, grass and flowers in a moment; timber
         // catches slowly and burns long, and some of it stands charred after; a living trunk and oak bound with iron

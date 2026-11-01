@@ -364,7 +364,7 @@ static class WorldDump
         {
             HexGround.Grass => (96, 150, 64), HexGround.Dirt => (140, 120, 80), HexGround.Sand => (214, 196, 130), HexGround.Snow => (232, 236, 240),
             HexGround.Swamp => (70, 96, 70), HexGround.Rough => (128, 112, 96), HexGround.Lava => (190, 70, 30), HexGround.Scorched => (60, 44, 40),
-            HexGround.Water => (90, 140, 200), _ => (30, 60, 120),
+            HexGround.Bog => (52, 62, 40), HexGround.Water => (90, 140, 200), _ => (30, 60, 120),
         };
         foreach (var x in c.Cells)
         {

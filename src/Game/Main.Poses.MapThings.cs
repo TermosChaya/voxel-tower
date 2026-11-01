@@ -9,7 +9,7 @@ namespace VoxelTower.Game;
 /// A world of hexes laid out to show what stands on the big world map, every thing in its own hex and the land about it
 /// of every kind: our castle among its farms with a road east, an outpost and the place for one, the mines in a row,
 /// the small things in another, the dead places, a pass between mountains; a wood of the meadows, a wood in the snow,
-/// a swamp, sand by a lake with reeds and lilies, the horde's burnt land with its town and its lair.
+/// a swamp, sand by a lake with reeds and lilies, the horde's bog with its town and its lair.
 /// </summary>
 public sealed class ShowcaseHexes : IHexSource
 {
@@ -45,10 +45,10 @@ public sealed class ShowcaseHexes : IHexSource
         Ground(21, 4, 21, 5, HexGround.Sand, HexRelief.Forest);
         Ground(0, 0, 3, 3, HexGround.Dirt, HexRelief.Hills);
         Ground(0, 0, 1, 1, HexGround.Rough, HexRelief.Mountain);
-        Ground(12, 16, 25, 19, HexGround.Scorched);
-        Ground(20, 14, 25, 15, HexGround.Scorched);
-        Ground(17, 17, 18, 18, HexGround.Scorched, HexRelief.Forest);
-        Ground(23, 16, 25, 17, HexGround.Lava);
+        Ground(12, 16, 25, 19, HexGround.Bog);
+        Ground(20, 14, 25, 15, HexGround.Bog);
+        Ground(17, 17, 18, 18, HexGround.Bog, HexRelief.Forest);
+        Ground(23, 18, 24, 19, HexGround.Bog, HexRelief.Forest);
         // the pass: a ridge of mountains with a gate in it
         for (int r = 8; r <= 12; r++) { ref var l = ref _look[r * Width + 23]; l.Relief = HexRelief.Mountain; l.Ground = HexGround.Rough; }
         Thing(23, 10, HexIcon.Pass, 1);
@@ -84,7 +84,7 @@ public partial class Main
     /// What stands on the big world map, shown (--demo --pose=mapthings): --look=0 our castle among its farms; 1 the mines
     /// of logs, stone, iron and gold; 2 those of quicksilver, sulphur, crystal and gems; 3 the small things (piles, a chest,
     /// a campfire, the windmill and the water mill); 4 the shrine, a dwelling, the signpost, the stone of learning, the
-    /// stables, the observatory; 5 the horde's town in its burnt land with its army; 6 the lair and the pass; 7 the dead
+    /// stables, the observatory; 5 the horde's town in its bog with its army; 6 the lair and the pass; 7 the dead
     /// places; 8 a wood's edge and the snowy firs; 9 the lake, the sand, the swamp; 10 the whole showcase; 11 from far
     /// off (the coarse models standing for the things); 12 the hero and the horde's warlord close up.
     /// </summary>

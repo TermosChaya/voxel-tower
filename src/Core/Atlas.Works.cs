@@ -324,7 +324,7 @@ public sealed partial class Atlas
         // the trodden ground within, the tents of pale hides on it
         for (int dz = -13; dz <= 13; dz++)
             for (int dx = -13; dx <= 13; dx++)
-                if (dx * dx + dz * dz < 13 * 13) Put(cx + dx, Floor(cx + dx, cz + dz) - 1, cz + dz, Hash.H3(cx + dx, 5, cz + dz) < .3 ? Mat.Ash : Mat.Trodden, within, Lie.None, true);
+                if (dx * dx + dz * dz < 13 * 13) Put(cx + dx, Floor(cx + dx, cz + dz) - 1, cz + dz, Hash.H3(cx + dx, 5, cz + dz) < .3 ? Mat.Peat : Mat.Trodden, within, Lie.None, true);
         var rnd = new Mulberry32(SeedOf(c, 31));
         for (int k = 0; k < 6; k++)
         {

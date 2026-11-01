@@ -6,9 +6,11 @@ namespace VoxelTower.Core;
 /// What kind of valley a cell of the map is. Every kind has the plateau and the citadel and the river; they differ in their
 /// ground — more forest, more rock, more water — and in the places worth taking, so that taking a new valley is worth it:
 /// the mines lie in the valleys of ore, the barrow and the other places of power in the holy ones. Until there is a map
-/// of valleys, the first valley keeps every place it has always had (<see cref="MapParams.Classic"/>).
+/// of valleys, the first valley keeps every place it has always had (<see cref="MapParams.Classic"/>). A bog is a valley
+/// of the horde's homeland on the big map: low and wet, pools and mire about a firm island the keep or the horde's town
+/// stands on.
 /// </summary>
-public enum ValleyKind : byte { First, Ore, Sacred, Forest, Marsh, Mountain }
+public enum ValleyKind : byte { First, Ore, Sacred, Forest, Marsh, Mountain, Bog }
 
 /// <summary>The named places a valley may have.</summary>
 [Flags]
@@ -64,16 +66,16 @@ public static class Valleys
     public static string Key(ValleyKind k) => k switch
     {
         ValleyKind.Ore => "ore", ValleyKind.Sacred => "sacred", ValleyKind.Forest => "forest",
-        ValleyKind.Marsh => "marsh", ValleyKind.Mountain => "mountain", _ => "first",
+        ValleyKind.Marsh => "marsh", ValleyKind.Mountain => "mountain", ValleyKind.Bog => "bog", _ => "first",
     };
 
     public static string Name(ValleyKind k) => k switch
     {
         ValleyKind.Ore => "рудная долина", ValleyKind.Sacred => "священная долина", ValleyKind.Forest => "лесная долина",
-        ValleyKind.Marsh => "речная долина", ValleyKind.Mountain => "горная долина", _ => "первая долина",
+        ValleyKind.Marsh => "речная долина", ValleyKind.Mountain => "горная долина", ValleyKind.Bog => "болотная долина", _ => "первая долина",
     };
 
-    /// <summary>The kind of a key (first, ore, sacred, forest, marsh, mountain); null for none such.</summary>
+    /// <summary>The kind of a key (first, ore, sacred, forest, marsh, mountain, bog); null for none such.</summary>
     public static ValleyKind? Parse(string key)
     {
         foreach (ValleyKind k in Enum.GetValues(typeof(ValleyKind))) if (Key(k) == key) return k;
@@ -90,6 +92,8 @@ public static class Valleys
         ValleyKind.Mountain => (6, 4),
         ValleyKind.First => (3, 3),
         ValleyKind.Marsh => (1, 2),
+        // (bog iron in the bog's mire, as of old)
+        ValleyKind.Bog => (2, 3),
         _ => (2, 2),
     };
 
@@ -103,6 +107,10 @@ public static class Valleys
         ValleyKind.Marsh => new Ground(trees: .9, knoll: .8, knollHeight: .7, ridges: .6, river: 1.8, wet: .25, soil: 1.2, lift: .6, relief: .6, lakes: 3),
         // the mountains: high ridges, crags, little soil and few trees
         ValleyKind.Mountain => new Ground(trees: .55, knoll: .56, knollHeight: 1.6, ridges: 2, river: .8, wet: -.1, soil: .5, lift: 1.3, relief: 1.5, lakes: 1),
+        // the horde's bog: low, flat and wet, the island in its middle hardly over the mire, deep soil, ponds in its
+        // hollows and pools everywhere between (MapGen.Relief.cs), birches and drowned trees; its river no broader than
+        // any valley's, so the old bridge carries a party over it from the side it comes in by
+        ValleyKind.Bog => new Ground(trees: 1.15, knoll: .86, knollHeight: .55, ridges: .35, river: 1, wet: .45, soil: 1.4, lift: .5, relief: .4, lakes: 4),
         _ => new Ground(trees: 1, knoll: .7, knollHeight: 1, ridges: 1, river: 1, wet: 0, soil: 1, lift: 1, relief: 1, lakes: 1),
     };
 
@@ -118,6 +126,7 @@ public static class Valleys
         ValleyKind.Forest => Places.Watchtowers | Places.Bridges,
         ValleyKind.Marsh => Places.Bridges | Places.Outpost,
         ValleyKind.Mountain => Places.Silver | Places.Watchtowers,
+        ValleyKind.Bog => Places.Bridges,
         _ => Places.All,
     };
 }

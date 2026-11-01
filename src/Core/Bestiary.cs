@@ -49,7 +49,7 @@ public sealed class Breed
     /// <summary>The genitive of a few (2–4): «волка».</summary>
     public string Few;
     public bool Joins, Flees;
-    /// <summary>Found only on its own grounds and reliefs (a treant in the woods, a fire spirit on the burnt land).</summary>
+    /// <summary>Found only on its own grounds and reliefs (a treant in the woods, a fire spirit on rocky or burnt land).</summary>
     public bool Bound;
     /// <summary>Only ever one or a few of them (a dragon).</summary>
     public int Most = 40;
@@ -71,7 +71,7 @@ public sealed class Breed
 public static class Bestiary
 {
     static readonly HexGround[] Green = { HexGround.Grass, HexGround.Dirt }, Wild = { HexGround.Rough, HexGround.Snow },
-        Wet = { HexGround.Swamp }, Dry = { HexGround.Sand, HexGround.Dirt }, Burnt = { HexGround.Scorched, HexGround.Lava };
+        Wet = { HexGround.Swamp, HexGround.Bog }, Dry = { HexGround.Sand, HexGround.Dirt }, Burnt = { HexGround.Scorched, HexGround.Lava };
     static readonly HexRelief[] Wood = { HexRelief.Forest }, High = { HexRelief.Hills }, Open = { HexRelief.Flat };
 
     static HexGround[] G(params HexGround[][] sets) { var l = new List<HexGround>(); foreach (var s in sets) l.AddRange(s); return l.ToArray(); }
@@ -96,7 +96,8 @@ public static class Bestiary
         new() { Kind = Kinds.Basilisk, Tier = 5, Powers = BeastPower.Gaze, Grounds = G(Wet, Dry), Reliefs = Open, Group = "Василиски", One = "василиск", Few = "василиска", Many = "василисков" },
         new() { Kind = Kinds.Treant, Tier = 6, Reliefs = Wood, Bound = true, Group = "Энты", One = "энт", Few = "энта", Many = "энтов", Most = 12 },
         new() { Kind = Kinds.Golem, Tier = 6, Powers = BeastPower.Boulders, Grounds = Wild, Reliefs = High, Group = "Каменные големы", One = "каменный голем", Few = "каменных голема", Many = "каменных големов", Most = 12 },
-        new() { Kind = Kinds.FireSpirit, Tier = 6, Powers = BeastPower.Ablaze, Grounds = Burnt, Bound = true, Group = "Огненные духи", One = "огненный дух", Few = "огненных духа", Many = "огненных духов", Most = 12 },
+        // (the horde's land a bog now, no zone is burnt: the fire spirits keep to the rocky wastes)
+        new() { Kind = Kinds.FireSpirit, Tier = 6, Powers = BeastPower.Ablaze, Grounds = G(Burnt, new[] { HexGround.Rough }), Bound = true, Group = "Огненные духи", One = "огненный дух", Few = "огненных духа", Many = "огненных духов", Most = 12 },
         new() { Kind = Kinds.Wyvern, Tier = 6, Powers = BeastPower.Venom, Grounds = G(Wet, Wild), Reliefs = High, Group = "Виверны", One = "виверна", Few = "виверны", Many = "виверн", Most = 10 },
         new() { Kind = Kinds.Dragon, Tier = 7, Powers = BeastPower.Breath, Grounds = G(Wild, Burnt), Reliefs = High, Group = "Дракон", One = "дракон", Few = "дракона", Many = "драконов", Most = 3 },
     };

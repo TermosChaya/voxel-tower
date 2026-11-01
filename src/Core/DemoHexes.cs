@@ -9,7 +9,7 @@ namespace VoxelTower.Core;
 /// between each two that meet; woods, hills and lakes within them by noise; rivers running down from the ridges to the
 /// lakes; roads from our citadel to every zone through the passes; and in each zone the things of the map — mines of
 /// every resource, piles, chests, campfires, windmills, water wheels, shrines, dwellings, treasures and the monsters
-/// that keep them — the horde's towns and lairs in the zones farthest from ours, the land about them burnt. The same
+/// that keep them — the horde's towns and lairs in the zones farthest from ours, their land a bog. The same
 /// seed makes the same map. What is seen starts as the land about our citadel.
 /// </summary>
 public sealed class DemoHexes : IHexSource
@@ -109,7 +109,12 @@ public sealed class DemoHexes : IHexSource
         var grounds = new[] { HexGround.Grass, HexGround.Grass, HexGround.Dirt, HexGround.Grass, HexGround.Sand, HexGround.Snow, HexGround.Swamp, HexGround.Rough, HexGround.Dirt };
         var zoneGround = new HexGround[zones];
         for (int z = 0; z < zones; z++)
-            zoneGround[z] = z == home ? HexGround.Grass : horde.Contains(z) ? (rnd.Next() < .5 ? HexGround.Rough : HexGround.Dirt) : grounds[(int)(rnd.Next() * grounds.Length)];
+        {
+            if (z == home) { zoneGround[z] = HexGround.Grass; continue; }
+            // the horde's zones its homeland's bog (the roll taken all the same, so the rest is drawn as it was)
+            double roll = rnd.Next();
+            zoneGround[z] = horde.Contains(z) ? HexGround.Bog : grounds[(int)(roll * grounds.Length)];
+        }
 
         // ---- the ground, the relief, the height of every hex
         for (int r = 0; r < rows; r++)
@@ -119,7 +124,7 @@ public sealed class DemoHexes : IHexSource
                 var g = zoneGround[z];
                 double f = forest.Sample(c * .23, r * .23), h = hills.Sample(c * .19 + 40, r * .19), w = lakes.Sample(c * .16 + 90, r * .16 + 30);
                 var look = new HexLook { Ground = g, Zone = (short)z, Height = (byte)Math.Clamp((int)(heights.Sample(c * .045, r * .045) * 5) - 1, 0, 3) };
-                double woods = g switch { HexGround.Grass => .6, HexGround.Swamp => .55, HexGround.Snow => .58, HexGround.Dirt => .64, HexGround.Sand => .8, HexGround.Rough => .74, _ => .9 };
+                double woods = g switch { HexGround.Grass => .6, HexGround.Swamp => .55, HexGround.Bog => .66, HexGround.Snow => .58, HexGround.Dirt => .64, HexGround.Sand => .8, HexGround.Rough => .74, _ => .9 };
                 double hilly = g switch { HexGround.Rough or HexGround.Snow => .66, HexGround.Dirt or HexGround.Sand => .72, _ => .78 };
                 if (f > woods) look.Relief = HexRelief.Forest;
                 else if (h > hilly) look.Relief = HexRelief.Hills;
@@ -196,7 +201,7 @@ public sealed class DemoHexes : IHexSource
                 if (_look[i].Relief == HexRelief.Mountain) _look[i].Relief = HexRelief.Flat;
             }
 
-        // ---- the horde's land burnt about its towns, our citadel and the horde's towns at the zones' middles
+        // ---- the horde's bog about its towns, open about the town itself; our citadel and the horde's towns at the zones' middles
         Home = mid[home];
         foreach (int z in horde)
         {
@@ -207,8 +212,8 @@ public sealed class DemoHexes : IHexSource
                 int i = I(c, r);
                 if (zone[i] != z || _look[i].Ground is HexGround.Water or HexGround.DeepWater) continue;
                 int d = Distance(c, r, tc, tr);
-                _look[i].Ground = d <= 1 ? HexGround.Lava : HexGround.Scorched;
-                if (_look[i].Relief == HexRelief.Forest && d <= 3) _look[i].Relief = HexRelief.Flat;
+                _look[i].Ground = HexGround.Bog;
+                if (_look[i].Relief == HexRelief.Forest && d <= 2) _look[i].Relief = HexRelief.Flat;
             }
         }
 
