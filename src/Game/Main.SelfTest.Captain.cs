@@ -117,5 +117,47 @@ public partial class Main
         if (FP.On) FP.Exit();
         foreach (var u in new[] { sw, sw2, cap, wk }) if (!u.Dead) { u.Dead = true; u.DiedAt = -999; }
         await Frames(2);
+
+        // a commander holding the middle of a square of walls with towers at its corners: the archers on the towers stay
+        // there, those on the ground go up onto the towers or the walls, none comes down to the spot (Sim.Captains.Posts.cs)
+        int x0 = (fx - 40) & ~7, z0 = (fz - 40) & ~7, x1 = x0 + 80, z1 = z0 + 80;
+        var ring = new VoxelList();
+        for (int z = z0; z < z1; z++)
+            for (int x = x0; x < x1; x++)
+            {
+                bool tower = (x < x0 + 24 || x >= x1 - 24) && (z < z0 + 24 || z >= z1 - 24);
+                if (!tower && x >= x0 + 16 && x < x1 - 16 && z >= z0 + 16 && z < z1 - 16) continue;
+                for (int y = g; y < g + (tower ? 32 : 24); y++) ring.Add(x, y, z, Mat.Stone);
+            }
+        // (laid straight into the world, not remembered as built: taken away after, nobody mends it)
+        for (int i = 0; i < ring.Count; i++) w.Set(ring.X(i), ring.Y(i), ring.Z(i), Mat.Stone);
+        for (int t = 0; t < 2; t++) for (int y = g; y < g + 26; y++) w.Set(x1 - 18, y, (z0 + z1) / 2 + t, Mat.Ladder);
+        // (no raider of the tests before within the commander's sight: it holds its spot, it does not stand against one)
+        foreach (var o in sim.Units)
+            if (!o.Dead && o.Team == Team.Horde && (o.X - fx) * (o.X - fx) + (o.Z - fz) * (o.Z - fz) < 130 * 130 * 64) { o.Dead = true; o.DiedAt = -999; }
+        Advance(.3);
+        var high = new List<Unit>();
+        foreach (var (tx, tz) in new[] { (x0 + 12, z0 + 12), (x0 + 12, z1 - 12), (x1 - 12, z0 + 12), (x1 - 12, z1 - 12) })
+            high.Add(sim.Spawn(Kinds.Archer, sim.StandNear(tx, g + 34, tz, 2)));
+        var low = new[] { sim.Spawn(Kinds.Archer, sim.NearestStand(x0 + 40, z0 + 30, 2)), sim.Spawn(Kinds.Archer, sim.NearestStand(x0 + 40, z0 + 50, 2)) };
+        var tops = new List<int>();
+        foreach (var a in high) tops.Add(a.Post);
+        var keeper = sim.Spawn(Kinds.Captain, sim.NearestStand(x0 + 44, z0 + 40, 2));
+        sim.Command(new[] { keeper }, keeper.Cell);
+        keeper.Goal = keeper.Dest;
+        for (int i = 0; i < 40; i++) { Advance(.2); await Frames(1); }
+        bool stayed = true, upped = true;
+        for (int i = 0; i < high.Count; i++) stayed &= high[i].Post == tops[i] && tops[i] >= 0;
+        foreach (var a in low) upped &= a.Post >= 0 && sim.Nav.Feet(a.Post).y >= g + 16;
+        string Up(Unit a) => a.Post < 0 ? "no post" : $"{(sim.Nav.Feet(a.Post).y - g) / 8:0.0} m up";
+        check("a commander holding a spot inside walls keeps the archers on the towers over it and sends those below up onto the works",
+            stayed && upped, $"on the towers: {string.Join(", ", high.ConvertAll(a => Up(a) + (a.Post == tops[high.IndexOf(a)] ? "" : " (moved)")))}; from the ground: {Up(low[0])}, {Up(low[1])}; «{keeper.Why}»");
+        foreach (var u in high) { u.Dead = true; u.DiedAt = -999; }
+        foreach (var u in low) { u.Dead = true; u.DiedAt = -999; }
+        keeper.Dead = true; keeper.DiedAt = -999;
+        for (int i = 0; i < ring.Count; i++) w.Set(ring.X(i), ring.Y(i), ring.Z(i), Mat.Air);
+        for (int t = 0; t < 2; t++) for (int y = g; y < g + 26; y++) w.Set(x1 - 18, y, (z0 + z1) / 2 + t, Mat.Air);
+        Advance(.3);
+        await Frames(2);
     }
 }

@@ -9,10 +9,12 @@ namespace VoxelTower.Core;
 /// by itself, as far as <see cref="CaptainReach"/> — the player may turn that off and on, and give it a spot to hold.
 /// Every few seconds it looks over the field. With the horde coming it forms those on foot up inside the wall the horde is
 /// coming at (or before the citadel, where there is no wall), across the way in where the horde will walk in through an
-/// open gate or a gap with the shields in front, sends those who shoot up onto the wall-walks facing it,
-/// sends the badly hurt back to mend, sounds the horn when its people waver and closes the shield wall when the horde is
-/// on them; the band beaten off, it calls the workers to mend what was broken about it. At the alarm with no horde in
-/// sight it forms them at the citadel's gate. Those the player sent somewhere itself are left be. Its four calls
+/// open gate or a gap with the shields in front, keeps those who shoot up on our towers and walls over the way the horde
+/// comes and sends the rest up to them (Sim.Captains.Posts.cs), sends the badly hurt back to mend, sounds the horn when
+/// its people waver and closes the shield wall when the horde is on them; the band beaten off, it calls the workers to
+/// mend what was broken about it. At the alarm with no horde in sight it posts the shooters on the works on the side the
+/// horde will come from and the foot inside the gate or the wall it will come at (at the citadel's gate, where there is
+/// no wall). Those the player sent somewhere itself are left be. Its four calls
 /// (<see cref="Call"/>) the player can make too, gone into it: «За мной!», «Держать строй», «Залп!» and «Рог».
 /// </summary>
 public sealed partial class Sim
@@ -108,12 +110,7 @@ public sealed partial class Sim
         // the band beaten off: what it broke about where the commander stood its people is mended
         if (_lastFront.Remove(cap.Id, out var front) && !Waves.Active) MendFront(cap, front.x, front.z);
         if (cap.Goal >= 0) { HoldGoal(cap, men); return; }
-        if (Alarm)
-        {
-            var (gx, _, gz) = Nav.Feet(Gate);
-            int spot = StandToward(gx, gz, cx, cz, 4 * VoxelWorld.PerMetre);
-            Place(cap, Melee(men), spot, "alarm", "Командир собирает бойцов у ворот цитадели.");
-        }
+        if (Alarm) Watch(cap, men, cx, cz);
     }
 
     /// <summary>What a commander keeps: the spot the player gave it, or the citadel.</summary>
@@ -156,45 +153,17 @@ public sealed partial class Sim
         if (gap is { } across) PlaceAcross(cap, melee, lx, lz, across.ix, across.iz, across.width);
         else if (breach != null) Place(cap, melee, line, "breach", "Командир ставит бойцов в пролом, который пробивает орда.");
         else Place(cap, melee, line, "line", wall != null ? "Командир строит бойцов у стены, к которой идёт орда." : "Командир строит бойцов навстречу орде.");
-        // the shooters onto the wall-walks that face the horde; with no wall, behind the line
+        // the shooters up on our works over the way the horde comes, those on them already kept there; only those on the
+        // ground with no post to go up to behind the line (Sim.Captains.Posts.cs)
         var shooters = Shooters(men);
         if (shooters.Count > 0)
         {
-            var posts = wall is { } ww ? WallWalks(ww.x, ww.z, tx, tz, shooters.Count) : new List<int>();
-            posts.RemoveAll(p => _noWayUp.TryGetValue(p, out double until) && Time < until);
-            if (posts.Count == 0) Place(cap, shooters, NearestStand((int)Toward(lx, lz, cx, cz, 4 * VoxelWorld.PerMetre).x, (int)Toward(lx, lz, cx, cz, 4 * VoxelWorld.PerMetre).z, 2), "shooters", null);
-            else
-            {
-                // each to the post nearest it it can get to (a wall with no stair up it is no post), the rest behind the line
-                var free = new List<int>(posts);
-                var below = new List<Unit>();
-                bool moved = false;
-                int failed = 0;
-                foreach (var s in shooters)
-                {
-                    if (s.Ward == cap && s.Post >= 0 && posts.Exists(p => CellsApart(s.Post, p) <= 2)) { free.RemoveAll(p => CellsApart(s.Post, p) <= 2); continue; }
-                    bool placed = false;
-                    // (three posts in a row with no way up: the wall has no stair up it here, the rest are not tried)
-                    if (failed >= 3) { foreach (int p in free) _noWayUp[p] = Time + 20; free.Clear(); }
-                    for (int tries = 0; tries < 3 && free.Count > 0 && !placed; tries++)
-                    {
-                        int pick = 0; float near = float.MaxValue;
-                        for (int i = 0; i < free.Count; i++)
-                        {
-                            var (px, _, pz) = Nav.Feet(free[i]);
-                            float d = (px - s.X) * (px - s.X) + (pz - s.Z) * (pz - s.Z);
-                            if (d < near) { near = d; pick = i; }
-                        }
-                        int post = free[pick];
-                        free.RemoveAt(pick);
-                        if (Command(new[] { s }, post) > 0) { s.Ward = cap; placed = moved = true; failed = 0; }
-                        else { _noWayUp[post] = Time + 20; failed++; }
-                    }
-                    if (!placed) below.Add(s);
-                }
-                if (moved) { CaptainPosted++; OrderSaid(cap, "posted", "Командир ставит стрелков на стену против орды."); }
-                if (below.Count > 0) { var (rx, rz) = Toward(lx, lz, cx, cz, 4 * VoxelWorld.PerMetre); Place(cap, below, NearestStand((int)rx, (int)rz, 2), "shooters", null); }
-            }
+            var ways = HordeWays(lead, cx, cz);
+            if (breach is { } br) ways.Add(NearestStand(br.x, br.z, 2));
+            ways.RemoveAll(c => c < 0);
+            var (fx, fz) = wall is { } wp ? (wp.x, wp.z) : (lx, lz);
+            var below = PostShooters(cap, shooters, ways, fx, fz, cx, cz, null);
+            if (below.Count > 0) { var (rx, rz) = Toward(lx, lz, cx, cz, 4 * VoxelWorld.PerMetre); Place(cap, below, NearestStand((int)rx, (int)rz, 2), "shooters", null); }
         }
         // the commander itself a few steps behind its line
         var (bx, bz) = Toward(lx, lz, cx, cz, 5 * VoxelWorld.PerMetre);
@@ -249,17 +218,20 @@ public sealed partial class Sim
     /// side of that way (within 6 m), short of so near what is kept. Its middle, the way in there (a unit vector) and how
     /// wide it is, voxels; null if the way goes in by no such place, or hacks or climbs its way in.
     /// </summary>
-    (float x, float z, float ix, float iz, float width)? Opening(Unit lead, float cx, float cz, float stop)
+    (float x, float z, float ix, float iz, float width)? Opening(Unit lead, float cx, float cz, float stop) =>
+        FieldOf(lead.T) is { } f ? Opening(f, lead.Cell, cx, cz, stop, 160) : null;
+
+    /// <summary>The same along a field from a cell, for so many steps of it: where the horde coming that way will walk in.</summary>
+    (float x, float z, float ix, float iz, float width)? Opening(FlowField f, int from, float cx, float cz, float stop, int steps)
     {
-        if (FieldOf(lead.T) is not { } f) return null;
         float reach = 6 * VoxelWorld.PerMetre;
         float Side(float x, float z, float sx, float sz)
         {
             for (float s = 2; s <= reach; s += 2) if (OurWallAt((int)(x + sx * s), (int)(z + sz * s))) return s;
             return -1;
         }
-        int c = lead.Cell;
-        for (int step = 0; step < 160; step++)
+        int c = from;
+        for (int step = 0; step < steps; step++)
         {
             int next = f.Next(Nav, c, out float carve, out var works);
             if (next < 0 || next == c || carve > 0 || works != Works.None) return null;
@@ -286,7 +258,7 @@ public sealed partial class Sim
     /// The line across an opening in our walls, a step inside it: the front rank from side to side of it facing out,
     /// the shields in it first and the spears after, the rest in ranks behind; unless they stand so already.
     /// </summary>
-    void PlaceAcross(Unit cap, List<Unit> men, float x, float z, float ix, float iz, float width)
+    void PlaceAcross(Unit cap, List<Unit> men, float x, float z, float ix, float iz, float width, string said = null)
     {
         int spot = NearestStand((int)x, (int)z, 2);
         if (spot < 0 || men.Count == 0) return;
@@ -299,7 +271,7 @@ public sealed partial class Sim
         CommandAcross(men, x, z, -ix, -iz, cols);
         foreach (var u in men) u.Ward = cap;
         CaptainFormed++; CaptainAcross++;
-        OrderSaid(cap, "gap", "Командир ставит строй поперёк прохода в стене, щиты вперёд.");
+        OrderSaid(cap, "gap", said ?? "Командир ставит строй поперёк прохода в стене, щиты вперёд.");
     }
 
     /// <summary>A warlord on his feet, or a ram or a siege tower at our building, in bowshot of three of a commander's shooters: where to loose a volley.</summary>
@@ -318,13 +290,19 @@ public sealed partial class Sim
         return null;
     }
 
-    /// <summary>The spot the player gave a commander: it stands there, and those under its word about it.</summary>
+    /// <summary>
+    /// The spot the player gave a commander: it stands there, and those under its word about it; its shooters up on our
+    /// works over the ground round the spot, where there are posts for them (Sim.Captains.Posts.cs).
+    /// </summary>
     void HoldGoal(Unit cap, List<Unit> men)
     {
         if (cap.Post != cap.Goal) Command(new[] { cap }, cap.Goal);
         var (gx, _, gz) = Nav.Feet(cap.Goal);
         int front = NearestStand((int)gx, (int)gz, 2);
-        Place(cap, men, front, "goal", "Командир держит указанное место.");
+        var shooters = Shooters(men);
+        var stand = Melee(men);
+        if (shooters.Count > 0) stand.AddRange(PostShooters(cap, shooters, Round(gx, gz), gx, gz, gx, gz, "Командир ставит стрелков на стены у указанного места."));
+        Place(cap, stand, front, "goal", "Командир держит указанное место.");
     }
 
     /// <summary>
@@ -382,40 +360,6 @@ public sealed partial class Sim
             if (OurWallAt(x, z)) return (x, z);
         }
         return null;
-    }
-
-    /// <summary>
-    /// Cells on the walls of ours about a point of them, to stand on and shoot from: on top of our masonry or timber two
-    /// metres and more over the ground, the nearest to the horde first, a couple of metres apart.
-    /// </summary>
-    List<int> WallWalks(int wx, int wz, float tx, float tz, int want)
-    {
-        var found = new List<(int cell, float d)>();
-        int ci = wx >> NavGrid.Shift, ck = wz >> NavGrid.Shift, r = 18;
-        for (int k = Math.Max(0, ck - r); k <= Math.Min(Nav.NZ - 1, ck + r); k++)
-            for (int i = Math.Max(0, ci - r); i <= Math.Min(Nav.NX - 1, ci + r); i++)
-            {
-                int x = (i << NavGrid.Shift) + NavGrid.CS / 2, z = (k << NavGrid.Shift) + NavGrid.CS / 2;
-                if (!OurWallAt(x, z)) continue;
-                for (int y = Nav.NY - 1; y >= 1; y--)
-                {
-                    if (!Nav.Stand(i, y, k, 2)) continue;
-                    int c = Nav.Id(i, y, k);
-                    if (Nav.Floor[c] - World.GroundTop(x, z) < 2 * VoxelWorld.PerMetre) break;
-                    found.Add((c, (x - tx) * (x - tx) + (z - tz) * (z - tz)));
-                    break;
-                }
-            }
-        found.Sort((a, b) => a.d.CompareTo(b.d));
-        var picked = new List<int>();
-        foreach (var (c, _) in found)
-        {
-            if (picked.Count >= want) break;
-            bool apart = true;
-            foreach (int p in picked) if (CellsApart(p, c) < 2) { apart = false; break; }
-            if (apart) picked.Add(c);
-        }
-        return picked;
     }
 
     /// <summary>

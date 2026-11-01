@@ -85,6 +85,80 @@ public partial class Main
         Hud.Refresh();
     }
 
+    /// <summary>
+    /// A commander and our works (--pose=posts): a square of stone walls on level ground, square towers at its corners a
+    /// metre over the walls, a ladder up the middle of each wall inside; an archer on each tower and two inside on the
+    /// ground, swordsmen and the commander. --look=0 the square west of the citadel, the commander holding its middle, a
+    /// band of the horde 27 m west, a quarter of a minute later: the archers on the western towers where they were, the
+    /// rest up on the towers and walls over the spot, the swordsmen inside the western wall; 1 the square round the
+    /// citadel, the alarm with no horde in sight: the archers up on the western towers and walls, the swordsmen inside
+    /// the western wall.
+    /// </summary>
+    void PostsPose()
+    {
+        var w = World; var sim = Sim;
+        sim.Waves.Countdown = 1e9;
+        foreach (var u in sim.Units) if (u.Team == Team.Player) { u.Dead = true; u.DiedAt = -999; }
+        bool keep = _look == 1;
+        int cx = keep ? Site.KeepX & ~7 : (Site.KeepX - Site.KeepR - 260) & ~7, cz = Site.KeepZ & ~7, H = keep ? 128 : 96;
+        int x0 = cx - H - 8, x1 = cx + H + 8, z0 = cz - H - 8, z1 = cz + H + 8;
+        // level ground under it and out west, bare of trees (the citadel left standing)
+        int g = keep ? Site.KeepBase : w.SurfAt(cx, cz);
+        for (int z = z0 - 80; z < z1 + 80; z++)
+            for (int x = x0 - 260; x < x1 + 60; x++)
+            {
+                if (keep && (x - Site.KeepX) * (x - Site.KeepX) + (z - Site.KeepZ) * (z - Site.KeepZ) <= (Site.KeepR + 3) * (Site.KeepR + 3)) continue;
+                for (int y = Math.Max(2, g - 12); y < Math.Min(w.SY - 1, g + 120); y++)
+                {
+                    byte want = y < g ? (y == g - 1 ? Mat.Grass : Mat.Soil) : Mat.Air;
+                    if (w.Get(x, y, z) != want) w.Set(x, y, z, want);
+                }
+            }
+        // the walls two metres thick and 3 m high, towers four metres square and 4 m high at the corners
+        var ring = new VoxelList();
+        for (int z = z0 - 8; z < z1 + 8; z++)
+            for (int x = x0 - 8; x < x1 + 8; x++)
+            {
+                bool inX = x >= x0 && x < x1, inZ = z >= z0 && z < z1;
+                bool wall = inX && inZ && (x < x0 + 16 || x >= x1 - 16 || z < z0 + 16 || z >= z1 - 16);
+                bool tower = (x < x0 + 24 || x >= x1 - 24) && (z < z0 + 24 || z >= z1 - 24);
+                if (!wall && !tower) continue;
+                for (int y = g; y < g + (tower ? 32 : 24); y++) ring.Add(x, y, z, Mat.Stone);
+            }
+        sim.InstantLabour = true;
+        sim.DesignateBuild(ring);
+        sim.CompleteAll();
+        sim.InstantLabour = false;
+        foreach (var (lx, lz, alongX) in new[] { (x0 + 16, cz, false), (x1 - 18, cz, false), (cx, z0 + 16, true), (cx, z1 - 18, true) })
+            for (int t = 0; t < 2; t++)
+                for (int y = g; y < g + 26; y++) w.Set(lx + (alongX ? t : 0), y, lz + (alongX ? 0 : t), Mat.Ladder);
+        Advance(.3);
+        sim.ComputeFields();
+        // an archer on each tower, two on the ground inside; swordsmen and the commander
+        foreach (var (tx, tz) in new[] { (x0 + 8, z0 + 8), (x0 + 8, z1 - 8), (x1 - 8, z0 + 8), (x1 - 8, z1 - 8) })
+            sim.Spawn(Kinds.Archer, sim.StandNear(tx, g + 34, tz, 2));
+        int ix = keep ? cx + 60 : cx + 30;
+        for (int i = 0; i < 2; i++) sim.Spawn(Kinds.Archer, sim.NearestStand(ix, cz - 40 + i * 80, 2));
+        for (int i = 0; i < 5; i++) sim.Spawn(Kinds.Swordsman, sim.NearestStand(ix - 20 + i % 3 * 10, cz + 50 + i / 3 * 10, 2));
+        var cap = sim.Spawn(Kinds.Captain, sim.NearestStand(ix - 10, cz - 50, 2));
+        if (!keep)
+        {
+            // it holds the middle of the square
+            sim.Command(new[] { cap }, sim.NearestStand(cx + 20, cz, 2));
+            cap.Goal = cap.Dest;
+        }
+        Advance(.5);
+        if (keep) sim.RaiseAlarm();
+        else
+            foreach (var (t, dz) in new[] { (Kinds.Goblin, -24), (Kinds.Orc, -8), (Kinds.Goblin, 6), (Kinds.Goblin, 20), (Kinds.Troll, 0), (Kinds.Orc, 34) })
+                Camp(t, x0 - 220 + Math.Abs(dz) / 2, cz + dz).ChainedUntil = 1e9;
+        Advance(16);
+        Selected.Add(cap);
+        Hud.OnSelectionChanged();
+        Rig.SetAt(w.WX(cx - (keep ? 50 : 40)), w.WY(g), w.WZ(cz), -.35f, 1.0f, keep ? .72f : .85f);
+        Hud.Refresh();
+    }
+
     /// <summary>A worker gone into before a stretch of wall marked out west of the wall, laying it, the mark brass.</summary>
     void CommanderPoseWorker(int face, int top, int kz)
     {

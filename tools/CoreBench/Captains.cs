@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using VoxelTower.Core;
 
@@ -186,37 +187,45 @@ static class CaptainsBench
         check("one gone into guarding with its shield takes the blows it faces; turned away, they land",
             blocked >= 2 && guarded < turned * .5f, $"facing: lost {guarded:0}, blocked {blocked}; turned away: lost {turned:0}");
 
-        // a blow held back lands harder than one at a click (at a goblin held where it stands, looked at in the middle)
+        // a blow held back lands harder than one at a click (at a goblin held where it stands, looked at in the middle; a
+        // fresh one for each blow, and the blow's own harm counted rather than what the goblin has left: one blow may take
+        // its head off, and then the blows after it fall on nothing)
         Gone(orc);
         sw.Wounds = null; sw.Hp = sw.MaxHp; sw.Pain = 0; sw.Down = false;
-        var dummy = sim.Spawn(Kinds.Goblin, sim.NearestStand((int)sw.X + 9, (int)sw.Z, 2));
-        dummy.ChainedUntil = 1e9; dummy.Hp = dummy.MaxHp = 5000; dummy.Guard = true; dummy.Home = dummy.Cell;
-        var orc2 = dummy;
+        Unit dummy = null;
+        float dealt = 0;
+        sim.Hurting = (u, dmg, _) => { if (u == dummy) dealt += dmg; };
         float Swing(bool held)
         {
+            dummy = sim.Spawn(Kinds.Goblin, sim.NearestStand((int)sw.X + 9, (int)sw.Z, 2));
+            dummy.ChainedUntil = 1e9; dummy.Hp = dummy.MaxHp = 5000; dummy.Guard = true; dummy.Home = dummy.Cell;
             Run(1.5);
-            float ddx = orc2.X - sw.X, ddz = orc2.Z - sw.Z, ddy = orc2.Y + orc2.T.BodyH * .55f - (sw.Y + sw.T.BodyH * .88f);
+            float ddx = dummy.X - sw.X, ddz = dummy.Z - sw.Z, ddy = dummy.Y + dummy.T.BodyH * .55f - (sw.Y + sw.T.BodyH * .88f);
             sim.LookYaw = MathF.Atan2(ddz, ddx); sim.LookPitch = MathF.Atan2(ddy, MathF.Sqrt(ddx * ddx + ddz * ddz));
-            var orc = orc2;
-            float h0 = orc.Hp;
+            dealt = 0;
             sim.WishStrike = true;
             sim.Step(.05f);
             if (held)
             {
                 sim.Step(.05f);
                 Run(1.6);
-                h0 = orc.Hp;
+                dealt = 0;
             }
             sim.WishStrike = false;
             Run(.6);
-            return h0 - orc.Hp;
+            Gone(dummy);
+            return dealt;
         }
-        float light = 0, heavy = 0;
-        for (int i = 0; i < 4; i++) { light += Swing(false); heavy += Swing(true); }
-        check("a blow held back lands nearly twice as hard as one at a click", heavy > light * 1.4f, $"four light blows {light:0}, four held back {heavy:0}");
+        var lights = new List<float>(); var heavies = new List<float>();
+        for (int i = 0; i < 6; i++) { lights.Add(Swing(false)); heavies.Add(Swing(true)); }
+        sim.Hurting = null;
+        // (a blow the goblin took on its blade or stepped out of is no measure of how hard it was struck)
+        var landedL = lights.Where(d => d > 0).ToList(); var landedH = heavies.Where(d => d > 0).ToList();
+        check("a blow held back lands nearly twice as hard as one at a click",
+            landedL.Count >= 2 && landedH.Count >= 2 && landedH.Average() > landedL.Average() * 1.4f,
+            $"light blows {string.Join(", ", lights.Select(d => d.ToString("0")))}; held back {string.Join(", ", heavies.Select(d => d.ToString("0")))}");
 
         // a kick shoves a goblin back staggering
-        Gone(dummy);
         var gob = sim.Spawn(Kinds.Goblin, sim.NearestStand((int)sw.X + 8, (int)sw.Z, 2));
         gob.Guard = true; gob.Home = gob.Cell; gob.Hp = gob.MaxHp = 500;
         Run(.3);
@@ -271,5 +280,166 @@ static class CaptainsBench
         check("…and digs out what is marked to come out where it looks, and only that", leftMarked < 24 && leftOther >= laidMarked / 2 - 4,
             $"of the marked half {leftMarked} left, of the other {leftOther} standing");
         sim.Unpossess(null);
+        Posts(check);
+    }
+
+    /// <summary>
+    /// A commander uses our works (the author: «снимает лучников с башен, вместо того, чтобы пользоваться ими»). A square
+    /// ring of stone round the citadel, 20 m from it, 3 m high, towers a metre higher at its corners, a ladder up the
+    /// middle of each wall inside; an archer on each tower, swordsmen and the commander inside, the horde 25 m west. Those
+    /// on the western towers stay there; those on the eastern go up onto the western towers or walls, none down to the
+    /// ground. With the horde gone and the alarm up, the shooters go up on the side the horde comes from and the foot
+    /// stand inside the western wall, not at the citadel's gate; with a gap in that wall, across the gap. Given a spot
+    /// to hold by the western wall, the commander keeps its archers on the towers over it.
+    /// </summary>
+    static void Posts(Action<string, bool, string> check)
+    {
+        var mp = new MapParams();
+        var w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
+        var site = MapGen.Generate(w, mp);
+        w.Compact();
+        var sim = new Sim(w, site);
+        sim.Waves.Countdown = 1e9; sim.WildTarget = 0;
+        void Gone(Unit u) { u.Dead = true; u.DiedAt = -999; }
+        foreach (var u in sim.Units) if (u.Team == Team.Player) Gone(u);
+        void Run(double seconds) { for (double t = 0; t < seconds; t += .05) sim.Step(.05f); }
+        int kx = site.KeepX, kz = site.KeepZ, fg = site.KeepBase, H = 160;
+        // level ground about the citadel and out west, the citadel itself left standing
+        for (int z = kz - 210; z <= kz + 210; z++)
+            for (int x = kx - 480; x <= kx + 200; x++)
+            {
+                if ((x - kx) * (x - kx) + (z - kz) * (z - kz) <= (site.KeepR + 3) * (site.KeepR + 3)) continue;
+                for (int y = 2; y < w.SY - 1; y++)
+                {
+                    byte want = y < fg ? (y == fg - 1 ? Mat.Grass : Mat.Soil) : Mat.Air;
+                    if (w.Get(x, y, z) != want) w.Set(x, y, z, want);
+                }
+            }
+        // the ring on the metre cells: walls two cells thick and 3 m high, square towers six cells across at the corners a
+        // metre higher
+        int W0 = ((kx - H) & ~7) - 8, E1 = ((kx + H) & ~7) + 8, N0 = ((kz - H) & ~7) - 8, S1 = ((kz + H) & ~7) + 8;
+        sim.InstantLabour = true;
+        var ring = new VoxelList();
+        for (int z = N0 - 16; z < S1 + 16; z++)
+            for (int x = W0 - 16; x < E1 + 16; x++)
+            {
+                bool inX = x >= W0 && x < E1, inZ = z >= N0 && z < S1;
+                bool wall = (x < W0 + 16 || x >= E1 - 16) && inX && inZ || (z < N0 + 16 || z >= S1 - 16) && inX && inZ;
+                bool tower = (x < W0 + 32 || x >= E1 - 32) && (z < N0 + 32 || z >= S1 - 32);
+                if (!tower && !wall) continue;
+                for (int y = fg; y < fg + (tower ? 32 : 24); y++) ring.Add(x, y, z, Mat.Stone);
+            }
+        sim.DesignateBuild(ring);
+        sim.CompleteAll();
+        sim.InstantLabour = false;
+        // a ladder up the inner face of each wall at its middle
+        foreach (var (lx, lz, alongX) in new[] { (W0 + 16, kz, false), (E1 - 18, kz, false), (kx, N0 + 16, true), (kx, S1 - 18, true) })
+            for (int t = 0; t < 2; t++)
+                for (int y = fg; y < fg + 26; y++) w.Set(lx + (alongX ? t : 0), y, lz + (alongX ? 0 : t), Mat.Ladder);
+        Run(.3);
+        // (the horde with no timber or earth: no ladder up the ring, it hacks through the wall nearest it)
+        sim.HordeStock[Stockpile.Wood] = sim.HordeStock[Stockpile.Earth] = 0;
+        sim.ComputeFields();
+        int Top(int x, int z) => sim.StandNear(x, fg + 34, z, 2);
+        int Apart(int a, int b) => Math.Max(Math.Abs(sim.Nav.I(a) - sim.Nav.I(b)), Math.Abs(sim.Nav.K(a) - sim.Nav.K(b)));
+        var corners = new[] { (W0 + 8, N0 + 8), (W0 + 8, S1 - 8), (E1 - 8, N0 + 8), (E1 - 8, S1 - 8) };
+        bool Perched(Unit u) { if (u.Post < 0) return false; var (_, py, _) = sim.Nav.Feet(u.Post); return py >= fg + 16; }
+        bool West(Unit u) { if (u.Post < 0) return false; var (px, _, _) = sim.Nav.Feet(u.Post); return px < W0 + 40; }
+        string Where(Unit u) { if (u.Post < 0) return "no post"; var (px, py, pz) = sim.Nav.Feet(u.Post); return $"({(px - kx) / 8:0},{(py - fg) / 8:0.0},{(pz - kz) / 8:0})"; }
+        List<Unit> Muster()
+        {
+            foreach (var u in sim.Units) if (u.Team == Team.Player) Gone(u);
+            var list = new List<Unit>();
+            foreach (var (x, z) in corners) list.Add(sim.Spawn(Kinds.Archer, Top(x, z)));
+            for (int i = 0; i < 4; i++) list.Add(sim.Spawn(Kinds.Swordsman, sim.NearestStand(kx - 60 + i * 10, kz + 40, 2)));
+            list.Add(sim.Spawn(Kinds.Captain, sim.NearestStand(kx - 60, kz - 40, 2)));
+            Run(.3);
+            return list;
+        }
+
+        // the horde 25 m west of the ring
+        var ours = Muster();
+        var archers = ours.Take(4).ToArray();
+        int[] towerCells = archers.Select(a => a.Post).ToArray();
+        var band = Enumerable.Range(0, 6).Select(i =>
+        {
+            var g = sim.Spawn(Kinds.Goblin, sim.NearestStand(W0 - 200, kz - 25 + i * 10, 2));
+            g.Guard = true; g.Home = g.Cell; g.ChainedUntil = 1e9;
+            return g;
+        }).ToArray();
+        Run(7);
+        bool westStay = archers[0].Post == towerCells[0] && archers[1].Post == towerCells[1] && Apart(archers[0].Cell, towerCells[0]) <= 1 && Apart(archers[1].Cell, towerCells[1]) <= 1;
+        check("a commander keeps the archers on the towers over the way the horde comes where they are",
+            westStay, $"west towers: {Where(archers[0])}, {Where(archers[1])} (they stood at {string.Join(", ", towerCells.Take(2).Select(c => $"({(sim.Nav.Feet(c).x - kx) / 8:0},{(sim.Nav.Feet(c).z - kz) / 8:0})"))})");
+        check("…and sends those on the towers that do not reach the way up onto the towers or walls that do, none down to the ground",
+            archers.Skip(2).All(a => Perched(a) && West(a) && a.Ward != null) && archers.All(Perched) && sim.CaptainTowers + sim.CaptainWalls >= 2,
+            $"east towers' archers now at {string.Join(", ", archers.Skip(2).Select(Where))}; to towers {sim.CaptainTowers}, to walls {sim.CaptainWalls}");
+        // its look over the works afresh (the posts, where a man walks up from it, what each post is worth) costs little
+        var lookCap = ours[^1];
+        double cpu = 0;
+        for (int n = 0; n < 3; n++)
+        {
+            sim.ForgetPosts();
+            lookCap.NextOrders = 0;
+            double c0 = BenchClock.CpuMs();
+            sim.Step(.05f);
+            cpu = Math.Max(cpu, BenchClock.CpuMs() - c0);
+        }
+        check("a commander's look over the works afresh, posts and all, takes under 15 ms", cpu < 15, $"the worst of 3: {cpu:0.0} ms of work");
+        foreach (var g in band) Gone(g);
+        Run(1);
+
+        // the alarm, the horde gone: the shooters up on the side it comes from, the foot inside the wall it will come at
+        ours = Muster();
+        archers = ours.Take(4).ToArray();
+        var swords = ours.Skip(4).Take(4).ToArray();
+        var (gateX, _, gateZ) = sim.Nav.Feet(sim.Gate);
+        int towers0 = sim.CaptainTowers, walls0 = sim.CaptainWalls;
+        sim.RaiseAlarm();
+        Run(7);
+        float lineX = (float)swords.Where(u => u.Post >= 0).Select(u => sim.Nav.Feet(u.Post).x).DefaultIfEmpty(kx).Average();
+        check("at the alarm, no horde in sight, a commander posts its archers on the towers and walls on the side the horde comes from",
+            archers.All(a => Perched(a) && West(a)) && sim.CaptainTowers + sim.CaptainWalls > towers0 + walls0,
+            $"archers at {string.Join(", ", archers.Select(Where))}");
+        check("…and stands its foot inside the wall the horde will come at, not at the citadel's gate",
+            swords.All(u => u.Post >= 0 && u.Ward != null) && lineX < W0 + 16 + 48 && lineX > W0 + 16 && Math.Abs(lineX - gateX) > 60,
+            $"the line at x {(lineX - kx) / 8:0.0} m from the citadel (the western wall's inner face at {(W0 + 16 - kx) / 8:0.0} m, the citadel's gate at {(gateX - kx) / 8:0.0} m)");
+
+        // a gap in the western wall: at the alarm the foot stand across it, a step inside
+        sim.StandDown();
+        for (int z = kz - 16; z < kz + 16; z++) for (int x = W0; x < W0 + 18; x++) for (int y = fg; y < fg + 26; y++) w.Set(x, y, z, Mat.Air);
+        Run(.3);
+        sim.ComputeFields();
+        ours = Muster();
+        swords = ours.Skip(4).Take(4).ToArray();
+        int across0 = sim.CaptainAcross;
+        sim.RaiseAlarm();
+        Run(7);
+        bool inGap = swords.All(u => u.Post >= 0 && sim.Nav.Feet(u.Post).x > W0 + 8 && sim.Nav.Feet(u.Post).x < W0 + 16 + 48 && Math.Abs(sim.Nav.Feet(u.Post).z - kz) < 48);
+        check("…with a gap in that wall, across the gap a step inside it", inGap && sim.CaptainAcross > across0,
+            $"lines across {sim.CaptainAcross - across0}; posts {string.Join(", ", swords.Select(Where))}");
+        // one of the horde just outside the wall beside the gap, within a swordsman's reach of his place: the line holds
+        // the gap, nobody goes out after it
+        var lurker = sim.Spawn(Kinds.Goblin, sim.NearestStand(W0 - 8, kz + 40, 2));
+        lurker.Guard = true; lurker.Home = lurker.Cell; lurker.ChainedUntil = 1e9; lurker.Hp = lurker.MaxHp = 5000;
+        Run(5);
+        float outmost = swords.Min(u => u.X);
+        check("…and does not go out past the wall after one of the horde beyond it", outmost > W0 + 8 && swords.All(u => !u.Dead && u.Ward != null),
+            $"the westmost of them {(outmost - W0) / 8:0.0} m in from the wall's outer face; the goblin {(lurker.X - W0) / 8:0.0} m");
+        Gone(lurker);
+        sim.StandDown();
+        Run(1);
+
+        // a spot to hold by the western wall: the archers on the towers over it stay there, the rest come up to them
+        ours = Muster();
+        archers = ours.Take(4).ToArray();
+        var cap = ours[^1];
+        towerCells = archers.Select(a => a.Post).ToArray();
+        sim.Command(new[] { cap }, sim.NearestStand(W0 + 16 + 24, kz + 24, 2));
+        cap.Goal = cap.Dest;
+        Run(7);
+        check("a commander holding a spot by a wall keeps its archers up on the towers and walls over it, not down at the spot",
+            archers.All(Perched) && archers[0].Post == towerCells[0] && archers[1].Post == towerCells[1],
+            $"archers at {string.Join(", ", archers.Select(Where))}");
     }
 }

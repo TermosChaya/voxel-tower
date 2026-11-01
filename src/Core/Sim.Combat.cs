@@ -367,6 +367,8 @@ public sealed partial class Sim
         // a giant or a tame troll hurls a stone at one out of its reach
         if ((Hurling(u) || foe == null || !InReach(u, foe)) && HurlBoulder(u)) { ReleaseSite(u); return true; }
         if (foe == null) return false;
+        // one of a commander's line does not go out past our wall after one of the horde beyond it (Sim.Captains.Posts.cs)
+        if (!InReach(u, foe) && HoldsLine(u, foe)) return false;
         bool engaged = u.State == UnitState.Fight && u.Target == foe && u.Path == null;
         u.State = UnitState.Fight;
         u.Target = foe;
