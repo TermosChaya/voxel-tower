@@ -476,10 +476,10 @@ public partial class DeityView : Node3D
                 if (p >= 1) { crouch = .6f * (1 - Smooth((t - Sim.LeapCrouch - Sim.HopFor) / .4f)); fore = -.4f * crouch; }
             }
         }
-        // sitting, its head up
-        else if (d.Act == DeityAct.Tongue) pitch = -.1f;
-        else if (d.Act == DeityAct.Spit) pitch = t < Sim.SpitAt ? -.4f * Smooth(t / Sim.SpitAt) : -.1f;
-        else pitch = -.22f;
+        // sitting as it is sculpted, up on its forelegs, its hands on the ground; its head up a little to its tongue
+        else if (d.Act == DeityAct.Tongue) pitch = -.06f;
+        else if (d.Act == DeityAct.Spit) pitch = t < Sim.SpitAt ? -.3f * Smooth(t / Sim.SpitAt) : -.06f;
+        else pitch = -.02f;
         s.Crouch += (crouch - s.Crouch) * k; s.Pitch += (pitch - s.Pitch) * k;
         var root = new Transform3D(new Basis(Vector3.Up, MathF.PI / 2 - d.Facing).Scaled(Vector3.One * VoxelWorld.Vox * s.Scale),
             new Vector3(_w.WX(d.X), _w.WY(d.Y + off), _w.WZ(d.Z)));
@@ -502,7 +502,7 @@ public partial class DeityView : Node3D
         Place(s, root);
         s.Head = root * _xf[(int)Bone.Head];
         // the tongue, from the mouth of the figure as it is posed (low at the front of its head) to the tip
-        var mouth = s.Root * _xf[(int)Bone.Head] * new Vector3(0, 13f, 17.5f);
+        var mouth = s.Root * _xf[(int)Bone.Head] * new Vector3(0, 12.75f, 18f);
         float out_ = d.Act == DeityAct.Tongue ? Sim.TongueOut(t) : 0;
         bool shown = out_ > .02f;
         s.Tongue.Visible = s.Tip.Visible = shown;

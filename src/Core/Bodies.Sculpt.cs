@@ -190,6 +190,25 @@ public static partial class Bodies
         /// <summary>Recolours a cell that is there (fine coordinates), keeping what it is.</summary>
         public void FPut(BodyPart p, int x, int y, int z, byte m) { if (Detail && _c.Get((int)p, x, y, z, out _, out var t)) Finer(() => _c.Set((int)p, x, y, z, m, t)); }
 
+        /// <summary>
+        /// Sets the cells of a box (fine coordinates, the far corner excluded) that a shape gives a material for (0: not
+        /// in it), in one go: for a shape too big to set a cell at a time.
+        /// </summary>
+        public void FFill(BodyPart p, int x0, int y0, int z0, int x1, int y1, int z1, Func<int, int, int, byte> m, Tissue t = Tissue.Skin)
+        {
+            if (!Detail) return;
+            Finer(() =>
+            {
+                for (int y = y0; y < y1; y++)
+                    for (int z = z0; z < z1; z++)
+                        for (int x = x0; x < x1; x++)
+                        {
+                            byte c = m(x, y, z);
+                            if (c != 0) _c.Set((int)p, x, y, z, c, t);
+                        }
+            });
+        }
+
         /// <summary>Does a piece of the finer work, its cells marked as such (<see cref="Cells.Marking"/>).</summary>
         void Finer(Action work)
         {

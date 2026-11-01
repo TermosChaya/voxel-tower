@@ -32,6 +32,8 @@ public partial class GodPerson : Node3D
     public bool On => _d != null;
     /// <summary>The plate offering the god is up.</summary>
     public bool PlateShown => _plate.Visible;
+    /// <summary>The plate kept hidden whatever is up (the pictures of the gods by themselves).</summary>
+    public bool NoPlate;
     public Deity God => _d;
     public Camera3D Cam => _cam;
 
@@ -177,7 +179,7 @@ public partial class GodPerson : Node3D
     void Plate()
     {
         var g = _m.Sim.OurGod;
-        bool show = g != null && _d == null && !_m.FP.On && g.Act is not (DeityAct.Sinking or DeityAct.Fallen) && !_m.AtlasOpen;
+        bool show = !NoPlate && g != null && _d == null && !_m.FP.On && g.Act is not (DeityAct.Sinking or DeityAct.Fallen) && !_m.AtlasOpen;
         _plate.Visible = show;
         if (!show) return;
         double left = Math.Max(0, g.Until - _m.Sim.Time);

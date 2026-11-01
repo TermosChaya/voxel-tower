@@ -17,6 +17,14 @@ static class GodsBench
     public static void Run(Action<string, bool, string> check)
     {
         Console.WriteLine();
+        // ---- the two gods' bodies sculpted, in their finer cells, without keeping the game waiting
+        double s0 = BenchClock.CpuMs();
+        var angelBody = Bodies.God(DeityKind.Archangel);
+        double s1 = BenchClock.CpuMs();
+        var toadBody = Bodies.God(DeityKind.Toad);
+        double s2 = BenchClock.CpuMs();
+        check("the archangel's body and the toad's are sculpted in under two seconds between them",
+            angelBody.Top > 0 && toadBody.Top > 0 && s2 - s0 < 2000, $"the archangel {s1 - s0:0} ms, the toad {s2 - s1:0} ms");
         const float M = VoxelWorld.PerMetre;
         var mp = new MapParams();
         var w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
