@@ -354,19 +354,19 @@ public static partial class Kinds
     public static readonly UnitType Deer = new()
     {
         Key = "deer", Name = "Олень", Team = Team.Wild,
-        Move = new Mover { Height = 2, Climb = 1, Drop = 3, Speed = 4.2f },
+        Move = new Mover { Height = 2, Climb = 1, Drop = 3, Speed = 4.2f, Ladders = false },
         Hp = 50, Damage = 0, AttackTime = 1, Bounty = 6, BodyH = 13, BodyR = 3, FleeDist = 20 * VoxelWorld.PerMetre,
     };
     public static readonly UnitType Boar = new()
     {
         Key = "boar", Name = "Кабан", Team = Team.Wild,
-        Move = new Mover { Height = 1, Climb = 1, Drop = 3, Speed = 3.2f },
+        Move = new Mover { Height = 1, Climb = 1, Drop = 3, Speed = 3.2f, Ladders = false },
         Hp = 90, Damage = 9, AttackTime = 1.1f, Bounty = 9, BodyH = 7, BodyR = 3, Reach = 9, FleeDist = 10 * VoxelWorld.PerMetre,
     };
     public static readonly UnitType Hare = new()
     {
         Key = "hare", Name = "Заяц", Team = Team.Wild,
-        Move = new Mover { Height = 1, Climb = 1, Drop = 3, Speed = 4.8f },
+        Move = new Mover { Height = 1, Climb = 1, Drop = 3, Speed = 4.8f, Ladders = false },
         Hp = 10, Damage = 0, AttackTime = 1, Bounty = 2, BodyH = 4, BodyR = 1.5f, FleeDist = 12 * VoxelWorld.PerMetre,
     };
 
@@ -381,14 +381,14 @@ public static partial class Kinds
     public static readonly UnitType WhiteStag = new()
     {
         Key = "stag", Name = "Белый олень", Team = Team.Wild,
-        Move = new Mover { Height = 2, Climb = 1, Drop = 3, Speed = 5.2f },
+        Move = new Mover { Height = 2, Climb = 1, Drop = 3, Speed = 5.2f, Ladders = false },
         Hp = 70, Damage = 0, AttackTime = 1, Bounty = 60, BodyH = 15, BodyR = 3, FleeDist = 26 * VoxelWorld.PerMetre,
     };
     /// <summary>A cave bear out of the hills: it runs from nobody and goes for whoever comes near it, ours or the horde's.</summary>
     public static readonly UnitType Bear = new()
     {
         Key = "bear", Name = "Пещерный медведь", Team = Team.Wild,
-        Move = new Mover { Height = 2, Climb = 2, Drop = 3, Speed = 3.4f },
+        Move = new Mover { Height = 2, Climb = 2, Drop = 3, Speed = 3.4f, Ladders = false },
         // a long reach: a bear is a big beast, and it strikes from its bulk, not from a man's arm
         Hp = 380, Damage = 24, AttackTime = 1.4f, Bounty = 80, BodyH = 15, BodyR = 4.5f, Reach = 17, FleeDist = 0, Aggro = 9 * VoxelWorld.PerMetre,
     };

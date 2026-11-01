@@ -259,5 +259,41 @@ static class BestiaryBench
                 turned && mate.Target != null && (warg.Hp < warg.MaxHp || mate.Hp < mate.MaxHp || warg.Dead || mate.Dead) && gobs.Exists(g => g.Hp < g.MaxHp),
                 $"raiders turned {turned}; the second warg set on {mate.Target?.T.Name}; wargs {warg.Hp:0}, {mate.Hp:0}; orcs {string.Join(", ", gobs.Select(g => $"{g.Hp:0}"))}");
         }
+        // ---- the beasts keep off our ladders (The Well, 30.10.2026: «Животные пользуются лестницами»): a wall of ours with
+        // a ladder up it, the only way up; a man of the wild finds his way onto it, no beast does
+        {
+            var s = Fresh();
+            var w = s.World;
+            int wx = s.Site.KeepX - s.Site.KeepR - 220, wz = s.Site.KeepZ + 60, fg = w.SurfAt(wx, wz);
+            for (int z = wz - 90; z <= wz + 90; z++)
+                for (int x = wx - 60; x <= wx + 60; x++)
+                    for (int y = 2; y < w.SY - 1; y++)
+                    {
+                        byte want = y < fg ? Mat.Soil : Mat.Air;
+                        if (w.Get(x, y, z) != want) w.Set(x, y, z, want);
+                    }
+            // a ring of wall 4 m high round a yard, a ladder up its outer face
+            for (int z = wz - 48; z < wz + 48; z++)
+                for (int x = wx - 48; x < wx + 48; x++)
+                    if (Math.Max(Math.Abs(x - wx + .5f), Math.Abs(z - wz + .5f)) > 40)
+                        for (int y = fg; y < fg + 32; y++) w.Set(x, y, z, Mat.Stone);
+            for (int z = wz - 2; z < wz + 2; z++) for (int y = fg; y < fg + 34; y++) w.Set(wx - 49, y, z, Mat.Ladder);
+            Step(s, .3);
+            int top = s.NearestStand(wx - 44, wz, 2);
+            var (_, topY, _) = s.Nav.Feet(top);
+            var beasts = new[] { Kinds.Deer, Kinds.Boar, Kinds.Hare, Kinds.WhiteStag, Kinds.Bear, Kinds.Wolf, Kinds.Warg, Kinds.Spider, Kinds.Basilisk, Kinds.Treant, Kinds.Golem };
+            var climbed = new List<string>();
+            foreach (var k in beasts)
+            {
+                var u = s.Spawn(k, s.NearestStand(wx - 60, wz, k.Move.Height));
+                if (s.GoTo(u, top, adjacent: true, budget: 20000)) climbed.Add(k.Name);
+                u.Dead = true; u.DiedAt = -999;
+            }
+            var man = s.Spawn(Kinds.Bandit, s.NearestStand(wx - 60, wz, 2));
+            bool manUp = s.GoTo(man, top, adjacent: true, budget: 20000);
+            check("no beast of the wild climbs our ladders: up a wall whose only way up is a ladder a bandit finds his way, a deer, a boar, a hare, the white stag, a bear, wolves, wargs, a spider, a basilisk, a treant and a golem none",
+                topY >= fg + 30 && manUp && climbed.Count == 0,
+                $"the wall's top at {topY - fg} voxels; the bandit up {manUp}; beasts up: {(climbed.Count == 0 ? "none" : string.Join(", ", climbed))}");
+        }
     }
 }

@@ -123,14 +123,14 @@ public static partial class Kinds
     public static readonly UnitType Treant = new()
     {
         Key = "treant", Name = "Энт", Team = Team.Wild,
-        Move = new Mover { Height = 3, Climb = 2, Drop = 4, Speed = 1.4f, Wade = 1 },
+        Move = new Mover { Height = 3, Climb = 2, Drop = 4, Speed = 1.4f, Wade = 1, Ladders = false },
         Hp = 1400, Damage = 60, AttackTime = 2.2f, Bounty = 0, BodyH = 34, BodyR = 4.5f, Reach = 19, Tool = "club", Aggro = 12 * M, Regen = 8,
     };
     /// <summary>A stone golem: an earth spirit in a body of rock, tearing boulders out of the ground and hurling them.</summary>
     public static readonly UnitType Golem = new()
     {
         Key = "golem", Name = "Каменный голем", Team = Team.Wild,
-        Move = new Mover { Height = 3, Climb = 2, Drop = 5, Speed = 1.5f, Wade = 2 },
+        Move = new Mover { Height = 3, Climb = 2, Drop = 5, Speed = 1.5f, Wade = 2, Ladders = false },
         Hp = 1600, Damage = 56, AttackTime = 2.1f, Bounty = 40, BodyH = 28, BodyR = 4.5f, Reach = 18, Tool = "maul", Range = 28 * M, Aggro = 16 * M,
     };
     /// <summary>A fire spirit of the lava fields: a man-shaped blaze, setting alight what it passes and whom it strikes.</summary>
