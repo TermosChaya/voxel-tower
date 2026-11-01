@@ -894,7 +894,10 @@ public static partial class MapGen
 
         // ---- the named places, before the rocks and trees
         bool NearKeep(int x, int z, int margin) => Brushes.Dist(x - site.KeepX, z - site.KeepZ) < site.KeepR + margin;
-        (int x, int z) Free(double fx0, double fz0, int r)
+        // (given what to lay, a spot where all of it stands under the top of the world: the first free one it fits, tried
+        // and taken back if not, so on a mountain's peak a mine's knoll or a tower goes on to the next; where nothing
+        // fits, laid at the first free spot as much as the world holds)
+        (int x, int z) Free(double fx0, double fz0, int r, Action<int, int> lay = null)
         {
             int x = (int)fx0, z = (int)fz0;
             bool Ok(int cx, int cz)
@@ -908,13 +911,18 @@ public static partial class MapGen
                         if (dx * dx + dz * dz <= r * r && kind[(cz + dz) * SX + cx + dx] is Relief.River or Relief.Pond or Relief.Lake or Relief.Road or Relief.Ramp or Relief.Rim) return false;
                 return true;
             }
+            (int x, int z)? first = null;
             for (int ring = 0; ring <= 240; ring += 12)
                 for (int a = 0; a < 360; a += ring == 0 ? 360 : 30)
                 {
                     int cx = x + (int)(Math.Cos(a * Math.PI / 180) * ring), cz = z + (int)(Math.Sin(a * Math.PI / 180) * ring);
-                    if (Ok(cx, cz)) return (cx, cz);
+                    if (!Ok(cx, cz)) continue;
+                    if (lay == null || Landmarks.Tried(site, () => lay(cx, cz))) return (cx, cz);
+                    first ??= (cx, cz);
                 }
-            return (x, z);
+            var at = first ?? (x, z);
+            lay?.Invoke(at.x, at.z);
+            return at;
         }
         // a point between the river and the plateau's rim: the lowland the horde crosses
         (double x, double z) Between(double share)
@@ -928,8 +936,7 @@ public static partial class MapGen
         if ((places & Places.Mines) != 0)
         {
             var (cx, cz) = AtAngle(toEntry + Math.PI * .85, Rb * .6);
-            copper = Free(cx, cz, 30);
-            Landmarks.Mine(w, site, copper.x, copper.z, "Медный рудник", 3, false, seed + 1);
+            copper = Free(cx, cz, 30, (x, z) => Landmarks.Mine(w, site, x, z, "Медный рудник", 3, false, seed + 1));
         }
         if ((places & Places.MinersHouses) != 0 && (places & Places.Mines) != 0)
         {
@@ -939,15 +946,13 @@ public static partial class MapGen
         if ((places & (Places.Mines | Places.Silver)) != 0)
         {
             var (sx, sz) = Between(.35);
-            var silver = Free(sx, sz, 30);
-            Landmarks.Mine(w, site, silver.x, silver.z, "Серебряная жила", 6, true, seed + 3);
+            Free(sx, sz, 30, (x, z) => Landmarks.Mine(w, site, x, z, "Серебряная жила", 6, true, seed + 3));
         }
         var (gfx, gfz) = hex.SidePoint(entry, .3f, 100);
         var gold = ((int)gfx, (int)gfz);
         if ((places & Places.Mines) != 0)
         {
-            gold = Free(gfx, gfz, 30);
-            Landmarks.Mine(w, site, gold.Item1, gold.Item2, "Золотой прииск", 10, false, seed + 4);
+            gold = Free(gfx, gfz, 30, (x, z) => Landmarks.Mine(w, site, x, z, "Золотой прииск", 10, false, seed + 4));
         }
         if ((places & Places.Outpost) != 0)
         {
@@ -958,12 +963,10 @@ public static partial class MapGen
         if ((places & Places.Watchtowers) != 0)
         {
             double fdx = CX - fordAt.x, fdz = CZ - fordAt.z, fl = Math.Max(1, Math.Sqrt(fdx * fdx + fdz * fdz));
-            var tower = Free(fordAt.x + fdx / fl * 60, fordAt.z + fdz / fl * 60, 20);
-            Landmarks.Watchtower(w, site, tower.x, tower.z, "Руины сторожевой башни", seed + 6);
+            Free(fordAt.x + fdx / fl * 60, fordAt.z + fdz / fl * 60, 20, (x, z) => Landmarks.Watchtower(w, site, x, z, "Руины сторожевой башни", seed + 6));
             var (rfx, rfz) = AtAngle(ramps[1], rampRim[1] + rampLen * .6);
             var (pxr, pzr) = Dir(ramps[1] + Math.PI / 2);
-            var fallen = Free(rfx + pxr * 60, rfz + pzr * 60, 20);
-            Landmarks.Watchtower(w, site, fallen.x, fallen.z, "Обвалившаяся башня", seed + 7, .45);
+            Free(rfx + pxr * 60, rfz + pzr * 60, 20, (x, z) => Landmarks.Watchtower(w, site, x, z, "Обвалившаяся башня", seed + 7, .45));
         }
         if ((places & Places.Bridges) != 0)
         {

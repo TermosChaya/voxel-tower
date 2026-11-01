@@ -21,12 +21,54 @@ public static class Landmarks
 
     static int Ground(VoxelWorld w, Site s, int x, int z) => s.HTop[Math.Clamp(z, 0, w.SZ - 1) * w.SX + Math.Clamp(x, 0, w.SX - 1)];
 
+    // ---- a place tried where it is to stand: what it lays is written down as it goes, and if any of it would go past the
+    // top of the world (a mine's knoll or a tower on a mountain's peak, an outcrop of ore on one), all it laid is taken
+    // back and the valley looks for another spot; a place that fits is laid exactly as it always was
+    [ThreadStatic] static System.Collections.Generic.List<(VoxelWorld w, int x, int y, int z, byte was)> _laid;
+    [ThreadStatic] static System.Collections.Generic.List<(int i, int was)> _raised;
+    [ThreadStatic] static bool _over;
+
+    /// <summary>Lays a voxel of a place (or of an outcrop): past the top of the world nothing, and the place does not fit.</summary>
+    internal static void Set(VoxelWorld w, int x, int y, int z, byte m)
+    {
+        if ((uint)y >= (uint)w.SY) { _over = true; return; }
+        _laid?.Add((w, x, y, z, w.Get(x, y, z)));
+        w.SetRaw(x, y, z, m);
+    }
+
+    /// <summary>The ground of a column raised by a place, never over the top of the world.</summary>
+    static void Raise(VoxelWorld w, Site s, int i, int top)
+    {
+        _raised?.Add((i, s.HTop[i]));
+        s.HTop[i] = Math.Min(top, w.SY);
+    }
+
+    /// <summary>
+    /// Lays a place (or an outcrop) where it was asked if all of it stands under the top of the world: true. Else whatever
+    /// of it was laid is taken back, the ground and the valley's list of places as they were: false, and the caller tries
+    /// another spot.
+    /// </summary>
+    public static bool Tried(Site s, Action lay)
+    {
+        var laid = _laid = new System.Collections.Generic.List<(VoxelWorld, int, int, int, byte)>();
+        var raised = _raised = new System.Collections.Generic.List<(int, int)>();
+        int places = s.Landmarks.Count;
+        _over = false;
+        try { lay(); }
+        finally { _laid = null; _raised = null; }
+        if (!_over) return true;
+        for (int k = laid.Count - 1; k >= 0; k--) { var (v, x, y, z, was) = laid[k]; v.SetRaw(x, y, z, was); }
+        for (int k = raised.Count - 1; k >= 0; k--) s.HTop[raised[k].Item1] = raised[k].Item2;
+        s.Landmarks.RemoveRange(places, s.Landmarks.Count - places);
+        return false;
+    }
+
     static bool In(VoxelWorld w, int x, int z) => x >= 2 && z >= 2 && x < w.SX - 2 && z < w.SZ - 2;
 
     /// <summary>Remembers a voxel of what a ruin was: masonry, to be laid again if it is mended.</summary>
     static void Meant(Site s, int x, int y, int z)
     {
-        if (s.Design != null && s.Design.InBounds(x, y, z)) s.Design.SetRaw(x, y, z, Shapes.Masonry(x, y, z));
+        if (s.Design != null && s.Design.InBounds(x, y, z)) Set(s.Design, x, y, z, Shapes.Masonry(x, y, z));
     }
 
     /// <summary>Battlements every ten voxels along a wall's outer edge, six long: a merlon voxel here?</summary>
@@ -48,8 +90,8 @@ public static class Landmarks
                 if (d > R || !In(w, x, z)) continue;
                 int i = z * w.SX + x, g = s.HTop[i];
                 int top = g + (int)((1 - d * d / (R * R)) * H * (.8 + .4 * noise.Sample(x * .15, z * .15)));
-                for (int y = g; y < top; y++) w.SetRaw(x, y, z, y == top - 1 && Hash.H3(x, z, 31) < .35 ? Mat.Moss : Mat.Rock);
-                if (top > g) s.HTop[i] = top;
+                for (int y = g; y < top; y++) Set(w, x, y, z, y == top - 1 && Hash.H3(x, z, 31) < .35 ? Mat.Moss : Mat.Rock);
+                if (top > g) Raise(w, s, i, top);
             }
         // the vein: thick in the heart of the knoll, in specks further out
         int gc = g0 + 7;
@@ -59,7 +101,7 @@ public static class Landmarks
                 {
                     double e = Math.Sqrt((x - cx) * (x - cx) / 81.0 + (y - gc) * (y - gc) / 36.0 + (z - cz) * (z - cz) / 81.0);
                     if (e > 1 || !In(w, x, z) || w.Get(x, y, z) is not (Mat.Rock or Mat.Moss or Mat.Soil)) continue;
-                    if (Hash.H3(x * 7 + y, z, 37) < (e < .6 ? .9 : .4)) w.SetRaw(x, y, z, Mat.Ore);
+                    if (Hash.H3(x * 7 + y, z, 37) < (e < .6 ? .9 : .4)) Set(w, x, y, z, Mat.Ore);
                 }
         // the adit, from the side facing the citadel
         int dx = s.KeepX - cx, dz = s.KeepZ - cz;
@@ -82,7 +124,7 @@ public static class Landmarks
             {
                 var (x, z) = At(a, c);
                 if (!In(w, x, z)) continue;
-                for (int y = floor; y < floor + Tall; y++) w.SetRaw(x, y, z, Mat.Air);
+                for (int y = floor; y < floor + Tall; y++) Set(w, x, y, z, Mat.Air);
             }
         // timbering: posts and a lintel at the mouth and twice inside
         foreach (int a in new[] { R, R - 6, R - 12 })
@@ -94,7 +136,7 @@ public static class Landmarks
                     if (!In(w, x, z)) continue;
                     bool post = c < -Half || c >= Half;
                     for (int y = floor; y < floor + Tall + 2; y++)
-                        if (post || y >= floor + Tall - 1) w.SetRaw(x, y, z, Mat.Wood);
+                        if (post || y >= floor + Tall - 1) Set(w, x, y, z, Mat.Wood);
                 }
         }
         // the spoil heap beside the mouth
@@ -105,7 +147,7 @@ public static class Landmarks
                 double d = Brushes.Dist(x - heap.x, z - heap.z);
                 if (d > 6 || !In(w, x, z)) continue;
                 int g = Ground(w, s, x, z), hgt = (int)((1 - d / 6) * 5);
-                for (int y = g; y < g + hgt; y++) w.SetRaw(x, y, z, Hash.H3(x, y, z) < .3 ? Mat.Rock : Mat.Soil);
+                for (int y = g; y < g + hgt; y++) Set(w, x, y, z, Hash.H3(x, y, z) < .3 ? Mat.Rock : Mat.Soil);
             }
         var stand = At(R + 10, 0);
         var l = new Landmark { Kind = LandmarkKind.Mine, Name = name, X = cx, Z = cz, R = R + 10, StandX = stand.x, StandZ = stand.z, Income = income, Guarded = guarded };
@@ -118,7 +160,7 @@ public static class Landmarks
     {
         if (y >= bottom + keep) return;
         if (Hash.H3(x * 13 + y, z * 7 + (int)seed, 41) < .07) return;
-        w.SetRaw(x, y, z, y == bottom + keep - 1 && Hash.H3(x, z, 43) < .4 ? Mat.Moss : Mat.Ruin);
+        Set(w, x, y, z, y == bottom + keep - 1 && Hash.H3(x, z, 43) < .4 ? Mat.Moss : Mat.Ruin);
     }
 
     /// <summary>Rubble fallen round a ruin: a voxel or two of old masonry here and there on the ground.</summary>
@@ -131,7 +173,7 @@ public static class Landmarks
                 if (d < r0 || d > r1 || !In(w, x, z) || Hash.H3(x, z, 47) > share * (1 - (d - r0) / (r1 - r0 + 1))) continue;
                 int g = Ground(w, s, x, z), n = Hash.H3(x, z, 49) < .3 ? 2 : 1;
                 if (w.Get(x, g, z) != Mat.Air && !Mat.IsVeg[w.Get(x, g, z)]) continue;
-                for (int y = g; y < g + n; y++) w.SetRaw(x, y, z, Mat.Ruin);
+                for (int y = g; y < g + n; y++) Set(w, x, y, z, Mat.Ruin);
             }
     }
 
@@ -219,17 +261,17 @@ public static class Landmarks
                 {
                     int yy = y;
                     while (yy > 1 && Brushes.Free(w.Get(x, yy - 1, z))) yy--;
-                    w.SetRaw(x, yy, z, Mat.Ruin);
+                    Set(w, x, yy, z, Mat.Ruin);
                 }
                 continue;
             }
-            w.SetRaw(x, y, z, Mat.Ruin);
+            Set(w, x, y, z, Mat.Ruin);
         }
         // moss on what the rain falls on
         for (int i = 0; i < plan.Count; i++)
         {
             int x = plan.X(i), y = plan.Y(i), z = plan.Z(i);
-            if (w.Get(x, y, z) == Mat.Ruin && Brushes.Free(w.Get(x, y + 1, z)) && Hash.H3(x, y, z * 7) < .22) w.SetRaw(x, y, z, Mat.Moss);
+            if (w.Get(x, y, z) == Mat.Ruin && Brushes.Free(w.Get(x, y + 1, z)) && Hash.H3(x, y, z * 7) < .22) Set(w, x, y, z, Mat.Moss);
         }
         var l = new Landmark { Kind = LandmarkKind.Ruin, Name = name, X = (ax + bx) / 2, Z = (az + bz) / 2, R = (int)(span / 2) + 10 };
         s.Landmarks.Add(l);
@@ -290,7 +332,7 @@ public static class Landmarks
                 if (!In(w, x, z)) continue;
                 bool corner = (x == x0 || x == x0 + wx - 1) && (z == z0 || z == z0 + wz - 1);
                 int top = g + h - (corner ? 2 : 0) - (int)(Hash.H3(x, z, 63) * 2);
-                for (int y = g - 3; y < top; y++) w.SetRaw(x, y, z, y == top - 1 && m == Mat.Ruin && Hash.H3(x, z, 65) < .5 ? Mat.Moss : m);
+                for (int y = g - 3; y < top; y++) Set(w, x, y, z, y == top - 1 && m == Mat.Ruin && Hash.H3(x, z, 65) < .5 ? Mat.Moss : m);
             }
     }
 
@@ -316,8 +358,8 @@ public static class Landmarks
                 int i = z * w.SX + x, g = s.HTop[i];
                 int top = g + (int)(H * Math.Pow(1 - d * d / (R * R), .7) * (.92 + .16 * Hash.H3(x >> 2, z >> 2, (int)seed)));
                 if (top <= g) continue;
-                for (int y = g; y < top; y++) w.SetRaw(x, y, z, y == top - 1 ? Mat.GrassDry : Mat.Soil);
-                s.HTop[i] = top;
+                for (int y = g; y < top; y++) Set(w, x, y, z, y == top - 1 ? Mat.GrassDry : Mat.Soil);
+                Raise(w, s, i, top);
             }
         // the doorway: two stones and a black lintel across them, the passage into the mound behind
         int g0 = Ground(w, s, cx + (int)(ax * (R - 6)), cz + (int)(az * (R - 6)));
@@ -327,16 +369,16 @@ public static class Landmarks
                 int x = cx + (int)Math.Round(ax * a - az * c), z = cz + (int)Math.Round(az * a + ax * c);
                 if (!In(w, x, z)) continue;
                 bool jamb = Math.Abs(c) >= 5 && Math.Abs(c) <= 9 && a >= R - 16, opening = Math.Abs(c) < 5;
-                if (jamb) for (int y = g0 - 2; y < g0 + 16; y++) w.SetRaw(x, y, z, Mat.Ruin);
-                else if (opening) for (int y = g0; y < g0 + 12; y++) w.SetRaw(x, y, z, Mat.Air);
-                if (a >= R - 16 && Math.Abs(c) <= 9) for (int y = g0 + 12; y < g0 + 16; y++) if (!jamb) w.SetRaw(x, y, z, Mat.Menhir);
-                if (a >= R - 16 && Math.Abs(c) <= 9) for (int y = g0 + 16; y < g0 + 18; y++) w.SetRaw(x, y, z, Mat.Menhir);
+                if (jamb) for (int y = g0 - 2; y < g0 + 16; y++) Set(w, x, y, z, Mat.Ruin);
+                else if (opening) for (int y = g0; y < g0 + 12; y++) Set(w, x, y, z, Mat.Air);
+                if (a >= R - 16 && Math.Abs(c) <= 9) for (int y = g0 + 12; y < g0 + 16; y++) if (!jamb) Set(w, x, y, z, Mat.Menhir);
+                if (a >= R - 16 && Math.Abs(c) <= 9) for (int y = g0 + 16; y < g0 + 18; y++) Set(w, x, y, z, Mat.Menhir);
             }
         // the capstone on the crown, sunk in the turf
         int crown = Ground(w, s, cx, cz);
         for (int z = cz - 4; z <= cz + 4; z++)
             for (int x = cx - 4; x <= cx + 4; x++)
-                if (In(w, x, z) && Brushes.Dist((x - cx) * .8, z - cz) < 3.7) for (int y = crown - 2; y < crown + 1; y++) w.SetRaw(x, y, z, Mat.Menhir);
+                if (In(w, x, z) && Brushes.Dist((x - cx) * .8, z - cz) < 3.7) for (int y = crown - 2; y < crown + 1; y++) Set(w, x, y, z, Mat.Menhir);
         // the ring of stones, open where the doorway looks out
         for (int n = 0; n < 9; n++)
         {
@@ -365,8 +407,8 @@ public static class Landmarks
                 if (d > R || !In(w, x, z)) continue;
                 int i = z * w.SX + x, g = s.HTop[i];
                 int top = g + (int)((1 - d * d / (R * R)) * H * (.75 + .5 * noise.Sample(x * .17, z * .17)));
-                for (int y = g; y < top; y++) w.SetRaw(x, y, z, y == top - 1 && Hash.H3(x, z, 69) < .3 ? Mat.Moss : Mat.Rock);
-                if (top > g) s.HTop[i] = top;
+                for (int y = g; y < top; y++) Set(w, x, y, z, y == top - 1 && Hash.H3(x, z, 69) < .3 ? Mat.Moss : Mat.Rock);
+                if (top > g) Raise(w, s, i, top);
             }
         int foot = Ground(w, s, cx, cz) - 3;
         for (int y = 0; y < Tall + 5; y++)
@@ -379,7 +421,7 @@ public static class Landmarks
                 {
                     double ex = (x + .5 - ox) / hw, ez = (z + .5) / hd;
                     if (ex * ex + ez * ez > 1 + (Hash.H3(x * 5 + y, z, 73) - .5) * .25) continue;
-                    if (In(w, cx + x, cz + z)) w.SetRaw(cx + x, foot + y, cz + z, Mat.Menhir);
+                    if (In(w, cx + x, cz + z)) Set(w, cx + x, foot + y, cz + z, Mat.Menhir);
                 }
         }
         // broken pieces in the grass
@@ -390,7 +432,7 @@ public static class Landmarks
             int sz = 2 + n % 2, g = Ground(w, s, px, pz);
             for (int z = pz - sz; z <= pz + sz; z++)
                 for (int x = px - sz; x <= px + sz; x++)
-                    if (In(w, x, z) && Brushes.Dist(x - px, z - pz) <= sz) for (int y = g - 1; y < g + sz; y++) w.SetRaw(x, y, z, Mat.Menhir);
+                    if (In(w, x, z) && Brushes.Dist(x - px, z - pz) <= sz) for (int y = g - 1; y < g + sz; y++) Set(w, x, y, z, Mat.Menhir);
         }
         // held from beside the stone, on the side toward the citadel
         int toward = s.KeepX >= cx ? 1 : -1;
@@ -414,9 +456,9 @@ public static class Landmarks
                 if (d > Hollow || !In(w, x, z)) continue;
                 int i = z * w.SX + x, g = s.HTop[i];
                 int top = g - (int)(5 * (1 - d / Hollow));
-                for (int y = top; y < g + 2; y++) w.SetRaw(x, y, z, Mat.Air);
-                w.SetRaw(x, top - 1, z, d < Hollow - 4 || Hash.H3(x, z, 79) < .5 ? Mat.Soil : Mat.GrassDry);
-                s.HTop[i] = top;
+                for (int y = top; y < g + 2; y++) Set(w, x, y, z, Mat.Air);
+                Set(w, x, top - 1, z, d < Hollow - 4 || Hash.H3(x, z, 79) < .5 ? Mat.Soil : Mat.GrassDry);
+                Raise(w, s, i, top);
             }
         // the pool, its surface a voxel under the lowest point of its edge, so it lies still
         int rim = int.MaxValue;
@@ -432,9 +474,9 @@ public static class Landmarks
                 double d = Brushes.Dist(x - cx, z - cz);
                 if (d >= Pool || !In(w, x, z)) continue;
                 int i = z * w.SX + x, bed = rim - 6 - (int)(5 * (1 - d / Pool));
-                for (int y = bed; y <= Math.Max(s.HTop[i], rim); y++) w.SetRaw(x, y, z, y < rim - 1 ? Mat.Water : Mat.Air);
-                w.SetRaw(x, bed - 1, z, Mat.Soil);
-                s.HTop[i] = bed;
+                for (int y = bed; y <= Math.Max(s.HTop[i], rim); y++) Set(w, x, y, z, y < rim - 1 ? Mat.Water : Mat.Air);
+                Set(w, x, bed - 1, z, Mat.Soil);
+                Raise(w, s, i, bed);
                 if (s.WaterTop != null) s.WaterTop[i] = (short)(rim - 1);
             }
         for (int n = 0; n < 8; n++)

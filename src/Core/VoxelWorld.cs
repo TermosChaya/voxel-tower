@@ -105,7 +105,9 @@ public sealed class VoxelWorld
     /// <summary>Write without marking anything; used while generating the map.</summary>
     public void SetRaw(int x, int y, int z, byte m)
     {
-        // nothing is made off the land, a tree's crown over its edge or a ruin's stone
+        // nothing is made off the world, a knoll raised on a peak up against its top; nor off the land, a tree's crown
+        // over its edge or a ruin's stone
+        if ((uint)x >= (uint)SX || (uint)y >= (uint)SY || (uint)z >= (uint)SZ) return;
         if (_land != null && !_land[z * SX + x]) return;
         int ci = ((y >> Shift) * CZ + (z >> Shift)) * CX + (x >> Shift);
         if (TrackEdits) _edited[ci] = true;

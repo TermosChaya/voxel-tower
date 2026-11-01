@@ -87,7 +87,7 @@ public static class Troves
                     if (ore && m == Mat.Rock && Hash.H3(x * 7 + y, z, 133) < .04) m = Mat.Ore;
                     w.SetRaw(x, y, z, m);
                 }
-                if (top > g) s.HTop[i] = top;
+                if (top > g) s.HTop[i] = Math.Min(top, w.SY);
             }
         return g0;
     }
@@ -217,7 +217,7 @@ public static class Troves
                 if (d > 8 || !In(w, x, z)) continue;
                 int g = Ground(w, s, x, z), hgt = (int)((1 - d / 8) * 6);
                 for (int y = g; y < g + hgt; y++) w.SetRaw(x, y, z, y == g + hgt - 1 ? Mat.Grass : Hash.H3(x, y, z) < .3 ? Mat.Rock : Mat.Soil);
-                if (hgt > 0) s.HTop[z * w.SX + x] = g + hgt;
+                if (hgt > 0) s.HTop[z * w.SX + x] = Math.Min(g + hgt, w.SY);
             }
         // bones at the mouth and in the chamber, and the chest at the chamber's back
         var b0 = At(R + 4, -Half - 3);

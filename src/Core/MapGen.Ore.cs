@@ -69,8 +69,9 @@ public static class OreVeins
             bool near = false;
             foreach (var o in site.Outcrops) if (Brushes.Dist(x - o.X, z - o.Z) < 110) { near = true; break; }
             if (near) continue;
-            int r = 9 + (int)(Hash.H3(x, z, s + 4) * 6);
-            int y = Outcrop(w, x, z, r, s + made * 31);
+            int r = 9 + (int)(Hash.H3(x, z, s + 4) * 6), y = 0;
+            // (one that would stand past the top of the world, on a mountain's peak, is taken back: the next spot)
+            if (!Landmarks.Tried(site, () => y = Outcrop(w, x, z, r, s + made * 31))) continue;
             site.Outcrops.Add((x, z, y, r));
             // the vein goes on from it down into the hill, away from the open side
             double a = Hash.H3(x, z, s + 5) * Math.PI * 2, dip = .35 + Hash.H3(x, z, s + 6) * .5;
@@ -109,13 +110,13 @@ public static class OreVeins
                 // lumpy in blocks of a few voxels, as a rock is, not grain by grain
                 int h = (int)Math.Round(Math.Pow(k, .7) * height + (Hash.H3(x / 3, z / 3, s + 3) - .5) * 2.4);
                 // what grew there is gone under it
-                for (int y = top; y < top + h + 3 && y < w.SY; y++) if (w.Get(x, y, z) is var m && (Mat.IsVeg[m] || Mat.IsSprig(m))) w.SetRaw(x, y, z, Mat.Air);
+                for (int y = top; y < top + h + 3 && y < w.SY; y++) if (w.Get(x, y, z) is var m && (Mat.IsVeg[m] || Mat.IsSprig(m))) Landmarks.Set(w, x, y, z, Mat.Air);
                 for (int y = Math.Max(4, top - 3); y < top + Math.Max(0, h); y++)
                 {
                     // its face rusty in patches over the dark ore, and flecked with rust inside
                     bool face = y >= top + h - 1;
                     double rust = face ? Hash.H3(x / 4, z / 4, s + 4) * .85 + Hash.H3(x, z, s + 5) * .15 : Hash.H3(x * 3 + y, z, s + 4);
-                    w.SetRaw(x, y, z, rust < (face ? .55 : .2) ? Mat.OreRust : Mat.IronOre);
+                    Landmarks.Set(w, x, y, z, rust < (face ? .55 : .2) ? Mat.OreRust : Mat.IronOre);
                 }
                 if (Brushes.Dist(x - cx, z - cz) < 2) peak = Math.Max(peak, top + h);
             }

@@ -6304,6 +6304,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bestiary") BestiaryB
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bog") BogBench.Run(Check);
 // every side of a valley reaches the citadel: the river's valley on a dozen seeds, the other kinds on three (ReachBench.cs)
 if (args.Length == 0 || args[0] == "--reach") ReachBench.Run(Check);
+// every valley is made: each kind by itself on many seeds, a share of two big maps' cells (ValleysBench.cs)
+if (args.Length == 0 || args[0] == "--valleys") ValleysBench.Run(Check);
 // the gods: the waking learnt and cast, the Colossus out of the ground, set loose on the horde, ridden, against the
 // horde's god, back under (Gods.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--gods") GodsBench.Run(Check);

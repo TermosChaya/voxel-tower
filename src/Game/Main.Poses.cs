@@ -91,6 +91,7 @@ public partial class Main
         if (_pose == "swamp") { SwampPose(); return; }
         if (_pose == "bog") { BogPose(); return; }
         if (_pose == "river") { RiverPose(); return; }
+        if (_pose == "place") { PlacePose(); return; }
         if (_pose == "square") { SquarePose(); return; }
         if (_pose == "templates") { TemplatesPose(); return; }
         if (_pose == "commander") { CommanderPose(); return; }
