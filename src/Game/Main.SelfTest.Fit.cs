@@ -11,7 +11,8 @@ public partial class Main
     /// <summary>
     /// The interface in the least room it has, the largest size of it (110 %): every tool in hand, with its pick and its
     /// fills, keeps all its settings inside the console between the map and the tools and above the screen's edge, the
-    /// console's middle rising for those with many.
+    /// console's middle rising for those with many; the household of sixty along the top goes in two rows inside its
+    /// room, the last card «+N», which lets all of them out and folds them up again.
     /// </summary>
     async Task SelfTestFit(Action<string, bool, string> check)
     {
@@ -55,6 +56,33 @@ public partial class Main
         check("in the largest interface every tool keeps its settings inside the console, between the map and the tools and above the screen's edge, the console rising where they are many",
             bad.Count == 0 && raisedMost > 0, bad.Count == 0 ? $"{cases.Count} tools and forms, the console risen {raisedMost:0} at most" : string.Join("; ", bad.GetRange(0, Math.Min(4, bad.Count))));
 
+        // a household of sixty: two rows, «+N» on the last card; let out, all of them; folded up again
+        var added = new List<Unit>();
+        int have = 0;
+        foreach (var u in Sim.Units) if (!u.Dead && u.Team == Team.Player && !u.T.Called) have++;
+        for (int i = have; i < 60; i++)
+        {
+            int c = Sim.NearestStand(Site.KeepX + (i % 10 - 5) * 10, Site.KeepZ + Site.KeepR + 30 + i / 10 * 10, Kinds.Worker.Move.Height);
+            if (c >= 0) added.Add(Sim.Spawn(Kinds.Worker, c));
+        }
+        await Frames(4);
+        var bar = Hud.Colonists;
+        var at = bar.GetGlobalRect();
+        int rows = bar.Rows, folded = bar.Folded;
+        bool inside = at.Position.X >= bar.From - 1 && at.End.X <= bar.To + 1 && at.Position.X >= 0 && at.End.X <= vp.X;
+        var more = bar.MoreAt;
+        if (more is { } m) bar._GuiInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = m });
+        await Frames(4);
+        int openRows = bar.Rows, openFolded = bar.Folded;
+        var openAt = bar.GetGlobalRect();
+        bool openInside = openAt.Position.X >= bar.From - 1 && openAt.End.X <= bar.To + 1 && openAt.End.Y < vp.Y - BottomConsole.Band;
+        if (bar.MoreAt is { } back) bar._GuiInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = back });
+        await Frames(4);
+        int foldedRows = bar.Rows;
+        check("sixty of ours go along the top in two rows inside their room, the last card «+N»; it lets all of them out, and folds them up again",
+            rows == 2 && folded > 0 && inside && more != null && openFolded == 0 && openRows > 2 && openInside && foldedRows == 2,
+            $"{rows} rows, {folded} left out, inside {inside}; let out: {openRows} rows, {openFolded} left out, inside {openInside}; folded again: {foldedRows} rows");
+        foreach (var u in added) { u.Dead = true; u.DiedAt = -999; }
         root.ContentScaleFactor = scaleWas;
         await Frames(4);
     }

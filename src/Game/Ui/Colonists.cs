@@ -10,17 +10,30 @@ namespace VoxelTower.Game;
 /// how much of it is left, and marks for what is the matter — bleeding, in a fight, idle with a reason, standing where
 /// it was sent; a commander's level, and a star when he has a skill to choose. A click picks one (a second click takes
 /// the camera to it), Shift adds it to the chosen or drops it; the right button on a commander opens his card as a hero.
+/// A large household goes in two rows; one larger still has its last card «+N», which lets all of them out in as many
+/// rows as they need, and folds them up again.
 /// </summary>
 public partial class ColonistBar : Control
 {
     Main _m;
     readonly List<Unit> _pawns = new();
-    readonly List<float> _x = new();
+    /// <summary>Each card's top left in the bar's own frame, for those that have one (the first of the household in order).</summary>
+    readonly List<Vector2> _at = new();
     float _card = 44;
     int _hover = -1;
+    /// <summary>The card of those left out («+N»), or of folding them up again: where it is, if there is one.</summary>
+    Vector2? _more;
+    /// <summary>Those left out let out, in as many rows as they need.</summary>
+    bool _open;
     /// <summary>Where it may lie, between these x of its parent, centred between them; and how far down.</summary>
     public float From, To = 1600, Top = 46;
-    const float Gap = 4, KindGap = 10, MaxCard = 44, MinCard = 26;
+    const float Gap = 4, KindGap = 10, RowGap = 5, MaxCard = 44, MinCard = 26, MinOneRow = 34;
+    /// <summary>The «+N» card's index for <see cref="At"/>.</summary>
+    const int More = -2;
+    /// <summary>How many rows it takes now.</summary>
+    public int Rows { get; private set; } = 1;
+    /// <summary>How many of the household have no card now (folded into «+N»).</summary>
+    public int Folded => _pawns.Count - _at.Count;
 
     public void Init(Main m)
     {
@@ -37,35 +50,70 @@ public partial class ColonistBar : Control
         // the risen are no household of ours
         foreach (var u in _m.Sim.Units) if (!u.Dead && u.Team == Team.Player && !u.T.Called) _pawns.Add(u);
         _pawns.Sort((a, b) => a.T == b.T ? a.Id.CompareTo(b.Id) : Array.IndexOf(Kinds.Ours, a.T).CompareTo(Array.IndexOf(Kinds.Ours, b.T)));
-        int breaks = 0;
-        for (int i = 1; i < _pawns.Count; i++) if (_pawns[i].T != _pawns[i - 1].T) breaks++;
-        float room = Math.Max(100, To - From), need = _pawns.Count * (MaxCard + Gap) + breaks * KindGap;
-        _card = need <= room ? MaxCard : Math.Max(MinCard, (room - breaks * KindGap) / Math.Max(1, _pawns.Count) - Gap);
-        _x.Clear();
-        float x = 0;
-        for (int i = 0; i < _pawns.Count; i++)
+        float room = Math.Max(100, To - From), width = 0;
+        int n = _pawns.Count;
+        // a row of full cards; else one of cards no smaller than a face is read at; else two rows of the largest that fit;
+        // else two rows of the smallest, the last card «+N» — or, let out, all of them in as many rows as they take
+        bool laid = false;
+        for (float c = MaxCard; c >= MinOneRow && !laid; c--) laid = Lay(c, 1, n, false, room, out width);
+        for (float c = MaxCard; c >= MinCard && !laid; c--) laid = Lay(c, 2, n, false, room, out width);
+        // (all of them in two rows: nothing is left out, nothing to let out)
+        if (laid) _open = false;
+        else if (_open) laid = Lay(MinCard, int.MaxValue, n, true, room, out width);
+        if (!laid)
         {
-            if (i > 0 && _pawns[i].T != _pawns[i - 1].T) x += KindGap;
-            _x.Add(x);
-            x += _card + Gap;
+            int k = n;
+            while (k > 0 && !Lay(MinCard, 2, k, true, room, out width)) k--;
         }
-        float width = Math.Max(0, x - Gap);
-        Size = new Vector2(width, _card * 1.22f + 4);
+        Size = new Vector2(width, Rows * (_card * 1.22f + RowGap) - RowGap + 4);
         Position = new Vector2(From + (room - width) / 2, Top);
         Visible = _pawns.Count > 0 && !_m.Hud.InFirstPerson && !_m.Hud.TitleOpen && !_m.Hud.Hidden(Hud.Part.Faces) && !_m.AtlasOpen;
         QueueRedraw();
+    }
+
+    /// <summary>
+    /// Lays the first <paramref name="count"/> cards of the household (and the «+N» one after them, with
+    /// <paramref name="more"/>) in rows no wider than the room, a little gap between the kinds; true if no more rows than
+    /// so many were needed. What it laid is kept either way.
+    /// </summary>
+    bool Lay(float card, int rows, int count, bool more, float room, out float width)
+    {
+        _card = card;
+        _at.Clear();
+        _more = null;
+        float x = 0, rowH = card * 1.22f + RowGap;
+        int row = 0;
+        width = 0;
+        for (int i = 0; i <= count; i++)
+        {
+            bool last = i == count;
+            if (last && !more) break;
+            float gap = i > 0 && !last && x > 0 && _pawns[i].T != _pawns[i - 1].T ? KindGap : 0;
+            if (x > 0 && x + gap + card > room) { row++; x = 0; gap = 0; }
+            if (row >= rows) { Rows = rows; return false; }
+            var at = new Vector2(x + gap, row * rowH);
+            if (last) _more = at; else _at.Add(at);
+            x = at.X + card + Gap;
+            width = Math.Max(width, x - Gap);
+        }
+        Rows = row + 1;
+        return true;
     }
 
     /// <summary>The middle of one's card in the row, in the row's own frame (for the self-test); null if it has none.</summary>
     public Vector2? FaceOf(Unit u)
     {
         int i = _pawns.IndexOf(u);
-        return i < 0 ? null : new Vector2(_x[i] + _card / 2, _card / 2);
+        return i < 0 || i >= _at.Count ? null : _at[i] + new Vector2(_card / 2, _card / 2);
     }
+
+    /// <summary>The middle of the «+N» card in the bar's own frame, if it has one (for the self-test).</summary>
+    public Vector2? MoreAt => _more is { } m ? m + new Vector2(_card / 2, _card / 2) : null;
 
     int At(Vector2 p)
     {
-        for (int i = 0; i < _x.Count; i++) if (p.X >= _x[i] && p.X < _x[i] + _card) return i;
+        for (int i = 0; i < _at.Count; i++) if (new Rect2(_at[i], _card, _card * 1.22f).HasPoint(p)) return i;
+        if (_more is { } m && new Rect2(m, _card, _card * 1.22f).HasPoint(p)) return More;
         return -1;
     }
 
@@ -80,6 +128,8 @@ public partial class ColonistBar : Control
         if (e is not InputEventMouseButton { Pressed: true } mb || mb.ButtonIndex is not (MouseButton.Left or MouseButton.Right)) return;
         int i = At(mb.Position);
         AcceptEvent();
+        // those left out let out, or folded up again
+        if (i == More) { if (mb.ButtonIndex == MouseButton.Left) _open = !_open; return; }
         if (i < 0) return;
         var u = _pawns[i];
         // a commander's card as a hero: the right button, or the left on one with a skill to choose
@@ -96,6 +146,7 @@ public partial class ColonistBar : Control
     public override string _GetTooltip(Vector2 at)
     {
         int i = At(at);
+        if (i == More) return _open ? "Свернуть\nСнова два ряда лиц." : $"Ещё {Folded}\nЩелчок — показать всех жителей, ещё раз — свернуть.";
         if (i < 0) return "";
         var u = _pawns[i];
         return $"{u.Name} №{u.Id} · {Math.Ceiling(Math.Max(0, u.Hp))} из {Math.Ceiling(u.MaxHp)}\n{Retinue.Doing(u, _m.Sim)}.\nЩелчок — выбрать, ещё раз — показать; Shift — добавить к выбранным."
@@ -106,7 +157,31 @@ public partial class ColonistBar : Control
 
     public override void _Draw()
     {
-        for (int i = 0; i < _pawns.Count; i++) Card(_pawns[i], new Rect2(_x[i], 0, _card, _card * 1.22f), i == _hover);
+        for (int i = 0; i < _at.Count; i++) Card(_pawns[i], new Rect2(_at[i], _card, _card * 1.22f), i == _hover);
+        if (_more is { } m) MoreCard(new Rect2(m, _card, _card * 1.22f), _hover == More);
+    }
+
+    /// <summary>The card of those left out: «+N» on it; let out, a mark to fold them up again.</summary>
+    void MoreCard(Rect2 r, bool hover)
+    {
+        DrawRect(new Rect2(r.Position + new Vector2(1, 2), r.Size), new Color(0, 0, 0, .5f));
+        Ornament.Gradient(this, r, new Color("2a2024"), new Color("0e0b0d"));
+        var ink = hover ? Craft.BrassLight : Ornament.BronzeLight;
+        if (_open)
+        {
+            // a chevron up: fold them up
+            var c = r.GetCenter();
+            float s = r.Size.X * .22f;
+            DrawPolyline(new[] { c + new Vector2(-s, s * .5f), c + new Vector2(0, -s * .5f), c + new Vector2(s, s * .5f) }, ink, 2, true);
+        }
+        else
+        {
+            string text = "+" + Folded;
+            int size = (int)Math.Clamp(r.Size.X * .42f, 10, 18);
+            float w = Ornament.SerifBold.GetStringSize(text, HorizontalAlignment.Left, -1, size).X;
+            DrawString(Ornament.SerifBold, new Vector2(r.GetCenter().X - w / 2, r.GetCenter().Y + size * .35f), text, HorizontalAlignment.Left, -1, size, ink);
+        }
+        DrawRect(r, hover ? Craft.BrassLight : Craft.Brass, false, 1.1f);
     }
 
     void Card(Unit u, Rect2 r, bool hover)

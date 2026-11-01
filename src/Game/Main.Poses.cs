@@ -86,6 +86,7 @@ public partial class Main
         if (_pose == "lava") { LavaPose(); return; }
         if (_pose == "wand") { WandPose(); return; }
         if (_pose == "god") { GodPose(); return; }
+        if (_pose == "crowd") { CrowdPose(); return; }
         if (_pose == "angels") { FaithPose(); return; }
         if (_pose == "swamp") { SwampPose(); return; }
         if (_pose == "square") { SquarePose(); return; }

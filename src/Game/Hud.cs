@@ -610,8 +610,8 @@ public partial class Hud : CanvasLayer
             _colonists.To = vp.X - 14;
             _colonists.Top = _clockPanel.Position.Y + _clockPanel.Size.Y + 6;
         }
-        // a warlord in the valley: his bar under the faces in the middle
-        _lordBar.Position = new Vector2(MathF.Round((vp.X - LordBar.W) / 2), _colonists.Top + 52);
+        // a warlord in the valley: his bar under the faces in the middle (under both their rows, or all of them let out)
+        _lordBar.Position = new Vector2(MathF.Round((vp.X - LordBar.W) / 2), _colonists.Top + (_colonists.Visible ? Math.Max(52, _colonists.Size.Y + 6) : 52));
         // the console's middle stood up over the band when what is in hand needs more room than the band has (its well
         // a little over the plate's top), the hints and the toasts over it
         float lift = _inspector.Visible ? Math.Max(0, _inspector.Raise - (Inspector.Top - 6)) : 0;
