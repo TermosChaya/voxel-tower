@@ -37,6 +37,32 @@ public sealed partial class Sim
     }
 
     /// <summary>
+    /// The outpost's tower laid at once, whole, as the workers of a party left it who raised the outpost on the map while
+    /// we were not in the valley: what is free of its plan filled, remembered as built so that the workers mend it. False
+    /// where it cannot stand (a citadel's valley, no plan).
+    /// </summary>
+    public bool LayOutpost()
+    {
+        if (Site.HasKeep) return false;
+        var t = TemplateOf("squaretower");
+        var (x, z) = OutpostSpot();
+        var plan = t.Plan(World, Site, x, z, x, z, 0, OutpostHeight);
+        if (plan?.Voxels == null) return false;
+        var L = plan.Voxels;
+        if (plan.Arched != null) Arch(plan.Arched);
+        for (int i = 0; i < L.Count; i++)
+        {
+            int vx = L.X(i), vy = L.Y(i), vz = L.Z(i);
+            byte m = L.M(i);
+            if (!Brushes.Free(World.Get(vx, vy, vz))) continue;
+            World.Set(vx, vy, vz, m);
+            Remember(vx, vy, vz, m);
+        }
+        Nav.Flush();
+        return true;
+    }
+
+    /// <summary>
     /// The outpost's tower stands whole: its walls, a metre thick round a hollow middle, laid up to their top all round
     /// (the scaffolds the workers put up and take down again inside it are no part of it).
     /// </summary>

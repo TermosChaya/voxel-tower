@@ -94,6 +94,7 @@ public partial class Main
         Hud.Unfold.OpenAll();
         // (the keepers of the map given before its first turn, if this is the first valley it ever opened on)
         Atlas.Prepare();
+        Campaign.TowerRaised(cell, Sim);
         Atlas.Enter(Sim);
         Atlas.Settle(cell, Sim);
         // the beasts that keep a valley nobody holds are the map's: they stand at its middle when we first come; the keepers

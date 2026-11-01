@@ -111,6 +111,37 @@ public partial class Main
         Rig.SetAt(w.WX(mx), w.WY(w.SurfAt((int)mx, (int)mz)), w.WZ(mz), MathF.Atan2(ax, az) + .45f, .62f, s.Trove == TroveKind.Ruins ? 1.25f : 1.45f);
     }
 
+    /// <summary>
+    /// --campaign --pose=outpost: the scene opens on the valley next to the first whose outpost a party of ours raised on
+    /// the map while we were away, its three workers kept there (set before the valley is made, as the map leaves it).
+    /// </summary>
+    void OutpostPoseBefore()
+    {
+        MapCell cell = null;
+        foreach (var c in Atlas.Cells)
+            if (c.Owner == Holder.None && c.Holding == Holding.Outpost && c.Sum.Keep.Count == 0 && c.Trove == TroveKind.None && Campaign.Distance(0, 0, c.Q, c.R) == 1) { cell = c; break; }
+        if (cell == null) return;
+        cell.Owner = Holder.Ours; cell.Sum.Raised = 1;
+        for (int i = 0; i < 3; i++) cell.Sum.Keep.Add(new Traveller { Kind = Kinds.Worker, Look = 3 + i * 5, Hp = Kinds.Worker.Hp, MaxHp = Kinds.Worker.Hp });
+        Atlas.HereQ = cell.Q; Atlas.HereR = cell.R;
+    }
+
+    /// <summary>
+    /// The valley of an outpost raised on the map (--pose=outpost): its stone tower by the stone, the workers who raised it
+    /// come in, seen from the side they came by in the late morning. --look=1 nearer.
+    /// </summary>
+    void OutpostPose()
+    {
+        var s = Site; var w = World;
+        Sim.WildTarget = 0;
+        Sim.SetClock(new ClockTime(Atlas.Clock.Day, DayClock.DayLength * .35));
+        Atlas.Clock = Sim.Clock.Now;
+        Advance(6);
+        var (tx, tz) = Sim.OutpostSpot();
+        var (ix, iz) = (s.Hex ?? Hex.In(w.SX, w.SZ)).Inward(s.EntrySide);
+        Rig.SetAt(w.WX((s.KeepX + tx) / 2f), w.WY(s.KeepBase), w.WZ((s.KeepZ + tz) / 2f), MathF.Atan2(ix, iz) + .5f, .55f, _look == 1 ? 2.6f : 1.5f);
+    }
+
     /// <summary>A party of ours as the map keeps it: a commander and these kinds, a look each.</summary>
     static Party PartyOf(params UnitType[] kinds)
     {
@@ -126,6 +157,7 @@ public partial class Main
     void CampaignPoseBefore()
     {
         if (_pose == "trove" && Atlas != null) { TrovePoseBefore(); return; }
+        if (_pose == "outpost" && Atlas != null) { OutpostPoseBefore(); return; }
         if (_pose == "holdfight" && Atlas != null) { HoldFightBefore(); return; }
         if (_pose != "lairfight" || Atlas == null) return;
         var lair = Atlas.Cells.Find(c => c.Holding == Holding.HordeTown);
@@ -290,6 +322,11 @@ public partial class Main
             case "trove":
             {
                 TrovePose();
+                break;
+            }
+            case "outpost":
+            {
+                OutpostPose();
                 break;
             }
             case "atlas":

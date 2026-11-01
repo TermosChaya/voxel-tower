@@ -293,6 +293,33 @@ static class CampaignBench
             && rb.At(spot.Q, spot.R) is { Owner: Owner.Ours, Outpost: true },
             $"owner {spot.Owner}, raised {spot.Sum.Raised}; sent {sent}, coming {coming.Count}; read back {rb.At(spot.Q, spot.R).Owner} outpost {rb.At(spot.Q, spot.R).Outpost}");
 
+        // ---- an outpost raised on the map by a party with workers, its valley never gone into (The Well, 30.10.2026:
+        // «Застава: пустая долина, цитадели нет»): going in, its tower stands by the stone and its workers come in
+        {
+            var far = Campaign.New(37);
+            var post = far.Cells.First(c => c.Owner == Owner.None && c.Holding == Holding.Outpost && c.Sum.Keep.Count == 0 && Campaign.Distance(0, 0, c.Q, c.R) == 1);
+            var crew = new MapParty { Id = 950, Owner = Owner.Ours, Q = post.Q, R = post.R, CameQ = post.Q, CameR = post.R, Party = new Party() };
+            foreach (var k in new[] { Kinds.Captain, Kinds.Worker, Kinds.Worker, Kinds.Worker })
+                crew.Party.Members.Add(new Traveller { Kind = k, Hp = k.Hp, MaxHp = k.Hp });
+            far.Parties.Add(crew);
+            for (int i = 0; i < 400 && post.Owner != Owner.Ours; i++) far.Advance(30);
+            string dir3 = Path.Combine(Path.GetTempPath(), $"vt-campaign-outpost-{Environment.ProcessId}");
+            if (Directory.Exists(dir3)) Directory.Delete(dir3, true);
+            Directory.CreateDirectory(dir3);
+            var psim = far.OpenValley(dir3, post, out _);
+            psim.WildTarget = 0; psim.Clock.Left = 1e9;
+            bool stands = psim.OutpostStands();
+            int workers = psim.Units.Count(u => !u.Dead && u.Team == Team.Player && u.T == Kinds.Worker);
+            int fell = 0;
+            psim.Collapsed += (n, _, _, _) => fell += n;
+            Step(psim, 3);
+            bool still = psim.OutpostStands();
+            Directory.Delete(dir3, true);
+            check("an outpost raised on the map by a party with workers, its valley never gone into: going in, its stone tower stands by the stone whole, and the workers who raised it come in",
+                post.Owner == Owner.Ours && post.Sum.Raised >= 1 && stands && still && fell == 0 && workers == 3 && post.Outpost,
+                $"owner {post.Owner}, raised {post.Sum.Raised:0.00}; the tower {psim.OutpostLaid():P0} laid, standing {stands}, after 3 s {still}, fallen {fell}; workers come in {workers}; marked {post.Outpost}");
+        }
+
         Realm(check, Step);
     }
 

@@ -123,7 +123,10 @@ public sealed partial class MapCell
 
     /// <summary>Its valley's file in the campaign's folder.</summary>
     public string File => $"valley_{Q}_{R}.sav";
-    /// <summary>An outpost's tower was marked for the workers in its valley (Sim.Outpost.cs); standing, the cell is ours.</summary>
+    /// <summary>
+    /// An outpost's tower was marked for the workers in its valley (Sim.Outpost.cs), or, raised by a party on the map while
+    /// we were away, laid there whole when we first came in after; standing, the cell is ours.
+    /// </summary>
     public bool Outpost;
 }
 
@@ -487,6 +490,7 @@ public sealed partial class Campaign
                 if (cell.Holding == Holding.HordeTown && cell.Sum.Keep.Count == 0) sim.Garrison(Sim.Roster(LairThreat, 1));
             }
             sim.Campaign = true;
+            TowerRaised(cell, sim);
             Enter(sim, cell);
             Settle(cell, sim);
             return sim;
@@ -496,6 +500,16 @@ public sealed partial class Campaign
 
     /// <summary>How strong a lair's garrison is, against the siege's nights.</summary>
     public const float LairThreat = 3;
+
+    /// <summary>
+    /// An outpost a party of ours raised on the map while we were away: its tower stands in the valley, not only the stone
+    /// of its place (the workers built it as the map counted their days); laid the first time we come in after.
+    /// </summary>
+    public static void TowerRaised(MapCell cell, Sim sim)
+    {
+        if (cell.Holding == Holding.Outpost && cell.Owner == Owner.Ours && cell.Sum.Raised >= 1 && !cell.Outpost && sim.LayOutpost())
+            cell.Outpost = true;
+    }
 
     /// <summary>
     /// A valley we go into (the cell we are in, if not said) runs by the map's clock and holds the realm's gold; it knows
