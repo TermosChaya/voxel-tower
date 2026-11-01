@@ -143,7 +143,7 @@ public sealed partial class Sim
         }
         if (near.Count == 0) return false;
         near.Sort((a, b) => a.d.CompareTo(b.d));
-        var spot = near[Rng.Next(Math.Min(3, near.Count))].s;
+        var spot = near[Dice.Next(Math.Min(3, near.Count))].s;
         int c = StandNear((int)spot.X, (int)spot.Y, (int)spot.Z, u.T.Move.Height);
         // (something built over the place since: none of it)
         if (c < 0 || CellsApart(c, Nav.CellOf((int)spot.X, (int)spot.Y, (int)spot.Z)) > 1) return false;
@@ -167,10 +167,10 @@ public sealed partial class Sim
         u.Facing = u.Gaze = s.Facing;
         double stay = s.Does switch
         {
-            Pastime.Sell or Pastime.Hammer or Pastime.Saw => 30 + Rng.NextDouble() * 40,
-            Pastime.Spar => 20 + Rng.NextDouble() * 25,
-            Pastime.Shop or Pastime.Fetch => 8 + Rng.NextDouble() * 12,
-            _ => 6 + Rng.NextDouble() * 8,
+            Pastime.Sell or Pastime.Hammer or Pastime.Saw => 30 + Dice.NextDouble() * 40,
+            Pastime.Spar => 20 + Dice.NextDouble() * 25,
+            Pastime.Shop or Pastime.Fetch => 8 + Dice.NextDouble() * 12,
+            _ => 6 + Dice.NextDouble() * 8,
         };
         u.PastimeUntil = Time + stay;
     }

@@ -145,7 +145,9 @@ public static class Retinue
                     : u.Pastime == Pastime.Stroll ? u.After switch
                     {
                         Pastime.Warm => "идёт погреться к огню", Pastime.Shop or Pastime.Sell => "идёт на рынок", Pastime.Fetch => "идёт к колодцу",
-                        Pastime.Hammer or Pastime.Saw => "идёт поработать на улице", Pastime.Read => "идёт к ратуше", Pastime.Spar => "идёт на плац", _ => "прогуливается",
+                        Pastime.Hammer or Pastime.Saw => "идёт поработать на улице", Pastime.Read => "идёт к ратуше", Pastime.Spar => "идёт на плац",
+                        Pastime.Sleep => "идёт спать", Pastime.Eat => "идёт обедать", Pastime.Fish => "идёт удить рыбу", Pastime.Sweep => "идёт подмести у двери",
+                        Pastime.Tend => "идёт к клумбе", Pastime.Kneel => "идёт в святилище", Pastime.Sharpen => "идёт точить клинок", _ => "прогуливается",
                     } : "идёт";
         }
         string leisure = u.Pastime switch
@@ -153,7 +155,9 @@ public static class Retinue
             Pastime.Look => "осматривается", Pastime.Sit => "отдыхает", Pastime.Talk => "беседует", Pastime.Stretch => "потягивается",
             Pastime.Warm => "греется у огня", Pastime.Watch => "смотрит на запад", Pastime.Pray => "молится",
             Pastime.Shop => "выбирает товар", Pastime.Sell => "торгует за прилавком", Pastime.Saw => "пилит бревно", Pastime.Read => "читает объявления",
-            Pastime.Fetch => "набирает воду", Pastime.Spar => "бьёт чучело", Pastime.Hammer => u.Spot?.Of?.Kind == "masons" ? "тешет камень" : "куёт у наковальни", _ => "",
+            Pastime.Fetch => "набирает воду", Pastime.Spar => "бьёт чучело", Pastime.Hammer => u.Spot?.Of?.Kind == "masons" ? "тешет камень" : "куёт у наковальни",
+            Pastime.Sleep => "спит", Pastime.Eat => "обедает", Pastime.Drink => "пьёт воду", Pastime.Dice => "играет в кости", Pastime.Sharpen => "точит клинок",
+            Pastime.Fish => "удит рыбу", Pastime.Sweep => "метёт у двери", Pastime.Tend => "копается в клумбе", Pastime.Kneel => "молится в святилище", _ => "",
         };
         if (u.Hold) return leisure == "" ? "стоит по приказу" : "стоит по приказу, " + leisure;
         if (u.Why != "") return Bindings.Fill(u.Why);

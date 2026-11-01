@@ -83,7 +83,7 @@ public partial class Advisor : VBoxContainer
         foreach (var u in sim.Units)
         {
             if (u.Dead || u.Team != Team.Player || u.T != Kinds.Worker || u.Inside || u.Captor != null || u.Airborne != null) continue;
-            if (u.State != UnitState.Idle || u.Hold) continue;
+            if (u.State != UnitState.Idle || u.Hold || u.Pastime == Pastime.Sleep) continue;
             string why = u.Why ?? "";
             if (why == "до работы не дойти") stuck.Add(u);
             else if (why.StartsWith("ждёт опоры")) unfooted.Add(u);

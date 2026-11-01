@@ -98,7 +98,8 @@ public partial class WorkProgress : CanvasLayer
         string why = "";
         foreach (var u in sim.Units)
         {
-            if (u.Dead || u.Inside || u.T != Kinds.Worker || u.Hold || u.State != UnitState.Idle || u.Duty != Stockpile.None) continue;
+            // (asleep at night is no idleness to be told of)
+            if (u.Dead || u.Inside || u.T != Kinds.Worker || u.Hold || u.State != UnitState.Idle || u.Duty != Stockpile.None || u.Pastime == Pastime.Sleep) continue;
             idle++;
             if (why == "" && u.Why != "") why = u.Why;
         }

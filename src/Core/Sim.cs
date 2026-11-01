@@ -266,6 +266,7 @@ public sealed partial class Sim
         Stage = "TickTown"; TickTown(dt);
         Stage = "TickFrontage"; TickFrontage();
         Stage = "TickStreet"; TickStreet();
+        Stage = "TickVoices"; TickVoices();
         Stage = "TickHouseDoors"; TickHouseDoors();
         Stage = "TickStanding"; TickStanding();
         Stage = "TickTraps"; TickTraps();
@@ -438,11 +439,12 @@ public sealed partial class Sim
         for (int a = 0; a < Units.Count; a++)
         {
             var u = Units[a];
-            if (u.Dead || u.Inside || u.Airborne != null || u.PinKg > 0 || u.CarriedBy != null || u.PropBy != null || u.Propping != null || Nav.Ladder[u.Cell] != 0) continue;
+            // (one asleep lies where it lay down, in its bunk or by the fire)
+            if (u.Dead || u.Inside || u.Airborne != null || u.PinKg > 0 || u.CarriedBy != null || u.PropBy != null || u.Propping != null || Nav.Ladder[u.Cell] != 0 || u.Pastime == Pastime.Sleep) continue;
             for (int b = a + 1; b < Units.Count; b++)
             {
                 var v = Units[b];
-                if (v.Dead || v.Inside || v.Airborne != null || v.PinKg > 0 || v.CarriedBy != null || v.PropBy != null || v.Propping != null || Nav.Ladder[v.Cell] != 0) continue;
+                if (v.Dead || v.Inside || v.Airborne != null || v.PinKg > 0 || v.CarriedBy != null || v.PropBy != null || v.Propping != null || Nav.Ladder[v.Cell] != 0 || v.Pastime == Pastime.Sleep) continue;
                 float dx = v.X - u.X, dz = v.Z - u.Z, min = u.T.BodyR + v.T.BodyR + .5f;
                 if (dx * dx + dz * dz >= min * min || MathF.Abs(v.Y - u.Y) > Math.Min(u.T.BodyH, v.T.BodyH) * .8f) continue;
                 float d = MathF.Sqrt(dx * dx + dz * dz);
@@ -470,7 +472,7 @@ public sealed partial class Sim
         foreach (var u in Units)
         {
             if (u.Dead || u.Inside || u.Airborne != null || u == Possessed || u.State != UnitState.Idle || u.Path != null && u.PathI < u.Path.Count || Nav.Ladder[u.Cell] != 0) continue;
-            if (u.Team == Team.Player && (u.Site >= 0 || u.CarriedBy != null || u.Propping != null)) continue;
+            if (u.Team == Team.Player && (u.Site >= 0 || u.CarriedBy != null || u.Propping != null || u.Pastime == Pastime.Sleep)) continue;
             if (_stood.TryAdd(u.Cell, u)) continue;
             int c = FreeBeside(u);
             if (c < 0) continue;

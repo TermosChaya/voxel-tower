@@ -701,11 +701,31 @@ public sealed partial class Sim
         if (topple != null)
         {
             _settling = false;
+            // one of ours left at the foot on the side it goes (its feller, as the last of the cut goes): a step back to
+            // the other side of the stump as it starts down
+            if (topple.Felled) StepBack(topple);
             _toppling.Add((topple, pieces, fx, fz, baseY));
             Toppled?.Invoke(topple);
             return;
         }
         Lay(pieces, fx, fz, baseY, trunks, quiet, fellPlan?.Lane);
+    }
+
+    /// <summary>Those of ours within two metres of a felled tree's foot on the side it goes over to step back past the stump, as far as there is footing.</summary>
+    void StepBack(Toppling t)
+    {
+        foreach (var u in Units)
+        {
+            if (u.Dead || u.Inside || u.Team != Team.Player || u.Airborne != null || u == Possessed || u.CarriedBy != null) continue;
+            float ax = u.X - t.PX, az = u.Z - t.PZ, along = ax * t.DX + az * t.DZ, across = MathF.Abs(ax * t.DZ - az * t.DX);
+            if (along <= 0 || along > 2 * VoxelWorld.PerMetre || across >= 12) continue;
+            float tx = u.X - t.DX * (along + 4), tz = u.Z - t.DZ * (along + 4);
+            int c = StandNear((int)tx, (int)u.Y, (int)tz, u.T.Move.Height);
+            if (c < 0 || CellsApart(c, u.Cell) > 2 || _bodies[c] > 0 && c != u.Cell) continue;
+            u.Cell = c;
+            (u.X, u.Y, u.Z) = Nav.Feet(c);
+            u.Path = null;
+        }
     }
 
     /// <summary>Trees going over now, to be laid down when they get to the ground.</summary>
@@ -804,6 +824,7 @@ public sealed partial class Sim
         if (quiet || laid == 0) return;
         cx /= laid; cy /= laid; cz /= laid;
         Collapsed?.Invoke(laid, cx, cy, cz);
+        CallStone(laid, cx, cy, cz);
         if (laid > 120 && Time - _collapseSaid > 8)
         {
             _collapseSaid = Time;

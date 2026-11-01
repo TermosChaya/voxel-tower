@@ -141,6 +141,7 @@ public partial class Sound : Node
         HookCollapse(sim);
         HookCarry(sim);
         HookShout(sim);
+        HookVoices(sim);
     }
 
     /// <summary>A blade, a club or a beast's jaws starting down at someone: the swish of it through the air, or a beast's lunge.</summary>
@@ -292,6 +293,7 @@ public partial class Sound : Node
         _rain.VolumeDb = sim.Weather == Weather.Rain ? -9 : -80;
         AcidLoop(sim);
         TownLoop(sim);
+        Growls(sim);
     }
 
     // ---------------------------------------------------------------- making the sounds
@@ -333,6 +335,7 @@ public partial class Sound : Node
         MakeCollapse();
         MakeCarry();
         MakeShout();
+        MakeVoices();
     }
 
     void Add(string name, float[] s, bool loop = false)

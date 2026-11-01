@@ -46,6 +46,10 @@ public partial class UnitView : Node3D
         public Unit GazeAt;
         public bool Seen;
         public Transform3D Body;
+        /// <summary>How far down it lies asleep (0 to 1, eased); where its hands were in the frame they were last posed in (UnitView.Life.cs).</summary>
+        public float Lie;
+        public Transform3D HandR, HandL;
+        public double HandsAt = -1;
     }
 
     /// <summary>
@@ -148,6 +152,7 @@ public partial class UnitView : Node3D
         // a warband's leader carries its standard on its back: a pole and a rag of red cloth
         var cube = new BoxMesh { Size = Vector3.One };
         _standards = Multi(cube, new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = .9f, CullMode = BaseMaterial3D.CullModeEnum.Disabled }, true);
+        LifeInit();
         foreach (var a in OS.GetCmdlineUserArgs())
             if (a.StartsWith("--figures=")) _pinned = a[10..] switch { "near" => 0, "mid" => 1, "far" => 2, _ => -1 };
     }
@@ -307,6 +312,8 @@ public partial class UnitView : Node3D
         _t += dt;
         _dt = _m.Paused ? 0 : dt;
         var sim = _m.Sim;
+        HearLife(sim);
+        ForgetHeard();
         Distance();
         _meshing = 0;
         look_xf.Clear();
@@ -324,6 +331,7 @@ public partial class UnitView : Node3D
             if (!_looks.TryGetValue(u.Id, out var look)) _looks[u.Id] = look = new Look();
             Track(u, look, dt);
             var tint = Pose(u, k.Fig, look);
+            if (!u.Dead) Hands(k.Fig, look);
             // the dead go limp: their bones as the body falls and lies (UnitView.Corpse.cs)
             if (u.Dead) Limp(u, k.Fig, look);
             if (u.Id == HiddenId)
@@ -363,6 +371,7 @@ public partial class UnitView : Node3D
         DrawFallen(dt);
         DrawRings();
         DrawStandards(sim);
+        DrawProps(sim);
         DrawSplints();
     }
 
@@ -603,15 +612,20 @@ public partial class UnitView : Node3D
                         else if (u.Pastime == Pastime.Fetch) { elbowR = elbowL = -.7f; kneeR = kneeL = .15f; }
                         else if (u.Pastime == Pastime.Sell) { elbowR = elbowL = -.5f; }
                         else if (u.Pastime == Pastime.Read) { elbowR = elbowL = -1.4f; }
+                        // the town's own pastimes, and the small things one does standing at ease (UnitView.Life.cs)
+                        if (u.State == UnitState.Idle) LifePose(u, f, look, seed, ref main, ref off, ref legR, ref legL, ref lean, ref bob, ref elbowR, ref elbowL, ref kneeR, ref kneeL, ref hipYaw);
+                        Fidget(u, f, look, seed, ref main, ref off, ref elbowR, ref elbowL, ref lean);
                     }
                     break;
             }
+            // a greeting, a word, a cheer, the horde's chant (UnitView.Life.cs)
+            Gesture(u, f, look, seed, ref main, ref off, ref elbowR, ref elbowL, ref lean, ref bob);
             // a great one at a throw: stooping to the stone, up with it, over the head and away (UnitView.Hurl.cs)
             bool hurl = HurlPose(u, f, ref main, ref off, ref lean, ref bob, ref elbowR, ref elbowL, ref kneeR, ref kneeL, ref legR, ref legL);
             // the feet on the ground under them, as the stride sets them down (UnitView.Gait.cs): walking, and standing
             // where the ground is not level; not at work, in a fight, sitting or bound
             if (!hurl && u.State is not (UnitState.Work or UnitState.Carve or UnitState.Siege or UnitState.Fight) && !u.Bound
-                && u.Pastime is not (Pastime.Sit or Pastime.Bound))
+                && u.Pastime is not (Pastime.Sit or Pastime.Bound) && !OwnLegs(u))
                 bob = Footing(u, f, look, bob, ref legR, ref legL, ref kneeR, ref kneeL);
         }
         else
@@ -670,6 +684,9 @@ public partial class UnitView : Node3D
             if (u.Down) look.Down = Math.Max(look.Down, 1 - MathF.Exp(-(float)(_m.Sim.Time - u.DownSince) * 3.5f));
             else look.Down -= look.Down * Math.Min(1, _dt * 1.4f);
             if (look.Down > .01f) fall = Math.Max(fall, Smooth(look.Down));
+            // asleep: on its back in its bunk or on the ground (UnitView.Life.cs)
+            float lie = Lie(u, look);
+            if (lie > .01f) fall = Math.Max(fall, Smooth(lie));
         }
         // up on a comrade's shoulder: laid across it, not lying down (UnitView.Carry.cs)
         bool borne = f.Jointed && Sim.OnShoulder(u);
@@ -736,8 +753,10 @@ public partial class UnitView : Node3D
         // the breath: slow at rest, quick and deep after a run or in a fight, and it takes a while to settle
         float exert = u.Dead ? 0 : look.Run > .3f ? 1 : u.State == UnitState.Fight ? .8f : u.State is UnitState.Work or UnitState.Carve or UnitState.Siege ? .45f : look.Move > .2f ? .25f : 0;
         look.Exert += (exert - look.Exert) * Math.Min(1, _dt * (exert > look.Exert ? 1.2f : .12f));
-        look.Breath += _dt * (1.5f + 3.2f * look.Exert);
-        float inhale = u.Dead ? 0 : MathF.Sin(look.Breath) * (.55f + .9f * look.Exert);
+        // (asleep, slow and deep; the horde's heavy, a growl's breath)
+        bool asleep = u.Pastime == Pastime.Sleep && u.State == UnitState.Idle, heavy = u.Team == Team.Horde;
+        look.Breath += _dt * (asleep ? .85f : (heavy ? 1.9f : 1.5f) + 3.2f * look.Exert);
+        float inhale = u.Dead ? 0 : MathF.Sin(look.Breath) * ((asleep ? .95f : heavy ? 1f : .75f) + .9f * look.Exert);
         // where the head turns: at whom it fights, what it works, what it hunts, about it when idle
         Gaze(u, f, look);
         var waist = f.Pivot[(int)Bone.Torso];
@@ -746,9 +765,9 @@ public partial class UnitView : Node3D
             * RotAt(waist, Vector3.Up, chestYaw + look.HeadYaw * .25f);
         look.Body = body;
         // the chest swells with the breath and the shoulders and the head rise with it
-        var chest = body * new Transform3D(Basis.Identity, waist) * new Transform3D(Basis.FromScale(new Vector3(1 + .018f * inhale, 1 + .008f * inhale, 1 + .03f * inhale)), Vector3.Zero)
+        var chest = body * new Transform3D(Basis.Identity, waist) * new Transform3D(Basis.FromScale(new Vector3(1 + .026f * inhale, 1 + .011f * inhale, 1 + .042f * inhale)), Vector3.Zero)
             * new Transform3D(Basis.Identity, -waist);
-        var top = body * new Transform3D(Basis.Identity, new Vector3(0, .008f * inhale * f.NeckUp, .01f * inhale));
+        var top = body * new Transform3D(Basis.Identity, new Vector3(0, .017f * inhale * f.NeckUp, .016f * inhale));
         _xf[(int)Bone.Torso] = chest;
         // the head: turned and tilted to what it looks at, holding the eyes level against the trunk's lean
         var neck = f.Pivot[(int)Bone.Head];
@@ -931,10 +950,17 @@ public partial class UnitView : Node3D
         float ex = u.X, ey = u.Y + u.T.BodyH * .88f, ez = u.Z;
         bool at = false;
         float tx = 0, ty = 0, tz = 0;
+        // the town's life: the one it greets, who called out near, the hands at their pastime (UnitView.Life.cs)
+        bool lifeAt = false;
+        float lx = 0, ly = 0, lz = 0, lp = float.NaN;
+        if (!u.Dead && u.Airborne == null && u.State is UnitState.Idle or UnitState.Walk && u.Target == null && u.Prey == null)
+            lifeAt = LifeGaze(u, look, out lx, out ly, out lz, out lp);
         if (u.Dead || u.Airborne != null) { }
         else if (u.Target is { Dead: false } foe && (u.State == UnitState.Fight || Dist2(u, foe) < 30 * 30)) { tx = foe.X; ty = foe.Y + foe.T.BodyH * .8f; tz = foe.Z; at = true; }
         else if (u.Prey is { Dead: false } prey) { tx = prey.X; ty = prey.Y + prey.T.BodyH * .6f; tz = prey.Z; at = true; }
         else if (u.State == UnitState.Work && u.JobI < u.Jobs.Count) { var j = u.Jobs[u.JobI]; tx = j.x + .5f; ty = j.y + .5f; tz = j.z + .5f; at = true; }
+        else if (lifeAt) { tx = lx; ty = ly; tz = lz; at = true; }
+        else if (!float.IsNaN(lp)) { yaw = 0; pitch = lp; }
         else
         {
             // now and then something else to look at: about, or someone near
@@ -961,6 +987,8 @@ public partial class UnitView : Node3D
             float dx = tx - ex, dz = tz - ez, dy = ty - ey;
             yaw = -Mathf.Wrap(MathF.Atan2(dz, dx) - look.Face, -MathF.PI, MathF.PI);
             pitch = -MathF.Atan2(dy, MathF.Max(1, MathF.Sqrt(dx * dx + dz * dz)));
+            // a nod as it greets
+            if (lifeAt && !float.IsNaN(lp)) pitch = lp;
         }
         yaw = Math.Clamp(yaw, -1.2f, 1.2f);
         pitch = Math.Clamp(pitch, -.6f, .75f);

@@ -719,6 +719,7 @@ public sealed partial class Sim
             laid += part.Count;
         }
         Collapsed?.Invoke(f.Voxels.Count, f.X, f.Y, f.Z);
+        CallStone(f.Voxels.Count, f.X, f.Y, f.Z);
         Jar(sx, sy, sz, 5 + MathF.Sqrt(f.Voxels.Count) / 8, Math.Min(1, speed / (12 * VoxelWorld.PerMetre)));
         return true;
     }

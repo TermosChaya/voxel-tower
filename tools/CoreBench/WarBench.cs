@@ -25,7 +25,7 @@ static class WarBench
         var w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         var site = MapGen.Generate(w, mp);
         w.Compact();
-        var s = new Sim(w, site) { WildTarget = 0 };
+        var s = new Sim(w, site) { WildTarget = 0, QuietLife = true };
         s.SetSource(new MapRaids());
         s.Clock.Left = 1e9;
         return s;
@@ -615,7 +615,7 @@ static class WarBench
         var site2 = MapGen.Generate(w2, new MapParams { Seed = reader.Seed });
         w2.Compact();
         reader.Valley(w2, site2);
-        var sim2 = new Sim(w2, site2);
+        var sim2 = new Sim(w2, site2) { QuietLife = true };
         sim2.Load(reader);
         return sim2;
     }

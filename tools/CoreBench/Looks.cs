@@ -58,7 +58,7 @@ static class LooksBench
         var w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         var site = MapGen.Generate(w, mp);
         w.Compact();
-        var sim = new Sim(w, site);
+        var sim = new Sim(w, site) { QuietLife = true };
         sim.Waves.Countdown = 1e9; sim.WildTarget = 0;
         StartingFort.Raise(sim);
         sim.CancelArea(0, 0, w.SX, w.SZ);

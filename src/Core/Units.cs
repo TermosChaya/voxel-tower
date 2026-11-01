@@ -8,7 +8,7 @@ public enum Team : byte { Player, Horde, Wild }
 public enum UnitState : byte { Idle, Walk, Work, Fight, Carve, Siege, Flee, Dead }
 
 /// <summary>What a pawn with nothing to do passes the time with: for its pose and for the panel.</summary>
-public enum Pastime : byte { None, Stroll, Look, Sit, Talk, Stretch, Warm, Watch, Pray, Bound, Shop, Sell, Hammer, Saw, Read, Fetch, Spar }
+public enum Pastime : byte { None, Stroll, Look, Sit, Talk, Stretch, Warm, Watch, Pray, Bound, Shop, Sell, Hammer, Saw, Read, Fetch, Spar, Sleep, Eat, Drink, Dice, Sharpen, Fish, Sweep, Tend, Kneel }
 
 /// <summary>A kind of pawn or attacker: how it moves, works, fights, and what it looks like.</summary>
 public sealed class UnitType
@@ -795,6 +795,16 @@ public sealed class Unit
     public double PastimeUntil;
     /// <summary>Who it is talking to.</summary>
     public Unit Mate;
+    /// <summary>The ring it stands or squats in with others, talking or at dice (Sim.Life.cs).</summary>
+    public Huddle Group;
+    /// <summary>Where it lies down to sleep, a bunk or the ground (Sim.Life.cs); the day it last ate at noon.</summary>
+    public Berth Berth;
+    public int AteDay;
+    /// <summary>When it may look again for a place to fish, sweep, tend or kneel (a search across the ground is no small thing); when it last had work in hand.</summary>
+    public double LifeAgain, BusyAt = -99;
+    /// <summary>When it last greeted someone in passing, and whom (the view turns its head and raises a hand).</summary>
+    public double GreetAt = -99;
+    public Unit GreetTo;
     /// <summary>The way it looks while at it: at a fire, out over the wall.</summary>
     public float Gaze;
     /// <summary>Its place in the street (Sim.Streets.cs), and when it may look for one again.</summary>

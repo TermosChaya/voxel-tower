@@ -187,6 +187,7 @@ public sealed partial class Sim
             Idle(u, dt, stay: false);
             return;
         }
+        u.BusyAt = Time;
         // work where a tree is about to come down, or something built, waits till it is down (Sim.Undermine.cs)
         if (SiteInDanger(u)) { u.Unreachable[u.Site] = Time + 8; ReleaseSite(u); u.Why = "ждёт: там сейчас упадёт"; return; }
         if (u.Path != null && u.PathI < u.Path.Count) { Walk(u, dt); return; }
@@ -791,6 +792,13 @@ public sealed partial class Sim
             u.State = UnitState.Fight;
             u.Facing = MathF.Atan2(foe.Z - u.Z, foe.X - u.X);
             if (u.Cooldown <= 0) { Strike(u, foe); u.Cooldown = u.T.AttackTime; }
+            return true;
+        }
+        // a comrade come to bind it up or splint it is close by, and no foe: it waits for that rather than limp off from it
+        if (foe == null && u.Bandager is { Dead: false } binder && binder.Patient == u && Dist(u, binder) < 4 * VoxelWorld.PerMetre)
+        {
+            u.Path = null;
+            u.State = UnitState.Idle;
             return true;
         }
         if (CellsApart(u.Cell, Gate) > 2)

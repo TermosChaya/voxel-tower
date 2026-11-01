@@ -30,7 +30,7 @@ static class GodsBench
         var w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         var site = MapGen.Generate(w, mp);
         w.Compact();
-        var sim = new Sim(w, site);
+        var sim = new Sim(w, site) { QuietLife = true };
         sim.Waves.Countdown = 1e9; sim.WildTarget = 0;
         // (the horde's god left with nobody of ours about goes for the citadel: what it takes off it counted, and the
         // citadel kept whole meanwhile, so the valley is not lost under the bench)
@@ -380,7 +380,7 @@ static class GodsBench
         w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         site = MapGen.Generate(w, mp);
         w.Compact();
-        sim = new Sim(w, site);
+        sim = new Sim(w, site) { QuietLife = true };
         sim.Waves.Countdown = 1e9; sim.WildTarget = 0;
         Field();
         sim.Known.Add(SpellKind.Awaken);

@@ -211,7 +211,7 @@ static class ArchitectBench
         var w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         var site = MapGen.Generate(w, mp);
         w.Compact();
-        var sim = new Sim(w, site) { WildTarget = 0 };
+        var sim = new Sim(w, site) { WildTarget = 0, QuietLife = true };
         sim.Clock.Left = 1e9;
         foreach (var u in sim.Units) if (u.Team == Team.Wild) { u.Dead = true; u.DiedAt = -999; }
         if (Say) sim.Said += (t, _, _, _) => Console.WriteLine($"      [{sim.Time:0}] {t}");
@@ -296,7 +296,7 @@ static class ArchitectBench
         var site2 = MapGen.Generate(w2, mp);
         w2.Compact();
         reader.Valley(w2, site2);
-        var sim2 = new Sim(w2, site2) { WildTarget = 0 };
+        var sim2 = new Sim(w2, site2) { WildTarget = 0, QuietLife = true };
         sim2.Load(reader);
         sim2.Clock.Left = 1e9;
         return sim2;
@@ -591,7 +591,7 @@ static class ArchitectBench
         site.Roads.Clear();
         site.Roads.Add(new List<(float X, float Z)> { (cx - 600, cz + 4), (cx + 600, cz + 4) });
         w.Compact();
-        var sim = new Sim(w, site) { WildTarget = 0 };
+        var sim = new Sim(w, site) { WildTarget = 0, QuietLife = true };
         sim.Clock.Left = 1e9;
         foreach (var u in sim.Units) if (u.Team == Team.Wild) { u.Dead = true; u.DiedAt = -999; }
         foreach (var u in sim.Units) if (u.Team == Team.Player && u.T == Kinds.Worker) { u.Dead = true; u.DiedAt = -999; }

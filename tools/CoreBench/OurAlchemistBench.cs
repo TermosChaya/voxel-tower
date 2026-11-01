@@ -18,7 +18,7 @@ static class OurAlchemistBench
         var w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         var site = MapGen.Generate(w, mp);
         w.Compact();
-        var sim = new Sim(w, site);
+        var sim = new Sim(w, site) { QuietLife = true };
         sim.Waves.Countdown = 1e9; sim.WildTarget = 0;
         foreach (var u in sim.Units) if (u.Team == Team.Player) { u.Dead = true; u.DiedAt = -999; }
         void Run(double seconds) { for (double t = 0; t < seconds; t += .05) sim.Step(.05f); }

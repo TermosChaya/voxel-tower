@@ -39,7 +39,7 @@ static class TownBench
         var w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         var site = MapGen.Generate(w, mp);
         w.Compact();
-        var sim = new Sim(w, site);
+        var sim = new Sim(w, site) { QuietLife = true };
         sim.Waves.Countdown = 1e9; sim.WildTarget = 0;
         StartingFort.Raise(sim);
         int kx = site.KeepX, kz = site.KeepZ;
@@ -381,7 +381,7 @@ static class TownBench
             var site2 = MapGen.Generate(w2, new MapParams { Seed = save.Seed });
             w2.Compact();
             save.Valley(w2, site2);
-            sim2 = new Sim(w2, site2);
+            sim2 = new Sim(w2, site2) { QuietLife = true };
             sim2.Load(save);
         }
         var b2 = sim2.BuildingOf("barracks");

@@ -19,7 +19,7 @@ static class SmartworkBench
         var w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         var site = MapGen.Generate(w, mp);
         w.Compact();
-        var sim = new Sim(w, site);
+        var sim = new Sim(w, site) { QuietLife = true };
         sim.Waves.Countdown = 1e9; sim.WildTarget = 0;
         void Run(double seconds) { for (double t = 0; t < seconds; t += .05) sim.Step(.05f); }
         // the household at the gate kept out of it: these tests bring their own

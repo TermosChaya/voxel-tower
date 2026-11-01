@@ -411,7 +411,7 @@ if (args.Length == 0 || args[0] == "--sim")
             foreach (var u in crew)
             {
                 seen.Add(u.Pastime);
-                if (u.Pastime == Pastime.Talk && u.Mate != null) talks++;
+                if (u.Pastime == Pastime.Talk && u.Group != null) talks++;
             }
         }
         for (int i = 0; i < crew.Count; i++)
@@ -419,7 +419,9 @@ if (args.Length == 0 || args[0] == "--sim")
             float d = MathF.Sqrt((crew[i].X - start[i].X) * (crew[i].X - start[i].X) + (crew[i].Z - start[i].Z) * (crew[i].Z - start[i].Z));
             moved = Math.Max(moved, d); strayed = Math.Max(strayed, d);
         }
-        Check("idle workers pass the time and stay close", seen.Count >= 4 && talks > 0 && moved > 8 && strayed < 12 * VoxelWorld.PerMetre,
+        // (stay close: a stroll keeps within a few metres; the town's own pastimes, the bank, a door, the flower beds,
+        // the sanctuary, within 30 to 40)
+        Check("idle workers pass the time and stay close", seen.Count >= 4 && talks > 0 && moved > 8 && strayed < 40 * VoxelWorld.PerMetre,
             $"{string.Join(", ", seen)}; talking {talks} of 240 looks, the farthest {strayed / VoxelWorld.PerMetre:0.0} m from where it stood");
     }
 
@@ -1020,7 +1022,7 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--life")
     var w4 = new VoxelWorld(mp6.SizeX, mp6.SizeY, mp6.SizeZ);
     var site4 = MapGen.Generate(w4, mp6);
     w4.Compact();
-    var sim = new Sim(w4, site4);
+    var sim = new Sim(w4, site4) { QuietLife = true };
     sim.Waves.Countdown = 1e9; sim.WildTarget = 0;
     void Run(double seconds) { for (double t = 0; t < seconds; t += .05) sim.Step(.05f); }
     // with no stone in the stores, workers don't trudge to a stone wall marked out; told to bring in stone, timber or
@@ -6261,6 +6263,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--rowhouses") RowHouse
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--builders") BuildersBench.Run(Check);
 // the settlement's ways and furnishing: laid, walked, worn, set out, lit, sat on (Decor.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--decor") DecorBench.Run(Check);
+
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--living") LivingBench.Run(Check);
 // mines under the walls and what meets them (Mines.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--mines") MinesBench.Run(Check);
 // the valley a hexagon, and the kinds of valley (HexBench.cs)

@@ -213,6 +213,13 @@ public sealed partial class Sim
         u.SeatAt = null;
         u.SeatH = 0;
         LeaveSpot(u);
+        // out of its bunk, back onto the floor beside it (Sim.Life.cs)
+        if (u.Berth is { } b)
+        {
+            if (b.Key >= 0 && _bunkBy.TryGetValue(b.Key, out var by) && by == u) _bunkBy.Remove(b.Key);
+            if (b.Key >= 0 && u.Pastime == Pastime.Sleep) (u.X, _, u.Z) = Nav.Feet(u.Cell);
+            u.Berth = null;
+        }
     }
 
     /// <summary>The fires people warm themselves at besides the citadel's braziers: our campfires and braziers that burn.</summary>

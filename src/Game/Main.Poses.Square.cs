@@ -58,6 +58,50 @@ public partial class Main
 
     void SquarePose()
     {
+        var w = World; var sim = Sim;
+        var (hx, hz) = SquareBuild();
+
+        // the household out on the square
+        var folk = new System.Collections.Generic.List<Unit>();
+        foreach (var (t, dx, dz) in new[] { (Kinds.Worker, -8, -26), (Kinds.Worker, 8, -26), (Kinds.Worker, -26, 8), (Kinds.Worker, 26, -8),
+                     (Kinds.Spearman, -10, 26), (Kinds.Archer, 10, 26), (Kinds.Worker, -24, -12), (Kinds.Swordsman, 24, 12), (Kinds.Worker, 40, 0), (Kinds.Worker, -40, 4) })
+            folk.Add(sim.Spawn(t, sim.NearestStand(hx + dx, hz + dz, t.Move.Height)));
+        bool night = _look is 1 or 2 or 4;
+        if (night)
+        {
+            // dusk falls (the fires lit as it does), and the night holds while the scene is looked at
+            sim.Waves.Countdown = Waves.Dusk + 1;
+            Advance(2);
+            sim.Waves.Countdown = 8;
+        }
+        // half of them to the benches, the rest about the fire
+        for (int i = 0; i < folk.Count; i++) sim.Rest(folk[i], warm: night && i % 2 == 1);
+        for (int t = 0; t < 30; t++)
+        {
+            Advance(1);
+            if (night) sim.Waves.Countdown = 8;
+            foreach (var u in folk) if (u.Pastime is not (Pastime.Sit or Pastime.Warm or Pastime.Stroll)) sim.Rest(u, warm: night && folk.IndexOf(u) % 2 == 1);
+        }
+        int sitting = 0, warming = 0;
+        foreach (var u in folk) { if (u.Pastime == Pastime.Sit && u.SeatH > 0) sitting++; if (u.Pastime == Pastime.Warm) warming++; }
+        int lit = 0, ready = 0;
+        foreach (var y in sim.Yards) { if (y.Ready) ready++; if (y.Light != null) lit++; }
+        GD.Print($"[pose] square at {hx},{hz}: {sim.Yards.Count} things ({ready} standing, {lit} lit), {sitting} on the benches, {warming} at the fire, darkness {sim.Waves.Darkness:0.00}");
+
+        float cx2 = w.WX(hx), cz2 = w.WZ(hz), gy = w.WY(w.SurfAt(hx, hz));
+        switch (_look)
+        {
+            case 2: Rig.SetAt(w.WX(hx + 6), gy, w.WZ(hz - 26), -.66f + MathF.PI, .55f, 2.4f); break;
+            case 3: Rig.SetAt(w.WX(hx + 4), gy, w.WZ(hz + 24), -.66f + MathF.PI, .55f, 2.6f); break;
+            case 4: Rig.SetAt(w.WX(hx + 6), gy + .4f, w.WZ(hz + 52), -.66f, .5f, 2.4f); break;
+            default: Rig.Set(cx2, cz2, -.66f, .62f, 1.1f, snap: true); break;
+        }
+        Hud.Refresh();
+    }
+
+    /// <summary>The square of --pose=square put up at once: its houses, its ways and its things; where its middle is.</summary>
+    (int x, int z) SquareBuild()
+    {
         var w = World; var s = Site; var sim = Sim;
         sim.Waves.Countdown = 1e9;
         var (hx, hz) = _squareAt;
@@ -111,42 +155,6 @@ public partial class Main
         Put(DecorKind.Signpost, 12, 26, 0);
         Put(DecorKind.FlowerBed, -48, -36, 0); Put(DecorKind.FlowerBed, 48, 38, 2);
         sim.InstantLabour = false;
-
-        // the household out on the square
-        var folk = new System.Collections.Generic.List<Unit>();
-        foreach (var (t, dx, dz) in new[] { (Kinds.Worker, -8, -26), (Kinds.Worker, 8, -26), (Kinds.Worker, -26, 8), (Kinds.Worker, 26, -8),
-                     (Kinds.Spearman, -10, 26), (Kinds.Archer, 10, 26), (Kinds.Worker, -24, -12), (Kinds.Swordsman, 24, 12), (Kinds.Worker, 40, 0), (Kinds.Worker, -40, 4) })
-            folk.Add(sim.Spawn(t, sim.NearestStand(hx + dx, hz + dz, t.Move.Height)));
-        bool night = _look is 1 or 2 or 4;
-        if (night)
-        {
-            // dusk falls (the fires lit as it does), and the night holds while the scene is looked at
-            sim.Waves.Countdown = Waves.Dusk + 1;
-            Advance(2);
-            sim.Waves.Countdown = 8;
-        }
-        // half of them to the benches, the rest about the fire
-        for (int i = 0; i < folk.Count; i++) sim.Rest(folk[i], warm: night && i % 2 == 1);
-        for (int t = 0; t < 30; t++)
-        {
-            Advance(1);
-            if (night) sim.Waves.Countdown = 8;
-            foreach (var u in folk) if (u.Pastime is not (Pastime.Sit or Pastime.Warm or Pastime.Stroll)) sim.Rest(u, warm: night && folk.IndexOf(u) % 2 == 1);
-        }
-        int sitting = 0, warming = 0;
-        foreach (var u in folk) { if (u.Pastime == Pastime.Sit && u.SeatH > 0) sitting++; if (u.Pastime == Pastime.Warm) warming++; }
-        int lit = 0, ready = 0;
-        foreach (var y in sim.Yards) { if (y.Ready) ready++; if (y.Light != null) lit++; }
-        GD.Print($"[pose] square at {hx},{hz}: {sim.Yards.Count} things ({ready} standing, {lit} lit), {sitting} on the benches, {warming} at the fire, darkness {sim.Waves.Darkness:0.00}");
-
-        float cx2 = w.WX(hx), cz2 = w.WZ(hz), gy = w.WY(w.SurfAt(hx, hz));
-        switch (_look)
-        {
-            case 2: Rig.SetAt(w.WX(hx + 6), gy, w.WZ(hz - 26), -.66f + MathF.PI, .55f, 2.4f); break;
-            case 3: Rig.SetAt(w.WX(hx + 4), gy, w.WZ(hz + 24), -.66f + MathF.PI, .55f, 2.6f); break;
-            case 4: Rig.SetAt(w.WX(hx + 6), gy + .4f, w.WZ(hz + 52), -.66f, .5f, 2.4f); break;
-            default: Rig.Set(cx2, cz2, -.66f, .62f, 1.1f, snap: true); break;
-        }
-        Hud.Refresh();
+        return (hx, hz);
     }
 }

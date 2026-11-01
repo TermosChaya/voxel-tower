@@ -118,6 +118,8 @@ public partial class Main
         }
         int Removals() => Sim.Orders.Total - Sim.Orders.BuildTotal;
 
+        // (the staged scenes want those with nothing to do about where they were left: the town's day is the life part's)
+        Sim.QuietLife = true;
         // the campaign's part of the test, on a valley the scene was begun again on for it (Main.SelfTest.Board.cs)
         if (_boardStage != null)
         {
@@ -159,6 +161,15 @@ public partial class Main
         if (System.Environment.GetEnvironmentVariable("SELFTEST_ONLY") == "land")
         {
             await SelfTestLand(Check);
+            GD.Print($"[selftest] {(fails == 0 ? "all passed" : fails + " failed")}");
+            GetTree().Quit(fails == 0 ? 0 : 1);
+            return;
+        }
+        // SELFTEST_ONLY=life: only the town's life (sleep, a meal, a greeting)
+        if (System.Environment.GetEnvironmentVariable("SELFTEST_ONLY") == "life")
+        {
+            await Frames(5);
+            await SelfTestLife(Check);
             GD.Print($"[selftest] {(fails == 0 ? "all passed" : fails + " failed")}");
             GetTree().Quit(fails == 0 ? 0 : 1);
             return;
@@ -776,7 +787,7 @@ public partial class Main
         bool restored = Atmos.Sun.ShadowEnabled && vpG.Scaling3DScale == 1 && vpG.Msaa3D == Viewport.Msaa.Msaa2X && Atmos.Env.GlowEnabled;
         Check("the picture can be lowered for a weak machine and put back", lowered && restored, $"lowered {lowered}, back {restored}");
 
-        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 40 && Sound.Heard.Count >= 4,
+        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 48 && Sound.Heard.Count >= 4,
             $"{Sound.Clips} sounds, {Sound.Played} played: {string.Join(", ", Sound.Heard)}");
 
         var before = Rig.Target;
@@ -1128,6 +1139,8 @@ public partial class Main
             body.Contains("Видеокарта:") && body.Contains("===== Зависания") && body.Contains("===== Последние события") && body.Contains("===== Лог "),
             $"{body.Length} characters in {System.IO.Path.GetFileName(report)}");
         await SelfTestStrain(Check, Frames);
+        // (the town's life last of the valley's, so that nothing of it moves what the other parts stage)
+        await SelfTestLife(Check);
         // the campaign goes on in valleys of its own, the scene begun again for each
         if (await SelfTestBoard(Check, () => fails)) return;
         GD.Print($"[selftest] {(fails == 0 ? "all passed" : fails + " failed")}");

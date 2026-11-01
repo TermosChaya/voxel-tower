@@ -25,7 +25,7 @@ static class BestiaryBench
         var w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         var site = MapGen.Generate(w, mp);
         w.Compact();
-        var s = new Sim(w, site) { WildTarget = 0 };
+        var s = new Sim(w, site) { WildTarget = 0, QuietLife = true };
         s.SetSource(new MapRaids());
         s.Clock.Left = 1e9;
         foreach (var u in s.Units) { u.Dead = true; u.DiedAt = -999; }

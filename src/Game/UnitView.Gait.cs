@@ -163,6 +163,9 @@ public partial class UnitView
         float yaw = 0;
         if (a < .05f && !alert && look.Graze < .5f)
             yaw = (float)(Hash01(u.Id, (int)(t / 2.6f)) - .5f) * 1.1f;
+        // standing with its head up, now and then it sniffs the air: quick small nods
+        if (a < .05f && !alert && look.Graze < .5f && Hash01(u.Id + 5, (int)(t / 3)) < .35)
+            pitch += .07f * MathF.Max(0, MathF.Sin(t * 11 + seed));
         look.HeadPitch += (pitch - look.HeadPitch) * Math.Min(1, _dt * 4);
         look.HeadYaw += (yaw - look.HeadYaw) * Math.Min(1, _dt * 2.5f);
         _neckPitch = look.HeadPitch; _neckYaw = look.HeadYaw;

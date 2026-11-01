@@ -499,6 +499,7 @@ public sealed partial class Sim
         RaidReward();
         Dawn(Raids.Count, last);
         StandDown(beaten: true);
+        Cheer();
         if (Raids.AtNight && Clock.Night) Clock.Break(this);
         if (last) { Won = true; Over = true; Say("Осада снята. Вы выстояли.", 1); }
         else if (Source.Foretold) PlanRaid();

@@ -17,7 +17,7 @@ static class BuildersBench
         var w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         var site = MapGen.Generate(w, mp);
         w.Compact();
-        var sim = new Sim(w, site);
+        var sim = new Sim(w, site) { QuietLife = true };
         sim.Waves.Countdown = 1e9; sim.WildTarget = 0;
         void Run(double seconds) { for (double t = 0; t < seconds; t += .05) sim.Step(.05f); }
         // a field of level ground west of the citadel, bare of trees
@@ -245,7 +245,7 @@ static class BuildersBench
                 var site2 = MapGen.Generate(w2, new MapParams { Seed = reader.Seed });
                 w2.Compact();
                 reader.Valley(w2, site2);
-                sim2 = new Sim(w2, site2);
+                sim2 = new Sim(w2, site2) { QuietLife = true };
                 sim2.Load(reader);
             }
             var s1 = sim.Scaffolds[0];

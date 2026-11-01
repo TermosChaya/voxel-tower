@@ -342,6 +342,16 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   на 5, грудь до стены, выше нового конька после этажа; `HangFront`. Виды: `FixtureKind.Sign/Chimney/Trade` (и `Torch`
   для фонаря у двери), материалы 146–149, 159, 170–173. `FrontageOf(b)` — стоящее по якорям в рамке здания.
   `DecorateChunk` у зданий города не ставит бочки и стяги стен (`BuildingAt`).
+- `Sim.Life.cs` — досуг: `Idle` (сон без `Bedtime` будит, прогулка ведёт к занятию `After`), `Choose` (ночью
+  `TrySleep`, в полдень `TryEat`, днём улица, круг `TryTalk`, `TryTownPastime`: кости, точило, рыбалка, метла,
+  клумба, святилище), `Huddle` (круг: члены, середина, у кого слово `Turn`, `Chatter` при переходе), `Berth` (где и как
+  лежит: ступни у изножья, голова к валику; `BunkBerth` находит постель по вокселям `Mat.Bedding` от первой ножки),
+  `_bunkBy` (кто в какой лежанке), `_shores` (берега раз в 2 мин), `GoAside` (путь без лестниц), `ToBed`/`InBed`/
+  `TakeUp` для сцен; счётчики для стенда. Спящие не расталкиваются (`Separate`, `Unstack`). `_life` — свой генератор.
+- `Sim.Voices.cs` — голоса: `Spoke(Unit, string, Voice)`, `TickVoices` (четыре раза в секунду: отложенные слова,
+  `Greet`, `WorkCalls`, `HordeVoices`), `Chatter` (из `Tend`), `CallStone` (из обвалов `Sim.Collapse`, `Sim.Strain`),
+  `Cheer` (из `RaidRepelled`), `SayAloud` для сцен и самотеста. Вид — `UnitView.Life.cs` (`LifePose`, `Fidget`,
+  `Gesture`, `LifeGaze`, `Hands`, `DrawProps`), надписи — `ShoutTags.Style`, звук — `Sound.Voices.cs` (`Speech`).
 - `Sim.Streets.cs` — улица: `StreetSpot` (что делают, здание или колодец, где стоят, куда смотрят, кто там),
   `Street` (раз в 4 с `TickStreet`: места из стоящих кусков фасада `StandsOf` по `Kit.Stands` и у колодцев; прежние
   места сохраняются с теми, кто на них), `TryStreet` (из `Choose`: днём, без тревоги и орды, одно из трёх ближайших

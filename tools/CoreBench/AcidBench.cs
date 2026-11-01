@@ -17,7 +17,7 @@ static class AcidBench
         var w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         var site = MapGen.Generate(w, mp);
         w.Compact();
-        var sim = new Sim(w, site);
+        var sim = new Sim(w, site) { QuietLife = true };
         sim.Waves.Countdown = 1e9; sim.WildTarget = 0;
         foreach (var u in sim.Units) if (u.Team == Team.Player) { u.Dead = true; u.DiedAt = -999; }
         void Run(double seconds) { for (double t = 0; t < seconds; t += .05) sim.Step(.05f); }
@@ -152,7 +152,7 @@ static class AcidBench
             var site2 = MapGen.Generate(w2, new MapParams { Seed = reader.Seed });
             w2.Compact();
             reader.Valley(w2, site2);
-            sim2 = new Sim(w2, site2);
+            sim2 = new Sim(w2, site2) { QuietLife = true };
             sim2.Load(reader);
         }
         var alch2 = sim2.Units.Find(u => u.Id == alch.Id);
