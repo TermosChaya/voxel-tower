@@ -37,8 +37,10 @@ public partial class FarLand : MeshInstance3D
         uint seed = (uint)(s.HTop[0] * 7919 + s.HTop[^1] * 104729 + s.KeepX * 31 + s.KeepZ);
         var nHill = new ValueNoise(seed + 1); var nHill2 = new ValueNoise(seed + 2); var nRidge = new ValueNoise(seed + 3);
         var nRise = new ValueNoise(seed + 4); var nWood = new ValueNoise(seed + 5); var nCrown = new ValueNoise(seed + 6);
-        var nDry = new ValueNoise(seed + 7); var nKind = new ValueNoise(seed + 8);
+        var nDry = new ValueNoise(seed + 7); var nKind = new ValueNoise(seed + 8); var nPeak = new ValueNoise(seed + 9);
         int salt = (int)(seed % 9973) * 16;
+        // a mountain valley stands among mountains: ranges of peaks rise round it a little way out
+        bool peaks = s.Kind == ValleyKind.Mountain;
 
         // the lines of the grid: the valley's own every metre along its border, then outward in steps an eighth longer each
         var outs = new List<float>();
@@ -93,6 +95,15 @@ public partial class FarLand : MeshInstance3D
                 float hills = ((float)nHill.Sample(x * .006, z * .006) - .5f) * 48 + ((float)nHill2.Sample(x * .02, z * .02) - .5f) * 14 + ridge * ridge * ridge * 34;
                 float rise = 330 * MathF.Pow(Smooth((sd - 900) / (beyond - 900)), 1.4f) * (.5f + (float)nRise.Sample(x * .0011, z * .0011));
                 h = Mathf.Lerp(h, sum / 25 + hills, Smooth(sd / 900)) + rise;
+                if (peaks)
+                {
+                    // their crests sharp and their peaks where the crests cross, higher the further out, from some twenty
+                    // metres beyond the valley's edge
+                    float m1 = 1 - MathF.Abs((float)nPeak.Sample(x * .0013, z * .0013) * 2 - 1), m2 = 1 - MathF.Abs((float)nPeak.Sample(x * .0041 + 31, z * .0041 + 17) * 2 - 1);
+                    float m3 = 1 - MathF.Abs((float)nPeak.Sample(x * .009 + 7, z * .009 + 3) * 2 - 1);
+                    float mass = Smooth((sd - 160) / 700) * (.45f + .55f * (float)nPeak.Sample(x * .0006 + 50, z * .0006 + 50));
+                    h += mass * (m1 * m1 * 520 + m1 * m2 * 160 + m1 * m3 * 48);
+                }
             }
             riverD = 1e4f; roadD = 1e4f;
             if (river && !OnLand(x, z))
@@ -116,7 +127,7 @@ public partial class FarLand : MeshInstance3D
         var col = new Color[nx * nz];
         var lane = new Vector2[nx * nz];
         Color grass = new Color("4a5c33").SrgbToLinear(), lush = new Color("3c5a30").SrgbToLinear(), dry = new Color("585d34").SrgbToLinear();
-        Color wood = new Color("223322").SrgbToLinear(), rock = new Color("5a5862").SrgbToLinear();
+        Color wood = new Color("223322").SrgbToLinear(), rock = new Color("5a5862").SrgbToLinear(), snow = new Color("e9eef2").SrgbToLinear();
         var forest = new float[nx * nz];
         // how much of the ground is the mass of the crowns, for the shader to dome crown by crown
         var canopy = new float[nx * nz];
@@ -149,12 +160,15 @@ public partial class FarLand : MeshInstance3D
                 nrm[j * nx + i] = n;
                 int k = j * nx + i;
                 // the steep side of a wood is no crag but its trees, the shade under their crowns going in among the trunks
-                float steep = Smooth((1 - n.Y - .3f) / .35f) + Smooth((pos[k].Y / VoxelWorld.Vox - 250) / 150) * .5f;
+                float steep = Smooth((1 - n.Y - .3f) / .35f) + Smooth((pos[k].Y / VoxelWorld.Vox - 250) / 150) * (peaks ? .9f : .5f);
                 float bare = Math.Min(1, steep) * (1 - Math.Min(1, forest[k] * 1.6f));
                 float under = forest[k] * Smooth((1 - n.Y - .2f) / .45f);
                 col[k] = col[k].Lerp(wood, forest[k]).Lerp(rock, bare).Lerp(wood * .5f, under);
+                // the mountains' snow on their heights, where it lies on what is not too steep to hold it
+                float white = peaks ? Smooth((pos[k].Y / VoxelWorld.Vox - 430) / 70) * (1 - Smooth((1 - n.Y - .45f) / .25f) * .7f) : 0;
+                col[k] = col[k].Lerp(snow, white);
                 // how much of it is meadow, for its grass to dry to straw in patches as the valley's does
-                col[k].A = (1 - forest[k]) * (1 - bare);
+                col[k].A = (1 - forest[k]) * (1 - bare) * (1 - white);
             }
 
         // the cells: none inside the valley, none past the rim

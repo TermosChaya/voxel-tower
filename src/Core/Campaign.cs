@@ -470,14 +470,16 @@ public sealed partial class Campaign
     {
         extra = null;
         var mp = ParamsOf(cell);
-        var w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
-        var site = MapGen.Generate(w, mp);
-        w.Compact();
         string path = Path.Combine(dir, cell.File);
         SaveReader save = cell.Visited && System.IO.File.Exists(path) ? new SaveReader(System.IO.File.OpenRead(path)) : null;
-        Ready();
         try
         {
+            // (a valley saved before the mountains were massifs is made again with the knolls it was played on)
+            if (save != null) mp.Massifs = save.Massifs;
+            var w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
+            var site = MapGen.Generate(w, mp);
+            w.Compact();
+            Ready();
             save?.Valley(w, site);
             var sim = new Sim(w, site);
             if (save != null) extra = sim.Load(save);

@@ -44,6 +44,12 @@ public sealed class MapParams
     /// <summary>The treasure a valley of the map nobody holds keeps (Troves.cs), and whether it was taken already (then its chest is gone).</summary>
     public TroveKind Trove;
     public bool TroveTaken;
+    /// <summary>
+    /// A mountain valley's mountains raised as massifs, ranges of summits with spurs, gullies, cols, ledges and cliffs
+    /// (MapGen.Mountains.cs); off, as the rocky knolls of before 02.11.2026, for a valley saved before then, so that
+    /// what play changed of it is laid over the ground it was changed on.
+    /// </summary>
+    public bool Massifs = true;
 }
 
 /// <summary>

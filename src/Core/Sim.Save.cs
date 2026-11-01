@@ -43,8 +43,9 @@ public sealed partial class Sim
         using var w = new BinaryWriter(z, Encoding.UTF8, leaveOpen: true);
         w.Write(SaveMagic); w.Write(SaveVersion); w.Write(seed);
         // the valley's kind and shape, made again from them with the seed (version 40); its size and the side the horde
-        // comes by (version 45)
-        w.Write((byte)Site.Kind); w.Write(Site.Classic); w.Write(Site.Hex != null);
+        // comes by (version 45). Its shape a byte: 0 the old box, 1 a hexagon, 2 a hexagon whose mountains are massifs
+        // (a save of before them has 1 there, and its mountain valley is made again with the knolls it was played on)
+        w.Write((byte)Site.Kind); w.Write(Site.Classic); w.Write((byte)(Site.Hex == null ? 0 : Site.Massifs ? 2 : 1));
         w.Write(World.SX); w.Write(World.SZ); w.Write((byte)Site.EntrySide);
         // what holds it, and its sides as the map of valleys gave them (version 60)
         w.Write((byte)Site.Holding);
@@ -670,9 +671,9 @@ public sealed class SaveReader : IDisposable
     readonly GZipStream _z;
     public readonly BinaryReader R;
     public readonly uint Seed;
-    /// <summary>The valley's kind, whether it keeps the old places, and whether it is a hexagon.</summary>
+    /// <summary>The valley's kind, whether it keeps the old places, whether it is a hexagon, and whether its mountains were massifs.</summary>
     public readonly ValleyKind Kind;
-    public readonly bool Classic, Hexagon;
+    public readonly bool Classic, Hexagon, Massifs;
     /// <summary>The box the valley was made in, across, and the side the horde comes by.</summary>
     public readonly int SizeX, SizeZ, EntrySide;
     /// <summary>What holds the valley, and its sides as the map of valleys gave them (null when it was made by itself).</summary>
@@ -691,7 +692,9 @@ public sealed class SaveReader : IDisposable
         int version = R.ReadInt32();
         if (version != Sim.SaveVersion) throw new InvalidDataException($"a save of version {version}, not {Sim.SaveVersion}");
         Seed = R.ReadUInt32();
-        Kind = (ValleyKind)R.ReadByte(); Classic = R.ReadBoolean(); Hexagon = R.ReadBoolean();
+        Kind = (ValleyKind)R.ReadByte(); Classic = R.ReadBoolean();
+        byte shape = R.ReadByte();
+        Hexagon = shape != 0; Massifs = shape >= 2;
         SizeX = R.ReadInt32(); SizeZ = R.ReadInt32(); EntrySide = R.ReadByte();
         Holding = (Holding)R.ReadByte();
         int edges = R.ReadByte();

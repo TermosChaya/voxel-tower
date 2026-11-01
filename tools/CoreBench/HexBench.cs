@@ -319,7 +319,8 @@ static class HexBench
                     if (top <= 0) continue;
                     byte m = wk.Get(x, top - 1, z);
                     if (Mat.IsLeafy(m)) trees++;
-                    if (m == Mat.Rock) rock++;
+                    // (bare stone: the rock, a mountain's pale layers and its scree)
+                    if (m is Mat.Rock or Mat.RockPale or Mat.Scree) rock++;
                     if (sk.WaterTop[z * wk.SX + x] > 0) wet++;
                     sum += sk.HTop[z * wk.SX + x]; n++;
                 }

@@ -34,6 +34,8 @@ public sealed partial class Site
     /// <summary>What kind of valley this is, and whether the first valley keeps every place it always had.</summary>
     public ValleyKind Kind;
     public bool Classic = true;
+    /// <summary>Whether the valley was made with a mountain valley's mountains as massifs (<see cref="MapParams.Massifs"/>), for a save to make it again so.</summary>
+    public bool Massifs;
     /// <summary>What stands in the middle: the citadel, the place of an outpost, or the horde's town (<see cref="MapParams.Holding"/>).</summary>
     public Holding Holding;
     /// <summary>The sides as the map of valleys gave them (<see cref="MapParams.Edges"/>), for a save to make the valley again; null when made by itself.</summary>

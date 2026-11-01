@@ -83,7 +83,7 @@ public static partial class MapGen
         var site = new Site
         {
             HTop = new int[N], KeepR = 24, KeepX = (int)hex.CX, KeepZ = (int)hex.CZ, Design = new VoxelWorld(SX, w.SY, SZ),
-            SX = SX, SZ = SZ, Hex = hex, Kind = p.Kind, Classic = p.Classic, EntrySide = entry, Edges = p.Edges,
+            SX = SX, SZ = SZ, Hex = hex, Kind = p.Kind, Classic = p.Classic, EntrySide = entry, Edges = p.Edges, Massifs = p.Massifs,
         };
         if (entry == Hex.West)
         {
@@ -385,6 +385,108 @@ public static partial class MapGen
             }
             return best;
         }
+
+        // the lowland: broad swells, warped so they wind, long ridges, hills and a little roughness
+        double Lowland(int x, int z)
+        {
+            double wx = x + (nWarp.Sample(x * .0021, z * .0021) - .5) * 220, wz = z + (nWarp.Sample(x * .0021 + 40, z * .0021 + 40) - .5) * 220;
+            double macro = nMacro.Sample(wx * .0017, wz * .0017) * .65 + nMacro.Sample(wx * .0043 + 9, wz * .0043 + 9) * .35;
+            double ridge = 1 - Math.Abs(nRidge.Sample(wx * .0058, wz * .0058) * 2 - 1);
+            double low = baseH + (macro - .5) * 52 * ground.Relief + (nHill.Sample(x * .010, z * .010) - .5) * 22
+                + Math.Pow(ridge, 3) * 26 * ground.Ridges + (nFine.Sample(x * .11, z * .11) - .5) * p.Roughness;
+            // bluffs: the higher ground breaks in steps here and there, a cliff to each step
+            double terr = nTerr.Sample(x * .0045, z * .0045);
+            if (terr > .56 && low > baseH + 6)
+            {
+                double step = 11, f = (low - baseH) / step, fl = Math.Floor(f), fr = f - fl;
+                double stepped = baseH + (fl + Smooth((fr - .72) / .28)) * step;
+                low += (stepped - low) * Smooth((terr - .56) / .08);
+            }
+            low = Math.Clamp(low, MapGen.RiverLevel + 3, baseH + 34 + 26 * ground.Ridges);
+            // toward the sides, the heights the neighbours share: on a side itself, its own height and nothing else
+            double wsum = 0, esum = 0, dmin = 1e9;
+            for (int s = 0; s < 6; s++)
+            {
+                var (d, t) = hex.FromSide(s, x + .5f, z + .5f);
+                if (d > 170 || t < -.05 || t > 1.05) continue;
+                d = Math.Max(0, d);
+                double wt = 1 / ((d + 1) * (d + 1));
+                wsum += wt; dmin = Math.Min(dmin, d);
+                esum += wt * EdgeHeight(nEdge[s], s, Math.Clamp(t, 0, 1), sideLen);
+            }
+            if (wsum > 0) low += (esum / wsum - low) * Smooth(1 - dmin / 170);
+            return low;
+        }
+
+        // ---- a mountain valley's massifs (MapGen.Mountains.cs): its ranges of summits, and a lone summit or two, in the
+        // lowland well off the plateau, the roads and their ramps, the water and the land's edge; each summit low enough to
+        // stand under the top of the world
+        Massifs massifs = null;
+        float[] mount = null;
+        if (p.Kind == ValleyKind.Mountain && p.Massifs)
+        {
+            massifs = new Massifs(seed, w.SY);
+            mount = new float[N];
+            var mr = new Mulberry32(seed * 2246822519u + 3266489917u);
+            bool Fits(double x, double z, double reach)
+            {
+                int xi = (int)x, zi = (int)z;
+                if (xi < 0 || zi < 0 || xi >= SX || zi >= SZ) return false;
+                int c = zi * SX + xi;
+                if (hex.Edge((float)x, (float)z) < reach * .45 + 60 || site.InStrip((float)x, (float)z)) return false;
+                if (Brushes.Dist(x - CX, z - CZ) < RimAt(Math.Atan2(z - CZ, x - CX)) + reach * .45 + 50) return false;
+                if (roadD[c] < reach * .45 + 30 || riverD[c] - riverH[c] < reach * .4 + 30 || streamD[c] < reach * .35 + 20) return false;
+                return Ramp(x, z, out _, out _) >= reach * .45 + 30;
+            }
+            // (how high a summit can stand over the lowland at a spot and stay under the top; under so much it is no summit)
+            double Room(double x, double z)
+            {
+                double low = Lowland((int)x, (int)z);
+                for (int a = 0; a < 4; a++) low = Math.Max(low, Lowland((int)(x + Math.Cos(a * Math.PI / 2) * 24), (int)(z + Math.Sin(a * Math.PI / 2) * 24)));
+                return massifs.Top - 16 - low;
+            }
+            int ranges = 3 + (int)(mr.Next() * 3);
+            for (int g = 0, tries = 0; g < ranges + 2 && tries < 600; tries++)
+            {
+                double x = mr.Next() * SX, z = mr.Next() * SZ, h = 70 + mr.Next() * 60, reach = 80 + h * .8;
+                if (!Fits(x, z, reach) || massifs.Crowded(x, z, reach)) continue;
+                h = Math.Min(h, Room(x, z));
+                if (h < 45) continue;
+                massifs.Add(x, z, h, 80 + h * .8, mr);
+                g++;
+                // the first few start ranges: summits one after another, some higher and some lower, the way winding; the
+                // range ends where it would run onto the road, the water or another summit
+                if (g > ranges) continue;
+                var last = massifs.Summits[^1];
+                double dir = Math.Atan2(z - CZ, x - CX) + (mr.Next() < .5 ? 1 : -1) * Math.PI / 2 + (mr.Next() - .5) * .9;
+                int more = 1 + (int)(mr.Next() * 3);
+                for (int m = 0; m < more; m++)
+                {
+                    double h2 = Math.Clamp(last.H * (.62 + mr.Next() * .66), 50, 135), reach2 = 80 + h2 * .8;
+                    double step = (last.R + reach2) * (.42 + mr.Next() * .16);
+                    dir += (mr.Next() - .5) * .8;
+                    double x2 = last.X + Math.Cos(dir) * step, z2 = last.Z + Math.Sin(dir) * step;
+                    if (!Fits(x2, z2, reach2) || massifs.Crowded(x2, z2, reach2, last)) break;
+                    h2 = Math.Min(h2, Room(x2, z2));
+                    if (h2 < 45) break;
+                    massifs.Add(x2, z2, h2, 80 + h2 * .8, mr);
+                    last = massifs.Summits[^1];
+                }
+            }
+            // a lesser top or two on most summits' flanks, its shoulders
+            foreach (var s in massifs.Summits.ToArray())
+            {
+                int n = mr.Next() < .3 ? 0 : mr.Next() < .6 ? 1 : 2;
+                for (int k = 0; k < n; k++)
+                {
+                    double a = mr.Next() * Math.Tau, d = s.R * (.35 + mr.Next() * .25);
+                    double x = s.X + Math.Cos(a) * d, z = s.Z + Math.Sin(a) * d;
+                    double h = Math.Min(s.H * (.45 + mr.Next() * .27), Room(x, z)), reach = 60 + h * .8;
+                    if (h >= 30 && Fits(x, z, reach * .5)) massifs.Add(x, z, h, reach, mr);
+                }
+            }
+        }
+
         Parallel.For(0, SZ, z =>
         {
             for (int x = 0; x < SX; x++)
@@ -392,33 +494,7 @@ public static partial class MapGen
                 int i = z * SX + x;
                 float edgeIn = hex.Edge(x + .5f, z + .5f);
                 if (edgeIn < -2) { site.HTop[i] = baseH; continue; }
-                // the lowland: broad swells, warped so they wind, long ridges, hills and a little roughness
-                double wx = x + (nWarp.Sample(x * .0021, z * .0021) - .5) * 220, wz = z + (nWarp.Sample(x * .0021 + 40, z * .0021 + 40) - .5) * 220;
-                double macro = nMacro.Sample(wx * .0017, wz * .0017) * .65 + nMacro.Sample(wx * .0043 + 9, wz * .0043 + 9) * .35;
-                double ridge = 1 - Math.Abs(nRidge.Sample(wx * .0058, wz * .0058) * 2 - 1);
-                double low = baseH + (macro - .5) * 52 * ground.Relief + (nHill.Sample(x * .010, z * .010) - .5) * 22
-                    + Math.Pow(ridge, 3) * 26 * ground.Ridges + (nFine.Sample(x * .11, z * .11) - .5) * p.Roughness;
-                // bluffs: the higher ground breaks in steps here and there, a cliff to each step
-                double terr = nTerr.Sample(x * .0045, z * .0045);
-                if (terr > .56 && low > baseH + 6)
-                {
-                    double step = 11, f = (low - baseH) / step, fl = Math.Floor(f), fr = f - fl;
-                    double stepped = baseH + (fl + Smooth((fr - .72) / .28)) * step;
-                    low += (stepped - low) * Smooth((terr - .56) / .08);
-                }
-                low = Math.Clamp(low, MapGen.RiverLevel + 3, baseH + 34 + 26 * ground.Ridges);
-                // toward the sides, the heights the neighbours share: on a side itself, its own height and nothing else
-                double wsum = 0, esum = 0, dmin = 1e9;
-                for (int s = 0; s < 6; s++)
-                {
-                    var (d, t) = hex.FromSide(s, x + .5f, z + .5f);
-                    if (d > 170 || t < -.05 || t > 1.05) continue;
-                    d = Math.Max(0, d);
-                    double wt = 1 / ((d + 1) * (d + 1));
-                    wsum += wt; dmin = Math.Min(dmin, d);
-                    esum += wt * EdgeHeight(nEdge[s], s, Math.Clamp(t, 0, 1), sideLen);
-                }
-                if (wsum > 0) low += (esum / wsum - low) * Smooth(1 - dmin / 170);
+                double low = Lowland(x, z);
 
                 double dk = Brushes.Dist(x - CX, z - CZ), ang = Math.Atan2(z - CZ, x - CX), rp = RimAt(ang);
                 double rampD = Ramp(x, z, out double along, out int which);
@@ -430,13 +506,24 @@ public static partial class MapGen
                 }
                 else
                 {
-                    // rocky knolls out in the lowland, kept off the roads, the ramps and the horde's side
-                    double kn = nKnoll.Sample(x * .018, z * .018);
-                    if (kn > ground.Knoll)
+                    if (massifs != null)
                     {
-                        double fade = Smooth((roadD[i] - 6) / 26) * Smooth(rampD / 30) * Smooth((edgeIn - 30) / 50) * Smooth((dk - rp - 40) / 60);
-                        double hill = (kn - ground.Knoll) * 190 * ground.KnollHeight * fade;
-                        if (hill > 1.5) { h = low + hill; k = Relief.Knoll; }
+                        // the massifs, faded off the roads, the ramps, the plateau, the river and the stream and the land's edge
+                        double fade = Smooth((roadD[i] - 8) / 40) * Smooth((rampD - 4) / 46) * Smooth((edgeIn - 26) / 80) * Smooth((dk - rp - 36) / 80)
+                            * Smooth((riverD[i] - riverH[i] - 10) / 50) * Smooth((streamD[i] - streamHalf - 8) / 40);
+                        double share = 0, steep = 0, up = fade > 0 ? massifs.Rise(x, z, out share, out steep) * fade : 0;
+                        if (up > 1.5) { h = massifs.Shape(x, z, low, up, share * fade, steep * fade); mount[i] = (float)up; }
+                    }
+                    else
+                    {
+                        // rocky knolls out in the lowland, kept off the roads, the ramps and the horde's side
+                        double kn = nKnoll.Sample(x * .018, z * .018);
+                        if (kn > ground.Knoll)
+                        {
+                            double fade = Smooth((roadD[i] - 6) / 26) * Smooth(rampD / 30) * Smooth((edgeIn - 30) / 50) * Smooth((dk - rp - 40) / 60);
+                            double hill = (kn - ground.Knoll) * 190 * ground.KnollHeight * fade;
+                            if (hill > 1.5) { h = low + hill; k = Relief.Knoll; }
+                        }
                     }
                     // the ramps up to the plateau, their sides sloping down to the lowland
                     if (which >= 0 && along < rampRim[which] + rampLen && rampD < 34)
@@ -504,6 +591,8 @@ public static partial class MapGen
                 soil[i] = (byte)(k switch
                 {
                     Relief.Knoll or Relief.Rim => 0, Relief.Plateau or Relief.Pond => 7, Relief.River => 4,
+                    // (up a mountain the soil thins out)
+                    _ when mount != null && mount[i] > 0 => (int)Math.Max(1, (9 + nSoil.Sample(x * .02, z * .02) * 6) * ground.Soil * (1 - mount[i] / 80)),
                     _ => (int)((9 + nSoil.Sample(x * .02, z * .02) * 6) * ground.Soil),
                 });
             }
@@ -827,8 +916,38 @@ public static partial class MapGen
                 int h = site.HTop[i];
                 int drop = Math.Max(Math.Max(h - site.HTop[i - 1], h - site.HTop[i + 1]), Math.Max(h - site.HTop[i - SX], h - site.HTop[i + SX]));
                 if (drop >= 3) { kind[i] = Relief.Crag; soil[i] = 0; }
+                // (up a mountain the rock shows wherever the ground leans as steep as a roof, over five voxels across)
+                else if (mount != null && mount[i] > 0 && x >= 2 && z >= 2 && x < SX - 2 && z < SZ - 2
+                    && Math.Max(Math.Abs(site.HTop[i + 2] - site.HTop[i - 2]), Math.Abs(site.HTop[i + 2 * SX] - site.HTop[i - 2 * SX])) >= 4)
+                { kind[i] = Relief.Crag; soil[i] = 0; }
             }
         });
+
+        // ---- the massifs' scree: fans of broken stone at the feet of their cliffs, where the ground under a cliff lies
+        // gentle enough to hold it, thinning out at their edges
+        var scree = massifs != null ? new bool[N] : null;
+        if (massifs != null)
+            Parallel.For(12, SZ - 12, z =>
+            {
+                for (int x = 12; x < SX - 12; x++)
+                {
+                    int i = z * SX + x;
+                    if (kind[i] is not (Relief.Low or Relief.Bank) || water[i] > 0) continue;
+                    // (none but by a mountain)
+                    if (mount[i] <= 0 && mount[i - 8] <= 0 && mount[i + 8] <= 0 && mount[i - 8 * SX] <= 0 && mount[i + 8 * SX] <= 0) continue;
+                    int h = site.HTop[i], over = 0;
+                    for (int a = 0; a < 12; a++)
+                    {
+                        double ang = a * Math.PI / 6;
+                        for (int r = 4; r <= 12; r += 4)
+                        {
+                            int j = (z + (int)Math.Round(Math.Sin(ang) * r)) * SX + x + (int)Math.Round(Math.Cos(ang) * r);
+                            if (kind[j] == Relief.Crag || mount[j] > 0) over = Math.Max(over, site.HTop[j] - h);
+                        }
+                    }
+                    if (over >= 16 && nBloom.Sample(x * .05 + 17, z * .05 + 3) > .62 - (over - 16) / 50.0) { scree[i] = true; soil[i] = 0; }
+                }
+            });
 
         // ---- the columns filled: bedrock, rock, soil, the turf on top; water where it stands; tufts and flowers
         Parallel.For(0, w.CZ, cz =>
@@ -840,7 +959,9 @@ public static partial class MapGen
                     int i = z * SX + x, h = site.HTop[i], s = Math.Min(soil[i], Math.Max(0, h - 4));
                     byte k = kind[i];
                     w.FillColumnRaw(x, z, 0, 3, Mat.Bed);
-                    w.FillColumnRaw(x, z, 3, h - s, Mat.Rock);
+                    // (a mountain's rock in its layers, pale and dark)
+                    if (mount != null && mount[i] > 0) massifs.FillRock(w, x, z, 3, h - s);
+                    else w.FillColumnRaw(x, z, 3, h - s, Mat.Rock);
                     w.FillColumnRaw(x, z, h - s, h - 1, Mat.Soil);
                     double m = moist[i];
                     byte grass = m < .22 ? Mat.GrassDry : m > .64 ? Mat.GrassLush : Mat.Grass;
@@ -861,6 +982,26 @@ public static partial class MapGen
                         Relief.River or Relief.Pond or Relief.Lake => Mat.Soil,
                         _ => grass,
                     };
+                    if (mount != null && mount[i] > 0 || scree?[i] == true)
+                    {
+                        // up a mountain: scree under its cliffs, moss and dry grass above the trees, snow over the snow line
+                        // where the rock lies gentle enough to hold it, two voxels of it the higher up
+                        double line = massifs.SnowLine + (nBloom.Sample(x * .021 + 9, z * .021 + 41) - .5) * 16;
+                        if (scree[i]) top = Mat.Scree;
+                        // (its cliffs' faces their layers to the top, a little moss on them)
+                        else if (k == Relief.Crag) top = Hash.H3(x, z, 43) < .18 ? Mat.Moss : massifs.Rock(x, h - 1, z);
+                        else if (h >= line)
+                        {
+                            top = Mat.Snow;
+                            if (h >= line + 6) w.FillColumnRaw(x, z, h - 2, h - 1, Mat.Snow);
+                        }
+                        else if (h >= massifs.TreeLine + (line - massifs.SnowLine) && Mat.IsGrass(top))
+                        {
+                            // (above the trees, patches of bare rock among the moss and the dry grass)
+                            double a = nBloom.Sample(x * .06 + 3, z * .06 + 7) + (Hash.H3(x, z, 87) - .5) * .2;
+                            top = a > .58 ? massifs.Rock(x, h - 1, z) : a > .4 ? Mat.Moss : Mat.GrassDry;
+                        }
+                    }
                     w.FillColumnRaw(x, z, h - 1, h, top);
                     if (water[i] > h) w.FillColumnRaw(x, z, h, water[i], Mat.Water);
                     else if (Mat.IsGrass(top))
@@ -909,6 +1050,11 @@ public static partial class MapGen
                 for (int dz = -r; dz <= r; dz += 4)
                     for (int dx = -r; dx <= r; dx += 4)
                         if (dx * dx + dz * dz <= r * r && kind[(cz + dz) * SX + cx + dx] is Relief.River or Relief.Pond or Relief.Lake or Relief.Road or Relief.Ramp or Relief.Rim) return false;
+                // (in a valley of massifs, at the foot of the mountains and not up them, where a man can get to it)
+                if (mount != null)
+                    for (int dz = -r; dz <= r; dz += 4)
+                        for (int dx = -r; dx <= r; dx += 4)
+                            if (dx * dx + dz * dz <= r * r && mount[(cz + dz) * SX + cx + dx] > 12) return false;
                 return true;
             }
             (int x, int z)? first = null;
@@ -1033,6 +1179,8 @@ public static partial class MapGen
             int x = qx + (int)(Hash.H3(qx, qz, 201 + again * 10) * 16), z = qz + (int)(Hash.H3(qx, qz, 202 + again * 10) * 16);
             if (x >= SX || z >= SZ || !Clear(x, z) || !Mat.IsGrass(w.Get(x, w.SurfAt(x, z) - 1, z))) return null;
             int i = z * SX + x;
+            // (up a mountain no tree grows over the tree line, and fewer toward it)
+            if (mount != null && mount[i] > 0 && site.HTop[i] > massifs.TreeLine - Hash.H3(qx, qz, 206 + again * 10) * 30) return null;
             double f = nForest.Sample(x * .006, z * .006), m = moist[i], hgt = site.HTop[i] - baseH;
             double density = f > .58 ? .72 : f > .48 ? .28 : .04;
             // (thick by the water, thin on the dry ground: as many trees to the hectare as the old valley had, for the

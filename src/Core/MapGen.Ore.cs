@@ -58,7 +58,7 @@ public static class OreVeins
                     around += h / 8.0; lo = Math.Min(lo, h); hi = Math.Max(hi, h);
                 }
                 if (top < around - 1 || slope > 4 || hi - lo > 8) continue;
-                double weight = (m is Mat.Rock or Mat.Moss ? 3 : 1) + (slope <= 3 ? 1 : 0);
+                double weight = (m is Mat.Rock or Mat.Moss or Mat.RockPale ? 3 : 1) + (slope <= 3 ? 1 : 0);
                 spots.Add((Hash.H3(x, z, s + 3) * weight, x, z));
             }
         spots.Sort((a, b) => b.score.CompareTo(a.score));
@@ -149,7 +149,7 @@ public static class OreVeins
                         int vx = (int)x + dx, vy = (int)y + dy, vz = (int)z + dz;
                         if (!w.InBounds(vx, vy, vz) || !w.OnLand(vx, vz) || vy < 4) continue;
                         byte m = w.Get(vx, vy, vz);
-                        if (m is not (Mat.Rock or Mat.Moss or Mat.Soil) && !Mat.IsGrass(m)) continue;
+                        if (m is not (Mat.Rock or Mat.Moss or Mat.Soil or Mat.RockPale) && !Mat.IsGrass(m)) continue;
                         // below the surface: the outcrop's own vein may come up to it, a hidden one keeps well under
                         int top = w.GroundTop(vx, vz);
                         if (vy >= top - (deepOnly ? 6 : 1)) continue;

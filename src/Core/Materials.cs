@@ -216,6 +216,13 @@ public static class Mat
     public const byte Ivy = 195;
     /// <summary>Peat, the black wet mud of the horde's bog: its mires, its patches between the tussocks and the bottoms of its pools.</summary>
     public const byte Peat = 210;
+    /// <summary>
+    /// Scree, the broken stone fallen from a mountain's cliffs and lying in fans at their feet (MapGen.Mountains.cs):
+    /// loose, so it comes up more easily than the rock, and less of it is good stone.
+    /// </summary>
+    public const byte Scree = 224;
+    /// <summary>Pale rock, the lighter of the layers a mountain's rock lies in (MapGen.Mountains.cs): as hard as the dark, and as good stone.</summary>
+    public const byte RockPale = 225;
 
     public const int Count = 253;
 
@@ -286,6 +293,8 @@ public static class Mat
         D(Deck, "Настил орды", 0x4f3d2c, .26f, MatGroup.Wood, 0);
         D(Ivy, "Плющ", 0x3b6a28, .34f, MatGroup.Wood, 0);
         D(Peat, "Торф", 0x30261c, .2f, MatGroup.Earth, Natural | Earthy);
+        D(Scree, "Осыпь", 0x85807a, .32f, MatGroup.Rock, Natural);
+        D(RockPale, "Светлая скала", 0x736a61, .22f, MatGroup.Rock, Natural);
         D(Water, "Вода", 0x1f3a44, .04f, MatGroup.Hard, Natural);
         // oak bound with iron: the horde hacks it no faster than masonry
         D(Gate, "Ворота", 0x4b3322, .26f, MatGroup.Stone, Player);
@@ -480,7 +489,7 @@ public static class Mat
         // the ash of the horde's land flecked as burnt turf is
         Skin[Ash] = 8;
         // what holds the world up: loose pieces resting on these never fall
-        foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Scorch, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank, Menhir, Trodden, Basalt, IronOre, OreRust, Anthill, Peat }) IsAnchor[m] = true;
+        foreach (var m in new[] { Bed, Soil, Grass, GrassDry, GrassLush, Scorch, Rock, Path, Moss, Tuft, Keep, KeepShade, KeepDark, Roof, Ember, Iron, Plank, Menhir, Trodden, Basalt, IronOre, OreRust, Anthill, Peat, Scree, Snow, RockPale }) IsAnchor[m] = true;
 
         // what burns: needles and leaves flare up and are gone in seconds, grass and flowers in a moment; timber
         // catches slowly and burns long, and some of it stands charred after; a living trunk and oak bound with iron

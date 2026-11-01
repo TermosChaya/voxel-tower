@@ -48,7 +48,9 @@ public static class Labour
         // the ways laid on purpose come up as what they were laid of
         D(Mat.Gravel, 1, Stockpile.Stone, 1); D(Mat.Cobble, 1.5f, Stockpile.Stone, 1); D(Mat.Flag, 1.5f, Stockpile.Stone, 1); D(Mat.Boardwalk, 1, Stockpile.Wood, .75f);
         D(Mat.Rammed, 1, Stockpile.Earth, 1);
-        D(Mat.Rock, 4, Stockpile.Stone, 1); D(Mat.Moss, 4, Stockpile.Stone, 1);
+        D(Mat.Rock, 4, Stockpile.Stone, 1); D(Mat.Moss, 4, Stockpile.Stone, 1); D(Mat.RockPale, 4, Stockpile.Stone, 1);
+        // a mountain's scree is loose stone, quick to shovel up and half of it good; its snow is shovelled away for nothing
+        D(Mat.Scree, 2, Stockpile.Stone, .5f); D(Mat.Snow, .5f, Stockpile.None, 0);
         foreach (var m in new[] { Mat.Stone, Mat.Mortar, Mat.StoneDark, Mat.StoneLight, Mat.StoneWarm, Mat.StoneCool }) D(m, 2.5f, Stockpile.Stone, .75f);
         // a voxel tree holds less wood than a real one of its height (its crown is leaves round a few boughs): a voxel of
         // trunk stands for four of timber, and needles and leaves give a little brushwood

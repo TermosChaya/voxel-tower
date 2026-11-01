@@ -6306,6 +6306,9 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bog") BogBench.Run(C
 if (args.Length == 0 || args[0] == "--reach") ReachBench.Run(Check);
 // every valley is made: each kind by itself on many seeds, a share of two big maps' cells (ValleysBench.cs)
 if (args.Length == 0 || args[0] == "--valleys") ValleysBench.Run(Check);
+// the mountains of a mountain valley: no ground flat against the top of the world, summits that come to a point, no cones,
+// ridges between the summits, several summits to a valley, made in good time (MountainsBench.cs)
+if (args.Length == 0 || args[0] == "--mountains") MountainsBench.Run(Check);
 // the gods: the waking learnt and cast, the Colossus out of the ground, set loose on the horde, ridden, against the
 // horde's god, back under (Gods.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--gods") GodsBench.Run(Check);

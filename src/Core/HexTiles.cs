@@ -219,15 +219,20 @@ public static class HexTiles
                 mtn += wgt;
                 if (Burnt(l.Ground)) volcanic = true;
                 // its summit a little off its middle as its variant has it, and two lesser tops about it, so a range is
-                // a crowd of peaks and not one cone to a hex
+                // a crowd of peaks and not one cone to a hex; each top's flanks running out further along its spurs than
+                // between them, so a peak standing alone is no cone either
                 int vm = Vary(c, r);
                 for (int top = 0; top < 3; top++)
                 {
                     float a = vm * .1f + top * 2.1f, off = top == 0 ? 2.5f : 8.5f;
                     float ox = MathF.Cos(a) * off, oz = MathF.Sin(a) * off;
                     float tall = PeakOf(vm) * (top == 0 ? 1 : .58f + .1f * top), reach = HexMapLayout.R * (top == 0 ? 1.3f : .85f);
-                    float pd = MathF.Sqrt((px - cx - ox) * (px - cx - ox) + (pz - cz - oz) * (pz - cz - oz));
-                    if (pd < reach) peak = MathF.Max(peak, tall * MathF.Pow(1 - pd / reach, 1.15f));
+                    float sx = px - cx - ox, sz = pz - cz - oz, pd = MathF.Sqrt(sx * sx + sz * sz);
+                    if (pd >= reach) continue;
+                    float way = MathF.Atan2(sz, sx);
+                    float spur = 1 - MathF.Abs(2 * N(4096 + (int)MathF.Round(MathF.Cos(way) * 9), 4096 + (int)MathF.Round(MathF.Sin(way) * 9), 6, 340 + vm + top * 7) - 1);
+                    float far = reach * (.62f + .45f * spur * spur);
+                    if (pd < far) peak = MathF.Max(peak, tall * MathF.Pow(1 - pd / far, 1.15f));
                 }
             }
             else if (l.Relief == HexRelief.Forest) wood += wgt;
