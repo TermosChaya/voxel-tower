@@ -186,7 +186,12 @@ static class ArchitectBench
         long s = 0;
         for (int z = cz - Holdings.Square; z <= cz + Holdings.Square; z += 2)
             for (int x = cx - Holdings.Square; x <= cx + Holdings.Square; x += 2)
-                for (int y = sim.Site.KeepBase - 4; y < sim.Site.KeepBase + 40; y++) s = s * 31 + sim.World.Get(x, y, z);
+                for (int y = sim.Site.KeepBase - 4; y < sim.Site.KeepBase + 40; y++)
+                {
+                    // (turf trodden bare by the workers going about is no building of his)
+                    byte m = sim.World.Get(x, y, z);
+                    s = s * 31 + (m == Mat.Trodden ? Mat.Grass : m);
+                }
         return s;
     }
 

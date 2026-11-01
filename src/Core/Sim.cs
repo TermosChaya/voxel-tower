@@ -266,6 +266,7 @@ public sealed partial class Sim
         Stage = "TickTown"; TickTown(dt);
         Stage = "TickFrontage"; TickFrontage();
         Stage = "TickStreet"; TickStreet();
+        Stage = "TickTownWays"; TickTownWays();
         Stage = "TickHouseDoors"; TickHouseDoors();
         Stage = "TickStanding"; TickStanding();
         Stage = "TickTraps"; TickTraps();
@@ -384,16 +385,18 @@ public sealed partial class Sim
         bool climbing = Nav.I(next) == Nav.I(u.Cell) && Nav.K(next) == Nav.K(u.Cell) && next != u.Cell;
         if (climbing) { tx = u.X; tz = u.Z; ty = (Nav.Y(next) << NavGrid.Shift) + (Nav.Ground(Nav.I(next), Nav.Y(next) - 1, Nav.K(next)) ? Nav.Floor[next] - (Nav.Y(next) << NavGrid.Shift) : 0); }
         else { tx += u.OffX; tz += u.OffZ; }
-        float speed = u.T.Move.Speed * NavGrid.CS * pace * u.Pace * CartPace(u) * TroopPace(u) * (u.Hp < u.MaxHp * .4f ? .7f : 1) * (Nav.Water[u.Cell] > 0 ? .6f : 1) * (u.Routed || u.State == UnitState.Flee ? .85f + .15f * PainPace(u) : .55f + .45f * PainPace(u))
+        float speed = u.T.Move.Speed * NavGrid.CS * pace * u.Pace * CartPace(u) * TroopPace(u) * (u.Hp < u.MaxHp * .4f ? .7f : 1) * (u.Routed || u.State == UnitState.Flee ? .85f + .15f * PainPace(u) : .55f + .45f * PainPace(u))
             * (Nav.Spikes[u.Cell] > 0 ? .4f : 1) * Gait(u) * (Mires.Count > 0 && InMire(u.X, u.Z) ? .35f : 1)
-            * (DeadFogs.Count > 0 && u.Team == Team.Horde && !Deathless(u) && InDeadFog(u.X, u.Z) ? .5f : 1) * WayPace(u)
+            * (DeadFogs.Count > 0 && u.Team == Team.Horde && !Deathless(u) && InDeadFog(u.X, u.Z) ? .5f : 1) * FootPace(u)
             * (Miasmas.Count > 0 && u.Team == Team.Player && InMiasma(u.X, u.Z) ? .6f : 1)
             * (Time < u.SlowUntil ? u.SlowBy : 1) * (Time < u.ChargeUntil ? 1.8f : 1);
         float step = speed * dt * (climbing ? .5f : 1);
-        // the turf wears where ours keep walking (Sim.Paths.cs)
-        if (!climbing) Tread(u, step);
         float dx = tx - u.X, dz = tz - u.Z, dyv = ty - u.Y;
         float dist = climbing ? MathF.Abs(dyv) : MathF.Sqrt(dx * dx + dz * dz);
+        // up a slope or a step the slower the steeper it is, down one a little slower (Sim.Paths.cs)
+        if (!climbing && dist > .5f) step *= Sloped(dyv / dist);
+        // the turf wears where ours keep walking (Sim.Paths.cs)
+        if (!climbing) Tread(u, step);
         u.State = u.State == UnitState.Flee ? UnitState.Flee : UnitState.Walk;
         if (!climbing && dist > .01f) u.Facing = MathF.Atan2(dz, dx);
         u.Stride += step;

@@ -141,6 +141,23 @@ static class RowHousesBench
         var gatesA0 = sim.DoorsOf(zoneA);
         // the second drawn against the side A's door is in, a voxel off it — as the player would
         int sideA = doorA.Side;
+        // ---- a door through a long wall, its windows and shutters cut out with the wall (they used to stop it): looked
+        // at as soon as the first house stands, before the second one moves its door off the wall they share
+        {
+            int far = sideA ^ 1;
+            var d = Shapes.DoorOn(far, zoneA.X0, zoneA.Z0, zoneA.X1, zoneA.Z1, doorA.Y - 9, zoneA.Depth);
+            var gp = GatePlan.At(w, site, new VoxelHit { X = d.X, Y = d.Y, Z = d.Z, NX = d.NX, NZ = d.NZ }, d.Y - 8, outward: true);
+            int panes = 0;
+            if (gp != null)
+                for (int i = 0; i < gp.Cut.Count; i++)
+                {
+                    byte m = w.Get(gp.Cut.X(i), gp.Cut.Y(i), gp.Cut.Z(i));
+                    if (m is Mat.Window or Mat.WindowLog or Mat.Shutter or Mat.ShutterLog) panes++;
+                }
+            check("a door can be cut through a house's long wall where its windows are, the window going with the wall",
+                gp != null && panes > 0, $"{Shapes.SideWords[far]}: {(gp == null ? "no gateway" : $"{gp.Cut.Count} voxels to cut, {panes} of window and shutters")}");
+        }
+
         var (nx, nz) = Shapes.SideNormal(sideA);
         int bx0, bz0, bx1, bz1;
         if (nz != 0)
@@ -198,22 +215,6 @@ static class RowHousesBench
         check("the door in the wall shared is walled up and the first house gets one on a free side; both are entered from outside and furnished",
             movedA >= 1 && oldGateGone && filledA >= openingA * 9 / 10 && gatesA.Count >= 1 && zoneA.Closed && zoneB.Closed && inA && inB && viaA != null && gatesA.Contains(viaA) && viaB != null && sim.DoorsOf(zoneB).Contains(viaB) && zoneA.Beds > 0 && zoneB.Beds > 0,
             $"moved {movedA}, old gate gone {oldGateGone}, its doorway {filledA} of {openingA} laid, A's doors now {gatesA.Count} (sides {sim.DoorSidesOf(zoneA)}); A closed {zoneA.Closed} «{zoneA.Why}», B closed {zoneB.Closed} «{zoneB.Why}»; in A {inA} (gate {viaA?.Id}), in B {inB} (gate {viaB?.Id}); bunks {zoneA.Beds}/{zoneB.Beds}");
-
-        // ---- a door through a long wall, its windows and shutters cut out with the wall (they used to stop it)
-        {
-            int far = sideA ^ 1;
-            var d = Shapes.DoorOn(far, zoneA.X0, zoneA.Z0, zoneA.X1, zoneA.Z1, doorA.Y - 9, zoneA.Depth);
-            var gp = GatePlan.At(w, site, new VoxelHit { X = d.X, Y = d.Y, Z = d.Z, NX = d.NX, NZ = d.NZ }, d.Y - 8, outward: true);
-            int panes = 0;
-            if (gp != null)
-                for (int i = 0; i < gp.Cut.Count; i++)
-                {
-                    byte m = w.Get(gp.Cut.X(i), gp.Cut.Y(i), gp.Cut.Z(i));
-                    if (m is Mat.Window or Mat.WindowLog or Mat.Shutter or Mat.ShutterLog) panes++;
-                }
-            check("a door can be cut through a house's long wall where its windows are, the window going with the wall",
-                gp != null && panes > 0, $"{Shapes.SideWords[far]}: {(gp == null ? "no gateway" : $"{gp.Cut.Count} voxels to cut, {panes} of window and shutters")}");
-        }
 
         // ---- a door the player puts in, and the old one walled up
         var gB = sim.DoorsOf(zoneB);

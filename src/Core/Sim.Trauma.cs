@@ -411,7 +411,7 @@ public sealed partial class Sim
         lock (_lame)
         {
             if (!_lame.TryGetValue(s, out var m))
-                _lame[s] = m = new Mover { Height = s.Height, Climb = s.Climb, Drop = Math.Min(s.Drop, 2), Speed = s.Speed, Carve = s.Carve, Build = s.Build, Ladders = false };
+                _lame[s] = m = new Mover { Height = s.Height, Climb = s.Climb, Drop = Math.Min(s.Drop, 2), Speed = s.Speed, Carve = s.Carve, Build = s.Build, Ladders = false, Feet = s.Feet, Careful = s.Careful };
             return m;
         }
     }

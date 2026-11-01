@@ -18,6 +18,13 @@ public sealed class Mover
     public bool Ladders = true;
     /// <summary>Cells of deep water it walks through on the bottom with its head out (a hill giant two); 0 for none.</summary>
     public int Wade;
+    /// <summary>How fast it goes over each kind of ground, and what a step there counts for in its plans (Going.cs).</summary>
+    public Paces Feet = Going.Folk;
+    /// <summary>
+    /// Keeps off scrambles up ledges, jumps down off them and the tops of walls where there is a way round, as ours on foot
+    /// do: a gate or a stair within a fair way is taken instead. The horde and the beasts go straight over the ground.
+    /// </summary>
+    public bool Careful;
 
     /// <summary>Whether it can stand in a cell of deep water: on the bottom, the water no deeper than it wades.</summary>
     public bool Wades(NavGrid g, int i, int y, int k)
@@ -80,12 +87,46 @@ public sealed class PathFinder
         _cost = new float[g.Count]; _from = new int[g.Count]; _seen = new int[g.Count]; _closed = new int[g.Count];
     }
 
-    /// <summary>How much more a step into a cell counts than on dry open ground: wading, or picking a way among stakes.</summary>
+    /// <summary>How much more a step among stakes counts than one beside them.</summary>
     public const float AmongStakes = 6;
-    static float Going(NavGrid g, int c) => (g.Water[c] > 0 ? FlowField.Wade : 1) * (g.Spikes[c] > 0 ? AmongStakes : 1) * (OnWay(g, c) ? OnPath : 1);
 
-    /// <summary>How much less a step along a laid or trodden way counts: walkers keep to the paths when it costs them little.</summary>
-    public const float OnPath = .8f;
+    /// <summary>
+    /// How much a step into a cell counts against one on turf: the going there for this walker (Going.cs) — a laid way
+    /// quicker, the rough slower, water for ours a long way round — and picking a way among stakes.
+    /// </summary>
+    static float StepCost(NavGrid g, Mover m, int c) => m.Feet.Cost[g.Footing[c]] * (g.Spikes[c] > 0 ? AmongStakes : 1);
+
+    /// <summary>
+    /// What a step up or down counts for besides its going, in cells walked: a slope the steeper the slower, up more than
+    /// down; a scramble up a ledge higher than a step (up to a man's height) as much as a fair walk round, and onto a wall
+    /// or a floor of ours far more, so that a gate or a stair within a fair way is taken instead; a drop of more than a
+    /// metre and a half the more the deeper, and off a wall of ours more again.
+    /// </summary>
+    static float Rise(NavGrid g, Mover m, int from, int to, float going)
+    {
+        int dy = g.Y(to) - g.Y(from), r = g.Floor[to] - g.Floor[from];
+        float step = going * (1 + (dy > 0 ? .6f * dy : -.3f * dy));
+        if (!m.Careful) return step;
+        if (r > 10) return step + (g.Footing[to] == (byte)Footing.Floor ? WallScramble : Scramble);
+        if (r >= -12) return step;
+        // down to three metres let oneself down; more than that a jump, taken only when there is no way round at all
+        int f = -r;
+        step += Math.Min(f - 12, 12) * DropCost / NavGrid.CS;
+        if (f > 24) step += Jump + (f - 24) * JumpCost / NavGrid.CS;
+        return step + (g.Footing[from] == (byte)Footing.Floor ? WallDrop : 0);
+    }
+
+    /// <summary>
+    /// Cells walked a scramble up a ledge counts for, onto the ground and onto a wall of ours; each metre let down past the
+    /// first metre and a half to three metres; a jump from higher than that, and each metre of it; off a wall of ours more.
+    /// </summary>
+    public const float Scramble = 6, WallScramble = 40, DropCost = 6, Jump = 16, JumpCost = 8, WallDrop = 40;
+    /// <summary>
+    /// Cells walked a cell of ladder (or scaffolding) counts for, up and down, and getting onto it from the ground or a wall:
+    /// a man climbs a metre in the time he walks five or six, so a ladder over a wall is taken only when the way round to a
+    /// gate is longer than that.
+    /// </summary>
+    public const float LadderUp = 6, LadderDown = 5, Board = 6;
 
     /// <summary>A way under the feet of one standing in the cell: in the cell, or the top of the cell below.</summary>
     public static bool OnWay(NavGrid g, int c) => g.Paved[c] != 0 || c >= g.Layer && g.Paved[c - g.Layer] != 0;
@@ -129,7 +170,7 @@ public sealed class PathFinder
                     // no cutting corners: both sides must be walkable at this level, and only on the ground
                     if (!standing || !g.Stand(ni, y, nk, m.Height, gates) || !g.Stand(i + DX[dir], y, k, m.Height, gates) || !g.Stand(i, y, k + DK[dir], m.Height, gates)) continue;
                     int dn = g.Id(ni, y, nk);
-                    Relax(c, dn, 1.414f * Going(g, dn), heuristic);
+                    Relax(c, dn, Rise(g, m, c, dn, 1.414f * StepCost(g, m, dn)), heuristic);
                     continue;
                 }
                 // level first, then a step up, then the shortest drop; onto ground or onto a ladder,
@@ -143,16 +184,16 @@ public sealed class PathFinder
                     if (dy > 0 && !OpenColumn(i, k, y + m.Height, y + m.Height + dy - 1)) continue;
                     if (dy < 0 && !OpenColumn(ni, nk, ny + m.Height, y + m.Height - 1)) continue;
                     int sn = g.Id(ni, ny, nk);
-                    Relax(c, sn, (1 + (dy > 0 ? .6f * dy : -.3f * dy)) * Going(g, sn), heuristic);
+                    Relax(c, sn, g.Ground(ni, ny - 1, nk, gates) ? Rise(g, m, c, sn, StepCost(g, m, sn)) : 1 + (dy > 0 ? .6f * dy : -.3f * dy), heuristic);
                     break;
                 }
             }
             // up and down a ladder, for those that take one
             if (!m.Ladders) continue;
             if (y + 1 < g.NY && (g.Ladder[c] != 0 || g.Ladder[c + g.Layer] != 0) && g.CanBe(i, y + 1, k, m.Height, gates))
-                Relax(c, c + g.Layer, 1.8f, heuristic);
+                Relax(c, c + g.Layer, m.Careful ? LadderUp + (standing ? Board : 0) : 1.8f, heuristic);
             if (y >= 2 && (g.Ladder[c] != 0 || g.Ladder[c - g.Layer] != 0) && g.CanBe(i, y - 1, k, m.Height, gates))
-                Relax(c, c - g.Layer, 1.4f, heuristic);
+                Relax(c, c - g.Layer, m.Careful ? LadderDown + (standing ? Board : 0) : 1.4f, heuristic);
         }
         return null;
     }
@@ -395,10 +436,13 @@ public sealed class FlowField
         }
         if (dy > 0)
             for (int y = py + m.Height; y < py + m.Height + dy && y < g.NY; y++) t += m.CarveTime(g, g.Id(pi, y, pk));
-        // falling a long way hurts and the horde avoids it a little; wading is slow and nobody does it if a bridge is near
+        // falling a long way hurts and the horde avoids it a little; wading is slow and nobody does it if a bridge is near;
+        // the rest of the ground as the walker goes over it (Going.cs)
         float walk = (1 + (dy > 0 ? .6f * dy : -.3f * dy)) / m.Speed + (dy <= -4 ? 2 : 0);
-        if (g.Water[g.Id(qi, qy, qk)] > 0) walk *= Wade;
-        if (g.Spikes[g.Id(qi, qy, qk)] > 0) walk *= Spiked;
+        int q = g.Id(qi, qy, qk);
+        if (g.Water[q] > 0 || g.Footing[q] == (byte)Footing.Water) walk *= Wade;
+        else walk /= m.Feet.Of[g.Footing[q]];
+        if (g.Spikes[q] > 0) walk *= Spiked;
         return t + walk;
     }
 

@@ -175,6 +175,8 @@ public sealed partial class Sim
             Idle(u, dt, stay: false);
             return;
         }
+        // laying the town's ways (Sim.TownWays.cs): a cell at a time, then it looks for work again
+        if (u.Site < 0 && u.Paving >= 0 && PaveTick(u, dt)) { Busy(u); return; }
         if (u.Site < 0)
         {
             u.State = UnitState.Idle;
@@ -514,8 +516,10 @@ public sealed partial class Sim
         {
             if (only != null) return false;
             u.Why = "";
-            // nothing marked: do what it was told to, or take a little more out of an area the player set aside
+            // nothing marked: do what it was told to, or take a little more out of an area the player set aside, or lay
+            // the town's ways (Sim.TownWays.cs)
             if (DutyWork(u) || FeedFromZone(u)) u.NextSearch = Time;
+            else if (TownWork(u)) return true;
             return false;
         }
         int ui = Nav.I(u.Cell), uk = Nav.K(u.Cell), h = u.T.Move.Height, starved = 0;
@@ -581,7 +585,7 @@ public sealed partial class Sim
                 if (path == null)
                 {
                     // out of reach of anywhere to stand: scaffolding beside it, raised from the ground (Sim.Scaffold.cs)
-                    if (u.T.Work >= 1 && Stock[Stockpile.Wood] >= 600 && PlanReach(u, col, y0, y1) is { } lift)
+                    if (u.T.Work >= 1 && Stock[Stockpile.Wood] >= 600 && PlanReach(u, col, y0, y1) is { } lift && Stock[Stockpile.Wood] >= ScaffoldLogs(lift))
                     {
                         Scaffolds.Add(lift);
                         u.Raising = lift;
@@ -594,12 +598,15 @@ public sealed partial class Sim
                     continue;
                 }
                 u.Site = col; _claims[col]++;
+                u.MarkedWorkAt = Time;
                 u.SiteWork = mask;
                 u.Path = path.Count > 0 ? path : null; u.PathI = 0;
                 u.Jobs.Clear(); u.JobI = 0; u.Why = "";
                 return true;
             }
             if (near.Count > 0) unreached = true;
+            // nothing marked at this priority to be had: the town's ways, if they are at it (Sim.TownWays.cs)
+            if (only == null && (mask >> (int)WorkKind.Town & 1) != 0 && TownWork(u)) return true;
         }
         if (only != null) return false;
         if (unreached) u.Why = "до работы не дойти";

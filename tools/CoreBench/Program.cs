@@ -6302,6 +6302,9 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troves") TrovesBench
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bestiary") BestiaryBench.Run(Check);
 // the horde's homeland a bog: its zones on the big map, the map of before the same in all else, a bog valley (BogBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bog") BogBench.Run(Check);
+// how our people walk: the pace on each kind of ground, a road kept to, gates taken rather than ladders and walls,
+// a bridge rather than the water (Walkers.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--walkers") WalkersBench.Run(Check);
 // every side of a valley reaches the citadel: the river's valley on a dozen seeds, the other kinds on three (ReachBench.cs)
 if (args.Length == 0 || args[0] == "--reach") ReachBench.Run(Check);
 // every valley is made: each kind by itself on many seeds, a share of two big maps' cells (ValleysBench.cs)
