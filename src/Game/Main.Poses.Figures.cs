@@ -16,7 +16,7 @@ public partial class Main
     /// the workers, one swinging his pick; archers and swordsmen, every other swordsman with his shield up; goblins and
     /// sappers; orcs and miners; trolls and the beasts; the engines; and the troops the lore opens, every other one as it
     /// fights: spearmen, shieldbearers, halberdiers and knights; slingers, crossbowmen, bombardiers and hounds; the
-    /// riders; a tame troll and the giants. --look=0..9 frames one row.
+    /// riders; a tame troll and the giants; the commanders, the architect and a crewman. --look=0..10 frames one row.
     /// </summary>
     void People()
     {
@@ -31,6 +31,8 @@ public partial class Main
             // the troops the lore opens: men on foot; men who throw and shoot, and the hounds; the riders; the great ones
             new[] { Kinds.Spearman, Kinds.Shieldbearer, Kinds.Halberdier, Kinds.Knight }, new[] { Kinds.Slinger, Kinds.Crossbowman, Kinds.Bombardier, Kinds.OurAlchemist, Kinds.Hound },
             new[] { Kinds.Rider, Kinds.HorseArcher, Kinds.Lancer }, new[] { Kinds.TameTroll, Kinds.Giant, Kinds.HillGiant },
+            // the masters: the commanders, the architect and an engine's crew
+            new[] { Kinds.Captain, Kinds.Architect, Kinds.Crewman },
         };
         const float yaw = -.3f, pitch = .42f, gap = 34;
         float sin = MathF.Sin(yaw), cos = MathF.Cos(yaw);
@@ -40,6 +42,8 @@ public partial class Main
         float width = 0;
         for (int r = 0; r < rows.Length; r++)
         {
+            // (one row framed: the rows before it, between it and the camera, are not set out)
+            if (one && r < _look) continue;
             float span = 0;
             foreach (var t in rows[r]) span += Bodies.Looks(t) * Spacing(t);
             if (!one || r == _look) width = Math.Max(width, span);

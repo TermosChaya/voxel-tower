@@ -36,6 +36,8 @@ public static partial class Bodies
         var g = InFist(s, b, out int x, out int y, out int z0);
         int e = z0 + len * 4, back = b.ArmZ0 * 4 - 3;
         g.Fill(x, y, back, x + 2, y + 2, e + 1, Mat.Handle);
+        // the haft worn pale where the hands slide up and down it as it swings
+        g.Fill(x, y, z0 + 2, x + 2, y + 2, z0 + 16, Mat.Shaft);
         g.Wound(x, y, back, b.ArmZ0 * 4 + 2, 2, Mat.LeatherDark, Mat.Leather);
         for (int v = -16; v < 16; v++)
         {
@@ -50,9 +52,11 @@ public static partial class Bodies
             for (int k = 0; k < deep; k++)
                 for (int dx = 0; dx < thick; dx++) g.Dot(x + dx, y + 1 + v, zc - deep / 2 + k, m);
         }
-        // the chisel's end flares a little; the eye round the haft
+        // the chisel's end flares a little; the eye round the haft, the haft's end standing out of it split by an iron wedge
         g.Fill(x - 1, y + 15, e - 9, x + 3, y + 17, e - 6, Mat.SteelEdge);
         g.Fill(x - 1, y - 1, e - 5, x + 3, y + 3, e + 1, head);
+        g.Fill(x, y, e + 1, x + 2, y + 2, e + 2, Mat.Handle);
+        g.Fill(x, y, e + 1, x + 2, y + 1, e + 2, Mat.SteelDark);
         g.Tip = Half(g, x + 1, y - 15, e - 7);
     }
 

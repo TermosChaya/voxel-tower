@@ -75,6 +75,9 @@ public static partial class Bodies
             int x = 2 - (y - b.Waist - 1) * 5 / (b.Torso - 2);
             s.Paint(Body, x - 1, y, b.Z1, x + 1, y + 1, b.Z1 + 1, Mat.ClothWhite);
         }
+        // near, below the belt it hangs in folds before and behind
+        Folds(s, Body, -6, 6, (b.Waist - 3) * 2, b.Waist * 2, (b.Z1 + 1) * 2 - 1, +1);
+        Folds(s, Body, -6, 6, (b.Waist - 3) * 2, b.Waist * 2, (b.Z0 - 1) * 2, -1);
         // a sallet over a bearded face, a bascinet with its pig-faced visor, or a sallet with its visor down
         if (look == 1) Bascinet(s, b); else Sallet(s, b, look == 2);
         if (look == 0) Beard(s, b, b.Hair, false);
@@ -525,6 +528,11 @@ public static partial class Bodies
         s.Box(Body, -b.Chest - 1, b.Waist - 6, b.Z0 - 3, b.Chest + 1, b.Neck, b.Z0 - 2, cloak, Tissue.Armor);
         s.Box(Body, -b.Chest - 1, b.Neck - 1, b.Z0 - 2, b.Chest + 1, b.Neck, b.Z1 + 1, cloak, Tissue.Armor);
         s.Box(Body, -1, b.Neck - 2, b.Z1 + 1, 1, b.Neck - 1, b.Z1 + 2, Mat.Brass, Tissue.Gear);
+        // near, the cloak hangs in folds down the back, and its hem is cut ragged a little where it has been worn
+        Folds(s, Body, (-b.Chest - 1) * 2, (b.Chest + 1) * 2, (b.Waist - 6) * 2, (b.Neck - 2) * 2, (b.Z0 - 3) * 2, -1);
+        if (s.Detail)
+            for (int x = (-b.Chest - 1) * 2; x < (b.Chest + 1) * 2; x++)
+                if (Dice(x, look, 0, 171) < .3f) { s.FDel(Body, x, (b.Waist - 6) * 2, (b.Z0 - 3) * 2); s.FDel(Body, x, (b.Waist - 6) * 2, (b.Z0 - 3) * 2 + 1); }
         // the horn at the left hip, its bell forward, in brass mounts on a strap
         s.Box(Body, b.Chest, b.Waist - 2, -1, b.Chest + 1, b.Waist, 2, Mat.Horn, Tissue.Gear);
         s.Box(Body, b.Chest, b.Waist - 1, 2, b.Chest + 1, b.Waist + 1, 3, Mat.Brass, Tissue.Gear);
@@ -534,6 +542,17 @@ public static partial class Bodies
         s.Box(Body, -1, hy1 + 1, -1, 1, hy1 + 5, 1, cloak, Tissue.Gear);
         s.Box(Body, -1, hy1 + 3, hz0, 1, hy1 + 6, -1, cloak, Tissue.Gear);
         s.Box(Body, -1, hy1 + 1, hz0 - 1, 1, hy1 + 4, hz0, cloak, Tissue.Gear);
+        // near, the plume is feathers: its top and its trailing end ragged, a quill pale down its middle
+        if (s.Detail)
+            for (int y = (hy1 + 1) * 2; y < (hy1 + 6) * 2; y++)
+                for (int z = (hz0 - 1) * 2; z < 2; z++)
+                    for (int x = -2; x < 2; x++)
+                    {
+                        if (s.FMat(Body, x, y, z) != cloak) continue;
+                        bool top = !s.FHas(Body, x, y + 1, z), end = !s.FHas(Body, x, y, z - 1);
+                        if ((top || end) && x is -2 or 1 && Dice(x, y, z, 181) < .45f && s.FHas(Body, x + (x < 0 ? 1 : -1), y, z)) s.FDel(Body, x, y, z);
+                        else if (top && x is -1 or 0) s.FPut(Body, x, y, z, Mat.Linen);
+                    }
         if (look != 1) Beard(s, b, b.Hair);
         Sword(s, b, longsword: true);
         return Done(s, f, b);

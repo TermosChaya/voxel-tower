@@ -47,9 +47,66 @@ public static partial class Bodies
                 break;
         }
         if (look % 3 == 1 || look == 6) Beard(s, b, hair, look != 6);
+        WorkerKit(s, b, look);
         WorkerDetail(s, b, look);
         Pick(s, b, Mat.Iron);
         return Done(s, f, b);
+    }
+
+    /// <summary>
+    /// What a worker carries besides his pick, so the household's workers are told apart at a glance: a hammer hung
+    /// behind the right hip, a saw slung across the back with its handle over the shoulder, a coil of rope over the left
+    /// shoulder, or a shovel on the back, its blade at the hip and its grip over the shoulder. A blade goes through it as
+    /// through his smock (it is no armour, and what cuts it loose drops it).
+    /// </summary>
+    static void WorkerKit(Sculpt s, Build b, int look)
+    {
+        int bz = b.Z0 - 1;
+        switch (look % 4)
+        {
+            case 0:
+                // the hammer: its handle down from the belt behind the right hip, the head across its end
+                s.Box(Body, -4, b.Waist - 3, bz, -3, b.Waist + 1, b.Z0, Mat.Handle, Tissue.Skin);
+                s.Box(Body, -5, b.Waist - 4, bz, -2, b.Waist - 3, b.Z0, Mat.Iron, Tissue.Skin);
+                if (s.Detail) { s.FPut(Body, -10, (b.Waist - 4) * 2, bz * 2, Mat.Steel); s.FPut(Body, -5, (b.Waist - 4) * 2, bz * 2, Mat.Steel); }
+                break;
+            case 1:
+                // the saw: a bright blade slanting up across the back from the right hip, its teeth along its lower edge,
+                // the wooden handle at its upper end standing over the left shoulder
+                for (int k = 0; k < 7; k++)
+                {
+                    int x = -3 + k, y0 = b.Waist + 2 + k;
+                    s.Box(Body, x, y0, bz, x + 1, y0 + 2, b.Z0, Mat.SteelEdge, Tissue.Skin);
+                }
+                s.Box(Body, 3, b.Waist + 9, bz, 5, b.Neck + 1, b.Z0, Mat.Handle, Tissue.Skin);
+                if (s.Detail)
+                    s.FPattern(Body, -8, b.Waist * 2, bz * 2 - 1, 8, b.Neck * 2, bz * 2 + 1, (x, y, z) =>
+                        s.FMat(Body, x, y, z) == Mat.SteelEdge && !s.FHas(Body, x, y - 1, z) && (x & 1) == 0 ? Mat.SteelDark : (byte)0);
+                break;
+            case 2:
+                // a coil of rope over the left shoulder and down across the chest to the right hip
+                for (int y = b.Waist + 1; y < b.Neck; y++)
+                {
+                    int x = 3 - (y - b.Waist - 1) * 7 / Math.Max(1, b.Torso - 1);
+                    s.Box(Body, x, y, b.Z1, x + 1, y + 1, b.Z1 + 1, Mat.Straw, Tissue.Skin);
+                    s.Box(Body, x, y, bz, x + 1, y + 1, b.Z0, Mat.Straw, Tissue.Skin);
+                }
+                if (s.Detail)
+                    s.FPattern(Body, -10, b.Waist * 2, -20, 10, b.Neck * 2, 20, (x, y, z) => s.FMat(Body, x, y, z) == Mat.Straw && ((x + y) & 1) == 0 ? Mat.ClothOchre : (byte)0);
+                break;
+            default:
+                // a shovel on the back: the shaft from the left hip up over the right shoulder, the blade at the hip
+                for (int y = b.Waist; y < b.Neck + 1; y++)
+                {
+                    int x = 2 - (y - b.Waist) * 5 / Math.Max(1, b.Torso);
+                    s.Box(Body, x, y, bz, x + 1, y + 1, b.Z0, Mat.Handle, Tissue.Skin);
+                }
+                s.Box(Body, 1, b.Waist - 4, bz, 4, b.Waist, b.Z0, Mat.Iron, Tissue.Skin);
+                s.Box(Body, -4, b.Neck, bz, -2, b.Neck + 1, b.Z0, Mat.Handle, Tissue.Skin);
+                if (s.Detail)
+                    for (int x = 2; x < 8; x++) { s.FPut(Body, x, (b.Waist - 4) * 2, bz * 2, Mat.SteelEdge); s.FPut(Body, x, (b.Waist - 4) * 2 + 1, bz * 2, Mat.Steel); }
+                break;
+        }
     }
 
     static BodyPlan Archer(int look)
@@ -104,6 +161,8 @@ public static partial class Bodies
         s.FPaint(Body, .5f, b.Waist + 3, b.Z1, 1, b.Neck - 2, b.Z1 + 1, Mat.ClothBlue);
         s.FPaint(Body, -2, b.Neck - 5, b.Z1, 2, b.Neck - 4.5f, b.Z1 + 1, Mat.ClothBlue);
         s.FPaint(Body, -.5f, b.Neck - 5, b.Z1, .5f, b.Neck - 4.5f, b.Z1 + 1, Mat.ClothOchre);
+        // near, the tabard's skirt below the belt hangs in folds
+        Folds(s, Body, -6, 6, (b.Waist - 3) * 2, b.Waist * 2, (b.Z1 + 2) * 2 - 1, +1);
         // steel on the shoulders; a scabbard at the left hip, a pouch at the right
         Spaulders(s, b);
         Scabbard(s, b);
@@ -273,6 +332,9 @@ public static partial class Bodies
         s.Box(Body, -b.Chest, 3, b.Z0 - 1, b.Chest, b.Waist, b.Z1 + 1, robe);
         s.Cut(Body, -1, 3, b.Z1, 1, 7, b.Z1 + 1, both: false);
         s.Paint(Body, -b.Chest, 3, b.Z0 - 1, b.Chest, 4, b.Z1 + 1, Mat.RobeTrim);
+        // near, the skirt of the robe falls in folds before and behind
+        Folds(s, Body, -b.Chest * 2, b.Chest * 2, 3 * 2, b.Waist * 2, (b.Z1 + 1) * 2 - 1, +1);
+        Folds(s, Body, -b.Chest * 2, b.Chest * 2, 3 * 2, b.Waist * 2, (b.Z0 - 1) * 2, -1);
         // the girdle's ends hanging, wide sleeves, the charm
         s.Box(Body, 1, b.Waist - 4, b.Z1 + 1, 2, b.Waist, b.Z1 + 2, Mat.RobeTrim);
         s.Box(Body, 2, b.Waist - 3, b.Z1 + 1, 3, b.Waist, b.Z1 + 2, Mat.RobeTrim);

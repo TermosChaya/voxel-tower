@@ -71,6 +71,25 @@ public static partial class Bodies
     }
 
     /// <summary>
+    /// A fall of cloth drawn finer, its face toward <paramref name="way"/> (+1 before, −1 behind) at the fine depth z,
+    /// from x0 to x1 and from its hem y0 up to y1 (fine cells): grooves down it where it hangs in folds, every fourth cell
+    /// the whole way and those between over its lower third only, where it falls widest; never cut through the cloth.
+    /// </summary>
+    static void Folds(Sculpt s, BodyPart p, int x0, int x1, int y0, int y1, int z, int way)
+    {
+        if (!s.Detail) return;
+        int low = y0 + Math.Max(2, (y1 - y0) / 3);
+        for (int x = x0; x < x1; x++)
+        {
+            int k = ((x - x0) % 4 + 4) % 4;
+            if (k is 1 or 3) continue;
+            int top = k == 0 ? y1 : low;
+            for (int y = y0; y < top; y++)
+                if (s.FHas(p, x, y, z) && s.FHas(p, x, y, z - way)) s.FDel(p, x, y, z);
+        }
+    }
+
+    /// <summary>
     /// A belt's buckle drawn finer, before the half-voxel at (y, z) the plain one fills: a brass frame standing out of the
     /// belt with the leather showing in it and the tongue across.
     /// </summary>
@@ -454,6 +473,9 @@ public static partial class Bodies
         for (int x = (-b.Chest + 1) * 2; x < (b.Chest - 1) * 2; x++)
             if (((x + 64) / 2 & 1) == 0)
                 foreach (int z in new[] { (b.Z1 + 1) * 2, (b.Z1 + 1) * 2 + 1, (b.Z0 - 2) * 2, (b.Z0 - 2) * 2 + 1 }) s.FDel(Body, x, hem, z);
+        // below the belt the panels hang free, in folds before and behind
+        Folds(s, Body, (-b.Chest + 1) * 2, (b.Chest - 1) * 2, hem + 1, b.Waist * 2, (b.Z1 + 2) * 2 - 1, +1);
+        Folds(s, Body, (-b.Chest + 1) * 2, (b.Chest - 1) * 2, hem + 1, b.Waist * 2, (b.Z0 - 2) * 2, -1);
         Buckle(s, b.Waist, b.Z1 + 1);
     }
 

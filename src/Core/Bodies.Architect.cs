@@ -24,6 +24,16 @@ public static partial class Bodies
         s.Box(Body, -b.Chest, b.Waist - 5, b.Z0 - 1, b.Chest, b.Waist, b.Z1 + 1, coat);
         s.Cut(Body, -1, b.Waist - 5, b.Z1, 1, b.Waist - 2, b.Z1 + 1, both: false);
         s.Paint(Body, -b.Chest, b.Waist - 5, b.Z0 - 1, b.Chest, b.Waist - 4, b.Z1 + 1, Mat.ClothBrown);
+        // near, the skirts hang in folds before and behind, brass buttons down the front over the belt, the cuffs turned back
+        Folds(s, Body, -b.Chest * 2, b.Chest * 2, (b.Waist - 5) * 2, b.Waist * 2, (b.Z1 + 1) * 2 - 1, +1);
+        Folds(s, Body, -b.Chest * 2, b.Chest * 2, (b.Waist - 5) * 2, b.Waist * 2, (b.Z0 - 1) * 2, -1);
+        if (s.Detail)
+        {
+            for (int y = (b.Waist + 2) * 2; y < (b.Neck - 1) * 2; y += 3) s.FPut(Body, 0, y, b.Z1 * 2 - 1, Mat.Brass);
+            int cuff = (b.HandY + b.Hand) * 2;
+            foreach (var p in new[] { Main, Off })
+                s.FPattern(p, -80, cuff, -80, 80, cuff + 2, 80, (x, y, z) => s.FMat(p, x, y, z) == coat ? Mat.ClothBrown : (byte)0);
+        }
         // the strap from the right shoulder across the chest to the satchel at the left hip
         for (int k = 0; k < 7; k++) s.Dot(Body, -b.Chest + 1 + k, b.Neck - 1 - k, b.Z1, Mat.LeatherDark, Tissue.Gear);
         s.Box(Body, b.Chest, b.Waist - 3, -1, b.Chest + 1, b.Waist + 1, 2, Mat.Leather, Tissue.Gear);
