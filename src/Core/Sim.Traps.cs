@@ -91,11 +91,15 @@ public sealed partial class Sim
             }
         if (bx < 0) return;
         for (int y = y0 - 2; y < y0 + 2 * NavGrid.CS; y++)
+        {
             if (World.Get(bx, y, bz) == Mat.Stakes)
             {
                 World.Set(bx, y, bz, Mat.Air);
                 Fell?.Invoke(bx, y, bz, Mat.Stakes);
             }
+            // (and what was still to be set of it is let go: it would hang in the air with nothing under it)
+            else if (Orders.At(bx, y, bz) == Mat.Stakes) Orders.Clear(bx, y, bz);
+        }
     }
 
     /// <summary>A raider on a trap floor: the floor gives way under it, all that is joined to the spot within three metres.</summary>

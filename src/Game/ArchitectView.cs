@@ -5,9 +5,10 @@ using VoxelTower.Core;
 namespace VoxelTower.Game;
 
 /// <summary>
-/// The architect's plan as a ghost on the ground while he is chosen (Sim.Architect.cs): each piece he has yet to mark
-/// drawn as its outline in a pale blueprint blue, each one marked and being built fainter, the gates as rings, the ring
-/// round the point it holds as a thin line; what is finished is not drawn. Drawn over everything, made again twice a second.
+/// The architect's plan as a ghost on the ground while he is chosen (Sim.Architect.cs): his line round the point it
+/// holds, in pale green where it runs along what stands and in blueprint blue where it is to be built; each piece he has
+/// yet to mark drawn along its line (or round its place: the towers, the posts, the gates) brighter, each one marked and
+/// being built fainter; what is finished is not drawn but for the line. Drawn over everything, made again twice a second.
 /// </summary>
 public partial class ArchitectView : Node3D
 {
@@ -17,7 +18,8 @@ public partial class ArchitectView : Node3D
     /// <summary>How many pieces are drawn now (the self-test asks).</summary>
     public int Shown { get; private set; }
 
-    static readonly Color Planned = new(.55f, .78f, 1f, .75f), Building = new(.55f, .78f, 1f, .32f);
+    static readonly Color Planned = new(.55f, .78f, 1f, .75f), Building = new(.55f, .78f, 1f, .32f),
+        Stands = new(.62f, .9f, .55f, .55f), New = new(.55f, .78f, 1f, .5f), Nature = new(.5f, .7f, .8f, .3f);
 
     public void Init(Main m)
     {
@@ -46,6 +48,14 @@ public partial class ArchitectView : Node3D
         var w = _m.World;
         bool any = false;
         void Begin() { if (!any) { _mesh.SurfaceBegin(Mesh.PrimitiveType.Triangles); any = true; } }
+        // the line: what stands, what is to be built, water and cliffs that bar the way
+        for (int i = 0; i < p.Ring.Count; i++)
+        {
+            var (ax, az) = p.Ring[i]; var (bx, bz) = p.Ring[(i + 1) % p.Ring.Count];
+            byte e = i < p.Edge.Count ? p.Edge[i] : (byte)0;
+            Begin();
+            Band(w, ax, az, bx, bz, e == 0 ? New : e == 2 ? Nature : Stands, .6f);
+        }
         foreach (var piece in sim.ArchPieces(p))
         {
             ulong bit = 1UL << piece.Index;
@@ -53,10 +63,24 @@ public partial class ArchitectView : Node3D
             var c = (p.Marked & bit) != 0 ? Building : Planned;
             Begin();
             Shown++;
-            if (piece.Name is "ворота" or "надвратная башня")
+            if (piece.Round > 0) { Ring(w, piece.AtX, piece.AtZ, piece.Round, c); continue; }
+            if (piece.Line.Length >= 4 && piece.Work is ArchWorkKind.Wall or ArchWorkKind.Unbuild or ArchWorkKind.Stair)
             {
-                float mx = (piece.X0 + piece.X1) / 2f, mz = (piece.Z0 + piece.Z1) / 2f;
-                Ring(w, mx, mz, piece.Name == "ворота" ? 10 : 30, c);
+                for (int k = 0; k + 3 < piece.Line.Length; k += 2) Band(w, piece.Line[k], piece.Line[k + 1], piece.Line[k + 2], piece.Line[k + 3], c, 1.4f);
+                continue;
+            }
+            if (piece.Work is ArchWorkKind.Ditch or ArchWorkKind.Stakes)
+            {
+                // along its quarter of the line, so far out from it
+                int q = p.Works[piece.Index].Quarter;
+                float off = piece.Work == ArchWorkKind.Ditch ? 34 : 56;
+                for (int i = 0; i < p.Ring.Count; i++)
+                {
+                    var (ax, az) = p.Ring[i]; var (bx, bz) = p.Ring[(i + 1) % p.Ring.Count];
+                    if (Quarter(p, ax, az) != q && Quarter(p, bx, bz) != q) continue;
+                    var (oax, oaz) = Out(p, ax, az, off); var (obx, obz) = Out(p, bx, bz, off);
+                    Band(w, oax, oaz, obx, obz, c, piece.Work == ArchWorkKind.Ditch ? 1.6f : .9f);
+                }
                 continue;
             }
             // the outline of its box on the ground, a line a few voxels wide
@@ -66,12 +90,26 @@ public partial class ArchitectView : Node3D
         if (any) _mesh.SurfaceEnd();
     }
 
-    /// <summary>A flat band on the ground from one point to another (voxels), following the ground every few metres.</summary>
-    void Band(VoxelWorld w, float ax, float az, float bx, float bz, Color c)
+    /// <summary>The quarter about the plan's point a column is in (0 north … 3 west), as the plan splits its ditch.</summary>
+    static int Quarter(ArchPlan p, float x, float z)
+    {
+        float dx = x - p.CX, dz = z - p.CZ;
+        return Math.Abs(dz) >= Math.Abs(dx) ? (dz < 0 ? 0 : 2) : (dx > 0 ? 1 : 3);
+    }
+
+    /// <summary>A point of the line pushed so far out from the plan's point.</summary>
+    static (float x, float z) Out(ArchPlan p, float x, float z, float by)
+    {
+        float dx = x - p.CX, dz = z - p.CZ, d = MathF.Max(1, MathF.Sqrt(dx * dx + dz * dz));
+        return (x + dx / d * by, z + dz / d * by);
+    }
+
+    /// <summary>A flat band on the ground from one point to another (voxels), so wide, following the ground every few metres.</summary>
+    void Band(VoxelWorld w, float ax, float az, float bx, float bz, Color c, float wide = .9f)
     {
         float len = MathF.Max(1, MathF.Sqrt((bx - ax) * (bx - ax) + (bz - az) * (bz - az)));
         int n = Math.Max(1, (int)(len / 16));
-        float sx = -(bz - az) / len * .9f, sz = (bx - ax) / len * .9f;
+        float sx = -(bz - az) / len * wide, sz = (bx - ax) / len * wide;
         for (int i = 0; i < n; i++)
         {
             float t0 = (float)i / n, t1 = (float)(i + 1) / n;
