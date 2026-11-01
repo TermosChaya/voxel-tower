@@ -212,6 +212,24 @@ static class WorldBench
                 millSaid = $"{mill.Thing.Name}: {m0:0} → {m1:0} → again {m2:0}; next week {m3:0} → {m4:0}";
             }
             check("a windmill or a water wheel gives once a week", millOk, millSaid);
+            // a dwelling: hired out by the hero standing at it; a week on, the hero still standing there hires the new men
+            // without stepping off and back (The Well, 30.10.2026)
+            var dwell = Find(x => x.Thing is { Kind: ThingKind.Dwelling } && x.Sum.Keep.Count == 0 && Beside(c, x) != null);
+            string dwellSaid = "no dwelling";
+            bool dwellOk = false;
+            if (dwell != null)
+            {
+                var t = dwell.Thing;
+                c.Give(Res.Gold, 100000);
+                Put(c, hero, Beside(c, dwell)); c.Send(hero, dwell); WalkOut(c, hero);
+                int stock0 = t.Stock, got0 = c.Hire(dwell, t.Stock), week0 = c.Week;
+                for (int i = 0; i < 9 && c.Week == week0; i++) c.SkipToDawn();
+                bool offered = c.Dwellings.Exists(x => x.cell == dwell && x.p == hero);
+                int stock1 = t.Stock, got1 = c.Hire(dwell, t.Stock);
+                dwellOk = stock0 > 0 && got0 == stock0 && stock1 > 0 && offered && got1 == stock1 && c.CellOf(hero) == dwell;
+                dwellSaid = $"{t.Breed.Name}: hired {got0} of {stock0}; the next week {stock1} ready, offered again {offered}, hired {got1}, the hero still there {c.CellOf(hero) == dwell}";
+            }
+            check("a dwelling's men hired by the hero standing at it; a week on he hires the new ones standing there still, without stepping off and back", dwellOk, dwellSaid);
         }
 
         // ---- moves: spent by the ground, waited out, whole at dawn; the days of a way

@@ -154,7 +154,7 @@ public partial class Main
     /// experience; 5 a pass kept by a stack; 6 the horde's realm, its town in the burnt land; 7 the strategic view; 8 a road over a river on its bridge;
     /// 9 a mine held by a garrison of ours behind works, its card up (Campaign.Hold.cs); 10 a hero of the horde come up by
     /// ours under its banner; 11 the creatures of the wild about the citadel, the word over the nearest stack (what, how
-    /// many, against our hero).
+    /// many, against our hero); 12 a dwelling the hero stands at, its card up and his pane offering «Нанять в жилище».
     /// </summary>
     void BigMapPose()
     {
@@ -293,6 +293,18 @@ public partial class Main
                 c.Reveal(stack, 6);
                 Look(stack, 22, 16);
                 hover = () => v.HoverAt(v.Cam.UnprojectPosition(v.HexToScene(stack.Col, stack.Row)));
+                break;
+            }
+            case 12:
+            {
+                // a dwelling the hero stands at: its card, and his pane offering its hiring where he stands
+                var dwell = Nearest(h => h.Thing is { Kind: ThingKind.Dwelling } && h.Sum.Keep.Count == 0 && h.Passable, home);
+                hero.Q = dwell.Q; hero.R = dwell.R;
+                c.Reveal(dwell, 4);
+                c.Visit(hero, dwell);
+                Hud.MapPane.Choose(hero);
+                Hud.MapPane.Refresh();
+                Look(dwell, 24, 18);
                 break;
             }
         }

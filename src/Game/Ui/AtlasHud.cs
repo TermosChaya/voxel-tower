@@ -61,6 +61,8 @@ public partial class AtlasHud : Control
     public Button DawnButton { get; private set; }
     public Control EnterButton => _enter;
     public Control Panel => _about;
+    /// <summary>The card's buttons (for the self-test).</summary>
+    public Control CardButtons => _cardButtons;
 
     public void Init(Main m, AtlasView view)
     {
@@ -552,6 +554,10 @@ public partial class AtlasHud : Control
             else
             {
                 _about.AddChild(Big($"Войти в клетку ({{EnterCell}})", "Герой с армией войдёт в долину, и вы будете играть в ней.", () => EnterChosen()));
+                // a dwelling he stands at, with men ready: its hiring, whenever the player wants it
+                if (h.Owner == Holder.Ours && cell.Thing is { Kind: ThingKind.Dwelling, Stock: > 0 } dt)
+                    _about.AddChild(Big($"Нанять в жилище: {dt.Stock}", $"Готовы наняться {dt.Stock} ({dt.Breed.Name.ToLowerInvariant()}), по {Campaign.HireCost(dt.Breed)} золота. Нанятые пойдут с героем.",
+                        () => { C.Offer(h, cell); _doneWith.Remove(cell); Refresh(); }));
                 if (C.Foes(cell) > 0 && cell.Owner != Holder.Ours)
                     _about.AddChild(Big(Campaign.Untaken(cell) && cell.Trove == TroveKind.Shrine ? "Испытание сразу" : "Бой сразу",
                         "Бой решится сразу, по силе отрядов: вдвое сильнее побеждает 9 раз из 10, но теряет людей.", () => FightWith(h)));
@@ -626,17 +632,22 @@ public partial class AtlasHud : Control
         if (gold > 0 && cell != C.Here) _about.AddChild(Line($"Без вас платит {Fmt.Int(gold)} золота в минуту.", Ornament.Moss));
     }
 
-    /// <summary>A dwelling a hero of ours stands at with someone to hire, the player not yet done with it.</summary>
+    /// <summary>
+    /// A dwelling a hero of ours stands at with someone to hire, the player not yet done with it: put off («Позже»), it is
+    /// offered again when more are ready than were then (a new week), or from the hero's pane («Нанять в жилище»).
+    /// </summary>
     (MapParty p, MapCell cell)? DwellingDue
     {
         get
         {
             foreach (var d in C.Dwellings)
-                if (C.Parties.Contains(d.p) && d.p.Q == d.cell.Q && d.p.R == d.cell.R && d.cell.Thing is { Stock: > 0 } && !_doneWith.Contains(d.cell)) return d;
+                if (C.Parties.Contains(d.p) && d.p.Q == d.cell.Q && d.p.R == d.cell.R && d.cell.Thing is { Stock: > 0 } t
+                    && !(_doneWith.TryGetValue(d.cell, out int were) && t.Stock <= were)) return d;
             return null;
         }
     }
-    readonly HashSet<MapCell> _doneWith = new();
+    /// <summary>The dwellings put off, and how many were ready to hire then.</summary>
+    readonly Dictionary<MapCell, int> _doneWith = new();
 
     /// <summary>Whether ours hold a cell of theirs, in words: its garrison and works, or that the horde takes it without a fight.</summary>
     string Held(MapCell cell) => cell.Owner == Holder.Ours && C.Garrisoned(cell)
@@ -665,7 +676,7 @@ public partial class AtlasHud : Control
     void Card()
     {
         foreach (var c in _cardButtons.GetChildren()) c.QueueFree();
-        _doneWith.RemoveWhere(c => !C.Dwellings.Exists(d => d.cell == c));
+        foreach (var c in new List<MapCell>(_doneWith.Keys)) if (!C.Dwellings.Exists(d => d.cell == c)) _doneWith.Remove(c);
         if (C.Joiners.Count > 0)
         {
             // a stack of the wild asking to go with a hero of ours (Campaign.Bestiary.cs)
@@ -698,7 +709,7 @@ public partial class AtlasHud : Control
             all.AddThemeFontOverride("font", Ornament.SerifBold);
             _cardButtons.AddChild(all);
             _cardButtons.AddChild(Small("Одного", $"Нанять одного за {cost} золота.", () => { C.Hire(dw.cell, 1); _m.TellMap(); Refresh(); }));
-            _cardButtons.AddChild(Small("Позже", "Вернуться к жилищу можно в любой день. Новые готовы наняться каждую неделю.", () => { _doneWith.Add(dw.cell); Refresh(); }));
+            _cardButtons.AddChild(Small("Позже", "Пока герой стоит у жилища, нанять можно кнопкой «Нанять в жилище» на его панели. Новые готовы наняться каждую неделю.", () => { _doneWith[dw.cell] = t.Stock; Refresh(); }));
         }
         else if (CardParty is { } p)
         {

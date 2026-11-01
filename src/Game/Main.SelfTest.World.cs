@@ -130,6 +130,52 @@ public partial class Main
             asked && Math.Abs(got - Campaign.ChestOf(spot.Thing).gold) < 1 && spot.Thing.Taken && c.OpenChest(spot, true) == null,
             $"asked {asked}, «{said}», +{got:0} gold");
 
+        // a dwelling beside him, walked onto: its card asks; put off, the hero's pane offers its hiring while he stands
+        // there, and the card hires; men come again (as a week brings them), the pane offers them too (The Well, 30.10.2026:
+        // the men a week brought were to be had only by stepping off and back)
+        {
+            Button Find(Control under, string starts)
+            {
+                foreach (var n in under.FindChildren("*", "Button", true, false)) if (n is Button b && b.Text.StartsWith(starts)) return b;
+                return null;
+            }
+            c.Give(Res.Gold, 1000);
+            var dspot = Open(c.CellOf(hero), 1, 1);
+            dspot.Thing = new MapThing { Kind = ThingKind.Dwelling, Breed = Kinds.Spearman, Stock = 4 };
+            Hud.MapPane.GoTo(dspot.Col, dspot.Row);
+            for (int i = 0; i < 100 && hero.Moving; i++) Run(1);
+            await Frames(3);
+            bool offered = Hud.MapPane.CardShown && Find(Hud.MapPane.CardButtons, "Нанять всех") != null;
+            Find(Hud.MapPane.CardButtons, "Позже")?.EmitSignal(BaseButton.SignalName.Pressed);
+            await Frames(2);
+            bool putOff = !Hud.MapPane.CardShown;
+            Hud.MapPane.Choose(hero);
+            await Frames(2);
+            var again = Find(Hud.MapPane.Panel, "Нанять в жилище");
+            again?.EmitSignal(BaseButton.SignalName.Pressed);
+            await Frames(2);
+            int men0 = hero.Party.Members.Count;
+            Find(Hud.MapPane.CardButtons, "Нанять всех")?.EmitSignal(BaseButton.SignalName.Pressed);
+            await Frames(2);
+            int hired = hero.Party.Members.Count - men0;
+            // new men ready as a week brings them: the pane offers them where he stands
+            dspot.Thing.Stock = 3;
+            Hud.MapPane.Choose(hero);
+            await Frames(2);
+            var more = Find(Hud.MapPane.Panel, "Нанять в жилище");
+            more?.EmitSignal(BaseButton.SignalName.Pressed);
+            await Frames(2);
+            bool cardAgain = Hud.MapPane.CardShown && Find(Hud.MapPane.CardButtons, "Нанять всех") != null;
+            Find(Hud.MapPane.CardButtons, "Нанять всех")?.EmitSignal(BaseButton.SignalName.Pressed);
+            await Frames(2);
+            check("a dwelling walked onto: its card asks; put off, the hero's pane offers «Нанять в жилище» while he stands there and the card hires; with new men ready the pane offers them too",
+                offered && putOff && again != null && hired == 4 && more != null && cardAgain && dspot.Thing.Stock == 0 && c.CellOf(hero) == dspot,
+                $"the card {offered}, put off {putOff}, the pane's button {again != null}, hired {hired} of 4; new men: the button {more != null}, the card {cardAgain}, left {dspot.Thing.Stock}");
+            // (the hired let go again, the dwelling taken away: the hero's party as the tests after it know it)
+            hero.Party.Members.RemoveRange(men0, hero.Party.Members.Count - men0);
+            dspot.Thing = null;
+        }
+
         // what the realm's gold goes on (Campaign.Economy.cs): a hero hired at the tavern, an artifact bought of the
         // merchant for him and put on, a convoy sent from an outpost home — through the map's plates
         {

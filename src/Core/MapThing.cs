@@ -248,7 +248,7 @@ public sealed partial class Campaign
                 break;
             case ThingKind.Dwelling:
                 t.Owner = Owner.Ours;
-                if (!Dwellings.Exists(x => x.cell == cell)) Dwellings.Add((p, cell));
+                Offer(p, cell);
                 Tell(NewsKind.Arrived, $"Жилище: {t.Stock} готовы наняться ({t.Breed.Name}), {HireCost(t.Breed)} зол. каждый.", cell, p);
                 break;
             case ThingKind.Trove when Untaken(cell) && cell.Sum.Keep.Count == 0 && cell.Trove != TroveKind.Shrine:
@@ -279,6 +279,19 @@ public sealed partial class Campaign
         Tell(NewsKind.Taken, said, cell, p);
         HexChanged(cell);
         return said;
+    }
+
+    /// <summary>
+    /// A dwelling's hiring offered to a party of ours standing at it: on its coming, again whenever the player asks for it
+    /// while it stands there, and when a new week grows the dwelling (The Well: once hired out, the men a week brought were
+    /// to be had only by stepping off and back). Whether there is anyone to hire.
+    /// </summary>
+    public bool Offer(MapParty p, MapCell cell)
+    {
+        if (cell.Thing is not { Kind: ThingKind.Dwelling } t || p.Owner != Owner.Ours || !Parties.Contains(p) || p.Q != cell.Q || p.R != cell.R) return false;
+        int i = Dwellings.FindIndex(x => x.cell == cell);
+        if (i >= 0) Dwellings[i] = (p, cell); else Dwellings.Add((p, cell));
+        return t.Stock > 0;
     }
 
     /// <summary>What a man of a kind costs to hire at a dwelling of the map, gold.</summary>
@@ -326,6 +339,11 @@ public sealed partial class Campaign
             p.Steps = MapWalk.StepsOf(this, p);
         }
         if (week && Clock.Day > 1) Tell(NewsKind.Grew, $"Неделя {Week + 1}. Жилища пополнились.", Home, null);
+        // a hero of ours standing at a dwelling the week grew gets its hiring again where he stands
+        if (week)
+            foreach (var p in Parties)
+                if (p.Owner == Owner.Ours && !p.Moving && !p.Walking && At(p.Q, p.R) is { Thing: { Kind: ThingKind.Dwelling, Stock: > 0 } t } c && Offer(p, c))
+                    Tell(NewsKind.Arrived, $"Жилище пополнилось: {t.Stock} готовы наняться ({t.Breed.Name}), {HireCost(t.Breed)} зол. каждый.", c, p);
     }
 
     /// <summary>The mines of the realm and what they give a day, for the frame.</summary>
