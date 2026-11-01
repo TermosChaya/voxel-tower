@@ -518,6 +518,9 @@ public partial class BottomConsole : Control
     public const float Band = 126, Wing = 250, LeftW = 252, RightW = 264;
 
     public readonly Control Base, Left, Right;
+    /// <summary>How far its middle stands up over the band now, and between which x (see <see cref="Lift"/>).</summary>
+    public float Raised { get; private set; }
+    float _raiseFrom, _raiseTo;
 
     public BottomConsole()
     {
@@ -538,7 +541,23 @@ public partial class BottomConsole : Control
         AddChild(Right);
     }
 
-    static void DrawBase(Control c) => Craft.Bar(c, new Rect2(0, 0, c.Size.X, c.Size.Y), lineBelow: false);
+    /// <summary>
+    /// The middle stood up over the band by so much between these x, a plate rising from it as the wings do, for what is
+    /// shown there to fit (Inspector.Raise); 0 lays it down again.
+    /// </summary>
+    public void Lift(float by, float from, float to)
+    {
+        if (by == Raised && from == _raiseFrom && to == _raiseTo) return;
+        Raised = by; _raiseFrom = from; _raiseTo = to;
+        Base.QueueRedraw();
+    }
+
+    void DrawBase(Control c)
+    {
+        Craft.Bar(c, new Rect2(0, 0, c.Size.X, c.Size.Y), lineBelow: false);
+        // (under the well and the face drawn over the band)
+        if (Raised > 0) Craft.Plate(c, new Rect2(_raiseFrom, -Raised, _raiseTo - _raiseFrom, c.Size.Y + Raised + 20));
+    }
 
     /// <summary>A wing: a plate rising from the band, rounded only at its corner toward the field (the rest lie off the screen).</summary>
     static void DrawPlinth(Control c, bool left)

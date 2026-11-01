@@ -137,6 +137,15 @@ public partial class Main
             GetTree().Quit(fails == 0 ? 0 : 1);
             return;
         }
+        // SELFTEST_ONLY=fit: only the interface in the least room it has
+        if (System.Environment.GetEnvironmentVariable("SELFTEST_ONLY") == "fit")
+        {
+            await Frames(5);
+            await SelfTestFit(Check);
+            GD.Print($"[selftest] {(fails == 0 ? "all passed" : fails + " failed")}");
+            GetTree().Quit(fails == 0 ? 0 : 1);
+            return;
+        }
         // SELFTEST_ONLY=land: only the map of valleys as a land
         if (System.Environment.GetEnvironmentVariable("SELFTEST_ONLY") == "land")
         {
@@ -1077,6 +1086,7 @@ public partial class Main
         await SelfTestTown(Check);
         await MinesSelfTest((what, ok, detail) => Check(what, ok, detail));
         await SelfTestYard(Check);
+        await SelfTestFit(Check);
         await SelfTestArchitect(Check);
         await SelfTestFelling(Check);
         await SelfTestTemplates(Check);

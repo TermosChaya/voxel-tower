@@ -22,12 +22,29 @@ public partial class Inspector : Control
     public Unit One { get; private set; }
     /// <summary>What it shows now: "home", "keep", "tool", "one:…" and so on.</summary>
     public string KeyNow => _key;
+    /// <summary>Its top and its foot on the band, at rest.</summary>
+    public const float Top = 17, Foot = 9;
+    /// <summary>
+    /// How far it stands up over its place on the band: when what it shows needs more height than the band has (a
+    /// tool's many settings in a narrow window or a large interface) it rises, the console's middle with it
+    /// (<see cref="BottomConsole.Lift"/>), so that none of it goes under the screen's edge. 0 the rest of the time.
+    /// </summary>
+    public float Raise { get; private set; }
 
     public void Init(Main m)
     {
         _m = m;
         MouseFilter = MouseFilterEnum.Stop;
         Refresh(true);
+    }
+
+    public override void _Process(double delta)
+    {
+        if (_pane == null || !IsInstanceValid(_pane)) return;
+        float room = BottomConsole.Band - Top - Foot, raise = MathF.Max(0, MathF.Ceiling(_pane.GetCombinedMinimumSize().Y - room));
+        if (raise == Raise) return;
+        Raise = raise;
+        OffsetTop = Top - raise;
     }
 
     public override void _Draw() => Craft.Well(this, new Rect2(Vector2.Zero, Size));
@@ -73,7 +90,7 @@ public partial class Inspector : Control
         One = null;
         var box = new MarginContainer { MouseFilter = MouseFilterEnum.Pass };
         box.SetAnchorsPreset(LayoutPreset.FullRect);
-        foreach (var (side, px) in new[] { ("margin_left", 14), ("margin_right", 12), ("margin_top", 8), ("margin_bottom", 8) }) box.AddThemeConstantOverride(side, px);
+        foreach (var (side, px) in new[] { ("margin_left", 12), ("margin_right", 10), ("margin_top", 8), ("margin_bottom", 8) }) box.AddThemeConstantOverride(side, px);
         var sel = Chosen();
         box.AddChild(_key == "tool" ? ToolPane() : _key == "keep" ? KeepPane() : _key.StartsWith("spell:") ? SpellPane() : _key.StartsWith("look:") && _m.Inspected != null ? LookPane(_m.Inspected)
             : _key.StartsWith("home") ? HomePane() : sel.Count == 1 ? OnePane(sel[0]) : GroupPane(sel));
@@ -183,15 +200,15 @@ public partial class Inspector : Control
         _refresh.Add(() => undo.Disabled = _m.Sim.UndoDepth == 0);
         head.AddChild(undo);
         col.AddChild(head);
-        var opts = new HBoxContainer();
-        opts.AddThemeConstantOverride("separation", 16);
+        // the settings, as many lines as the width needs (a narrow window or a large interface): what does not fit
+        // goes down a line, never off under the tools
+        var opts = Flow(12);
         Options(opts);
         col.AddChild(opts);
         // what the brushes that lay are laying: the three of the stores and pitch, or a trap
         if (!o.Dig && t.Tool is Tool.Brush or Tool.Line or Tool.Box or Tool.Circle or Tool.Extrude)
         {
-            var mats = new HBoxContainer();
-            mats.AddThemeConstantOverride("separation", 18);
+            var mats = Flow(16);
             mats.AddChild(new Choice("Материал", MaterialTip, new[] { "камень", "брёвна", "земля", "смола" }, Array.IndexOf(Laid, o.Material), i => t.SetMaterial(Laid[i])));
             mats.AddChild(new Choice("Ловушка", TrapTip, new[] { "колья", "настил", "камни", "брёвна", "порох" }, Array.IndexOf(Traps, o.Material), i => t.SetMaterial(Traps[i])));
             col.AddChild(mats);
@@ -205,8 +222,8 @@ public partial class Inspector : Control
         if (t.Tool == Tool.Wand && !o.Dig && !o.WandCapture)
             col.AddChild(new Choice("Переложить в", "Переложить в\nРабочие разберут выделенное и сложат заново из этого материала. Разобранное вернётся в запас. Клавиши {MatStone}, {MatWood}, {MatEarth} и {MatMetal}.",
                 new[] { "камень", "брёвна", "земля", "металл" }, Array.IndexOf(Relaid, o.Material), i => t.SetMaterial(Relaid[i])));
-        // the settlement's palette: the ways, then the things
-        if (t.Tool == Tool.Yard) col.AddChild(YardPalette());
+        // the settlement's palette: the ways after the settings, then the things
+        if (t.Tool == Tool.Yard) col.AddChild(YardPalette(opts));
         // the library: the ready templates, the bridge, the settlement's rank, and the blueprints taken
         if (t.Tool == Tool.Template) col.AddChild(TemplateLibrary());
         // the blueprints taken so far, with the tool that takes them and with a copy in hand
@@ -215,27 +232,34 @@ public partial class Inspector : Control
         return col;
     }
 
-    /// <summary>The «Обустройство» palette: a row of the kinds of way and a row of the things, each with what it is in its tooltip.</summary>
-    Control YardPalette()
+    /// <summary>A row of settings that goes on in another line when it is wider than the console.</summary>
+    static HFlowContainer Flow(int gap)
+    {
+        var f = new HFlowContainer { MouseFilter = MouseFilterEnum.Pass };
+        f.AddThemeConstantOverride("h_separation", gap);
+        f.AddThemeConstantOverride("v_separation", 5);
+        return f;
+    }
+
+    /// <summary>
+    /// The «Обустройство» palette: the kinds of way along with the settings, and the things in a row of their own, as
+    /// many lines as it takes; each with what it is in its tooltip.
+    /// </summary>
+    Control YardPalette(Container settings)
     {
         var t = _m.Tools; var o = t.Opt;
-        var box = new VBoxContainer();
-        box.AddThemeConstantOverride("separation", 4);
-        Choice Row(string caption, int from, int count)
+        Choice Row(string caption, int from, int count, bool wrap)
         {
             var names = new string[count];
             for (int i = 0; i < count; i++) names[i] = BuildTools.YardName(from + i).ToLowerInvariant();
-            var c = new Choice(caption, caption, names, o.YardPick - from, i => t.PickYard(from + i));
-            int k = 0;
-            foreach (var child in c.GetChildren())
-                if (child is Button b) { b.TooltipText = Bindings.Fill(BuildTools.YardName(from + k) + "\n" + BuildTools.YardAbout(from + k)); k++; }
+            var c = new Choice(caption, caption, names, o.YardPick - from, i => t.PickYard(from + i), wrap);
+            for (int k = 0; k < c.Buttons.Count; k++) c.Buttons[k].TooltipText = Bindings.Fill(BuildTools.YardName(from + k) + "\n" + BuildTools.YardAbout(from + k));
             return c;
         }
-        var ways = Row("Дорожка", 0, BuildTools.WayCount);
+        var ways = Row("Дорожка", 0, BuildTools.WayCount, false);
         KeyTags.Tag(ways, () => Bindings.Label(Act.Form));
-        box.AddChild(ways);
-        box.AddChild(Row("Вещь", BuildTools.WayCount, BuildTools.YardCount - BuildTools.WayCount));
-        return box;
+        settings.AddChild(ways);
+        return Row("Вещь", BuildTools.WayCount, BuildTools.YardCount - BuildTools.WayCount, true);
     }
 
     /// <summary>The icon of each template in the library, by its key.</summary>
@@ -255,8 +279,8 @@ public partial class Inspector : Control
     Control TemplateLibrary()
     {
         var t = _m.Tools; var o = t.Opt;
-        var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", 4);
+        // (in as many lines as the console's width needs)
+        var row = Flow(4);
         // the tabs first: defence, buildings, the settlement's things
         row.AddChild(new Choice("Раздел", TemplateTabTip, Sim.TemplateTabs, o.TemplateTab, i => t.PickTemplateTab(i)));
         row.AddChild(new Control { CustomMinimumSize = new Vector2(10, 0) });
@@ -265,10 +289,9 @@ public partial class Inspector : Control
             // the things, as the «Обустройство» tool has them
             var names = new string[Yard.All.Length];
             for (int i = 0; i < names.Length; i++) names[i] = Yard.Name(Yard.All[i]).ToLowerInvariant();
-            var things = new Choice("Вещь", "Вещь\nСтавится щелчком, {Rotate} поворачивает. Рабочие соберут её из запасов.", names, o.TemplateDecor, i => t.PickTemplateDecor(i));
-            int n = 0;
-            foreach (var child in things.GetChildren())
-                if (child is Button b) { b.TooltipText = Bindings.Fill(Yard.Name(Yard.All[n]) + "\n" + Yard.About(Yard.All[n]) + " Ставится щелчком, {Rotate} поворачивает."); n++; }
+            var things = new Choice("Вещь", "Вещь\nСтавится щелчком, {Rotate} поворачивает. Рабочие соберут её из запасов.", names, o.TemplateDecor, i => t.PickTemplateDecor(i), wrap: true);
+            for (int n = 0; n < things.Buttons.Count; n++)
+                things.Buttons[n].TooltipText = Bindings.Fill(Yard.Name(Yard.All[n]) + "\n" + Yard.About(Yard.All[n]) + " Ставится щелчком, {Rotate} поворачивает.");
             KeyTags.Tag(things, () => Bindings.Label(Act.Form));
             row.AddChild(things);
             return row;
@@ -306,7 +329,7 @@ public partial class Inspector : Control
     Control Shelf()
     {
         var t = _m.Tools;
-        var row = new HBoxContainer();
+        var row = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         row.AddThemeConstantOverride("separation", 6);
         var head = Hud.CapsLabel("чертежи", 9);
         head.VerticalAlignment = VerticalAlignment.Center;
@@ -316,6 +339,12 @@ public partial class Inspector : Control
         {
             var none = Hud.Text(Bindings.Fill("Чертежей пока нет. Обведите постройку рамкой ({ToolCapture})."), Ornament.SerifItalic, 12, Ornament.Aged);
             none.VerticalAlignment = VerticalAlignment.Center;
+            // (cut short where the console ends, the whole of it under the pointer)
+            none.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            none.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            none.CustomMinimumSize = new Vector2(120, 0);
+            none.TooltipText = none.Text;
+            none.MouseFilter = MouseFilterEnum.Pass;
             row.AddChild(none);
             return row;
         }
@@ -356,7 +385,7 @@ public partial class Inspector : Control
         "брёвен. Слой смолы на дне рва загорается целиком от огненной стрелы и горит долго и жарко. Рабочие смолу " +
         "не тушат, сгоревшую восстанавливает починка ({ToolRepair}).";
 
-    void Options(HBoxContainer opts)
+    void Options(Container opts)
     {
         var t = _m.Tools; var o = t.Opt;
         bool dig = o.Dig;
@@ -368,8 +397,8 @@ public partial class Inspector : Control
         // (each with its keys, shown on it while Alt is held)
         static Control Keyed(Control c, Func<string> keys) { KeyTags.Tag(c, keys); return c; }
         static string Pair(Act a, Act b) => $"{Bindings.Label(a)} {Bindings.Label(b)}";
-        Control Width(string caption = "Толщина") => Keyed(new Stepper(caption, widthTip, () => Len(o.Width), d => t.StepWidth(d)), () => Pair(Act.WidthLess, Act.WidthMore));
-        Control Height() => Keyed(dig ? new Stepper("Глубина", depthTip, () => Len(o.Depth), d => t.StepHeight(d)) : new Stepper("Высота", heightTip, () => Len(o.Height), d => t.StepHeight(d)),
+        Control Width(string caption = "Толщина") => Keyed(new Stepper(caption, widthTip, () => Len(o.Width), d => t.StepWidth(d), ValueW), () => Pair(Act.WidthLess, Act.WidthMore));
+        Control Height() => Keyed(dig ? new Stepper("Глубина", depthTip, () => Len(o.Depth), d => t.StepHeight(d), ValueW) : new Stepper("Высота", heightTip, () => Len(o.Height), d => t.StepHeight(d), ValueW),
             () => Pair(Act.HeightLess, Act.HeightMore));
         Control Level() => Keyed(dig
             ? new Choice("Дно", floorTip, new[] { "ровное", "по рельефу" }, o.Level ? 0 : 1, i => { if ((i == 0) != o.Level) t.ToggleLevel(); })
@@ -412,11 +441,11 @@ public partial class Inspector : Control
                     "он поднимается сам и сбрасывает в ров тех, кто на нём. Щелчок по подъёмному мосту без кисти: сам, опущен или поднят.",
                     new[] { "арочный", "подъёмный" }, o.DrawBridge ? 1 : 0, i => { o.DrawBridge = i == 1; t.Changed(); }));
                 opts.AddChild(new Stepper("Проход", "Ширина прохода\nНе меньше 1,25 м, парапеты или перила добавляются к ней. Клавиши {WidthLess} и {WidthMore}.",
-                    () => Len(Math.Max(Bridges.MinWidth, o.Width)), d => t.StepWidth(d)));
+                    () => Len(Math.Max(Bridges.MinWidth, o.Width)), d => t.StepWidth(d), ValueW));
                 opts.AddChild(Hud.CapsLabel(o.DrawBridge || o.Material == Mat.Wood ? "деревянный" : "каменный", 11, Ornament.BronzeLight));
                 break;
             case Tool.Extrude:
-                opts.AddChild(new Stepper("Шаг", "Шаг\nНа сколько грань нарастает или углубляется за щелчок. Клавиши {HeightLess} и {HeightMore}.", () => Len(o.Step), d => t.StepHeight(d)));
+                opts.AddChild(new Stepper("Шаг", "Шаг\nНа сколько грань нарастает или углубляется за щелчок. Клавиши {HeightLess} и {HeightMore}.", () => Len(o.Step), d => t.StepHeight(d), ValueW));
                 break;
             case Tool.Gather:
                 opts.AddChild(new Choice("Участок", "Участок\nКамень ({MatStone}), лес ({MatWood}), земля ({MatEarth}): здесь рабочие добывают ресурс. " +
@@ -429,7 +458,7 @@ public partial class Inspector : Control
                     t.GatherKind switch { Stockpile.Wood => 1, Stockpile.Earth => 2, Stockpile.Metal => 3, Zone.Shelter => 4, Zone.Sanctum => 5, Zone.Dwelling => 6, _ => 0 },
                     i => { if (i == 4) t.SetShelter(true); else if (i == 5) t.SetSanctum(true); else if (i == 6) t.SetDwelling(true); else t.SetMaterial(new[] { Mat.Stone, Mat.Wood, Mat.Rammed, Mat.Plate }[i]); }));
                 if (t.GatherKind is Stockpile.Stone or Stockpile.Earth or Stockpile.Metal)
-                    opts.AddChild(new Stepper("Глубина", "Глубина\nДо какой глубины брать камень, землю или руду. Клавиши {HeightLess} и {HeightMore}.", () => Len(o.Depth), d => t.StepHeight(d)));
+                    opts.AddChild(new Stepper("Глубина", "Глубина\nДо какой глубины брать камень, землю или руду. Клавиши {HeightLess} и {HeightMore}.", () => Len(o.Depth), d => t.StepHeight(d), ValueW));
                 break;
             case Tool.Wand:
                 opts.AddChild(Keyed(new Choice("Щелчок", "Что делает щелчок\nСнести: рабочие разберут выделенное, материал вернётся в запас. Кирка ({Pick}).\n" +
@@ -462,10 +491,10 @@ public partial class Inspector : Control
                 // a house: its length by the height keys, its depth by the width keys, the side its door looks out of turned
                 if (tp.Key == "house")
                 {
-                    opts.AddChild(Keyed(new Stepper("Длина", "Длина\nДлина дома. Клавиши {HeightLess} и {HeightMore}.", () => Len(t.TemplateSize(tp)), d => t.StepHeight(d)), () => Pair(Act.HeightLess, Act.HeightMore)));
-                    opts.AddChild(Keyed(new Stepper("Глубина", "Глубина\nГлубина дома. Клавиши {WidthLess} и {WidthMore}.", () => Len(t.HouseDepth), d => t.StepHouseDepth(d)), () => Pair(Act.WidthLess, Act.WidthMore)));
+                    opts.AddChild(Keyed(new Stepper("Длина", "Длина\nДлина дома. Клавиши {HeightLess} и {HeightMore}.", () => Len(t.TemplateSize(tp)), d => t.StepHeight(d), ValueW), () => Pair(Act.HeightLess, Act.HeightMore)));
+                    opts.AddChild(Keyed(new Stepper("Глубина", "Глубина\nГлубина дома. Клавиши {WidthLess} и {WidthMore}.", () => Len(t.HouseDepth), d => t.StepHouseDepth(d), ValueW), () => Pair(Act.WidthLess, Act.WidthMore)));
                 }
-                else if (tp.SizeMax > 0) opts.AddChild(Keyed(new Stepper("Высота", "Высота\nВысота шаблона. Клавиши {HeightLess} и {HeightMore}.", () => Len(t.TemplateSize(tp)), d => t.StepHeight(d)), () => Pair(Act.HeightLess, Act.HeightMore)));
+                else if (tp.SizeMax > 0) opts.AddChild(Keyed(new Stepper("Высота", "Высота\nВысота шаблона. Клавиши {HeightLess} и {HeightMore}.", () => Len(t.TemplateSize(tp)), d => t.StepHeight(d), ValueW), () => Pair(Act.HeightLess, Act.HeightMore)));
                 opts.AddChild(Hud.CapsLabel(tp.Key == "house" ? $"дверь {Shapes.SideWords[Sim.SideOfTurn(o.TemplateRot)]} · {Bindings.Label(Act.Rotate)} — другая сторона" : tp.Line ? "протяните от конца до конца" : $"поворот {o.TemplateRot * 90}° · {Bindings.Label(Act.Rotate)} — повернуть · Shift и протяжка — ряд", 10, Ornament.Aged));
                 var rank = Hud.CapsLabel("поселение: " + _m.Sim.StandingLine().ToLowerInvariant(), 10, Ornament.BronzeLight);
                 rank.TooltipText = StandingTip;
@@ -481,6 +510,9 @@ public partial class Inspector : Control
             opts.AddChild(Keyed(new Choice("Сетка", "Сетка\nКонцы штрихов встают в узлы сетки, линии идут вдоль осей или под 45°. Сетка отсчитывается от центра цитадели. Клавиша {Grid}.",
                 new[] { "нет", "50 см", "1 м", "2 м" }, Array.IndexOf(ToolOptions.Grids, o.Grid), i => t.SetGrid(ToolOptions.Grids[i])), () => Bindings.Label(Act.Grid)));
     }
+
+    /// <summary>How wide a setting's value is in the console: «12,5 м» and no more, so the settings close up.</summary>
+    const float ValueW = 56;
 
     public static string Len(int voxels)
     {
@@ -528,7 +560,7 @@ public partial class Inspector : Control
             col.AddChild(pick);
             _refresh.Add(() => { for (int i = 0; i < buttons.Count; i++) buttons[i].SetPressedNoSignal(_m.Tools.WeatherPick == i); });
         }
-        var state = Hud.Text("", Ornament.SerifItalic, 13, Ornament.BronzeLight);
+        var state = Hud.Text("", Ornament.SerifItalic, 13, Ornament.BronzeLight, wrap: true);
         col.AddChild(state);
         _refresh.Add(() =>
         {
@@ -612,11 +644,13 @@ public partial class Inspector : Control
         return col;
     }
 
-    /// <summary>The orders for the chosen: back to work, stay, the horn; and what to bring in and whether to stand and fight.</summary>
-    HBoxContainer Orders(List<Unit> chosen)
+    /// <summary>
+    /// The orders for the chosen: back to work, stay, the horn; and what to bring in and whether to stand and fight (in
+    /// another line, when a large party with all its orders is wider than the console).
+    /// </summary>
+    Container Orders(List<Unit> chosen)
     {
-        var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", 4);
+        var row = Flow(4);
         row.AddChild(new Glyph(Icons.Pick, "За работу\nВыбранные снова сами ищут работу.", () => _m.Command.ReleaseSelected()));
         row.AddChild(new Glyph(Icons.Of("knight-banner"), "Стоять здесь\nВыбранные остаются на месте. Для солдат это место становится постом.", () => _m.Command.HoldSelected()));
         row.AddChild(AlarmGlyph());
@@ -730,7 +764,7 @@ public partial class Inspector : Control
         col.AddThemeConstantOverride("separation", 4);
         var top = new HBoxContainer();
         top.AddThemeConstantOverride("separation", 16);
-        var who = new VBoxContainer { CustomMinimumSize = new Vector2(380, 0) };
+        var who = new VBoxContainer { CustomMinimumSize = new Vector2(330, 0) };
         who.AddThemeConstantOverride("separation", 0);
         string band = u.Band != null ? " · " + u.Band.Name : "";
         who.AddChild(Hud.Text(u.Name + band, Ornament.SerifBold, 16, u.Team == Team.Horde ? Ornament.Blood.Lightened(.25f) : Ornament.Moss));
@@ -738,16 +772,16 @@ public partial class Inspector : Control
         who.AddChild(bar);
         var doing = Hud.Text("", Ornament.SerifItalic, 13, Ornament.BronzeLight);
         doing.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-        doing.CustomMinimumSize = new Vector2(380, 0);
+        doing.CustomMinimumSize = new Vector2(330, 0);
         who.AddChild(doing);
         var hurt = Hud.Text("", Ornament.Serif, 12, Ornament.Blood);
         hurt.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-        hurt.CustomMinimumSize = new Vector2(380, 0);
+        hurt.CustomMinimumSize = new Vector2(330, 0);
         who.AddChild(hurt);
         top.AddChild(who);
         var chart = new BodyChart { Unit = u, CustomMinimumSize = new Vector2(58, 74), TooltipText = "Раны\nЗелёное — цело, жёлтое — задето, оранжевое — изранено или кость сломана, красное — тяжело ранено, перечёркнутое — отрублено." };
         top.AddChild(chart);
-        var about = new VBoxContainer();
+        var about = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         about.AddThemeConstantOverride("separation", 2);
         about.AddChild(Hud.CapsLabel(u.Team == Team.Horde ? "Налётчик" : "Зверь", 8));
         string note = u.Team == Team.Wild
@@ -758,7 +792,7 @@ public partial class Inspector : Control
             note = u.Inside ? "Пленный в цитадели. Его можно обратить в веру (вкладка «Таинства») или отдать послу орды за выкуп. Ночью без стражи он сбежит."
                 : "Связан. Свободный рабочий отведёт его в цитадель. Если оставить надолго, развяжется и убежит.";
         var noteLabel = Hud.Text(Bindings.Fill(note), Ornament.Serif, 12, Ornament.Aged, wrap: true);
-        noteLabel.CustomMinimumSize = new Vector2(330, 0);
+        noteLabel.CustomMinimumSize = new Vector2(240, 0);
         about.AddChild(noteLabel);
         top.AddChild(about);
         col.AddChild(top);
@@ -780,7 +814,11 @@ public partial class Inspector : Control
         col.AddThemeConstantOverride("separation", 4);
         var counts = new List<string>();
         foreach (var t in Kinds.Ours) { int n = chosen.FindAll(u => u.T == t).Count; if (n > 0) counts.Add(Retinue.Plural(t, n)); }
-        col.AddChild(Hud.Text($"Выбрано {chosen.Count}: {string.Join(", ", counts)} · щелчок по портрету — выбрать одного", Ornament.SerifBold, 13, Ornament.BronzeLight));
+        var said = Hud.Text($"Выбрано {chosen.Count}: {string.Join(", ", counts)} · щелчок по портрету — выбрать одного", Ornament.SerifBold, 13, Ornament.BronzeLight);
+        said.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        said.TooltipText = said.Text;
+        said.MouseFilter = MouseFilterEnum.Pass;
+        col.AddChild(said);
         var faces = new HFlowContainer();
         faces.AddThemeConstantOverride("h_separation", 4);
         faces.AddThemeConstantOverride("v_separation", 3);
@@ -847,6 +885,10 @@ public partial class Inspector : Control
         var keep = Btn($"Цитадель · {Bindings.Label(Act.Keep)}", "Цитадель ({Keep})\nНабор войска. Новобранцы готовятся по очереди. Войско не может быть больше числа мест.", () => _m.Command.OpenKeep(), 98);
         keep.SizeFlagsVertical = SizeFlags.ShrinkBegin;
         row.AddChild(keep);
+        // the kinds between the citadel and the squads, a second line of them when there is no room for all in one
+        var kinds = Flow(10);
+        kinds.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        row.AddChild(kinds);
         foreach (var kind in present.GetRange(0, Math.Min(present.Count, 4)))
         {
             var t = kind;
@@ -863,7 +905,7 @@ public partial class Inspector : Control
             note.CustomMinimumSize = new Vector2(112, 0);
             info.AddChild(note);
             block.AddChild(info);
-            row.AddChild(block);
+            kinds.AddChild(block);
             _refresh.Add(() =>
             {
                 var (n, text) = Retinue.Summary(_m.Sim, t);

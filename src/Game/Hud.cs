@@ -184,7 +184,7 @@ public partial class Hud : CanvasLayer
         _inspector.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         _inspector.OffsetLeft = BottomConsole.LeftW + PortraitFrame.S + 24;
         _inspector.OffsetRight = -BottomConsole.RightW - 12;
-        _inspector.OffsetTop = 17; _inspector.OffsetBottom = -9;
+        _inspector.OffsetTop = Inspector.Top; _inspector.OffsetBottom = -Inspector.Foot;
         _inspector.Init(m);
         // the tools in rows by what they are for, a gap between the rows: building, the works of the fort, marking out
         // what is to be taken or set aside, and the material with the pick
@@ -612,11 +612,17 @@ public partial class Hud : CanvasLayer
         }
         // a warlord in the valley: his bar under the faces in the middle
         _lordBar.Position = new Vector2(MathF.Round((vp.X - LordBar.W) / 2), _colonists.Top + 52);
+        // the console's middle stood up over the band when what is in hand needs more room than the band has (its well
+        // a little over the plate's top), the hints and the toasts over it
+        float lift = _inspector.Visible ? Math.Max(0, _inspector.Raise - (Inspector.Top - 6)) : 0;
+        // (a few pixels it takes from the band's own margin: the well up to the band's edge, the band level)
+        if (lift < 4) lift = 0;
+        _console.Lift(lift, _inspector.Position.X - 10, _inspector.Position.X + _inspector.Size.X + 10);
         // the hints just over the console between the map and the tools, the toasts over them
         Unfold.Tick();
         _hints.Visible = Settings.Hints && _console.Visible;
         _hints.Room = vp.X - BottomConsole.LeftW - BottomConsole.RightW - 40;
-        _hints.Position = new Vector2(MathF.Round((vp.X - _hints.Size.X) / 2), vp.Y - BottomConsole.Band - 8 - Hints.H);
+        _hints.Position = new Vector2(MathF.Round((vp.X - _hints.Size.X) / 2), vp.Y - BottomConsole.Band - 8 - Hints.H - lift);
         float hinted = _hints.Visible ? Hints.H + 8 : 0;
         _advisor.Visible = Settings.Advice && _console.Visible && (_m.Tutor == null || _m.Tutor.Over);
         _advisor.Position = new Vector2(14, vp.Y - BottomConsole.Wing - 10 - _advisor.Size.Y);
@@ -628,7 +634,7 @@ public partial class Hud : CanvasLayer
             // (the mysteries are a page of the lore, met with it)
             if (_lastTab is not (null or "magic") && Target("tab:" + _lastTab) is TabPlaque tab) Meet("tab:" + _lastTab, tab.TooltipText);
         }
-        _toasts.Position = new Vector2((vp.X - _toasts.Size.X) / 2, vp.Y - BottomConsole.Band - 14 - hinted - _toasts.Size.Y);
+        _toasts.Position = new Vector2((vp.X - _toasts.Size.X) / 2, vp.Y - BottomConsole.Band - 14 - hinted - lift - _toasts.Size.Y);
         Unit first = null;
         foreach (var u in _m.Selected) if (!u.Dead && (first == null || u.Id < first.Id)) first = u;
         _portrait.Unit = _inspector.One ?? first;

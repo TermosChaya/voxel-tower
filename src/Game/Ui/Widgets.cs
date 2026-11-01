@@ -125,7 +125,7 @@ public partial class Stepper : HBoxContainer
 {
     public Stepper() { }
 
-    public Stepper(string caption, string tooltip, Func<string> value, Action<int> step)
+    public Stepper(string caption, string tooltip, Func<string> value, Action<int> step, float valueWidth = 118)
     {
         AddThemeConstantOverride("separation", 4);
         TooltipText = tooltip;
@@ -134,7 +134,7 @@ public partial class Stepper : HBoxContainer
         cap.VerticalAlignment = VerticalAlignment.Center;
         AddChild(cap);
         // wide enough for the longest of its words, so that the row does not shift as the value changes
-        var val = new Label { Text = value(), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, CustomMinimumSize = new Vector2(118, 0) };
+        var val = new Label { Text = value(), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, CustomMinimumSize = new Vector2(valueWidth, 0) };
         val.AddThemeFontOverride("font", Ornament.SerifBold);
         val.AddThemeFontSizeOverride("font_size", 15);
         val.AddThemeColorOverride("font_color", Ornament.Parchment);
@@ -154,18 +154,36 @@ public partial class Stepper : HBoxContainer
     public override GodotObject _MakeCustomTooltip(string forText) => Tooltip.Make(forText);
 }
 
-/// <summary>A row of mutually exclusive choices, like "Столб · Шар · Перекрасить".</summary>
+/// <summary>
+/// A row of mutually exclusive choices, like "Столб · Шар · Перекрасить". A long one (<paramref name="wrap"/>) lays its
+/// buttons in as many lines as the width it is given needs, its caption before the first.
+/// </summary>
 public partial class Choice : HBoxContainer
 {
+    /// <summary>Its buttons, in order.</summary>
+    public readonly List<Button> Buttons = new();
+
     public Choice() { }
 
-    public Choice(string caption, string tooltip, string[] items, int current, Action<int> pick)
+    public Choice(string caption, string tooltip, string[] items, int current, Action<int> pick, bool wrap = false)
     {
         AddThemeConstantOverride("separation", 3);
         TooltipText = tooltip;
         var cap = Hud.CapsLabel(caption);
-        cap.VerticalAlignment = VerticalAlignment.Center;
+        cap.VerticalAlignment = wrap ? VerticalAlignment.Top : VerticalAlignment.Center;
+        // (a wrapped one's caption level with its first line of buttons)
+        if (wrap) cap.CustomMinimumSize = new Vector2(0, 22);
         AddChild(cap);
+        Container into = this;
+        if (wrap)
+        {
+            var flow = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Pass };
+            flow.AddThemeConstantOverride("h_separation", 3);
+            flow.AddThemeConstantOverride("v_separation", 3);
+            AddChild(flow);
+            into = flow;
+            SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        }
         var group = new ButtonGroup();
         for (int i = 0; i < items.Length; i++)
         {
@@ -173,7 +191,8 @@ public partial class Choice : HBoxContainer
             var b = new Button { Text = items[i], ToggleMode = true, ButtonGroup = group, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 26), TooltipText = Bindings.Fill(tooltip), MouseDefaultCursorShape = CursorShape.PointingHand };
             b.SetPressedNoSignal(i == current);
             b.Pressed += () => pick(k);
-            AddChild(b);
+            into.AddChild(b);
+            Buttons.Add(b);
         }
     }
 
