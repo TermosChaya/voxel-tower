@@ -26,7 +26,7 @@ public partial class WorkTable : Control
     static float DutyX => WorkX(Work.Kinds);
     static float MilitiaX => DutyX + DutyW;
     static float DoingX => MilitiaX + MilitiaW;
-    public const float Width = 880;
+    public const float Width = 950;
 
     static readonly string[] DutyNames = { "—", "камень", "брёвна", "землю", "металл" };
     static readonly int[] Duties = { Stockpile.None, Stockpile.Stone, Stockpile.Wood, Stockpile.Earth, Stockpile.Metal };

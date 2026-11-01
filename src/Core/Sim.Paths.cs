@@ -10,8 +10,8 @@ public enum WayKind : byte { Dirt, Gravel, Cobble, Flags, Boards }
 /// The settlement's ways. A way is laid with the path tool along a line on the ground, as wide as the brush: the turf of
 /// each column under it is cut away and the way's own stuff laid in its place, flush with the ground and following its
 /// slope (rammed earth, gravel, cobbles of two shades, flagstones a stone to every three voxels, a boardwalk of planks),
-/// the tufts and flowers on it cleared. People go faster along ways (<see cref="WayPace"/>) and keep to them when it
-/// costs them little (<c>PathFinder.OnPath</c>). And the valley wears ways of its own: where ours
+/// the tufts and flowers on it cleared. People go faster along ways (<see cref="FootPace"/>, Going.cs) and keep to them
+/// when it costs them little. And the valley wears ways of its own: where ours
 /// walk the turf again and again it is trodden bare (Mat.Trodden), along the routes they keep between the houses, the
 /// citadel and their work; left unwalked a while, a trodden way grows over again. A way can be laid over a trodden one.
 /// </summary>
@@ -95,24 +95,22 @@ public sealed partial class Sim
         return n;
     }
 
-    /// <summary>How much faster one goes along a way of each stuff: a trodden one a little, cobbles and flags most.</summary>
-    static float PaceOn(byte m) => m switch
+    /// <summary>
+    /// The pace a walker keeps for the ground under its feet (Going.cs): ours faster along a way, slower in tall grass,
+    /// on rubble, in a bog, in water over the feet, each kind by its own going; the horde and the wild as they always went.
+    /// </summary>
+    float FootPace(Unit u)
     {
-        Mat.Trodden or Mat.DirtPath => 1.12f,
-        Mat.Gravel => 1.18f,
-        Mat.Boardwalk => 1.22f,
-        Mat.Cobble or Mat.Flag => 1.28f,
-        _ => 1,
-    };
-
-    /// <summary>The pace a walker keeps for the ground under its feet: faster along a way.</summary>
-    float WayPace(Unit u)
-    {
+        if (u.T.Move.Feet is { } f) return f.Of[Nav.Footing[u.Cell]];
+        // the horde and the wild as they always went: slower in water, a little quicker on a way
         int x = (int)u.X, z = (int)u.Z, y = (int)MathF.Floor(u.Y + .01f) - 1;
-        if (!World.InBounds(x, y, z)) return 1;
-        byte m = World.Get(x, y, z);
-        return Mat.IsPavement[m] ? PaceOn(m) : 1;
+        byte m = World.InBounds(x, y, z) ? World.Get(x, y, z) : Mat.Air;
+        float way = m switch { Mat.Trodden or Mat.DirtPath => 1.12f, Mat.Gravel => 1.18f, Mat.Boardwalk => 1.22f, Mat.Cobble or Mat.Flag => 1.28f, _ => 1 };
+        return (Nav.Water[u.Cell] > 0 ? .6f : 1) * way;
     }
+
+    /// <summary>How much of its pace a walker keeps on a slope, rise over run: up it a third less at forty-five degrees, down it a little less.</summary>
+    static float Sloped(float slope) => slope > 0 ? 1 / (1 + .5f * MathF.Min(slope, 2.5f)) : 1 / (1 + .12f * MathF.Min(-slope, 2.5f));
 
     // ------------------------------------------------------------ the ways the valley wears by itself
 

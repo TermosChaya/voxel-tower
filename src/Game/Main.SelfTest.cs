@@ -948,13 +948,15 @@ public partial class Main
         foreach (var u in Sim.Units) if (u.Team == Team.Horde && !u.Dead && !u.Bound && !u.Inside) { u.Dead = true; u.DiedAt = -999; }
         int lowTop = Shapes.LevelTop(World, kx - 110, kz + 70, 4);
         var low = Shapes.Line(World, Site, kx - 116, kz + 70, kx - 104, kz + 70, new Stroke { Mat = Mat.Stone, Width = 2, Height = 2, Level = true }, lowTop);
-        int finished0 = Progress.Finished, lines0 = Hud.Lines.Count;
+        // (the chronicle keeps its last 80 lines: what is new is what follows the last line there now, wherever that is)
+        int finished0 = Progress.Finished;
+        var lastLine = Hud.Lines.Count > 0 ? Hud.Lines[^1] : default;
         Sim.DesignateBuild(low);
         Progress.Track("Камень", low, false);
         bool following = Progress.Following > 0;
         for (int t = 0; t < 240 && Progress.Finished == finished0; t++) { Advance(.5); await Frames(1); }
         bool toldDone = false;
-        for (int i = lines0; i < Hud.Lines.Count; i++) toldDone |= Hud.Lines[i].text.StartsWith("Готово: камень");
+        for (int i = Hud.Lines.Count - 1; i >= 0 && !Equals(Hud.Lines[i], lastLine); i--) toldDone |= Hud.Lines[i].text.StartsWith("Готово: камень");
         Check("work marked is followed with how far it has got, and when it is done the chronicle says so",
             following && Progress.Finished > finished0 && toldDone,
             $"followed {following}; finished {Progress.Finished - finished0}, told {toldDone}; " +
@@ -969,6 +971,14 @@ public partial class Main
         if (about.Count > 0) { Sim.Command(about, Sim.NearestStand(kx - 100, kz - 100, 2)); for (int t = 0; t < 40; t++) Advance(.5); }
         Selected.Clear(); Hud.OnSelectionChanged();
         Sim.Stock.Gold = 500;
+        // (a place free in the citadel for the one taken on: how many of ours the fights before this left alive is not
+        // what is looked at here; the last soldier come in by them goes if they are all taken)
+        string household = string.Join(", ", System.Linq.Enumerable.Select(System.Linq.Enumerable.GroupBy(Sim.Units.FindAll(u => !u.Dead && u.Team == Team.Player && !u.T.Called && u.Billet < 0), u => u.T.Name), g => $"{g.Key} {System.Linq.Enumerable.Count(g)}"));
+        if (Sim.Household() >= Sim.Places && Sim.Units.FindLast(u => !u.Dead && u.Team == Team.Player && u.T != Kinds.Worker && !u.T.Called && u.Billet < 0) is { } spare)
+        {
+            household += $" ({spare.T.Name} sent off to make room)";
+            spare.Dead = true; spare.DiedAt = -999;
+        }
         int w0 = Sim.Count(Kinds.Worker);
         await Look(kx, kz);
         // (and whoever is there still, kept by the work or the way, or come by meanwhile, is put there and held till the
@@ -981,6 +991,8 @@ public partial class Main
         }
         await ClickAt(ScreenAt(kx, Site.KeepBase + 40, kz));
         bool keepOpen = Hud.KeepShown;
+        string whyNot = Sim.CantEnlist(Kinds.Worker);
+        household = $"{Sim.Household()} of {Sim.Places} places taken: {household}";
         string instead = Inspected != null ? $" ({Inspected.T.Name} looked at instead)" : "";
         foreach (var u in Selected) instead = $" ({u.T.Name} chosen instead)";
         Hud.Inspector.TileOf(Kinds.Worker)?.Press();
@@ -988,7 +1000,7 @@ public partial class Main
         Advance(8);
         Check("a click on the citadel opens its muster; a worker taken on is paid for and comes out at once",
             keepOpen && paidNow && Sim.Count(Kinds.Worker) == w0 + 1 && Sim.Places == Sim.CitadelPlaces,
-            $"muster {(keepOpen ? "open" : "not open")}{instead}, paid at once {paidNow}, {Sim.Stock.Gold:0} gold left, workers {w0} → {Sim.Count(Kinds.Worker)}");
+            $"muster {(keepOpen ? "open" : "not open")}{instead}, paid at once {paidNow}, {Sim.Stock.Gold:0} gold left, workers {w0} → {Sim.Count(Kinds.Worker)}; {household}{(whyNot != null ? $", «{whyNot}»" : "")}");
         foreach (var u in heldOff) u.Hold = false;
         KeyPress(Key.Escape);
         Check("Esc lets the citadel go", !KeepChosen && !Hud.KeepShown);

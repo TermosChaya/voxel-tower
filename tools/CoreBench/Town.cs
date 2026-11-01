@@ -56,7 +56,10 @@ static class TownBench
                 if (hi - lo <= 2 && !site.Forbidden(x, z)) spots.Add((x, z));
             }
         if (spots.Count < 3) { check("level ground for the town", false, $"{spots.Count} spots"); return; }
-        for (int i = 0; i < 6; i++) sim.Spawn(Kinds.Worker, sim.Gate);
+        // (the town's own streets are left out of it, Sim.TownWays.cs: idle, the workers here go about the buildings and
+        // the street, which is what is looked at; the streets have their own bench, --walkers)
+        for (int i = 0; i < 6; i++) sim.Spawn(Kinds.Worker, sim.Gate).Priority[(int)WorkKind.Town] = 0;
+        foreach (var u in sim.Units) if (u.T == Kinds.Worker) u.Priority[(int)WorkKind.Town] = 0;
         sim.Stock[Stockpile.Wood] += 800.0 * VoxelWorld.PerM3;
         sim.Stock[Stockpile.Stone] += 800.0 * VoxelWorld.PerM3;
         // (earth too: the daub of a timber-framed look and the tiles are of it)
