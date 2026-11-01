@@ -145,7 +145,8 @@ public partial class Main
     /// valley's places with three of its own out on the map and three guests of the ore valley come in, its town hall
     /// standing (the town tab and the citadel's muster open); «edge» a commander gone into at the side toward the ore
     /// valley, his men about him, the offer to go out to the map in his eyes; «heroboard» a party on its way, its hero risen
-    /// a level with a skill to choose, his card opened from the board.
+    /// a level with a skill to choose, his card opened from the board; «mended» the first valley's old fort mended, its
+    /// gate seen from outside (Main.Poses.Scaffold.cs).
     /// </summary>
     void CampaignPose()
     {
@@ -162,6 +163,7 @@ public partial class Main
         switch (_pose)
         {
             case "land": LandPose(); break;
+            case "mended": MendedPose(); break;
             case "bigmap": BigMapPose(); break;
             case "economy": EconomyPose(); break;
             case "holdfight": HoldFight(); break;

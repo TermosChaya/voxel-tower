@@ -356,6 +356,8 @@ public sealed partial class Sim
             g.Missing = r.ReadInt32(); g.Step = r.ReadInt32();
             for (int k = 0; k < Gateway.Voxels; k++) { g.At[k] = r.ReadInt32(); g.Gone[k] = r.ReadBoolean(); }
             SweepOf(g);
+            // (its head an arch, if it was hung before heads were: Sim.Gates.cs)
+            ArchHead(g);
             Gates.Add(g);
         }
         FortGate = Gates.Find(g => g.Id == fortGate);

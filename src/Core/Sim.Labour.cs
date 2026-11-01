@@ -17,10 +17,11 @@ public sealed partial class Sim
         return n;
     }
 
-    /// <summary>Marks earth to dig, rock to quarry, trees to fell or own masonry to take down.</summary>
+    /// <summary>Marks earth to dig, rock to quarry, trees to fell or own masonry to take down; scaffolding marked comes down whole, from the top (Sim.Scaffold.cs).</summary>
     public int DesignateRemove(VoxelList L)
     {
         int n = Orders.PlanRemove(L);
+        ScaffoldsMarked(L);
         if (InstantLabour) CompleteAll();
         return n;
     }

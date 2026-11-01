@@ -37,14 +37,108 @@ public sealed partial class Sim
 
     /// <summary>
     /// Forgets a voxel the player had taken down, and what was meant to stand on it and is already gone: a wall taken
-    /// down from the top leaves nothing of itself remembered above.
+    /// down from the top leaves nothing of itself remembered above. Taken down by our workers (<paramref name="unmade"/>),
+    /// it is kept a while in <see cref="_unmade"/>: what comes down for want of it is forgotten too (<see cref="ForgetFallen"/>).
     /// </summary>
-    void Forget(int x, int y, int z)
+    void Forget(int x, int y, int z, bool unmade = false)
     {
         if (MeantAt(x, y, z) == 0) return;
         Design.SetRaw(x, y, z, 0);
         DesignRev++;
-        for (int yy = y + 1; yy < World.SY && Design.Get(x, yy, z) != 0 && Brushes.Free(World.Get(x, yy, z)); yy++) Design.SetRaw(x, yy, z, 0);
+        if (unmade) Unmade(x, y, z);
+        for (int yy = y + 1; yy < World.SY && Design.Get(x, yy, z) != 0 && Brushes.Free(World.Get(x, yy, z)); yy++)
+        {
+            Design.SetRaw(x, yy, z, 0);
+            if (unmade) Unmade(x, yy, z);
+        }
+    }
+
+    /// <summary>
+    /// Where what was meant was knocked out or came down, and when, for a quarter of an hour: a commander's mending after
+    /// a raid takes up what the raid broke, not what lay broken before it — the old fort's breaches, an old ruin's
+    /// missing top, a wall the player has given up for another (Sim.Captains.cs).
+    /// </summary>
+    readonly Dictionary<int, double> _knocked = new();
+    double _knockedPruned;
+    public const double KnockedFor = 900;
+
+    void Knocked(int x, int y, int z, byte old)
+    {
+        // (what came down as the valley was made, before its first second, the years did)
+        if (Time <= 0 || old == Mat.Air) return;
+        byte meant = Design.Get(x, y, z);
+        if (meant == 0 || !Stands(old, meant) || Stands(World.Get(x, y, z), meant)) return;
+        _knocked[WaterPlanner.Pack(x, y, z)] = Time;
+        if (Time - _knockedPruned < 30) return;
+        _knockedPruned = Time;
+        var old2 = new List<int>();
+        foreach (var (p, t) in _knocked) if (Time - t > KnockedFor) old2.Add(p);
+        foreach (int p in old2) _knocked.Remove(p);
+    }
+
+    /// <summary>Whether a meant voxel was knocked out in the last quarter of an hour.</summary>
+    bool KnockedLately(int p) => _knocked.TryGetValue(p, out double t) && Time - t <= KnockedFor;
+
+    /// <summary>
+    /// Where our workers took down what was meant, and when, for a few minutes after: what of the same building comes
+    /// down then for want of it was taken down with it, not knocked down.
+    /// </summary>
+    readonly Dictionary<int, double> _unmade = new();
+    double _unmadePruned;
+    const double UnmadeFor = 180;
+
+    void Unmade(int x, int y, int z)
+    {
+        _unmade[WaterPlanner.Pack(x, y, z)] = Time;
+        if (Time - _unmadePruned < 10) return;
+        _unmadePruned = Time;
+        var old = new List<int>();
+        foreach (var (p, t) in _unmade) if (Time - t > UnmadeFor) old.Add(p);
+        foreach (int p in old) _unmade.Remove(p);
+    }
+
+    /// <summary>
+    /// What comes down because the player had what held it taken down — a tower's top over its dug-out foot, a wall's end
+    /// past where it was cut — is forgotten as it falls: it was taken down with the rest, not knocked down, and is not to
+    /// be mended (else the workers mark the top of a tower that is no more over the place it stood). Each piece coming
+    /// down whole (joined face to face) that touches anything taken down in the last few minutes goes so; what the horde,
+    /// a blast or the years bring down stays remembered.
+    /// </summary>
+    void ForgetFallen(HashSet<int> falling)
+    {
+        if (_unmade.Count == 0) return;
+        var seen = new HashSet<int>();
+        var piece = new List<int>();
+        var stack = new Stack<int>();
+        foreach (int p in falling)
+        {
+            if (!seen.Add(p)) continue;
+            piece.Clear();
+            stack.Push(p);
+            bool unmade = false;
+            while (stack.Count > 0)
+            {
+                int q = stack.Pop();
+                piece.Add(q);
+                var (x, y, z) = WaterPlanner.Unpack(q);
+                for (int d = 0; d < 6; d++)
+                {
+                    var (nx, ny, nz) = Step6(x, y, z, d);
+                    int n = WaterPlanner.Pack(nx, ny, nz);
+                    if (falling.Contains(n)) { if (seen.Add(n)) stack.Push(n); }
+                    else if (!unmade && _unmade.TryGetValue(n, out double at) && Time - at <= UnmadeFor) unmade = true;
+                }
+            }
+            if (!unmade) continue;
+            foreach (int q in piece)
+            {
+                var (x, y, z) = WaterPlanner.Unpack(q);
+                if (Design.Get(x, y, z) == 0) continue;
+                Design.SetRaw(x, y, z, 0);
+                DesignRev++;
+                Unmade(x, y, z);
+            }
+        }
     }
 
     /// <summary>Something stands where a voxel was meant that will do: the meant material, any stone for stone.</summary>
@@ -192,7 +286,7 @@ public sealed partial class Sim
             Orders.PlanBuild(_one);
             return;
         }
-        if (Stands(was, meant)) Forget(x, y, z);
+        if (Stands(was, meant)) Forget(x, y, z, unmade: true);
     }
 
     /// <summary>Of the meant voxels on the columns of a rectangle: how many there are, and how many stand.</summary>

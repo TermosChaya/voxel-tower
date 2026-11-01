@@ -633,10 +633,12 @@ public sealed partial class Sim
     /// What is no longer held comes down: taken out of where it stood, and laid again lower, column by column, each
     /// voxel running off its heap to a lower neighbour as loose stone does. A tree falls over instead, away from whoever
     /// is beside it, and lies as a log — and rolls on, if it lies across a slope. Leaves and twigs that fall are lost.
-    /// Whoever it comes down on is crushed; what was marked to be taken out is marked again where it lies.
+    /// Whoever it comes down on is crushed; what was marked to be taken out is marked again where it lies. What comes down
+    /// for want of what the player had taken down is forgotten with it (Sim.Design.cs).
     /// </summary>
     void Fall(HashSet<int> falling, bool quiet)
     {
+        if (!quiet) ForgetFallen(falling);
         if (!quiet && FallWhole(falling)) return;
         _settling = true;
         var pieces = new List<(int x, int y, int z, byte m, byte order)>(falling.Count);
@@ -886,11 +888,11 @@ public sealed partial class Sim
 
     /// <summary>What a voxel is once it has fallen: masonry broken stone, timber broken timber, rammed earth loose earth;
     /// trees lie as logs, iron leaves as loose plates, a roof's tiles and slates as broken stone, its shingles and thatch
-    /// as broken timber, and the rest as it was.</summary>
+    /// and scaffolding's poles as broken timber, and the rest as it was.</summary>
     static byte Broken(byte m) =>
         Mat.IsMasonry(m) || m is Mat.Ruin or Mat.Keep or Mat.DropStone or Mat.Tile or Mat.Slate ? Mat.Rubble
         : Mat.IsIronLeaf(m) ? Mat.Plate
-        : m is Mat.Wood or Mat.Deck or Mat.Plank or Mat.TrapDeck or Mat.Stakes or Mat.DropLog or Mat.Shingle or Mat.Thatch || Mat.Swings(m) ? Mat.Lumber
+        : m is Mat.Wood or Mat.Deck or Mat.Plank or Mat.TrapDeck or Mat.Stakes or Mat.DropLog or Mat.Shingle or Mat.Thatch or Mat.Scaffold || Mat.Swings(m) ? Mat.Lumber
         : m is Mat.Rammed or Mat.Daub ? Mat.Soil : m;
 
     /// <summary>Where a falling voxel comes to rest: down its column onto whatever is solid, then off its heap down to a

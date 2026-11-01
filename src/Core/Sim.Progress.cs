@@ -244,6 +244,8 @@ public sealed partial class Sim
         "leader" => !Bands.Exists(b => b.Id == (int)e.From) && !_slainBands.Contains((int)e.From),
         "weak" => Raids.Active,
         "thief" => _thiefAway && Raids.Count >= (int)e.From,
+        // the fort's gate walled up, or taken down with its wall: there is none to hang
+        "gate" => FortGate == null,
         _ => false,
     };
 
@@ -266,7 +268,8 @@ public sealed partial class Sim
         for (int i = 0; i < Errands.Count; i++)
         {
             var e = Errands[i];
-            if (!e.Main && Failed(e)) { Errands.RemoveAt(i--); continue; }
+            // (one of the first day's road that can no longer be done gives way to the next, unpaid)
+            if (Failed(e)) { Errands.RemoveAt(i--); if (e.Main) GiveRoad(); continue; }
             if (!Met(e)) continue;
             Errands.RemoveAt(i--);
             ErrandsDone++;

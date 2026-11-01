@@ -254,7 +254,10 @@ public sealed partial class Sim
     public readonly List<Gateway> Gates = new();
     int _nextGate = 1;
 
-    /// <summary>Hangs a gate: the gateway cut and the leaves laid by the workers, or (built) all of it at once.</summary>
+    /// <summary>
+    /// Hangs a gate: the gateway cut and the leaves laid by the workers, or (built) all of it at once. The wall over the
+    /// gateway stands as an arch from the first (<see cref="ArchHead"/>).
+    /// </summary>
     public Gateway AddGate(GatePlan plan, bool built = false)
     {
         var g = plan.Make();
@@ -262,6 +265,7 @@ public sealed partial class Sim
         Array.Fill(g.At, -1);
         SweepOf(g);
         Gates.Add(g);
+        ArchHead(g);
         if (built)
         {
             for (int i = 0; i < plan.Cut.Count; i++)
@@ -281,6 +285,40 @@ public sealed partial class Sim
             if (plan.Seal.Count > 0) DesignateBuild(plan.Seal);
         }
         return g;
+    }
+
+    /// <summary>How deep the head over a gateway stands as an arch, at most (a metre).</summary>
+    const int HeadDeep = 8;
+
+    /// <summary>
+    /// The head of a gateway set as an arch (<see cref="Arched"/>), as a house's lintel is: what of the wall stands or is
+    /// meant over the opening, through the wall from face to face, from the top of the opening up a metre or to the wall's
+    /// top. A wall no higher than a man over a gate would otherwise crack over it as soon as it is weighed — a few courses
+    /// of stone held out over two metres pass more aside to the jambs than they bear — and come down; the old fort's gate
+    /// so came down as soon as the workers mended about it. Gates of a game saved before are set so as it is read.
+    /// </summary>
+    void ArchHead(Gateway g)
+    {
+        int top = g.Y + Gateway.Height;
+        bool Wall(int x, int y, int z)
+        {
+            if (!World.InBounds(x, y, z)) return false;
+            byte m = World.Get(x, y, z);
+            return MeantAt(x, y, z) != 0 || Holds(m) && !Mat.IsTrunk(m);
+        }
+        for (int u = g.U0; u < g.U0 + Gateway.Width; u++)
+        {
+            // out through the wall from the leaves' plane: the head's columns, till the far face (a gateway cut to the
+            // wall's top has none)
+            bool seen = false;
+            for (int t = -1; t < 40; t++)
+            {
+                int a = g.P - g.In * t, x = g.AlongX ? u : a, z = g.AlongX ? a : u;
+                if (!Wall(x, top, z)) { if (seen || t > 2) break; continue; }
+                seen = true;
+                for (int y = top; y < top + HeadDeep && Wall(x, y, z); y++) Arched.SetRaw(x, y, z, 1);
+            }
+        }
     }
 
     /// <summary>The cells the leaves fill shut or sweep through as they turn.</summary>
@@ -410,9 +448,67 @@ public sealed partial class Sim
         return true;
     }
 
+    double _gatesLookAt;
+
+    /// <summary>
+    /// Whether a gate's wall is gone: nothing meant and nothing built standing in its jambs, the player having had them
+    /// taken down. A gate in a wall the horde broke keeps its place, and is mended with the wall.
+    /// </summary>
+    bool WallGone(Gateway g)
+    {
+        int n = 0;
+        for (int side = 0; side < 2; side++)
+            for (int k = 1; k <= GatePlan.Jamb; k++)
+            {
+                int u = side == 0 ? g.U0 - k : g.U0 + Gateway.Width - 1 + k;
+                for (int y = g.Y; y < g.Y + Gateway.Height; y += 3)
+                    for (int t = -1; t <= 8; t++)
+                    {
+                        int a = g.P - g.In * t, x = g.AlongX ? u : a, z = g.AlongX ? a : u;
+                        if (!World.InBounds(x, y, z)) continue;
+                        byte m = World.Get(x, y, z);
+                        if ((MeantAt(x, y, z) != 0 || Holds(m) && !Debris(m) && !Mat.IsTrunk(m)) && ++n >= 8) return false;
+                    }
+            }
+        return true;
+    }
+
+    /// <summary>
+    /// A gate whose wall the player had taken down goes with it: its leaves, what was marked to hang them again, and the
+    /// gate itself — else mending about the place hangs it again standing by itself in the yard.
+    /// </summary>
+    void DropGate(Gateway g)
+    {
+        UnhangGate(g);
+        for (int i = 0; i < Gateway.Voxels; i++)
+        {
+            var (x, y, z) = g.Place(i, 0);
+            if (World.InBounds(x, y, z) && Mat.IsLeaf(Orders.At(x, y, z))) Orders.Clear(x, y, z);
+        }
+        // (and its head is no arch any more: what is built there after stands as anything built; through the two metres
+        // out from where its leaves hung)
+        int top = g.Y + Gateway.Height;
+        for (int u = g.U0; u < g.U0 + Gateway.Width; u++)
+            for (int t = -1; t < 16; t++)
+            {
+                int a = g.P - g.In * t, x = g.AlongX ? u : a, z = g.AlongX ? a : u;
+                for (int y = top; y < top + HeadDeep; y++) if (World.InBounds(x, y, z)) Arched.SetRaw(x, y, z, 0);
+            }
+        Gates.Remove(g);
+        if (g == FortGate) FortGate = null;
+    }
+
     /// <summary>Opens and shuts the gates: for whoever knocked, before the horde, as the player told them.</summary>
     void TickGates(float dt)
     {
+        // every few seconds, a gate whose wall is gone is let go, hung or not (a gate read from a game saved before this
+        // was looked to is let go so too)
+        if (Time >= _gatesLookAt)
+        {
+            _gatesLookAt = Time + 2;
+            for (int i = Gates.Count - 1; i >= 0; i--)
+                if (WallGone(Gates[i])) DropGate(Gates[i]);
+        }
         foreach (var g in Gates)
         {
             if (!g.Ready)

@@ -37,6 +37,10 @@ public sealed class Scaffold
     public double Done = -1, Used;
     public bool Lowering;
     public float Budget;
+    /// <summary>The player marked it to be taken out: it comes down from the top as soon as nobody is on it.</summary>
+    public bool Ordered;
+    /// <summary>How many of its voxels stood when it was last looked over for what has lost its footing (−1: not yet).</summary>
+    internal int Standing = -1;
 }
 
 public sealed partial class Sim
@@ -357,7 +361,17 @@ public sealed partial class Sim
         if (!quick && by != null && by.Raising == null)
         {
             s.Lowering = true; s.Budget = 0;
-            s.Voxels.Sort((a, b) => WaterPlanner.Unpack(a).y.CompareTo(WaterPlanner.Unpack(b).y));
+            // from the top down, and in each course the boards before the poles they are lashed to, the middle of a span
+            // first, so that none is ever left hanging by itself (taken off the end)
+            static int Key(int p)
+            {
+                var (x, y, z) = WaterPlanner.Unpack(p);
+                int lx = x & NavGrid.CS - 1, lz = z & NavGrid.CS - 1, e = NavGrid.CS - 1;
+                bool onX = lz is 0 || lz == e, onZ = lx is 0 || lx == e;
+                int along = onX && onZ ? 0 : 1 + (onX ? Math.Min(lx, e - lx) : Math.Min(lz, e - lz));
+                return y * NavGrid.CS + along;
+            }
+            s.Voxels.Sort((a, b) => Key(a).CompareTo(Key(b)));
             by.Raising = s;
             return;
         }
@@ -390,8 +404,9 @@ public sealed partial class Sim
                 // in its cells (anyone: a raider on it is on it too), but for one of ours idling on the ground at its
                 // foot (the work it was put up for done from beside it, where the workers reach the lowest course)
                 if (ui == c.i && uk == c.k && uy >= c.y0 && uy <= c.y1 + 1 && !(u.Team == Team.Player && uy == c.y0 && u.State == UnitState.Idle)) return true;
-                // one of ours up on what it leads to, near it
-                if (u.Team == Team.Player && u.Y >= foot + 2 * NavGrid.CS && Math.Abs(ui - c.i) <= 6 && Math.Abs(uk - c.k) <= 6) return true;
+                // a worker of ours up on what it leads to, near it (not a soldier at its post on the wall: it has the
+                // wall's own way up and down, and a wall kept manned kept the scaffolding by it standing for good)
+                if (u.Team == Team.Player && u.T.Work >= 1 && u.Y >= foot + 2 * NavGrid.CS && Math.Abs(ui - c.i) <= 6 && Math.Abs(uk - c.k) <= 6) return true;
             }
         }
         return false;
@@ -399,8 +414,9 @@ public sealed partial class Sim
 
     /// <summary>
     /// Once a second: scaffolds that have served are taken down — one put up to get out of somewhere once its raiser is
-    /// out, one for work once nothing marked is left in reach of it for a while — and any with a raider near comes down
-    /// at once.
+    /// out, one for work once nothing marked is left in reach of it for a while, one the player marked to be taken out as
+    /// soon as nobody is on it — and any with a raider near comes down at once. One being taken down by a worker who is no
+    /// more (fallen, gone out of the valley) is given to another; what of one has lost its footing comes down.
     /// </summary>
     void TickScaffolds()
     {
@@ -409,9 +425,20 @@ public sealed partial class Sim
         for (int n = Scaffolds.Count - 1; n >= 0; n--)
         {
             var s = Scaffolds[n];
-            if (s.Lowering || s.Columns.Count == 0) continue;
+            if (s.Columns.Count == 0) continue;
             var c0 = s.Columns[0];
             float bx = (c0.i << NavGrid.Shift) + 4, bz = (c0.k << NavGrid.Shift) + 4;
+            if (s.Lowering)
+            {
+                // nobody at it any more: another takes it on, or it comes down at once
+                bool at = false;
+                foreach (var u in Units) if (!u.Dead && u.Raising == s) { at = true; break; }
+                if (!at) { s.Lowering = false; TakeDown(s, quick: false, FreeWorkerNear(bx, bz)); }
+                continue;
+            }
+            // what of it stands on nothing any more (burnt through, blown out at its foot) comes down
+            if (s.Done >= 0) ScaffoldFalls(s);
+            if (!Scaffolds.Contains(s)) continue;
             // the horde near: down with it, before it is climbed
             bool raider = false;
             foreach (var r in Units)
@@ -423,10 +450,17 @@ public sealed partial class Sim
                 Say("Леса разобраны: орда близко.", 2, bx, bz);
                 continue;
             }
-            // still going up: its raiser gone, it comes down
+            // still going up: its raiser gone (fallen, gone out of the valley), it comes down
             if (s.Done < 0)
             {
-                if (s.By == null || s.By.Dead || s.By.Raising != s) TakeDown(s, quick: true);
+                if (s.By == null || s.By.Dead || s.By.Raising != s || !Units.Contains(s.By)) TakeDown(s, quick: true);
+                continue;
+            }
+            // marked by the player to be taken out: from the top, once nobody is on it
+            if (s.Ordered)
+            {
+                if (OnScaffold(s)) continue;
+                TakeDown(s, quick: InstantLabour, FreeWorkerNear(bx, bz));
                 continue;
             }
             // one put up out of a pit stays there, its way out (Sim.Undermine.cs)
@@ -456,6 +490,145 @@ public sealed partial class Sim
     }
 
     static float Dist2(Unit u, float x, float z) => MathF.Sqrt((u.X - x) * (u.X - x) + (u.Z - z) * (u.Z - z));
+
+    /// <summary>
+    /// Scaffolding is poles lashed one on another up from the ground: what of a scaffold no longer stands on anything
+    /// (its foot burnt through, blown out, dug away) comes down, each piece of it that hangs together falling as one body
+    /// and lying broken where it lands. Looked over only when some of it has gone since the last look.
+    /// </summary>
+    void ScaffoldFalls(Scaffold s)
+    {
+        int standing = 0;
+        foreach (int p in s.Voxels) { var (x, y, z) = WaterPlanner.Unpack(p); if (World.Get(x, y, z) == Mat.Scaffold) standing++; }
+        if (standing == s.Standing) return;
+        bool first = s.Standing < 0;
+        s.Standing = standing;
+        if (standing == 0) { Scaffolds.Remove(s); if (s.By?.Raising == s) s.By.Raising = null; return; }
+        // (one never looked over before is taken to stand: a scaffold read back from a save stood as it was laid)
+        if (first) return;
+        var left = new HashSet<int>();
+        foreach (int p in s.Voxels) { var (x, y, z) = WaterPlanner.Unpack(p); if (World.Get(x, y, z) == Mat.Scaffold) left.Add(p); }
+        // what rests on something that is not scaffolding, and what is lashed to that, up and along
+        var queue = new Queue<int>();
+        foreach (int p in left)
+        {
+            var (x, y, z) = WaterPlanner.Unpack(p);
+            byte under = World.Get(x, y - 1, z);
+            if (under != Mat.Air && under != Mat.Water && under != Mat.Scaffold) queue.Enqueue(p);
+        }
+        foreach (int p in queue) left.Remove(p);
+        while (queue.Count > 0)
+        {
+            var (x, y, z) = WaterPlanner.Unpack(queue.Dequeue());
+            for (int d = 0; d < 6; d++)
+            {
+                var (nx, ny, nz) = Step6(x, y, z, d);
+                int n = WaterPlanner.Pack(nx, ny, nz);
+                if (left.Remove(n)) queue.Enqueue(n);
+            }
+        }
+        if (left.Count == 0) return;
+        // what is left hangs in the air: down it comes, piece by piece
+        var block = new List<(int x, int y, int z)>();
+        while (left.Count > 0)
+        {
+            int seed = 0;
+            foreach (int p in left) { seed = p; break; }
+            left.Remove(seed);
+            block.Clear();
+            queue.Enqueue(seed);
+            while (queue.Count > 0)
+            {
+                var (x, y, z) = WaterPlanner.Unpack(queue.Dequeue());
+                block.Add((x, y, z));
+                for (int d = 0; d < 6; d++)
+                {
+                    var (nx, ny, nz) = Step6(x, y, z, d);
+                    int n = WaterPlanner.Pack(nx, ny, nz);
+                    if (left.Remove(n)) queue.Enqueue(n);
+                }
+            }
+            // (lying where it lands as a heap of broken poles, not standing up again in its shape; with too much in the air
+            // already, it is taken, its logs back in the stores)
+            var piece = Loose(new List<(int x, int y, int z)>(block), 0, -4, 0, "упавшие леса");
+            if (piece != null) piece.Heap = true;
+            else foreach (var (x, y, z) in block) { World.Set(x, y, z, Mat.Air); Stock[Stockpile.Wood] += 1; }
+        }
+        s.Standing = 0;
+        foreach (int p in s.Voxels) { var (x, y, z) = WaterPlanner.Unpack(p); if (World.Get(x, y, z) == Mat.Scaffold) s.Standing++; }
+        if (s.Standing == 0) { Scaffolds.Remove(s); if (s.By?.Raising == s) s.By.Raising = null; }
+        Say("Леса лишились опоры и рухнули.", 2, s.Columns[0].i << NavGrid.Shift, s.Columns[0].k << NavGrid.Shift);
+        Nav.Flush();
+        InvalidateFields();
+    }
+
+    /// <summary>
+    /// The player's marking to take out scaffolding: the whole scaffold it is part of comes down from the top as the
+    /// workers take scaffolding down, once nobody is on it — not dug out from the foot up as earth is, which left what is
+    /// over the dug part hanging in the air. Scaffolding not of a scaffold the sim keeps (a game saved before) is gathered
+    /// into one as it stands. What was marked of it is dropped.
+    /// </summary>
+    void ScaffoldsMarked(VoxelList L)
+    {
+        if (L == null) return;
+        HashSet<Scaffold> marked = null;
+        for (int i = 0; i < L.Count; i++)
+        {
+            int x = L.X(i), y = L.Y(i), z = L.Z(i);
+            if (World.Get(x, y, z) != Mat.Scaffold || !Orders.IsRemove(Orders.At(x, y, z))) continue;
+            int p = WaterPlanner.Pack(x, y, z);
+            bool had = false;
+            if (marked != null) foreach (var s in marked) if (s.Voxels.Contains(p)) { had = true; break; }
+            if (had) continue;
+            var sc = Scaffolds.Find(s => s.Voxels.Contains(p)) ?? GatherScaffold(p);
+            if (sc != null) (marked ??= new()).Add(sc);
+        }
+        if (marked == null) return;
+        foreach (var s in marked)
+        {
+            foreach (int p in s.Voxels)
+            {
+                var (x, y, z) = WaterPlanner.Unpack(p);
+                if (Orders.IsRemove(Orders.At(x, y, z))) Orders.Clear(x, y, z);
+            }
+            // (one still going up comes down when it has served)
+            if (s.Done >= 0) s.Ordered = true;
+        }
+    }
+
+    /// <summary>The scaffolding joined to a voxel of it, gathered into a scaffold standing done, nobody's; null past fifty thousand voxels.</summary>
+    Scaffold GatherScaffold(int seed)
+    {
+        var seen = new HashSet<int> { seed };
+        var queue = new Queue<int>();
+        queue.Enqueue(seed);
+        var s = new Scaffold { Done = Time, Used = Time };
+        var cols = new Dictionary<int, (int y0, int y1)>();
+        while (queue.Count > 0)
+        {
+            int p = queue.Dequeue();
+            s.Voxels.Add(p);
+            if (s.Voxels.Count > 50_000) return null;
+            var (x, y, z) = WaterPlanner.Unpack(p);
+            int col = (z >> NavGrid.Shift) * Nav.NX + (x >> NavGrid.Shift), cy = y >> NavGrid.Shift;
+            cols[col] = cols.TryGetValue(col, out var c) ? (Math.Min(c.y0, cy), Math.Max(c.y1, cy)) : (cy, cy);
+            for (int d = 0; d < 6; d++)
+            {
+                var (nx, ny, nz) = Step6(x, y, z, d);
+                if (World.Get(nx, ny, nz) != Mat.Scaffold) continue;
+                int n = WaterPlanner.Pack(nx, ny, nz);
+                if (seen.Add(n)) queue.Enqueue(n);
+            }
+        }
+        foreach (var (col, (y0, y1)) in cols)
+        {
+            int i = col % Nav.NX, k = col / Nav.NX;
+            s.Columns.Add((i, k, y0, y1, false));
+            s.From.Add(Nav.Id(i, y0, k));
+        }
+        Scaffolds.Add(s);
+        return s;
+    }
 
     bool WorkNear(Scaffold s)
     {

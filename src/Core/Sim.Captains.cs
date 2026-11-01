@@ -418,11 +418,20 @@ public sealed partial class Sim
         return picked;
     }
 
-    /// <summary>The band gone: what of ours was broken about the wall it came at is marked to be mended, for the workers.</summary>
+    /// <summary>
+    /// The band gone: what of ours it broke about the wall it came at is marked to be mended, for the workers — what was
+    /// knocked out lately, and what stands cracked; not what lay broken before (the old fort's breaches, an old ruin's
+    /// top, a wall given up for another), which is the player's to mend or not (Sim.Design.cs).
+    /// </summary>
     void MendFront(Unit cap, int x, int z)
     {
         int r = 24 * VoxelWorld.PerMetre;
         var meant = MeantIn(x - r, z - r, x + r, z + r);
+        meant.RemoveAll(p =>
+        {
+            var (vx, vy, vz) = WaterPlanner.Unpack(p);
+            return !Stands(World.Get(vx, vy, vz), MeantAt(vx, vy, vz)) && !KnockedLately(p);
+        });
         if (meant.Count == 0) return;
         var lay = new VoxelList(); var clear = new VoxelList();
         MendPlan(meant, lay, clear);

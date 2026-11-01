@@ -70,6 +70,7 @@ public sealed partial class Sim
         w.Replaced += OnWaterEdit;
         w.Replaced += OnSupportEdit;
         w.Replaced += OnTrapEdit;
+        w.Replaced += Knocked;
         // from here on, what is written to the valley is what a save has to keep
         w.TrackEdits = true;
     }

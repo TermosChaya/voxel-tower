@@ -6271,6 +6271,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--metal") MetalBench.R
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--nature") NatureBench.Run(Check);
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--fellsafe") FellSafeBench.Run(Check);
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--architect") ArchitectBench.Run(Check);
+// the workers' repairs: scaffolding taken down from the top, an old wall taken down not built again, the gate's lintel mended (RepairsBench.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--repairs") RepairsBench.Run(Check);
 
 // the war: the bands' spirit, the warlords, engines given up, our tactics, a raid fought out and its report, two hundred at once (WarBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--war") WarBench.Run(Check);
