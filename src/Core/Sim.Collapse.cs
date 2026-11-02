@@ -462,13 +462,16 @@ public sealed partial class Sim
         return true;
     }
 
-    /// <summary>Lets everything unsound in a rectangle come down at once, without a word: a new game's ruins settle.</summary>
-    public int Subside(int x0, int z0, int x1, int z1)
+    /// <summary>
+    /// Lets everything unsound in a rectangle come down at once, without a word: a new game's ruins settle. Weighed, what
+    /// stands out further than it bears from what holds it comes down too, as it would in the first moments of a game.
+    /// </summary>
+    public int Subside(int x0, int z0, int x1, int z1, bool weigh = false)
     {
         var falling = new HashSet<int>();
         for (int z = Math.Max(0, z0) & ~31; z <= Math.Min(World.SZ - 1, z1); z += 32)
             for (int x = Math.Max(0, x0) & ~31; x <= Math.Min(World.SX - 1, x1); x += 32)
-                Overhangs(x, z, 32, falling, weigh: false);
+                Overhangs(x, z, 32, falling, weigh);
         if (falling.Count > 0) Fall(falling, quiet: true);
         _shaken.Clear();
         return falling.Count;

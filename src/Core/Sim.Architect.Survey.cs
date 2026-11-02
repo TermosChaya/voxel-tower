@@ -78,6 +78,8 @@ public sealed partial class Sim
         foreach (var _ in TopsIn(Design, x0, z0, nx, nz, meant)) yield return false;
         foreach (var _ in TopsIn(Orders.Layer, x0, z0, nx, nz, marked)) yield return false;
         var walls = new int[n]; var timber = new int[n]; var roofed = new int[n]; var tall = new int[n]; var broken = new int[n]; var off = new int[n]; var ground = new long[n];
+        // (the castle's lean-tos are buildings, their fronts no walls to take a line along)
+        var sheds = StartingFort.Sheds(this);
         // every other column each way, sixteen to a cell: a wall that bars the way is two voxels thick at the least
         int rows = 0;
         for (int z = z0; z < z0 + nz; z += 2)
@@ -89,7 +91,7 @@ public sealed partial class Sim
                 int g = GroundAt(x, z);
                 ground[c] += g;
                 int built = OursTop(x, z, g), top = Math.Max(built, Math.Max(meant[col], marked[col]));
-                if (top - g < Fortification.Bars) continue;
+                if (top - g < Fortification.Bars || sheds.Exists(r => x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1)) continue;
                 // a roof or a deck over room to stand in (a gateway's, a bridge's, a room in a tower): no wall to bar the way there
                 if (built > g + 12 && Brushes.Free(World.Get(x, g + 1, z)) && Brushes.Free(World.Get(x, g + 6, z))) { roofed[c]++; continue; }
                 walls[c]++;

@@ -219,7 +219,7 @@ static class ArchitectBench
             $"walled {walled}; plans {plans0} → {sim2.ArchPlans}; the stretch planned again as new {doubled}; «{again?.Found}»");
     }
 
-    /// <summary>The old fort a new game begins with, half in ruin, round the citadel.</summary>
+    /// <summary>The citadel's castle a new game begins with, half in ruin, round the keep (StartingFort.cs).</summary>
     static void OldFort(Action<string, bool, string> check)
     {
         var mp = new MapParams { Seed = 3, Kind = ValleyKind.Forest, Hexagon = true, SizeX = MapParams.GameSize, SizeZ = MapParams.GameSize };
@@ -237,11 +237,12 @@ static class ArchitectBench
         sim.Stock.Gold = 9999;
         var (fx0, fz0, fx1, fz1) = sim.FortArea;
         var sound0 = sim.Soundness(fx0, fz0, fx1, fz1);
-        // the curtain: the columns meant to stand in stone a man and a half and more
+        // the curtain: the columns of the castle's walls between its towers meant to stand in stone a man and a half and more
         var curtain = new List<(int x, int z)>();
         for (int z = fz0; z <= fz1; z++)
             for (int x = fx0; x <= fx1; x++)
             {
+                if (!StartingFort.OnCurtain(site, x, z)) continue;
                 int g = site.HTop[z * w.SX + x], high = 0;
                 for (int y = g; y < g + 48; y++) { byte m = sim.MeantAt(x, y, z); if (Mat.IsMasonry(m)) high = y + 1 - g; }
                 if (high >= 12) curtain.Add((x, z));
@@ -291,7 +292,7 @@ static class ArchitectBench
         var sound = sim.Soundness(fx0, fz0, fx1, fz1);
         int way = WayIn(sim, cx, cz, out bool byGates, out string crossed), walk = WalkIn(sim, cx, cz, out string walked);
         bool hung = sim.FortGate is { Broken: false };
-        check("in the old fort his line is the fort's: he lays no new wall by its curtain but what mends it, a tower or a stair, mends its breaches and hangs its gate, and the citadel is shut in, the way in only through the gate",
+        check("in the citadel's castle a new game finds his line is its curtain: he lays no new wall by it but what mends it, a tower or a stair, mends its breaches and hangs its gate, and the citadel is shut in, the way in only through the gate",
             plan != null && kept && onLine >= curtain.Count * 85 / 100 && newWalls == 0 && beside == 0 && sound.standing >= sound.meant * 95 / 100 && hung && (way < 0 || byGates) && walk > 0,
             $"«{plan?.Found}»; saved with {System.Numerics.BitOperations.PopCount(done)} pieces done and read back {(kept ? "as it was" : "changed")}; {onLine} of {curtain.Count} columns of the curtain on his line; new walls {newWalls}; voxels laid by the curtain not of mending, a tower, a stair or stone for the palisade {beside}; " +
             $"the fort sound {sound0.standing * 100 / Math.Max(1, sound0.meant)} % → {sound.standing * 100 / Math.Max(1, sound.meant)} %, its gate hung {hung}; works: {Works(plan)}; the horde's way in {(way < 0 ? "none" : $"{way} cells, {crossed}")}; a worker's, the gates open: {(walk < 0 ? "none" : $"{walk} cells, {walked}")}");

@@ -194,17 +194,13 @@ static class RepairsBench
         sim.DesignateBuild(Shapes.Line(w, site, nx, z1, x0 + 16, z1, stroke, top));
         sim.InstantLabour = false;
         Run(2);
-        // the old west wall, its gate and its two towers taken down by the workers: dug from where they stand, so what is
-        // out of their reach comes down by itself as they go
+        // the castle's west side taken down by the workers — its curtain, the gatehouse with its gate and towers, the towers
+        // on its corners: dug from where they stand, so what is out of their reach comes down by itself as they go
         var down = new VoxelList();
         for (int z = z0 - 14; z <= z1 + 14; z++)
-            for (int x = x0 - 14; x <= x0 + 14; x++)
-                for (int y = kb - 4; y < top + 24; y++)
-                {
-                    bool wall = Math.Abs(x - x0) <= 4 && z >= z0 && z <= z1;
-                    bool tower = (x - x0) * (x - x0) + (z - z0) * (z - z0) <= 132 || (x - x0) * (x - x0) + (z - z1) * (z - z1) <= 132;
-                    if ((wall || tower) && w.Get(x, y, z) != 0 && sim.MeantAt(x, y, z) != 0) down.Add(x, y, z, 0);
-                }
+            for (int x = x0 - 28; x <= x0 + 14; x++)
+                for (int y = kb - 4; y < top + 32; y++)
+                    if (StartingFort.WestSide(site, x, z) && w.Get(x, y, z) != 0 && sim.MeantAt(x, y, z) != 0) down.Add(x, y, z, 0);
         sim.DesignateRemove(down);
         for (int i = 0; i < 10; i++) sim.Spawn(Kinds.Worker, sim.Gate);
         int fellMeant = 0;
@@ -217,7 +213,7 @@ static class RepairsBench
         int meantLeft = place.Count(p => { var (x, y, z) = WaterPlanner.Unpack(p); return sim.MeantAt(x, y, z) != 0; });
         bool gateGone = !sim.Gates.Contains(gate) && sim.FortGate == null;
         int leavesLeft = Enumerable.Range(0, Gateway.Voxels).Count(i => { var (x, y, z) = gate.Place(i, 0); return Mat.IsLeaf(w.Get(x, y, z)); });
-        check("the old fort's west wall, its gate and its towers taken down by the workers: nothing of them is remembered to be mended, what came down by itself as they went neither, and the gate goes with its wall",
+        check("the castle's west side — its curtain, its gatehouse with the gate, its towers — taken down by the workers: nothing of them is remembered to be mended, what came down by itself as they went neither, and the gate goes with its wall",
             sim.Orders.Total == 0 && meantLeft == 0 && fellMeant == 0 && gateGone && leavesLeft == 0,
             $"{down.Count} voxels taken down in {sim.Time - t0:0} s, {sim.Orders.Total} orders left; {meantLeft} still remembered there; {fellMeant} remembered came down; the gate let go {gateGone}, {leavesLeft} of its leaves left");
 

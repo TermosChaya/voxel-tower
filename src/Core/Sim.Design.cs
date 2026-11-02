@@ -289,13 +289,18 @@ public sealed partial class Sim
         if (Stands(was, meant)) Forget(x, y, z, unmade: true);
     }
 
-    /// <summary>Of the meant voxels on the columns of a rectangle: how many there are, and how many stand.</summary>
+    /// <summary>
+    /// Of the meant voxels on the columns of a rectangle that are of the building, not what furnishes or dresses it (a
+    /// cask, a crate, a flag): how many there are, and how many stand.
+    /// </summary>
     public (int meant, int standing) Soundness(int x0, int z0, int x1, int z1)
     {
         int meant = 0, standing = 0;
         foreach (int p in MeantIn(x0, z0, x1, z1))
         {
             var (x, y, z) = WaterPlanner.Unpack(p);
+            // (a cask stands whole and is still nothing that bars the way: counted, it would never be standing)
+            if (Brushes.Free(MeantAt(x, y, z))) continue;
             meant++;
             if (!Brushes.Free(World.Get(x, y, z))) standing++;
         }

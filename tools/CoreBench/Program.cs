@@ -1326,7 +1326,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--fort")
     // the rest at once, as if by many hands; the workers out of the way first (an idle one may stand in a breach)
     foreach (var u in sim5.Units) if (u.Team == Team.Player) { u.Dead = true; u.DiedAt = -999; }
     sim5.InstantLabour = true;
-    sim5.CompleteAll();
+    // (rubble cleared off a course is laid again by an order of its own: twice)
+    sim5.CompleteAll(); Run5(.1); sim5.CompleteAll();
     sim5.InstantLabour = false;
     Run5(2);
     var (meant7, standing7) = sim5.Soundness(fx0, fz0, fx1, fz1);
@@ -6337,6 +6338,10 @@ if (args.Length == 0 || args[0] == "--mountains") MountainsBench.Run(Check);
 if (args.Length == 0 || args[0] == "--texts") TextsBench.Run(Check);
 // the old works of people in the wild: by the roads, on the heights, at the woods' edges (TracesBench.cs)
 if (args.Length == 0 || args[0] == "--traces") TracesBench.Run(Check);
+
+// the citadel is a castle: raised round the keep in every kind of valley, half fallen as a game finds it; mended, it shuts
+// the keep in but for its gate, and the way in from the horde's side goes through it (CastleBench.cs)
+if (args.Length == 0 || args[0] == "--castle") CastleBench.Run(Check);
 // the gods: the waking learnt and cast, the Colossus out of the ground, set loose on the horde, ridden, against the
 // horde's god, back under (Gods.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--gods") GodsBench.Run(Check);

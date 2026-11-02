@@ -101,6 +101,9 @@ public static class WorldGen
             }
     }
 
+    /// <summary>How high the keep's walls stand over its base, voxels (its cone and the iron on top of it rise 29 more).</summary>
+    public const int KeepHigh = 54;
+
     /// <summary>The citadel: a round brick keep with arrow slits that glow, a plank door and a slate cone.</summary>
     internal static int Keep(VoxelWorld w, Site s)
     {
@@ -108,7 +111,7 @@ public static class WorldGen
         for (int z = KZ - KR; z <= KZ + KR; z++)
             for (int x = KX - KR; x <= KX + KR; x++)
                 if (Brushes.Dist(x - KX + .5, z - KZ + .5) <= KR) bse = Math.Max(bse, s.HTop[z * w.SX + x]);
-        const int H = 54;
+        const int H = KeepHigh;
         for (int z = KZ - KR; z <= KZ + KR; z++)
             for (int x = KX - KR; x <= KX + KR; x++)
             {
