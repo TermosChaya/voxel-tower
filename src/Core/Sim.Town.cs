@@ -975,9 +975,15 @@ public sealed partial class Sim
 
     // ------------------------------------------------------------ kept
 
+    /// <summary>
+    /// The town's switches, carried over the count of its buildings in a save (a save of before has none set, and reads
+    /// as both on): the town does not furnish itself; the yard dog does not raise the alarm.
+    /// </summary>
+    const int TownNoDecor = 1 << 24, TownNoDogAlarm = 1 << 25, TownSwitches = TownNoDecor | TownNoDogAlarm;
+
     void WriteTown(System.IO.BinaryWriter w)
     {
-        w.Write(Buildings.Count);
+        w.Write(Buildings.Count | (TownDecorAuto ? 0 : TownNoDecor) | (DogAlarm ? 0 : TownNoDogAlarm));
         foreach (var b in Buildings)
         {
             w.Write(b.Kind); w.Write(b.X0); w.Write(b.Z0); w.Write(b.X1); w.Write(b.Z1);
@@ -990,7 +996,10 @@ public sealed partial class Sim
     void ReadTown(System.IO.BinaryReader r)
     {
         Buildings.Clear();
-        for (int i = r.ReadInt32(); i > 0; i--)
+        int head = r.ReadInt32();
+        TownDecorAuto = (head & TownNoDecor) == 0;
+        DogAlarm = (head & TownNoDogAlarm) == 0;
+        for (int i = head & ~TownSwitches; i > 0; i--)
         {
             var b = new Building { Kind = r.ReadString(), X0 = r.ReadInt32(), Z0 = r.ReadInt32(), X1 = r.ReadInt32(), Z1 = r.ReadInt32() };
             b.Level = r.ReadInt32(); b.Target = r.ReadInt32(); b.Ready = r.ReadBoolean(); b.Top0 = r.ReadInt32(); b.Variant = r.ReadByte();

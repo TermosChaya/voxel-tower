@@ -107,6 +107,8 @@ public partial class Main
         else if (look is 4 or 5 && put[look == 4 ? 3 : 1] is { } close && sim.FrontOf(close, out int fx, out int fy, out int fz, out int nx, out int nz))
             Rig.SetAt(World.WX(fx + nx * 8), World.WY(fy + 10), World.WZ(fz + nz * 8), MathF.Atan2(nx, nz) + .35f, .5f, 2.2f);
         else Rig.Set(World.WX(bx), World.WZ(bz) + .4f, .75f, .72f, 1.05f, snap: true);
+        // the «Город» tab open with its switches: the town furnishing itself turned off, the dog's alarm on
+        if (look == 6) { sim.TownDecorAuto = false; Hud.OpenPanel("town"); }
         Hud.Refresh();
     }
 }

@@ -122,6 +122,22 @@ static class TameBench
             sent == 0 && hurtByOurs == 0 && sim.WildAlive() == wildOnly && Kinds.TameKinds.All(t => !t.Move.Ladders),
             $"archers sent after a hen {sent}, hurt by ours {hurtByOurs:0}, the herds counted {sim.WildAlive()} with {wildOnly} wild and {sim.TameCount()} of the town's about");
 
+        // ---- with «Пёс поднимает тревогу» off in the town's tab, the dog barks at the horde and raises no alarm
+        int barksOff = sim.Barks, alarmsOff = sim.DogAlarms;
+        Unit g0 = null;
+        if (dog != null)
+        {
+            sim.DogAlarm = false;
+            g0 = sim.Spawn(Kinds.Goblin, sim.NearestStand((int)dog.X - 150, (int)dog.Z, Kinds.Goblin.Move.Height));
+            for (int k = 0; k < 200; k++) sim.Step(.05f);
+        }
+        check("the town's beasts: with the dog's alarm switched off it barks at a raider near and raises no alarm",
+            sim.Barks - barksOff >= 3 && sim.DogAlarms == alarmsOff, $"barks {sim.Barks - barksOff}, alarms raised by the dog {sim.DogAlarms - alarmsOff}");
+        if (g0 != null) { g0.Dead = true; g0.DiedAt = sim.Time; }
+        sim.DogAlarm = true;
+        if (sim.Alarm) sim.StandDown();
+        Run(5);
+
         // ---- the horde comes: the dog barks and raises the alarm
         int barks = sim.Barks;
         bool alarmBefore = sim.Alarm;

@@ -59,6 +59,17 @@ public partial class Main
         // with no town hall yet, the tab says to put one up first
         string advice = Hud.Town.Advice;
         check("the «Город» tab says what to build next: with no town hall, the hall", advice != null && advice.Contains("ратуш"), $"«{advice}»");
+        // its two switches, lit while on: a click turns each off, another on again
+        var shown0 = Hud.Town.Switches;
+        Hud.Town.ToggleSwitch(0); Hud.Town.ToggleSwitch(1);
+        await Frames(2);
+        var shown1 = Hud.Town.Switches;
+        bool off = !Sim.TownDecorAuto && !Sim.DogAlarm;
+        Hud.Town.ToggleSwitch(0); Hud.Town.ToggleSwitch(1);
+        await Frames(2);
+        check("the «Город» tab's switches: the town furnishing itself and the dog raising the alarm, lit while on, a click turns each off and on again",
+            shown0 == (true, true) && off && shown1 == (false, false) && Sim.TownDecorAuto && Sim.DogAlarm && Hud.Town.Switches == (true, true),
+            $"shown {shown0} → {shown1} → {Hud.Town.Switches}; off in the sim {off}, on again {Sim.TownDecorAuto && Sim.DogAlarm}");
         // (the tab is laid out again as things change: what a button said is read before it is pressed)
         var put = Buttons(kind.Name).Find(b => b.Text.StartsWith("Поставить"));
         string putText = put?.Text;

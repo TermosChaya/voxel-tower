@@ -22,6 +22,10 @@ public partial class TownPanel : VBoxContainer
     Main _m;
     Label _income, _standing, _advice, _captains;
     VBoxContainer _rows;
+    /// <summary>The town's switches: it furnishes itself; the yard dog raises the alarm.</summary>
+    Medallion _decor, _dog;
+    /// <summary>Whether the town furnishes itself and the dog raises the alarm, as the switches show (for the self-test).</summary>
+    public (bool decor, bool dog) Switches => (_decor.Lit, _dog.Lit);
     string _key = "";
     double _next;
 
@@ -47,6 +51,16 @@ public partial class TownPanel : VBoxContainer
         _advice = Hud.Text("", Ornament.Serif, 13, Ornament.BronzeLight, wrap: true);
         _advice.CustomMinimumSize = new Vector2(Width - 24, 0);
         AddChild(_advice);
+        // the town's switches, lit while on
+        var switches = new HBoxContainer();
+        switches.AddThemeConstantOverride("separation", 8);
+        _decor = new Medallion(Icons.Of("candle-light"), "") { CustomMinimumSize = new Vector2(36, 36) };
+        _decor.Clicked += () => ToggleSwitch(0);
+        _dog = new Medallion(Icons.Of("sniffing-dog"), "") { CustomMinimumSize = new Vector2(36, 36) };
+        _dog.Clicked += () => ToggleSwitch(1);
+        switches.AddChild(_decor);
+        switches.AddChild(_dog);
+        AddChild(switches);
         _rows = new VBoxContainer();
         _rows.AddThemeConstantOverride("separation", 7);
         AddChild(_rows);
@@ -77,8 +91,26 @@ public partial class TownPanel : VBoxContainer
         return key.ToString();
     }
 
+    /// <summary>A switch of the town turned over, as a click on it does: 0 the town furnishing itself, 1 the dog raising the alarm.</summary>
+    public void ToggleSwitch(int which)
+    {
+        if (which == 0) _m.Sim.TownDecorAuto = !_m.Sim.TownDecorAuto;
+        else _m.Sim.DogAlarm = !_m.Sim.DogAlarm;
+        Refresh();
+    }
+
     public void Refresh()
     {
+        // (the switches are cheap: set each time, whether or not the rest is laid out again)
+        var s = _m.Sim;
+        _decor.Lit = s.TownDecorAuto;
+        _decor.TooltipText = s.TownDecorAuto
+            ? $"Город обставляется сам: включено\nКогда жилых домов {Sim.TownDecorHouses} и больше, рабочие сами ставят между домами скамьи, фонари, клумбы, колодец и другое из «Обустройства», если другой работы мало и запасов хватает. Щелчок выключает."
+            : "Город обставляется сам: выключено\nРабочие сами ничего не ставят. Щелчок включает.";
+        _dog.Lit = s.DogAlarm;
+        _dog.TooltipText = s.DogAlarm
+            ? $"Пёс поднимает тревогу: включено\nДворовый пёс лает на орду с {Sim.DogBarkAt} м. Если налётчик подошёл ближе {Sim.DogAlarmAt} м, на третий лай пёс поднимает тревогу, и рабочие уходят в убежища. Щелчок выключает."
+            : "Пёс поднимает тревогу: выключено\nПёс только лает на орду. Щелчок включает.";
         string key = Key();
         if (key == _key) return;
         _key = key;

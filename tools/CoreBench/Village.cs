@@ -237,6 +237,24 @@ static class VillageBench
             u.Dead = true; u.DiedAt = -999;
         }
         check("every house is still walked into with the town furnished", walkedAfter == houses.Count, $"{walkedAfter} of {houses.Count}");
+
+        // ---- the switch in the town's tab: on, the town sets things out by itself as time goes; off, nothing; both
+        // switches (and the yard dog's) are kept in a save, and a save of before reads them as on
+        sim.Stock[Stockpile.Wood] += 100 * VoxelWorld.PerM3; sim.Stock[Stockpile.Stone] += 100 * VoxelWorld.PerM3;
+        int on0 = sim.TownDecorSet;
+        for (int t = 0; t < 120 * 20; t++) { sim.Step(.05f); if (t % 200 == 0) sim.CompleteAll(); }
+        int setOn = sim.TownDecorSet - on0;
+        sim.TownDecorAuto = false; sim.DogAlarm = false;
+        int off0 = sim.TownDecorSet;
+        for (int t = 0; t < 120 * 20; t++) { sim.Step(.05f); if (t % 200 == 0) sim.CompleteAll(); }
+        int setOff = sim.TownDecorSet - off0;
+        var back = ArchitectBench.Reload(sim);
+        bool keptOff = !back.TownDecorAuto && !back.DogAlarm;
+        sim.TownDecorAuto = true; sim.DogAlarm = true;
+        var back2 = ArchitectBench.Reload(sim);
+        check("the town's switch: on, the town sets things out by itself as the minutes go; off, nothing; both of the town's switches are kept in a save",
+            setOn > 0 && setOff == 0 && keptOff && back2.TownDecorAuto && back2.DogAlarm,
+            $"set out in 2 min on {setOn}, off {setOff}; read back off {keptOff}, on again {back2.TownDecorAuto && back2.DogAlarm}");
     }
 
     /// <summary>A house's lamp or chimney (a torch or a chimney anchored in a house drawn with the rectangle).</summary>

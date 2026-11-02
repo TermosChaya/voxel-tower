@@ -20,6 +20,10 @@ public sealed partial class Sim
     public bool TownBeasts;
     /// <summary>Barks at the horde, hens scattered, alarms the dog raised, since the start (the bench asks).</summary>
     public int Barks, Scattered, DogAlarms;
+    /// <summary>Whether the yard dog raises the alarm at a raider near (the switch in the town's tab, on unless turned off); off, it only barks.</summary>
+    public bool DogAlarm = true;
+    /// <summary>How far off the yard dog barks at the horde, and how near a raider has to be for its third bark to raise the alarm, metres.</summary>
+    public const int DogBarkAt = 40, DogAlarmAt = 25;
 
     Random _tameRng;
     Random _tame => _tameRng ??= new Random(Site.KeepX * 31 + Site.KeepZ * 7 + 5);
@@ -200,7 +204,7 @@ public sealed partial class Sim
     /// </summary>
     void DogTick(Unit u, float dt)
     {
-        var raider = Nearest(u, Team.Horde, 40 * VoxelWorld.PerMetre);
+        var raider = Nearest(u, Team.Horde, DogBarkAt * VoxelWorld.PerMetre);
         if (raider != null && !raider.Bound && !raider.Envoy && !raider.Inside)
         {
             u.Facing = MathF.Atan2(raider.Z - u.Z, raider.X - u.X);
@@ -212,7 +216,7 @@ public sealed partial class Sim
                 var was = _barkedAt.GetValueOrDefault(u.Id);
                 int n = was.at == raider.Id ? was.n + 1 : 1;
                 _barkedAt[u.Id] = (raider.Id, n);
-                if (n >= 3 && !Alarm && Dist(u, raider) < 25 * VoxelWorld.PerMetre)
+                if (n >= 3 && DogAlarm && !Alarm && Dist(u, raider) < DogAlarmAt * VoxelWorld.PerMetre)
                 {
                     DogAlarms++;
                     Say("Пёс лает на орду: тревога.", 2, u);

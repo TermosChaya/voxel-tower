@@ -15,8 +15,10 @@ namespace VoxelTower.Core;
 public sealed partial class Sim
 {
     double _nextTownDecor;
-    /// <summary>Whether the town sets things out by itself (on unless turned off).</summary>
+    /// <summary>Whether the town sets things out by itself (the switch in the town's tab, on unless turned off).</summary>
     public bool TownDecorAuto = true;
+    /// <summary>The houses lived in that make a town that furnishes itself.</summary>
+    public const int TownDecorHouses = 3;
     /// <summary>Things the town set out by itself this game (the tests ask).</summary>
     public int TownDecorSet;
     bool _townDecorSaid;
@@ -41,7 +43,7 @@ public sealed partial class Sim
         // (a town of houses lived in: three at least, drawn by the player, the town's buildings by themselves not a town)
         int houses = 0;
         foreach (var z in Zones) if (LivedIn(z)) houses++;
-        if (houses < 3) return false;
+        if (houses < TownDecorHouses) return false;
         var have = new Dictionary<DecorKind, int>();
         foreach (var s in Yards) have[s.Kind] = have.GetValueOrDefault(s.Kind) + 1;
         bool Has(string kind) => Buildings.Exists(b => b.Ready && b.Kind == kind);
