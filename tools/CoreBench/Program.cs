@@ -2483,10 +2483,17 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--thieves")
 
     // a worker of ours alone in the field: a thief beats it down, binds it and leads it off; cut down, it lets it go
     var lone = simH.Spawn(Kinds.Worker, simH.NearestStand((int)gxH - 420, (int)gzH - 120, 4));
+    // (worn out, a third of itself left: which of the two lands the first blows is the dice's, and with the thief
+    // sent reeling at the first exchange the worker gets away; what is looked at here is the binding and the leading)
+    lone.Hp = lone.MaxHp / 3;
     var snatcher = simH.Spawn(Kinds.Thief, simH.NearestStand((int)lone.X - 40, (int)lone.Z, 2));
     snatcher.Band = null;
     double boundAt = -1;
-    for (int t = 0; t < 60 && boundAt < 0; t++) { RunH(.5); if (lone.Captor == snatcher) boundAt = (t + 1) * .5; }
+    for (int t = 0; t < 60 && boundAt < 0; t++)
+    {
+        RunH(.5);
+        if (lone.Captor == snatcher) boundAt = (t + 1) * .5;
+    }
     float led0 = lone.X;
     RunH(4);
     float ledTo = lone.X;
@@ -6326,6 +6333,9 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troves") TrovesBench
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bestiary") BestiaryBench.Run(Check);
 // the horde's homeland a bog: its zones on the big map, the map of before the same in all else, a bog valley (BogBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bog") BogBench.Run(Check);
+// how our people walk: the pace on each kind of ground, a road kept to, gates taken rather than ladders and walls,
+// a bridge rather than the water (Walkers.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--walkers") WalkersBench.Run(Check);
 // every side of a valley reaches the citadel: the river's valley on a dozen seeds, the other kinds on three (ReachBench.cs)
 if (args.Length == 0 || args[0] == "--reach") ReachBench.Run(Check);
 // every valley is made: each kind by itself on many seeds, a share of two big maps' cells (ValleysBench.cs)

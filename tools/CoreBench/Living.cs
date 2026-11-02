@@ -127,7 +127,9 @@ static class LivingBench
         Run(40);
         Print("night");
         int asleep = workers.Count(u => u.Pastime == Pastime.Sleep || u.Pastime == Pastime.Stroll && u.After == Pastime.Sleep);
-        int inBunks = folk.Count(u => u.Pastime == Pastime.Sleep && u.Berth is { Key: >= 0 });
+        // (in a bunk or on the way to the one it took, as the asleep are counted: slower over the turf now than along the
+        // ways, two of the five were still crossing the yard to theirs at forty seconds)
+        int inBunks = folk.Count(u => (u.Pastime == Pastime.Sleep || u.Pastime == Pastime.Stroll && u.After == Pastime.Sleep) && u.Berth is { Key: >= 0 });
         int soldiersAsleep = soldiers.Count(u => u.Pastime == Pastime.Sleep), watching = soldiers.Count(u => u.Pastime is Pastime.Watch or Pastime.Look);
         int bunks = dwelling?.Beds ?? 0;
         check("a town's night: the workers go to bed, in the bunks of the dwelling while there are bunks, every other soldier on watch",

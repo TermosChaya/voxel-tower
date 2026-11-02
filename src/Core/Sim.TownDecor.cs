@@ -29,7 +29,8 @@ public sealed partial class Sim
         if (Time < _nextTownDecor) return;
         // (not of the sim's dice: a thing set out or not changes nothing else drawn from them)
         _nextTownDecor = Time + 30 + Hash.H3((int)Time, 61, 7) * 15;
-        if (!TownDecorAuto || Alarm || Raids.Active || Orders.Total > 60) return;
+        // (not at night either: the town's people asleep, nothing of the town's own is set out to keep them up)
+        if (!TownDecorAuto || Alarm || Raids.Active || Orders.Total > 60 || !QuietLife && Bedtime) return;
         if (Stock[Stockpile.Wood] < 12 * VoxelWorld.PerM3 || Stock[Stockpile.Stone] < 12 * VoxelWorld.PerM3) return;
         SetOutTownThing();
     }
@@ -64,6 +65,7 @@ public sealed partial class Sim
             if (have.GetValueOrDefault(k) >= n) break;
             if (TownSpot(k, out int x, out int z, out int rot) && PlaceDecor(k, x, z, rot) == null)
             {
+                Yards[^1].ByTown = true;
                 TownDecorSet++;
                 if (!_townDecorSaid)
                 {

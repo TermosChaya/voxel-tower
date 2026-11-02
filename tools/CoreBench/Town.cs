@@ -56,7 +56,10 @@ static class TownBench
                 if (hi - lo <= 2 && !site.Forbidden(x, z)) spots.Add((x, z));
             }
         if (spots.Count < 3) { check("level ground for the town", false, $"{spots.Count} spots"); return; }
-        for (int i = 0; i < 6; i++) sim.Spawn(Kinds.Worker, sim.Gate);
+        // (the town's own streets are left out of it, Sim.TownWays.cs: idle, the workers here go about the buildings and
+        // the street, which is what is looked at; the streets have their own bench, --walkers)
+        for (int i = 0; i < 6; i++) sim.Spawn(Kinds.Worker, sim.Gate).Priority[(int)WorkKind.Town] = 0;
+        foreach (var u in sim.Units) if (u.T == Kinds.Worker) u.Priority[(int)WorkKind.Town] = 0;
         sim.Stock[Stockpile.Wood] += 800.0 * VoxelWorld.PerM3;
         sim.Stock[Stockpile.Stone] += 800.0 * VoxelWorld.PerM3;
         // (earth too: the daub of a timber-framed look and the tiles are of it)
@@ -274,7 +277,9 @@ static class TownBench
                 for (int y = pg + 4; y < pg + 12; y++) w.Set(x, y, z, Mat.Air);
             }
         for (int x = 0; x < 6; x++) for (int z = 0; z < 6; z++) { w.Set(px + x, pg + 4, pz + z, Mat.Thatch); w.Set(px + 9 + x, pg + 4, pz + z, Mat.Tile); }
-        bool sparkThatch = sim.Ignite(px, pg + 4, pz), sparkTile = sim.Ignite(px + 9, pg + 4, pz);
+        // (two sparks on the thatch, in its middle and at a corner: whether one at the corner caught either of its two
+        // neighbours before it burnt out was the dice's, and with hides known for our roofs one time in eight it did not)
+        bool sparkThatch = sim.Ignite(px + 2, pg + 4, pz + 2) | sim.Ignite(px + 5, pg + 4, pz + 5), sparkTile = sim.Ignite(px + 9, pg + 4, pz);
         // (how far the fire got through the thatch at its height: a worker who happened to be near may run to beat it
         // out, as the town's other works had them about, and what he beat out is no less caught)
         int caught = 0;
@@ -307,7 +312,9 @@ static class TownBench
         var idle = sim.Units.Where(u => !u.Dead && u.T == Kinds.Worker).ToList();
         int atStreet = 0, facing = 0;
         var doing = new HashSet<Pastime>();
-        for (int i = 0; i < 160 && atStreet < 3; i++)
+        // (till three are at it and all of them stand at their places: slower over the turf now than along the ways, one
+        // counted at its stall while still on the way to it was counted not standing there)
+        for (int i = 0; i < 160 && (atStreet < 3 || facing < atStreet); i++)
         {
             Run(1);
             atStreet = facing = 0;

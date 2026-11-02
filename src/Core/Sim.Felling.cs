@@ -584,9 +584,11 @@ public sealed partial class Sim
             bool lanes = false;
             foreach (var o in Dangers) if (o != d && (o.DX != 0 || o.DZ != 0)) { lanes = true; break; }
             bool Other(int c) { var (px, py, pz) = Nav.Feet(c); foreach (var o in Dangers) if (o != d && (o.DX != 0 || o.DZ != 0) && o.Has(px, py, pz, r)) return true; return false; }
-            var path = Paths.Find(u.Cell, c => { var (px, py, pz) = Nav.Feet(c); return !d.Has(px, py, pz, r + 2) && (!lanes || !Other(c)); }, c => 0, MoverOf(u), 2500, gates: true,
+            // (by any way out, up a ledge or down off one: there is no time to look for the stair, Pathing.cs, Careful)
+            var flee = Careless(MoverOf(u));
+            var path = Paths.Find(u.Cell, c => { var (px, py, pz) = Nav.Feet(c); return !d.Has(px, py, pz, r + 2) && (!lanes || !Other(c)); }, c => 0, flee, 2500, gates: true,
                 lane: lanes ? c => Other(c) ? 12 : 0 : null);
-            path ??= Paths.Find(u.Cell, c => { var (px, py, pz) = Nav.Feet(c); return !d.Has(px, py, pz, r + 2); }, c => 0, MoverOf(u), 2500, gates: true);
+            path ??= Paths.Find(u.Cell, c => { var (px, py, pz) = Nav.Feet(c); return !d.Has(px, py, pz, r + 2); }, c => 0, flee, 2500, gates: true);
             if (path == null) { u.State = UnitState.Idle; return true; }
             u.Path = path; u.PathI = 0;
         }

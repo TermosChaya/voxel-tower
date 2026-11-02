@@ -148,7 +148,7 @@ public sealed partial class Sim
         // (something built over the place since: none of it)
         if (c < 0 || CellsApart(c, Nav.CellOf((int)spot.X, (int)spot.Y, (int)spot.Z)) > 1) return false;
         int ci = Nav.I(c), ck = Nav.K(c);
-        var path = c == u.Cell ? new List<int>() : Paths.Find(u.Cell, x => x == c, x => H(x, ci, ck), u.T.Move, 8000, gates: true);
+        var path = c == u.Cell ? new List<int>() : ShortWay(u, u.Cell, x => x == c, x => H(x, ci, ck), 8000);
         if (path == null || path.Exists(x => Nav.Ladder[x] != 0)) return false;
         Busy(u);
         u.Path = path.Count > 0 ? path : null; u.PathI = 0;

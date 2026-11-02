@@ -14,6 +14,8 @@ public sealed class DecorSite
     public Fixture Light;
     /// <summary>Its voxels as they were set out.</summary>
     public VoxelList Voxels;
+    /// <summary>Set out by the town itself (Sim.TownDecor.cs), not by the player: no work to keep anyone up for; not saved.</summary>
+    public bool ByTown;
 }
 
 /// <summary>A place to sit: on a bench, its seat's height over the floor, the way one faces, and who sits there.</summary>
@@ -185,7 +187,7 @@ public sealed partial class Sim
         int c = NearestStand((int)best.X, (int)best.Z, u.T.Move.Height);
         if (c < 0) return false;
         int ci = Nav.I(c), ck = Nav.K(c);
-        var path = c == u.Cell ? new List<int>() : Paths.Find(u.Cell, x => x == c, x => H(x, ci, ck), u.T.Move, 1500, gates: true);
+        var path = c == u.Cell ? new List<int>() : ShortWay(u, u.Cell, x => x == c, x => H(x, ci, ck), 1500);
         if (path == null) return false;
         u.Path = path.Count > 0 ? path : null; u.PathI = 0;
         u.Pastime = Pastime.Stroll; u.After = Pastime.Sit; u.PastimeUntil = Time + 40;
