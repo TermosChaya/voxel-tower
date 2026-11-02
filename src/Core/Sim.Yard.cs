@@ -122,7 +122,8 @@ public sealed partial class Sim
         var (lx, lz) = Yard.Turn(at.dx - .5f, at.dz - .5f, s.Rot);
         var f = new Fixture
         {
-            Kind = s.Kind == DecorKind.Campfire ? FixtureKind.Campfire : FixtureKind.Brazier,
+            // (a lamp's or a shrine's candle is a torch's flame: it lights the night, nobody warms at it, it smokes none)
+            Kind = s.Kind == DecorKind.Campfire ? FixtureKind.Campfire : s.Kind is DecorKind.LampPost or DecorKind.Shrine ? FixtureKind.Torch : FixtureKind.Brazier,
             LX = s.X + lx + .5f, LY = s.Y + at.dy, LZ = s.Z + lz + .5f,
         };
         // it stands while its flames do, and while the embers under them are ours and stand
@@ -246,7 +247,7 @@ public sealed partial class Sim
             // its fire, read back with the rest of the fixtures (it is anchored on its embers)
             var embers = new HashSet<int>();
             for (int j = 0; j < s.Voxels.Count; j++) if (s.Voxels.M(j) == Mat.Ember) embers.Add(WaterPlanner.Pack(s.Voxels.X(j), s.Voxels.Y(j), s.Voxels.Z(j)));
-            s.Light = Fixtures.Find(f => f.Kind is FixtureKind.Campfire or FixtureKind.Brazier && embers.Contains(f.Anchor));
+            s.Light = Fixtures.Find(f => f.Kind is FixtureKind.Campfire or FixtureKind.Brazier or FixtureKind.Torch && embers.Contains(f.Anchor));
             s.Ready = s.Light != null;
             Yards.Add(s);
         }

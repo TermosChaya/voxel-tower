@@ -4,14 +4,18 @@ using System.Collections.Generic;
 namespace VoxelTower.Core;
 
 /// <summary>What the «Обустройство» tool sets out in the settlement.</summary>
-public enum DecorKind : byte { Campfire, Bench, Torch, Brazier, Well, Woodpile, Cart, Barrels, Fence, Signpost, FlowerBed }
+public enum DecorKind : byte { Campfire, Bench, Torch, Brazier, Well, Woodpile, Cart, Barrels, Fence, Signpost, FlowerBed,
+    LampPost, Pots, HayBales, Trough, Stall, Shrine, NoticeBoard, Coop, Barrow, Statue }
 
 /// <summary>
 /// The small things a settlement is furnished with between its houses, each a little figure of voxels the workers put
 /// together from the stores like anything else: a campfire in a ring of stones with its logs and flames, a bench, a
 /// torch on a pole, a brazier on a stone pedestal, a well with its roof and bucket, a woodpile, a cart, barrels and a
-/// crate, a length of fence, a signpost, a flower bed. Laid out a quarter turn at a time about the spot clicked, on its
-/// floor; what makes light, smoke or a seat of it is told by <see cref="LightAt"/> and <see cref="Seats"/>.
+/// crate, a length of fence, a signpost, a flower bed; a lamp on a post, pots of flowers, bales of hay, a water trough,
+/// a market stall under a striped awning, a wayside shrine with its candle, a notice board, a hen coop, a barrow, a
+/// statue on a plinth. Laid out a quarter turn at a time about the spot clicked, on its floor; what makes light, smoke
+/// or a seat of it is told by <see cref="LightAt"/> and <see cref="Seats"/>. The town sets some out by itself as it
+/// grows (Sim.TownDecor.cs).
 /// </summary>
 public static class Yard
 {
@@ -21,7 +25,10 @@ public static class Yard
     {
         DecorKind.Campfire => "Костёр", DecorKind.Bench => "Скамья", DecorKind.Torch => "Факел на шесте", DecorKind.Brazier => "Жаровня",
         DecorKind.Well => "Колодец", DecorKind.Woodpile => "Поленница", DecorKind.Cart => "Телега", DecorKind.Barrels => "Бочки и ящик",
-        DecorKind.Fence => "Изгородь", DecorKind.Signpost => "Указатель", _ => "Клумба",
+        DecorKind.Fence => "Изгородь", DecorKind.Signpost => "Указатель", DecorKind.LampPost => "Фонарь", DecorKind.Pots => "Цветы в горшках",
+        DecorKind.HayBales => "Тюки сена", DecorKind.Trough => "Поилка", DecorKind.Stall => "Прилавок", DecorKind.Shrine => "Придорожный крест",
+        DecorKind.NoticeBoard => "Доска объявлений", DecorKind.Coop => "Курятник", DecorKind.Barrow => "Тачка", DecorKind.Statue => "Статуя",
+        _ => "Клумба",
     };
 
     /// <summary>What it is for, for its tooltip.</summary>
@@ -37,6 +44,16 @@ public static class Yard
         DecorKind.Barrels => "Две бочки и ящик.",
         DecorKind.Fence => "Звено изгороди, 2 м.",
         DecorKind.Signpost => "Столб с указателями.",
+        DecorKind.LampPost => "Фонарь на столбе. Светит ночью. Дома рядом платят больше подати.",
+        DecorKind.Pots => "3 глиняных горшка с цветами. Дома рядом платят больше подати.",
+        DecorKind.HayBales => "3 тюка сена.",
+        DecorKind.Trough => "Каменная поилка.",
+        DecorKind.Stall => "Прилавок под полосатым навесом, на нём товар.",
+        DecorKind.Shrine => "Каменный столб с крестом под кровлей, свеча в нише. Светит ночью. Дома рядом платят больше подати.",
+        DecorKind.NoticeBoard => "Доска под навесом, на ней листы.",
+        DecorKind.Coop => "Курятник на ножках со сходнями.",
+        DecorKind.Barrow => "Тачка с камнями.",
+        DecorKind.Statue => "Статуя на постаменте. Дома рядом платят больше подати.",
         _ => "Грядка цветов в каменном бордюре. Дома рядом платят больше подати.",
     };
 
@@ -162,6 +179,113 @@ public static class Yard
                 for (int x = -6; x <= -1; x++) { P(x, 8, 0, Mat.Bench); P(x, 9, 0, Mat.Bench); }
                 P(-7, 9, 0, Mat.Bench);
                 break;
+            case DecorKind.LampPost:
+                for (int z = -1; z <= 1; z++) for (int x = -1; x <= 1; x++) P(x, 0, z, Mat.StoneDark);
+                for (int y = 1; y <= 17; y++) P(0, y, 0, Mat.Wood);
+                // the lantern on top of the post: an iron floor, iron at its corners, its candle on an ember of a wick, an
+                // iron cap and a finial (laid from the bottom up, as the workers lay everything)
+                for (int z = -1; z <= 1; z++) for (int x = -1; x <= 1; x++) { P(x, 18, z, Mat.Iron); P(x, 21, z, Mat.Iron); }
+                foreach (int x in new[] { -1, 1 }) foreach (int z in new[] { -1, 1 }) for (int y = 19; y <= 20; y++) P(x, y, z, Mat.Iron);
+                P(0, 19, 0, Mat.Ember); P(0, 20, 0, Mat.Flame);
+                P(0, 22, 0, Mat.Iron);
+                break;
+            case DecorKind.Pots:
+                foreach (var (cx, s0, h) in new[] { (-4, 3, 3), (0, 2, 2), (3, 3, 4) })
+                {
+                    for (int y = 0; y < h; y++)
+                        for (int z = 0; z < s0; z++)
+                            for (int x = cx; x < cx + s0; x++)
+                            {
+                                // the rim a little wider than the pot's foot
+                                if (y == 0 && s0 == 3 && (x == cx || x == cx + 2) && (z == 0 || z == 2)) continue;
+                                P(x, y, z - s0 / 2, Mat.Tile);
+                            }
+                    for (int z = 0; z < s0; z++)
+                        for (int x = cx; x < cx + s0; x++)
+                            P(x, h, z - s0 / 2, H(x, h, z, 6, .5) ? Mat.FlowerRed : cx == 0 ? Mat.FlowerWhite : Mat.Flower);
+                }
+                break;
+            case DecorKind.HayBales:
+                foreach (var (x0, y0, z0) in new[] { (-5, 0, -2), (0, 0, -2), (-3, 3, -2) })
+                    for (int y = y0; y < y0 + 3; y++)
+                        for (int z = z0; z < z0 + 4; z++)
+                            for (int x = x0; x < x0 + 5; x++) P(x, y, z, Mat.Hay);
+                break;
+            case DecorKind.Trough:
+                for (int x = -5; x <= 5; x++)
+                    for (int z = -2; z <= 2; z++)
+                    {
+                        bool wall = x == -5 || x == 5 || z == -2 || z == 2;
+                        P(x, 0, z, Mat.Stone);
+                        if (wall) { P(x, 1, z, Mat.Stone); P(x, 2, z, H(x, 2, z, 7, .4) ? Mat.StoneDark : Mat.Stone); }
+                        else P(x, 1, z, Mat.StoneDark);
+                    }
+                break;
+            case DecorKind.Stall:
+                foreach (int x in new[] { -6, -2, 2, 6 }) foreach (int z in new[] { -3, 3 }) for (int y = 0; y <= 12; y++) P(x, y, z, Mat.Wood);
+                // the counter along the front, and the goods on it
+                for (int x = -5; x <= 5; x++) { P(x, 4, 3, Mat.Table); P(x, 5, 3, Mat.Table); for (int y = 0; y < 4; y++) P(x, y, 3, Mat.Wood); }
+                for (int x = -4; x <= -2; x++) { P(x, 6, 3, Mat.Sack); P(x, 7, 3, Mat.Sack); }
+                for (int x = 0; x <= 1; x++) for (int y = 6; y <= 7; y++) P(x, y, 3, y == 7 ? Mat.CrateEdge : Mat.Crate);
+                P(3, 6, 3, Mat.Cask); P(3, 7, 3, Mat.Hoop); P(4, 6, 3, Mat.Cask);
+                // the awning: a striped roof of straw and fired clay falling to the front, its beams on the posts
+                for (int x = -6; x <= 6; x++) { P(x, 13, -3, Mat.Wood); P(x, 13, 3, Mat.Wood); }
+                for (int x = -6; x <= 6; x++)
+                    for (int z = -4; z <= 4; z++)
+                        if (z != -3 && z != 3) P(x, z < 0 ? 14 : 13, z, ((x + 6) / 2) % 2 == 0 ? Mat.Thatch : Mat.Tile);
+                for (int x = -6; x <= 6; x++) { P(x, 14, -3, ((x + 6) / 2) % 2 == 0 ? Mat.Thatch : Mat.Tile); P(x, 14, 3, ((x + 6) / 2) % 2 == 0 ? Mat.Thatch : Mat.Tile); }
+                break;
+            case DecorKind.Shrine:
+                for (int z = -1; z <= 1; z++) for (int x = -1; x <= 1; x++) for (int y = 0; y <= 10; y++)
+                    // a niche facing the way, the candle in it
+                    if (!(z == 1 && x == 0 && y is >= 6 and <= 8)) P(x, y, z, y == 0 ? Mat.StoneDark : Mat.StoneLight);
+                P(0, 6, 1, Mat.Ember); P(0, 7, 1, Mat.Flame);
+                // its little roof, and the cross over it
+                for (int x = -2; x <= 2; x++) { P(x, 11, -2, Mat.Wood); P(x, 11, 2, Mat.Wood); for (int z = -1; z <= 1; z++) P(x, 12, z, Mat.Wood); }
+                for (int x = -2; x <= 2; x++) P(x, 11, 0, Mat.Wood);
+                for (int y = 13; y <= 16; y++) P(0, y, 0, Mat.Iron);
+                P(-1, 15, 0, Mat.Iron); P(1, 15, 0, Mat.Iron);
+                break;
+            case DecorKind.NoticeBoard:
+                foreach (int x in new[] { -5, 0, 5 }) for (int y = 0; y <= 13; y++) P(x, y, 0, Mat.Wood);
+                for (int x = -4; x <= 4; x++) for (int y = 5; y <= 11; y++) P(x, y, 0, Mat.Table);
+                // the sheets pinned to it
+                foreach (var (x, y) in new[] { (-3, 9), (-2, 9), (-3, 8), (-2, 8), (1, 10), (2, 10), (1, 9), (2, 9), (1, 8), (-1, 6), (0, 6), (3, 7) })
+                    P(x, y, 1, Mat.Canvas);
+                for (int x = -6; x <= 6; x++) { P(x, 14, 0, Mat.Wood); P(x, 13, -1, Mat.Wood); P(x, 13, 1, Mat.Wood); }
+                break;
+            case DecorKind.Coop:
+                foreach (int x in new[] { -3, 3 }) foreach (int z in new[] { -2, 2 }) for (int y = 0; y <= 2; y++) P(x, y, z, Mat.Wood);
+                for (int x = -3; x <= 3; x++)
+                    for (int z = -2; z <= 2; z++)
+                        for (int y = 3; y <= 7; y++)
+                        {
+                            bool shell = x == -3 || x == 3 || z == -2 || z == 2 || y == 3;
+                            // its little door in the front
+                            if (!shell || z == 2 && x is >= -1 and <= 0 && y is >= 4 and <= 5) continue;
+                            P(x, y, z, Mat.Wood);
+                        }
+                // its roof of shingles, the ridge a course over the eaves (laid on them: nothing of a roof hangs by a corner)
+                for (int x = -4; x <= 4; x++) for (int z = -3; z <= 3; z++) { P(x, 8, z, Mat.Shingle); if (Math.Abs(z) <= 1) P(x, 9, z, Mat.Shingle); }
+                // the ramp down from the door
+                for (int st = 0; st < 4; st++) for (int y = 0; y <= 3 - st; y++) { P(-1, y, 3 + st, Mat.Bench); P(0, y, 3 + st, Mat.Bench); }
+                break;
+            case DecorKind.Barrow:
+                // the wheel at the front, the tray behind it on its legs, the two handles out behind
+                for (int y = 0; y <= 3; y++) for (int x = 3; x <= 6; x++) if ((x - 4.5) * (x - 4.5) + (y - 1.5) * (y - 1.5) < 4.2) P(x, y, 0, (x - 4.5) * (x - 4.5) + (y - 1.5) * (y - 1.5) > 1.6 ? Mat.Hoop : Mat.Cask);
+                for (int x = -3; x <= 3; x++) for (int z = -2; z <= 2; z++) { P(x, 2, z, Mat.Table); if (Math.Abs(z) == 2 || x == -3 || x == 3) P(x, 3, z, Mat.Table); }
+                // (the handles down to the ground behind, resting there as a barrow put down does)
+                foreach (int z in new[] { -2, 2 }) { P(-3, 0, z, Mat.Wood); P(-3, 1, z, Mat.Wood); for (int x = -7; x <= -4; x++) P(x, 1, z, Mat.Wood); P(-8, 0, z, Mat.Wood); P(-8, 1, z, Mat.Wood); }
+                for (int x = -2; x <= 1; x++) for (int z = -1; z <= 1; z++) if (H(x, 3, z, 9, .7)) P(x, 3, z, Mat.Hewn);
+                break;
+            case DecorKind.Statue:
+                for (int y = 0; y <= 4; y++) for (int z = -2; z <= 2; z++) for (int x = -2; x <= 2; x++)
+                    if (y < 4 || Math.Abs(x) < 2 && Math.Abs(z) < 2) P(x, y, z, y == 0 || y == 4 ? Mat.StoneDark : Mat.StoneLight);
+                // a figure in a long robe, its arms at its sides, a staff in its hand
+                for (int y = 5; y <= 12; y++) for (int z = -1; z <= 0; z++) for (int x = -1; x <= 1; x++) if (y <= 10 || x == 0) P(x, y, z, Mat.Stone);
+                for (int y = 13; y <= 14; y++) for (int z = -1; z <= 0; z++) for (int x = -1; x <= 0; x++) P(x, y, z, Mat.Stone);
+                for (int y = 5; y <= 15; y++) P(2, y, 0, Mat.StoneDark);
+                break;
             default:
                 for (int x = -5; x <= 4; x++)
                     for (int z = -3; z <= 2; z++)
@@ -198,6 +322,8 @@ public static class Yard
         DecorKind.Campfire => (.5f, 2.5f, .5f),
         DecorKind.Torch => (.5f, 18.6f, .5f),
         DecorKind.Brazier => (.5f, 5.6f, .5f),
+        DecorKind.LampPost => (.5f, 20.6f, .5f),
+        DecorKind.Shrine => (.5f, 7.4f, 1.6f),
         _ => null,
     };
 

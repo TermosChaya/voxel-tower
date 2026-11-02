@@ -914,7 +914,7 @@ public sealed partial class Sim
         Mat.IsMasonry(m) || m is Mat.Ruin or Mat.Keep or Mat.DropStone or Mat.Tile or Mat.Slate ? Mat.Rubble
         : Mat.IsIronLeaf(m) ? Mat.Plate
         : m is Mat.Wood or Mat.Deck or Mat.Plank or Mat.TrapDeck or Mat.Stakes or Mat.DropLog or Mat.Shingle or Mat.Thatch or Mat.Scaffold || Mat.Swings(m) ? Mat.Lumber
-        : m is Mat.Rammed or Mat.Daub ? Mat.Soil : m;
+        : m == Mat.Rammed || Mat.IsDaub(m) ? Mat.Soil : m;
 
     /// <summary>Where a falling voxel comes to rest: down its column onto whatever is solid, then off its heap down to a
     /// lower neighbour while there is one two voxels lower (or one lower, half the time), as loose stone runs; (−1, −1, −1)

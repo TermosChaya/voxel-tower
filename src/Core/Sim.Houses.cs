@@ -104,16 +104,18 @@ public sealed partial class Sim
     /// null and <paramref name="over"/> the dwelling under it).
     /// </summary>
     public VoxelList PlanHouseAt(int ax, int az, int bx, int bz, in Stroke st, int doorSide, out Shapes.HouseDoor door, out string why, out VoxelList arched,
-        out (int x0, int z0, int x1, int z1) rect, out int shared, out Zone over) =>
-        PlanHouseAt(ax, az, bx, bz, st, doorSide, out door, out why, out arched, out rect, out shared, out over, out _);
+        out (int x0, int z0, int x1, int z1) rect, out int shared, out Zone over, bool varied = false) =>
+        PlanHouseAt(ax, az, bx, bz, st, doorSide, out door, out why, out arched, out rect, out shared, out over, out _, varied: varied);
 
     /// <summary>
     /// As above, with the doors of the houses beside it that it would wall in (<paramref name="moves"/>: those in a wall
     /// it comes to share, each with where it goes instead). Before a door of a house beside it, not sharing that wall, it
-    /// may not stand at all; nor share a wall whose door has nowhere else to go.
+    /// may not stand at all; nor share a wall whose door has nowhere else to go. A house drawn by the player is
+    /// <paramref name="varied"/>: put up in the look its plot gives it (Sim.HouseLooks.cs), its porch and woodshed with it
+    /// where they have room.
     /// </summary>
     public VoxelList PlanHouseAt(int ax, int az, int bx, int bz, in Stroke st, int doorSide, out Shapes.HouseDoor door, out string why, out VoxelList arched,
-        out (int x0, int z0, int x1, int z1) rect, out int shared, out Zone over, out List<DoorMove> moves, bool lax = false)
+        out (int x0, int z0, int x1, int z1) rect, out int shared, out Zone over, out List<DoorMove> moves, bool lax = false, bool varied = false)
     {
         int x0 = ax, z0 = az, x1 = bx, z1 = bz;
         FitHouse(ref x0, ref z0, ref x1, ref z1, out shared, out over);
@@ -127,7 +129,13 @@ public sealed partial class Sim
         for (int z = z0; z <= z1; z++) if (Site.Forbidden(x0, z) || Site.Forbidden(x1, z)) { why = NoBuildWhy(Site.Forbidden(x0, z) ? x0 : x1, z); return null; }
         why = DoorsInTheWay(rect, out moves);
         if (why != null) return null;
-        return Shapes.House(World, Site, x0, z0, x1, z1, st, 0, doorSide, TakenBesides(x0, z0, x1, z1), shared, out door, out why, out arched, lax);
+        var stroke = st;
+        if (varied && stroke.Look == null && HouseLook(stroke.Mat, x0, z0, x1, z1) is { } look) { stroke.Look = look; stroke.Roof = look.Covering; }
+        var plan = Shapes.House(World, Site, x0, z0, x1, z1, stroke, 0, doorSide, TakenBesides(x0, z0, x1, z1), shared, out door, out why, out arched, lax);
+        // its porch and its woodshed where they have room, clear of the ways and of the doors about it
+        if (plan != null && varied && stroke.Look != null && stroke.Look.Annexes.Length > 0)
+            Annexes(stroke.Look, stroke.Roof, stroke.Mat, rect, door, shared, plan, arched, new List<string>(), dwelling: true);
+        return plan;
     }
 
     /// <summary>Why nothing is built over a column nobody may build on.</summary>

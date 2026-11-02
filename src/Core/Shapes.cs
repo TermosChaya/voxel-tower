@@ -253,7 +253,8 @@ public static class Shapes
     public static bool DoorFree(VoxelWorld w, Site site, HouseDoor d, Func<int, int, int, bool> taken, bool lax)
     {
         int threshold = d.Y - 8, across = d.NX != 0 ? d.Z : d.X;
-        static bool Solid(byte m) => m != Mat.Air && !Mat.Passable[m] && !Mat.IsLeafy(m) || Mat.IsTrunk(m);
+        // (a building's or a house's dressing is in nobody's way: it is taken down when the door is cut, Sim.HouseDress.cs)
+        static bool Solid(byte m) => m != Mat.Air && !Mat.Passable[m] && !Mat.IsLeafy(m) && !Mat.IsDecor[m] || Mat.IsTrunk(m);
         for (int u = -Gateway.Half - 4; u <= Gateway.Half + 4; u++)
             for (int k = 1; k <= 8; k++)
             {
@@ -411,7 +412,7 @@ public static class Shapes
             int x = L.X(i), y = L.Y(i), z = L.Z(i);
             byte m = lintel.Contains(Key(w, x, y, z)) ? Mat.Wood : L.M(i);
             // windows in the outer face of the long walls, over head height, clear of the door and the corners
-            if (m != Mat.Wood || !lintel.Contains(Key(w, x, y, z))) m = Windowed(x, y, z, m, x0, z0, x1, z1, ground, door);
+            if (m != Mat.Wood || !lintel.Contains(Key(w, x, y, z))) m = Windowed(x, y, z, m, x0, z0, x1, z1, ground, door, st.Look?.Shutter ?? 0);
             o.Add(x, y, z, m);
             if (m == Mat.Wood && lintel.Contains(Key(w, x, y, z))) arched.Add(x, y, z, m);
         }
@@ -422,9 +423,9 @@ public static class Shapes
     /// What a voxel of a house's wall is laid as: a window where it is in the outer face of a long wall, three voxels
     /// wide and five high from a metre and a third over the floor (the dark of the room between two shutters, a board
     /// over them), one every two metres along the wall, none within a metre of the door or of the corners; else what
-    /// it was.
+    /// it was. The shutters are painted <paramref name="paint"/> if the house's look has them painted.
     /// </summary>
-    static byte Windowed(int x, int y, int z, byte m, int x0, int z0, int x1, int z1, int ground, HouseDoor door)
+    static byte Windowed(int x, int y, int z, byte m, int x0, int z0, int x1, int z1, int ground, HouseDoor door, byte paint = 0)
     {
         if (m == Mat.Wood && y <= ground) return m;
         bool alongX = x1 - x0 >= z1 - z0;
@@ -438,9 +439,9 @@ public static class Shapes
         int from = l - (l0 + HouseWall + 6);
         if (from < 0 || l > l1 - HouseWall - 6 || from % 16 > 2) return m;
         // the dark of the room between two shutters, a board over them
-        bool glass = from % 16 == 1 && above < 15, stone = Mat.IsMasonry(m) || m is Mat.Rammed or Mat.Daub;
+        bool glass = from % 16 == 1 && above < 15, stone = Mat.IsMasonry(m) || m == Mat.Rammed || Mat.IsDaub(m);
         if (!stone && m != Mat.Wood) return m;
-        return glass ? (stone ? Mat.Window : Mat.WindowLog) : stone ? Mat.Shutter : Mat.ShutterLog;
+        return glass ? (stone ? Mat.Window : Mat.WindowLog) : paint != 0 ? paint : stone ? Mat.Shutter : Mat.ShutterLog;
     }
 
     /// <summary>Whether a house of this outer size can be built: room enough inside to sleep in, and not too wide to floor over.</summary>

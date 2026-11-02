@@ -223,6 +223,13 @@ public static class Mat
     public const byte Scree = 224;
     /// <summary>Pale rock, the lighter of the layers a mountain's rock lies in (MapGen.Mountains.cs): as hard as the dark, and as good stone.</summary>
     public const byte RockPale = 225;
+    /// <summary>
+    /// The washes a house's daub is given, so that a street of houses is not all of one colour (Sim.Houses.cs): white lime,
+    /// yellow ochre, a rose and a grey-blue. Daub all the same, packed of earth.
+    /// </summary>
+    public const byte DaubWhite = 215, DaubOchre = 214, DaubRose = 213, DaubBlue = 212;
+    /// <summary>A house's shutters painted green, red or blue: boards all the same, whatever the wall is of.</summary>
+    public const byte ShutterGreen = 211, ShutterRed = 209, ShutterBlue = 208;
 
     public const int Count = 253;
 
@@ -434,6 +441,11 @@ public static class Mat
         D(Tile, "Черепица", 0x8e3f2a, .18f, MatGroup.Stone, Player); D(Shingle, "Дранка", 0x6e6152, .2f, MatGroup.Wood, Player);
         D(Thatch, "Солома", 0x9a8045, .24f, MatGroup.Wood, Player); D(Slate, "Сланец", 0x3f4656, .14f, MatGroup.Stone, Player);
         D(Daub, "Обмазка", 0xb3a68a, .07f, MatGroup.Earth, Player); D(Bell, "Колокол", 0x8a6a34, .08f, MatGroup.Metal, Player);
+        // the houses' washes and painted shutters (Sim.Houses.cs)
+        D(DaubWhite, "Побелка", 0xd2cbb7, .05f, MatGroup.Earth, Player); D(DaubOchre, "Охра", 0xc09a58, .07f, MatGroup.Earth, Player);
+        D(DaubRose, "Обмазка", 0xb18a79, .07f, MatGroup.Earth, Player); D(DaubBlue, "Обмазка", 0x94a1a8, .06f, MatGroup.Earth, Player);
+        D(ShutterGreen, "Ставни", 0x4e6a43, .14f, MatGroup.Wood, Player); D(ShutterRed, "Ставни", 0x8b3c2e, .14f, MatGroup.Wood, Player);
+        D(ShutterBlue, "Ставни", 0x3f5a7b, .14f, MatGroup.Wood, Player);
         // the map of valleys' ground (Atlas.cs)
         D(Snow, "Снег", 0xe9eef2, .05f, MatGroup.Earth, Natural); D(Sand, "Песок", 0xc6ad78, .12f, MatGroup.Earth, Natural | Earthy);
         D(Wheat, "Нива", 0xc9a23e, .2f, MatGroup.Earth, Natural | Earthy); D(Ash, "Пепел", 0x2f2a2a, .3f, MatGroup.Earth, Natural | Earthy);
@@ -570,6 +582,10 @@ public static class Mat
 
     /// <summary>Laid stone of any shade, or its mortar.</summary>
     public static bool IsMasonry(byte m) => m is Stone or Mortar or StoneDark or StoneLight or StoneWarm or StoneCool;
+    /// <summary>Daub, plain or washed in a colour.</summary>
+    public static bool IsDaub(byte m) => m is Daub or DaubWhite or DaubOchre or DaubRose or DaubBlue;
+    /// <summary>A window's shutters, plain or painted.</summary>
+    public static bool IsShutter(byte m) => m is Shutter or ShutterLog or ShutterGreen or ShutterRed or ShutterBlue;
 
     /// <summary>A voxel of a gate's leaf: shut (ours walk through it), barred, or swinging and open.</summary>
     public static bool IsLeaf(byte m) => m is Gate or GateShut or GateOpen or IronGate or IronGateShut or IronGateOpen;

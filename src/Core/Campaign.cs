@@ -475,7 +475,7 @@ public sealed partial class Campaign
         try
         {
             // (a valley saved before the mountains were massifs is made again with the knolls it was played on)
-            if (save != null) mp.Massifs = save.Massifs;
+            if (save != null) { mp.Massifs = save.Massifs; mp.Traces = save.Traced; }
             var w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
             var site = MapGen.Generate(w, mp);
             w.Compact();

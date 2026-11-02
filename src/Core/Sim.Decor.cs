@@ -6,9 +6,10 @@ namespace VoxelTower.Core;
 /// <summary>
 /// A building's dressing (a torch in a sconce, a banner, a barrel, a crate, sacks); or the fire of a campfire or of a torch
 /// or brazier set out on the ground (Sim.Yard.cs); or a town building's frontage: its sign, its chimney, a thing of its
-/// trade set out before it (Sim.Frontage.cs).
+/// trade set out before it (Sim.Frontage.cs); or a house's: a thing by its door or walls, a box of flowers under a
+/// window, its garden (Sim.HouseDress.cs).
 /// </summary>
-public enum FixtureKind : byte { Torch, Banner, Barrel, Crate, Sacks, Campfire, Brazier, Sign, Chimney, Trade }
+public enum FixtureKind : byte { Torch, Banner, Barrel, Crate, Sacks, Campfire, Brazier, Sign, Chimney, Trade, HouseProp, WindowBox, Garden }
 
 /// <summary>A piece of a building's dressing: what it is, the voxels it is made of, the building voxel it hangs on or stands by.</summary>
 public sealed class Fixture

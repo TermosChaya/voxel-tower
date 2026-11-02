@@ -160,7 +160,8 @@ public sealed partial class Sim
     /// the plan, and what holds as an arch into <paramref name="arched"/>. What has no room is left out, and why goes
     /// into <paramref name="left"/> («навес: мешает дом»).
     /// </summary>
-    void Annexes(Look look, byte covering, byte wallMat, (int x0, int z0, int x1, int z1) rect, Shapes.HouseDoor door, int shared, VoxelList plan, VoxelList arched, List<string> left)
+    void Annexes(Look look, byte covering, byte wallMat, (int x0, int z0, int x1, int z1) rect, Shapes.HouseDoor door, int shared, VoxelList plan, VoxelList arched, List<string> left,
+        bool dwelling = false)
     {
         if (look == null) return;
         var taken = TakenBesides(rect.x0, rect.z0, rect.x1, rect.z1);
@@ -178,7 +179,7 @@ public sealed partial class Sim
             if ((shared & 1 << side) != 0) { left.Add($"{what}: стена общая с соседом"); continue; }
             var part = new VoxelList();
             var partArched = new VoxelList();
-            string why = Annex(a, side, a.Covering != 0 ? a.Covering : covering == 0 ? Mat.Wood : covering, wallMat, rect, door, floor, taken, part, partArched, laid);
+            string why = Annex(a, side, a.Covering != 0 ? a.Covering : covering == 0 ? Mat.Wood : covering, wallMat, rect, door, floor, taken, part, partArched, laid, dwelling);
             if (why != null) { left.Add($"{what}: {why}"); continue; }
             for (int i = 0; i < part.Count; i++) { plan.Add(part.X(i), part.Y(i), part.Z(i), part.M(i)); laid.Add(Key(part.X(i), part.Y(i), part.Z(i))); }
             for (int i = 0; i < partArched.Count; i++) arched.Add(partArched.X(i), partArched.Y(i), partArched.Z(i), partArched.M(i));
@@ -191,7 +192,8 @@ public sealed partial class Sim
     /// One part built on to a building by its side: its ground looked over first (in the valley, about level, nothing
     /// built, no other house, no water), then laid out. Why not, or null.
     /// </summary>
-    string Annex(Annex a, int side, byte covering, byte wallMat, (int x0, int z0, int x1, int z1) rect, Shapes.HouseDoor door, int floor, Func<int, int, int, bool> taken, VoxelList L, VoxelList arched, HashSet<long> laid)
+    string Annex(Annex a, int side, byte covering, byte wallMat, (int x0, int z0, int x1, int z1) rect, Shapes.HouseDoor door, int floor, Func<int, int, int, bool> taken, VoxelList L, VoxelList arched, HashSet<long> laid,
+        bool dwelling = false)
     {
         var (sx, sz) = Shapes.SideNormal(side);
         bool alongX = sz != 0;
@@ -224,6 +226,8 @@ public sealed partial class Sim
                 // (the ground may rise a little into it, its posts and fence set on it; no more)
                 if (g > floor + 6 || g < floor - 12) return "там неровно";
                 if (taken(x, floor + 2, z) || BuildingAt(x, z) is { } other && !(other.X0 == rect.x0 && other.Z0 == rect.z0)) return "мешает дом";
+                // (a house's porch or shed is no part of the street: off the ways and the roads, from before others' doors)
+                if (dwelling && KeptClear(x, z)) return "там проход";
                 for (int y = g; y < floor + 30; y++)
                 {
                     byte m = World.Get(x, y, z);

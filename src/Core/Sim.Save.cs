@@ -17,6 +17,8 @@ public sealed partial class Sim
 {
     /// <summary>20: the bodies sculpted finer, their half-voxels (and so a wounded body's) not what they were.</summary>
     public const int SaveVersion = 77;
+    /// <summary>The bit of a save's byte of the valley's shape that says it was made with the old works in its wild.</summary>
+    public const byte ShapeTraced = 0x40;
     internal static readonly byte[] SaveMagic = { (byte)'S', (byte)'V', (byte)'A', (byte)'L' };
 
     static Dictionary<string, UnitType> _kindByKey;
@@ -45,7 +47,7 @@ public sealed partial class Sim
         // the valley's kind and shape, made again from them with the seed (version 40); its size and the side the horde
         // comes by (version 45). Its shape a byte: 0 the old box, 1 a hexagon, 2 a hexagon whose mountains are massifs
         // (a save of before them has 1 there, and its mountain valley is made again with the knolls it was played on)
-        w.Write((byte)Site.Kind); w.Write(Site.Classic); w.Write((byte)(Site.Hex == null ? 0 : Site.Massifs ? 2 : 1));
+        w.Write((byte)Site.Kind); w.Write(Site.Classic); w.Write((byte)((Site.Hex == null ? 0 : Site.Massifs ? 2 : 1) | (Site.Traced ? ShapeTraced : 0)));
         w.Write(World.SX); w.Write(World.SZ); w.Write((byte)Site.EntrySide);
         // what holds it, and its sides as the map of valleys gave them (version 60)
         w.Write((byte)Site.Holding);
@@ -673,7 +675,7 @@ public sealed class SaveReader : IDisposable
     public readonly uint Seed;
     /// <summary>The valley's kind, whether it keeps the old places, whether it is a hexagon, and whether its mountains were massifs.</summary>
     public readonly ValleyKind Kind;
-    public readonly bool Classic, Hexagon, Massifs;
+    public readonly bool Classic, Hexagon, Massifs, Traced;
     /// <summary>The box the valley was made in, across, and the side the horde comes by.</summary>
     public readonly int SizeX, SizeZ, EntrySide;
     /// <summary>What holds the valley, and its sides as the map of valleys gave them (null when it was made by itself).</summary>
@@ -694,6 +696,8 @@ public sealed class SaveReader : IDisposable
         Seed = R.ReadUInt32();
         Kind = (ValleyKind)R.ReadByte(); Classic = R.ReadBoolean();
         byte shape = R.ReadByte();
+        // (a bit over the shape: the valley made with the old works in its wild, MapGen.Traces.cs)
+        Traced = (shape & Sim.ShapeTraced) != 0; shape = (byte)(shape & ~Sim.ShapeTraced);
         Hexagon = shape != 0; Massifs = shape >= 2;
         SizeX = R.ReadInt32(); SizeZ = R.ReadInt32(); EntrySide = R.ReadByte();
         Holding = (Holding)R.ReadByte();

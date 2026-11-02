@@ -199,10 +199,14 @@ static class RowHousesBench
             movedA >= 1 && oldGateGone && filledA >= openingA * 9 / 10 && gatesA.Count >= 1 && zoneA.Closed && zoneB.Closed && inA && inB && viaA != null && gatesA.Contains(viaA) && viaB != null && sim.DoorsOf(zoneB).Contains(viaB) && zoneA.Beds > 0 && zoneB.Beds > 0,
             $"moved {movedA}, old gate gone {oldGateGone}, its doorway {filledA} of {openingA} laid, A's doors now {gatesA.Count} (sides {sim.DoorSidesOf(zoneA)}); A closed {zoneA.Closed} «{zoneA.Why}», B closed {zoneB.Closed} «{zoneB.Why}»; in A {inA} (gate {viaA?.Id}), in B {inB} (gate {viaB?.Id}); bunks {zoneA.Beds}/{zoneB.Beds}");
 
-        // ---- a door through a long wall, its windows and shutters cut out with the wall (they used to stop it)
+        // ---- a door through a long wall, its windows and shutters cut out with the wall (they used to stop it): one
+        // with no door in it (the moved door may be in the far one, the dressing before a wall no longer in a door's way)
         {
-            int far = sideA ^ 1;
-            var d = Shapes.DoorOn(far, zoneA.X0, zoneA.Z0, zoneA.X1, zoneA.Z1, doorA.Y - 9, zoneA.Depth);
+            // a house of its own for it, away from the row: its door to the south, the new one through its north wall
+            int far = 0;
+            var cplan = sim.PlanHouseAt(spot.x - 108, spot.z - 95, spot.x - 61, spot.z - 60, st, 1, out var doorC, out _, out var archC, out var rectC, out _, out _, out var movesC);
+            if (cplan != null) { sim.PutHouse(cplan, archC, doorC, rectC, movesC); sim.CompleteAll(); for (int i = 0; i < 100; i++) sim.Step(.05f); }
+            var d = cplan == null ? default : Shapes.DoorOn(far, rectC.x0, rectC.z0, rectC.x1, rectC.z1, doorC.Y - 9, doorC.Top);
             var gp = GatePlan.At(w, site, new VoxelHit { X = d.X, Y = d.Y, Z = d.Z, NX = d.NX, NZ = d.NZ }, d.Y - 8, outward: true);
             int panes = 0;
             if (gp != null)

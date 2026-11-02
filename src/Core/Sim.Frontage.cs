@@ -93,7 +93,7 @@ public sealed partial class Sim
         }
         var have = FrontageOf(b);
         foreach (var kit in KitsOf(b.Kind)) SetOut(kit, fx, fy, fz, ax, az, nx, nz, umin, umax, swing);
-        if (ChimneyKinds.Contains(b.Kind)) SetOutChimney(b, fy, nx, nz, have.Find(f => f.Kind == FixtureKind.Chimney));
+        if (ChimneyKinds.Contains(b.Kind)) SetOutChimney(b.X0, b.Z0, b.X1, b.Z1, fy, nx, nz, have.Find(f => f.Kind == FixtureKind.Chimney));
     }
 
     /// <summary>A piece of the frontage hung: its voxels laid, kept with the rest of the dressing.</summary>
@@ -135,14 +135,14 @@ public sealed partial class Sim
     /// moved in toward the door, never into the doorway. Nothing of it when any of it has no room, or is where a door's
     /// leaves swing, or the wall it hangs on does not stand.
     /// </summary>
-    void SetOut(Kit kit, int fx, int fy, int fz, int ax, int az, int nx, int nz, int umin, int umax, HashSet<int> swing)
+    void SetOut(Kit kit, int fx, int fy, int fz, int ax, int az, int nx, int nz, int umin, int umax, HashSet<int> swing, bool offWays = false)
     {
         int klo = int.MaxValue, khi = int.MinValue, under = int.MaxValue;
         foreach (var ((u, y, _), _) in kit.V) { klo = Math.Min(klo, u); khi = Math.Max(khi, u); under = Math.Min(under, y); }
         int shift = khi > umax ? umax - khi : klo < umin ? umin - klo : 0;
         if (klo + shift < umin || khi + shift > umax || under < 24 && klo + shift < Doorway && khi + shift > -Doorway)
         {
-            if (kit.Else != null) SetOut(kit.Else, fx, fy, fz, ax, az, nx, nz, umin, umax, swing);
+            if (kit.Else != null) SetOut(kit.Else, fx, fy, fz, ax, az, nx, nz, umin, umax, swing, offWays);
             return;
         }
         (int x, int z) At(int u, int t) => (fx + ax * (u + shift) + nx * t, fz + az * (u + shift) + nz * t);
@@ -159,6 +159,8 @@ public sealed partial class Sim
             if (!World.InBounds(x, 0, z)) return;
             int g = FrontGround(x, z);
             if (World.Get(x, g - 1, z) is Mat.Water or Mat.Acid or Mat.Pitch or Mat.Lava) return;
+            // (a house's pieces keep off the ways laid or trodden and the roads: Sim.HouseDress.cs)
+            if (offWays && !kit.Hung && (Mat.IsPavement[World.Get(x, g - 1, z)] || Site.RoadDist(x, z) < 6)) return;
             ground[c] = g;
             lo = Math.Min(lo, g); hi = Math.Max(hi, g);
             x0 = Math.Min(x0, x); z0 = Math.Min(z0, z); x1 = Math.Max(x1, x); z1 = Math.Max(z1, z);
@@ -205,14 +207,18 @@ public sealed partial class Sim
     /// little over the ridge, open at the top, a breast of it filling in to the wall under the roof's edge; at the end
     /// away from the door, or the other when that has no room. Its smoke comes out at the top (<see cref="Fixture.LX"/>).
     /// One that stands is left be, unless a storey put up since leaves it under the ridge: then it is built up again.
+    /// A house's (Sim.HouseDress.cs) is of one of four <paramref name="build"/>s — a square stack open at the top, one
+    /// narrowing over the eaves, one closed with two pots on it, one capped with a dressed stone — at the end its plot
+    /// <paramref name="prefer"/>s if it has room.
     /// </summary>
-    void SetOutChimney(Building b, int fy, int doorNx, int doorNz, Fixture standing)
+    void SetOutChimney(int bx0, int bz0, int bx1, int bz1, int fy, int doorNx, int doorNz, Fixture standing, int build = 0, int prefer = 1)
     {
-        bool alongX = b.X1 - b.X0 >= b.Z1 - b.Z0;
-        int c = alongX ? (b.Z0 + b.Z1) / 2 : (b.X0 + b.X1) / 2;
-        for (int end = 1; end >= 0; end--)
+        bool alongX = bx1 - bx0 >= bz1 - bz0;
+        int c = alongX ? (bz0 + bz1) / 2 : (bx0 + bx1) / 2;
+        for (int e = 0; e < 2; e++)
         {
-            int s = end == 1 ? 1 : -1, face = alongX ? (end == 1 ? b.X1 : b.X0) : (end == 1 ? b.Z1 : b.Z0);
+            int end = e == 0 ? prefer : 1 - prefer;
+            int s = end == 1 ? 1 : -1, face = alongX ? (end == 1 ? bx1 : bx0) : (end == 1 ? bz1 : bz0);
             // (not at the end the door is in)
             if (alongX ? doorNx == s : doorNz == s) continue;
             (int x, int z) At(int along, int across) => alongX ? (face + s * along, c + across) : (c + across, face + s * along);
@@ -250,17 +256,30 @@ public sealed partial class Sim
                 if (!Built(wx, ay, wz)) { (wx, wz) = At(-1, 0); if (!Built(wx, ay, wz)) break; }
                 var f = new Fixture { Kind = FixtureKind.Chimney, Anchor = WaterPlanner.Pack(wx, ay, wz) };
                 bool room = true;
+                // (narrowing: a voxel in all round from the ridge up)
+                int narrow = build == 1 ? ridge - 1 : int.MaxValue;
                 for (int y = lo; y <= top && room; y++)
                     for (int a = s0; a < s0 + 5 && room; a++)
                         for (int k = -2; k <= 2; k++)
                         {
-                            bool rim = a == s0 || a == s0 + 4 || k == -2 || k == 2;
-                            // the flue open at the top, the rim of it blackened
-                            if (y >= top - 1 && !rim) continue;
+                            bool outer = a == s0 || a == s0 + 4 || k == -2 || k == 2;
+                            if (y >= narrow && outer) continue;
+                            bool rim = y >= narrow ? a == s0 + 1 || a == s0 + 3 || k == -1 || k == 1 : outer;
+                            // the flue open at the top, the rim of it blackened (closed under two pots, or under a capstone)
+                            if (y >= top - 1 && !rim && build != 2) continue;
                             var (x, z) = At(a, k);
                             if (y < FrontGround(x, z)) continue;
                             if (!HasRoom(x, y, z)) { room = false; break; }
-                            f.Voxels.Add((x, y, z, y == top ? Mat.Hoop : Mat.Flue));
+                            f.Voxels.Add((x, y, z, y == top ? build == 3 ? Mat.Hewn : build == 2 ? Mat.Flue : Mat.Hoop : Mat.Flue));
+                        }
+                // two pots on the closed one
+                if (build == 2)
+                    foreach (var (pa, pk) in new[] { (s0 + 1, -1), (s0 + 3, 1) })
+                        for (int y = top + 1; y <= top + 2 && room; y++)
+                        {
+                            var (x, z) = At(pa, pk);
+                            if (!HasRoom(x, y, z)) { room = false; break; }
+                            f.Voxels.Add((x, y, z, Mat.Hoop));
                         }
                 if (!room) continue;
                 // the breast: from the stack in to the wall, as high as the roof's edge leaves room
@@ -272,7 +291,8 @@ public sealed partial class Sim
                     }
                 var (sx, sz) = At(s0 + 2, 0);
                 if (!NobodyIn(Math.Min(sx, wx) - 3, Math.Min(sz, wz) - 3, Math.Max(sx, wx) + 3, Math.Max(sz, wz) + 3, lo, top)) return;
-                (f.LX, f.LY, f.LZ) = (sx + .5f, top + 1, sz + .5f);
+                if (build == 2) (sx, sz) = At(s0 + 1, -1);
+                (f.LX, f.LY, f.LZ) = (sx + .5f, top + (build == 2 ? 3 : 1), sz + .5f);
                 HangFront(f);
                 return;
             }

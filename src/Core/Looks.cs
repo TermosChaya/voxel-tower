@@ -62,6 +62,8 @@ public sealed class Look
     /// <summary>How much higher its first walls stand than its kind's.</summary>
     public int DH;
     public Annex[] Annexes = Array.Empty<Annex>();
+    /// <summary>What its daub is washed with (a house's, Sim.Houses.cs), and its shutters' paint (0: plain boards).</summary>
+    public byte Daub = Mat.Daub, Shutter;
 }
 
 /// <summary>
@@ -93,13 +95,13 @@ public static class Looks
             case WallStyle.Plaster:
                 if (h < (upper ? 0 : 3)) return Shapes.Masonry(x, y, z);
                 if (corner || h >= high - 1) return Mat.Wood;
-                return Mat.Daub;
+                return look.Daub;
             case WallStyle.StoneBase:
                 if (!upper && h < Rail) return Shapes.Masonry(x, y, z);
-                return Frame(h, q, len, corner, post, outer, braced: upper, high);
+                return Frame(h, q, len, corner, post, outer, braced: upper, high, look.Daub);
             case WallStyle.Frame:
                 if (!upper && h < 2) return Shapes.Masonry(x, y, z);
-                return Frame(h, q, len, corner, post, outer, braced: true, high);
+                return Frame(h, q, len, corner, post, outer, braced: true, high, look.Daub);
             default:
                 return Shapes.Lay(wallMat, x, y, z);
         }
@@ -110,15 +112,16 @@ public static class Looks
     /// at the top of logs; on the outer face a brace rising to the rail in the end panels and another from the rail up;
     /// daub between.
     /// </summary>
-    static byte Frame(int h, int q, int len, bool corner, bool post, bool outer, bool braced, int high)
+    static byte Frame(int h, int q, int len, bool corner, bool post, bool outer, bool braced, int high, byte daub)
     {
         if (corner || post || h <= 0 || h == Rail || h >= high - 1) return Mat.Wood;
+        // (inside, the plain daub: the wash is for the street)
         if (!outer) return Mat.Daub;
         // the end panels' braces, leaning in toward the middle of the wall
         int inner = len - 2 * T, p = q % PostEvery - 2, last = inner - q - 1;
         if (q < PostEvery && (braced && h < Rail ? p + 2 == h : h > Rail && p + 2 == (h - Rail) * 3 / 4 + 1)) return Mat.Wood;
         if (last < PostEvery - 2 && (braced && h < Rail ? last == h : h > Rail && last == (h - Rail) * 3 / 4 + 1)) return Mat.Wood;
-        return Mat.Daub;
+        return daub;
     }
 
     /// <summary>
@@ -144,7 +147,7 @@ public static class Looks
         {
             case WallStyle.Rough: return Shapes.Masonry(x >> 1, y >> 1, z >> 1);
             case WallStyle.StoneBase or WallStyle.Frame or WallStyle.Plaster:
-                return Math.Abs(c - cmid) <= 1 || y == top + 4 ? Mat.Wood : Mat.Daub;
+                return Math.Abs(c - cmid) <= 1 || y == top + 4 ? Mat.Wood : look.Daub;
             default: return Shapes.Lay(wallMat, x, y, z);
         }
     }

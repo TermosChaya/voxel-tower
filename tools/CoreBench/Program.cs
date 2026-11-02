@@ -6257,6 +6257,8 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--casual") CasualBench
 
 // houses the workers build: roofed whole, floored, furnished, and a storey on a storey (Houses.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--houses") HousesBench.Run(Check);
+// a street of houses drawn with the rectangle, not all alike, dressed as they stand (Village.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--village") VillageBench.Run(Check);
 // houses side by side, their doors as the player wants them (RowHouses.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--rowhouses") RowHousesBench.Run(Check);
 // the builders at work: what falls, who is shut in up there, thin decks walked on (Builders.cs)
@@ -6316,6 +6318,8 @@ if (args.Length == 0 || args[0] == "--mountains") MountainsBench.Run(Check);
 // the game says what it does: the kinds' words with their own numbers, the lore's shares, one price wherever a kind is
 // hired, the architect offered only in his building (TextsBench.cs)
 if (args.Length == 0 || args[0] == "--texts") TextsBench.Run(Check);
+// the old works of people in the wild: by the roads, on the heights, at the woods' edges (TracesBench.cs)
+if (args.Length == 0 || args[0] == "--traces") TracesBench.Run(Check);
 // the gods: the waking learnt and cast, the Colossus out of the ground, set loose on the horde, ridden, against the
 // horde's god, back under (Gods.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--gods") GodsBench.Run(Check);

@@ -52,10 +52,12 @@ public partial class Main
             return;
         }
         int top = home?.Depth ?? 0, floorTop = top - Shapes.HouseHeight;
-        // the ridge runs along the long side, here along z: six courses up the slope, twelve voxels in from the eaves,
-        // and the ridge itself ten courses up over the middle
-        int rx = x0 - Shapes.Eaves + 12;
-        bool roofMeant = top > 0 && Sim.Orders.At(rx, top + 6, hz) != 0 && Sim.Arched.Get(rx, top + 6, hz) != 0 && Sim.Orders.At(hx, top + 10, hz) != 0;
+        // the house is in the look its plot gives it (Sim.HouseLooks.cs): its roof's form and covering are the look's;
+        // over the middle the ridge, marked to stand as an arch, the room open under it
+        var look = Sim.HouseLook(Mat.Stone, home.X0, home.Z0, home.X1, home.Z1);
+        int Ridge(Func<int, int, int, bool> at) { for (int y = top + 1; y < top + 40; y++) if (at(hx, y, hz)) return y; return -1; }
+        int ridgeMeant = Ridge((x, y, z) => Sim.Orders.At(x, y, z) != 0 && Sim.Arched.Get(x, y, z) != 0);
+        bool roofMeant = top > 0 && ridgeMeant > top + 4;
         bool floorMeant = top > 0 && Sim.Orders.At(hx, floorTop - 1, hz) != 0;
         // the walls, floor and roof laid at once, as by many hands; the door cut and the gate hung by the household,
         // then the furnishing laid at once
@@ -69,12 +71,26 @@ public partial class Main
             Sim.LookOver(home);
             if (home.Beds < 2) Advance(1);
         }
-        bool roofed = top > 0 && World.Get(rx, top + 6, hz) == Mat.Wood && World.Get(hx, top + 10, hz) == Mat.Wood && World.Get(hx, top + 6, hz) == Mat.Air;
+        int ridge = Ridge((x, y, z) => World.Get(x, y, z) != Mat.Air);
+        bool roofed = top > 0 && ridge > top + 4 && Mat.LikeLogs(World.Get(hx, ridge, hz)) && World.Get(hx, top + 2, hz) == Mat.Air;
+        // its covering laid on its slopes, its daub washed and its shutters painted as the look has them
+        int covered = 0, washed = 0, painted = 0;
+        for (int z = z0 - Shapes.Eaves; z <= z1 + Shapes.Eaves; z++)
+            for (int x = x0 - Shapes.Eaves; x <= x1 + Shapes.Eaves; x++)
+                for (int y = floorTop - 2; y < top + 40; y++)
+                {
+                    byte m = World.Get(x, y, z);
+                    if (look != null && look.Covering != 0 && m == look.Covering) covered++;
+                    if (look != null && m == look.Daub && m != Mat.Daub) washed++;
+                    if (look != null && look.Shutter != 0 && m == look.Shutter) painted++;
+                }
+        bool styled = look != null && (look.Covering == 0 || covered > 100) && (look.Daub == Mat.Daub || look.Walls == WallStyle.Plain || look.Walls == WallStyle.Rough || washed > 20)
+            && (look.Shutter == 0 || painted > 0);
         bool floored = top > 0 && World.Get(hx + 3, floorTop - 1, hz + 5) == Mat.Wood;
         int beds = home?.Beds ?? 0;
-        check("the house form marks a pitched roof of logs standing as an arch, and a floor of logs; built, the house is closed and furnished",
-            home != null && floorMeant && roofMeant && roofed && floored && home.Closed && beds >= 2,
-            $"dwelling {(home == null ? "none" : $"top {top}, closed {home.Closed} «{home.Why}», bunks {beds}")}; floor meant {floorMeant}, roof meant {roofMeant}, roofed {roofed}, floored {floored}; bunks planned {home.Planned}");
+        check("the house form marks a pitched roof standing as an arch, and a floor of logs; built in its plot's look, the house is closed and furnished",
+            home != null && floorMeant && roofMeant && roofed && floored && home.Closed && beds >= 2 && styled,
+            $"dwelling {(home == null ? "none" : $"top {top}, closed {home.Closed} «{home.Why}», bunks {beds}")}; floor meant {floorMeant}, roof meant {roofMeant} ({ridgeMeant}), roofed {roofed} ({ridge}), floored {floored}; bunks planned {home.Planned}; «{look?.Name}»: covering {covered}, wash {washed}, paint {painted}");
         // drawn again over it: a second storey
         await Drag(x0, z0, x1, z1);
         bool waiting = Sim.Storeys.Count == 1;

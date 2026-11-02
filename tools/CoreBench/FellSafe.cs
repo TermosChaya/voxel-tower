@@ -24,7 +24,9 @@ static class FellSafeBench
         var lines = new List<string>();
         foreach (var (seed, kind) in new[] { (7u, ValleyKind.First), (5u, ValleyKind.Forest), (3u, ValleyKind.Mountain) })
         {
-            var mp = new MapParams { Seed = seed, Kind = kind, Hexagon = true, SizeX = MapParams.GameSize, SizeZ = MapParams.GameSize };
+            // (the valleys it was made on, without the old works in the wild: where a tree falls and who steps aside is
+            // chaotic, and the old works change both)
+            var mp = new MapParams { Seed = seed, Kind = kind, Hexagon = true, SizeX = MapParams.GameSize, SizeZ = MapParams.GameSize, Traces = false };
             var w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
             var site = MapGen.Generate(w, mp);
             w.Compact();

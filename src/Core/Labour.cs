@@ -93,11 +93,13 @@ public static class Labour
         D(Mat.Shingle, 1.5f, Stockpile.Wood, .5f); D(Mat.Thatch, .75f, Stockpile.Wood, .25f);
         // daub crumbles back to earth; a bell is taken down whole, metal
         D(Mat.Daub, 1, Stockpile.Earth, .75f); D(Mat.Bell, 2, Stockpile.Metal, 1);
+        foreach (var m in new[] { Mat.DaubWhite, Mat.DaubOchre, Mat.DaubRose, Mat.DaubBlue }) D(m, 1, Stockpile.Earth, .75f);
+        foreach (var m in new[] { Mat.ShutterGreen, Mat.ShutterRed, Mat.ShutterBlue }) D(m, .5f, Stockpile.Wood, .3f);
         LayCost[Mat.Rammed] = 1; LayCost[Mat.Wood] = 1.5f;
         // a roof is covered about as quickly as it is laid of logs; thatch is bound on a little quicker
         LayCost[Mat.Tile] = LayCost[Mat.Slate] = LayCost[Mat.Shingle] = 1.5f; LayCost[Mat.Thatch] = 1.2f;
         // daub is packed in by hand between the timbers; a bell is cast and hung
-        LayCost[Mat.Daub] = 1.2f; LayCost[Mat.Bell] = 4;
+        LayCost[Mat.Daub] = LayCost[Mat.DaubWhite] = LayCost[Mat.DaubOchre] = LayCost[Mat.DaubRose] = LayCost[Mat.DaubBlue] = 1.2f; LayCost[Mat.Bell] = 4;
         foreach (var m in new[] { Mat.Stone, Mat.Mortar, Mat.StoneDark, Mat.StoneLight, Mat.StoneWarm, Mat.StoneCool }) LayCost[m] = 2;
         // a ladder is joinery: rails and rungs take longer than the logs they are made of; a gate more so
         LayCost[Mat.Ladder] = 6;
@@ -132,7 +134,7 @@ public static class Labour
         Mat.Stone or Mat.Mortar or Mat.StoneDark or Mat.StoneLight or Mat.StoneWarm or Mat.StoneCool or Mat.DropStone => Stockpile.Stone,
         Mat.Wood or Mat.Ladder or Mat.Gate or Mat.GateShut or Mat.GateOpen or Mat.Pitch or Mat.Stakes or Mat.TrapDeck or Mat.DrawDeck or Mat.DropLog
             or Mat.Bunk or Mat.Bedding or Mat.Table or Mat.Bench => Stockpile.Wood,
-        Mat.Rammed or Mat.Powder or Mat.DirtPath or Mat.Tile or Mat.Daub => Stockpile.Earth,
+        Mat.Rammed or Mat.Powder or Mat.DirtPath or Mat.Tile or Mat.Daub or Mat.DaubWhite or Mat.DaubOchre or Mat.DaubRose or Mat.DaubBlue => Stockpile.Earth,
         Mat.Slate => Stockpile.Stone,
         Mat.Shingle or Mat.Thatch => Stockpile.Wood,
         Mat.Gravel or Mat.Cobble or Mat.Flag => Stockpile.Stone,

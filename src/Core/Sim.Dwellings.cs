@@ -129,6 +129,7 @@ public sealed partial class Sim
             // iron over the doorway (the gatehouse's lintel, a house walled in iron): its leaves are iron too
             bool iron = false;
             for (int y = d.Y - 8 + Gateway.Height - 2; y < d.Y - 8 + Gateway.Height + 6 && !iron; y++) iron = Mat.IsMetalWork(World.Get(d.X, y, d.Z));
+            ClearBefore(d);
             var plan = GatePlan.At(World, Site, new VoxelHit { X = d.X, Y = d.Y, Z = d.Z, NX = d.NX, NZ = d.NZ }, d.Top > 0 ? d.Y - 8 : -1, iron, outward: d.Top > 0);
             if (plan == null) continue;
             // the leaves hang on the face the door looks out of, their foot at the top of the floor, and that is a

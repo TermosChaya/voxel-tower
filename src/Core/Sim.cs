@@ -265,6 +265,8 @@ public sealed partial class Sim
         Stage = "TickDwellings"; TickDwellings();
         Stage = "TickTown"; TickTown(dt);
         Stage = "TickFrontage"; TickFrontage();
+        Stage = "TickHouseDress"; TickHouseDress();
+        Stage = "TickTownDecor"; TickTownDecor();
         Stage = "TickStreet"; TickStreet();
         Stage = "TickVoices"; TickVoices();
         Stage = "TickHouseDoors"; TickHouseDoors();

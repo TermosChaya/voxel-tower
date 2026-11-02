@@ -50,6 +50,11 @@ public sealed class MapParams
     /// what play changed of it is laid over the ground it was changed on.
     /// </summary>
     public bool Massifs = true;
+    /// <summary>
+    /// The old works of people laid in the wild when the valley is made (MapGen.Traces.cs: wayside crosses, milestones,
+    /// cairns, standing stones, old walls and footings, piles of logs, fence posts); off for a valley saved before them.
+    /// </summary>
+    public bool Traces = true;
 }
 
 /// <summary>

@@ -126,6 +126,15 @@ public partial class Main
             stepped && fire is { Kind: DecorKind.Campfire, Ready: true, Light: not null } && sim.Fixtures.Contains(fire.Light) && sim.Yards.Count == yards0 + 2 && seats == 2,
             $"stepped {stepped}; campfire {(fire == null ? "not set out" : $"ready {fire.Ready}, lit {fire.Light != null}")}; things {sim.Yards.Count - yards0}, bench {(bench == null ? "not set out" : $"{bench.Kind} ready {bench.Ready}")}, seats {seats}");
 
+        // a lamp on a post, one of the new things, set out the same way: put together and lit as a torch is
+        Tools.PickYard(BuildTools.WayCount + Array.IndexOf(Yard.All, DecorKind.LampPost));
+        await Click(fx + 44, fz + 20);
+        var lamp = sim.Yards.Count > yards0 + 2 ? sim.Yards[^1] : null;
+        for (int i = 0; i < 6 && lamp is not { Ready: true }; i++) Advance(.6);
+        check("a lamp on a post set out with a click is put together and lit, its flame a torch's",
+            lamp is { Kind: DecorKind.LampPost, Ready: true, Light: { Kind: FixtureKind.Torch } } && sim.Fixtures.Contains(lamp.Light),
+            lamp == null ? "not set out" : $"{lamp.Kind} ready {lamp.Ready}, light {lamp.Light?.Kind.ToString() ?? "none"}");
+
         // the campfire taken down: let go, its fire out
         if (fire != null)
         {

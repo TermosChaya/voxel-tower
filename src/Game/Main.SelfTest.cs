@@ -989,6 +989,10 @@ public partial class Main
         if (about.Count > 0) { Sim.Command(about, Sim.NearestStand(kx - 100, kz - 100, 2)); for (int t = 0; t < 40; t++) Advance(.5); }
         Selected.Clear(); Hud.OnSelectionChanged();
         Sim.Stock.Gold = 500;
+        // (a place free for the one taken on, whoever the fights before left alive: the valley's lie, and so those fights,
+        // change with what the valley is made with)
+        foreach (var u in Sim.Units.FindAll(u => !u.Dead && u.Team == Team.Player && u.T != Kinds.Worker && !u.T.Called && u.Billet < 0))
+            if (Sim.Household() + Kinds.Worker.Room > Sim.Places) { u.Dead = true; u.DiedAt = -999; }
         int w0 = Sim.Count(Kinds.Worker);
         await Look(kx, kz);
         // (and whoever is there still, kept by the work or the way, or come by meanwhile, is put there and held till the

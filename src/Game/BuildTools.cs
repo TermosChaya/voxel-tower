@@ -974,7 +974,7 @@ public partial class BuildTools : Node3D
         st.Dig = false;
         int x0 = Math.Min(a.x, b.x), z0 = Math.Min(a.z, b.z), x1 = Math.Max(a.x, b.x), z1 = Math.Max(a.z, b.z);
         // drawn up against a house it shares its wall (Sim.Houses.cs); over one's room it is a storey on it
-        var plan = _m.Sim.PlanHouseAt(x0, z0, x1, z1, st, Opt.HouseDoor, out var door, out string why, out var arched, out var rect, out int shared, out var under, out var moves);
+        var plan = _m.Sim.PlanHouseAt(x0, z0, x1, z1, st, Opt.HouseDoor, out var door, out string why, out var arched, out var rect, out int shared, out var under, out var moves, varied: true);
         if (under != null)
         {
             string no = _m.Sim.PlanStorey(under, x0, z0, x1, z1, st.Mat);
@@ -992,7 +992,8 @@ public partial class BuildTools : Node3D
         var eaves = _m.Sim.EavesOverHouse(rect);
         if (eaves.Count > 0) _m.Sim.DesignateRemove(eaves);
         HousesDrawn++;
-        _m.Hud.Log($"Дом: дверь {Shapes.SideWords[door.Side]}" + (shared != 0 ? ", стена общая с соседним домом" : "") +
+        string look = _m.Sim.HouseLook(st.Mat, rect.x0, rect.z0, rect.x1, rect.z1)?.Name;
+        _m.Hud.Log($"Дом{(look != null ? $" ({look})" : "")}: дверь {Shapes.SideWords[door.Side]}" + (shared != 0 ? ", стена общая с соседним домом" : "") +
             ". Когда стены встанут, рабочие прорубят дверь и навесят ворота, потом поставят лежанки. Каждая лежанка — место в войске.", Hud.Kind.Ok);
     }
 
@@ -1011,14 +1012,15 @@ public partial class BuildTools : Node3D
     {
         int x0 = Math.Min(a.x, b.x), z0 = Math.Min(a.z, b.z), x1 = Math.Max(a.x, b.x), z1 = Math.Max(a.z, b.z);
         HouseDrawn = (x0, z0, x1, z1);
-        var plan = _m.Sim.PlanHouseAt(x0, z0, x1, z1, st, Opt.HouseDoor, out var door, out string why, out _, out _, out int shared, out var under);
+        var plan = _m.Sim.PlanHouseAt(x0, z0, x1, z1, st, Opt.HouseDoor, out var door, out string why, out _, out var rect, out int shared, out var under, varied: true);
         if (under != null)
         {
             _houseNote = "второй этаж на дом";
             return under.Depth > 1 ? Shapes.Storey(_m.World, _m.Site, under.X0, under.Z0, under.X1, under.Z1, under.Depth, st.Mat, out _, out _, out _) : null;
         }
         if (plan == null) { _houseNote = Bindings.Fill(why); return null; }
-        _houseNote = $"дверь {Shapes.SideWords[door.Side]}" + (Opt.HouseDoor < 0 ? Bindings.Fill(" ({Rotate} — выбрать сторону)") : "") + (shared != 0 ? ", стена общая с соседом" : "");
+        string look = _m.Sim.HouseLook(st.Mat, rect.x0, rect.z0, rect.x1, rect.z1)?.Name;
+        _houseNote = (look != null ? look + ", " : "") + $"дверь {Shapes.SideWords[door.Side]}" + (Opt.HouseDoor < 0 ? Bindings.Fill(" ({Rotate} — выбрать сторону)") : "") + (shared != 0 ? ", стена общая с соседом" : "");
         // the doorway shown open in the ghost, where it will be cut
         int threshold = door.Y - 8, across = door.NX != 0 ? door.Z : door.X, u0 = (across - Gateway.Half + 4) & ~7;
         var shown = new VoxelList();

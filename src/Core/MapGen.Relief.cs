@@ -83,7 +83,7 @@ public static partial class MapGen
         var site = new Site
         {
             HTop = new int[N], KeepR = 24, KeepX = (int)hex.CX, KeepZ = (int)hex.CZ, Design = new VoxelWorld(SX, w.SY, SZ),
-            SX = SX, SZ = SZ, Hex = hex, Kind = p.Kind, Classic = p.Classic, EntrySide = entry, Edges = p.Edges, Massifs = p.Massifs,
+            SX = SX, SZ = SZ, Hex = hex, Kind = p.Kind, Classic = p.Classic, EntrySide = entry, Edges = p.Edges, Massifs = p.Massifs, Traced = p.Traces,
         };
         if (entry == Hex.West)
         {
@@ -1219,6 +1219,7 @@ public static partial class MapGen
         // the small things (MapGen.Nature.cs): bushes, fallen trees, flowers, reeds and the rest, clear of the middle
         // whatever stands there
         if (p.Details) Nature(w, site, p, relief);
+        if (p.Details && p.Traces) Traces(w, site, p);
         if (p.Holding == Holding.Outpost) { site.KeepBase = Holdings.OutpostPlace(w, site); return site; }
         if (p.Holding == Holding.HordeTown) { site.KeepBase = Holdings.HordeTown(w, site, seed, p.HordeWorks); return site; }
 

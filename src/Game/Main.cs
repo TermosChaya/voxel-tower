@@ -176,6 +176,8 @@ public partial class Main : Node3D
     bool _classic = true, _hexagon = true;
     /// <summary>A mountain valley's mountains as massifs; off for a save made before them (<see cref="MapParams.Massifs"/>).</summary>
     bool _massifs = true;
+    /// <summary>The old works of people in the wild; off for a save made before them (<see cref="MapParams.Traces"/>).</summary>
+    bool _traces = true;
     /// <summary>The world's box across (voxels) when not the default (--size=1536; a multiple of 32).</summary>
     int _size;
     /// <summary>The side of the hexagon the horde comes by (--entry=0…5: north-east, east, south-east, south-west, west, north-west).</summary>
@@ -285,7 +287,7 @@ public partial class Main : Node3D
         if (PendingLoad != null)
         {
             _loadedFrom = PendingLoad;
-            try { save = new SaveReader(System.IO.File.OpenRead(PendingLoad)); _seed = save.Seed; _valley = save.Kind; _classic = save.Classic; _hexagon = save.Hexagon; _massifs = save.Massifs; _size = save.SizeX; _entry = save.EntrySide; _holding = save.Holding; _edges = save.Edges; }
+            try { save = new SaveReader(System.IO.File.OpenRead(PendingLoad)); _seed = save.Seed; _valley = save.Kind; _classic = save.Classic; _hexagon = save.Hexagon; _massifs = save.Massifs; _traces = save.Traced; _size = save.SizeX; _entry = save.EntrySide; _holding = save.Holding; _edges = save.Edges; }
             catch (Exception e) { GD.PrintErr($"[voxel-tower] could not read {PendingLoad}: {e.Message}"); save?.Dispose(); save = null; }
             PendingLoad = null;
             if (!campaign) _demo = _selfTest = false;
@@ -294,7 +296,10 @@ public partial class Main : Node3D
         Task.Run(() => Bodies.Warm(Kinds.All()));
         var sw = Stopwatch.StartNew();
         var mp = new MapParams { Seed = _seed, Kind = _valley, Classic = _classic, Hexagon = _hexagon, EntrySide = _entry, Holding = _holding, Edges = _edges,
-            Trove = _trove, TroveTaken = _troveTaken, HordeWorks = _hordeWorks, Massifs = _massifs };
+            Trove = _trove, TroveTaken = _troveTaken, HordeWorks = _hordeWorks, Massifs = _massifs,
+            // (the self-test's and the tutorial check's valley as it was before the old works in the wild: their scenes stand where
+            // they always stood, and the bench --traces looks at those)
+            Traces = _traces && !_selfTest && !_tutCheck };
         // (--perf-without=details: the valley made without its small things, to weigh what they cost)
         mp.Details = Array.IndexOf(_perfWithout, "details") < 0;
         // the game's valley: a hexagon in a box a half again as wide as the bench's (192 m from point to point)

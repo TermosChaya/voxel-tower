@@ -75,7 +75,8 @@ public sealed partial class Sim
             // its ladder against a long wall with no door in it, no eaves out over a house beside it (Sim.Houses.cs)
             // (a town building's walls go on up and its roof goes back up as its look has them)
             var b = BuildingOn(zone);
-            var look = b?.Look;
+            // (a house drawn with the rectangle goes on up in the look its plot gives it, Sim.HouseLooks.cs)
+            var look = b?.Look ?? HouseLookOf(zone, s.Mat);
             byte covering = look != null && look.Covering != 0 ? look.Covering : b?.K.Roof ?? 0;
             var plan = Shapes.Storey(World, Site, s.X0, s.Z0, s.X1, s.Z1, s.Top, s.Mat, DoorSidesOf(zone), SharedSidesOf(zone), out var arched, out var ladder, out int newTop, covering, look);
             // what of the roof came down into the room as it was taken apart is carried off

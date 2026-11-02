@@ -101,14 +101,15 @@ static class DecorBench
         int col = 0;
         foreach (var k in Yard.All)
         {
-            int px = fx0 + 230 + col % 2 * 40, pz = fz0 + 20 + col / 2 * 40;
+            // (three to a row on the field, its 21 things and more within it)
+            int px = fx0 + 216 + col % 3 * 34, pz = fz0 + 20 + col / 3 * 36;
             string why = sim.PlaceDecor(k, px, pz, col % 4);
             if (why == null) placed.Add((k, sim.Yards[^1]));
             else Console.WriteLine($"  {Yard.Name(k)}: {why}");
             col++;
         }
         t0 = sim.Time;
-        while (sim.Time - t0 < 400 && placed.Any(p => !p.site.Ready)) { Stock(); Run(1); }
+        while (sim.Time - t0 < 900 && placed.Any(p => !p.site.Ready)) { Stock(); Run(1); }
         foreach (var (k, st) in placed.Where(p => !p.site.Ready))
         {
             var miss = new Dictionary<string, int>();
