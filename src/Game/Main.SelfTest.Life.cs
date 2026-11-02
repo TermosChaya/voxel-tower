@@ -36,11 +36,14 @@ public partial class Main
         for (int i = 0; i < 80 && (eater.Pastime != Pastime.Eat || eater.State != UnitState.Idle || eater.Path != null && eater.PathI < eater.Path.Count); i++) { Advance(.25); await Frames(1); }
         eater.PastimeUntil = sim.Time + 60;
         sleeper.PastimeUntil = sim.Time + 60;
-        for (int i = 0; i < 90 && (!Units.Lying(sleeper.Id) || Units.PropsDrawn == 0); i++) await Frames(1);
+        // (lying down takes the view about a second and a half of its frames' time: waited for by the clock, up to 6 s,
+        // not by a count of frames, which at 120 frames a second gave it 0.75 s and it was drawn lying only by halves)
+        var lyingDown = System.Diagnostics.Stopwatch.StartNew();
+        while (lyingDown.Elapsed.TotalSeconds < 6 && (!Units.Lying(sleeper.Id) || Units.PropsDrawn == 0)) await Frames(1);
         bool lying = Units.Lying(sleeper.Id), bowl = Units.PropsDrawn > 0;
         check("one asleep lies on its back and is drawn lying; one eating sits with a bowl drawn in its hand",
             sleeper.Pastime == Pastime.Sleep && lying && eater.Pastime == Pastime.Eat && bowl,
-            $"the sleeper {sleeper.Pastime}, drawn lying {lying}; the eater {eater.Pastime} {eater.State} at {eater.X:0},{eater.Z:0}, things in hands drawn {Units.PropsDrawn}");
+            $"the sleeper {sleeper.Pastime}, drawn lying {lying} after {lyingDown.Elapsed.TotalSeconds:0.0} s{(Paused ? ", the game paused" : "")}; the eater {eater.Pastime} {eater.State} at {eater.X:0},{eater.Z:0}, things in hands drawn {Units.PropsDrawn}");
         // a greeting: the word over the one who says it, and heard
         bool wasHeard = Sound.Heard.Contains("greet");
         a.GreetAt = b.GreetAt = sim.Time; a.GreetTo = b; b.GreetTo = a;

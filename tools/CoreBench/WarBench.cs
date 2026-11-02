@@ -91,6 +91,8 @@ static class WarBench
     public static void Run(Action<string, bool, string> check)
     {
         Console.WriteLine();
+        // (WAR_ONLY=crowd: only the two hundred, for how long a step takes)
+        if (Environment.GetEnvironmentVariable("WAR_ONLY") == "crowd") { Crowd(check); return; }
 
         // ---- a band's spirit: its fallen, a blast seen, one of it thrown; at the bottom it breaks whole
         {
@@ -550,43 +552,48 @@ static class WarBench
         }
 
         // ---- two hundred of the horde at once round the fort, a warlord among them: how long a step takes
+        Crowd(check);
+    }
+
+    /// <summary>Two hundred of the horde at once round the fort, a warlord among them: how long a step takes.</summary>
+    static void Crowd(Action<string, bool, string> check)
+    {
+        var s = Fresh();
+        Fort(s, 16, 24);
+        Run(s, .1);
+        s.Raid(new List<UnitType>(), 4, .5, s.NewWarlord(4));
+        int kx = s.Site.KeepX, kz = s.Site.KeepZ;
+        // (a spot in the water or on a cliff takes no band: a little further round, then)
+        int summoned = 0;
+        for (int i = 0; i < 80 && summoned < 28; i++)
         {
-            var s = Fresh();
-            Fort(s, 16, 24);
-            Run(s, .1);
-            s.Raid(new List<UnitType>(), 4, .5, s.NewWarlord(4));
-            int kx = s.Site.KeepX, kz = s.Site.KeepZ;
-            // (a spot in the water or on a cliff takes no band: a little further round, then)
-            int summoned = 0;
-            for (int i = 0; i < 80 && summoned < 28; i++)
-            {
-                double a = i * Math.PI * 2 / 28;
-                if (s.Summon(kx + (int)(Math.Cos(a) * (440 + i % 3 * 60)), kz + (int)(Math.Sin(a) * (440 + i % 3 * 60)), summoned % 7 == 0) != null) summoned++;
-            }
-            double cpu = 0, worst = 0; int steps = 0, peak = 0, horde = 0;
-            string slowest = "";
-            Sim.StageTicks = new Dictionary<string, long>();
-            for (double t = 0; t < 120; t += .05)
-            {
-                Sim.StageTicks.Clear(); Sim.SlowestUnitTicks = 0;
-                double c0 = BenchClock.CpuMs();
-                s.Step(.05f);
-                double c = BenchClock.CpuMs() - c0;
-                if (c > worst)
-                {
-                    var who = s.Units.FirstOrDefault(u => u.Id == Sim.SlowestUnit);
-                    slowest = $"at {t:0.0} s: " + string.Join(", ", Sim.StageTicks.OrderByDescending(k => k.Value).Take(3).Select(k => $"{k.Key} {k.Value * 1000.0 / System.Diagnostics.Stopwatch.Frequency:0.0}"))
-                        + $"; the slowest unit {who?.T.Key} {who?.State} {who?.Why} routed {who?.Routed} {Sim.SlowestUnitTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency:0.0} ms";
-                }
-                cpu += c; worst = Math.Max(worst, c); steps++;
-                int alive = 0, raiders = 0;
-                foreach (var u in s.Units) if (!u.Dead) { alive++; if (u.Team == Team.Horde) raiders++; }
-                peak = Math.Max(peak, alive); horde = Math.Max(horde, raiders);
-            }
-            check("two hundred of the horde at once at the fort, a warlord among them: a step takes under 4 ms on the whole", cpu / steps < 4 && horde >= 200,
-                $"{summoned} bands called up; {cpu / steps:0.00} ms a step on the whole, the slowest {worst:0.0} ms ({slowest}); up to {horde} of the horde, {peak} alive in all");
-            Sim.StageTicks = null;
+            double a = i * Math.PI * 2 / 28;
+            if (s.Summon(kx + (int)(Math.Cos(a) * (440 + i % 3 * 60)), kz + (int)(Math.Sin(a) * (440 + i % 3 * 60)), summoned % 7 == 0) != null) summoned++;
         }
+        double cpu = 0, worst = 0; int steps = 0, peak = 0, horde = 0;
+        string slowest = "";
+        Sim.StageTicks = new Dictionary<string, long>();
+        double own0 = BenchClock.ThreadMs();
+        for (double t = 0; t < 120; t += .05)
+        {
+            Sim.StageTicks.Clear(); Sim.SlowestUnitTicks = 0;
+            double c0 = BenchClock.CpuMs();
+            s.Step(.05f);
+            double c = BenchClock.CpuMs() - c0;
+            if (c > worst)
+            {
+                var who = s.Units.FirstOrDefault(u => u.Id == Sim.SlowestUnit);
+                slowest = $"at {t:0.0} s: " + string.Join(", ", Sim.StageTicks.OrderByDescending(k => k.Value).Take(3).Select(k => $"{k.Key} {k.Value * 1000.0 / System.Diagnostics.Stopwatch.Frequency:0.0}"))
+                    + $"; the slowest unit {who?.T.Key} {who?.State} {who?.Why} routed {who?.Routed} {Sim.SlowestUnitTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency:0.0} ms";
+            }
+            cpu += c; worst = Math.Max(worst, c); steps++;
+            int alive = 0, raiders = 0;
+            foreach (var u in s.Units) if (!u.Dead) { alive++; if (u.Team == Team.Horde) raiders++; }
+            peak = Math.Max(peak, alive); horde = Math.Max(horde, raiders);
+        }
+        check("two hundred of the horde at once at the fort, a warlord among them: a step takes under 4 ms on the whole", cpu / steps < 4 && horde >= 200,
+            $"{summoned} bands called up; {cpu / steps:0.00} ms a step on the whole ({(BenchClock.ThreadMs() - own0) / steps:0.00} ms of the thread's own time), the slowest {worst:0.0} ms ({slowest}); up to {horde} of the horde, {peak} alive in all");
+        Sim.StageTicks = null;
     }
 
     /// <summary>A field of level turf, so many voxels either way of a spot, bare to the sky.</summary>

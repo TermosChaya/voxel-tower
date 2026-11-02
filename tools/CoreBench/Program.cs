@@ -47,9 +47,15 @@ void Check(string what, bool ok, string detail = "")
 
 // the clock the timed checks go by counts the bench's own work, not the time it waits on a busy machine
 {
-    var (work, idle) = BenchClock.Weighed();
-    Check("the bench's clock counts its own work and not its waiting", work > 5 && work < 60 && idle < 10, $"50 ms of work counted {work:0.0} ms, 50 ms asleep {idle:0.0} ms");
+    var (work, walled, idle) = BenchClock.Weighed();
+    Check("the bench's clock counts its own work and not its waiting", work >= 50 && work < 60 && walled >= work * .98 && idle < 10,
+        $"50 ms of the bench's work took {walled:0.0} ms of the wall clock (counted {work:0.0} ms), 50 ms asleep counted {idle:0.0} ms; " +
+        (BenchClock.FastPerMs > 0 ? $"the fast cores at {BenchClock.FastPerMs / 1e6:0.00} GHz ({BenchClock.Chip()})" : "no cycle counts: the thread's time"));
 }
+// the horde's way to the citadel is built on another thread and taken up when it is done, the later the busier the
+// machine; BENCH_FIELDS_AFTER=s builds it at once and takes it up so many seconds of game later, to go over a fight the
+// same each time (Sim.FieldsAfter)
+Sim.FieldsAfter = double.Parse(Environment.GetEnvironmentVariable("BENCH_FIELDS_AFTER") ?? "0", System.Globalization.CultureInfo.InvariantCulture);
 
 var sw = Stopwatch.StartNew();
 var w = new VoxelWorld(WorldGen.SizeX, WorldGen.SizeY, WorldGen.SizeZ);

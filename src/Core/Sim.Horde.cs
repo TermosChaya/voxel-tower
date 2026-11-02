@@ -19,6 +19,14 @@ public sealed partial class Sim
     bool _fieldWood, _fieldEarth;
     double _fieldAt = -99;
     public double LastFieldMs { get; private set; }
+    /// <summary>
+    /// The bench's way (never the game's), seconds of game time: a field asked for is built at once, on another thread
+    /// from the grid as it stands, and the horde takes it up so long after, however fast the bench runs its steps or however
+    /// busy the machine is. Left to itself it came the more steps later the busier the machine was, built from a grid the
+    /// steps were changing meanwhile, and every fight went another way. 0: the game's way.
+    /// </summary>
+    public static double FieldsAfter;
+    double _fieldTakeAt;
 
     bool HasWood => HordeStock[Stockpile.Wood] >= Siege.BridgeWood;
     bool HasEarth => HordeStock[Stockpile.Earth] >= Siege.FillEarth;
@@ -65,7 +73,7 @@ public sealed partial class Sim
     {
         if (_fieldTask != null)
         {
-            if (!_fieldTask.IsCompleted) return;
+            if (!_fieldTask.IsCompleted || FieldsAfter > 0 && Time < _fieldTakeAt) return;
             if (_fieldTask.Status == TaskStatus.RanToCompletion && _fieldTaskGen == _fieldGen) Fields = _fieldTask.Result;
             _fieldTask = null;
         }
@@ -82,6 +90,8 @@ public sealed partial class Sim
         var sw = System.Diagnostics.Stopwatch.StartNew();
         _fieldTaskGen = _fieldGen;
         _fieldTask = Task.Run(() => { var f = BuildFields(wood, earth); LastFieldMs = sw.Elapsed.TotalMilliseconds; return f; });
+        // (the bench's way: built from the grid as it stands now, nothing changing it meanwhile, and taken up so long after)
+        if (FieldsAfter > 0) { _fieldTask.Wait(); _fieldTakeAt = Time + FieldsAfter; }
     }
 
     // ------------------------------------------------------------ raiders

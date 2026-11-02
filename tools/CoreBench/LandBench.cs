@@ -59,23 +59,26 @@ static class LandBench
     public static void Run(Action<string, bool, string> check)
     {
         Console.WriteLine();
-        // ---- how long, the big map and the small
-        long big = long.MaxValue, small = long.MaxValue;
+        // ---- how long, the big map and the small: the bench's own working time (BenchClock), the land being made on this
+        // thread; by the wall clock it took up to 3.5 s on a busy machine and failed
+        double big = double.MaxValue, small = double.MaxValue, bigWall = double.MaxValue;
         Atlas a = null;
         for (int k = 0; k < 3; k++)
         {
             var c3 = Campaign.New(11, 3);
             var sw = Stopwatch.StartNew();
+            double t0 = BenchClock.CpuMs();
             a = Atlas.Build(c3);
-            big = Math.Min(big, sw.ElapsedMilliseconds);
+            big = Math.Min(big, BenchClock.CpuMs() - t0);
+            bigWall = Math.Min(bigWall, sw.Elapsed.TotalMilliseconds);
             var c2 = Campaign.New(11, 2);
-            sw.Restart();
+            t0 = BenchClock.CpuMs();
             Atlas.Build(c2);
-            small = Math.Min(small, sw.ElapsedMilliseconds);
+            small = Math.Min(small, BenchClock.CpuMs() - t0);
         }
         int chunks = a.World.AllocatedChunks;
         check("the map of valleys is made as a land in good time: the big map under 2 s", big < 2000,
-            $"37 cells {a.SX}×{a.SZ}×{Atlas.Height} voxels in {big} ms, 19 cells in {small} ms; {chunks} chunks hold voxels");
+            $"37 cells {a.SX}×{a.SZ}×{Atlas.Height} voxels in {big:0} ms ({bigWall:0} ms by the wall clock), 19 cells in {small:0} ms; {chunks} chunks hold voxels");
 
         // ---- every kind of cell shows as its kind
         foreach (uint seed in new uint[] { 11, 23, 5 })
@@ -176,9 +179,10 @@ static class LandBench
             var trove = c.Cells.Find(x => x.Trove != TroveKind.None);
             at.World.TakeDirty(new List<int>());
             ore.Owner = Owner.Ours;
-            var sw = Stopwatch.StartNew();
+            // (the bench's own working time: by the wall clock it came to 222 ms on a busy machine, 26 alone)
+            double t0 = BenchClock.CpuMs();
             at.Refresh(ore);
-            long ms = sw.ElapsedMilliseconds;
+            double ms = BenchClock.CpuMs() - t0;
             var dirty = new List<int>();
             at.World.TakeDirty(dirty);
             var fresh = Atlas.Build(c);
@@ -196,7 +200,7 @@ static class LandBench
             bool same2 = Same(at.World, fresh.World, out int d2, out var f2);
             check("a cell put on again as its holder changed is the land a new map makes: an outpost on a cell taken, the bog's peat over one the horde took, a treasure taken; only its chunks and those about it made again",
                 same1 && same2 && tower && ash1 > ash0 + 500 && homeAsh > 0 && dirty.Count < a.World.ChunkCount / 4 && ms < 200,
-                $"taken in {ms} ms, {dirty.Count} chunks of {at.World.ChunkCount}; outpost {tower};  peat in the cell the horde took {ash0} → {ash1}, in the first valley {homeAsh}; " +
+                $"taken in {ms:0} ms, {dirty.Count} chunks of {at.World.ChunkCount}; outpost {tower};  peat in the cell the horde took {ash0} → {ash1}, in the first valley {homeAsh}; " +
                 $"differ from a new map: {d1} {(d1 > 0 ? f1.ToString() : "")}, {d2} {(d2 > 0 ? $"{f2}: {Mat.NameOf(at.World.Get(f2.x, f2.y, f2.z))} against {Mat.NameOf(fresh.World.Get(f2.x, f2.y, f2.z))}, in {at.CellOfColumn(f2.x, f2.z)?.Q},{at.CellOfColumn(f2.x, f2.z)?.R}; the horde took {near.Q},{near.R}, the treasure {trove.Q},{trove.R}" : "")}");
         }
     }
