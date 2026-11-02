@@ -42,7 +42,7 @@ public partial class Main
         var al = sim.Spawn(Kinds.OurAlchemist, sim.NearestStand(wx, kz + 18, 2));
         al.Hold = true; al.Dest = al.Post = al.Cell; al.Hp = al.MaxHp = 5000;
         bool climbing = sim.Climbing(gob);
-        int stone0 = Stone(), ate0 = sim.OurAte;
+        int stone0 = Stone(), ate0 = sim.OurAte, flasks0 = sim.OurFlasks;
         Rig.Focus(w.WX(face - 20), w.WZ(kz));
         // (as long as a flask or two more takes, now that the acid runs down the rungs as a liquid before it eats)
         Advance(10);
@@ -50,7 +50,7 @@ public partial class Main
         await Frames(20);
         check("an alchemist of ours on our wall throws at the rungs under a goblin on the horde's ladder: they are eaten through, it comes down, our stone stands, the glass is heard",
             climbing && sim.OurAte > ate0 && !sim.Climbing(gob) && gob.Y < foot + 8 && Stone() == stone0 && Sound.Heard.Contains("glass"),
-            $"on the ladder {climbing}; {sim.OurAte - ate0} rungs eaten; the goblin {gob.Y - foot:0} up, on it {sim.Climbing(gob)}; our stone {stone0} → {Stone()}");
+            $"on the ladder {climbing}; {sim.OurFlasks - flasks0} flasks, {sim.OurAte - ate0} rungs eaten; the goblin {gob.Y - foot:0} up, on it {sim.Climbing(gob)}, down {gob.Down}; our stone {stone0} → {Stone()}; the alchemist «{al.Why}» {al.State} at {al.Y - foot:0} up");
         gob.Dead = al.Dead = true; gob.DiedAt = al.DiedAt = -999;
         // the wall and what is left of the ladder taken away again
         for (int z = kz - 24; z <= kz + 24; z++) for (int x = face; x < wx + 6; x++) for (int y = foot; y < top + 2; y++) if (w.Get(x, y, z) != Mat.Air) w.Set(x, y, z, Mat.Air);

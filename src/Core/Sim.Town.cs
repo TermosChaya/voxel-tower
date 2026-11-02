@@ -610,6 +610,10 @@ public sealed partial class Sim
             }
             return;
         }
+        // a storey waiting for the roof to come off: furnished as it stands, as it was (the storey's floor laid first
+        // under the roof closes the room again, and furnished then for the storey's level on the one floor, what stood
+        // was left in the way of the furniture of the two)
+        if (b.Target > b.Level && Storeys.Exists(s => s.X0 == z.X0 && s.Z0 == z.Z0)) return;
         long key = FloorKey(floor) * 31 + b.Target;
         if (!_furnishing.TryGetValue(z.Id, out var plan) || plan.Key != key)
         {

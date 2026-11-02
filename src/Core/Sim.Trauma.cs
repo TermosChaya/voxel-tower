@@ -401,17 +401,66 @@ public sealed partial class Sim
     /// <summary>A weapon swung with both hands, swung with one: half as hard with the other arm broken.</summary>
     static float Grip(Unit u) => (Broken(u) & Break.Off) != 0 && u.T.Tool is "halberd" or "maul" or "longsword" or "spear" or "pick" ? .5f : 1;
 
+    /// <summary>
+    /// The same mover not careful of scrambles, jumps and ladders (Pathing.cs): when no way that keeps to the doors and
+    /// stairs is found within a search, the way that does not is taken, as it always was, so that nothing one could get
+    /// to before is out of reach now.
+    /// </summary>
+    static readonly Dictionary<Mover, Mover> _careless = new();
+    static Mover Careless(Mover s)
+    {
+        if (!s.Careful) return s;
+        lock (_careless)
+        {
+            if (!_careless.TryGetValue(s, out var m))
+                _careless[s] = m = new Mover { Height = s.Height, Climb = s.Climb, Drop = s.Drop, Speed = s.Speed, Carve = s.Carve, Build = s.Build, Ladders = s.Ladders, Wade = s.Wade, Feet = s.Feet };
+            return m;
+        }
+    }
+
+    /// <summary>
+    /// Whether one of ours is a fighter in a fight: a soldier, a commander, a rider, an engine's crew or a worker called to
+    /// arms (not a worker at his work, nor a priest), with the alarm up or the horde within forty metres; looked at once a
+    /// second. It is slowed by no ground then and kept from no way to a foe or a post by its care for the gates, as the
+    /// horde is not: in the tutorial's first fight a swordsman and an archer, slowed in the grass about the silver vein
+    /// that the raiders crossed at their old pace, fell there, and the training band's one raider broke the citadel.
+    /// </summary>
+    bool AtWar(Unit u)
+    {
+        if (u.Team != Team.Player || !Fortification.Fighter(u)) return false;
+        if (Time < u.WarLook) return u.AtWar;
+        u.WarLook = Time + 1;
+        return u.AtWar = Alarm || Nearest(u, Team.Horde, 40 * VoxelWorld.PerMetre) != null;
+    }
+
+    /// <summary>
+    /// A short way for one going to a seat, a bed, a stall, out of a fire or out of a space being walled shut: kept to the
+    /// doors and the ways as its kind goes, and, not found so within the search's bound, by plain steps as it always was
+    /// (the care for the gates counted dear, a worker's way to his bunk ran past the little search for it, and he slept
+    /// on the floor where he stood).
+    /// </summary>
+    List<int> ShortWay(Unit u, int from, Func<int, bool> goal, Func<int, float> h, int budget)
+    {
+        var m = u.T.Move;
+        var path = Paths.Find(from, goal, h, m, budget, gates: true);
+        if (path == null && (m.Careful || m.Feet != null) && Paths.Expanded >= budget) path = Paths.Find(from, goal, h, PathFinder.Plain(m), budget, gates: true);
+        return path;
+    }
+
     /// <summary>The way one lame walks: for the planning of its ways, a mover of its kind that takes no ladder.</summary>
     static readonly Dictionary<Mover, Mover> _lame = new();
-    static Mover MoverOf(Unit u)
+    Mover MoverOf(Unit u)
     {
         var s = u.T.Move;
+        // a fighter of ours in a fight goes as the horde goes: by plain steps over any ground, its care for the gates and
+        // the ground's going left to the walking of peace (Going.cs)
+        if (AtWar(u)) s = PathFinder.Plain(s);
         // a broken leg, or a comrade on the shoulder: no ladder (Sim.Carry.cs)
         if (!Lame(u) && u.Carrying is not { Aloft: true } || !s.Ladders) return s;
         lock (_lame)
         {
             if (!_lame.TryGetValue(s, out var m))
-                _lame[s] = m = new Mover { Height = s.Height, Climb = s.Climb, Drop = Math.Min(s.Drop, 2), Speed = s.Speed, Carve = s.Carve, Build = s.Build, Ladders = false };
+                _lame[s] = m = new Mover { Height = s.Height, Climb = s.Climb, Drop = Math.Min(s.Drop, 2), Speed = s.Speed, Carve = s.Carve, Build = s.Build, Ladders = false, Feet = s.Feet, Careful = s.Careful };
             return m;
         }
     }

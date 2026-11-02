@@ -277,7 +277,7 @@ public sealed partial class Sim
                 if (!Nav.Stand(i, y, k, h)) continue;
                 int c = Nav.Id(i, y, k);
                 if (c == u.Cell || _bodies[c] > 0 || Nav.Water[c] > 0) break;
-                var path = Paths.Find(u.Cell, x => x == c, x => H(x, i, k), u.T.Move, 600, gates: true);
+                var path = ShortWay(u, u.Cell, x => x == c, x => H(x, i, k), 600);
                 if (path == null || path.Count > radius * 3) break;
                 // nobody climbs a ladder or scaffolding for a stroll
                 if (path.Exists(x => Nav.Ladder[x] != 0)) break;
@@ -367,7 +367,7 @@ public sealed partial class Sim
             int c = StandNear(x, (int)u.Y, z, u.T.Move.Height);
             if (c < 0 || c == u.Cell || _bodies[c] > 0 || Nav.Water[c] > 0) continue;
             int ci = Nav.I(c), ck = Nav.K(c);
-            var path = Paths.Find(u.Cell, q => q == c, q => H(q, ci, ck), u.T.Move, 1500, gates: true);
+            var path = ShortWay(u, u.Cell, q => q == c, q => H(q, ci, ck), 1500);
             if (path == null || path.Exists(q => Nav.Ladder[q] != 0)) continue;
             u.Path = path; u.PathI = 0;
             u.Pastime = Pastime.Stroll; u.After = Pastime.Look; u.PastimeUntil = Time + 30;
@@ -577,7 +577,7 @@ public sealed partial class Sim
     bool GoAside(Unit u, int c, Pastime does)
     {
         int ci = Nav.I(c), ck = Nav.K(c);
-        var path = c == u.Cell ? new List<int>() : Paths.Find(u.Cell, x => x == c, x => H(x, ci, ck), u.T.Move, 4000, gates: true);
+        var path = c == u.Cell ? new List<int>() : ShortWay(u, u.Cell, x => x == c, x => H(x, ci, ck), 4000);
         if (path == null || path.Exists(x => Nav.Ladder[x] != 0)) return false;
         Busy(u);
         u.Path = path.Count > 0 ? path : null; u.PathI = 0;
@@ -851,7 +851,7 @@ public sealed partial class Sim
             int c = NearestStand((int)(fx + Math.Cos(a) * 13), (int)(fz + Math.Sin(a) * 13), u.T.Move.Height);
             if (c < 0 || c != u.Cell && _bodies[c] > 0) continue;
             int ci = Nav.I(c), ck = Nav.K(c);
-            var path = c == u.Cell ? new List<int>() : Paths.Find(u.Cell, x => x == c, x => H(x, ci, ck), u.T.Move, reach > 64 ? 6000 : 1500, gates: true);
+            var path = c == u.Cell ? new List<int>() : ShortWay(u, u.Cell, x => x == c, x => H(x, ci, ck), reach > 64 ? 6000 : 1500);
             if (path == null) continue;
             var (cx, _, cz) = Nav.Feet(c);
             u.Path = path.Count > 0 ? path : null; u.PathI = 0;

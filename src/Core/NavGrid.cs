@@ -55,6 +55,8 @@ public sealed class NavGrid
     public readonly byte[] Deck;
     /// <summary>The cell has a way laid or trodden in it (a quarter of its columns or more): walked faster, and chosen.</summary>
     public readonly byte[] Paved;
+    /// <summary>What the feet of one standing in the cell rest on and stand in (<see cref="Core.Footing"/>, Going.cs): how fast it is walked.</summary>
+    public readonly byte[] Footing;
     public const byte DeckHigh = 1, DeckLow = 2;
     /// <summary>Columns of 64 one course of a cell must cover to be a floor to stand on.</summary>
     public const int DeckT = 40;
@@ -89,6 +91,7 @@ public sealed class NavGrid
         Tree = new byte[Count];
         Deck = new byte[Count];
         Paved = new byte[Count];
+        Footing = new byte[Count];
         _dirty = new bool[Count];
         w.Edited += OnEdit;
     }
@@ -270,6 +273,42 @@ public sealed class NavGrid
         Tree[c] = (byte)(tree ? 1 : 0);
         Deck[c] = (byte)(fill >= SolidT ? 0 : (high >= DeckT ? DeckHigh : 0) | (low >= DeckT ? DeckLow : 0));
         Floor[c] = (ushort)FloorIn(x0, y0, z0);
+        Footing[c] = (byte)(fill >= SolidT ? Core.Footing.Open : FootingIn(x0, z0, Floor[c]));
+    }
+
+    /// <summary>
+    /// What the feet of one standing in a cell rest on and stand in (Going.cs): water over them, in the cell or in the top
+    /// of the cell under it where the floor is; else the stuff under the middle of the floor, and on the ground, whether
+    /// plants stand thick about the feet (every other column looked at, up to the knee).
+    /// </summary>
+    Core.Footing FootingIn(int x0, int z0, int floor)
+    {
+        if (floor < 1 || floor + 3 >= World.SY) return Core.Footing.Open;
+        int wet = 0;
+        byte under = Mat.Air;
+        for (int q = 0; q < 4; q++)
+        {
+            int x = x0 + 3 + (q & 1), z = z0 + 3 + (q >> 1);
+            byte at = World.Get(x, floor, z);
+            if (at == Mat.Water || at == Mat.Pitch || at == Mat.Acid) wet++;
+            if (under == Mat.Air) under = World.Get(x, floor - 1, z);
+        }
+        if (wet > 0) return Core.Footing.Water;
+        // the middle open over the floor (the feet on the edge of a wall below): what that edge is
+        for (int zz = 0; zz < CS && under == Mat.Air; zz++)
+            for (int xx = 0; xx < CS && under == Mat.Air; xx++)
+                if (Cls[World.Get(x0 + xx, floor - 1, z0 + zz)] != 0) under = World.Get(x0 + xx, floor - 1, z0 + zz);
+        var f = Going.Ground(under);
+        if (!Going.Overgrows(f)) return f;
+        int veg = 0;
+        for (int zz = 0; zz < CS; zz += 2)
+            for (int xx = 0; xx < CS; xx += 2)
+                for (int y = floor; y < floor + 3; y++)
+                {
+                    byte v = World.Get(x0 + xx, y, z0 + zz);
+                    if (Mat.IsVeg[v] && !Mat.IsTrunk(v)) veg++;
+                }
+        return veg >= Going.RoughVeg ? Going.Overgrown(f) : f;
     }
 
     /// <summary>

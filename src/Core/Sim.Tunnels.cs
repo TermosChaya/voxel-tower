@@ -697,9 +697,10 @@ public sealed partial class Sim
             }
             t.Dug++;
         }
-        // nobody digs on past a step without props, under ground that may fall in: the rest of the bore waits for logs
-        // (with none in the stores, past the step being dug, which there will be nothing to shore with)
-        HoldBore(t, t.Dug >= t.Cells.Count ? -1 : t.Dug > 0 && !t.Shored[t.Dug - 1] ? t.Dug : Stock[Stockpile.Wood] < FrameLogs ? t.Dug + 1 : -1);
+        // nobody digs on past a step without props, under ground that may fall in: the rest of the bore waits for logs;
+        // and it is dug a step at a time, the step being dug the only one open to the picks, so that each is shored as it
+        // opens (three digging steps on ahead at once let the ground water into four of them before any frame went in)
+        HoldBore(t, t.Dug >= t.Cells.Count ? -1 : t.Dug > 0 && !t.Shored[t.Dug - 1] ? t.Dug : t.Dug + 1);
     }
 
     /// <summary>
