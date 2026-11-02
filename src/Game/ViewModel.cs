@@ -35,6 +35,10 @@ public partial class ViewModel : Node3D
     int _wi = -1, _si = -1;
     bool _bow, _two, _spear, _aimed;
     MeshInstance3D _armR, _armL, _held, _shield, _strA, _strB, _shaft, _head;
+    // the hands cut off the arms at the wrist, so that a fist can turn onto what it holds as a wrist bends; how high the
+    // wrists are in the figure's voxels
+    MeshInstance3D _handR, _handL;
+    float _wristR, _wristL;
     BodyState _woundsSeen;
     int _rev = -1;
     bool _dirty = true;
@@ -68,7 +72,7 @@ public partial class ViewModel : Node3D
             AddChild(mi);
             return mi;
         }
-        _armR = Mi(); _armL = Mi(); _held = Mi(); _shield = Mi();
+        _armR = Mi(); _armL = Mi(); _held = Mi(); _shield = Mi(); _handR = Mi(); _handL = Mi();
         var box = new BoxMesh { Size = Vector3.One };
         MeshInstance3D Rod(Color c) { var mi = Mi(); mi.Mesh = box; mi.MaterialOverride = Plain(c); return mi; }
         _strA = Rod(new Color(.82f, .78f, .64f)); _strB = Rod(new Color(.82f, .78f, .64f));
@@ -117,7 +121,7 @@ public partial class ViewModel : Node3D
     {
         const int GX = 96, GY = 54;
         var on = new bool[GX * GY];
-        foreach (var mi in heldOnly ? new[] { _held } : new[] { _armR, _armL, _held, _shield })
+        foreach (var mi in heldOnly ? new[] { _held } : new[] { _armR, _armL, _handR, _handL, _held, _shield })
         {
             if (mi.Mesh == null || !mi.Visible || !Visible) continue;
             var t = mi.GlobalTransform;
@@ -253,7 +257,7 @@ public partial class ViewModel : Node3D
             Arm(_armL, true, V(_g.OffFist), Away.Lerp(_now.P + D * (_aimed ? .2f : .28f) + (_aimed ? new Vector3(0, -.04f, 0) : Vector3.Zero), up), D,
                 AwayElbow.Lerp(new Vector3(-.40f, -.42f, 0), up), carried);
         else Arm(_armL, true, V(_g.OffFist), Away.Lerp(new Vector3(-.25f, -.31f, -.36f), up), new Vector3(.25f, .55f, -.8f), AwayElbow.Lerp(new Vector3(-.40f, -.50f, 0), up));
-        if (_si < 0 && up < .02f) _armL.Visible = false;
+        if (_si < 0 && up < .02f) _armL.Visible = _handL.Visible = false;
         _strA.Visible = _strB.Visible = _shaft.Visible = _head.Visible = false;
     }
 
@@ -286,11 +290,24 @@ public partial class ViewModel : Node3D
         _woundsSeen = u.Wounds; _rev = u.Wounds?.Rev ?? -1;
         var plan = u.Wounds?.Plan ?? _plan;
         PartGrid Now(BodyPart p) => u.Wounds != null ? u.Wounds.Grid[(int)p] : plan.Grid[(int)p];
-        _armR.Mesh = Made(Figure.NearOf(plan, (int)Part.Main, Now(BodyPart.Main), out _), BodyPlan.FineSub);
-        _armL.Mesh = Made(Figure.NearOf(plan, (int)Part.Off, Now(BodyPart.Off), out _), BodyPlan.FineSub);
+        // (cut at the wrist: as far above the fist's middle as its middle is above the arm's end, a half-voxel more)
+        int Wrist(Part part, Vector3 fist)
+        {
+            var f = plan.Fine[(int)part];
+            int bottom = f == null ? 0 : (f.Y0 >= 0 ? f.Y0 / BodyPlan.K : (f.Y0 - BodyPlan.K + 1) / BodyPlan.K);
+            int row = (int)MathF.Floor(fist.Y * BodyPlan.Sub);
+            return row + Math.Max(1, row - bottom) + 1;
+        }
+        int wr = Wrist(Part.Main, Fist()), wl = Wrist(Part.Off, V(_g.OffFist));
+        _wristR = wr / (float)BodyPlan.Sub; _wristL = wl / (float)BodyPlan.Sub;
+        _armR.Mesh = Made(Figure.NearOf(plan, (int)Part.Main, Now(BodyPart.Main), out _, wr), BodyPlan.FineSub);
+        _handR.Mesh = Made(Figure.NearOf(plan, (int)Part.Main, Now(BodyPart.Main), out _, int.MinValue, wr), BodyPlan.FineSub);
+        _armL.Mesh = Made(Figure.NearOf(plan, (int)Part.Off, Now(BodyPart.Off), out _, wl), BodyPlan.FineSub);
+        _handL.Mesh = Made(Figure.NearOf(plan, (int)Part.Off, Now(BodyPart.Off), out _, int.MinValue, wl), BodyPlan.FineSub);
         _held.Mesh = _wi < 0 ? null : Made(Figure.DressOf(plan, _wi, Now(plan.Dress[_wi].On), out _, _bow ? Mat.Linen : (byte)0), plan.Dress[_wi].Sub);
         _shield.Mesh = _si < 0 ? null : Made(Figure.DressOf(plan, _si, Now(plan.Dress[_si].On), out _), plan.Dress[_si].Sub);
         _armR.Visible = _armR.Mesh != null; _armL.Visible = _armL.Mesh != null;
+        _handR.Visible = _handR.Mesh != null; _handL.Visible = _handL.Mesh != null;
         _held.Visible = _held.Mesh != null; _shield.Visible = _shield.Mesh != null;
         // how much further than a round shield's this one reaches from the fist, metres: carried, it goes that much lower
         _shieldTall = 0;
@@ -401,17 +418,34 @@ public partial class ViewModel : Node3D
     /// </summary>
     void Arm(MeshInstance3D mi, bool left, Vector3 fist, Vector3 p, Vector3 d, Vector3 elbow, float carry = 0)
     {
-        if (mi.Mesh == null) return;
+        var hand = left ? _handL : _handR;
+        if (mi.Mesh == null && hand.Mesh == null) return;
         var up = (left ? V(_g.OffShoulder) : V(_g.Shoulder)) - fist;
         var r = Frame(elbow - p, d) * Frame(up, Vector3.Back).Transposed();
+        // the forearm the elbow's way; the fist about its grip, turned onto what it holds as far as it is carried, and the
+        // forearm hung from the wrist where the fist ends (turned whole, the arm stood across the chest as if held to it)
+        var fistTurn = r;
         if (carry > .001f)
         {
             var held = Frame(d, elbow - p) * Frame(Vector3.Back, up).Transposed();
-            r = new Basis(new Quaternion(r.Orthonormalized()).Slerp(new Quaternion(held.Orthonormalized()), Math.Clamp(carry, 0, 1)));
+            fistTurn = new Basis(new Quaternion(r.Orthonormalized()).Slerp(new Quaternion(held.Orthonormalized()), Math.Clamp(carry, 0, 1)));
         }
-        Place(mi, r, fist, p, ArmSize);
-        mi.Visible = true;
-        if (!left) _gripAngle = Mathf.RadToDeg((r * Vector3.Back).AngleTo(d));
+        if (hand.Mesh != null) { Place(hand, fistTurn, fist, p, ArmSize); hand.Visible = true; }
+        if (mi.Mesh != null)
+        {
+            var wrist = new Vector3(fist.X, left ? _wristL : _wristR, fist.Z);
+            var at = p + fistTurn * (wrist - fist) * (VoxelWorld.Vox * ArmSize / M);
+            Place(mi, r, wrist, at, ArmSize);
+            mi.Visible = true;
+        }
+        if (!left) _gripAngle = Mathf.RadToDeg((fistTurn * Vector3.Back).AngleTo(d));
+    }
+
+    /// <summary>The left arm and its hand placed as one, unbent at the wrist (on the shield, at the bow).</summary>
+    void Whole(bool left, Basis r, Vector3 g, Vector3 p)
+    {
+        foreach (var mi in left ? new[] { _armL, _handL } : new[] { _armR, _handR })
+            if (mi.Mesh != null) { Place(mi, r, g, p, ArmSize); mi.Visible = true; }
     }
 
     float _gripAngle;
@@ -561,7 +595,7 @@ public partial class ViewModel : Node3D
         else c += new Vector3(-.05f, -.06f, .04f) * -b;
         var r = Frame(n, new Vector3(-.35f, -.85f, .4f)) * Frame(V(w.Edge), V(_g.OffShoulder) - V(w.Grip)).Transposed();
         if (_shield.Mesh != null) Place(_shield, r, V(w.Grip), c);
-        if (_armL.Mesh != null) { Place(_armL, r, V(w.Grip), c, ArmSize); _armL.Visible = true; }
+        Whole(true, r, V(w.Grip), c);
     }
 
     // ---------------------------------------------------------------- the bow
@@ -605,7 +639,7 @@ public partial class ViewModel : Node3D
         var grip = V(w.Grip);
         var r = Frame(new Vector3(-.22f, -.30f, .05f) - b, axis) * Frame(V(_g.OffShoulder) - grip, Vector3.Back).Transposed();
         if (_held.Mesh != null) Place(_held, r, grip, b);
-        if (_armL.Mesh != null) { Place(_armL, r, grip, b, ArmSize); _armL.Visible = true; }
+        Whole(true, r, grip, b);
         // the tips of its limbs, where the string is tied
         var tip = V(w.Tip);
         float s = VoxelWorld.Vox / M;
@@ -637,7 +671,7 @@ public partial class ViewModel : Node3D
         else _shaft.Visible = _head.Visible = false;
         Arm(_armR, false, V(_g.Fist), _hand, (b - _hand).Normalized(), new Vector3(.34f, -.16f, .10f).Lerp(new Vector3(.40f, -.95f, .05f), carried));
         // drawn to the cheek the hand is beside the eye, out of sight: only the string and the arrow show
-        if (nocked && _draw > .5f || carried > .95f) _armR.Visible = false;
+        if (nocked && _draw > .5f || carried > .95f) _armR.Visible = _handR.Visible = false;
     }
 
     /// <summary>The bow carried low at the left, and the drawing hand down at the right side.</summary>
