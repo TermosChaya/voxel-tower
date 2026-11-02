@@ -182,9 +182,12 @@ public sealed partial class Sim
         if (u.Path == null || u.PathI >= u.Path.Count || Time >= u.NextSearch)
         {
             float dx = u.X - from.X, dz = u.Z - from.Z, l = MathF.Max(.5f, MathF.Sqrt(dx * dx + dz * dz));
-            int c = NearestStand((int)(u.X + dx / l * 5 * VoxelWorld.PerMetre), (int)(u.Z + dz / l * 5 * VoxelWorld.PerMetre), u.T.Move.Height);
+            int c = StandNear((int)(u.X + dx / l * 5 * VoxelWorld.PerMetre), (int)u.Y, (int)(u.Z + dz / l * 5 * VoxelWorld.PerMetre), u.T.Move.Height);
+            // (on a wall it keeps to the wall: a step back is no jump down off it, the flasks go on from up there, and
+            // what it throws at is still looked for)
+            if (c < 0 || Nav.Floor[c] < u.Y - 12) return false;
             u.NextSearch = Time + .8;
-            if (c < 0 || !GoTo(u, c, budget: 3000)) return false;
+            if (!GoTo(u, c, budget: 3000)) return false;
         }
         if (u.Path == null || u.PathI >= u.Path.Count) return false;
         u.State = UnitState.Walk;

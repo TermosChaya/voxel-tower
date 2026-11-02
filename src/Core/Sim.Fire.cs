@@ -230,7 +230,7 @@ public sealed partial class Sim
         {
             u.NextSearch = Time + .6;
             int from = u.Cell;
-            var path = Paths.Find(from, c => c != from && !HotAt(c), c => 0, u.T.Move, 900, gates: true);
+            var path = ShortWay(u, from, c => c != from && !HotAt(c), c => 0, 900);
             if (path == null || path.Count == 0) return false;
             u.Path = path; u.PathI = 0;
         }
@@ -277,7 +277,7 @@ public sealed partial class Sim
             var (vx, vy, vz) = WaterPlanner.Unpack(at);
             bool Reaches(int c) => Math.Abs((Nav.I(c) << NavGrid.Shift) + 4 - vx) <= 10 && Math.Abs((Nav.K(c) << NavGrid.Shift) + 4 - vz) <= 10
                 && Nav.Floor[c] - Labour.ReachDown <= vy && Nav.Floor[c] + Labour.ReachUp > vy;
-            var path = Reaches(u.Cell) ? new List<int>() : Paths.Find(u.Cell, Reaches, c => H(c, vx >> NavGrid.Shift, vz >> NavGrid.Shift), u.T.Move, 20000, gates: true);
+            var path = Reaches(u.Cell) ? new List<int>() : ShortWay(u, u.Cell, Reaches, c => H(c, vx >> NavGrid.Shift, vz >> NavGrid.Shift), 20000);
             if (path == null) { u.Unreachable[-1 - best] = Time + 10; return false; }
             ReleaseSite(u);
             u.Path = path.Count > 0 ? path : null;

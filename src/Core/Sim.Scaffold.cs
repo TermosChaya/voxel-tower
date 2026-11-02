@@ -49,8 +49,13 @@ public sealed partial class Sim
 
     /// <summary>Voxels of scaffolding a worker lashes up a second, and takes down.</summary>
     const float ScaffoldPace = 40, UnscaffoldPace = 60;
-    /// <summary>Seconds a scaffold for work stands with nobody on it and nothing in reach of it before it is taken down.</summary>
-    const double ScaffoldIdle = 12;
+    /// <summary>
+    /// Seconds a scaffold stands with nobody on it and no work high up about it before it is taken down: long enough for
+    /// the workers to fetch what the next course is laid of and come back to it.
+    /// </summary>
+    const double ScaffoldIdle = 45;
+    /// <summary>How far about a scaffold work high up keeps it standing, cells: the next stretch of the same wall or tower is worked from it.</summary>
+    const int ScaffoldServes = 4;
 
     double _scaffoldAt;
 
@@ -69,6 +74,23 @@ public sealed partial class Sim
                 yield return (x0, y0 + dy, z0 + d); yield return (x0 + e, y0 + dy, z0 + d);
             }
         }
+    }
+
+    /// <summary>The logs a scaffold takes, voxels: not begun without them all, lest it be lashed half up and taken down again.</summary>
+    static int ScaffoldLogs(Scaffold s)
+    {
+        int n = 0;
+        foreach (var c in s.Columns) n += ColumnVoxels(c).Count;
+        return n;
+    }
+
+    /// <summary>The logs in the stores not owed yet to scaffolding going up, voxels: two begun at once on the same logs,
+    /// one ran out of them halfway and came down again.</summary>
+    double ScaffoldLogsFree()
+    {
+        double free = Stock[Stockpile.Wood];
+        foreach (var s in Scaffolds) if (s.Done < 0 && !s.Lowering) free -= Math.Max(0, ScaffoldLogs(s) - s.Voxels.Count);
+        return free;
     }
 
     /// <summary>The voxels of a column of scaffolding, in the order they go up.</summary>
@@ -100,8 +122,19 @@ public sealed partial class Sim
         {
             if (!Nav.Open(i, y, k) || Nav.Water[Nav.Id(i, y, k)] > 0) return false;
             if (ToLay(Nav.Id(i, y, k), 1)) return false;
+            // not in a mine's bore, where its frames go (lashed up there, it took the logs and the corners the props
+            // stand in, and a countermine was dug on with its steps bare)
+            if (InBore(Nav.Id(i, y, k))) return false;
         }
         return !Site.Forbidden((i << NavGrid.Shift) + 4, (k << NavGrid.Shift) + 4);
+    }
+
+    /// <summary>Whether a cell is a step of a mine, or the cell over one (a step is two cells high).</summary>
+    bool InBore(int c)
+    {
+        foreach (var t in Tunnels)
+            if (t.Cells.Contains(c) || c >= Nav.Layer && t.Cells.Contains(c - Nav.Layer)) return true;
+        return false;
     }
 
     /// <summary>How far down from a cell its column falls to a cell to stand in (1 or more), or 0 if not within twenty metres.</summary>
@@ -242,7 +275,7 @@ public sealed partial class Sim
                         int baseY = sy - down, cells = down + 1;
                         if (cells >= bestCells || cells > 16 || !Scaffoldable(ni, nk, baseY, sy)) continue;
                         int start = Nav.Id(ni, baseY, nk);
-                        if (u.Cell != start && Paths.Find(u.Cell, c => c == start, c => H(c, ni, nk), MoverOf(u), 8000, gates: true) == null) continue;
+                        if (u.Cell != start && Paths.Find(u.Cell, c => c == start, c => H(c, ni, nk), MoverOf(u), 20000, gates: true) == null) continue;
                         best = new Scaffold { By = u, Site = col };
                         best.Columns.Add((ni, nk, baseY, sy, false)); best.From.Add(start);
                         bestCells = cells;
@@ -270,7 +303,7 @@ public sealed partial class Sim
         {
             if (u.Path == null || u.PathI >= u.Path.Count)
             {
-                if (!GoTo(u, from, budget: 6000)) { GiveUpScaffold(u, s); return false; }
+                if (!GoTo(u, from, budget: 20000)) { GiveUpScaffold(u, s); return false; }
                 if (u.Path == null) return true;
             }
             Walk(u, dt);
@@ -401,12 +434,15 @@ public sealed partial class Sim
             int ui = Nav.I(u.Cell), uy = Nav.Y(u.Cell), uk = Nav.K(u.Cell);
             foreach (var c in s.Columns)
             {
-                // in its cells (anyone: a raider on it is on it too), but for one of ours idling on the ground at its
-                // foot (the work it was put up for done from beside it, where the workers reach the lowest course)
-                if (ui == c.i && uk == c.k && uy >= c.y0 && uy <= c.y1 + 1 && !(u.Team == Team.Player && uy == c.y0 && u.State == UnitState.Idle)) return true;
+                // in its cells (anyone: a raider on it is on it too), but for one of ours on the ground at its foot (the
+                // work it was put up for done from beside it, where the workers reach the lowest course; idle ones strolling
+                // about there kept a short one standing for good)
+                if (ui == c.i && uk == c.k && uy >= c.y0 && uy <= c.y1 + 1 && !(u.Team == Team.Player && uy == c.y0)) return true;
                 // a worker of ours up on what it leads to, near it (not a soldier at its post on the wall: it has the
                 // wall's own way up and down, and a wall kept manned kept the scaffolding by it standing for good)
-                if (u.Team == Team.Player && u.T.Work >= 1 && u.Y >= foot + 2 * NavGrid.CS && Math.Abs(ui - c.i) <= 6 && Math.Abs(uk - c.k) <= 6) return true;
+                // (up there: about as high as its top, not merely higher than its foot, as one on the ground by a scaffold
+                // stood in a ditch is)
+                if (u.Team == Team.Player && u.T.Work >= 1 && u.Y >= foot + 2 * NavGrid.CS && Math.Abs(uy - (c.y1 + 1)) <= 2 && Math.Abs(ui - c.i) <= 6 && Math.Abs(uk - c.k) <= 6) return true;
             }
         }
         return false;
@@ -630,16 +666,23 @@ public sealed partial class Sim
         return s;
     }
 
+    /// <summary>
+    /// Whether work is still marked high up about a scaffold: in any column within <see cref="ScaffoldServes"/> cells of
+    /// the work it was raised for (of its foot, for one put up to get out), higher than one reaches from the ground at
+    /// its foot. The next stretch and the next courses of the same wall or tower are worked from it, so it stands for them.
+    /// </summary>
     bool WorkNear(Scaffold s)
     {
-        if (s.Site < 0) return false;
-        int si = s.Site % Nav.NX, sk = s.Site / Nav.NX;
-        for (int dk = -1; dk <= 1; dk++)
-            for (int di = -1; di <= 1; di++)
+        if (s.Columns.Count == 0) return false;
+        var c0 = s.Columns[0];
+        int si = s.Site >= 0 ? s.Site % Nav.NX : c0.i, sk = s.Site >= 0 ? s.Site / Nav.NX : c0.k;
+        int foot = Nav.Floor[Nav.Id(c0.i, c0.y0, c0.k)];
+        for (int dk = -ScaffoldServes; dk <= ScaffoldServes; dk++)
+            for (int di = -ScaffoldServes; di <= ScaffoldServes; di++)
             {
                 int i = si + di, k = sk + dk;
                 if (i < 0 || k < 0 || i >= Nav.NX || k >= Nav.NZ) continue;
-                if (Orders.Span(k * Nav.NX + i, out _, out _)) return true;
+                if (Orders.Span(k * Nav.NX + i, out _, out int y1) && y1 >= foot + Labour.ReachUp - 4) return true;
             }
         return false;
     }
@@ -660,7 +703,7 @@ public sealed partial class Sim
             if (Math.Abs(ui - c0.i) > 8 || Math.Abs(uk - c0.k) > 8) continue;
             int foot = s.Escape && s.Exit >= 0 ? s.Exit : Nav.Id(c0.i, c0.y0, c0.k);
             if (u.Y < Nav.Floor[foot] + 2 * NavGrid.CS) continue;
-            if (!GoTo(u, foot, budget: 6000)) continue;
+            if (!GoTo(u, foot, budget: 20000)) continue;
             u.Why = "спускается по лесам";
             return true;
         }

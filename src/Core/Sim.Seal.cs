@@ -196,7 +196,7 @@ public sealed partial class Sim
     {
         if (!Closing(u.Cell)) return false;
         u.NextSearch = Time + 1;
-        var path = Paths.Find(u.Cell, c => !Closing(c) && !Held(c, out _) && !Held(c - Nav.Layer, out _), _ => 0, u.T.Move, 3000, gates: true);
+        var path = ShortWay(u, u.Cell, c => !Closing(c) && !Held(c, out _) && !Held(c - Nav.Layer, out _), _ => 0, 3000);
         if (path == null || path.Count == 0) return false;
         u.Path = path; u.PathI = 0;
         u.Why = "выходит, пока стену не закрыли";

@@ -244,13 +244,29 @@ static class SmartworkBench
         // (as many logs as it was always given: what the scenes before left in the stores is chaotic — the grove felled
         // to the last tree leaves far more, and with three times the logs the bore went 12 steps and 2 fell in unshored)
         sim.Stock[Stockpile.Wood] = 50;
-        Watch(300, () => mine.Dug == mine.Cells.Count);
-        int shored = mine.Shored.FindAll(x => x).Count;
+        // (till it is dug, or it runs into the ground water under this field a dozen steps on: the water takes the frames
+        // over its last steps from under the props before the mine is told flooded, and caves them in six seconds after;
+        // on main that came within the last six seconds watched and the check held only so, and with the workers quicker
+        // over the ground now it came sooner. The steps shored are those shored as they were dug, whatever the water took
+        // after.)
+        var everShored = new bool[mine.Cells.Count];
+        bool Wet()
+        {
+            for (int i = 0; i < mine.Dug && i < mine.Cells.Count; i++)
+            {
+                var (cx, cy, cz) = sim.Nav.Feet(mine.Cells[i]);
+                for (int y = (int)cy; y < (int)cy + 8; y++) if (sim.World.Get((int)cx, y, (int)cz) == Mat.Water) return true;
+            }
+            return false;
+        }
+        Watch(300, () => { for (int i = 0; i < everShored.Length; i++) everShored[i] |= mine.Shored[i]; return mine.Dug == mine.Cells.Count || mine.Flooded || Wet(); });
+        bool flooded = mine.Flooded || Wet();
+        int shored = everShored.Count(x => x);
         string mineCost = Cost();
         int fallen = mine.Fallen.FindAll(x => x).Count;
         check("our countermine dug with no logs goes no further than its first step; given logs it is shored and dug on, every step shored, none fallen in, none hurt",
             bareDug <= 1 && mine.Dug > bareDug + 2 && shored >= mine.Dug - 2 && fallen == 0 && hurts.Count == 0 && crew.All(u => !u.Dead),
-            $"{bareDug} of {mine.Cells.Count} steps dug in a minute with no logs; then {mine.Dug} dug, {shored} shored, {fallen} fallen in; {mineCost}");
+            $"{bareDug} of {mine.Cells.Count} steps dug in a minute with no logs; then {mine.Dug} dug, {shored} shored, {fallen} fallen in{(flooded ? " (watched till it ran into the ground water)" : "")}; {mineCost}");
         Reset();
     }
 }

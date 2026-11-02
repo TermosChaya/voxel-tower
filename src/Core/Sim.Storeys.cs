@@ -56,8 +56,61 @@ public sealed partial class Sim
                     if (o != 0 && !Orders.IsRemove(o)) Orders.Clear(x, y, z);
                 }
         DesignateRemove(Shapes.OverHouse(World, house.X0, house.Z0, house.X1, house.Z1, top));
-        Storeys.Add(new StoreyPlan { X0 = house.X0, Z0 = house.Z0, X1 = house.X1, Z1 = house.Z1, Top = top, Mat = mat, Since = Time });
+        var plan = new StoreyPlan { X0 = house.X0, Z0 = house.Z0, X1 = house.X1, Z1 = house.Z1, Top = top, Mat = mat, Since = Time };
+        Storeys.Add(plan);
+        // the storey's ladder and its floor of logs go in first, under the roof still on: from that floor the workers
+        // take the roof off from its ridge down (from the ground under the eaves the ridge of a wide or steep roof was
+        // out of reach, and what came off it came off only while those who had built it still stood up there)
+        var shape = StoreyShape(plan, house, out var arched, out var ladder, out _);
+        var floor = new VoxelList();
+        for (int i = 0; i < shape.Count; i++) if (shape.Y(i) < top) floor.Add(shape.X(i), shape.Y(i), shape.Z(i), shape.M(i));
+        var floorArched = new VoxelList();
+        for (int i = 0; i < arched.Count; i++) if (arched.Y(i) < top) floorArched.Add(arched.X(i), arched.Y(i), arched.Z(i), arched.M(i));
+        DesignateBuild(ladder);
+        Arch(floorArched);
+        DesignateBuild(floor);
         return null;
+    }
+
+    /// <summary>
+    /// Whether anything of the old roof (or else laid up over the walls) still stands to be taken down: all of it but the
+    /// storey's own ladder, which goes up through its hatch into the room under the roof before the roof comes off.
+    /// </summary>
+    bool RoofLeft(StoreyPlan s)
+    {
+        var over = Shapes.OverHouse(World, s.X0, s.Z0, s.X1, s.Z1, s.Top);
+        const int t = Shapes.HouseWall;
+        for (int i = 0; i < over.Count; i++)
+        {
+            int x = over.X(i), z = over.Z(i);
+            bool room = x - s.X0 >= t && s.X1 - x >= t && z - s.Z0 >= t && s.Z1 - z >= t;
+            if (!(room && World.Get(x, over.Y(i), z) == Mat.Ladder)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>The scaffolding standing within a storey's walls over the house's top, where the storey goes up.</summary>
+    VoxelList ScaffoldOver(StoreyPlan s)
+    {
+        var L = new VoxelList();
+        if (Scaffolds.Count == 0) return L;
+        for (int y = s.Top; y < Math.Min(World.SY - 1, s.Top + Shapes.HouseHeight + 2); y++)
+            for (int z = s.Z0; z <= s.Z1; z++)
+                for (int x = s.X0; x <= s.X1; x++)
+                    if (World.Get(x, y, z) == Mat.Scaffold) L.Add(x, y, z, Mat.Air);
+        return L;
+    }
+
+    /// <summary>The storey a plan raises on its house as things stand: its ladder, its floor, its walls and roof (Shapes.Storey).</summary>
+    VoxelList StoreyShape(StoreyPlan s, Zone zone, out VoxelList arched, out VoxelList ladder, out int newTop)
+    {
+        // its ladder against a long wall with no door in it, no eaves out over a house beside it (Sim.Houses.cs)
+        // (a town building's walls go on up and its roof goes back up as its look has them)
+        var b = BuildingOn(zone);
+        // (a house drawn with the rectangle goes on up in the look its plot gives it, Sim.HouseLooks.cs)
+        var look = b?.Look ?? HouseLookOf(zone, s.Mat);
+        byte covering = look != null && look.Covering != 0 ? look.Covering : b?.K.Roof ?? 0;
+        return Shapes.Storey(World, Site, s.X0, s.Z0, s.X1, s.Z1, s.Top, s.Mat, DoorSidesOf(zone), SharedSidesOf(zone), out arched, out ladder, out newTop, covering, look);
     }
 
     /// <summary>Every couple of seconds: a storey whose house has its roof off is marked out.</summary>
@@ -71,28 +124,28 @@ public sealed partial class Sim
             var zone = Zones.Find(z => z.Kind == Zone.Dwelling && z.X0 == s.X0 && z.Z0 == s.Z0 && z.X1 == s.X1 && z.Z1 == s.Z1);
             // the house taken back meanwhile: nothing to go up on
             if (zone == null) { Storeys.RemoveAt(i); continue; }
-            if (Shapes.OverHouse(World, s.X0, s.Z0, s.X1, s.Z1, s.Top).Count > 0) continue;
-            // its ladder against a long wall with no door in it, no eaves out over a house beside it (Sim.Houses.cs)
-            // (a town building's walls go on up and its roof goes back up as its look has them)
-            var b = BuildingOn(zone);
-            // (a house drawn with the rectangle goes on up in the look its plot gives it, Sim.HouseLooks.cs)
-            var look = b?.Look ?? HouseLookOf(zone, s.Mat);
-            byte covering = look != null && look.Covering != 0 ? look.Covering : b?.K.Roof ?? 0;
-            var plan = Shapes.Storey(World, Site, s.X0, s.Z0, s.X1, s.Z1, s.Top, s.Mat, DoorSidesOf(zone), SharedSidesOf(zone), out var arched, out var ladder, out int newTop, covering, look);
-            // what of the roof came down into the room as it was taken apart is carried off
+            if (RoofLeft(s)) continue;
+            // scaffolding still lashed up inside the walls' line to take the roof off comes down first: marked round it,
+            // the walls went up with a gap of it in them, open once it came down (a trolls' den never closed again)
+            var lashed = ScaffoldOver(s);
+            if (lashed.Count > 0) { DesignateRemove(lashed); continue; }
+            // (what of its ladder and floor is laid already, laid first under the roof, is left as it is)
+            var plan = StoreyShape(s, zone, out var arched, out var ladder, out int newTop);
+            // what of the roof came down into the room, or onto the new floor, as it was taken apart is carried off
             var debris = new VoxelList();
             for (int z = s.Z0; z <= s.Z1; z++)
                 for (int x = s.X0; x <= s.X1; x++)
-                    for (int y = s.Top - Shapes.TallestRise - 4; y < s.Top; y++)
+                    for (int y = s.Top - Shapes.TallestRise - 4; y < s.Top + 4; y++)
                         if (World.Get(x, y, z) is Mat.Lumber or Mat.Rubble) debris.Add(x, y, z, Mat.Air);
             if (debris.Count > 0) DesignateRemove(debris);
             DesignateBuild(ladder);
             Arch(arched);
             DesignateBuild(plan);
             zone.Depth = newTop;
-            _furnishing.Remove(zone.Id);
+            // (the old layout is kept, so that the new one, laid out for both floors once they are closed, takes away what
+            // of it stands in its way: let go, a chest of the floor below stood for good where the new layout put a table)
             Storeys.RemoveAt(i);
-            Say("Крыша снята: рабочие ставят лестницу, настилают пол и поднимают второй этаж.", 1, (s.X0 + s.X1) / 2f, (s.Z0 + s.Z1) / 2f);
+            Say("Крыша снята: рабочие поднимают стены этажа.", 1, (s.X0 + s.X1) / 2f, (s.Z0 + s.Z1) / 2f);
         }
     }
 

@@ -564,6 +564,10 @@ if (args.Length == 0 || args[0] == "--sim")
             $"held on the way {heldOnTheWay}, held now {sent.Hold}, at work in the grove {inGrove}, focus {(sent.Focus == grove2 ? "the grove" : "none")}; {sent.Why}");
         sim.RemoveZones(wood2.x - G, wood2.z - G, wood2.x + G, wood2.z + G);
         sim.CancelArea(wood2.x - 70, wood2.z - 70, wood2.x + 70, wood2.z + 70);
+        // (and whatever of the groves' trees is still marked: a tree at a grove's edge left half felled when its minute
+        // was up has its crown marked out past that box, and the areas below are worked when nothing else is marked —
+        // the workers, slower now in the grove's undergrowth, went to it from the cut again and again)
+        sim.CancelArea(0, 0, w4.SX, w4.SZ);
         sim.ReleaseHold(crew);
 
 
@@ -2483,10 +2487,17 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--thieves")
 
     // a worker of ours alone in the field: a thief beats it down, binds it and leads it off; cut down, it lets it go
     var lone = simH.Spawn(Kinds.Worker, simH.NearestStand((int)gxH - 420, (int)gzH - 120, 4));
+    // (worn out, a third of itself left: which of the two lands the first blows is the dice's, and with the thief
+    // sent reeling at the first exchange the worker gets away; what is looked at here is the binding and the leading)
+    lone.Hp = lone.MaxHp / 3;
     var snatcher = simH.Spawn(Kinds.Thief, simH.NearestStand((int)lone.X - 40, (int)lone.Z, 2));
     snatcher.Band = null;
     double boundAt = -1;
-    for (int t = 0; t < 60 && boundAt < 0; t++) { RunH(.5); if (lone.Captor == snatcher) boundAt = (t + 1) * .5; }
+    for (int t = 0; t < 60 && boundAt < 0; t++)
+    {
+        RunH(.5);
+        if (lone.Captor == snatcher) boundAt = (t + 1) * .5;
+    }
     float led0 = lone.X;
     RunH(4);
     float ledTo = lone.X;
@@ -2878,7 +2889,14 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--captives")
     RunC(1);
     simC.Carcasses.Add(Kinds.Boar);
     string nightC = simC.Sacrifice(RiteKind.Carcass);
-    for (int t = 0; t < 300 && gob2C.Inside; t++) RunC(.5);
+    // (a raid kept up all the while: the prisoner works at its bonds only while one is on, and how soon the band is beaten
+    // off is the fight's — on main its last raider lingered at the citadel past the two minutes by chance, and with ours
+    // going otherwise over the ground it went a few seconds before them)
+    for (int t = 0; t < 300 && gob2C.Inside; t++)
+    {
+        if (!simC.Raids.Active) simC.Waves.StartNow(simC);
+        RunC(.5);
+    }
     if (Environment.GetEnvironmentVariable("NIGHT_WHY") != null)
         foreach (var o in simC.Units) if (!o.Dead && o.Team == Team.Player) Console.WriteLine($"  NIGHT_WHY {o.T.Name} #{o.Id} {o.X:0},{o.Z:0} inside {o.Inside} {o.State} militia {o.Militia}; waves {simC.Waves.Active}, unguarded {gob2C.Unguarded:0.0}, bound {gob2C.Bound}");
     Check("by night there are no rites; a prisoner left unguarded slips out of the citadel and runs", nightC != null && !gob2C.Inside && !gob2C.Bound && gob2C.Routed,
@@ -6326,6 +6344,9 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--troves") TrovesBench
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bestiary") BestiaryBench.Run(Check);
 // the horde's homeland a bog: its zones on the big map, the map of before the same in all else, a bog valley (BogBench.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--bog") BogBench.Run(Check);
+// how our people walk: the pace on each kind of ground, a road kept to, gates taken rather than ladders and walls,
+// a bridge rather than the water (Walkers.cs)
+if (args.Length == 0 || args[0] == "--sim" || args[0] == "--walkers") WalkersBench.Run(Check);
 // every side of a valley reaches the citadel: the river's valley on a dozen seeds, the other kinds on three (ReachBench.cs)
 if (args.Length == 0 || args[0] == "--reach") ReachBench.Run(Check);
 // every valley is made: each kind by itself on many seeds, a share of two big maps' cells (ValleysBench.cs)

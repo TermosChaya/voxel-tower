@@ -114,6 +114,35 @@ static class LooksBench
                 var over = zz == null ? null : Shapes.OverHouse(w, b.X0, b.Z0, b.X1, b.Z1, zz.Depth);
                 var (fs, fp, fb) = sim.FurnitureOf(b);
                 Console.WriteLine($"  furniture: {fs} of {fp} standing, blocked: {fb}");
+                // (holes in the walls of the storey: open voxels in the wall ring between the old top and the new)
+                if (zz != null)
+                {
+                    var holes = new List<string>();
+                    int t = Shapes.HouseWall, n = 0;
+                    for (int y = zz.Depth - Shapes.HouseHeight; y < zz.Depth; y++)
+                        for (int z = b.Z0; z <= b.Z1; z++)
+                            for (int x = b.X0; x <= b.X1; x++)
+                            {
+                                bool ring = x - b.X0 < t || b.X1 - x < t || z - b.Z0 < t || b.Z1 - z < t;
+                                if (!ring || w.Get(x, y, z) != Mat.Air) continue;
+                                n++;
+                                if (holes.Count < 6) holes.Add($"{x - b.X0},{y - g},{z - b.Z0}");
+                            }
+                    Console.WriteLine($"  open in the walls of the storey: {n} voxels, e.g. {string.Join("; ", holes)}");
+                    // (columns over the walls' top with nothing at all over them: a hole in the roof)
+                    var bare = new List<string>();
+                    int nb = 0;
+                    for (int z = b.Z0; z <= b.Z1; z++)
+                        for (int x = b.X0; x <= b.X1; x++)
+                        {
+                            bool any = false;
+                            for (int y = zz.Depth; y < zz.Depth + Looks.HighestRoof && !any; y++) any = w.Get(x, y, z) != Mat.Air;
+                            if (any) continue;
+                            nb++;
+                            if (bare.Count < 6) bare.Add($"{x - b.X0},{z - b.Z0} (under it {Mat.NameOf(w.Get(x, zz.Depth - 1, z))})");
+                        }
+                    Console.WriteLine($"  columns with no roof over them: {nb}, e.g. {string.Join("; ", bare)}");
+                }
                 Console.WriteLine($"  raising: storeys waiting {sim.Storeys.Count}, zone {(zz == null ? "none" : $"{zz.X0},{zz.Z0}-{zz.X1},{zz.Z1} depth {zz.Depth}, closed {zz.Closed} «{zz.Why}», planned {zz.Planned}")}, over it {over?.Count}"
                     + (over is { Count: > 0 } ? $" e.g. {Mat.NameOf(w.Get(over.X(0), over.Y(0), over.Z(0)))} at {over.X(0) - b.X0},{over.Y(0) - g},{over.Z(0) - b.Z0}" : ""));
             }
@@ -240,7 +269,17 @@ static class LooksBench
         int fell0 = fell;
         string raise = sim.Raise(rb);
         double r0 = sim.Time;
-        for (int s = 0; s < wait && rb.Level < 2; s++) Run(1);
+        // (LOOKS_WHY: what the workers are about, every two minutes of the raising)
+        bool whys = Environment.GetEnvironmentVariable("LOOKS_WHY") != null;
+        for (int s = 0; s < wait && rb.Level < 2; s++)
+        {
+            Run(1);
+            if (!whys || s % (s < 200 ? 10 : 120) != 0) continue;
+            int left = Shapes.OverHouse(w, rb.X0, rb.Z0, rb.X1, rb.Z1, sim.ZoneOf(rb)?.Depth ?? 0).Count;
+            var (fs1, fp1, fb1) = sim.FurnitureOf(rb);
+            Console.WriteLine($"  t+{s}: {left} over the walls, storeys waiting {sim.Storeys.Count}, marked {sim.Orders.Total}, level {rb.Level}/{rb.Target}, depth {sim.ZoneOf(rb)?.Depth} (zone {sim.ZoneOf(rb)?.Id}, dwellings there {sim.Zones.Count(z => z.Kind == Zone.Dwelling && z.X0 <= rb.X1 && z.X1 >= rb.X0 && z.Z0 <= rb.Z1 && z.Z1 >= rb.Z0)}), furniture {fs1}/{fp1} {fb1}; " + string.Join("; ", sim.Units.Where(u => !u.Dead && u.T == Kinds.Worker)
+                .Select(u => $"«{u.Why}» {u.State} at {(int)u.X - rb.X0},{(int)u.Y - w.GroundTop((int)rb.CX, (int)rb.CZ)},{(int)u.Z - rb.Z0}{(u.Raising != null ? " scaffold" : "")}")));
+        }
         Run(10);
         if (rb.Level < 2) Marked(rb);
         var rz = sim.ZoneOf(rb);

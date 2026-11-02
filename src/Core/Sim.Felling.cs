@@ -364,6 +364,10 @@ public sealed partial class Sim
                     if (Mat.IsTrunk(m)) { if (!b.Wood.Contains(WaterPlanner.Pack(x, y, z))) { trees++; break; } continue; }
                     // (scaffolding is only poles and boards, put up again as easily)
                     if (m == Mat.Scaffold) { cost += 40; break; }
+                    // (a way laid in the ground is ground, and logs of trees felled before lie on it to be cut up, none of
+                    // it built by anyone: a tree goes down across them as across the turf — the last tree of a grove,
+                    // the logs of the others still lying round it on every side, had no way to fall and was left)
+                    if (Mat.IsPavement[m] || m == Mat.Wood && MeantAt(x, y, z) == 0) continue;
                     if (Mat.IsPlayer[m]) { built++; break; }
                 }
             }
@@ -588,9 +592,11 @@ public sealed partial class Sim
             bool lanes = false;
             foreach (var o in Dangers) if (o != d && (o.DX != 0 || o.DZ != 0)) { lanes = true; break; }
             bool Other(int c) { var (px, py, pz) = Nav.Feet(c); foreach (var o in Dangers) if (o != d && (o.DX != 0 || o.DZ != 0) && o.Has(px, py, pz, r)) return true; return false; }
-            var path = Paths.Find(u.Cell, c => { var (px, py, pz) = Nav.Feet(c); return !d.Has(px, py, pz, r + 2) && (!lanes || !Other(c)); }, c => 0, MoverOf(u), 2500, gates: true,
+            // (by any way out, up a ledge or down off one: there is no time to look for the stair, Pathing.cs, Careful)
+            var flee = Careless(MoverOf(u));
+            var path = Paths.Find(u.Cell, c => { var (px, py, pz) = Nav.Feet(c); return !d.Has(px, py, pz, r + 2) && (!lanes || !Other(c)); }, c => 0, flee, 2500, gates: true,
                 lane: lanes ? c => Other(c) ? 12 : 0 : null);
-            path ??= Paths.Find(u.Cell, c => { var (px, py, pz) = Nav.Feet(c); return !d.Has(px, py, pz, r + 2); }, c => 0, MoverOf(u), 2500, gates: true);
+            path ??= Paths.Find(u.Cell, c => { var (px, py, pz) = Nav.Feet(c); return !d.Has(px, py, pz, r + 2); }, c => 0, flee, 2500, gates: true);
             if (path == null) { u.State = UnitState.Idle; return true; }
             u.Path = path; u.PathI = 0;
         }

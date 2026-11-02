@@ -35,7 +35,8 @@ public partial class Main
         // (at its meal and standing still at it: a step aside to a free cell is no meal yet)
         for (int i = 0; i < 80 && (eater.Pastime != Pastime.Eat || eater.State != UnitState.Idle || eater.Path != null && eater.PathI < eater.Path.Count); i++) { Advance(.25); await Frames(1); }
         eater.PastimeUntil = sim.Time + 60;
-        sleeper.PastimeUntil = sim.Time + 60;
+        // (the sleeper's staged bed, InBed, holds till the scene ends: given a minute instead, it was woken at once by the
+        // day wherever the run before had left the clock by day, and the check found nobody asleep)
         // (lying down takes the view about a second and a half of its frames' time: waited for by the clock, up to 6 s,
         // not by a count of frames, which at 120 frames a second gave it 0.75 s and it was drawn lying only by halves)
         var lyingDown = System.Diagnostics.Stopwatch.StartNew();
