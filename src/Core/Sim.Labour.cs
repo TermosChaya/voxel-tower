@@ -205,6 +205,20 @@ public sealed partial class Sim
                 // it waits a good while — walking back to it every few seconds only takes the hands off other work
                 bool aside = _inTheWay && StepAside(u);
                 u.Unreachable[u.Site] = Time + (aside ? 1.5 : u.Why.StartsWith("ждёт опоры") ? 30 : u.Why.StartsWith("нет") ? 8 : 4);
+                // nothing in reach at all of what only comes out there, and its top higher than one reaches (a roof coming
+                // off from its ridge down, the worker under its eaves): scaffolding up to where its top is in reach, from
+                // here (a town hall's roof was walked up to from the ground under it again and again, the whole raising
+                // long: what came off it came off only while those who had built it stood on it still)
+                if (u.Why == "" && Orders.ColWork[0][u.Site] == 0 && u.T.Work >= 1 && Stock[Stockpile.Wood] >= 600
+                    && Orders.Span(u.Site, out _, out int top) && top >= Nav.Floor[u.Cell] + Labour.ReachUp
+                    && PlanReach(u, u.Site, top, top) is { } lift && ScaffoldLogsFree() >= ScaffoldLogs(lift))
+                {
+                    ReleaseSite(u);
+                    Scaffolds.Add(lift);
+                    u.Raising = lift;
+                    u.Why = "ставит леса к работе наверху";
+                    return;
+                }
                 ReleaseSite(u);
                 u.NextSearch = Time + .2;
                 return;
@@ -573,12 +587,7 @@ public sealed partial class Sim
                 bool lays = (mask & 1) != 0 && Orders.ColWork[0][col] > 0;
                 bool Low(int c) => Goal(c) && Nav.Floor[c] - Labour.ReachDown <= y0;
                 List<int> path = null;
-                // work up on what is built, out of reach from the ground there (a wall's upper courses, a roof coming
-                // off), is climbed to as it always was: the way that keeps to the doors keeps off the very walls and roofs
-                // the work is on (the workers come down from what they built now, and the roofs of a town hall, a trolls'
-                // den and a workshop to be raised a storey came off no more)
                 var mover = MoverOf(u);
-                if (mover.Careful && y1 >= World.GroundTop((ci << NavGrid.Shift) + 4, (ck << NavGrid.Shift) + 4) + Labour.ReachUp) mover = Careless(mover);
                 if (lays)
                 {
                     path = Low(u.Cell) ? new List<int>() : Paths.Find(u.Cell, Low, c => H(c, ci, ck), mover, 30000, gates: true);

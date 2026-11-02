@@ -423,9 +423,10 @@ public sealed partial class Sim
             int ui = Nav.I(u.Cell), uy = Nav.Y(u.Cell), uk = Nav.K(u.Cell);
             foreach (var c in s.Columns)
             {
-                // in its cells (anyone: a raider on it is on it too), but for one of ours idling on the ground at its
-                // foot (the work it was put up for done from beside it, where the workers reach the lowest course)
-                if (ui == c.i && uk == c.k && uy >= c.y0 && uy <= c.y1 + 1 && !(u.Team == Team.Player && uy == c.y0 && u.State == UnitState.Idle)) return true;
+                // in its cells (anyone: a raider on it is on it too), but for one of ours on the ground at its foot (the
+                // work it was put up for done from beside it, where the workers reach the lowest course; idle ones strolling
+                // about there kept a short one standing for good)
+                if (ui == c.i && uk == c.k && uy >= c.y0 && uy <= c.y1 + 1 && !(u.Team == Team.Player && uy == c.y0)) return true;
                 // a worker of ours up on what it leads to, near it (not a soldier at its post on the wall: it has the
                 // wall's own way up and down, and a wall kept manned kept the scaffolding by it standing for good)
                 // (up there: about as high as its top, not merely higher than its foot, as one on the ground by a scaffold

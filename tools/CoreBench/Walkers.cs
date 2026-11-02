@@ -25,7 +25,8 @@ static class WalkersBench
         var w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         var site = MapGen.Generate(w, mp);
         w.Compact();
-        var sim = new Sim(w, site);
+        // (the old quiet way with nothing to do, as the other staged scenes have it: Sim.Life.cs)
+        var sim = new Sim(w, site) { QuietLife = true };
         sim.Waves.Countdown = 1e9; sim.WildTarget = 0;
         void Run(double seconds) { for (double t = 0; t < seconds; t += .05) sim.Step(.05f); }
         // the household at the gate kept out of it: these tests bring their own
@@ -271,7 +272,8 @@ static class WalkersBench
         var w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         var site = MapGen.Generate(w, mp);
         w.Compact();
-        var sim = new Sim(w, site);
+        // (the old quiet way with nothing to do, as the other staged scenes have it: Sim.Life.cs)
+        var sim = new Sim(w, site) { QuietLife = true };
         sim.Waves.Countdown = 1e9; sim.WildTarget = 0;
         void Run(double seconds) { for (double t = 0; t < seconds; t += .05) sim.Step(.05f); }
         foreach (var u in sim.Units) if (u.Team == Team.Player) { u.Dead = true; u.DiedAt = -999; }
@@ -371,7 +373,8 @@ static class WalkersBench
         var w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
         var site = MapGen.Generate(w, mp);
         w.Compact();
-        var sim = new Sim(w, site);
+        // (the old quiet way with nothing to do, as the other staged scenes have it: Sim.Life.cs)
+        var sim = new Sim(w, site) { QuietLife = true };
         sim.Waves.Countdown = 1e9; sim.WildTarget = 0;
         void Run(double seconds) { for (double t = 0; t < seconds; t += .05) sim.Step(.05f); }
         int fx0 = (site.KeepX - 460) & ~7, fz0 = (site.KeepZ - 140) & ~7, fg = w.SurfAt(fx0 + 160, fz0 + 140);
@@ -390,7 +393,8 @@ static class WalkersBench
             Shapes.LevelTop(w, fx0 + 120, fz0 + 140, 48));
         sim.DesignateBuild(tower);
         sim.DesignateBuild(wall);
-        // each scaffold as it goes up and comes down, while the work goes on (logs given as told)
+        // each scaffold as it goes up and comes down, while the work goes on (logs given as told); one put up to get out
+        // of somewhere comes down as soon as its raiser is out, as it should, and is not counted as taken down by turns
         var log = new List<string>();
         (int raised, int down, int quick, int again, double took, int left) Watch(string name, Action stock)
         {
@@ -411,7 +415,7 @@ static class WalkersBench
                     up[sc] = sim.Time;
                     raised++;
                     var c = sc.Columns[0];
-                    if (downs.Any(d => Math.Abs(d.i - c.i) <= 3 && Math.Abs(d.k - c.k) <= 3 && sim.Time - d.down < 60)) again++;
+                    if (!sc.Escape && downs.Any(d => Math.Abs(d.i - c.i) <= 3 && Math.Abs(d.k - c.k) <= 3 && sim.Time - d.down < 60)) again++;
                     log.Add($"{name} {sim.Time - t0:0} up {(sc.Escape ? "escape" : "reach")} at {c.i},{c.k} {c.y0}-{c.y1}");
                 }
                 foreach (var sc in up.Keys.ToList())
@@ -420,7 +424,7 @@ static class WalkersBench
                     var c = sc.Columns.Count > 0 ? sc.Columns[0] : default;
                     if (double.IsNaN(up[sc])) { up.Remove(sc); continue; }
                     downs.Add((up[sc], sim.Time, c.i, c.k));
-                    if (sim.Time - up[sc] < 30) quick++;
+                    if (sim.Time - up[sc] < 30 && !sc.Escape) quick++;
                     log.Add($"{name} {sim.Time - t0:0} down at {c.i},{c.k} after {sim.Time - up[sc]:0} s");
                     up.Remove(sc);
                 }
@@ -428,8 +432,9 @@ static class WalkersBench
             return (raised, downs.Count, quick, again, sim.Time - t0, sim.Orders.Total);
         }
         var plenty = Watch("plenty", Stock);
-        Run(240);
-        int standing = sim.Scaffolds.Count;
+        // (long enough for one left up on what it built to wait for a gate to open, lash its own way down and climb down by it)
+        Run(480);
+        int standing = sim.Scaffolds.Count(sc => !sc.Escape);
         if (debug)
         {
             foreach (var sc in sim.Scaffolds)
@@ -463,7 +468,7 @@ static class WalkersBench
         sim.DesignateBuild(ring);
         var closed = Watch("ring", Stock);
         Run(240);
-        int ringStanding = sim.Scaffolds.Count;
+        int ringStanding = sim.Scaffolds.Count(sc => !sc.Escape);
         if (debug)
         {
             Console.WriteLine($"       scaffolds: {string.Join("; ", log)}");

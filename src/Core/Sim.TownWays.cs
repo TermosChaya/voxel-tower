@@ -192,6 +192,11 @@ public sealed partial class Sim
         }
     }
 
+    /// <summary>The day's own hours, which no way is laid in (Sim.Life.cs): the night, and the meal at noon for one that
+    /// has not eaten; nobody asleep or at its bowl is got up for it (the town's ways are what the workers find to do
+    /// themselves, not marked work, which comes before them).</summary>
+    bool DaysOwn(Unit u) => u.Pastime is Pastime.Sleep or Pastime.Eat || !QuietLife && (Bedtime || Noon && u.AteDay != Clock.Day);
+
     /// <summary>What one at the town's ways is doing, for its card.</summary>
     string PavingWhy => TownGrade() == WayKind.Dirt ? "прокладывает тропу по городу" : "мостит улицу";
 
@@ -201,7 +206,7 @@ public sealed partial class Sim
     /// </summary>
     bool TownWork(Unit u)
     {
-        if (_townWays.Count == 0 || u.T.Work < 1 || !Work.Does(u, WorkKind.Town) || !HasMainHand(u) || Alarm || Raids.Active) return false;
+        if (_townWays.Count == 0 || u.T.Work < 1 || !Work.Does(u, WorkKind.Town) || !HasMainHand(u) || Alarm || Raids.Active || DaysOwn(u)) return false;
         if (Time - u.MarkedWorkAt < TownIdle || Orders.Total > 0 && Time - _ordersMoved < TownBusy) return false;
         var grade = TownGrade();
         int ui = Nav.I(u.Cell), uk = Nav.K(u.Cell), best = -1;
@@ -244,7 +249,7 @@ public sealed partial class Sim
     bool PaveTick(Unit u, float dt)
     {
         int col = u.Paving;
-        if (!_townWays.TryGetValue(col, out var cols) || !Work.Does(u, WorkKind.Town) || Alarm || Raids.Active) { StopPaving(u); return false; }
+        if (!_townWays.TryGetValue(col, out var cols) || !Work.Does(u, WorkKind.Town) || Alarm || Raids.Active || DaysOwn(u)) { StopPaving(u); return false; }
         int ci = col % Nav.NX, ck = col / Nav.NX;
         if (Math.Abs(Nav.I(u.Cell) - ci) > 1 || Math.Abs(Nav.K(u.Cell) - ck) > 1)
         {
