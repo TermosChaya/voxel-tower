@@ -40,8 +40,10 @@ public partial class Main
         v._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = true, Position = mid });
         for (int i = 1; i <= 10; i++) v._UnhandledInput(new InputEventMouseMotion { Position = mid + new Vector2(-20 * i, 0), ButtonMask = MouseButtonMask.Right });
         v._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Right, Pressed = false, Position = mid + new Vector2(-200, 0) });
-        await Frames(2);
+        // the eye where the drag left it, before any frame: frames on a busy machine are long, and whatever else moves the
+        // eye with the time (the map's clock, a hero it follows) moved it on by a metre in them, along as well as across
         var dragged = v.Cam.GlobalPosition;
+        await Frames(2);
         float z0 = v.Zoom;
         for (int i = 0; i < 4; i++) v._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.WheelUp, Pressed = true, Position = mid });
         await Frames(40);
