@@ -230,6 +230,12 @@ public static class Mat
     public const byte DaubWhite = 215, DaubOchre = 214, DaubRose = 213, DaubBlue = 212;
     /// <summary>A house's shutters painted green, red or blue: boards all the same, whatever the wall is of.</summary>
     public const byte ShutterGreen = 211, ShutterRed = 209, ShutterBlue = 208;
+    /// <summary>
+    /// What grows in a valley's open ground by itself besides its grass and flowers (MapGen.Wilds.cs), from the free numbers
+    /// under the houses' colours: heather on the heights and the dry ground, the pink of a dog rose in flower, the white of a
+    /// hawthorn's blossom, the yellow of broom; and a bracket fungus on dead wood. Leaves to everyone, as juniper is.
+    /// </summary>
+    public const byte Heather = 207, BlossomPink = 206, BlossomWhite = 205, Broom = 204, Bracket = 203;
 
     public const int Count = 253;
 
@@ -474,18 +480,27 @@ public static class Mat
         D(Nest, "Гнездо", 0x6e5636, .26f, MatGroup.Wood, Natural);
         D(Anthill, "Муравейник", 0x5e4631, .34f, MatGroup.Earth, Natural | Earthy);
         D(Hollow, "Дупло", 0x1e1712, .14f, MatGroup.Wood, Natural);
+        // what grows in the open by itself (MapGen.Wilds.cs): heather, a rose's, a hawthorn's and broom's flowers, a bracket fungus
+        D(Heather, "Вереск", 0x5b4560, .3f, MatGroup.Wood, Natural);
+        D(BlossomPink, "Шиповник", 0xc27088, .22f, MatGroup.Wood, Natural);
+        D(BlossomWhite, "Боярышник", 0xd6d0c0, .12f, MatGroup.Wood, Natural);
+        D(Broom, "Дрок", 0xcfae30, .2f, MatGroup.Wood, Natural);
+        D(Bracket, "Трутовик", 0xa98a5c, .22f, MatGroup.Wood, Natural);
         Emission[Phial] = .35f;
         Emission[Window] = Emission[WindowLog] = .45f;
 
         // a number no material has been given yet (kept for one being made elsewhere) is at least something, not nothing
         for (int m = 1; m < Count; m++) if (Def[m].Name == null) D((byte)m, "—", 0x808080, 0, MatGroup.Hard, 0);
         foreach (var m in new[] { Leaf, Trunk, Tuft, Foliage, Flower, Bloom, Birch, NeedleLight, FoliageLight, FoliageGold, PineBark, Snag,
-            FlowerRed, FlowerWhite, FlowerBlue, Fern, Reed, Mushroom, Lily, Juniper, BerryRed, BerryBlue, Nest, Hollow }) IsVeg[m] = true;
+            FlowerRed, FlowerWhite, FlowerBlue, Fern, Reed, Mushroom, Lily, Juniper, BerryRed, BerryBlue, Nest, Hollow,
+            Heather, BlossomPink, BlossomWhite, Broom, Bracket }) IsVeg[m] = true;
         foreach (var m in new[] { Leaf, Tuft, Foliage, NeedleLight, FoliageLight, FoliageGold, Ladder, SiegeLadder, Ivy, Water, Flower, Bloom, Banner, BannerTrim, Sconce, Flame, Stakes, Pitch, TowerLadder, Acid, Scaffold, Lava,
-            FlowerRed, FlowerWhite, FlowerBlue, Fern, Reed, Mushroom, Lily, Juniper, BerryRed, BerryBlue, Nest }) Passable[m] = true;
+            FlowerRed, FlowerWhite, FlowerBlue, Fern, Reed, Mushroom, Lily, Juniper, BerryRed, BerryBlue, Nest,
+            Heather, BlossomPink, BlossomWhite, Broom, Bracket }) Passable[m] = true;
         IsLadder[Ladder] = IsLadder[SiegeLadder] = IsLadder[TowerLadder] = IsLadder[Scaffold] = IsLadder[Ivy] = true;
         foreach (var m in new[] { Tuft, Flower, Bloom, FlowerRed, FlowerWhite, FlowerBlue, Fern, Reed, Mushroom, Lily }) SwayKind[m] = 1;
-        foreach (var m in new[] { Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold, Juniper, BerryRed, BerryBlue, Nest, MapFlagBlue, MapFlagRed }) SwayKind[m] = 2;
+        foreach (var m in new[] { Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold, Juniper, BerryRed, BerryBlue, Nest, MapFlagBlue, MapFlagRed,
+            Heather, BlossomPink, BlossomWhite, Broom }) SwayKind[m] = 2;
         foreach (var m in new[] { Stone, StoneDark, StoneLight, StoneWarm, StoneCool, Mortar, Keep, KeepShade, KeepDark, Cobble, Flag }) Smooth[m] = true;
         foreach (var m in new[] { Steel, Mail, Brass, Pitch, SteelEdge, SteelDark, Nugget, Quicksilver }) Metal[m] = true;
         for (int m = 0; m < Count; m++)
@@ -498,6 +513,9 @@ public static class Mat
         // juniper in needles; berries, a nest's twigs and the inside of a hollow plain
         Skin[Juniper] = 7;
         Skin[BerryRed] = Skin[BerryBlue] = Skin[Nest] = Skin[Hollow] = 0;
+        // a bracket fungus plain; heather in needles, as juniper
+        Skin[Bracket] = 0;
+        Skin[Heather] = 7;
         // the ash of the horde's land flecked as burnt turf is
         Skin[Ash] = 8;
         // what holds the world up: loose pieces resting on these never fall
@@ -507,7 +525,10 @@ public static class Mat
         // catches slowly and burns long, and some of it stands charred after; a living trunk and oak bound with iron
         // slower still, a dead tree readily; pitch catches from anything, runs with fire and burns long, twice as hot
         void F(float caught, float fuel, float charred, params byte[] ms) { foreach (var m in ms) { Catch[m] = caught; Fuel[m] = fuel; CharShare[m] = charred; Heat[m] = 1; } }
-        F(.5f, 4, 0, Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold, Juniper, BerryRed, BerryBlue);
+        F(.5f, 4, 0, Leaf, Foliage, NeedleLight, FoliageLight, FoliageGold, Juniper, BerryRed, BerryBlue, BlossomPink, BlossomWhite);
+        // heather and broom are dry and go up quicker than leaves; a bracket fungus only chars
+        F(.6f, 3, 0, Heather, Broom);
+        F(.05f, 2, 0, Bracket);
         F(.35f, 1.5f, 0, Tuft, Flower, Bloom, FlowerRed, FlowerWhite, FlowerBlue, Fern);
         // dry reeds and a nest of twigs go up at a touch; mushrooms only shrivel; lilies on the water do not burn
         F(.6f, 2, 0, Reed, Nest);
@@ -570,8 +591,10 @@ public static class Mat
 
     /// <summary>The trunk of a tree, birch or any other.</summary>
     public static bool IsTrunk(byte m) => m is Trunk or Birch or PineBark or Snag or Hollow;
-    /// <summary>Needles and leaves, in any of their shades, and what hangs among them: juniper, berries, a nest.</summary>
-    public static bool IsLeafy(byte m) => m is Leaf or Foliage or NeedleLight or FoliageLight or FoliageGold or Juniper or BerryRed or BerryBlue or Nest;
+    /// <summary>Needles and leaves, in any of their shades, and what hangs among them: juniper, berries, a nest; heather, a bush's
+    /// flowers, a bracket fungus on dead wood.</summary>
+    public static bool IsLeafy(byte m) => m is Leaf or Foliage or NeedleLight or FoliageLight or FoliageGold or Juniper or BerryRed or BerryBlue or Nest
+        or Heather or BlossomPink or BlossomWhite or Broom or Bracket;
 
     /// <summary>A tuft of grass, a flower, a fern, a reed, a mushroom, a lily on the water: the game draws it in blades and
     /// petals, not as a cube.</summary>

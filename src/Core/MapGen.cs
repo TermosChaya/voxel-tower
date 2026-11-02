@@ -55,6 +55,13 @@ public sealed class MapParams
     /// cairns, standing stones, old walls and footings, piles of logs, fence posts); off for a valley saved before them.
     /// </summary>
     public bool Traces = true;
+    /// <summary>
+    /// Nature's dressing of the open laid when the valley is made (MapGen.Wilds.cs: boulders and outcrops with lichen and
+    /// moss, thickets of dog rose, hawthorn and broom, heather, tall flowers, bracket fungi on dead wood, driftwood and
+    /// pebbles on the banks, a beavers' lodge, snow lying in the mountains' hollows, cranberries and cotton grass in the
+    /// bog); off for a valley saved before it.
+    /// </summary>
+    public bool Wilds = true;
 }
 
 /// <summary>

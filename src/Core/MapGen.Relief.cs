@@ -83,7 +83,7 @@ public static partial class MapGen
         var site = new Site
         {
             HTop = new int[N], KeepR = 24, KeepX = (int)hex.CX, KeepZ = (int)hex.CZ, Design = new VoxelWorld(SX, w.SY, SZ),
-            SX = SX, SZ = SZ, Hex = hex, Kind = p.Kind, Classic = p.Classic, EntrySide = entry, Edges = p.Edges, Massifs = p.Massifs, Traced = p.Traces,
+            SX = SX, SZ = SZ, Hex = hex, Kind = p.Kind, Classic = p.Classic, EntrySide = entry, Edges = p.Edges, Massifs = p.Massifs, Traced = p.Traces, Wilded = p.Wilds,
         };
         if (entry == Hex.West)
         {
@@ -1220,6 +1220,7 @@ public static partial class MapGen
         // whatever stands there
         if (p.Details) Nature(w, site, p, relief);
         if (p.Details && p.Traces) Traces(w, site, p);
+        if (p.Details && p.Wilds) Wilds(w, site, p, relief);
         if (p.Holding == Holding.Outpost) { site.KeepBase = Holdings.OutpostPlace(w, site); return site; }
         if (p.Holding == Holding.HordeTown) { site.KeepBase = Holdings.HordeTown(w, site, seed, p.HordeWorks); return site; }
 

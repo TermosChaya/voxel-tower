@@ -6342,6 +6342,8 @@ if (args.Length == 0 || args[0] == "--traces") TracesBench.Run(Check);
 // the citadel is a castle: raised round the keep in every kind of valley, half fallen as a game finds it; mended, it shuts
 // the keep in but for its gate, and the way in from the horde's side goes through it (CastleBench.cs)
 if (args.Length == 0 || args[0] == "--castle") CastleBench.Run(Check);
+// nature's dressing of the open: boulders, ledges, thickets, heather, tall flowers, fungi, the banks' logs, lodges, snow, cranberries (WildsBench.cs)
+if (args.Length == 0 || args[0] == "--wilds") WildsBench.Run(Check);
 // the gods: the waking learnt and cast, the Colossus out of the ground, set loose on the horde, ridden, against the
 // horde's god, back under (Gods.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--gods") GodsBench.Run(Check);

@@ -24,9 +24,10 @@ static class FellSafeBench
         var lines = new List<string>();
         foreach (var (seed, kind) in new[] { (7u, ValleyKind.First), (5u, ValleyKind.Forest), (3u, ValleyKind.Mountain) })
         {
-            // (the valleys it was made on, without the old works in the wild: where a tree falls and who steps aside is
-            // chaotic, and the old works change both)
-            var mp = new MapParams { Seed = seed, Kind = kind, Hexagon = true, SizeX = MapParams.GameSize, SizeZ = MapParams.GameSize, Traces = false };
+            // (the valleys it was made on, without the old works in the wild and nature's dressing of the open: where a tree
+            // falls and who steps aside is chaotic, and either changes both — 2 soldiers struck of 66 trees with the dressing,
+            // as with the old works; the felling's own faults that shows are being mended on a branch of their own)
+            var mp = new MapParams { Seed = seed, Kind = kind, Hexagon = true, SizeX = MapParams.GameSize, SizeZ = MapParams.GameSize, Traces = false, Wilds = false };
             var w = new VoxelWorld(mp.SizeX, mp.SizeY, mp.SizeZ);
             var site = MapGen.Generate(w, mp);
             w.Compact();

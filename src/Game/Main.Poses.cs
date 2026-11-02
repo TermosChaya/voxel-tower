@@ -106,6 +106,7 @@ public partial class Main
         if (_pose == "rowhouses") { RowHousesPose(); return; }
         if (_pose == "village") { VillagePose(); return; }
         if (_pose == "traces") { TracesPose(); return; }
+        if (_pose == "wilds") { WildsPose(); return; }
         if (_pose == "holding") { HoldingPose(); return; }
         if (_pose == "arrive") { ArrivePose(); return; }
         if (_pose == "nature") { NaturePose(); return; }

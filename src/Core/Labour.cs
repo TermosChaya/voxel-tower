@@ -56,7 +56,8 @@ public static class Labour
         // trunk stands for four of timber, and needles and leaves give a little brushwood
         foreach (var m in new[] { Mat.Trunk, Mat.Birch, Mat.PineBark, Mat.Snag, Mat.Hollow }) D(m, 2, Stockpile.Wood, 4);
         D(Mat.Wood, 2, Stockpile.Wood, .75f);
-        foreach (var m in new[] { Mat.Leaf, Mat.Foliage, Mat.NeedleLight, Mat.FoliageLight, Mat.FoliageGold, Mat.Juniper, Mat.BerryRed, Mat.BerryBlue, Mat.Nest }) D(m, .25f, Stockpile.Wood, .15f);
+        foreach (var m in new[] { Mat.Leaf, Mat.Foliage, Mat.NeedleLight, Mat.FoliageLight, Mat.FoliageGold, Mat.Juniper, Mat.BerryRed, Mat.BerryBlue, Mat.Nest,
+            Mat.Heather, Mat.BlossomPink, Mat.BlossomWhite, Mat.Broom, Mat.Bracket }) D(m, .25f, Stockpile.Wood, .15f);
         // ladders come apart quickly, and what the horde leaves behind is timber too
         D(Mat.Ladder, 1, Stockpile.Wood, .75f); D(Mat.SiegeLadder, .5f, Stockpile.Wood, .75f); D(Mat.Ivy, .5f, Stockpile.None, 0); D(Mat.Deck, 1.5f, Stockpile.Wood, .75f);
         D(Mat.Gate, 2.5f, Stockpile.Wood, .75f); D(Mat.GateShut, 2.5f, Stockpile.Wood, .75f); D(Mat.GateOpen, 2.5f, Stockpile.Wood, .75f);

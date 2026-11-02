@@ -56,7 +56,7 @@ public partial class Main
         CampaignPoseBefore();
         if (Atlas?.Here is not { } cell) return false;
         var mp = Atlas.ParamsOf(cell);
-        _seed = mp.Seed; _valley = mp.Kind; _classic = false; _hexagon = true; _massifs = mp.Massifs; _traces = mp.Traces; _size = 0;
+        _seed = mp.Seed; _valley = mp.Kind; _classic = false; _hexagon = true; _massifs = mp.Massifs; _traces = mp.Traces; _wilds = mp.Wilds; _size = 0;
         _entry = mp.EntrySide; _holding = mp.Holding; _edges = mp.Edges; _trove = mp.Trove; _troveTaken = mp.TroveTaken;
         string file = Path.Combine(Saves.CampaignDir(CampSlot), cell.File);
         if (cell.Visited && File.Exists(file)) PendingLoad = file;
