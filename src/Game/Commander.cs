@@ -430,13 +430,24 @@ public partial class Commander : Node
         return u;
     }
 
-    /// <summary>Puts one of a kind in the citadel's line, or says why it cannot be.</summary>
+    /// <summary>Takes one of a kind on at the citadel (it steps out of the door at once), or says why it cannot be.</summary>
     public bool Enlist(UnitType t)
     {
         string why = _m.Sim.CantEnlist(t);
         if (why != null) { _m.Hud.Float(why, Ornament.Blood); return false; }
         _m.Sim.Enlist(t);
-        _m.Hud.Float($"{t.Name}: в очереди цитадели", Ornament.EmberGlow);
+        _m.Hud.Float($"{t.Name}: нанят, выходит из цитадели", Ornament.EmberGlow);
+        _m.Hud.Refresh();
+        return true;
+    }
+
+    /// <summary>Takes one of a kind on in its building (it comes out of that building's door), or says why it cannot be.</summary>
+    public bool HireAt(Building b, UnitType t)
+    {
+        string why = _m.Sim.CantHireAt(b, t);
+        if (why != null) { _m.Hud.Float(why, Ornament.Blood); return false; }
+        _m.Sim.HireAt(b, t);
+        _m.Hud.Float($"{t.Name}: нанят, выходит из здания «{b.K.Name}»", Ornament.EmberGlow);
         _m.Hud.Refresh();
         return true;
     }

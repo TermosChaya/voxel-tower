@@ -138,7 +138,7 @@ public partial class Hints : Control
             case Tool.Gate:
                 // over a gate: walled up; over a house's wall: a door of the house
                 o.Add((Lmb, t.HoverGate != null ? "заложить ворота" : "по стене, по стене дома — дверь"));
-                if (t.HoverGate == null) o.Add(("ЛКМ по воротам", "заложить"));
+                if (t.HoverGate == null) o.Add(($"{Lmb} по воротам", "заложить"));
                 break;
             case Tool.Repair:
                 o.Add((Lmb, "по разрушенной постройке"));

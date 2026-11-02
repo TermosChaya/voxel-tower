@@ -339,7 +339,7 @@ public sealed partial class Sim
             return !marching;
         }
         // swordsmen hold the ground round themselves or their post, going first for what breaks the walls
-        float leash = 6 * 16;
+        float leash = HoldGround;
         var foe = MeleeFoe(u, leash);
         if (foe == null && u.Post >= 0)
         {
@@ -438,7 +438,11 @@ public sealed partial class Sim
     public bool Lit(float x, float z) => Time < BloodMoonUntil || _lit.Contains(LitKey((int)Math.Clamp(x, 0, World.SX - 1), (int)Math.Clamp(z, 0, World.SZ - 1)));
 
     /// <summary>How far a bow carries into the dark now: all the way by day, little more than half at night.</summary>
-    public float DarkRange(Unit a) => ShotRange(a) * FogRange * (1 - .45f * Clock.Darkness * ShotDark(a));
+    public float DarkRange(Unit a) => ShotRange(a) * FogRange * (1 - DarkLoss * Clock.Darkness * ShotDark(a));
+    /// <summary>The share of a bow's reach the full dark takes off; how far round itself or its post a man of the line holds the ground.</summary>
+    public const float DarkLoss = .45f, HoldGround = 12 * VoxelWorld.PerMetre;
+    /// <summary>How much harder a slinger's stone strikes with the lead shot.</summary>
+    public const float LeadShot = 1.33f;
 
     /// <summary>How far a bow carries to a spot: all the way by day or where it is light, little more than half in the dark.</summary>
     public float RangeAt(Unit a, float x, float z) => Clock.Darkness <= 0 || Lit(x, z) || HasRelic("eye") && a.Team == Team.Player ? ShotRange(a) * FogRange : DarkRange(a);
@@ -500,7 +504,7 @@ public sealed partial class Sim
         Shots++;
         // a stone of lead strikes a third harder; now and then a slinger with the lead shot and pots throws one of burning pitch
         var kind = ShotOf(u.T);
-        float harm = kind == Shot.Stone && Knows("leadshot") ? 1.33f : 1;
+        float harm = kind == Shot.Stone && Knows("leadshot") ? LeadShot : 1;
         if (kind == Shot.Stone && Knows("leadshot") && Rng.NextDouble() < FirePotShare && PotSafe(t)) kind = Shot.FirePot;
         float scatter = kind is Shot.Pot or Shot.FirePot ? 10 : 4;
         Arrows.Add(new Arrow

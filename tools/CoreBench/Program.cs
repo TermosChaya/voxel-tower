@@ -6309,6 +6309,9 @@ if (args.Length == 0 || args[0] == "--valleys") ValleysBench.Run(Check);
 // the mountains of a mountain valley: no ground flat against the top of the world, summits that come to a point, no cones,
 // ridges between the summits, several summits to a valley, made in good time (MountainsBench.cs)
 if (args.Length == 0 || args[0] == "--mountains") MountainsBench.Run(Check);
+// the game says what it does: the kinds' words with their own numbers, the lore's shares, one price wherever a kind is
+// hired, the architect offered only in his building (TextsBench.cs)
+if (args.Length == 0 || args[0] == "--texts") TextsBench.Run(Check);
 // the gods: the waking learnt and cast, the Colossus out of the ground, set loose on the horde, ridden, against the
 // horde's god, back under (Gods.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--gods") GodsBench.Run(Check);

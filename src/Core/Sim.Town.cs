@@ -128,13 +128,13 @@ public sealed partial class Sim
             Needs = new[] { ("smithy", 1) }, Grants1 = new[] { "barrows", "buckets", "hides" }, Grants2 = new[] { "carts", "bunks", "guild" },
             Props1 = new[] { Prop.Workbench, Prop.Blocks }, Props2 = new[] { Prop.Workbench, Prop.Crates } },
         new() { Key = "masons", W = 33, D = 41, Name = "Двор каменщиков", Lore = "b_masons", Gold = 50, UpGold = 120, Roof = Mat.Slate,
-            About = "Известковый раствор: орда ломает камень на 33 % дольше. Артель каменщиков: строят на 25 % быстрее.",
+            About = $"Известковый раствор: орда ломает камень на {KindTexts.Pct(1 / MortarHack)} % дольше. Артель каменщиков: строят на 25 % быстрее.",
             Level2 = "Тёсаный камень, цитадель на скале и крепость: камни бьют вдвое меньше, цитадель получает вдвое меньше урона, орда ломает камень ещё дольше.",
             Grants1 = new[] { "mortar", "masons" }, Grants2 = new[] { "granite", "bastion", "fortress" },
             Hires = new[] { H(Kinds.Architect, 1, 1) },
             Props1 = new[] { Prop.Blocks, Prop.Workbench }, Props2 = new[] { Prop.Blocks, Prop.Blocks } },
         new() { Key = "drill", W = 37, D = 57, Name = "Учебный плац", Lore = "b_drill", Gold = 40, UpGold = 90, Roof = Mat.Shingle,
-            About = "Наём на 20 % дешевле, стёганки: у новых солдат на 20 % больше здоровья.", Level2 = "Солдаты ходят и бегают на 15 % быстрее.",
+            About = $"Наём на {KindTexts.Pct(DrillCut)} % дешевле, стёганки: у новых солдат на 20 % больше здоровья.", Level2 = "Солдаты ходят и бегают на 15 % быстрее.",
             Grants1 = new[] { "drill", "gambesons" }, Grants2 = new[] { "drillyard" },
             Props1 = new[] { Prop.Rack, Prop.Target }, Props2 = new[] { Prop.Rack, Prop.Target } },
         new() { Key = "infirmary", W = 37, D = 97, Name = "Лазарет", Lore = "b_infirmary", Gold = 40, UpGold = 90, Wall = Mat.Wood, Roof = Mat.Tile,
@@ -219,6 +219,32 @@ public sealed partial class Sim
 
     /// <summary>The kinds the citadel itself takes on: the household's own. The rest are hired in their buildings.</summary>
     public static bool CitadelHires(UnitType t) => t == Kinds.Worker || t == Kinds.Archer || t == Kinds.Swordsman || t == Kinds.Priest || t == Kinds.Captain;
+
+    /// <summary>The kind of building that hires one of a kind, and from which of its storeys; null if none does.</summary>
+    public static (TownKind kind, int level)? HirerKind(UnitType t)
+    {
+        foreach (var k in TownKinds)
+            foreach (var (kind, level, _) in k.Hires)
+                if (kind == t) return (k, level);
+        return null;
+    }
+
+    /// <summary>
+    /// The building of the valley one of a kind is hired in: the first that would take one on now, else the first of its
+    /// kind standing or going up; null if none is put up.
+    /// </summary>
+    public Building HirerOf(UnitType t)
+    {
+        if (HirerKind(t) is not { } h) return null;
+        Building any = null;
+        foreach (var b in Buildings)
+        {
+            if (b.K != h.kind) continue;
+            if (CantHireAt(b, t) == null) return b;
+            any ??= b;
+        }
+        return any;
+    }
 
     /// <summary>The town building of a kind, if one is put up (standing or going up).</summary>
     public Building BuildingOf(string kind) => Buildings.Find(b => b.Kind == kind);

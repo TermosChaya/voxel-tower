@@ -884,7 +884,7 @@ public partial class Inspector : Control
         row.AddThemeConstantOverride("separation", 10);
         var present = new List<UnitType>();
         foreach (var kind in Kinds.Ours) if (_m.Sim.Count(kind) > 0) present.Add(kind);
-        var keep = Btn($"Цитадель · {Bindings.Label(Act.Keep)}", "Цитадель ({Keep})\nНабор войска. Новобранцы готовятся по очереди. Войско не может быть больше числа мест.", () => _m.Command.OpenKeep(), 98);
+        var keep = Btn($"Цитадель · {Bindings.Label(Act.Keep)}", "Цитадель ({Keep})\nНабор войска: нанятый выходит из цитадели сразу, войска из зданий — из дверей своих зданий. Войско не больше числа мест.", () => _m.Command.OpenKeep(), 98);
         keep.SizeFlagsVertical = SizeFlags.ShrinkBegin;
         row.AddChild(keep);
         // the kinds between the citadel and the squads, a second line of them when there is no room for all in one

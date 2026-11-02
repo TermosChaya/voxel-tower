@@ -23,7 +23,9 @@ public sealed partial class Sim
     const float ChargeOut = 5 * VoxelWorld.PerMetre, ChargeUp = 3.5f * VoxelWorld.PerMetre;
     const float GreatOut = 7 * VoxelWorld.PerMetre, GreatUp = 4.5f * VoxelWorld.PerMetre;
     /// <summary>How near a shieldbearer covers ours; how far a bodkin goes on through; how near ours a pot is not thrown.</summary>
-    const float WallReach = 3 * VoxelWorld.PerMetre, PierceReach = 5 * VoxelWorld.PerMetre, PotClear = 2 * VoxelWorld.PerMetre;
+    internal const float WallReach = 3 * VoxelWorld.PerMetre, PierceReach = 5 * VoxelWorld.PerMetre, PotClear = 2 * VoxelWorld.PerMetre;
+    /// <summary>What the long shafts add to a polearm's reach; what the shield wall leaves of a blow; how much faster the hunt runs down one that flees.</summary>
+    public const float LongShafts = 1.25f, ShieldCover = .75f, HuntPace = 1.33f;
     /// <summary>How far a pot's burst breaks the horde's works, voxels; it hurts and throws half again as far.</summary>
     public const float PotReach = 1.25f * VoxelWorld.PerMetre;
     /// <summary>How far hounds and riders run after one that flees, and how long a gallop holds for a charge, seconds.</summary>
@@ -54,7 +56,7 @@ public sealed partial class Sim
     // ------------------------------------------------------------ reach, range and pace
 
     /// <summary>How far one strikes from, voxels: a spear or a halberd of ours a quarter further with the long shafts.</summary>
-    public float ReachOf(Unit a) => a.T.Reach * (a.Team == Team.Player && Polearm(a.T) && Knows("longshafts") ? 1.25f : 1);
+    public float ReachOf(Unit a) => a.T.Reach * (a.Team == Team.Player && Polearm(a.T) && Knows("longshafts") ? LongShafts : 1);
 
     /// <summary>How far a shot of ours carries by day: a bow by the lore of bows, a crossbow, a sling or a pot by its own.</summary>
     public float ShotRange(Unit a) => (Bow(a.T) ? BowRange(a) : a.T.Range) * HeroBow(a);
@@ -66,7 +68,7 @@ public sealed partial class Sim
     float ShotHarm(Unit a) => a.Team == Team.Player && a.T.Tool is "bow" or "crossbow" ? ArrowHarm : 1;
 
     /// <summary>A third faster after one that flees, for a hound or a rider with the hunt; a soldier drilled on the drill yard, a seventh faster always.</summary>
-    float TroopPace(Unit u) => (Hunter(u.T) && Knows("hunt") && u.Target is { Routed: true, Dead: false } ? 1.33f : 1) * (Soldier(u) && Knows("drillyard") ? 1.15f : 1);
+    float TroopPace(Unit u) => (Hunter(u.T) && Knows("hunt") && u.Target is { Routed: true, Dead: false } ? HuntPace : 1) * (Soldier(u) && Knows("drillyard") ? 1.15f : 1);
 
     // ------------------------------------------------------------ every tick
 
@@ -119,7 +121,7 @@ public sealed partial class Sim
             // one who has lost his shield arm covers nobody
             if (o == b || o.Dead || o.Inside || o.T != Kinds.Shieldbearer || o.Wounds is { Shield: false }) continue;
             float dx = o.X - b.X, dz = o.Z - b.Z;
-            if (dx * dx + dz * dz <= WallReach * WallReach && MathF.Abs(o.Y - b.Y) < 2 * VoxelWorld.PerMetre) return .75f;
+            if (dx * dx + dz * dz <= WallReach * WallReach && MathF.Abs(o.Y - b.Y) < 2 * VoxelWorld.PerMetre) return ShieldCover;
         }
         return 1;
     }

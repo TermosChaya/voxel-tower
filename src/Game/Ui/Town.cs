@@ -145,7 +145,7 @@ public partial class TownPanel : VBoxContainer
             if (b.Level < level) continue;
             b.Stock.TryGetValue(kind.Key, out float n);
             string no = sim.CantHireAt(b, kind);
-            var hire = Button($"{kind.Name} · {(int)n} · {sim.HireCost(kind)} зол.{(kind.Metal > 0 ? $" · {kind.Metal:0.##} м³ мет." : "")}", $"{kind.Name}: {Retinue.About(kind)}\nЖдут найма: {(int)n}, прибавляется {growth} за волну.\n" + (no == null ? "Щелчок — нанять, выйдет из двери здания." : $"Нельзя: {no}."));
+            var hire = Button($"{kind.Name} · {(int)n} · {sim.HireCost(kind)} зол.{(kind.Metal > 0 ? $" · {kind.Metal:0.##} м³ мет." : "")}", $"{kind.Name} · {sim.HireCost(kind)} золота{sim.HireNote(kind)}\n{Retinue.About(kind)}\nЖдут найма: {(int)n}, на рассвете прибавляется {growth}, до {growth * 2}.\n" + (no == null ? "Щелчок — нанять, выйдет из двери здания." : $"Нельзя: {no}."));
             hire.Disabled = no != null;
             hire.Pressed += () =>
             {

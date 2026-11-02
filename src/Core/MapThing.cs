@@ -294,8 +294,12 @@ public sealed partial class Campaign
         return t.Stock > 0;
     }
 
-    /// <summary>What a man of a kind costs to hire at a dwelling of the map, gold.</summary>
-    public static int HireCost(UnitType t) => t == Kinds.Knight ? 60 : t == Kinds.Rider || t == Kinds.Halberdier ? 40 : t == Kinds.Crossbowman || t == Kinds.Swordsman ? 30 : 20;
+    /// <summary>
+    /// What a man of a kind costs to hire at a dwelling of the map, gold: the kind's own price, as a valley's citadel and
+    /// buildings ask it (the realm's gold is one purse, so a kind costs the same wherever it is hired; only a valley's
+    /// own drill yard takes a fifth off, there).
+    /// </summary>
+    public static int HireCost(UnitType t) => t.Cost;
 
     /// <summary>So many hired at a dwelling into the army of the hero standing at it, as the gold goes; how many were.</summary>
     public int Hire(MapCell cell, int n)

@@ -135,8 +135,8 @@ public sealed partial class Sim
             G("vessel", "Сосуд", 40, 1, 0, "Запас вмешательства вдвое больше: до 300, а не до 150.", "rosary"),
             G("altar", "Жертвенник", 40, 1, 1, "Обряд даёт в 1,5 раза больше вмешательства и ещё одно откровение.", "rosary"),
             G("litany", "Литании", 60, 2, 0, "Заклинания на 20 % дешевле.", "vessel"),
-            G("vigil", "Бдение", 60, 2, 1, "Заклинания перезаряжаются на 33 % быстрее.", "altar"),
-            G("might", "Сила веры", 90, 3, .5f, "Заклинания на 33 % сильнее и действуют на 33 % дольше.", "litany", "vigil"),
+            G("vigil", "Бдение", 60, 2, 1, $"Заклинания перезаряжаются на {KindTexts.Pct(VigilCut)} % быстрее.", "altar"),
+            G("might", "Сила веры", 90, 3, .5f, $"Заклинания на {KindTexts.Pct(MightMore)} % сильнее и действуют на {KindTexts.Pct(MightMore)} % дольше.", "litany", "vigil"),
             wake,
         };
     }
@@ -232,7 +232,13 @@ public sealed partial class Sim
     float ArrowHarm => Knows("barbs") ? 1.25f : 1;
     float TorchLight => (Knows("braziers") ? 9 : 6) * VoxelWorld.PerMetre;
     /// <summary>How much slower the horde hacks stone set in lime mortar, and in a fortress's.</summary>
-    float StoneHack => (Knows("mortar") ? .7f : 1) * (Knows("fortress") ? .8f : 1);
+    float StoneHack => (Knows("mortar") ? MortarHack : 1) * (Knows("fortress") ? .8f : 1);
+    /// <summary>
+    /// What some of the lore and the buildings change, by so much, for their words to say (KindTexts.Pct): the pace the
+    /// horde hacks stone at with the mortar, the price of hiring with a drill yard, a rite's rest with the vigil, its might.
+    /// </summary>
+    public const float MortarHack = .7f, MightMore = 1.3f;
+    public const double DrillCut = .8, VigilCut = .7;
     float LayPace => (Knows("masons") ? 1.25f : 1) * (Knows("guild") ? 1.2f : 1);
     float DigPace => (Knows("picks") ? 1.25f : 1) * (Knows("guild") ? 1.2f : 1);
     /// <summary>How much of a blow the citadel takes.</summary>
@@ -249,8 +255,13 @@ public sealed partial class Sim
     float Steadfast(bool hold) => Knows("veterans") ? (hold ? .12f : .2f) : (hold ? .2f : .35f);
     float YieldMore => Knows("barrows") ? 1.2f : 1;
     float BeatPace => Knows("buckets") ? 2 : 1;
-    /// <summary>What hiring a kind costs now.</summary>
-    public int HireCost(UnitType t) => (int)Math.Round(t.Cost * (Knows("drill") ? .8 : 1));
+    /// <summary>
+    /// What hiring a kind costs now, wherever in the valley it is hired (the citadel, its building): its price, a fifth
+    /// off with a drill yard of this valley's.
+    /// </summary>
+    public int HireCost(UnitType t) => (int)Math.Round(t.Cost * (Knows("drill") ? DrillCut : 1));
+    /// <summary>Why the price is less than the kind's own, for the words beside it: « (на 20 % дешевле: учебный плац)», or nothing.</summary>
+    public string HireNote(UnitType t) => HireCost(t) < t.Cost ? $" (было {t.Cost}, на {KindTexts.Pct(DrillCut)} % дешевле: учебный плац)" : "";
     float MendHome => Knows("banners") ? 2 : 1;
     float StakeHarm => (Knows("spikes") ? 1.6f : 1) * (Knows("deathtraps") ? 1.3f : 1);
     float StakeHold => Knows("deathtraps") ? .5f : 1;
@@ -271,9 +282,9 @@ public sealed partial class Sim
     float SacrificeMore => Knows("altar") ? 1.5f : 1;
     /// <summary>What casting a spell takes now, and how long before it can be cast again.</summary>
     public double CostOf(Spell s) => Sandbox ? 0 : s.Cost * (Knows("litany") ? .8 : 1) * (HasRelic("staff") ? .67 : 1);
-    public double CooldownOf(Spell s) => Sandbox ? 0 : s.Cooldown * (Knows("vigil") ? .7 : 1);
+    public double CooldownOf(Spell s) => Sandbox ? 0 : s.Cooldown * (Knows("vigil") ? VigilCut : 1);
     /// <summary>How much harder the spells strike and how much longer they last, with the strength of faith.</summary>
-    float Might => Knows("might") ? 1.3f : 1;
+    float Might => Knows("might") ? MightMore : 1;
     /// <summary>What the spells kill with: a raider killed so gives intervention back with the reaping.</summary>
     static readonly HashSet<string> SpellCauses = new() { "заклятый обвал", "провал", "огненный дождь", "молния", "мор", "туман мёртвых", "взрыв", "чёрный ветер", "землетрясение", "звезда", "смерч", "телекинез" };
 }
