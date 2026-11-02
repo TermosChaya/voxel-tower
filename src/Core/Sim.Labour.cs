@@ -233,6 +233,7 @@ public sealed partial class Sim
             Worked?.Invoke(hit.x, hit.y, hit.z, dig ? World.Get(hit.x, hit.y, hit.z) : hit.m, dig);
         }
         int guard = 0;
+        bool cutOne = false;
         while (u.JobI < u.Jobs.Count && guard++ < 4096)
         {
             var j = u.Jobs[u.JobI];
@@ -241,6 +242,10 @@ public sealed partial class Sim
             if (u.Effort < cost) break;
             // (each voxel of a trunk, or of a footing, weighed before it goes: the one that brings it down waits)
             if (FellHold(u, j)) break;
+            // (one cut that brings a tree or a bough down to a blow: what comes down is the wood its lane was laid over,
+            // not that and the next piece cut free in the same swing, falling together some other way)
+            if (FellCut && cutOne) break;
+            cutOne |= FellCut;
             u.JobI++;
             if (Do(u, j))
             {

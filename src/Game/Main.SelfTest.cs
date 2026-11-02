@@ -398,6 +398,12 @@ public partial class Main
             int far = Sim.NearestStand((int)b.X + (b.X > World.SX / 2 ? -300 : 300), (int)b.Z, b.T.Move.Height);
             if (far >= 0) { b.Cell = far; (b.X, b.Y, b.Z) = Sim.Nav.Feet(far); b.Path = null; }
         }
+        // (and it is fought out forty metres off the citadel: an archer sheltering in it, mended, comes out of its door,
+        // and the night's watch goes up onto the wall over it, both in bowshot of a goblin standing there)
+        int field = -1;
+        foreach (var (fx2, fz2) in new[] { (-320, 40), (320, 40), (40, -320), (40, 320) })
+            if (field < 0) field = Sim.NearestStand(kx + fx2, kz + fz2, swordsman.T.Move.Height);
+        if (field >= 0) { swordsman.Cell = field; (swordsman.X, swordsman.Y, swordsman.Z) = Sim.Nav.Feet(field); swordsman.Path = null; }
         var captive = Sim.Spawn(Kinds.Goblin, Sim.NearestStand((int)swordsman.X + 10, (int)swordsman.Z, 2));
         captive.Guard = true; captive.Home = captive.Cell;
         for (int t = 0; t < 120 && !captive.Bound && !captive.Dead; t++) Advance(.25);
@@ -489,6 +495,13 @@ public partial class Main
             if (u.Dead || u.T != Kinds.Worker || u.Inside) continue;
             worker ??= u;
             if (!Sim.Units.Exists(o => o != u && !o.Dead && !o.Inside && MathF.Abs(o.X - u.X) < 6 && MathF.Abs(o.Z - u.Z) < 6)) { worker = u; break; }
+        }
+        // (all of them sheltering in the citadel after what came before: one let out at its door)
+        if (worker == null && Sim.Units.Find(u => !u.Dead && u.T == Kinds.Worker) is { } inside)
+        {
+            int door = Sim.NearestStand(kx + 24, kz + 24, inside.T.Move.Height);
+            inside.Inside = false; inside.Refuge = -1; inside.Cell = door; (inside.X, inside.Y, inside.Z) = Sim.Nav.Feet(door); inside.Path = null;
+            worker = inside;
         }
         await Look(worker.X, worker.Z);
         await ClickAt(Command.Screen(worker, .5f));

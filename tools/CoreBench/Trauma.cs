@@ -194,7 +194,22 @@ static class TraumaBench
             $"knit by the citadel {knitHome}; splinted {(splinted.Wounds.Splinted & Break.LegL) != 0} ({string.Join(", ", splinted.Wounds.Wounds)})");
 
         // kept in a save
-        var pin = At(Kinds.Worker, kx - 420, kz + 420);
+        // (on level ground, so the heap rests on it and pins rather than coming down on the one under it: where the cell
+        // nearest the spot falls, a voxel this way or that as what lies about the valley stands, is chaotic)
+        Unit pin = null;
+        foreach (var (ox, oz) in new[] { (-420, 420), (-400, 420), (-420, 400), (-440, 420), (-420, 440), (-400, 400), (-440, 440) })
+        {
+            int c = sim.NearestStand(kx + ox, kz + oz, Kinds.Worker.Move.Height);
+            if (c < 0) continue;
+            var (fx, fy, fz) = sim.Nav.Feet(c);
+            bool level = true;
+            for (int dz = -1; dz <= 1 && level; dz++)
+                for (int dx = -1; dx <= 1 && level; dx++) level = w.SurfAt((int)fx + dx, (int)fz + dz) == (int)MathF.Floor(fy + .01f);
+            if (!level) continue;
+            pin = sim.Spawn(Kinds.Worker, c);
+            break;
+        }
+        pin ??= At(Kinds.Worker, kx - 420, kz + 420);
         Heap(pin, 1, 8);
         Run(.5);
         var ms = new System.IO.MemoryStream();

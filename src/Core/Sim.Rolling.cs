@@ -110,6 +110,24 @@ public sealed partial class Sim
         return true;
     }
 
+    /// <summary>Whether wood lying so would roll as a log once let go (<see cref="BakeLog"/> takes it for one): long, round enough, not too thick.</summary>
+    static bool LogShaped(List<(int x, int y, int z)> cells)
+    {
+        int n = cells.Count;
+        if (n < 24) return false;
+        int x0 = int.MaxValue, x1 = int.MinValue, y0 = int.MaxValue, y1 = int.MinValue, z0 = int.MaxValue, z1 = int.MinValue;
+        foreach (var (x, y, z) in cells) { x0 = Math.Min(x0, x); x1 = Math.Max(x1, x); y0 = Math.Min(y0, y); y1 = Math.Max(y1, y); z0 = Math.Min(z0, z); z1 = Math.Max(z1, z); }
+        return LogBox(n, x1 - x0 + 1, y1 - y0 + 1, z1 - z0 + 1);
+    }
+
+    /// <summary>A body of so many voxels in such a box is a log: long against its round, round enough, not too thick, and filling much of its box.</summary>
+    static bool LogBox(int n, int lx, int ly, int lz)
+    {
+        bool alongX = lx >= lz;
+        int len = alongX ? lx : lz, wide = alongX ? lz : lx, thick = Math.Max(wide, ly), thin = Math.Min(wide, ly);
+        return !(thin < 2 || thick > 6 || len < 3 * thick || thick > thin * 1.6f || n < .5f * len * wide * ly);
+    }
+
     /// <summary>
     /// Whether a piece is a log — no thicker than three quarters of a metre, three times as long one way along the ground
     /// as it is thick, and about as thick up as across — and if so, laid as it came down (turned to the nearest right angle): how thick its round is, how far its
@@ -130,9 +148,9 @@ public sealed partial class Sim
             x0 = Math.Min(x0, wx); x1 = Math.Max(x1, wx); y0 = Math.Min(y0, wy); y1 = Math.Max(y1, wy); z0 = Math.Min(z0, wz); z1 = Math.Max(z1, wz);
         }
         int lx = x1 - x0 + 1, ly = y1 - y0 + 1, lz = z1 - z0 + 1;
+        if (!LogBox(n, lx, ly, lz)) return false;
         bool alongX = lx >= lz;
-        int len = alongX ? lx : lz, wide = alongX ? lz : lx, thick = Math.Max(wide, ly), thin = Math.Min(wide, ly);
-        if (thin < 2 || thick > 6 || len < 3 * thick || thick > thin * 1.6f || n < .5f * len * wide * ly) return false;
+        int len = alongX ? lx : lz, wide = alongX ? lz : lx;
         f.Voxels.Clear(); f.Voxels.AddRange(laid);
         f.Turn = 0; f.AX = 1; f.AY = 0; f.AZ = 0;
         r = (wide + ly) * .25f;

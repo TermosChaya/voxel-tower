@@ -234,7 +234,6 @@ static class SmartworkBench
         // out of their reach is another matter)
         int mx0 = (int)gx - 120, mz0 = (int)gz + 330;
         Clear(mx0 - 40, mz0 - 40, mx0 + 160, mz0 + 40);
-        double wood0 = sim.Stock[Stockpile.Wood];
         sim.Stock[Stockpile.Wood] = 0;
         var bore = sim.PlanCountermine(mx0, mz0, mx0 + 120, mz0, 24, out var mine);
         sim.DesignateRemove(bore);
@@ -242,7 +241,9 @@ static class SmartworkBench
         for (int i = 0; i < 3; i++) At(Kinds.Worker, mx0 - 16, mz0 - 16 + i * 16);
         Watch(60);
         int bareDug = mine.Dug;
-        sim.Stock[Stockpile.Wood] = Math.Max(50, wood0);
+        // (as many logs as it was always given: what the scenes before left in the stores is chaotic — the grove felled
+        // to the last tree leaves far more, and with three times the logs the bore went 12 steps and 2 fell in unshored)
+        sim.Stock[Stockpile.Wood] = 50;
         Watch(300, () => mine.Dug == mine.Cells.Count);
         int shored = mine.Shored.FindAll(x => x).Count;
         string mineCost = Cost();

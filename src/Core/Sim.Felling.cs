@@ -431,6 +431,7 @@ public sealed partial class Sim
     /// </summary>
     bool FellHold(Unit u, (int x, int y, int z, byte m) j)
     {
+        FellCut = false;
         if (!Orders.IsRemove(j.m)) return false;
         if (!Mat.IsTrunk(World.Get(j.x, j.y, j.z))) return DropHold(u, j);
         // (a hold is kept for a moment, so the tree is not weighed afresh every frame; that it is not the last is never
@@ -485,7 +486,7 @@ public sealed partial class Sim
         // (never while one of ours is under it: one who cannot get out of the way in half a minute is left there, and
         // the way chosen again later, round them)
         int stay = ClearLane(plan.Lane, u);
-        if (stay == 0) return false;
+        if (stay == 0) { FellCut = true; return false; }
         u.Why = "ждёт, пока отойдут от дерева";
         u.FellHold = true;
         if (Time - plan.Warned > 30)
@@ -506,6 +507,9 @@ public sealed partial class Sim
     }
 
     double _fellLeftSaid = -99;
+
+    /// <summary>The voxel just weighed by <see cref="FellHold"/> is the cut that brings a tree or a bough down, its lane clear: the blow ends with it.</summary>
+    bool FellCut;
 
     /// <summary>A tree left standing: the marks taken off all of it, the butt under the cut and the crown about it.</summary>
     void LeaveTree(in FellBulk tree)

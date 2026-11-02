@@ -86,11 +86,19 @@ public partial class Main
         bool bar = FP.CallsShown;
         Key_(Act.FpWood);
         bool held = cap.Ready[1] > sim.Time && sw.WallUntil > sim.Time && sw.Ward == cap && sw2.Ward == cap;
+        // (no archers near: those of the tests before, wherever they stood, sent across the valley for the call, and
+        // back after it — one within 50 m that could reach the post looses the volley, as it should)
+        var bows = sim.Units.FindAll(u => !u.Dead && !u.Inside && u.Team == Team.Player && u.T.Ranged);
+        var bowsAt = bows.ConvertAll(u => u.Cell);
+        foreach (var b in bows)
+        {
+            int far = sim.NearestStand((int)b.X + (b.X > w.SX / 2 ? -500 : 500), (int)b.Z, b.T.Move.Height);
+            if (far >= 0) { b.Cell = far; (b.X, b.Y, b.Z) = sim.Nav.Feet(far); b.Path = null; }
+        }
         Key_(Act.FpEarth);
         await Frames(2);
-        // (no archers near, or none near that can reach it — an archer of the tests before may stand within 50 m of
-        // here, wherever the valley put this field: refused in words either way)
         bool refused = cap.Ready[2] <= sim.Time && FP.SaidLine.Contains("стрел");
+        for (int i = 0; i < bows.Count; i++) { var b = bows[i]; b.Cell = bowsAt[i]; (b.X, b.Y, b.Z) = sim.Nav.Feet(bowsAt[i]); b.Path = null; }
         foreach (var (x, y, z) in post) w.Set(x, y, z, Mat.Air);
         check("a commander gone into shows its four calls; «Держать строй» on its key sets the swordsmen about it to hold, «Залп!» with no archers is refused in words",
             bar && held && refused, $"calls shown {bar}, held {held} (wall till {sw.WallUntil - sim.Time:0.0} s, ward {sw.Ward?.Id}), refused {refused} («{FP.SaidLine}»)");

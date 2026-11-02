@@ -508,6 +508,9 @@ public sealed partial class Sim
         if (n == 0) return;
         float slope = rise / n / (2 * off), push = 2f / 3 * MathF.Abs(slope) / (1 + slope * slope);
         if (push < .14f) return;
+        // (only a log that can roll goes: one too thick for it, or lying aslant, stays where it lies, as its lane was
+        // reckoned, and is not let go to tumble down the slope)
+        if (!LogShaped(cells)) return;
         var f = Loose(cells, 0, 0, 0, "бревно");
         if (f != null) f.Intact = true;
         if (f == null || !BakeLog(f, out float r, out float half, out float ax, out float az)) return;
@@ -788,7 +791,9 @@ public sealed partial class Sim
             cx += lx; cy += ly; cz += lz; laid++;
             if (Mat.IsMasonry(m) || m is Mat.Ruin or Mat.Tile or Mat.Slate) stone++; else if (m is Mat.Wood or Mat.Deck or Mat.Shingle or Mat.Thatch || Mat.IsTrunk(m)) wood++;
             // a falling tree comes down away from those beside it (Sim.Felling.cs); whoever is under it after all is struck
-            if (quiet || log && trunks < 60) continue;
+            // (the wood within half a metre of the cut comes down slow, settling on the stump, as its lane has it: nobody
+            // beside the butt is struck by it)
+            if (quiet || log && (trunks < 60 || y - baseY < VoxelWorld.PerMetre / 2)) continue;
             foreach (var u in under)
             {
                 if (u.Dead || MathF.Abs(u.X - lx - .5f) > u.T.BodyR + 1 || MathF.Abs(u.Z - lz - .5f) > u.T.BodyR + 1 || ly < u.Y - 1 || ly > u.Y + u.T.BodyH) continue;
