@@ -271,6 +271,7 @@ public sealed partial class Sim
         Stage = "TickArchPlan"; TickArchPlan();
         Stage = "TickStreet"; TickStreet();
         Stage = "TickVoices"; TickVoices();
+        Stage = "TickTownWays"; TickTownWays();
         Stage = "TickHouseDoors"; TickHouseDoors();
         Stage = "TickStanding"; TickStanding();
         Stage = "TickTraps"; TickTraps();
@@ -390,16 +391,27 @@ public sealed partial class Sim
         bool climbing = Nav.I(next) == Nav.I(u.Cell) && Nav.K(next) == Nav.K(u.Cell) && next != u.Cell;
         if (climbing) { tx = u.X; tz = u.Z; ty = (Nav.Y(next) << NavGrid.Shift) + (Nav.Ground(Nav.I(next), Nav.Y(next) - 1, Nav.K(next)) ? Nav.Floor[next] - (Nav.Y(next) << NavGrid.Shift) : 0); }
         else { tx += u.OffX; tz += u.OffZ; }
-        float speed = u.T.Move.Speed * NavGrid.CS * pace * u.Pace * CartPace(u) * TroopPace(u) * (u.Hp < u.MaxHp * .4f ? .7f : 1) * (Nav.Water[u.Cell] > 0 ? .6f : 1) * (u.Routed || u.State == UnitState.Flee ? .85f + .15f * PainPace(u) : .55f + .45f * PainPace(u))
+        float speed = u.T.Move.Speed * NavGrid.CS * pace * u.Pace * CartPace(u) * TroopPace(u) * (u.Hp < u.MaxHp * .4f ? .7f : 1) * (u.Routed || u.State == UnitState.Flee ? .85f + .15f * PainPace(u) : .55f + .45f * PainPace(u))
             * (Nav.Spikes[u.Cell] > 0 ? .4f : 1) * Gait(u) * (Mires.Count > 0 && InMire(u.X, u.Z) ? .35f : 1)
-            * (DeadFogs.Count > 0 && u.Team == Team.Horde && !Deathless(u) && InDeadFog(u.X, u.Z) ? .5f : 1) * WayPace(u)
+            * (DeadFogs.Count > 0 && u.Team == Team.Horde && !Deathless(u) && InDeadFog(u.X, u.Z) ? .5f : 1) * FootPace(u)
             * (Miasmas.Count > 0 && u.Team == Team.Player && InMiasma(u.X, u.Z) ? .6f : 1)
             * (Time < u.SlowUntil ? u.SlowBy : 1) * (Time < u.ChargeUntil ? 1.8f : 1);
         float step = speed * dt * (climbing ? .5f : 1);
-        // the turf wears where ours keep walking (Sim.Paths.cs)
-        if (!climbing) Tread(u, step);
         float dx = tx - u.X, dz = tz - u.Z, dyv = ty - u.Y;
         float dist = climbing ? MathF.Abs(dyv) : MathF.Sqrt(dx * dx + dz * dz);
+        // one of ours standing still on the very spot aimed for, too broad to come up to (an engine waiting for a mark,
+        // a horse at its post): passed as near as it lets one come, and on from beside it (the walker was pushed back
+        // off it for good, a mending of the wall left undone a whole raid long)
+        if (!climbing && u.Team == Team.Player && dist < NavGrid.CS && _bodies[next] > 0 && BroadInTheWay(u, tx, tz))
+        {
+            u.Cell = next;
+            u.PathI++;
+            return u.PathI >= u.Path.Count;
+        }
+        // up a slope or a step the slower the steeper it is, down one a little slower (Sim.Paths.cs)
+        if (!climbing && dist > .5f && u.T.Move.Feet != null) step *= Sloped(dyv / dist);
+        // the turf wears where ours keep walking (Sim.Paths.cs)
+        if (!climbing) Tread(u, step);
         u.State = u.State == UnitState.Flee ? UnitState.Flee : UnitState.Walk;
         if (!climbing && dist > .01f) u.Facing = MathF.Atan2(dz, dx);
         u.Stride += step;
@@ -423,6 +435,19 @@ public sealed partial class Sim
         u.X += dx / dist * step;
         u.Z += dz / dist * step;
         u.Y += dyv * Math.Min(1, step / dist);
+        return false;
+    }
+
+    /// <summary>Whether a broad body of its own side standing still covers the point a walker aims for, and the walker is
+    /// as near it as bodies let one come.</summary>
+    bool BroadInTheWay(Unit u, float tx, float tz)
+    {
+        foreach (var v in Units)
+        {
+            if (v.T.BodyR < 3 || v == u || v.Dead || v.Inside || v.Team != u.Team || v.Airborne != null || v.Path != null && v.PathI < v.Path.Count) continue;
+            float gap = v.T.BodyR + u.T.BodyR + .5f, ax = v.X - tx, az = v.Z - tz, bx = v.X - u.X, bz = v.Z - u.Z;
+            if (ax * ax + az * az < gap * gap && bx * bx + bz * bz < (gap + 1) * (gap + 1)) return true;
+        }
         return false;
     }
 
@@ -531,7 +556,7 @@ public sealed partial class Sim
     float H(int c, int ti, int tk) => PathFinder.Octile(Nav.I(c) - ti, Nav.K(c) - tk) * .95f;
 
     /// <summary>Plans a walk to a cell (or next to it), keeping to a lane if given; false if there is no way.</summary>
-    public bool GoTo(Unit u, int target, bool adjacent = false, int budget = 40000, Func<int, float> lane = null, int reach = 1)
+    public bool GoTo(Unit u, int target, bool adjacent = false, int budget = 40000, Func<int, float> lane = null, int reach = 1, bool roundabout = true)
     {
         int ti = Nav.I(target), tk = Nav.K(target), ty = Nav.Y(target);
         Func<int, bool> goal = adjacent
@@ -539,6 +564,8 @@ public sealed partial class Sim
             : c => c == target;
         if (goal(u.Cell)) { u.Path = null; return true; }
         var path = Paths.Find(u.Cell, goal, c => H(c, ti, tk), MoverOf(u), budget, gates: u.Team == Team.Player, lane: lane);
+        // none that keeps to the doors and stairs within the search's bound: the way as it always was (Pathing.cs, Careful)
+        if (path == null && roundabout && MoverOf(u).Careful && Paths.Expanded >= budget) path = Paths.Find(u.Cell, goal, c => H(c, ti, tk), Careless(MoverOf(u)), budget, gates: u.Team == Team.Player, lane: lane);
         if (path == null) return false;
         u.Path = path; u.PathI = 0;
         // a way somewhere on purpose is no stroll

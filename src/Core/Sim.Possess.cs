@@ -117,7 +117,7 @@ public sealed partial class Sim
         bool moving = wl > .05f;
         bool run = WishRun && CanRun;
         float speed = u.T.Move.Speed * NavGrid.CS * u.Pace * CartPace(u) * (run ? 1.6f : 1) * (Guarding ? .5f : 1) * (u.Hp < u.MaxHp * .4f ? .7f : 1)
-            * (Nav.Water[u.Cell] > 0 ? .6f : 1) * (Nav.Spikes[u.Cell] > 0 ? .4f : 1) * Gait(u) * (Mires.Count > 0 && InMire(u.X, u.Z) ? .35f : 1);
+            * FootPace(u) * (Nav.Spikes[u.Cell] > 0 ? .4f : 1) * Gait(u) * (Mires.Count > 0 && InMire(u.X, u.Z) ? .35f : 1);
         bool climbed = false;
         if (WishClimb != 0) climbed = ClimbBy(u, WishClimb * speed * .5f * dt);
         if (moving && !climbed)

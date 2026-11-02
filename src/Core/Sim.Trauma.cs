@@ -401,6 +401,23 @@ public sealed partial class Sim
     /// <summary>A weapon swung with both hands, swung with one: half as hard with the other arm broken.</summary>
     static float Grip(Unit u) => (Broken(u) & Break.Off) != 0 && u.T.Tool is "halberd" or "maul" or "longsword" or "spear" or "pick" ? .5f : 1;
 
+    /// <summary>
+    /// The same mover not careful of scrambles, jumps and ladders (Pathing.cs): when no way that keeps to the doors and
+    /// stairs is found within a search, the way that does not is taken, as it always was, so that nothing one could get
+    /// to before is out of reach now.
+    /// </summary>
+    static readonly Dictionary<Mover, Mover> _careless = new();
+    static Mover Careless(Mover s)
+    {
+        if (!s.Careful) return s;
+        lock (_careless)
+        {
+            if (!_careless.TryGetValue(s, out var m))
+                _careless[s] = m = new Mover { Height = s.Height, Climb = s.Climb, Drop = s.Drop, Speed = s.Speed, Carve = s.Carve, Build = s.Build, Ladders = s.Ladders, Wade = s.Wade, Feet = s.Feet };
+            return m;
+        }
+    }
+
     /// <summary>The way one lame walks: for the planning of its ways, a mover of its kind that takes no ladder.</summary>
     static readonly Dictionary<Mover, Mover> _lame = new();
     static Mover MoverOf(Unit u)
@@ -411,7 +428,7 @@ public sealed partial class Sim
         lock (_lame)
         {
             if (!_lame.TryGetValue(s, out var m))
-                _lame[s] = m = new Mover { Height = s.Height, Climb = s.Climb, Drop = Math.Min(s.Drop, 2), Speed = s.Speed, Carve = s.Carve, Build = s.Build, Ladders = false };
+                _lame[s] = m = new Mover { Height = s.Height, Climb = s.Climb, Drop = Math.Min(s.Drop, 2), Speed = s.Speed, Carve = s.Carve, Build = s.Build, Ladders = false, Feet = s.Feet, Careful = s.Careful };
             return m;
         }
     }

@@ -704,9 +704,14 @@ public sealed class Unit
     public double NextLook;
 
     /// <summary>Its priority for every kind of work (<see cref="WorkKind"/>): 1 first, 4 last, 0 never.</summary>
-    public readonly byte[] Priority = { Work.Usual, Work.Usual, Work.Usual, Work.Usual, 1 };
+    public readonly byte[] Priority = { Work.Usual, Work.Usual, Work.Usual, Work.Usual, 1, Work.Usual };
     /// <summary>The kinds of work (bits by <see cref="WorkKind"/>) it went to its site for; it does only those there.</summary>
     public int SiteWork = (1 << Work.Kinds) - 1;
+    /// <summary>The cell column of the town's ways it lays now (Sim.TownWays.cs), or −1; the work done at it toward the next column.</summary>
+    public int Paving = -1;
+    public float PaveEffort;
+    /// <summary>When it last went to marked work: the town's ways wait till it has had none for a while.</summary>
+    public double MarkedWorkAt = -999;
     /// <summary>A resource the player told it to bring in by itself (a store kind, or none), and the area it works for it.</summary>
     public int Duty;
     public Zone DutyZone;

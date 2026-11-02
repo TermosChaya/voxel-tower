@@ -175,6 +175,8 @@ public sealed partial class Sim
             Idle(u, dt, stay: false);
             return;
         }
+        // laying the town's ways (Sim.TownWays.cs): a cell at a time, then it looks for work again
+        if (u.Site < 0 && u.Paving >= 0 && PaveTick(u, dt)) { Busy(u); return; }
         if (u.Site < 0)
         {
             u.State = UnitState.Idle;
@@ -203,6 +205,20 @@ public sealed partial class Sim
                 // it waits a good while — walking back to it every few seconds only takes the hands off other work
                 bool aside = _inTheWay && StepAside(u);
                 u.Unreachable[u.Site] = Time + (aside ? 1.5 : u.Why.StartsWith("ждёт опоры") ? 30 : u.Why.StartsWith("нет") ? 8 : 4);
+                // nothing in reach at all of what only comes out there, and its top higher than one reaches (a roof coming
+                // off from its ridge down, the worker under its eaves): scaffolding up to where its top is in reach, from
+                // here (a town hall's roof was walked up to from the ground under it again and again, the whole raising
+                // long: what came off it came off only while those who had built it stood on it still)
+                if (u.Why == "" && Orders.ColWork[0][u.Site] == 0 && u.T.Work >= 1 && Stock[Stockpile.Wood] >= 600
+                    && Orders.Span(u.Site, out _, out int top) && top >= Nav.Floor[u.Cell] + Labour.ReachUp
+                    && PlanReach(u, u.Site, top, top) is { } lift && ScaffoldLogsFree() >= ScaffoldLogs(lift))
+                {
+                    ReleaseSite(u);
+                    Scaffolds.Add(lift);
+                    u.Raising = lift;
+                    u.Why = "ставит леса к работе наверху";
+                    return;
+                }
                 ReleaseSite(u);
                 u.NextSearch = Time + .2;
                 return;
@@ -517,8 +533,10 @@ public sealed partial class Sim
         {
             if (only != null) return false;
             u.Why = "";
-            // nothing marked: do what it was told to, or take a little more out of an area the player set aside
+            // nothing marked: do what it was told to, or take a little more out of an area the player set aside, or lay
+            // the town's ways (Sim.TownWays.cs)
             if (DutyWork(u) || FeedFromZone(u)) u.NextSearch = Time;
+            else if (TownWork(u)) return true;
             return false;
         }
         int ui = Nav.I(u.Cell), uk = Nav.K(u.Cell), h = u.T.Move.Height, starved = 0;
@@ -539,6 +557,8 @@ public sealed partial class Sim
                 // what another pawn was sent to bring in is its work
                 if (u.Duty != Stockpile.None && ZoneAt((col % Nav.NX << NavGrid.Shift) + 4, (col / Nav.NX << NavGrid.Shift) + 4) is { Auto: true } other && other != u.DutyZone) continue;
                 if (u.Unreachable.TryGetValue(col, out double until) && Time < until) continue;
+                // all of it held back for now (a roof's lower courses, coming off after those over them): no work there yet
+                if (_heldBack.TryGetValue((long)col << 8 | (uint)mask, out double held) && Time < held) continue;
                 // what one pawn found it could not get to, those standing about the same place do not try for again
                 if (_noWay.TryGetValue(col, out var nw) && Time < nw.until && CellsApart(u.Cell, nw.from) <= 6 && MathF.Abs(Nav.Floor[u.Cell] - Nav.Floor[nw.from]) <= 8) continue;
                 float d = PathFinder.Octile(col % Nav.NX - ui, col / Nav.NX - uk);
@@ -551,6 +571,19 @@ public sealed partial class Sim
             foreach (var (_, col) in near)
             {
                 if (!Orders.Span(col, out int y0, out int y1)) continue;
+                // what only comes out there is sought where it can come out now: of a roof coming off from its ridge down,
+                // the courses free of any still over them (a worker sent under the eaves, where all is held back, found
+                // nothing and went again, the whole raising long, and no scaffolding went up to the ridge)
+                if (Orders.ColWork[0][col] == 0 || (mask & 1) == 0)
+                {
+                    if (!TakeableSpan(col, mask, y0, y1, out int t0, out int t1))
+                    {
+                        if (_heldBack.Count > 4096) _heldBack.Clear();
+                        _heldBack[(long)col << 8 | (uint)mask] = Time + 3;
+                        continue;
+                    }
+                    (y0, y1) = (t0, t1);
+                }
                 int ci = col % Nav.NX, ck = col / Nav.NX;
                 // stand beside the work (in its column only if nothing is to be laid where the body would be),
                 // and not where another pawn already stands
@@ -571,20 +604,26 @@ public sealed partial class Sim
                 bool lays = (mask & 1) != 0 && Orders.ColWork[0][col] > 0;
                 bool Low(int c) => Goal(c) && Nav.Floor[c] - Labour.ReachDown <= y0;
                 List<int> path = null;
+                var mover = MoverOf(u);
                 if (lays)
                 {
-                    path = Low(u.Cell) ? new List<int>() : Paths.Find(u.Cell, Low, c => H(c, ci, ck), MoverOf(u), 30000, gates: true);
+                    path = Low(u.Cell) ? new List<int>() : Paths.Find(u.Cell, Low, c => H(c, ci, ck), mover, 30000, gates: true);
                     if (!Low(u.Cell)) _seekSpent += Paths.Expanded;
+                    // (cut short by the search's bound, not out of reach: the way as it always was, plain steps over any ground,
+                    // which costs less to find: a countermine's bore with water seeping in, its steps counted dear, was found by
+                    // no search, and the workers lashed scaffolding up in it where its frames should stand)
+                    if (path == null && (mover.Careful || mover.Feet != null) && Paths.Expanded >= 30000) { path = Paths.Find(u.Cell, Low, c => H(c, ci, ck), PathFinder.Plain(mover), 30000, gates: true); _seekSpent += Paths.Expanded; }
                 }
                 if (path == null)
                 {
-                    path = Goal(u.Cell) ? new List<int>() : Paths.Find(u.Cell, Goal, c => H(c, ci, ck), MoverOf(u), 30000, gates: true);
+                    path = Goal(u.Cell) ? new List<int>() : Paths.Find(u.Cell, Goal, c => H(c, ci, ck), mover, 30000, gates: true);
                     if (!Goal(u.Cell)) _seekSpent += Paths.Expanded;
+                    if (path == null && (mover.Careful || mover.Feet != null) && Paths.Expanded >= 30000) { path = Paths.Find(u.Cell, Goal, c => H(c, ci, ck), PathFinder.Plain(mover), 30000, gates: true); _seekSpent += Paths.Expanded; }
                 }
                 if (path == null)
                 {
                     // out of reach of anywhere to stand: scaffolding beside it, raised from the ground (Sim.Scaffold.cs)
-                    if (u.T.Work >= 1 && Stock[Stockpile.Wood] >= 600 && PlanReach(u, col, y0, y1) is { } lift)
+                    if (u.T.Work >= 1 && Stock[Stockpile.Wood] >= 600 && PlanReach(u, col, y0, y1) is { } lift && ScaffoldLogsFree() >= ScaffoldLogs(lift))
                     {
                         Scaffolds.Add(lift);
                         u.Raising = lift;
@@ -597,12 +636,15 @@ public sealed partial class Sim
                     continue;
                 }
                 u.Site = col; _claims[col]++;
+                u.MarkedWorkAt = Time;
                 u.SiteWork = mask;
                 u.Path = path.Count > 0 ? path : null; u.PathI = 0;
                 u.Jobs.Clear(); u.JobI = 0; u.Why = "";
                 return true;
             }
             if (near.Count > 0) unreached = true;
+            // nothing marked at this priority to be had: the town's ways, if they are at it (Sim.TownWays.cs)
+            if (only == null && (mask >> (int)WorkKind.Town & 1) != 0 && TownWork(u)) return true;
         }
         if (only != null) return false;
         if (unreached) u.Why = "до работы не дойти";
@@ -620,6 +662,30 @@ public sealed partial class Sim
     const int SeekBudget = 20_000;
     // the work columns some pawn found it could not get to lately: till when, and from where it looked
     readonly Dictionary<int, (double until, int from)> _noWay = new();
+    // the work columns all of whose marked work (of the kinds sought) is held back for now, and till when they are not
+    // looked at again for those kinds
+    readonly Dictionary<long, double> _heldBack = new();
+
+    /// <summary>
+    /// Of what is marked to come out in a column (its marked span <paramref name="y0"/>…<paramref name="y1"/>), of the
+    /// kinds given, the lowest and highest that can come out now: all of it but what of an arch waits for what is over
+    /// it (Sim.Builders.cs ArchOver). False if none can.
+    /// </summary>
+    bool TakeableSpan(int col, int mask, int y0, int y1, out int t0, out int t1)
+    {
+        t0 = int.MaxValue; t1 = int.MinValue;
+        int x0 = (col % Nav.NX) << NavGrid.Shift, z0 = (col / Nav.NX) << NavGrid.Shift;
+        for (int y = y1; y >= y0; y--)
+            for (int z = z0; z < z0 + NavGrid.CS; z++)
+                for (int x = x0; x < x0 + NavGrid.CS; x++)
+                {
+                    byte o = Orders.At(x, y, z);
+                    if (o == 0 || !Orders.IsRemove(o) || (mask >> (int)Work.Of(o) & 1) == 0) continue;
+                    if (Arched.Get(x, y, z) != 0 && ArchOver(x, y, z)) continue;
+                    t0 = Math.Min(t0, y); t1 = Math.Max(t1, y);
+                }
+        return t1 >= t0;
+    }
 
     bool Inside(Zone z, int col)
     {
@@ -918,7 +984,8 @@ public sealed partial class Sim
             ReleaseSite(u);
             u.State = UnitState.Flee;
             u.Refuge = RefugeFor(u, foe);
-            if (u.Refuge < 0 || !GoTo(u, u.Refuge, adjacent: u.Refuge == Gate, budget: 20000)) u.Path = null;
+            // (a way that keeps to the doors and stairs, or none: in a hurry to get away it does not look further)
+            if (u.Refuge < 0 || !GoTo(u, u.Refuge, adjacent: u.Refuge == Gate, budget: 20000, roundabout: false)) u.Path = null;
         }
         if (u.Path != null) Walk(u, dt);
         // at the citadel's door: in
