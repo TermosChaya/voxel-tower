@@ -46,10 +46,19 @@ public sealed partial class Sim
         _fieldVersion = Nav.Version; _fieldAt = Time;
     }
 
+    /// <summary>
+    /// Every raider kind's field, each worked out by itself on a thread of its own, on no more than half the machine's
+    /// cores (the game's frames keep the rest): they only read the grid, and a field comes out the same whichever thread
+    /// works it out.
+    /// </summary>
     Dictionary<UnitType, FlowField> BuildFields(bool wood, bool earth)
     {
+        var kinds = Kinds.HordeKinds;
+        var fields = new FlowField[kinds.Length];
+        Parallel.For(0, kinds.Length, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 2) },
+            i => fields[i] = FlowField.Compute(Nav, kinds[i].Move, Goals, 900, wood, earth));
         var d = new Dictionary<UnitType, FlowField>();
-        foreach (var t in Kinds.HordeKinds) d[t] = FlowField.Compute(Nav, t.Move, Goals, 900, wood, earth);
+        for (int i = 0; i < kinds.Length; i++) d[kinds[i]] = fields[i];
         return d;
     }
 

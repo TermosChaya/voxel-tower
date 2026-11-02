@@ -91,10 +91,12 @@ static class WarBench
     public static void Run(Action<string, bool, string> check)
     {
         Console.WriteLine();
-        // (WAR_ONLY=crowd: only the two hundred, for how long a step takes)
-        if (Environment.GetEnvironmentVariable("WAR_ONLY") == "crowd") { Crowd(check); return; }
+        // (WAR_ONLY=crowd: only the two hundred, for how long a step takes; WAR_ONLY=gap,troll…: only those scenes)
+        string only = Environment.GetEnvironmentVariable("WAR_ONLY");
+        bool Want(string scene) => only == null || only.Split(',').Contains(scene);
 
         // ---- a band's spirit: its fallen, a blast seen, one of it thrown; at the bottom it breaks whole
+        if (Want("spirit"))
         {
             var s = Fresh();
             s.Raid(Enumerable.Repeat(Kinds.Goblin, 8).ToList(), 1, .5);
@@ -121,6 +123,7 @@ static class WarBench
         }
 
         // ---- a warlord at the head of his army: his guard, his hardness, his cry, his blow to the ground, his fall
+        if (Want("warlord"))
         {
             var s = Fresh();
             var lord = s.NewWarlord(3);
@@ -185,6 +188,7 @@ static class WarBench
         }
 
         // ---- a warlord badly hurt: off the field with his guard; away with his wounds, on in level; back as he went
+        if (Want("hurt"))
         {
             var s = Fresh();
             var lord = s.NewWarlord(1);
@@ -213,6 +217,7 @@ static class WarBench
         }
 
         // ---- engines left alone: given up and set alight, their keepers go, and the raid ends
+        if (Want("engines"))
         {
             var s = Fresh();
             s.Raid(new List<UnitType> { Kinds.Catapult, Kinds.Mantlet, Kinds.Goblin, Kinds.Goblin, Kinds.Goblin }, 1, .5);
@@ -229,6 +234,7 @@ static class WarBench
         }
 
         // ---- our archers loose at the warlord before a nearer goblin; our swordsmen go for the sapper with a charge
+        if (Want("archers"))
         {
             var s = Fresh();
             foreach (var u in s.Units) if (u.Team == Team.Player) Gone(u);
@@ -256,6 +262,7 @@ static class WarBench
 
         // ---- a commander stands its line at the breach: where the horde comes up a ladder onto our wall, not where the
         // straight way from the horde meets it
+        if (Want("breach"))
         {
             var s = Fresh();
             foreach (var u in s.Units) if (u.Team == Team.Player) Gone(u);
@@ -295,12 +302,13 @@ static class WarBench
         }
 
         // ---- a troll warlord hurls boulders at those up on our wall, and at the wall itself on his way, breaking it
+        if (Want("troll"))
         {
             var s = Fresh();
             foreach (var u in s.Units) if (u.Team == Team.Player) Gone(u);
             var w = s.World; var site = s.Site;
             int wx = (site.KeepX - 300) & ~7, wz = site.KeepZ;
-            Level(s, wx - 80, wz, 200, 320);
+            LevelToKeep(s, wx - 280, wz - 320, wz + 320);
             int fg = w.SurfAt(wx, wz);
             s.InstantLabour = true;
             var wall = new VoxelList();
@@ -335,6 +343,7 @@ static class WarBench
 
         // ---- a shaman warlord curses a stretch of our wall: it cracks over its faces and crumbles, and under the same
         // blows it goes through sooner than a stretch uncursed
+        if (Want("shaman"))
         {
             var s = Fresh();
             foreach (var u in s.Units) if (u.Team == Team.Player) Gone(u);
@@ -383,6 +392,7 @@ static class WarBench
 
         // ---- a goblin warlord's ambush: one band lies down in cover beside the way; unseen, it waits; one of ours
         // passing near, it rises on them
+        if (Want("ambush"))
         {
             var s = Fresh();
             foreach (var u in s.Units) if (u.Team == Team.Player) Gone(u);
@@ -434,12 +444,13 @@ static class WarBench
         }
 
         // ---- a commander stands the line across an open way through our wall, shields in front, and it stops a band
+        if (Want("gap"))
         {
             var s = Fresh();
             foreach (var u in s.Units) if (u.Team == Team.Player) Gone(u);
             var w = s.World; var site = s.Site;
             int wx = (site.KeepX - 300) & ~7, wz = site.KeepZ & ~7;
-            Level(s, wx - 60, wz, 200, 320);
+            LevelToKeep(s, wx - 260, wz - 320, wz + 320);
             int fg = w.SurfAt(wx, wz);
             s.InstantLabour = true;
             var wall = new VoxelList();
@@ -483,9 +494,18 @@ static class WarBench
         }
 
         // ---- a warlord's raid at a walled fort fought out to its end; its report read back from a save
+        if (Want("raid"))
         {
             var s = Fresh();
             var ours = Fort(s, 8, 8);
+            // four archers of the commander's own besides, under its word and not sent anywhere by the player, for it to
+            // post and to loose its volleys with (the eight on the ring are the player's, which it leaves be: a volley came
+            // only once one of them went after a raider and was its own again; and with the horde's way worked out on the
+            // fort as it stands, the ninth wave took the citadel from eight and eight)
+            {
+                int kx = s.Site.KeepX, kz = s.Site.KeepZ, ring = s.Site.KeepR + 44;
+                for (int i = 0; i < 4; i++) ours.Add(s.Spawn(Kinds.Archer, s.NearestStand(kx - ring + 30, kz + 12 + i * 8, 2)));
+            }
             Run(s, .1);
             var lord = s.NewWarlord(3);
             // (the ninth wave's army: big enough to come on and storm, the warlord with it, before it breaks — since the
@@ -517,6 +537,7 @@ static class WarBench
         }
 
         // ---- a raid led by a warlord of each kind but the orc at the fort, saved and read back in the middle of it
+        if (Want("kinds"))
         foreach (var kind in new[] { Kinds.Troll, Kinds.Shaman, Kinds.Goblin })
         {
             var s = Fresh();
@@ -552,7 +573,7 @@ static class WarBench
         }
 
         // ---- two hundred of the horde at once round the fort, a warlord among them: how long a step takes
-        Crowd(check);
+        if (Want("crowd")) Crowd(check);
     }
 
     /// <summary>Two hundred of the horde at once round the fort, a warlord among them: how long a step takes.</summary>
@@ -603,6 +624,26 @@ static class WarBench
         int fg = w.SurfAt(cx, cz);
         for (int z = cz - rz; z <= cz + rz; z++)
             for (int x = cx - rx; x <= cx + rx; x++)
+                for (int y = 2; y < w.SY - 1; y++)
+                {
+                    byte want = y < fg ? (y == fg - 1 ? Mat.Grass : Mat.Soil) : Mat.Air;
+                    if (w.Get(x, y, z) != want) w.Set(x, y, z, want);
+                }
+        s.Step(.05f);
+    }
+
+    /// <summary>
+    /// The ground made level for a scene between the horde and the citadel, from <paramref name="x0"/> right up to the
+    /// citadel's foot and at the height it stands on. The citadel stands on a plateau over the lowland: a field made level
+    /// at the lowland's height left a cliff six metres high between the scene and the citadel, and a way for the horde
+    /// worked out after the levelling rightly went round it, by the plateau's slope, rather than through the scene.
+    /// </summary>
+    static void LevelToKeep(Sim s, int x0, int z0, int z1)
+    {
+        var w = s.World; var site = s.Site;
+        int fg = site.KeepBase, x1 = site.KeepX - site.KeepR - 20;
+        for (int z = z0; z <= z1; z++)
+            for (int x = x0; x <= x1; x++)
                 for (int y = 2; y < w.SY - 1; y++)
                 {
                     byte want = y < fg ? (y == fg - 1 ? Mat.Grass : Mat.Soil) : Mat.Air;

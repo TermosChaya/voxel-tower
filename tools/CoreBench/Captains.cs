@@ -28,10 +28,13 @@ static class CaptainsBench
         void Gone(Unit u) { u.Dead = true; u.DiedAt = -999; }
         int kx = site.KeepX, kz = site.KeepZ;
 
-        // a level field west of the citadel, a stone wall of ours across it four metres high, built by the workers' rules
-        int wx = (kx - 300) & ~7, wz = kz, fg = w.SurfAt(wx, wz);
+        // a level field west of the citadel, a stone wall of ours across it four metres high, built by the workers' rules;
+        // the field at the height the citadel stands on and right up to its foot (made level at the lowland's height, it
+        // left a cliff six metres high between the wall and the citadel, and the horde's way rightly went round by the
+        // plateau's slope, nowhere near the wall)
+        int wx = (kx - 300) & ~7, wz = kz, fg = site.KeepBase;
         for (int z = wz - 140; z <= wz + 140; z++)
-            for (int x = wx - 240; x <= wx + 120; x++)
+            for (int x = wx - 240; x <= kx - site.KeepR - 20; x++)
                 for (int y = 2; y < w.SY - 1; y++)
                 {
                     byte want = y < fg ? Mat.Soil : Mat.Air;

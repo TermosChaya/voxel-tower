@@ -52,10 +52,12 @@ void Check(string what, bool ok, string detail = "")
         $"50 ms of the bench's work took {walled:0.0} ms of the wall clock (counted {work:0.0} ms), 50 ms asleep counted {idle:0.0} ms; " +
         (BenchClock.FastPerMs > 0 ? $"the fast cores at {BenchClock.FastPerMs / 1e6:0.00} GHz ({BenchClock.Chip()})" : "no cycle counts: the thread's time"));
 }
-// the horde's way to the citadel is built on another thread and taken up when it is done, the later the busier the
-// machine; BENCH_FIELDS_AFTER=s builds it at once and takes it up so many seconds of game later, to go over a fight the
-// same each time (Sim.FieldsAfter)
-Sim.FieldsAfter = double.Parse(Environment.GetEnvironmentVariable("BENCH_FIELDS_AFTER") ?? "0", System.Globalization.CultureInfo.InvariantCulture);
+// the horde's way to the citadel: in the game it is built on another thread and taken up when it is done, which in the
+// bench, running its steps far faster than the game, came the more steps later the busier the machine was, and every
+// fight went another way. The bench builds it at once from the grid as it stands and takes it up a step later, as the
+// game has it a moment after asking, so a fight goes the same each time (Sim.FieldsAfter); BENCH_FIELDS_AFTER=s takes it
+// up so many seconds of game later instead, 0 the game's own way
+Sim.FieldsAfter = double.Parse(Environment.GetEnvironmentVariable("BENCH_FIELDS_AFTER") ?? "0.05", System.Globalization.CultureInfo.InvariantCulture);
 
 var sw = Stopwatch.StartNew();
 var w = new VoxelWorld(WorldGen.SizeX, WorldGen.SizeY, WorldGen.SizeZ);
@@ -1215,6 +1217,10 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--life")
                 int y = w4.SurfAt(x, z) + 2;
                 if (Mat.IsTrunk(w4.Get(x, y, z)) && Shapes.Tree(w4, x, y, z).Count > 6000) tree = (x, z);
             }
+        // (what the scenes before left marked is taken off first: the pit the worker set to fell first walked past was
+        // still marked, 60 m off, and the woodman went to dig it rather than take up the plot about him; how the scenes
+        // before had gone decided whether he did)
+        sim.CancelArea(0, 0, w4.SX - 1, w4.SZ - 1);
         var woodman = sim.Spawn(Kinds.Worker, sim.NearestStand(tree.x + 30, tree.z, 4));
         sim.BeginMarking();
         var plot = sim.AddZone(tree.x - 20, tree.z - 20, tree.x + 20, tree.z + 20, Stockpile.Wood, 0);

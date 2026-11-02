@@ -395,6 +395,13 @@ public sealed class FlowField
         }
         if (dy > 0)
             for (int y = py + m.Height; y < py + m.Height + dy && y < g.NY; y++) t += m.CarveTime(g, g.Id(pi, y, pk));
+        // dropping, the body steps off into the column beside and goes down it: whatever fills that column between its
+        // feet then and its feet after (a floor, a deck, the bedrock bottom of a box it is shut in) leaves no way down, as
+        // the walkers' own search has it (PathFinder.Find); else a raider shut in over a hollow took the hollow for its
+        // way out and hacked at it through the floor for ever
+        if (dy < 0)
+            for (int y = qy + m.Height; y < py + m.Height && y < g.NY; y++)
+                if (!g.Open(qi, y, qk)) return float.PositiveInfinity;
         // falling a long way hurts and the horde avoids it a little; wading is slow and nobody does it if a bridge is near
         float walk = (1 + (dy > 0 ? .6f * dy : -.3f * dy)) / m.Speed + (dy <= -4 ? 2 : 0);
         if (g.Water[g.Id(qi, qy, qk)] > 0) walk *= Wade;
