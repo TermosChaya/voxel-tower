@@ -174,10 +174,25 @@ static class ArchitectBench
             $"«{plan?.Found}»; {onLine} of {wall.Count} columns of the hand-built sides on his line; voxels laid beside them not of a tower, a stair or mending {beside}, timber {timber}; works: {Works(plan)}; " +
             $"{fort.Words()}; the horde's way in {(way < 0 ? "none" : $"{way} cells, {crossed}")}; a worker's, the gates open: {(walk < 0 ? "none" : $"{walk} cells, {walked}")}; gate {(gate is { } g2 ? $"at ({g2.x - cx}, {g2.z - cz})" : "none")}");
 
-        // ---- the player walls part of the way he meant to build before he marks it: he plans again round it
+        // ---- while he looks the ground over no step of the game waits on it: the plan is made a slice a step
         var sim2 = Valley(7, 600, 300, out cx, out cz);
+        Step(sim2, 2);
         sim2.Spawn(Kinds.Architect, sim2.NearestStand(cx + 12, cz + 12, 2));
-        Step(sim2, 5);
+        double longest = 0;
+        int steps = 0;
+        for (; steps < 2400 && sim2.ArchPlan == null; steps++)
+        {
+            double t0 = BenchClock.CpuMs();
+            sim2.Step(.05f);
+            longest = Math.Max(longest, BenchClock.CpuMs() - t0);
+        }
+        check("while he looks the ground over no step of the game waits on his plan: it is made a slice a step, in good time",
+            sim2.ArchPlan != null && longest < 40 && steps * .05 < 60,
+            $"plan made in {steps} steps ({steps * .05:0.0} s of the game), {sim2.ArchPlanMs:0} ms in all, its longest slice {sim2.ArchSliceMs:0.0} ms; the longest step {longest:0.0} ms of work");
+
+        // ---- the player walls part of the way he meant to build before he marks it: he plans again round it
+        // (once he has marked the first of it and set to work, ten seconds and more after he planned)
+        Step(sim2, 11);
         var first = sim2.ArchPlan;
         // a stretch of his new wall not marked yet, walled by the player along its line
         int wi = first == null ? -1 : first.Works.FindIndex(w => w.Kind == ArchWorkKind.Wall && w.Stage == 0 && (first.Marked >> first.Works.IndexOf(w) & 1) == 0 && w.Line.Length >= 4);
@@ -285,7 +300,7 @@ static class ArchitectBench
     // ------------------------------------------------------------ helpers
 
     /// <summary>The game saved and read back into a valley made again from its seed.</summary>
-    static Sim Reload(Sim s)
+    internal static Sim Reload(Sim s)
     {
         var ms = new System.IO.MemoryStream();
         s.Save(ms, 3, "architect", "");

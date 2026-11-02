@@ -29,7 +29,9 @@ public partial class Main
         var old = sim.RaiseWalls(new[] { (fx + R, fz - R), (fx - R, fz - R), (fx - R, fz + R) }, closed: false, 24, 8);
         int marked0 = sim.ArchMarked;
         var arch = sim.Spawn(Kinds.Architect, sim.NearestStand(fx, fz + 40, 2));
-        Advance(10);
+        // he looks the ground over a slice a step, then marks his first pieces
+        for (int i = 0; i < 60 && sim.ArchPlan == null; i++) Advance(1);
+        Advance(6);
         int marked = sim.ArchMarked - marked0;
         var plan = sim.ArchPlan;
         // what he planned new along the old sides: none of his new wall within two metres of them but where it meets them

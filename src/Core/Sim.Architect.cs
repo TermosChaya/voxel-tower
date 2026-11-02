@@ -80,9 +80,14 @@ public sealed partial class Sim
     /// <summary>What the architect is about and what he lacks, for his card and the chronicle; pieces he has marked since the start.</summary>
     public string ArchDoing = "", ArchLacks = "";
     public int ArchMarked, ArchMended;
-    /// <summary>How many times he has planned, and how long the last plan took to make, ms (the bench asks).</summary>
+    /// <summary>How many times he has planned, how long the last plan took to make in all and its longest slice, ms (the bench asks).</summary>
     public int ArchPlans;
-    public double ArchPlanMs;
+    public double ArchPlanMs, ArchSliceMs;
+    /// <summary>The plan he is making, a slice of it a step (<see cref="TickArchPlan"/>), and the way he set out to plan for; none while he is not.</summary>
+    IEnumerator<ArchPlan> _archMaking;
+    ArchStyle _archMakingFor;
+    /// <summary>Whether he is looking the ground over for a plan now.</summary>
+    public bool ArchSurveying => _archMaking != null;
     public const string ArchitectOne = "в долине уже есть архитектор: он один на долину";
 
     readonly HashSet<int> _archDuty = new();
@@ -539,15 +544,44 @@ public sealed partial class Sim
         return true;
     }
 
-    /// <summary>He looks the ground over and plans anew, and says what he found and means to do.</summary>
-    void PlanAgain(Unit u)
+    /// <summary>He sets out to look the ground over and plan anew: a slice of it a step from now on (<see cref="TickArchPlan"/>).</summary>
+    void PlanAgain()
     {
-        var clock = System.Diagnostics.Stopwatch.StartNew();
-        ArchPlan = MakeArchPlan();
-        ArchPlanMs = clock.Elapsed.TotalMilliseconds;
+        if (_archMaking != null) return;
+        _archMaking = PlanSlices().GetEnumerator();
+        _archMakingFor = ArchStyle;
+        ArchPlanMs = ArchSliceMs = 0;
+    }
+
+    /// <summary>
+    /// Each step, a slice of the plan he is making: the survey a few rows of metres at a time, the search for the line a
+    /// few thousand places at a time (Sim.Architect.Survey.cs), so that no step of the game waits on the whole of it;
+    /// made, it is his plan. With no architect left, the planning is let go.
+    /// </summary>
+    void TickArchPlan()
+    {
+        if (_archMaking == null) return;
+        var arch = Units.Find(a => !a.Dead && a.Team == Team.Player && a.T == Kinds.Architect);
+        if (arch == null) { _archMaking.Dispose(); _archMaking = null; return; }
+        long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+        bool more = _archMaking.MoveNext();
+        double ms = System.Diagnostics.Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
+        ArchPlanMs += ms; ArchSliceMs = Math.Max(ArchSliceMs, ms);
+        if (more && _archMaking.Current == null) return;
+        var plan = more ? _archMaking.Current : null;
+        _archMaking.Dispose();
+        _archMaking = null;
+        if (plan != null) Planned(arch, plan);
+    }
+
+    /// <summary>The plan made: it is his, and he says what he found and means to do.</summary>
+    void Planned(Unit u, ArchPlan plan)
+    {
+        ArchPlan = plan;
         ArchPlans++;
         _archPlannedAt = _archMoved = Time;
-        _archReplan = false;
+        // (the way changed while he looked the ground over: he plans again for the new one)
+        _archReplan = _archMakingFor != ArchStyle;
         _archLeft.Clear(); _archCols.Clear(); _archAgain.Clear(); _archBeside.Clear();
         // new wall that has to pass by a wall that stands (there was no other way round) is not planned again for it
         for (int i = 0; i < ArchPlan.Works.Count; i++)
@@ -566,7 +600,13 @@ public sealed partial class Sim
         if (u == Possessed || Time < u.NextOrders) return;
         u.NextOrders = Time + 4 + u.Id % 5 * .1;
         if (!u.Commands) { ArchDoing = "ждёт ваших приказов"; ArchLacks = ""; u.Why = "архитектор: ждёт ваших приказов"; ArchDuty(Stockpile.None); return; }
-        if (ArchPlan == null || _archReplan && Time - _archPlannedAt > 10) PlanAgain(u);
+        if (ArchPlan == null || _archReplan && Time - _archPlannedAt > 10) PlanAgain();
+        // the plan not made yet, or made again: he walks the ground over, and marks nothing new meanwhile
+        if (ArchPlan == null || _archMaking != null)
+        {
+            ArchDoing = "осматривает место…"; ArchLacks = ""; u.Why = "архитектор: осматривает место…";
+            return;
+        }
         var p = ArchPlan;
         // the horde near the ring: nothing new is marked till it is gone
         if (HordeNear(p.CX, p.CZ, p.H + 60 * VoxelWorld.PerMetre))
@@ -996,6 +1036,7 @@ public sealed partial class Sim
         byte way = r.ReadByte();
         ArchStyle = (ArchStyle)(way & 3);
         ArchPlan = null;
+        _archMaking = null;
         if (!r.ReadBoolean()) return;
         if ((way & ArchWorksMark) == 0)
         {

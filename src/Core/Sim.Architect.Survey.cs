@@ -57,11 +57,16 @@ public sealed partial class Sim
         }
     }
 
-    /// <summary>Walks the ground within so far of a point (see <see cref="Lie"/>).</summary>
-    ArchGround SurveyAbout(int px, int pz, int reach)
+    /// <summary>How much of the planning one slice does (a slice a step of the game while he plans, Sim.Architect.cs): rows of sampled columns of the survey, chunks of a layer looked through, places the search for the line takes up.</summary>
+    const int SurveyRows = 8, TopsChunks = 8, RingSteps = 6144;
+
+    /// <summary>
+    /// Walks the ground within so far of a point (see <see cref="Lie"/>) into the ground given, a slice at a time: it
+    /// stops after every few rows of what it looks over, to go on the next step (see <see cref="PlanSlices"/>).
+    /// </summary>
+    IEnumerable<bool> SurveySlices(int px, int pz, int reach, ArchGround s)
     {
         const int C = NavGrid.CS, Sh = NavGrid.Shift;
-        var s = new ArchGround();
         int pi = px >> Sh, pk = pz >> Sh, r = (reach + C - 1) / C;
         s.I0 = Math.Max(0, pi - r); s.K0 = Math.Max(0, pk - r);
         int i1 = Math.Min(Nav.NX - 1, pi + r), k1 = Math.Min(Nav.NZ - 1, pk + r);
@@ -70,11 +75,13 @@ public sealed partial class Sim
         s.Is = new Lie[n]; s.Floor = new short[n]; s.Rise = new short[n];
         // what is meant to stand and what is marked to be laid, the top of each column
         var meant = new int[nx * nz]; var marked = new int[nx * nz];
-        TopsIn(Design, x0, z0, nx, nz, meant);
-        TopsIn(Orders.Layer, x0, z0, nx, nz, marked);
+        foreach (var _ in TopsIn(Design, x0, z0, nx, nz, meant)) yield return false;
+        foreach (var _ in TopsIn(Orders.Layer, x0, z0, nx, nz, marked)) yield return false;
         var walls = new int[n]; var timber = new int[n]; var roofed = new int[n]; var tall = new int[n]; var broken = new int[n]; var off = new int[n]; var ground = new long[n];
         // every other column each way, sixteen to a cell: a wall that bars the way is two voxels thick at the least
+        int rows = 0;
         for (int z = z0; z < z0 + nz; z += 2)
+        {
             for (int x = x0; x < x0 + nx; x += 2)
             {
                 int c = ((z - z0) >> Sh) * s.NI + ((x - x0) >> Sh), col = (z - z0) * nx + (x - x0);
@@ -92,6 +99,8 @@ public sealed partial class Sim
                 byte m = built >= top ? World.Get(x, top - 1, z) : meant[col] >= top ? Design.Get(x, top - 1, z) : Orders.At(x, top - 1, z);
                 if (m == Mat.Wood) timber[c]++;
             }
+            if (++rows % SurveyRows == 0) yield return false;
+        }
         for (int c = 0; c < n; c++)
         {
             int cols = C * C / 4 - off[c];
@@ -159,6 +168,7 @@ public sealed partial class Sim
                 best = MathF.Sqrt(best);
                 if (best < 10) s.Is[c] |= Lie.Road;
                 if (best < 32) s.Is[c] |= Lie.NearRoad | (alongX ? Lie.RoadAlongX : 0);
+                if ((c & 4095) == 4095) yield return false;
             }
         // beside a house
         for (int c = 0; c < n; c++)
@@ -172,7 +182,6 @@ public sealed partial class Sim
                     if (ni >= 0 && nk >= 0 && ni < s.NI && nk < s.NK && !s.Has(s.Idx(ni, nk), Lie.House)) s.Is[s.Idx(ni, nk)] |= Lie.ByHouse;
                 }
         }
-        return s;
     }
 
     static readonly (int di, int dk)[] Four = { (1, 0), (-1, 0), (0, 1), (0, -1) };
@@ -206,9 +215,13 @@ public sealed partial class Sim
         return 0;
     }
 
-    /// <summary>For each column of a box, one over the highest voxel of a layer (what is meant, or marked to be laid) that would bar the way; 0 for none.</summary>
-    static void TopsIn(VoxelWorld layer, int x0, int z0, int nx, int nz, int[] tops)
+    /// <summary>
+    /// For each column of a box, one over the highest voxel of a layer (what is meant, or marked to be laid) that would
+    /// bar the way; 0 for none. A slice at a time: it stops after every so many chunks it has looked through.
+    /// </summary>
+    static IEnumerable<bool> TopsIn(VoxelWorld layer, int x0, int z0, int nx, int nz, int[] tops)
     {
+        int looked = 0;
         for (int cz = z0 >> VoxelWorld.Shift; cz <= (z0 + nz - 1) >> VoxelWorld.Shift && cz < layer.CZ; cz++)
             for (int cx = x0 >> VoxelWorld.Shift; cx <= (x0 + nx - 1) >> VoxelWorld.Shift && cx < layer.CX; cx++)
                 for (int cy = 0; cy < layer.CY; cy++)
@@ -224,6 +237,7 @@ public sealed partial class Sim
                         int col = z * nx + x;
                         if (y + 1 > tops[col]) tops[col] = y + 1;
                     }
+                    if (++looked % TopsChunks == 0) yield return false;
                 }
     }
 
@@ -316,14 +330,14 @@ public sealed partial class Sim
     /// of those. A diagonal step is no shorter than its two sides where either is barred, and near a road the line goes
     /// square across it, so that a gate can hang there.
     /// </summary>
-    static List<int> CheapestRing(ArchGround s, float[] cost, int want)
+    static IEnumerable<bool> CheapestRing(ArchGround s, float[] cost, int want, Action<List<int>> found)
     {
         int n = s.NI * s.NK;
         var dist = new float[2 * n]; var from = new int[2 * n]; var seen = new int[2 * n]; var closed = new int[2 * n];
         var open = new PriorityQueue<int, float>();
         float best = float.PositiveInfinity;
         List<int> ring = null;
-        int gen = 0;
+        int gen = 0, taken = 0;
         // the cells of the half-line most likely to be on the line first (what stands, and about the reach wanted), so
         // that the cheapest found early cuts the later searches short; sixteen of them at the most
         var starts = new List<(int cell, float promise)>();
@@ -343,6 +357,7 @@ public sealed partial class Sim
             int goal = start + n;
             while (open.TryDequeue(out int st, out float d))
             {
+                if (++taken % RingSteps == 0) yield return false;
                 if (closed[st] == gen) continue;
                 closed[st] = gen;
                 if (d >= best) break;
@@ -381,7 +396,7 @@ public sealed partial class Sim
                 }
             }
         }
-        return ring;
+        found(ring);
     }
 
     // ------------------------------------------------------------ the plan
@@ -393,9 +408,21 @@ public sealed partial class Sim
     /// The architect looks the ground over and plans (see the summary of this file): the reach he wants inside the line
     /// is as big as clears the point by three metres (bigger for a stronger way and a bigger garrison); stone if the
     /// stores have well over half of what the new wall takes and the way is not the modest one, else a palisade first.
-    /// What he found and means to do is said in <see cref="ArchPlan.Found"/>.
+    /// What he found and means to do is said in <see cref="ArchPlan.Found"/>. All of it at once, as the bench asks it.
     /// </summary>
     public ArchPlan MakeArchPlan()
+    {
+        foreach (var plan in PlanSlices()) if (plan != null) return plan;
+        return null;
+    }
+
+    /// <summary>
+    /// The planning a slice at a time (<see cref="MakeArchPlan"/>): null after each slice of the survey and of the
+    /// search for the line, the plan at the end. The game takes a slice a step (Sim.Architect.cs, TickArchPlan), so that
+    /// no step waits on the whole of it; the slices are counted in work, not in time, and the plan comes out the same
+    /// however fast the machine is.
+    /// </summary>
+    IEnumerable<ArchPlan> PlanSlices()
     {
         var (cx, cz, r) = PointToHold();
         var style = ArchStyle;
@@ -407,17 +434,25 @@ public sealed partial class Sim
         p.HordeSide = SideToward(ex - cx, ez - cz);
         // the ground about, wider if walls of ours stand at the edge of what he looked at
         int reach = Math.Min(want + 240, 640);
-        var s = SurveyAbout(cx, cz, reach);
-        if (reach < 640 && WallsAtEdge(s)) s = SurveyAbout(cx, cz, reach = 640);
-        var cost = RingCosts(s, cx, cz, want, out int town);
-        var ring = CheapestRing(s, cost, want);
+        var s = new ArchGround();
+        foreach (var _ in SurveySlices(cx, cz, reach, s)) yield return null;
+        if (reach < 640 && WallsAtEdge(s))
+        {
+            s = new ArchGround();
+            foreach (var _ in SurveySlices(cx, cz, reach = 640, s)) yield return null;
+        }
+        var cost = RingCosts(s, cx, cz, want, out _);
+        yield return null;
+        List<int> ring = null;
+        foreach (var _ in CheapestRing(s, cost, want, found => ring = found)) yield return null;
         if (ring == null || ring.Count < 8)
         {
             p.Found = "Архитектор не нашёл, где поставить стену вокруг: мешают дома или край долины.";
-            return p;
+            yield return p;
+            yield break;
         }
         BuildPlan(p, s, cost, ring);
-        return p;
+        yield return p;
     }
 
     /// <summary>Whether a wall of ours stands within four cells of the edge of the ground looked at.</summary>
