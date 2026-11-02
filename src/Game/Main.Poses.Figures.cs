@@ -78,6 +78,8 @@ public partial class Main
         Rig.Set(World.WX(cx) - sin * over, World.WZ(cz) - cos * over, yaw, pitch, one ? zoom : 1.6f, snap: true);
         GD.Print($"[voxel-tower] the figures stand round {cx:0},{cz:0}, {gap:0} voxels a row; closer: --cam={cx - sin * over / VoxelWorld.Vox:0},{cz - cos * over / VoxelWorld.Vox:0},-0.3,0.42,6");
         Hud.Refresh();
+        // (--bare: nothing of the interface over the figures, for a contact sheet)
+        if (_bare) Hud.Visible = false;
     }
 
     /// <summary>

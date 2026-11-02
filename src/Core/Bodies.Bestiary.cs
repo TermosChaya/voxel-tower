@@ -140,8 +140,41 @@ public static partial class Bodies
         // the topknot, the tusks out of the lower jaw
         s.Box(Body, -1, b.Crown, b.HeadZ + 3, 1, b.Crown + 3, b.HeadZ + 5, Mat.Hair);
         s.Pair(Body, Body, -3, b.Neck + 2, b.HZ1, -2, b.Neck + 5, b.HZ1 + 1, Mat.Tusk);
+        OgreDetail(s, b, look);
         Club(s, b, banded: look == 1);
         return Done(s, f, b);
+    }
+
+    /// <summary>
+    /// An ogre drawn finer: its bulk rounded off at the trunk's, the arms' and the legs' edges; coarse hair over the chest
+    /// above the belly; a string of teeth and finger bones across the chest with a jawbone hung from it; the topknot in
+    /// strands, bound with a ring of bone.
+    /// </summary>
+    static void OgreDetail(Sculpt s, Build b, int look)
+    {
+        if (!s.Detail) return;
+        s.FRound(Body, -b.Chest, b.Waist + 1, b.Z0, b.Chest, b.Neck, b.Z1, 2f, top: true);
+        s.FRound(Main, b.ArmX0, b.HandY, b.ArmZ0, -b.Chest, b.Neck, b.ArmZ1, 1.5f, top: false);
+        s.FRound(Off, b.Chest, b.HandY, b.ArmZ0, -b.ArmX0, b.Neck, b.ArmZ1, 1.5f, top: false);
+        s.FRound(LegR, b.LegX0, 0, -(b.LegD / 2), b.LegX1, b.Leg, b.LegD - b.LegD / 2, 1.5f, top: false);
+        s.FRound(LegL, -b.LegX1, 0, -(b.LegD / 2), -b.LegX0, b.Leg, b.LegD - b.LegD / 2, 1.5f, top: false);
+        int front = b.Z1 * 2 - 1, chest0 = (b.Waist + 9) * 2, chest1 = (b.Neck - 2) * 2, cw = b.Chest * 2;
+        // hair over the chest, thickest down its middle
+        s.FPattern(Body, -cw, chest0, front, cw, chest1, front + 1, (x, y, z) =>
+            s.FHas(Body, x, y, z) && Dice(x, y, look, 105) < .28f - MathF.Abs(x + .5f) * .018f ? Mat.Hair : (byte)0);
+        // the string of teeth and bones across the chest, sagging to its middle, and a jawbone hung there
+        for (int x = -cw + 3; x < cw - 3; x++)
+        {
+            int y = chest1 - 2 - (int)(6 * (1 - (x + .5f) * (x + .5f) / ((cw - 3) * (cw - 3))));
+            s.FPut(Body, x, y, front, (x & 1) == 0 ? Mat.Bone : Mat.Linen);
+            if ((x + 64) % 4 == 0) s.FPut(Body, x, y - 1, front, Mat.Bone);
+        }
+        int jy = chest1 - 10;
+        for (int x = -3; x < 3; x++) { s.FPut(Body, x, jy, front, Mat.Bone); if (x is -3 or 2) { s.FPut(Body, x, jy + 1, front, Mat.Bone); s.FPut(Body, x, jy + 2, front, Mat.Bone); } }
+        for (int x = -2; x < 2; x++) s.FPut(Body, x, jy + 1, front, (x & 1) == 0 ? Mat.Tusk : Mat.Bone);
+        // the topknot in strands bound with bone at its root
+        s.FPattern(Body, -4, b.Crown * 2, (b.HeadZ + 3) * 2, 4, b.Crown * 2 + 6, (b.HeadZ + 5) * 2, (x, y, z) =>
+            s.FMat(Body, x, y, z) != Mat.Hair ? (byte)0 : y == b.Crown * 2 + 1 ? Mat.Bone : (x + z) % 2 == 0 && y > b.Crown * 2 + 3 ? Mat.HairBrown : (byte)0);
     }
 
     /// <summary>A troll of the woods: the horde's trolls' kin with no paint and no iron, mossed over, a club of root.</summary>
@@ -165,7 +198,7 @@ public static partial class Bodies
         s.Coat(Body, -b.Chest, b.Neck - 4, b.Z0, b.Chest, b.Neck, b.Z1, Mat.Moss);
         s.Paint(Body, -b.Chest, b.Waist + 4, b.Z0 - 1, b.Chest, b.Neck, b.Z0, Mat.Moss);
         Skirt(s, b, Mat.Hide, Tissue.Skin, 5);
-        TrollDetail(s, b, look, tame: false);
+        TrollDetail(s, b, look, tame: false, strap: false);
         Club(s, b);
         return Done(s, f, b);
     }

@@ -152,6 +152,42 @@ public static partial class Bodies
     }
 
     /// <summary>
+    /// A cleaver as the horde beat them out of scrap: a short haft bound in hide through the fist, an iron cap on its butt,
+    /// and on its end a broad slab of iron hanging below it, its back straight along the haft and riveted to it, its lower
+    /// edge bellying a little toward the fore end with that corner cut off, a hole through its top fore corner, rust over
+    /// it, the back dark, the edge honed bright and notched.
+    /// </summary>
+    static void Cleaver(Sculpt s, Build b, int len = 9)
+    {
+        var g = InFist(s, b, out int x, out int y, out int z0);
+        int q = 4, e = z0 + len * q, butt = b.ArmZ0 * q - 4;
+        g.Fill(x, y, butt, x + 2, y + 2, e - 8, Mat.Handle);
+        g.Wound(x, y, butt, z0 + 2, 2, Mat.Hide, Mat.LeatherDark);
+        g.Fill(x - 1, y - 1, butt - 2, x + 3, y + 3, butt, Mat.Iron);
+        const int L = 30, D = 15;
+        int za = e - L;
+        for (int z = za; z <= e; z++)
+        {
+            float t = (z - za) / (float)L;
+            int deep = D - (t < .15f ? (int)((.15f - t) / .15f * 4) : 0) + (int)(MathF.Sin(t * MathF.PI) * 1.5f);
+            for (int d = 0; d <= deep; d++)
+            {
+                // the fore corner cut off, two notches out of the edge, the hole
+                if (z > e - 3 && d > deep - (z - (e - 3)) * 2) continue;
+                bool edge = d >= deep - 1;
+                if (edge && (z - za) / 4 is 3 or 5 && Dice(z >> 2, 0, 1, 5) < .85f) continue;
+                if (d is >= 2 and <= 4 && z >= e - 6 && z <= e - 4) continue;
+                byte m = edge ? Mat.SteelEdge : d <= 1 ? Mat.SteelDark : Dice(z >> 2, d >> 2, x, 6) < .3f ? Mat.Rust : Mat.Iron;
+                g.Dot(x, y + 1 - d, z, m);
+                if (d <= 3) g.Dot(x + 1, y + 1 - d, z, m);
+            }
+        }
+        // the rivets through its back where it is bound to the haft
+        foreach (int z in new[] { za + 4, za + 14, za + 24 }) { g.Dot(x - 1, y, z, Mat.Steel); g.Dot(x + 2, y, z, Mat.Steel); }
+        g.Tip = Half(g, x + 1, y - D / 2f, e - L / 2f);
+    }
+
+    /// <summary>
     /// A knife: a grip bound in rag or leather, an iron bolster, and a blade straight along its back with the edge below
     /// bellying out and sweeping up to the point; an old one notched and rusty.
     /// </summary>

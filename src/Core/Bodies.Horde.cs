@@ -245,9 +245,23 @@ public static partial class Bodies
         if (look % 2 == 0 && look != 6) s.Box(Body, -1, b.Crown, -1, 1, b.Crown + 2, 1, Mat.Hair);
         if (look == 5) s.Box(Body, -4, b.Crown, 0, 4, b.Crown + 1, 1, Mat.Bone);
         Claws(s, b, Mat.Horn);
+        // a mantle of reeds over the shoulders and down the back on some, as the bog's folk weave them
+        bool reeds = look % 4 == 1;
+        if (reeds)
+        {
+            s.Coat(Body, -b.Chest, b.Neck - 2, b.Z0, b.Chest, b.Neck, b.Z1, Mat.Reed);
+            s.Coat(Body, -b.Chest, b.Waist + 1, b.Z0, b.Chest, b.Neck, b.Z0 + 1, Mat.Reed);
+        }
         if (s.Detail)
         {
             int W = b.Chest * 2, waist = b.Waist * 2, neck = b.Neck * 2, z1 = b.Z1 * 2;
+            // the reeds in strands, straw among them, moss grown in, the hem gone dark with peat; the others' hems
+            // stained green by the bog's water
+            if (reeds)
+                s.FPattern(Body, -80, waist + 2, -80, 80, neck, 80, (x, y, z) => s.FMat(Body, x, y, z) != Mat.Reed ? (byte)0
+                    : y == waist + 2 && Dice(x, z, look, 86) < .6f ? Mat.Peat : (x + z + 64) % 3 == 0 ? Mat.Straw : Dice(x >> 1, y >> 1, z >> 1, 87) < .2f ? Mat.Moss : (byte)0);
+            else if (look % 4 != 3)
+                s.FPattern(Body, -80, waist, -80, 80, waist + 3, 80, (x, y, z) => s.FMat(Body, x, y, z) == b.Shirt && Dice(x, y, z, 88) < .35f ? Mat.Moss : (byte)0);
             // the hem of the shirt torn, the loincloth's too
             if (look % 4 != 3)
                 for (int x = -W; x < W; x++)
@@ -836,7 +850,9 @@ public static partial class Bodies
     /// through the nose of some, the tusks curving up and out of the lower jaw past small teeth, ears pointed back and
     /// ringed; scars over the eye of some; a crest of hair over a shaved scalp inked with spirals, or the iron cap riveted
     /// with great horns curving out of it; a breastplate of rusted iron, its edges ragged, riveted over the jerkin; the
-    /// pauldrons ragged and riveted, horn spikes on them; the kilt of hide, fur at its belt; ink round the bare arms.
+    /// pauldrons in three riveted lames stepping in over the shoulder, two spikes up off each, fur under them on some;
+    /// the kilt of hide, some strips dark with peat, fur at its belt with moss in it, teeth strung along it; ink round
+    /// the bare arms. A bearded axe in the fist, or a cleaver beaten out of scrap.
     /// </summary>
     static BodyPlan Orc(int look)
     {
@@ -867,8 +883,14 @@ public static partial class Bodies
         }
         s.Box(Main, b.ArmX0 - 1, b.Neck - 4, b.ArmZ0 - 1, -b.Chest, b.Neck, b.ArmZ1 + 1, Mat.Iron, Tissue.Armor);
         s.Box(Off, b.Chest, b.Neck - 4, b.ArmZ0 - 1, -b.ArmX0 + 1, b.Neck, b.ArmZ1 + 1, Mat.Iron, Tissue.Armor);
-        s.Box(Main, b.ArmX0, b.Neck, -1, b.ArmX0 + 1, b.Neck + 2, 0, Mat.Bone, Tissue.Armor);
-        s.Box(Off, -b.ArmX0 - 1, b.Neck, -1, -b.ArmX0, b.Neck + 2, 0, Mat.Bone, Tissue.Armor);
+        // two spikes up off each, before and behind its outer edge (one in the middle read from afar as a little head
+        // over the arm), horn on those in horned caps, iron on the rest
+        byte spike = look >= 3 ? Mat.Horn : Mat.Iron;
+        foreach (int z in new[] { b.ArmZ0, b.ArmZ1 - 1 })
+        {
+            s.Box(Main, b.ArmX0, b.Neck, z, b.ArmX0 + 1, b.Neck + 2, z + 1, spike, Tissue.Armor);
+            s.Box(Off, -b.ArmX0 - 1, b.Neck, z, -b.ArmX0, b.Neck + 2, z + 1, spike, Tissue.Armor);
+        }
         for (int x = -b.Chest; x < 0; x += 2)
             s.Pair(Body, Body, x, b.Waist - 4, b.Z1, x + 1, b.Waist + 1, b.Z1 + 1, Mat.Leather);
         // a topknot, or an iron cap with horns
@@ -886,7 +908,7 @@ public static partial class Bodies
             s.Box(Body, -1, hy1 + 1, -3, 1, hy1 + 2, -1, Mat.Hair);
         }
         OrcDetail(s, b, look, chain);
-        Axe(s, b);
+        if (look % 3 == 1) Cleaver(s, b); else Axe(s, b);
         return Done(s, f, b);
     }
 
@@ -991,21 +1013,46 @@ public static partial class Bodies
                 s.FSet(Body, x, y, z, Mat.Iron, Tissue.Armor); s.FSet(Body, x + 1, y, z, Mat.Iron, Tissue.Armor);
                 if ((y & 2) == 0) s.FSet(Body, x + 1, y, z1 + 1, Mat.Iron, Tissue.Armor);
             }
-        // the pauldrons ragged and riveted, horn spikes on the left
-        int ax0 = (b.ArmX0 - 1) * 2, az0 = (b.ArmZ0 - 1) * 2, az1 = (b.ArmZ1 + 1) * 2, py = (b.Neck - 4) * 2;
+        // the pauldrons in three lames, each standing in a cell from the one below it over the shoulder and before and
+        // behind, the iron under each lame in shadow, a rivet every third cell along each; under the
+        // lowest a lining of fur, ragged, on those with a chain; the two spikes tapering to a point that leans out
+        int ax0 = (b.ArmX0 - 1) * 2, az0 = (b.ArmZ0 - 1) * 2, az1 = (b.ArmZ1 + 1) * 2, py = (b.Neck - 4) * 2, ridge = b.Neck * 2;
         foreach (var (p, sg) in new[] { (Main, 1), (Off, -1) })
         {
             int X(int x) => sg > 0 ? x : -1 - x;
-            for (int z = az0; z < az1; z++)
-                for (int x = ax0; x < -cw; x++)
-                {
-                    if (Dice(x, z, sg, 95) < .4f) s.FDel(p, X(x), py, z);
-                    if ((x + z) % 3 == 0 && (x == ax0 || z == az0 || z == az1 - 1)) s.FPut(p, X(x), py + 3, z, Mat.Steel);
-                }
-            s.FPattern(p, -80, py, -80, 80, b.Neck * 2, 80, (x, y, z) => s.FMat(p, x, y, z) == Mat.Iron && Dice(x >> 1, y >> 1, z >> 1, 96 + sg) < .18f ? Mat.Rust : (byte)0);
-            if (sg < 0)
-                foreach (int z in new[] { az0 + 2, az1 - 3 })
-                    for (int k = 0; k < 4; k++) { s.FSet(p, X(ax0 + 4), b.Neck * 2 + k, z, k == 3 ? Mat.Bone : Mat.Horn, Tissue.Armor); if (k < 2) s.FSet(p, X(ax0 + 3), b.Neck * 2 + k, z, Mat.Horn, Tissue.Armor); }
+            for (int y = py; y < ridge; y++)
+            {
+                int row = y - py, inset = Math.Min(2, row / 3);
+                for (int z = az0; z < az1; z++)
+                    for (int x = ax0; x < -cw; x++)
+                    {
+                        int fromOut = x - ax0, fromFace = Math.Min(z - az0, az1 - 1 - z);
+                        if (fromOut < inset || fromFace < inset) { s.FDel(p, X(x), y, z); continue; }
+                        if (fromOut != inset && fromFace != inset) continue;
+                        byte m = row % 3 == 2 && inset < 2 ? Mat.SteelDark : (byte)0;
+                        if (row % 3 == 1 && ((fromOut == inset ? z : x) + 99) % 3 == 0) m = Mat.Steel;
+                        if (m != 0) s.FPut(p, X(x), y, z, m);
+                    }
+            }
+            s.FPattern(p, -80, py, -80, 80, ridge, 80, (x, y, z) => s.FMat(p, x, y, z) == Mat.Iron && Dice(x >> 1, y >> 1, z >> 1, 96 + sg) < .18f ? Mat.Rust : (byte)0);
+            if (chain)
+                for (int z = az0; z < az1; z++)
+                    for (int x = ax0; x < -cw; x++)
+                    {
+                        if (!s.FHas(p, X(x), py, z)) continue;
+                        if ((x == ax0 || z == az0 || z == az1 - 1) && Dice(x, z, sg, 95) < .35f) { s.FDel(p, X(x), py, z); continue; }
+                        s.FPut(p, X(x), py, z, Mat.FurBoar);
+                    }
+            byte horn = look >= 3 ? Mat.Horn : Mat.Iron, point = look >= 3 ? Mat.Bone : Mat.Steel;
+            foreach (int zc in new[] { b.ArmZ0 * 2, (b.ArmZ1 - 1) * 2 })
+                for (int k = 0; k < 4; k++)
+                    for (int dz = 0; dz < 2; dz++)
+                        for (int dx = 0; dx < 2; dx++)
+                        {
+                            bool keep = k < 2 || dx == 0 && (k == 2 || dz == (zc < 0 ? 0 : 1));
+                            if (!keep) s.FDel(p, X(ax0 + 2 + dx), ridge + k, zc + dz);
+                            else s.FPut(p, X(ax0 + 2 + dx), ridge + k, zc + dz, k == 3 ? point : horn);
+                        }
             // ink round the bare arm, a leather wrap at the wrist
             for (int y = (b.HandY + b.Hand) * 2; y < (b.HandY + b.Hand) * 2 + 3; y++) s.FPattern(p, -80, y, -80, 80, y + 1, 80, (x, yy, z) => s.FMat(p, x, yy, z) == skin ? Mat.Leather : (byte)0);
             for (int y = py - 8; y < py - 2; y++) s.FPattern(p, -80, y, -80, 80, y + 1, 80, (x, yy, z) => s.FMat(p, x, yy, z) == skin && ((x + z + yy) % 4 == 0 || yy == py - 8 || yy == py - 3) ? Mat.Ink : (byte)0);
@@ -1019,6 +1066,12 @@ public static partial class Bodies
             }
         s.FPattern(Body, -80, b.Waist * 2, -80, 80, b.Waist * 2 + 2, 80, (x, y, z) => s.FMat(Body, x, y, z) == Mat.Leather ? Mat.FurBoar : (byte)0);
         foreach (var p in new[] { LegR, LegL }) s.FPattern(p, -80, b.Boot * 2 - 1, -80, 80, b.Boot * 2, 80, (x, y, z) => s.FHas(p, x, y, z) ? Mat.FurBoar : (byte)0);
+        // the bog they come from on it: every third strip of the kilt dyed dark with peat, tufts of moss in the fur of
+        // its belt and the boots', and a tooth or a finger bone strung along the strips' ends before
+        s.FPattern(Body, -80, (b.Waist - 4) * 2, -80, 80, b.Waist * 2, 80, (x, y, z) => s.FMat(Body, x, y, z) == Mat.Hide && (x + 64) / 2 % 3 == 0 ? Mat.Peat : (byte)0);
+        s.FPattern(Body, -80, b.Waist * 2, -80, 80, b.Waist * 2 + 2, 80, (x, y, z) => s.FMat(Body, x, y, z) == Mat.FurBoar && Dice(x >> 1, y, z >> 1, 98) < .3f ? Mat.Moss : (byte)0);
+        foreach (var p in new[] { LegR, LegL }) s.FPattern(p, -80, b.Boot * 2 - 1, -80, 80, b.Boot * 2, 80, (x, y, z) => s.FMat(p, x, y, z) == Mat.FurBoar && Dice(x, y, z, 99) < .25f ? Mat.Moss : (byte)0);
+        s.FPattern(Body, -80, (b.Waist - 4) * 2 + 1, z1 + 1, 80, (b.Waist - 4) * 2 + 3, z1 + 2, (x, y, z) => s.FHas(Body, x, y, z) && (x + 64) % 5 == 0 ? Mat.Bone : (byte)0);
     }
 
     /// <summary>
@@ -1027,11 +1080,18 @@ public static partial class Bodies
     /// to a bulb over the jaw, teeth of all sizes out of the jaw (one tusk broken), a beard of moss hanging from the jaw,
     /// claws on its fingers and toes; a wild one has a shackle on its left wrist with a length of broken chain.
     /// </summary>
-    static void TrollDetail(Sculpt s, Build b, int look, bool tame)
+    static void TrollDetail(Sculpt s, Build b, int look, bool tame, bool strap = true)
     {
         if (!s.Detail) return;
         int hy0 = b.Neck, hz1 = b.HZ1, F = hz1 * 2 - 1, H0 = hy0 * 2, E = (hy0 + 3) * 2, W = b.HeadW * 2;
         byte skin = b.Skin;
+        // its bulk rounded off: the trunk's upright edges and its shoulders, the arms' and the legs' edges, so that it
+        // stands as a body of flesh and not a stack of boxes
+        s.FRound(Body, -b.Chest, b.Waist + 1, b.Z0, b.Chest, b.Neck, b.Z1, 2f, top: true);
+        s.FRound(Main, b.ArmX0, b.HandY, b.ArmZ0, -b.Chest, b.Neck, b.ArmZ1, 1.5f, top: false);
+        s.FRound(Off, b.Chest, b.HandY, b.ArmZ0, -b.ArmX0, b.Neck, b.ArmZ1, 1.5f, top: false);
+        s.FRound(LegR, b.LegX0, 0, -(b.LegD / 2), b.LegX1, b.Leg, b.LegD - b.LegD / 2, 1.5f, top: false);
+        s.FRound(LegL, -b.LegX1, 0, -(b.LegD / 2), -b.LegX0, b.Leg, b.LegD - b.LegD / 2, 1.5f, top: false);
         // the hide blotched darker
         foreach (var p in new[] { Body, Main, Off, LegR, LegL })
             s.FPattern(p, -80, 0, -80, 80, 200, 80, (x, y, z) => s.FMat(p, x, y, z) == skin && Dice(x >> 2, y >> 2, z >> 2, 100 + look) < .34f ? Mat.SkinTrollDark : (byte)0);
@@ -1078,6 +1138,29 @@ public static partial class Bodies
                     int len = 2 + (int)(Dice(x, z, look, 101) * 8);
                     for (int k = 1; k <= len; k++) s.FSet(Body, x, H0 - k, z, Mat.Moss);
                 }
+        // the loincloth of hides in strips, ragged at the hem, some dark with peat, a belt of boar's fur with moss in it
+        int lo = (b.Waist - 6) * 2, belt = (b.Waist + 1) * 2 - 2;
+        s.FPattern(Body, -80, lo, -80, 80, belt + 2, 80, (x, y, z) =>
+        {
+            if (s.FMat(Body, x, y, z) != Mat.Leather) return 0;
+            if (y >= belt) return Dice(x >> 1, y, z >> 1, 102) < .15f ? Mat.Moss : Mat.FurBoar;
+            int strip = (x + 64) / 3;
+            return strip % 3 == 0 ? Mat.Peat : strip % 3 == 1 ? Mat.Hide : (byte)0;
+        });
+        for (int x = -b.Chest * 2; x < b.Chest * 2 && !tame && strap; x++)
+            if ((x + 64) % 3 == 2 || Dice(x, look, 0, 103) < .3f)
+                for (int z = (b.Z0 - 1) * 2; z < (b.Z1 + 1) * 2; z++) { s.FDel(Body, x, lo, z); if ((x + 64) % 3 == 2) s.FDel(Body, x, lo + 1, z); }
+        // a strap from the right shoulder to the left hip with bones and a skull hung on it
+        int chest = b.Z1 * 2 - 1, sy0 = b.Neck * 2 - 3, sy1 = (b.Waist + 2) * 2;
+        for (int y = sy1; y <= sy0 && !tame && strap; y++)
+        {
+            float k = (y - sy1) / (float)(sy0 - sy1);
+            int x0 = (int)MathF.Round(b.Chest * 2 * (1 - 2 * k)) - 2;
+            for (int x = x0; x < x0 + 4; x++) s.FPut(Body, x, y, chest, y % 6 == 0 && x == x0 + 1 ? Mat.Bone : Mat.LeatherDark);
+        }
+        int skx = 2, sky = (sy0 + sy1) / 2 - 2;
+        for (int y = sky - 2; y <= sky + 2 && !tame && strap; y++) for (int x = skx - 2; x <= skx + 2; x++) s.FPut(Body, x, y, chest, Mat.Bone);
+        if (!tame && strap) { s.FPut(Body, skx - 1, sky + 1, chest, Mat.Maw); s.FPut(Body, skx + 1, sky + 1, chest, Mat.Maw); s.FPut(Body, skx, sky - 1, chest, Mat.Maw); }
         // claws on the fingers and on the toes
         int hx0 = b.ArmX0 * 2, hx1 = -b.Chest * 2, hy = b.HandY * 2, hz0 = b.ArmZ0 * 2, hzz = b.ArmZ1 * 2;
         foreach (var (p, sg) in new[] { (Main, 1), (Off, -1) })

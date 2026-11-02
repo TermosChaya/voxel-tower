@@ -68,7 +68,15 @@ public static partial class Bodies
                 // the hammer: its handle down from the belt behind the right hip, the head across its end
                 s.Box(Body, -4, b.Waist - 3, bz, -3, b.Waist + 1, b.Z0, Mat.Handle, Tissue.Skin);
                 s.Box(Body, -5, b.Waist - 4, bz, -2, b.Waist - 3, b.Z0, Mat.Iron, Tissue.Skin);
-                if (s.Detail) { s.FPut(Body, -10, (b.Waist - 4) * 2, bz * 2, Mat.Steel); s.FPut(Body, -5, (b.Waist - 4) * 2, bz * 2, Mat.Steel); }
+                if (s.Detail)
+                {
+                    // the face of the head bright from striking, its other end split into a claw, the handle worn pale
+                    // where it is gripped and a wedge of oak driven into the eye
+                    int hy = (b.Waist - 4) * 2;
+                    for (int z = bz * 2; z < bz * 2 + 2; z++) { s.FPut(Body, -10, hy, z, Mat.Steel); s.FPut(Body, -10, hy + 1, z, Mat.Steel); s.FDel(Body, -5, hy, z); s.FPut(Body, -5, hy + 1, z, Mat.SteelDark); }
+                    for (int y = hy + 2; y < hy + 5; y++) for (int z = bz * 2; z < bz * 2 + 2; z++) s.FPut(Body, -7, y, z, Mat.Board);
+                    s.FPut(Body, -7, hy + 1, bz * 2, Mat.Wood);
+                }
                 break;
             case 1:
                 // the saw: a bright blade slanting up across the back from the right hip, its teeth along its lower edge,
@@ -105,6 +113,12 @@ public static partial class Bodies
                 s.Box(Body, -4, b.Neck, bz, -2, b.Neck + 1, b.Z0, Mat.Handle, Tissue.Skin);
                 if (s.Detail)
                     for (int x = 2; x < 8; x++) { s.FPut(Body, x, (b.Waist - 4) * 2, bz * 2, Mat.SteelEdge); s.FPut(Body, x, (b.Waist - 4) * 2 + 1, bz * 2, Mat.Steel); }
+                if (s.Detail)
+                {
+                    // two rivets where the blade's socket takes the shaft, the grip worn dark
+                    s.FPut(Body, 4, (b.Waist - 1) * 2, bz * 2, Mat.Steel); s.FPut(Body, 5, (b.Waist - 1) * 2 + 1, bz * 2, Mat.Steel);
+                    for (int x = -8; x < -4; x++) s.FPut(Body, x, b.Neck * 2, bz * 2, Mat.LeatherDark);
+                }
                 break;
         }
     }
