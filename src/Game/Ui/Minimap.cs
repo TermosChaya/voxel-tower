@@ -44,9 +44,37 @@ public partial class Minimap : Control
         CustomMinimumSize = new Vector2(256, 256f * w.SZ / w.SX);
         MouseFilter = MouseFilterEnum.Stop;
         MouseDefaultCursorShape = CursorShape.PointingHand;
-        TooltipText = "Карта\nЩелчок переносит вид. Рамка — видимая часть, ромб — цитадель. " +
+        TooltipText = Bindings.Fill("{MapBig} — крупно, ещё раз — обратно.\n") + "Карта\nЩелчок переносит вид. Рамка — видимая часть, ромб — цитадель. " +
             "Голубые точки — ваши люди, красные — орда, бурые — звери. " +
             "Квадраты — рудники, серые ромбики — руины.";
+    }
+
+    /// <summary>
+    /// Sized and placed for a disc of so much radius about a point (MapRing.cs): a hexagonal valley so that its corners
+    /// come to the disc's edge and it fills it, a square one as a square of the given side in its middle.
+    /// </summary>
+    public void Fit(Vector2 centre, float radius, float side)
+    {
+        var w = _m.World;
+        CustomMinimumSize = Vector2.Zero;
+        if (w.Land != null)
+        {
+            var c = w.Land.Corners();
+            float cx = 0, cz = 0, r = 1;
+            foreach (var (x, z) in c) { cx += x; cz += z; }
+            cx /= c.Length; cz /= c.Length;
+            foreach (var (x, z) in c) r = MathF.Max(r, MathF.Sqrt((x - cx) * (x - cx) + (z - cz) * (z - cz)));
+            // pixels to a voxel, the corners a little inside the ring
+            float k = (radius - 2) / r;
+            Size = new Vector2(w.SX * k, w.SZ * k);
+            Position = centre - new Vector2(cx * k, cz * k);
+        }
+        else
+        {
+            Size = new Vector2(side, side);
+            Position = centre - new Vector2(side / 2, side / 2);
+        }
+        QueueRedraw();
     }
 
     /// <summary>The highest column of a pixel's block, and what tops it.</summary>

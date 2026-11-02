@@ -11,7 +11,8 @@ namespace VoxelTower.Game;
 /// it was sent; a commander's level, and a star when he has a skill to choose. A click picks one (a second click takes
 /// the camera to it), Shift adds it to the chosen or drops it; the right button on a commander opens his card as a hero.
 /// A large household goes in two rows; one larger still has its last card «+N», which lets all of them out in as many
-/// rows as they need, and folds them up again.
+/// rows as they need, and folds them up again. At its left end, the marks of the parts of the household (Roster.cs) there
+/// are men of now: a click on one shows only those, a second click all again; with Shift it chooses them all.
 /// </summary>
 public partial class ColonistBar : Control
 {
@@ -34,6 +35,14 @@ public partial class ColonistBar : Control
     public int Rows { get; private set; } = 1;
     /// <summary>How many of the household have no card now (folded into «+N»).</summary>
     public int Folded => _pawns.Count - _at.Count;
+    /// <summary>The part of the household the list is narrowed to (all, or one kind of work or state).</summary>
+    public Roster Filter { get; private set; } = Roster.All;
+    /// <summary>The parts there are men of now, their marks' top left in the bar's frame, and how many each has.</summary>
+    readonly List<(Roster part, Vector2 at, int count)> _parts = new();
+    const float Mark = 20, MarkGap = 3, MarksAfter = 10;
+    /// <summary>A part's mark's index for <see cref="At"/>: this, less its place among the marks.</summary>
+    const int PartAt = -100;
+    Sim _of;
 
     public void Init(Main m)
     {
@@ -46,11 +55,28 @@ public partial class ColonistBar : Control
     {
         using var prof = Prof.Time("Colonists");
         if (_m?.Sim == null) return;
+        // a new game, or one read back: the whole list again
+        if (_of != _m.Sim) { if (_of != null) Filter = Roster.All; _of = _m.Sim; }
         _pawns.Clear();
         // the risen are no household of ours
         foreach (var u in _m.Sim.Units) if (!u.Dead && u.Team == Team.Player && !u.T.Called) _pawns.Add(u);
+        // the parts there are men of, in two rows of marks at the left end; the list narrowed to the one chosen, all
+        // again when it has nobody left (the last of the hurt mended)
+        var counts = new int[Rosters.Order.Length];
+        foreach (var u in _pawns)
+            for (int g = 1; g < Rosters.Order.Length; g++) if (Rosters.Holds(Rosters.Order[g], u, _m.Sim)) counts[g]++;
+        counts[0] = _pawns.Count;
+        if (Filter != Roster.All && counts[Array.IndexOf(Rosters.Order, Filter)] == 0) Filter = Roster.All;
+        _parts.Clear();
+        var present = new List<int>();
+        for (int g = 0; g < Rosters.Order.Length; g++) if (counts[g] > 0) present.Add(g);
+        int perRow = present.Count <= 2 ? 0 : (present.Count + 1) / 2;
+        for (int i = 0; i < present.Count && perRow > 0; i++)
+            _parts.Add((Rosters.Order[present[i]], new Vector2(i % perRow * (Mark + MarkGap), i / perRow * (Mark + MarkGap)), counts[present[i]]));
+        float marks = perRow > 0 ? perRow * (Mark + MarkGap) - MarkGap + MarksAfter : 0;
+        if (Filter != Roster.All) _pawns.RemoveAll(u => !Rosters.Holds(Filter, u, _m.Sim));
         _pawns.Sort((a, b) => a.T == b.T ? a.Id.CompareTo(b.Id) : Array.IndexOf(Kinds.Ours, a.T).CompareTo(Array.IndexOf(Kinds.Ours, b.T)));
-        float room = Math.Max(100, To - From), width = 0;
+        float room = Math.Max(100, To - From - marks), width = 0;
         int n = _pawns.Count;
         // a row of full cards; else one of cards no smaller than a face is read at; else two rows of the largest that fit;
         // else two rows of the smallest, the last card «+N» — or, let out, all of them in as many rows as they take
@@ -65,9 +91,13 @@ public partial class ColonistBar : Control
             int k = n;
             while (k > 0 && !Lay(MinCard, 2, k, true, room, out width)) k--;
         }
-        Size = new Vector2(width, Rows * (_card * 1.22f + RowGap) - RowGap + 4);
-        Position = new Vector2(From + (room - width) / 2, Top);
-        Visible = _pawns.Count > 0 && !_m.Hud.InFirstPerson && !_m.Hud.TitleOpen && !_m.Hud.Hidden(Hud.Part.Faces) && !_m.AtlasOpen;
+        // the cards laid after the marks
+        for (int i = 0; i < _at.Count; i++) _at[i] += new Vector2(marks, 0);
+        if (_more is { } mo) _more = mo + new Vector2(marks, 0);
+        float tall = Math.Max(Rows * (_card * 1.22f + RowGap) - RowGap + 4, _parts.Count > 0 ? 2 * Mark + MarkGap + 2 : 0);
+        Size = new Vector2(width + marks, tall);
+        Position = new Vector2(From + (To - From - Size.X) / 2, Top);
+        Visible = counts[0] > 0 && !_m.Hud.InFirstPerson && !_m.Hud.TitleOpen && !_m.Hud.Hidden(Hud.Part.Faces) && !_m.AtlasOpen;
         QueueRedraw();
     }
 
@@ -110,8 +140,34 @@ public partial class ColonistBar : Control
     /// <summary>The middle of the «+N» card in the bar's own frame, if it has one (for the self-test).</summary>
     public Vector2? MoreAt => _more is { } m ? m + new Vector2(_card / 2, _card / 2) : null;
 
+    /// <summary>The middle of a part's mark in the bar's own frame (for the self-test); null if that part has none now.</summary>
+    public Vector2? MarkOf(Roster part)
+    {
+        foreach (var (g, at, _) in _parts) if (g == part) return at + new Vector2(Mark / 2, Mark / 2);
+        return null;
+    }
+
+    /// <summary>
+    /// Narrows the list to a part of the household, or shows all again if it is narrowed to that part already; with
+    /// <paramref name="choose"/> the part is narrowed to and all of it chosen.
+    /// </summary>
+    public void Narrow(Roster part, bool choose = false)
+    {
+        Filter = choose || Filter != part ? part : Roster.All;
+        if (choose)
+        {
+            _m.Selected.Clear();
+            foreach (var u in _m.Sim.Units)
+                if (!u.Dead && u.Team == Team.Player && !u.T.Called && Rosters.Holds(part, u, _m.Sim)) _m.Selected.Add(u);
+            _m.Hud.OnSelectionChanged();
+        }
+        _m.Hud.Refresh();
+        QueueRedraw();
+    }
+
     int At(Vector2 p)
     {
+        for (int i = 0; i < _parts.Count; i++) if (new Rect2(_parts[i].at, Mark, Mark).HasPoint(p)) return PartAt - i;
         for (int i = 0; i < _at.Count; i++) if (new Rect2(_at[i], _card, _card * 1.22f).HasPoint(p)) return i;
         if (_more is { } m && new Rect2(m, _card, _card * 1.22f).HasPoint(p)) return More;
         return -1;
@@ -130,6 +186,8 @@ public partial class ColonistBar : Control
         AcceptEvent();
         // those left out let out, or folded up again
         if (i == More) { if (mb.ButtonIndex == MouseButton.Left) _open = !_open; return; }
+        // a part's mark: the list narrowed to it, or (with Shift) all of it chosen
+        if (i <= PartAt) { if (mb.ButtonIndex == MouseButton.Left) Narrow(_parts[PartAt - i].part, mb.ShiftPressed); return; }
         if (i < 0) return;
         var u = _pawns[i];
         // a commander's card as a hero: the right button, or the left on one with a skill to choose
@@ -147,6 +205,12 @@ public partial class ColonistBar : Control
     {
         int i = At(at);
         if (i == More) return _open ? "Свернуть\nСнова два ряда лиц." : $"Ещё {Folded}\nЩелчок — показать всех жителей, ещё раз — свернуть.";
+        if (i <= PartAt)
+        {
+            var (g, _, n) = _parts[PartAt - i];
+            if (g == Roster.All) return $"Все: {n}\nПоказать весь список.";
+            return $"{Rosters.Name(g)}: {n}\nВ списке только {Rosters.About(g)}. Ещё щелчок — снова все. Shift+щелчок — выбрать их всех.";
+        }
         if (i < 0) return "";
         var u = _pawns[i];
         return $"{u.Name} №{u.Id} · {Math.Ceiling(Math.Max(0, u.Hp))} из {Math.Ceiling(u.MaxHp)}\n{Retinue.Doing(u, _m.Sim)}.\nЩелчок — выбрать, ещё раз — показать; Shift — добавить к выбранным."
@@ -157,8 +221,21 @@ public partial class ColonistBar : Control
 
     public override void _Draw()
     {
+        for (int i = 0; i < _parts.Count; i++) PartMark(_parts[i].part, new Rect2(_parts[i].at, Mark, Mark), _hover == PartAt - i);
         for (int i = 0; i < _at.Count; i++) Card(_pawns[i], new Rect2(_at[i], _card, _card * 1.22f), i == _hover);
         if (_more is { } m) MoreCard(new Rect2(m, _card, _card * 1.22f), _hover == More);
+    }
+
+    /// <summary>A part's mark: a small round plate, its sign on it; the part the list is narrowed to ringed in ember.</summary>
+    void PartMark(Roster g, Rect2 r, bool hover)
+    {
+        var c = r.GetCenter();
+        float rad = r.Size.X / 2;
+        bool on = Filter == g;
+        DrawCircle(c + new Vector2(.6f, 1.2f), rad, new Color(0, 0, 0, .5f), true, -1, true);
+        DrawCircle(c, rad, on ? new Color("3a2a22") : new Color("1b1518"), true, -1, true);
+        Rosters.Paint(this, r.Grow(-rad * .38f), g, on ? Ornament.EmberGlow : hover ? Craft.BrassLight : Ornament.BronzeLight);
+        DrawArc(c, rad - .5f, 0, MathF.Tau, 24, on ? Ornament.EmberGlow : hover ? Craft.BrassLight : Craft.Brass, on ? 1.8f : 1.1f, true);
     }
 
     /// <summary>The card of those left out: «+N» on it; let out, a mark to fold them up again.</summary>

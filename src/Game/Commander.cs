@@ -564,7 +564,7 @@ public partial class Commander : Node
             if (no != null) _m.Hud.Float(no, Ornament.Blood);
             GetViewport().SetInputAsHandled(); return;
         }
-        if ((_m.Hud.Board?.IsOpen == true || _m.AtlasOpen) && Bindings.Find(k.PhysicalKeycode, Bindings.Scope.Field) is not (Act.Pause or Act.Speed or Act.Help)) return;
+        if ((_m.Hud.Board?.IsOpen == true || _m.AtlasOpen) && Bindings.Find(k.PhysicalKeycode, Bindings.Scope.Field) is not (Act.Pause or Act.Speed or Act.Help or Act.MapBig)) return;
         // the sandbox: a band of the horde called up where the pointer is, a heavy one with Shift
         // and with Alt a god where the pointer is: ours, with Shift the horde's
         if (_m.Sim.Waves.OnCall && k.PhysicalKeycode == Bindings.KeyOf(Act.Summon) && k.AltPressed) { SummonGod(k.ShiftPressed); GetViewport().SetInputAsHandled(); return; }
@@ -598,6 +598,7 @@ public partial class Commander : Node
             case Act.Alarm: Alarm(); break;
             case Act.Trails: ToggleTrails(); break;
             case Act.Keep: OpenKeep(); break;
+            case Act.MapBig: _m.Hud.ToggleBigMap(); break;
             case Act.Possess: Possess(); break;
             case Act.Help: _m.Hud.OpenMenu("controls"); break;
             default: return;

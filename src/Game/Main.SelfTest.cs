@@ -146,6 +146,15 @@ public partial class Main
             GetTree().Quit(fails == 0 ? 0 : 1);
             return;
         }
+        // SELFTEST_ONLY=roster: only the list narrowed, the map large and the muster's kinds of the buildings
+        if (System.Environment.GetEnvironmentVariable("SELFTEST_ONLY") == "roster")
+        {
+            await Frames(5);
+            await SelfTestRoster(Check);
+            GD.Print($"[selftest] {(fails == 0 ? "all passed" : fails + " failed")}");
+            GetTree().Quit(fails == 0 ? 0 : 1);
+            return;
+        }
         // SELFTEST_ONLY=land: only the map of valleys as a land
         if (System.Environment.GetEnvironmentVariable("SELFTEST_ONLY") == "land")
         {
@@ -520,7 +529,7 @@ public partial class Main
         foreach (var u in Sim.Units)
             if (!u.Dead && u.Team == Team.Player && (firstFace == null || Array.IndexOf(Kinds.PlayerKinds, u.T) < Array.IndexOf(Kinds.PlayerKinds, firstFace.T)
                 || u.T == firstFace.T && u.Id < firstFace.Id)) firstFace = u;
-        Hud.Colonists._GuiInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = new Vector2(8, 12) });
+        Hud.Colonists._GuiInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = Hud.Colonists.FaceOf(firstFace) ?? new Vector2(8, 12) });
         await Frames(2);
         Check("a click on a face along the top picks that pawn, and the console shows it", Selected.Count == 1 && Selected.Contains(firstFace) && Hud.Inspecting == firstFace,
             $"{Selected.Count} chosen, the console on {Hud.Inspecting?.Name} №{Hud.Inspecting?.Id}");
@@ -1096,6 +1105,7 @@ public partial class Main
         await MinesSelfTest((what, ok, detail) => Check(what, ok, detail));
         await SelfTestYard(Check);
         await SelfTestFit(Check);
+        await SelfTestRoster(Check);
         await SelfTestArchitect(Check);
         await SelfTestFelling(Check);
         await SelfTestTemplates(Check);

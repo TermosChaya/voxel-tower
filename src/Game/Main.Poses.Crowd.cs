@@ -15,7 +15,7 @@ public partial class Main
         var sim = Sim;
         sim.Waves.Countdown = 1e9;
         int n = _look > 0 ? _look : 30, have = 0;
-        var kinds = new[] { Kinds.Worker, Kinds.Archer, Kinds.Swordsman, Kinds.Spearman, Kinds.Priest, Kinds.Crossbowman, Kinds.Slinger };
+        var kinds = new[] { Kinds.Worker, Kinds.Archer, Kinds.Swordsman, Kinds.Spearman, Kinds.Priest, Kinds.Crossbowman, Kinds.Slinger, Kinds.Rider, Kinds.Captain, Kinds.Hound };
         foreach (var u in sim.Units) if (!u.Dead && u.Team == Team.Player && !u.T.Called) have++;
         for (int i = have; i < n; i++)
         {
@@ -24,6 +24,8 @@ public partial class Main
             if (c < 0) continue;
             var u = sim.Spawn(t, c);
             (u.X, u.Y, u.Z) = sim.Nav.Feet(c);
+            // every seventh hurt, for the list narrowed to the hurt
+            if (i % 7 == 3) u.Hp = u.MaxHp * .4f;
         }
         Paused = true;
     }

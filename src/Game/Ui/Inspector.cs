@@ -65,10 +65,10 @@ public partial class Inspector : Control
         var sel = Chosen();
         if (sel.Count == 0 && _m.KeepChosen) return "keep";
         if (sel.Count == 0 && _m.Inspected is { } look) return "look:" + look.Id;
-        // the household's pane is made anew when a kind comes into it or goes out of it
+        // the household's pane is made anew when a kind comes into it or goes out of it, or the list is narrowed
         if (sel.Count == 0)
         {
-            var kinds = new System.Text.StringBuilder("home:");
+            var kinds = new System.Text.StringBuilder($"home:{_m.Hud.Colonists?.Filter}:");
             foreach (var t in Kinds.Ours) kinds.Append(_m.Sim.Count(t) > 0 ? '1' : '0');
             return kinds.ToString();
         }
@@ -882,8 +882,11 @@ public partial class Inspector : Control
     {
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 10);
+        // the kinds there are of, those of the part the list is narrowed to (Roster.cs) when it is narrowed to a kind of work
         var present = new List<UnitType>();
-        foreach (var kind in Kinds.Ours) if (_m.Sim.Count(kind) > 0) present.Add(kind);
+        var part = _m.Hud.Colonists?.Filter ?? Roster.All;
+        if (part is Roster.Hurt or Roster.Idle) part = Roster.All;
+        foreach (var kind in Kinds.Ours) if (_m.Sim.Count(kind) > 0 && Rosters.Holds(part, kind)) present.Add(kind);
         var keep = Btn($"Цитадель · {Bindings.Label(Act.Keep)}", "Цитадель ({Keep})\nНабор войска: нанятый выходит из цитадели сразу, войска из зданий — из дверей своих зданий. Войско не больше числа мест.", () => _m.Command.OpenKeep(), 98);
         keep.SizeFlagsVertical = SizeFlags.ShrinkBegin;
         row.AddChild(keep);

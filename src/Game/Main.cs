@@ -41,7 +41,8 @@ namespace VoxelTower.Game;
 /// chooses our pawns (or the first N), --tab=key lets a panel down from the beam, --tool=N takes up the Nth tool,
 /// --ui-scale=S draws the interface at that size instead of the player's own, --inspect looks at the first raider (or beast),
 /// --unfold shows the frame as a new siege of one's own begins it, its later tools and the lore not yet let out,
-/// --keep opens the citadel's muster,
+/// --keep opens the citadel's muster, --bigmap shows the map large, --roster=part narrows the household's list (Roster.cs, by its
+/// name in English: shooters, melee…),
 /// --day=F starts at that time of the day (0 dawn, 1 sunset), --alarm=S raises the alarm and runs on S seconds,
 /// --weather=rain|fog|wind brings that weather at once, --envoy sends the horde's envoy and waits for its offer,
 /// --lore=N,key,… puts N knowledge in hand with that lore learnt, --sounds=folder writes every sound out as a .wav and quits,
@@ -142,7 +143,8 @@ public partial class Main : Node3D
 
     string _shot;
     int _shotFrames = 45, _frames;
-    bool _demo, _calm, _selfTest, _finale, _top, _inspect, _keep, _unfold;
+    bool _demo, _calm, _selfTest, _finale, _top, _inspect, _keep, _unfold, _bigMap;
+    string _roster;
     int _look = -1;
     /// <summary>--cam=x,z,yaw,pitch,zoom: where the camera looks for a screenshot, x and z in voxels.</summary>
     float[] _cam;
@@ -236,6 +238,8 @@ public partial class Main : Node3D
             else if (a == "--selftest") _selfTest = true;
             else if (a == "--inspect") _inspect = true;
             else if (a == "--keep") _keep = true;
+            else if (a == "--bigmap") _bigMap = true;
+            else if (a.StartsWith("--roster=")) _roster = a[9..];
             else if (a == "--unfold") _unfold = true;
             else if (a.StartsWith("--load=")) PendingLoad = a["--load=".Length..];
             else if (a == "--tutorial") _tutorialAt = 0;
@@ -586,6 +590,8 @@ public partial class Main : Node3D
             Rig.Set(World.WX(seen.X), World.WZ(seen.Z), -.66f, .62f, 2.2f, snap: true);
         }
         if (_keep) Command.OpenKeep();
+        if (_bigMap) Hud.ToggleBigMap();
+        if (_roster != null && Enum.TryParse<Roster>(_roster, true, out var part)) Hud.Colonists.Narrow(part);
         if (_unfold) Hud.Unfold.Begin();
         if (_tool >= 0 && _tool < Hud.ToolDefs.Length) Tools.SetTool(Hud.ToolDefs[_tool].tool);
         if (_grid >= 0) Tools.SetGrid(_grid);

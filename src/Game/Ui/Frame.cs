@@ -578,34 +578,42 @@ public partial class BottomConsole : Control
 
 /// <summary>
 /// The map of the valley in a ring, the quarters of the world lettered on it, with buttons to zoom and to look
-/// straight down. The map is round: cut to the ring, the land beyond the valley shown in shadow up to it.
+/// straight down. The map is round: cut to the ring, the land beyond the valley shown in shadow up to it; a hexagonal
+/// valley fills the ring, its corners at its edge. It can be shown large ({MapBig}, the button on the ring): the same
+/// ring, as large as the screen lets it be, over the lower left corner, and back.
 /// </summary>
 public partial class MapRing : Control
 {
     public const float Outer = 118, Inner = 103, Side = Inner * 1.62f;
     Main _m;
-    Medallion _top;
+    Medallion _top, _big;
+    Disc _mask;
+    Ring _ring;
+    readonly List<(Control knob, float angle, float half)> _knobs = new();
+    /// <summary>How many times larger than on the console it is shown now (1 there).</summary>
+    public float Scale { get; private set; } = 1;
     public Minimap Map { get; private set; }
     /// <summary>The buttons of the view on the ring: looking straight down and back, home to the citadel (the tutorial points at them).</summary>
     public Control TopButton => _top;
     public Control HomeButton { get; private set; }
+    /// <summary>The button that shows the map large and back.</summary>
+    public Control BigButton => _big;
+    /// <summary>The map asked to be shown large or back (by its button): the frame moves it and calls <see cref="Grow"/>.</summary>
+    public event Action BigAsked;
 
     public void Init(Main m)
     {
         _m = m;
-        CustomMinimumSize = new Vector2(Outer * 2, Outer * 2);
-        Size = CustomMinimumSize;
         MouseFilter = MouseFilterEnum.Ignore;
-        var mask = new Disc { Position = Vector2.Zero, Size = Size, ClipChildren = ClipChildrenMode.Only, MouseFilter = MouseFilterEnum.Ignore };
-        AddChild(mask);
+        _mask = new Disc { Position = Vector2.Zero, ClipChildren = ClipChildrenMode.Only, MouseFilter = MouseFilterEnum.Ignore };
+        AddChild(_mask);
         Map = new Minimap();
-        mask.AddChild(Map);
+        _mask.AddChild(Map);
         Map.Init(m);
-        Map.CustomMinimumSize = new Vector2(Side, Side);
-        Map.Size = new Vector2(Side, Side);
-        Map.Position = new Vector2(Outer - Side / 2, Outer - Side / 2);
-        AddChild(new Ring { Size = Size, MouseFilter = MouseFilterEnum.Ignore });
-        // the buttons sit on the ring, low on either side of the south: the zoom outermost, the views within
+        _ring = new Ring { MouseFilter = MouseFilterEnum.Ignore };
+        AddChild(_ring);
+        // the buttons sit on the ring, low on either side of the south: the zoom outermost, the views within; the large
+        // map's high on the east
         foreach (var (text, factor, angle, tip) in new[]
         {
             ("−", 1 / 1.3f, 2.86f, "Отдалить ({CamZoomOut})"),
@@ -624,14 +632,40 @@ public partial class MapRing : Control
         home.Clicked += () => _m.Rig.Home();
         KeyTags.Tag(home, Act.CamHome);
         HomeButton = home;
+        _big = ViewKnob(Icons.Scroll, "Большая карта ({MapBig})\nКарта долины крупно, в левом нижнем углу. Ещё раз — обратно.", -.84f);
+        _big.Clicked += () => BigAsked?.Invoke();
+        KeyTags.Tag(_big, Act.MapBig);
+        Grow(1);
+    }
+
+    /// <summary>
+    /// Lays the ring out so many times larger than on the console (1 back to its own size): the disc, the map in it
+    /// fitted to the valley, the ring and its buttons.
+    /// </summary>
+    public void Grow(float k)
+    {
+        Scale = k;
+        float outer = Outer * k, inner = Inner * k;
+        CustomMinimumSize = new Vector2(outer * 2, outer * 2);
+        Size = CustomMinimumSize;
+        _mask.Radius = inner;
+        _mask.Size = Size;
+        _ring.Outer = outer; _ring.Inner = inner;
+        _ring.Size = Size;
+        Map.Fit(new Vector2(outer, outer), inner, Side * k);
+        float r = outer - (Outer - Inner) * .5f;
+        foreach (var (knob, angle, half) in _knobs) knob.Position = new Vector2(outer + MathF.Cos(angle) * r - half, outer + MathF.Sin(angle) * r - half);
+        if (_big != null) _big.Lit = k > 1;
+        QueueRedraw();
+        _ring.QueueRedraw();
+        _mask.QueueRedraw();
     }
 
     Medallion ViewKnob(Icons.Painter icon, string tip, float angle)
     {
         var b = new Medallion(icon, tip) { Size = new Vector2(30, 30), CustomMinimumSize = new Vector2(30, 30), MouseDefaultCursorShape = CursorShape.PointingHand };
-        float r = (Outer + Inner) / 2;
-        b.Position = new Vector2(Outer + MathF.Cos(angle) * r - 15, Outer + MathF.Sin(angle) * r - 15);
         AddChild(b);
+        _knobs.Add((b, angle, 15));
         return b;
     }
 
@@ -643,9 +677,8 @@ public partial class MapRing : Control
             MouseDefaultCursorShape = CursorShape.PointingHand, TooltipText = Bindings.Fill(tip), Flat = false,
         };
         b.AddThemeFontSizeOverride("font_size", 13);
-        float r = (Outer + Inner) / 2;
-        b.Position = new Vector2(Outer + MathF.Cos(angle) * r - 12, Outer + MathF.Sin(angle) * r - 12);
         AddChild(b);
+        _knobs.Add((b, angle, 12));
         return b;
     }
 
@@ -658,19 +691,23 @@ public partial class MapRing : Control
     public override void _Draw()
     {
         // under the map: the land beyond the valley, dark
-        DrawCircle(new Vector2(Outer, Outer), Inner + 1, new Color("16110e"), true, -1, true);
-        for (int i = 0; i < 4; i++) DrawCircle(new Vector2(Outer, Outer), Inner - 4 - i * 6, new Color(1, .9f, .7f, .012f), true, -1, true);
+        float outer = Outer * Scale, inner = Inner * Scale;
+        DrawCircle(new Vector2(outer, outer), inner + 1, new Color("16110e"), true, -1, true);
+        for (int i = 0; i < 4; i++) DrawCircle(new Vector2(outer, outer), inner - 4 - i * 6, new Color(1, .9f, .7f, .012f), true, -1, true);
     }
 
     /// <summary>What the map is cut to: a disc.</summary>
     public partial class Disc : Control
     {
-        public override void _Draw() => DrawCircle(Size / 2, Inner, Colors.White, true, -1, true);
+        public float Radius = Inner;
+        public override void _Draw() => DrawCircle(Size / 2, Radius, Colors.White, true, -1, true);
     }
 
     /// <summary>The ring: the map darkening toward it, a dark band with a thin line at each edge, the quarters of the world lettered on it.</summary>
     public partial class Ring : Control
     {
+        public float Outer = MapRing.Outer, Inner = MapRing.Inner;
+
         public override void _Draw()
         {
             var c = Size / 2;

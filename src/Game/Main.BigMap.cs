@@ -7,6 +7,9 @@ namespace VoxelTower.Game;
 
 public partial class Main
 {
+    /// <summary>The map of the valleys' small map shown large and back ({MapBig} with the map of the valleys open).</summary>
+    public void ToggleBigBoardMap() => WorldMap?.ToggleMiniBig();
+
     /// <summary>The big map's hexes as its drawing reads them, for the campaign it was made for.</summary>
     CampaignHexes _hexes;
     Campaign _hexesOf;

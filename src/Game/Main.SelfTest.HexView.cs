@@ -78,8 +78,11 @@ public partial class Main
         v.ClickedHex -= Heard;
         check("a click on a hex's middle tells that hex", heard == aim, $"clicked {aim}, heard {heard}");
 
-        // a click on the small map takes the eye there
-        var (tx, tz) = lay.Center(20, 20);
+        // a click on the small map takes the eye there: a hex a fifth of the way from the middle of what it shows (the land
+        // that is known) toward its right edge
+        var shows = v.MiniView;
+        var aimHex = lay.HexAt(shows.GetCenter().X + shows.Size.X * .2f, shows.GetCenter().Y);
+        var (tx, tz) = lay.Center(aimHex.Col, aimHex.Row);
         var on = v.MiniPoint(tx, tz);
         var ev = new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = on, GlobalPosition = on };
         GetViewport().PushInput(ev);

@@ -15,7 +15,7 @@ public enum Act
     CallWave, Summon, Pause, Speed, Trails, QuickSave, QuickLoad, Help,
     FpForward, FpBack, FpLeft, FpRight, FpRun, FpUp, FpDown, FpFire, FpStone, FpWood, FpEarth,
     FpKick, FpSwitch, FpLadder, FpOrder, FpFourth,
-    Board, FpLeave, EnterCell,
+    Board, FpLeave, EnterCell, MapBig,
 }
 
 /// <summary>
@@ -53,6 +53,7 @@ public static class Bindings
         D(Act.CamTurnRight, Camera, "Повернуть вправо", "", Key.E),
         D(Act.CamTop, Camera, "Вид сверху", "Вид на долину сверху и обратно. То же делает кнопка с картой у миникарты.", Key.Y),
         D(Act.CamHome, Camera, "Вернуть вид", "Вернуть вид к крепости. То же делает кнопка с башней у миникарты.", Key.H, Key.Home),
+        D(Act.MapBig, Camera, "Большая карта", "Карта в левом нижнем углу крупно и обратно, в долине и на карте долин. То же делает кнопка со свитком у миникарты.", Key.Quoteleft),
         D(Act.CamZoomIn, Camera, "Приблизить", "", Key.Pageup, Key.KpAdd),
         D(Act.CamZoomOut, Camera, "Отдалить", "", Key.Pagedown, Key.KpSubtract),
 
@@ -137,6 +138,7 @@ public static class Bindings
         (BrushOptions, "Shift с кистью", "Кирка на один мазок."),
         (BrushOptions, "Shift+{Lmb} палочкой", "Добавить к выделению; щелчок без Shift применит ко всему выделенному, Esc сбросит."),
         (Orders, "{Lmb}", "Выбрать человека, рамкой — нескольких. С Shift — добавить или убрать."),
+        (Orders, "{Lmb} по значку слева от лиц", "Оставить в списке только часть дружины: рабочих, ближний бой, стрелков, управляющих и других. Ещё раз — всех, с Shift — выбрать их всех."),
         (Orders, "ЛКМ по портрету", "Выбрать человека, ещё раз — показать его."),
         (Orders, "{Rmb} по портрету командира", "Карточка героя: уровень, опыт, умения. На новом уровне в ней выбирают умение. Медальон со шлемом наверху значит, что выбор ждёт."),
         (Orders, "{Rmb}", "По земле — идти, по зверю — охотиться, по врагу — атаковать."),

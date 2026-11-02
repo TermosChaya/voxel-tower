@@ -173,7 +173,8 @@ public partial class Hud : CanvasLayer
         _ring = new MapRing();
         _console.Left.AddChild(_ring);
         _ring.Init(m);
-        _ring.Position = new Vector2(BottomConsole.LeftW / 2 - MapRing.Outer - 2, BottomConsole.Wing / 2 - MapRing.Outer + 4);
+        _ring.Position = RingHome;
+        _ring.BigAsked += ToggleBigMap;
         _portrait = new PortraitFrame();
         _console.Base.AddChild(_portrait);
         _portrait.Init(m);
@@ -601,6 +602,8 @@ public partial class Hud : CanvasLayer
         _stores.Size = new Vector2(storesW, 30);
         _stores.Position = new Vector2(Math.Max(tabsEnd + 14, tabsEnd + (_clockPanel.Position.X - tabsEnd - storesW) / 2), 4);
         _drop.Bottom = vp.Y - BottomConsole.Wing - 6;
+        // the map shown large: over the lower left corner, as large as the screen lets it be
+        if (_ring.Scale > 1) PlaceBigMap(vp);
         _colonists.From = Math.Max(14, _drop.RightEdge + 12);
         _colonists.To = _clockPanel.Position.X - 12;
         _colonists.Top = TopBeam.Height + 5;
@@ -967,6 +970,45 @@ public partial class Hud : CanvasLayer
 
     /// <summary>The map control, for tests.</summary>
     public Minimap Map => _ring.Map;
+    /// <summary>The map's ring (the self-test sees where it stands and how large).</summary>
+    public MapRing Ring => _ring;
+    /// <summary>The panel let down from the beam now ("town", "lore"…), or null.</summary>
+    public string PanelOpen => _drop?.OpenKey;
+
+    /// <summary>Where the map's ring stands on the console's left wing.</summary>
+    static Vector2 RingHome => new(BottomConsole.LeftW / 2 - MapRing.Outer - 2, BottomConsole.Wing / 2 - MapRing.Outer + 4);
+
+    /// <summary>Whether the map of the valley is shown large now.</summary>
+    public bool BigMap => _ring.Scale > 1;
+
+    /// <summary>
+    /// The map of the valley shown large over the lower left corner, over everything, or back in its place on the
+    /// console ({MapBig}, the button on its ring). On the map of the valleys the same key shows its small map large.
+    /// </summary>
+    public void ToggleBigMap()
+    {
+        if (_m.AtlasOpen) { _m.ToggleBigBoardMap(); return; }
+        _ring.GetParent()?.RemoveChild(_ring);
+        if (_ring.Scale > 1)
+        {
+            _console.Left.AddChild(_ring);
+            _ring.Grow(1);
+            _ring.Position = RingHome;
+        }
+        else
+        {
+            _root.AddChild(_ring);
+            PlaceBigMap(_root.GetViewportRect().Size);
+        }
+        Sound.Ui("tick");
+    }
+
+    void PlaceBigMap(Vector2 vp)
+    {
+        float k = Math.Clamp(Math.Min((vp.Y - TopBeam.Height - 24) / (2 * MapRing.Outer), vp.X * .5f / (2 * MapRing.Outer)), 1.3f, 3.2f);
+        if (Math.Abs(_ring.Scale - k) > .01f) _ring.Grow(k);
+        _ring.Position = new Vector2(8, vp.Y - _ring.Size.Y - 8);
+    }
 
     /// <summary>Which panel hangs from the beam (null for none), and who the console shows in full, for tests.</summary>
     /// <summary>The panel let down, by its key: "magic" for the lore on its page of the mysteries.</summary>
