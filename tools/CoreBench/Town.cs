@@ -275,11 +275,20 @@ static class TownBench
             }
         for (int x = 0; x < 6; x++) for (int z = 0; z < 6; z++) { w.Set(px + x, pg + 4, pz + z, Mat.Thatch); w.Set(px + 9 + x, pg + 4, pz + z, Mat.Tile); }
         bool sparkThatch = sim.Ignite(px, pg + 4, pz), sparkTile = sim.Ignite(px + 9, pg + 4, pz);
-        Run(18);
+        // (how far the fire got through the thatch at its height: a worker who happened to be near may run to beat it
+        // out, as the town's other works had them about, and what he beat out is no less caught)
+        int caught = 0;
+        for (double t = 0; t < 18; t += .05)
+        {
+            sim.Step(.05f);
+            int now = 0;
+            for (int x = 0; x < 6; x++) for (int z = 0; z < 6; z++) if (w.Get(px + x, pg + 4, pz + z) != Mat.Thatch || sim.IsBurning(px + x, pg + 4, pz + z)) now++;
+            caught = Math.Max(caught, now);
+        }
         int thatchLeft = 0, tileLeft = 0;
         for (int x = 0; x < 6; x++) for (int z = 0; z < 6; z++) { if (w.Get(px + x, pg + 4, pz + z) == Mat.Thatch && !sim.IsBurning(px + x, pg + 4, pz + z)) thatchLeft++; if (w.Get(px + 9 + x, pg + 4, pz + z) == Mat.Tile) tileLeft++; }
         check("a thatched roof catches at a spark and burns through, a tiled one takes no fire",
-            sparkThatch && !sparkTile && thatchLeft < 30 && tileLeft == 36, $"spark on thatch {sparkThatch}, on tiles {sparkTile}; 18 s on, unburnt thatch {thatchLeft} of 36, tiles {tileLeft} of 36");
+            sparkThatch && !sparkTile && caught > 6 && tileLeft == 36, $"spark on thatch {sparkThatch}, on tiles {sparkTile}; in 18 s the fire got through {caught} of 36 of the thatch ({thatchLeft} unburnt at the end), tiles {tileLeft} of 36");
         // (a look may cover it otherwise: Sim.Looks.cs)
         byte Cover(Building x) => x?.Look is { Covering: > 0 } l ? l.Covering : x?.K.Roof ?? 0;
         check("each town building's roof is covered as its trade (or its look) has it: tiles on the hall and the market, slate on the barracks, a house's of logs; thatch and shingles burn, tiles and slate do not",

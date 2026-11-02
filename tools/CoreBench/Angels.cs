@@ -121,7 +121,9 @@ static class AngelsBench
         Gone(foes);
 
         // ---- hail: on the band and its ladder, not on our wall
-        int lx = (int)(cx - 10 * M), lz = (int)(cz - 40 * M);
+        // (the ladder inside the circle the hail comes down on, 4 m from its middle: 8 m out it stood past the circle's
+        // 7 m, and only a stone at the very edge broke into it — on one draw of the dice three did, on another none)
+        int lx = (int)(cx - 6 * M), lz = (int)(cz - 40 * M);
         for (int y = fg; y < fg + 40; y++) for (int z = lz; z < lz + 8; z++) { w.Set(lx, y, z, Mat.SiegeLadder); w.Set(lx + 1, y, z, Mat.SiegeLadder); }
         int wx = (int)(cx + 6 * M);
         for (int y = fg; y < fg + 16; y++) for (int z = lz - 24; z < lz + 32; z++) for (int x = wx; x < wx + 4; x++) w.Set(x, y, z, Mat.Stone);

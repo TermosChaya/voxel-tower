@@ -261,6 +261,8 @@ public sealed partial class Sim
         {
             if (!Labour.Diggable(cur)) { Orders.Clear(j.x, j.y, j.z); return false; }
             DigAway(j.x, j.y, j.z, cur, u.T.Yield);
+            // what of ours it alone held, marked to come out too, comes away with it (Sim.Builders.cs)
+            if (Bound(cur) && Mat.IsPlayer[cur]) TakeLooseWith(j.x, j.y, j.z, u.T.Yield);
             return true;
         }
         if (!Brushes.Free(cur) || cur == j.m) { Orders.Clear(j.x, j.y, j.z); return false; }

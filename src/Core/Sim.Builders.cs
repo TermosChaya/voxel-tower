@@ -119,4 +119,91 @@ public sealed partial class Sim
                     && World.Get(x + dx, y + 1, z + dz) != Mat.Air) return true;
         return false;
     }
+
+    /// <summary>The most of a loose bit the one taking a building down takes away with the voxel that held it.</summary>
+    const int LooseMost = 96;
+    readonly HashSet<int> _looseSeen = new(), _looseHeld = new();
+    readonly List<int> _loose = new();
+    readonly Stack<int> _looseWay = new();
+
+    /// <summary>
+    /// A voxel of ours just taken out: what of an arch is marked to come out and was held by it alone — a pair of
+    /// shingles in the course under the ridge whose neighbour lower down the slope went first, the stub of a crown on the
+    /// ridge — is taken away with it, as whoever takes a roof apart takes the loose bits down by hand, and does not drop
+    /// on those working under it. Only a small bit, all of it ours and marked to come out: what else it held comes down.
+    /// </summary>
+    void TakeLooseWith(int x, int y, int z, float yield)
+    {
+        _looseHeld.Clear();
+        bool arched = Arched.Get(x, y, z) != 0;
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dz = -1; dz <= 1; dz++)
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    int nx = x + dx, ny = y + dy, nz = z + dz, k = Math.Abs(dx) + Math.Abs(dy) + Math.Abs(dz);
+                    if (k == 0 || !World.InBounds(nx, ny, nz)) continue;
+                    // an arch's members hold at their corners as well
+                    if (k > 1 && !arched && Arched.Get(nx, ny, nz) == 0) continue;
+                    if (!Loosens(nx, ny, nz) || _looseHeld.Contains(WaterPlanner.Pack(nx, ny, nz))) continue;
+                    if (!LooseFrom(nx, ny, nz)) { foreach (int p in _looseSeen) _looseHeld.Add(p); continue; }
+                    foreach (int p in _loose)
+                    {
+                        var (px, py, pz) = WaterPlanner.Unpack(p);
+                        DigAway(px, py, pz, World.Get(px, py, pz), yield);
+                    }
+                }
+    }
+
+    /// <summary>
+    /// Whether a voxel is of an arch of ours — a roof, a lintel, what stands on a ridge — and marked to come out: only
+    /// such a bit hangs on its neighbours in the course and is taken down so. A wall's stones cut out of a gateway go as
+    /// they are dug, and those left loose come down to be cleared, as they always did.
+    /// </summary>
+    bool Loosens(int x, int y, int z)
+    {
+        byte m = World.Get(x, y, z);
+        return Arched.Get(x, y, z) != 0 && Bound(m) && Mat.IsPlayer[m] && Orders.IsRemove(Orders.At(x, y, z));
+    }
+
+    /// <summary>
+    /// Whether the bit of what is marked to come out joined to a voxel is held by nothing now (into <see cref="_loose"/>):
+    /// searched as <see cref="Adrift"/> searches, and held by the ground, by what is set in rock, by anything built that
+    /// is not to come out, or by being more than a hand can take.
+    /// </summary>
+    bool LooseFrom(int sx, int sy, int sz)
+    {
+        _loose.Clear(); _looseWay.Clear(); _looseSeen.Clear();
+        int s = WaterPlanner.Pack(sx, sy, sz);
+        _looseWay.Push(s); _looseSeen.Add(s);
+        while (_looseWay.Count > 0)
+        {
+            int p = _looseWay.Pop();
+            _loose.Add(p);
+            if (_loose.Count > LooseMost) return false;
+            var (px, py, pz) = WaterPlanner.Unpack(p);
+            byte here = World.Get(px, py, pz);
+            bool arched = Arched.Get(px, py, pz) != 0;
+            for (int dy = -1; dy <= 1; dy++)
+                for (int dz = -1; dz <= 1; dz++)
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        int k = Math.Abs(dx) + Math.Abs(dy) + Math.Abs(dz);
+                        if (k == 0 || k > 1 && !arched) continue;
+                        int nx = px + dx, ny = py + dy, nz = pz + dz;
+                        if (!World.InBounds(nx, ny, nz)) { if (ny < 0) return false; continue; }
+                        byte m = World.Get(nx, ny, nz);
+                        // resting on the ground (timber on water too), set into rock aside, an arch's corner on the ground
+                        if (dy < 0 && dx == 0 && dz == 0 ? Ground(m) || m == Mat.Water && Floats(here)
+                            : k == 1 ? dy == 0 && HoldsAside(here, m) : dy < 0 && Ground(m)) return false;
+                        if (!Bound(m)) continue;
+                        int q = WaterPlanner.Pack(nx, ny, nz);
+                        if (_looseSeen.Contains(q)) continue;
+                        // anything built that stays holds it, so does what is no arch, and what was found held a moment ago
+                        if (!Loosens(nx, ny, nz) || _looseHeld.Contains(q)) return false;
+                        _looseSeen.Add(q);
+                        _looseWay.Push(q);
+                    }
+        }
+        return true;
+    }
 }

@@ -78,12 +78,15 @@ static class LooksBench
         int fell = 0;
         bool settled = false;
         bool say = Environment.GetEnvironmentVariable("LOOKS_SAY") != null;
-        sim.Collapsed += (n, x, y, z) =>
+        sim.Fell += (x, y, z, m) =>
         {
-            // (only what comes down at the buildings tried: a miners' building digs its ore, and the rock it digs may fall)
-            if (!settled || !sim.Buildings.Exists(b => b.Kind == k.Key && x > b.X0 - 60 && x < b.X1 + 60 && z > b.Z0 - 60 && z < b.Z1 + 60)) return;
-            fell += n;
-            if (say) Console.WriteLine($"  fell {n} at {x:0},{y:0},{z:0} (ground {w.GroundTop((int)x, (int)z)}) t {sim.Time:0}: {string.Join(" ", sim.Buildings.Select(b => $"{b.Kind}{b.Variant} {b.X0},{b.Z0}-{b.X1},{b.Z1}"))}");
+            // (only what comes down of the buildings tried, or of what was built at them: a miners' building digs its ore,
+            // and the rock it digs may fall; and splinters of a tree that came down by them, a heap of them breaking up
+            // where it landed, are no part of a building)
+            if (!settled || m is Mat.Lumber or Mat.Rubble || Mat.IsTrunk(m) || Mat.IsNatural[m] || Mat.IsVeg[m]) return;
+            if (!sim.Buildings.Exists(b => b.Kind == k.Key && x > b.X0 - 60 && x < b.X1 + 60 && z > b.Z0 - 60 && z < b.Z1 + 60)) return;
+            fell++;
+            if (say) Console.WriteLine($"  fell ({x}, {y}, {z}) {Mat.NameOf(m)} (ground {w.GroundTop(x, z)}) t {sim.Time:0}: {string.Join(" ", sim.Buildings.Select(b => $"{b.Kind}{b.Variant} {b.X0},{b.Z0}-{b.X1},{b.Z1}"))}");
         };
         void Run(double s) { for (double t = 0; t < s; t += .05) sim.Step(.05f); }
         // (what is still marked about a building that will not go up, for LOOKS_SAY)

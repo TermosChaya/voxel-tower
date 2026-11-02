@@ -131,8 +131,10 @@ public sealed partial class Sim
         if ((Mat.IsGrass(old) || old == Mat.Scorch) && (Mat.IsGrass(now) || now == Mat.Scorch)) return;
         _shaken.Add(WaterPlanner.Pack(x, y, z));
         // something that held taken away: what stands over it is weighed as one body; and while a building is weighed
-        // so as standing on too little, what is set under it or against it too (it may be propped up)
-        if ((Rigid(old) || Ground(old)) && !Holds(now) && !Ground(now) || _leaning > 0 && (Holds(now) || Ground(now))) _undercut.Add(WaterPlanner.Pack(x, y, z));
+        // so as standing on too little, what is set under it or against it too (it may be propped up) — there, not
+        // anywhere in the valley: a stone laid in a field away from it props nothing, and only has whatever stands
+        // half-built about it weighed for nothing
+        if ((Rigid(old) || Ground(old)) && !Holds(now) && !Ground(now) || _leaning > 0 && (Holds(now) || Ground(now)) && LeansNear(x, z)) _undercut.Add(WaterPlanner.Pack(x, y, z));
     }
 
     void TickCollapse(float dt)

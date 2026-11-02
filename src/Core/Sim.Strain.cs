@@ -45,8 +45,21 @@ public sealed partial class Sim
     /// <summary>Places where something that held was taken away since they were last looked at: what stands over them is weighed as one body.</summary>
     readonly HashSet<int> _undercut = new();
     double _crackSaid = -99, _overSaid = -99;
-    /// <summary>How many of the strained were found so by a building standing on too little.</summary>
+    /// <summary>How many of the strained were found so by a building standing on too little, and the patches they are in.</summary>
     int _leaning;
+    readonly HashSet<int> _leanPatches = new();
+
+    /// <summary>
+    /// Whether a column is within three patches (about twelve metres and more) of one with a building standing on too
+    /// little: what is set there may prop it, or bear on what does.
+    /// </summary>
+    bool LeansNear(int x, int z)
+    {
+        for (int dz = -96; dz <= 96; dz += 32)
+            for (int dx = -96; dx <= 96; dx += 32)
+                if (_leanPatches.Contains(PatchOf(Math.Clamp(x + dx, 0, World.SX - 1), Math.Clamp(z + dz, 0, World.SZ - 1)))) return true;
+        return false;
+    }
 
     /// <summary>The most voxels a building weighed as one body may have; a greater one is held together by its courses only.</summary>
     const int BodyMost = 30000;
@@ -198,7 +211,14 @@ public sealed partial class Sim
         }
         if (stale != null) foreach (int p in stale) _strained.Remove(p);
         _leaning = 0;
-        foreach (var (_, (_, _, body)) in _strained) if (body) _leaning++;
+        _leanPatches.Clear();
+        foreach (var (p, (_, _, body)) in _strained)
+        {
+            if (!body) continue;
+            _leaning++;
+            var (x, _, z) = WaterPlanner.Unpack(p);
+            _leanPatches.Add(PatchOf(x, z));
+        }
         foreach (int p in Cracking)
         {
             var (load, bears, _) = _strained[p];
