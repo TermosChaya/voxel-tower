@@ -422,7 +422,7 @@ public partial class ViewModel : Node3D
     // flask at the right hip, pointing ahead and down; a sling hanging from the fist
     static readonly Pose CarryOne = At(.29f, -.31f, -.42f, new Vector3(.34f, .38f, -.86f), Vector3.Forward, 1.05f);
     static readonly Pose CarryUpright = At(.38f, -.31f, -.44f, new Vector3(.24f, .72f, -.65f), Vector3.Forward);
-    static readonly Pose CarrySide = At(.31f, -.31f, -.42f, new Vector3(.40f, .62f, -.68f), Vector3.Forward);
+    static readonly Pose CarrySide = At(.31f, -.35f, -.42f, new Vector3(.40f, .62f, -.68f), Vector3.Forward);
     static readonly Pose CarryHeavy = At(.36f, -.33f, -.40f, new Vector3(.55f, .50f, -.67f), Vector3.Forward);
     // (a troll's club or a giant's maul, as long as a man and thick as his body: further out and lower still, its head at the right edge)
     static readonly Pose CarryHuge = At(.42f, -.40f, -.40f, new Vector3(.72f, .32f, -.62f), Vector3.Forward);

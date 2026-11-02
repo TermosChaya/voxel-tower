@@ -292,7 +292,7 @@ public partial class Hud : CanvasLayer
         _town = new TownPanel();
         _town.Init(m);
         _townTab = Tab("town", Icons.Of("castle"), "Город", "Город\nЗдания: открытые в «Знаниях» ставят здесь, рабочие их строят. Готовое здание нанимает войска " +
-            "из запаса, который прибавляется каждую волну, а второй этаж улучшает их. Ратуша платит золото, рынок меняет запасы.", _town, TownPanel.Width);
+            "из запаса, который прибавляется на рассвете, а второй этаж улучшает их. Ратуша платит золото, рынок меняет запасы.", _town, TownPanel.Width);
         _squeeze.AddRange(new[] { worksTab, _goalsTab, _hordeTab, _loreTab, _townTab });
 
         _stores = new Stores();

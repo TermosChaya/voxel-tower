@@ -37,10 +37,12 @@ public partial class Main
         eater.PastimeUntil = sim.Time + 60;
         // (the sleeper's staged bed, InBed, holds till the scene ends: given a minute instead, it was woken at once by the
         // day wherever the run before had left the clock by day, and the check found nobody asleep)
-        // (lying down takes the view about a second and a half of its frames' time: waited for by the clock, up to 6 s,
-        // not by a count of frames, which at 120 frames a second gave it 0.75 s and it was drawn lying only by halves)
+        // (lying down takes the view about a second and a half of its frames' time: waited for until at least 6 s by the
+        // clock and 600 frames have gone, up to a minute — 90 frames at 120 a second gave it 0.75 s, and 6 s by the clock
+        // after a heavy scene, its frames slow, gave it too few frames to lie down in)
         var lyingDown = System.Diagnostics.Stopwatch.StartNew();
-        while (lyingDown.Elapsed.TotalSeconds < 6 && (!Units.Lying(sleeper.Id) || Units.PropsDrawn == 0)) await Frames(1);
+        for (int f = 0; (f < 600 || lyingDown.Elapsed.TotalSeconds < 6) && lyingDown.Elapsed.TotalSeconds < 60
+            && (!Units.Lying(sleeper.Id) || Units.PropsDrawn == 0); f++) await Frames(1);
         bool lying = Units.Lying(sleeper.Id), bowl = Units.PropsDrawn > 0;
         check("one asleep lies on its back and is drawn lying; one eating sits with a bowl drawn in its hand",
             sleeper.Pastime == Pastime.Sleep && lying && eater.Pastime == Pastime.Eat && bowl,

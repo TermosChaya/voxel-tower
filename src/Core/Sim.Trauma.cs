@@ -420,17 +420,19 @@ public sealed partial class Sim
 
     /// <summary>
     /// Whether one of ours is a fighter in a fight: a soldier, a commander, a rider, an engine's crew or a worker called to
-    /// arms (not a worker at his work, nor a priest), with the alarm up or the horde within forty metres; looked at once a
-    /// second. It is slowed by no ground then and kept from no way to a foe or a post by its care for the gates, as the
-    /// horde is not: in the tutorial's first fight a swordsman and an archer, slowed in the grass about the silver vein
-    /// that the raiders crossed at their old pace, fell there, and the training band's one raider broke the citadel.
+    /// arms (not a worker at his work, nor a priest), with the alarm up, the horde within forty metres or set at its place
+    /// by a commander; looked at once a second. It is slowed by no ground then and kept from no way to a foe or a post by
+    /// its care for the gates, as the horde is not: in the tutorial's first fight a swordsman and an archer, slowed in the
+    /// grass about the silver vein that the raiders crossed at their old pace, fell there, and the training band's one
+    /// raider broke the citadel; and an archer a commander holding a spot sent up onto the works of a tower, with the
+    /// climb onto our masonry counted dear, stopped on a ledge a metre and a half up.
     /// </summary>
     bool AtWar(Unit u)
     {
         if (u.Team != Team.Player || !Fortification.Fighter(u)) return false;
         if (Time < u.WarLook) return u.AtWar;
         u.WarLook = Time + 1;
-        return u.AtWar = Alarm || Nearest(u, Team.Horde, 40 * VoxelWorld.PerMetre) != null;
+        return u.AtWar = Alarm || u.Ward is { Dead: false } w && w.T == Kinds.Captain || Nearest(u, Team.Horde, 40 * VoxelWorld.PerMetre) != null;
     }
 
     /// <summary>

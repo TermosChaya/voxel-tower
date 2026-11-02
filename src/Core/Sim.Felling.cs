@@ -549,6 +549,9 @@ public sealed partial class Sim
                 if (!into) continue;
                 stay++;
                 o.Path = null; o.NextSearch = 0;
+                // (and the work it was going to put off a while: sent round only, it went for the same work by the same
+                // way again, over and over, the tree waited on it three times and was left — a fallen log half sawn up)
+                if (o.Site >= 0) { o.Unreachable[o.Site] = Time + 8; ReleaseSite(o); }
                 continue;
             }
             stay++;
