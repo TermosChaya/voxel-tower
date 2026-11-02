@@ -19,7 +19,7 @@ public sealed class Danger
     /// <summary>The log of its tree rolling down the slope: the lane is kept while it rolls, from RollFrom, a while at most.</summary>
     public Flier Roller;
     public double RollFrom;
-    /// <summary>A tree's lane (not a digger's box): kept no longer than <see cref="Sim.TreeLaneMost"/> since Born, the last time it was in use (a blow at its tree, its fall, its log's roll).</summary>
+    /// <summary>A tree's lane (not a digger's box): kept no longer than <see cref="Sim.TreeLaneMost"/> since Born, the last time it was in use (a blow at its tree, its fall, its log's roll). A digger's box: Born when what it covers began to come down (<see cref="Sim.FallKeptMost"/>).</summary>
     public bool Tree;
     public double Born = -1;
     /// <summary>The heights it covers, voxels (a lane covers all).</summary>
