@@ -188,6 +188,12 @@ public partial class Main
                     GD.Print($"[tutorial]      template: {(Sim.MarkingsMade > made ? "put up" : "nothing put up")}, «{Tools.PlanText}»");
                     break;
                 }
+                case "Дорожки и вещи":
+                    // a dirt way from the house drawn before toward the fort
+                    Tools.SetTool(Tool.Yard); Tools.PickYard(0);
+                    await Look(kx - 120, kz + 120);
+                    await Drag((kx - 150, kz + 150), (kx - 100, kz + 150));
+                    break;
                 case "Работы": Hud.OpenPanel("works"); break;
                 case "Часы": Command.TogglePause(); await Frames(3); Command.SetSpeed(3); break;
                 case "Рудник":

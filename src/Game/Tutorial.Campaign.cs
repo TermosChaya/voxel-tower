@@ -119,7 +119,8 @@ public partial class Tutorial
         {
             Chapter = map, Title = "Обзор карты",
             Text = "Карту двигают {CamForward}{CamLeft}{CamBack}{CamRight}, стрелки или правая кнопка мыши. Колесо " +
-                "приближает и отдаляет её. {Board} открывает карту и возвращает в долину.",
+                "приближает и отдаляет её. {Board} открывает карту и возвращает в долину. Земли орды — топь, в горах " +
+                "долины с хребтами и снегом.",
             Task = "Сдвиньте и отдалите карту",
             Enter = () => { if (m.WorldMap is { } v) { look0 = v.Look; dist0 = v.Distance; } },
             Done = () => m.WorldMap is { } v && (v.Look - look0).Length() > 24 && Math.Abs(v.Distance - dist0) > dist0 * .3f,
