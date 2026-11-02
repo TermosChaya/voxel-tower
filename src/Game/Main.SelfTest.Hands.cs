@@ -39,8 +39,9 @@ public partial class Main
             float share = FP.Hands.Covered(FP.Cam, vp, new Rect2(vp * .4f, vp * .2f), out bool middle, out _);
             FP.Hands.Covered(FP.Cam, vp, new Rect2(vp * .4f, vp * .2f), out _, out var at, heldOnly: true);
             bool side = t == Kinds.Archer ? at.X < vp.X * .5f : at.X > vp.X * .55f;
-            float rest = FP.Hands.Raised;
-            bool low = inside && rest < .05f && share > .005f && share < .15f && !middle && side && at.Y > vp.Y * .5f;
+            float rest = FP.Hands.Raised, grip = FP.Hands.GripAngle;
+            // (and what it holds runs through its fist, not out of the top of it: the bow is held in the other hand)
+            bool low = inside && rest < .05f && share > .005f && share < .15f && !middle && side && at.Y > vp.Y * .5f && (t == Kinds.Archer || grip < 5);
             // a goblin five metres before it, held fast where it stands
             var gob = sim.Spawn(Kinds.Goblin, sim.NearestStand((int)me.X - 40, (int)me.Z, 2));
             gob.ChainedUntil = 1e9;
@@ -50,9 +51,9 @@ public partial class Main
             int frames = 0;
             for (; frames < 600 && FP.Hands.Raised > .05f; frames++) { Advance(.02); await Frames(1); }
             float down = FP.Hands.Raised;
-            check($"first person: {me.Name.ToLowerInvariant()} carries what it holds low at the side, out of the middle of the sight; a goblin near brings it up, gone it goes down again",
+            check($"first person: {me.Name.ToLowerInvariant()} carries what it holds low at the side in its fist, out of the middle of the sight; a goblin near brings it up, gone it goes down again",
                 low && up >= .95f && down <= .05f,
-                $"in {inside}; at rest raised {rest:0.00}, covering {share * 100:0.0} % of the sight about {at.X / vp.X:0.00},{at.Y / vp.Y:0.00}, in its middle {middle}; goblin near: raised {up:0.00}; gone: {down:0.00} after {frames} frames");
+                $"in {inside}; at rest raised {rest:0.00}, covering {share * 100:0.0} % of the sight about {at.X / vp.X:0.00},{at.Y / vp.Y:0.00}, in its middle {middle}, the grip {grip:0}° off the fist's way through; goblin near: raised {up:0.00}; gone: {down:0.00} after {frames} frames");
             FP.Exit();
             me.Dead = true; me.DiedAt = -999;
             await Frames(2);

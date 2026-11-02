@@ -242,14 +242,16 @@ public partial class ViewModel : Node3D
         // the fist on the grip, the forearm going off under the right edge
         var D = _now.D;
         Held(_held, _now);
-        Arm(_armR, false, Fist(), _now.P, D, new Vector3(.40f, -.42f, 0));
+        float up = Smooth(_raise);
+        // (carried low, the fist turned onto the grip; at the guard and in a stroke, the forearm the elbow's way)
+        float carried = _stroking && since < Total ? 0 : 1 - up;
+        Arm(_armR, false, Fist(), _now.P, D, new Vector3(.40f, -.42f, 0), carried);
         // the other hand: on the shield; once the hands are up, further up the haft or under the stock, or empty at the
         // lower left; else down at the side, out of sight
-        float up = Smooth(_raise);
         if (_si >= 0) Shield(since);
         else if (_two || _aimed)
             Arm(_armL, true, V(_g.OffFist), Away.Lerp(_now.P + D * (_aimed ? .2f : .28f) + (_aimed ? new Vector3(0, -.04f, 0) : Vector3.Zero), up), D,
-                AwayElbow.Lerp(new Vector3(-.40f, -.42f, 0), up));
+                AwayElbow.Lerp(new Vector3(-.40f, -.42f, 0), up), carried);
         else Arm(_armL, true, V(_g.OffFist), Away.Lerp(new Vector3(-.25f, -.31f, -.36f), up), new Vector3(.25f, .55f, -.8f), AwayElbow.Lerp(new Vector3(-.40f, -.50f, 0), up));
         if (_si < 0 && up < .02f) _armL.Visible = false;
         _strA.Visible = _strB.Visible = _shaft.Visible = _head.Visible = false;
@@ -390,16 +392,31 @@ public partial class ViewModel : Node3D
 
     /// <summary>
     /// An arm with its fist at <paramref name="p"/>, coming to it from <paramref name="elbow"/> (both in metres), what the
-    /// fist holds going through it along <paramref name="d"/> as near as the wrist allows. At rest the arm hangs from the
-    /// shoulder and what it holds goes through the fist along +z.
+    /// fist holds going through it along <paramref name="d"/>. At rest the arm hangs from the shoulder and what it holds
+    /// goes through the fist along +z. At the guard (<paramref name="carry"/> 0) the forearm is turned the elbow's way and
+    /// what is held goes through the fist as near <paramref name="d"/> as the wrist allows; carried low
+    /// (<paramref name="carry"/> 1), the fist's way through is turned onto <paramref name="d"/> itself and the forearm
+    /// comes to it as near the elbow's way as is square to that: a blade carried pointing ahead along the arm, turned the
+    /// forearm's way, stood out of the top of the fist, as if from between the fingers.
     /// </summary>
-    void Arm(MeshInstance3D mi, bool left, Vector3 fist, Vector3 p, Vector3 d, Vector3 elbow)
+    void Arm(MeshInstance3D mi, bool left, Vector3 fist, Vector3 p, Vector3 d, Vector3 elbow, float carry = 0)
     {
         if (mi.Mesh == null) return;
         var up = (left ? V(_g.OffShoulder) : V(_g.Shoulder)) - fist;
-        Place(mi, Frame(elbow - p, d) * Frame(up, Vector3.Back).Transposed(), fist, p, ArmSize);
+        var r = Frame(elbow - p, d) * Frame(up, Vector3.Back).Transposed();
+        if (carry > .001f)
+        {
+            var held = Frame(d, elbow - p) * Frame(Vector3.Back, up).Transposed();
+            r = new Basis(new Quaternion(r.Orthonormalized()).Slerp(new Quaternion(held.Orthonormalized()), Math.Clamp(carry, 0, 1)));
+        }
+        Place(mi, r, fist, p, ArmSize);
         mi.Visible = true;
+        if (!left) _gripAngle = Mathf.RadToDeg((r * Vector3.Back).AngleTo(d));
     }
+
+    float _gripAngle;
+    /// <summary>How far the right fist's way through is from what it holds, degrees, as last drawn (for the tests): 0 when the grip runs straight through it.</summary>
+    public float GripAngle => _gripAngle;
 
     // ---------------------------------------------------------------- holds and strokes
 
