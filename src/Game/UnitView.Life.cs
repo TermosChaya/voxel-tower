@@ -33,6 +33,8 @@ public partial class UnitView
 
     /// <summary>Whether one is drawn lying down asleep (for the self-test).</summary>
     public bool Lying(int id) => _looks.TryGetValue(id, out var l) && l.Lie > .9f;
+    /// <summary>Whether one is drawn now (the self-test asks).</summary>
+    public bool Shows(int id) => _looks.ContainsKey(id);
     /// <summary>The things drawn in hands in the last frame (for the self-test).</summary>
     public int PropsDrawn => _props?.Multimesh.VisibleInstanceCount ?? 0;
 

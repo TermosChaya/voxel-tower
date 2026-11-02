@@ -785,8 +785,10 @@ public partial class Inspector : Control
         top.AddChild(chart);
         var about = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         about.AddThemeConstantOverride("separation", 2);
-        about.AddChild(Hud.CapsLabel(u.Team == Team.Horde ? "Налётчик" : "Зверь", 8));
-        string note = u.Team == Team.Wild
+        about.AddChild(Hud.CapsLabel(u.Team == Team.Horde ? "Налётчик" : u.T.Tame ? "Живёт в городе" : "Зверь", 8));
+        string note = u.T.Tame
+            ? (u.T == Kinds.Cur ? "Ходит за рабочими, вечером лежит у костра. Лает на орду и поднимает тревогу." : u.T == Kinds.Hen ? "Живёт у жилого дома, разбегается из-под ног, ночью спит у двери." : "Пасётся в загоне конюшни, от орды бежит к конюшне.") + " На неё не охотятся."
+            : u.Team == Team.Wild
             ? $"{u.T.Bounty} зол. за добычу. Убегает от людей. Выберите своих и щёлкните по нему {{Rmb}}."
             : (u.Leader ? $"Вожак: {u.T.Bounty * 3} зол. за голову. " : $"{u.T.Bounty} зол. за голову. ")
               + (u.Returned ? "Сбежал в прошлый раз и вернулся. " : "") + "Выберите своих и щёлкните по нему {Rmb}.";

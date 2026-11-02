@@ -59,6 +59,8 @@ public sealed class UnitType
     public float Hover;
     /// <summary>Health it gets back a second, unless fire is on it (a troll of the woods, a treant).</summary>
     public float Regen;
+    /// <summary>One of the town's beasts (Units.Tame.cs): a hen, the yard dog, a horse of the stables, a goat; nobody hunts it.</summary>
+    public bool Tame;
 }
 
 public static partial class Kinds
@@ -507,7 +509,7 @@ public static partial class Kinds
     /// <summary>Every kind there is, ours and our masters, the horde's, the beasts', the risen and the engines (bodies sculpted ahead, saves read back).</summary>
     public static IEnumerable<UnitType> All()
     {
-        foreach (var arr in new[] { PlayerKinds, Masters, HordeKinds, WildKinds, Guardians, Engines, Summoned, Casters, Throwers, Crews, Beasts, Joiners })
+        foreach (var arr in new[] { PlayerKinds, Masters, HordeKinds, WildKinds, Guardians, Engines, Summoned, Casters, Throwers, Crews, Beasts, Joiners, TameKinds })
             foreach (var t in arr) yield return t;
     }
 }

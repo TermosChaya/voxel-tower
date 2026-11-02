@@ -27,7 +27,7 @@ public static class Retinue
     /// <summary>What a pawn (or anyone) is doing, in a few words.</summary>
     public static string Doing(Unit u, Sim sim)
     {
-        if (u.Dead) return u.Team == Team.Wild ? "добыт" : "пал";
+        if (u.Dead) return u.T.Tame ? "погиб" : u.Team == Team.Wild ? "добыт" : "пал";
         string hurt = Hurt(u);
         string what = DoingNow(u, sim);
         if (u.Burn > 0) hurt = hurt == "" ? "горит" : "горит, " + hurt;
@@ -49,7 +49,7 @@ public static class Retinue
 
     public static string DoingNow(Unit u, Sim sim)
     {
-        if (u.Dead) return u.Team == Team.Wild ? "добыт" : "пал";
+        if (u.Dead) return u.T.Tame ? "погиб" : u.Team == Team.Wild ? "добыт" : "пал";
         if (u.Airborne is { } flying) return flying.Held ? "в хватке телекинеза" : "летит по воздуху";
         // carried, carrying, helped along, helping (Sim.Carry.cs)
         if (Sim.OnShoulder(u)) return u.CarriedBy.CarryTo == sim.Gate ? "его несут к цитадели" : "его несут в жилой дом";
@@ -77,6 +77,9 @@ public static class Retinue
         if (u.PushCell >= 0) return "сбрасывает лестницу";
         if (sim.Climbing(u)) return "лезет по лестнице";
         if (u.Burn > 0 && u.State == UnitState.Flee && u.Team != Team.Horde) return "выбегает из огня";
+        if (u.T.Tame)
+            return u.State == UnitState.Flee ? "убегает" : u.Pastime == Pastime.Sleep ? "спит" : u.T == Kinds.Hen ? (u.State == UnitState.Walk ? "ходит по двору" : "клюёт зёрна")
+                : u.T == Kinds.Cur ? (u.State == UnitState.Walk ? "бежит за рабочим" : "сидит рядом") : u.State == UnitState.Walk ? "бродит в загоне" : "пасётся в загоне";
         if (u.Team == Team.Wild)
             return u.State switch { UnitState.Flee => "убегает", UnitState.Fight => "бросается в атаку", UnitState.Walk => "бродит", _ => "пасётся" };
         if (u.Team == Team.Horde && u.Bound)

@@ -174,6 +174,15 @@ public partial class Main
             GetTree().Quit(fails == 0 ? 0 : 1);
             return;
         }
+        // SELFTEST_ONLY=creatures: only the small life and the town's beasts
+        if (System.Environment.GetEnvironmentVariable("SELFTEST_ONLY") == "creatures")
+        {
+            await Frames(5);
+            await SelfTestCreatures(Check);
+            GD.Print($"[selftest] {(fails == 0 ? "all passed" : fails + " failed")}");
+            GetTree().Quit(fails == 0 ? 0 : 1);
+            return;
+        }
         // SELFTEST_ONLY=hands: only what is held before the eyes in first person
         if (System.Environment.GetEnvironmentVariable("SELFTEST_ONLY") == "hands")
         {
@@ -787,7 +796,7 @@ public partial class Main
         bool restored = Atmos.Sun.ShadowEnabled && vpG.Scaling3DScale == 1 && vpG.Msaa3D == Viewport.Msaa.Msaa2X && Atmos.Env.GlowEnabled;
         Check("the picture can be lowered for a weak machine and put back", lowered && restored, $"lowered {lowered}, back {restored}");
 
-        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 48 && Sound.Heard.Count >= 4,
+        Check("the sounds are made by the game itself and heard as it plays", Sound.Clips == 58 && Sound.Heard.Count >= 4,
             $"{Sound.Clips} sounds, {Sound.Played} played: {string.Join(", ", Sound.Heard)}");
 
         var before = Rig.Target;
@@ -1145,6 +1154,8 @@ public partial class Main
         await SelfTestStrain(Check, Frames);
         // (the town's life last of the valley's, so that nothing of it moves what the other parts stage)
         await SelfTestLife(Check);
+        // the small life about the view and the town's beasts
+        await SelfTestCreatures(Check);
         // the campaign goes on in valleys of its own, the scene begun again for each
         if (await SelfTestBoard(Check, () => fails)) return;
         GD.Print($"[selftest] {(fails == 0 ? "all passed" : fails + " failed")}");

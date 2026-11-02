@@ -6267,6 +6267,11 @@ if (args.Length == 0 || args[0] == "--sim" || args[0] == "--builders") BuildersB
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--decor") DecorBench.Run(Check);
 
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--living") LivingBench.Run(Check);
+// the small life about the view: flocks, crows by the dead, butterflies and bees, fireflies, frogs, fish, midges (AmbienceBench.cs)
+if (args.Length == 0 || args[0] == "--ambience") AmbienceBench.Run(Check);
+// the town's beasts: hens at the dwellings, the yard dog with the workers and barking at the horde, horses and goats in the
+// stables' paddock; none hunted, none on a ladder (TameBench.cs)
+if (args.Length == 0 || args[0] == "--tame") TameBench.Run(Check);
 // mines under the walls and what meets them (Mines.cs)
 if (args.Length == 0 || args[0] == "--sim" || args[0] == "--mines") MinesBench.Run(Check);
 // the valley a hexagon, and the kinds of valley (HexBench.cs)

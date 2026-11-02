@@ -94,6 +94,7 @@ public partial class Main
         if (_pose == "place") { PlacePose(); return; }
         if (_pose == "square") { SquarePose(); return; }
         if (_pose == "life") { LifePose(); return; }
+        if (_pose == "creatures") { CreaturesPose(); return; }
         if (_pose == "templates") { TemplatesPose(); return; }
         if (_pose == "commander") { CommanderPose(); return; }
         if (_pose == "posts") { PostsPose(); return; }

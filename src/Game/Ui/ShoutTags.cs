@@ -44,6 +44,8 @@ public partial class ShoutTags : CanvasLayer
         (int)Voice.Laugh => (Ornament.SerifItalic, 15, new Color("e9dbb6"), 1.4, true),
         (int)Voice.Praise or (int)Voice.Cheer => (Ornament.SerifBold, 18, new Color("ffe27a"), 2, false),
         (int)Voice.Chant or (int)Voice.Roar => (Ornament.SerifBold, 18, new Color("ff9070"), 1.6, false),
+        (int)Voice.Bark => (Ornament.SerifBold, 16, new Color("ffd890"), 1.2, false),
+        (int)Voice.Cluck or (int)Voice.Neigh or (int)Voice.Bleat => (Ornament.SerifItalic, 13, new Color("e9dbb6"), 1.2, true),
         _ => (Ornament.SerifBold, 18, new Color("ffd890"), Lasts, false),
     };
 

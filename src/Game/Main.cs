@@ -58,6 +58,8 @@ public partial class Main : Node3D
     public int NextBlueprintId = 1;
 
     public WorldView View { get; private set; }
+    /// <summary>The small life about the view: flocks, crows by the dead, butterflies and bees, fireflies, fish, midges (AmbienceView.cs).</summary>
+    public AmbienceView Life { get; private set; }
     public CameraRig Rig { get; private set; }
     public BuildTools Tools { get; private set; }
     public Hud Hud { get; private set; }
@@ -319,7 +321,7 @@ public partial class Main : Node3D
         if (_demo && _pose == "shaman") ClearTrees(Site.KeepX - Site.KeepR - 240, Site.KeepZ - 90, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 90);
         if (_demo && _pose == "spells") ClearTrees(Site.KeepX - Site.KeepR - 260, Site.KeepZ - 100, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
         if (_demo && _pose == "traps") ClearTrees(Site.KeepX - Site.KeepR - 220, Site.KeepZ - 120, Site.KeepX - Site.KeepR - 40, Site.KeepZ + 120);
-        if (_demo && _pose is "square" or "life") SquareGround();
+        if (_demo && _pose is "square" or "life" or "creatures") SquareGround();
         if (_trailer >= 0) TrailerGround();
         if (_demo && _pose is "blast" or "grip" or "wind" or "hexes" or "sorcerers" or "wonders" or "fp" or "powder" or "charge" or "stones" or "topple" or "roll" or "crush" or "drops" or "troops" or "wave" or "lava") ClearTrees(Site.KeepX - Site.KeepR - 300, Site.KeepZ - 140, Site.KeepX - Site.KeepR - 30, Site.KeepZ + 140);
         World.Compact();
@@ -448,6 +450,8 @@ public partial class Main : Node3D
         if (_soundsTo != null) { Sound.SaveAll(_soundsTo); GD.Print($"[voxel-tower] {Sound.Clips} sounds written to {_soundsTo}"); GetTree().Quit(); }
         // where the warbands will go is shown in play; scripted runs keep the horde's ways to the waves
         Sim.WantTrails = !_selfTest;
+        // the town's beasts in a game played; the scenes staged and the self-test ask for them themselves
+        Sim.TownBeasts = !_selfTest && !_demo;
         if (Sim.WantTrails && !_demo) Sim.ComputeFields(coming: true);
 
         Tools = new BuildTools();
@@ -474,6 +478,9 @@ public partial class Main : Node3D
         AddChild(Cine);
         Cine.Init(this);
         View.Grass.Bind(this);
+        Life = new AmbienceView();
+        View.AddChild(Life);
+        Life.Init(this);
         Tools.Init(this);
         Rig.RightClick += p => { if (Tools.Tool != Tool.None) Tools.Cancel(); else Command.OrderTo(p); };
 

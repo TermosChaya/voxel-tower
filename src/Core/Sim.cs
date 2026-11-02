@@ -260,6 +260,7 @@ public sealed partial class Sim
         Stage = "TickBands"; TickBands(); TickWarlords(); TickSpirit();
         Stage = "TickTrails"; TickTrails();
         Stage = "TendWildlife"; TendWildlife();
+        Stage = "TendTownBeasts"; TendTownBeasts();
         Stage = "TendTurf"; TendTurf();
         Stage = "TickShelter"; TickShelter();
         Stage = "TickDwellings"; TickDwellings();
@@ -295,6 +296,7 @@ public sealed partial class Sim
             if (u == Possessed) PossessedTick(u, dt);
             else if (u.Team == Team.Player) PawnTick(u, dt);
             else if (u.Team == Team.Horde) RaiderTick(u, dt);
+            else if (u.T.Tame) TameTick(u, dt);
             else WildTick(u, dt);
         }
         StageUnit = 0;

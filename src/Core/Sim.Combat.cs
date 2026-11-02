@@ -222,6 +222,8 @@ public sealed partial class Sim
         // a leader is worth thrice its kind
         if (u.Team == Team.Horde) Stock.Gold += u.T.Bounty * (u.Leader ? 3 : 1) * (HasRelic("horn") ? 1.5 : 1);
         if (u.Champion > 0) ChampionFell(u);
+        // one of the town's beasts: nobody's quarry; the yard dog is missed
+        else if (u.T.Tame) { if (u.T == Kinds.Cur) Say("Дворовый пёс погиб.", 2, u); }
         else if (u.Team == Team.Wild)
         {
             // a keeper of the map's treasures struck down: no quarry
@@ -248,7 +250,7 @@ public sealed partial class Sim
     /// <summary>Sends pawns after a beast to hunt, or after a raider to strike down.</summary>
     public int Hunt(IEnumerable<Unit> hunters, Unit prey)
     {
-        if (prey == null || prey.Dead || prey.Team == Team.Player) return 0;
+        if (prey == null || prey.Dead || prey.Team == Team.Player || prey.T.Tame) return 0;
         int n = 0;
         foreach (var u in hunters)
         {

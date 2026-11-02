@@ -352,6 +352,11 @@ Godot 4.7.2 .NET, C# (`net10.0`), проект `~/Documents/voxel-tower`, git, �
   `Greet`, `WorkCalls`, `HordeVoices`), `Chatter` (из `Tend`), `CallStone` (из обвалов `Sim.Collapse`, `Sim.Strain`),
   `Cheer` (из `RaidRepelled`), `SayAloud` для сцен и самотеста. Вид — `UnitView.Life.cs` (`LifePose`, `Fidget`,
   `Gesture`, `LifeGaze`, `Hands`, `DrawProps`), надписи — `ShoutTags.Style`, звук — `Sound.Voices.cs` (`Speech`).
+- `Ambience.cs` — мелкая жизнь вне симуляции (`Critter`, `Mote`, стаи `Flock`: сидят, летят, садятся, кружат,
+  улетают), `Tick(dt, вокруг чего, радиус, мелочь ли)`, `Startle`; события `TookOff`, `Called`, `Splashed` для звука.
+  Тикает и рисует `AmbienceView.cs` (дитя `WorldView`, по времени игры, `Warm` для сцен), звук `Sound.Wildlife.cs`.
+- `Sim.Tame.cs` — живность города (`Units.Tame.cs`: `Hen`, `Cur`, `Horse`, `Goat`, флаг `UnitType.Tame`):
+  `TendTownBeasts`, `TameTick`, `Scatter`, `Bolt`, `DogTick`, `FireToLieBy`, `Paddock`; включается `TownBeasts`.
 - `Sim.Streets.cs` — улица: `StreetSpot` (что делают, здание или колодец, где стоят, куда смотрят, кто там),
   `Street` (раз в 4 с `TickStreet`: места из стоящих кусков фасада `StandsOf` по `Kit.Stands` и у колодцев; прежние
   места сохраняются с теми, кто на них), `TryStreet` (из `Choose`: днём, без тревоги и орды, одно из трёх ближайших

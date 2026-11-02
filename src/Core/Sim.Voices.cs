@@ -3,8 +3,8 @@ using System.Collections.Generic;
 
 namespace VoxelTower.Core;
 
-/// <summary>What is said aloud: a greeting, a word in talk, a laugh, a call at work, a commander's praise, a cheer, the horde's chant and its roar.</summary>
-public enum Voice : byte { Greet, Chat, Laugh, Call, Praise, Cheer, Chant, Roar }
+/// <summary>What is said aloud: a greeting, a word in talk, a laugh, a call at work, a commander's praise, a cheer, the horde's chant and its roar; the town's beasts' bark, cluck, whinny and bleat.</summary>
+public enum Voice : byte { Greet, Chat, Laugh, Call, Praise, Cheer, Chant, Roar, Bark, Cluck, Neigh, Bleat }
 
 /// <summary>
 /// The valley's voices. Two of ours passing close greet each other, a nod or a raised hand and now and then a word for

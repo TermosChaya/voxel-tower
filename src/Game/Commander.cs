@@ -329,7 +329,7 @@ public partial class Commander : Node
             _m.Hud.OnSelectionChanged();
             return;
         }
-        if (prey != null && prey.Team != Team.Player)
+        if (prey != null && prey.Team != Team.Player && !prey.T.Tame)
         {
             int n = _m.Sim.Hunt(_m.Selected, prey);
             if (n > 0)

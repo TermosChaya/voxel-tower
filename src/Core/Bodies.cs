@@ -171,7 +171,8 @@ public static partial class Bodies
         "lancer" => 2, "tametroll" => 2, "giant" => 3, "alchemist" => 3, "hillgiant" => 2, "ouralchemist" => 3,
         "mangonel" => 2, "ballista" => 2, "trebuchet" => 2, "crew" => 3, "captain" => 3, "architect" => 2, "skeleton" => 2, "wolf" => 2,
         "bandit" => 3, "spider" => 2, "warg" => 2, "harpy" => 2, "cultist" => 2, "centaur" => 3, "ghoul" => 2, "ogre" => 2, "wildtroll" => 2, "wraith" => 2,
-        "minotaur" => 2, "griffin" => 2, "basilisk" => 2, "treant" => 2, "golem" => 2, "firespirit" => 1, "wyvern" => 2, "dragon" => 2, _ => 1,
+        "minotaur" => 2, "griffin" => 2, "basilisk" => 2, "treant" => 2, "golem" => 2, "firespirit" => 1, "wyvern" => 2, "dragon" => 2,
+        "hen" => 3, "cur" => 3, "horse" => 4, "goat" => 3, _ => 1,
     };
 
     /// <summary>A look for a unit, from its number, so it keeps it.</summary>
@@ -283,6 +284,10 @@ public static partial class Bodies
         "firespirit" => FireSpirit(look),
         "wyvern" => Wyvern(look),
         "dragon" => Dragon(look),
+        "hen" => Hen(look),
+        "cur" => Cur(look),
+        "horse" => Horse(look),
+        "goat" => Goat(look),
         _ => Worker(0),
     };
 

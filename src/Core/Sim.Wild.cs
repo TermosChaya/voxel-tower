@@ -118,7 +118,7 @@ public sealed partial class Sim
     public int WildAlive()
     {
         int n = 0;
-        foreach (var u in Units) if (!u.Dead && u.Team == Team.Wild) n++;
+        foreach (var u in Units) if (!u.Dead && u.Team == Team.Wild && !u.T.Tame) n++;
         return n;
     }
 

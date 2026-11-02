@@ -229,7 +229,7 @@ public partial class Tutorial : Node
         Unit best = null; float bd = float.MaxValue;
         foreach (var u in _m.Sim.Units)
         {
-            if (u.Dead || u.Team != Team.Wild) continue;
+            if (u.Dead || u.Team != Team.Wild || u.T.Tame) continue;
             float d = (u.X - _m.Site.KeepX) * (u.X - _m.Site.KeepX) + (u.Z - _m.Site.KeepZ) * (u.Z - _m.Site.KeepZ);
             if (d < bd) { bd = d; best = u; }
         }

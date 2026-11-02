@@ -39,9 +39,13 @@ public partial class Sound
                 Voice.Praise => ("cheer", .3, .95f),
                 Voice.Cheer => ("cheer", .1, .65f),
                 Voice.Chant => ("chant", .25, .75f),
+                Voice.Bark => ("bark", .2, .75f),
+                Voice.Cluck => ("cluck", .3, .4f),
+                Voice.Neigh => ("neigh", 1.5, .55f),
+                Voice.Bleat => ("bleat", 1, .45f),
                 _ => ("roar", .15, 1f),
             };
-            float pitch = u.Team == Team.Horde ? .84f + u.Id % 4 * .05f : .9f + u.Id % 6 * .04f;
+            float pitch = u.Team == Team.Horde ? .84f + u.Id % 4 * .05f : u.T.Tame ? .92f + u.Id % 5 * .04f : .9f + u.Id % 6 * .04f;
             Play(clip, u.X, u.Y + 12, u.Z, every, loud, pitch: pitch);
         };
     }

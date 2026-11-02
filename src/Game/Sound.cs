@@ -336,6 +336,7 @@ public partial class Sound : Node
         MakeCarry();
         MakeShout();
         MakeVoices();
+        MakeWildlife();
     }
 
     void Add(string name, float[] s, bool loop = false)
